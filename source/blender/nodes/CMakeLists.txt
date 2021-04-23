@@ -244,6 +244,7 @@ set(SRC
   shader/nodes/node_shader_sepcombHSV.c
   shader/nodes/node_shader_sepcombRGB.cc
   shader/nodes/node_shader_sepcombXYZ.cc
+  shader/nodes/node_shader_shader_info.c
   shader/nodes/node_shader_shaderToRgb.c
   shader/nodes/node_shader_squeeze.c
   shader/nodes/node_shader_subsurface_scattering.c

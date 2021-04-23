@@ -23,3 +23,8 @@ void world_normals_get(out vec3 N)
   generated_from_orco(vec3(0.0), N);
 #endif
 }
+
+void world_position_get(out vec3 P)
+{
+  P = worldPosition;
+}
