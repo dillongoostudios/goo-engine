@@ -186,7 +186,7 @@ struct GPUUniformBuf *GPU_material_sss_profile_get(GPUMaterial *material,
 /* High level functions to create and use GPU materials */
 GPUMaterial *GPU_material_from_nodetree_find(struct ListBase *gpumaterials,
                                              const void *engine_type,
-                                             int options);
+                                             int options);                                    
 GPUMaterial *GPU_material_from_nodetree(struct Scene *scene,
                                         struct Material *ma,
                                         struct bNodeTree *ntree,
@@ -222,6 +222,7 @@ bool GPU_material_is_volume_shader(GPUMaterial *mat);
 
 void GPU_material_flag_set(GPUMaterial *mat, eGPUMatFlag flag);
 bool GPU_material_flag_get(GPUMaterial *mat, eGPUMatFlag flag);
+int GPU_material_light_groups_get(GPUMaterial *mat);
 
 void GPU_pass_cache_init(void);
 void GPU_pass_cache_garbage_collect(void);

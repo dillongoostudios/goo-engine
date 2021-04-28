@@ -20,6 +20,7 @@ struct LightData {
   vec4 upvec_sizey;            /* xyz: Normalized right vector, w: area size Y or spot scale Y */
   vec4 forwardvec_type;        /* xyz: Normalized forward vector, w: Light Type */
   vec4 diff_spec_volume;       /* xyz: Diffuse/Spec/Volume power, w: radius for volumetric. */
+  ivec4  light_group_bits;     /* x : light groups, yzw : unused */
 };
 
 /* convenience aliases */
@@ -91,6 +92,8 @@ layout(std140) uniform light_block
 
 uniform sampler2DArrayShadow shadowCubeTexture;
 uniform sampler2DArrayShadow shadowCascadeTexture;
+
+uniform int lightGroups;
 
 /** \} */
 
@@ -245,6 +248,9 @@ float spot_attenuation(LightData ld, vec3 l_vector)
 float light_attenuation(LightData ld, vec4 l_vector)
 {
   float vis = 1.0;
+  if ((ld.light_group_bits.x & lightGroups) == 0) {
+    return 0.0;
+  }
   if (ld.l_type == SPOT) {
     vis *= spot_attenuation(ld, l_vector.xyz);
   }

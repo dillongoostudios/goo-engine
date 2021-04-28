@@ -209,6 +209,10 @@ typedef struct Material {
   char blend_flag;
   char _pad3[1];
 
+  /* Light groups */
+  int light_group_bits;
+  char _pad4[4];
+
   /**
    * Cached slots for texture painting, must be refreshed in
    * refresh_texpaint_image_cache before using.

@@ -120,7 +120,12 @@ class DATA_PT_EEVEE_light(DataButtonsPanel, Panel):
             elif light.shape in {'RECTANGLE', 'ELLIPSE'}:
                 sub.prop(light, "size", text="Size X")
                 sub.prop(light, "size_y", text="Y")
-
+        
+        col = layout.column()
+        col.use_property_split = False
+        col.prop(light, "light_group_bits", text="Light groups")
+        col.use_property_split = True
+        col = layout.column()
 
 class DATA_PT_EEVEE_light_distance(DataButtonsPanel, Panel):
     bl_label = "Custom Distance"

@@ -648,6 +648,16 @@ bool GPU_material_flag_get(GPUMaterial *mat, eGPUMatFlag flag)
   return (mat->flag & flag) != 0;
 }
 
+int GPU_material_light_groups_get(GPUMaterial *mat) 
+{
+  Material* ma = mat->ma;
+  if (ma) {
+    return ma->light_group_bits;
+  } else {
+    return 0xFFFFFFFF;
+  }
+}
+
 GPUMaterial *GPU_material_from_nodetree_find(ListBase *gpumaterials,
                                              const void *engine_type,
                                              int options)

@@ -117,6 +117,12 @@ static void rna_def_light(BlenderRNA *brna)
   StructRNA *srna;
   PropertyRNA *prop;
   static float default_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+  static bool default_groups[32] = {
+    true, true, true, true, true, true, true, true, 
+    true, true, true, true, true, true, true, true, 
+    true, true, true, true, true, true, true, true, 
+    true, true, true, true, true, true, true, true,
+  };
 
   srna = RNA_def_struct(brna, "Light", "ID");
   RNA_def_struct_sdna(srna, "Light");
@@ -196,6 +202,14 @@ static void rna_def_light(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Use Nodes", "Use shader nodes to render the light");
   RNA_def_property_update(prop, 0, "rna_Light_use_nodes_update");
+
+  prop = RNA_def_property(srna, "light_group_bits", PROP_BOOLEAN, PROP_LAYER);
+  RNA_def_property_boolean_sdna(prop, NULL, "light_group_bits", 1);
+  RNA_def_property_array(prop, 32);
+  RNA_def_property_ui_text(prop, "Light Groups", "Light groups affected by this light");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_update(prop, 0, "rna_Light_update");
+  RNA_def_property_boolean_array_default(prop, default_groups);
 
   /* common */
   rna_def_animdata_common(srna);

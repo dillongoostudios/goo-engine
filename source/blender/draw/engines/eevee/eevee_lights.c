@@ -203,6 +203,8 @@ static void eevee_light_setup(Object *ob, EEVEE_Light *evli)
 
   /* No shadow by default */
   evli->shadow_id = -1.0f;
+
+  evli->light_group_bits = la->light_group_bits;
 }
 
 void EEVEE_lights_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)

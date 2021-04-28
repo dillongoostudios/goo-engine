@@ -45,6 +45,8 @@
     .alpha_threshold = 0.5f, \
  \
     .blend_shadow = MA_BS_SOLID, \
+ \
+    .light_group_bits = 0xFFFFFFFF \
   }
 
 /** \} */

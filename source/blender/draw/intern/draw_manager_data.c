@@ -1351,6 +1351,8 @@ void DRW_shgroup_add_material_resources(DRWShadingGroup *grp, struct GPUMaterial
     drw_shgroup_uniform_create_ex(grp, loc, DRW_UNIFORM_BLOCK_OBATTRS, uattrs, 0, 0, 1);
     grp->uniform_attrs = uattrs;
   }
+
+  DRW_shgroup_uniform_int_copy(grp, "lightGroups", GPU_material_light_groups_get(material));
 }
 
 GPUVertFormat *DRW_shgroup_instance_format_array(const DRWInstanceAttrFormat attrs[],
