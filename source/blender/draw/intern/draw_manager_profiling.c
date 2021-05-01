@@ -20,7 +20,7 @@
  * \ingroup draw
  */
 
-#include "GL/glew.h"
+#include "GPU_glew.h"
 
 #include "BLI_listbase.h"
 #include "BLI_rect.h"

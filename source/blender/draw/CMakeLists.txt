@@ -42,6 +42,7 @@ set(INC
 
   ../../../intern/atomic
   ../../../intern/glew-mx
+  ../../../extern/glew/include
   ../../../intern/guardedalloc
 
   # dna_type_offsets.h

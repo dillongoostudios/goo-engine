@@ -125,6 +125,9 @@ static void blender_version_init(void)
   }
   else if (STREQ(STRINGIFY(BLENDER_VERSION_CYCLE), "release")) {
     version_cycle = "";
+  }  
+  else if (STREQ(STRINGIFY(BLENDER_VERSION_CYCLE), "custom")) {
+    version_cycle = " DillongooStudios Custom";
   }
   else {
     BLI_assert(!"Invalid Blender version cycle");
