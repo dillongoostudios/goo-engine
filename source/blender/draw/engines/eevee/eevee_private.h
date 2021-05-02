@@ -186,7 +186,8 @@ enum {
   VAR_WORLD_BACKGROUND = (1 << 10),
   VAR_WORLD_PROBE = (1 << 11),
   VAR_WORLD_VOLUME = (1 << 12),
-  VAR_DEFAULT = (1 << 13),
+  VAR_MAT_SHADOW_ID = (1 << 13),
+  VAR_DEFAULT = (1 << 14),
 };
 
 /* Material shader cache keys */
@@ -917,6 +918,9 @@ typedef struct EEVEE_ViewLayerData {
 
   struct GPUTexture *shadow_cube_pool;
   struct GPUTexture *shadow_cascade_pool;
+
+  struct GPUTexture *shadow_cube_id_pool;
+  struct GPUTexture *shadow_cascade_id_pool;
 
   struct EEVEE_ShadowCasterBuffer shcasters_buffers[2];
 

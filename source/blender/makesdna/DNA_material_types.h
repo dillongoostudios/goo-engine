@@ -207,7 +207,7 @@ typedef struct Material {
   char blend_method;
   char blend_shadow;
   char blend_flag;
-  char _pad3[1];
+  char check_shadow_id;
 
   /* Light groups */
   int light_group_bits;
@@ -351,6 +351,8 @@ enum {
   MA_BS_CLIP = 2,
   MA_BS_HASHED = 3,
 };
+
+#define MA_SHADOW_ID (1 << 0)
 
 /* Grease Pencil Stroke styles */
 enum {

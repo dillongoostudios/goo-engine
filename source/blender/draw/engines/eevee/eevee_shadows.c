@@ -78,6 +78,7 @@ void EEVEE_shadows_init(EEVEE_ViewLayerData *sldata)
       (linfo->shadow_high_bitdepth != sh_high_bitdepth)) {
     BLI_assert((sh_cube_size > 0) && (sh_cube_size <= 4096));
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_pool);
+    DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_id_pool);
     CLAMP(sh_cube_size, 1, 4096);
   }
 
@@ -85,6 +86,7 @@ void EEVEE_shadows_init(EEVEE_ViewLayerData *sldata)
       (linfo->shadow_high_bitdepth != sh_high_bitdepth)) {
     BLI_assert((sh_cascade_size > 0) && (sh_cascade_size <= 4096));
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_pool);
+    DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_id_pool);
     CLAMP(sh_cascade_size, 1, 4096);
   }
 
@@ -115,7 +117,7 @@ void EEVEE_shadows_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   INIT_MINMAX(linfo->shcaster_aabb.min, linfo->shcaster_aabb.max);
 
   {
-    DRWState state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_SHADOW_OFFSET;
+    DRWState state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_SHADOW_OFFSET | DRW_STATE_WRITE_COLOR;
     DRW_PASS_CREATE(psl->shadow_pass, state);
 
     stl->g_data->shadow_shgrp = DRW_shgroup_create(EEVEE_shaders_shadow_sh_get(),
@@ -211,10 +213,14 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
   eGPUTextureFormat shadow_pool_format = (linfo->shadow_high_bitdepth) ? GPU_DEPTH_COMPONENT24 :
                                                                          GPU_DEPTH_COMPONENT16;
+
+  eGPUTextureFormat shadow_id_pool_format = GPU_R32UI;
   /* Setup enough layers. */
   /* Free textures if number mismatch. */
   if (linfo->num_cube_layer != linfo->cache_num_cube_layer) {
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_pool);
+    DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_id_pool);
+
     linfo->cache_num_cube_layer = linfo->num_cube_layer;
     /* Update all lights. */
     BLI_bitmap_set_all(&linfo->sh_cube_update[0], true, MAX_LIGHT);
@@ -222,6 +228,8 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
   if (linfo->num_cascade_layer != linfo->cache_num_cascade_layer) {
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_pool);
+    DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_id_pool);
+
     linfo->cache_num_cascade_layer = linfo->num_cascade_layer;
   }
 
@@ -230,8 +238,14 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
                                                            linfo->shadow_cube_size,
                                                            max_ii(1, linfo->num_cube_layer * 6),
                                                            shadow_pool_format,
-                                                           DRW_TEX_FILTER | DRW_TEX_COMPARE,
+                                                           DRW_TEX_COMPARE,
                                                            NULL);
+    sldata->shadow_cube_id_pool = DRW_texture_create_2d_array(linfo->shadow_cube_size,
+                                                              linfo->shadow_cube_size,
+                                                              max_ii(1, linfo->num_cube_layer * 6),
+                                                              shadow_id_pool_format,
+                                                              0,
+                                                              NULL);
   }
 
   if (!sldata->shadow_cascade_pool) {
@@ -239,8 +253,14 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
                                                               linfo->shadow_cascade_size,
                                                               max_ii(1, linfo->num_cascade_layer),
                                                               shadow_pool_format,
-                                                              DRW_TEX_FILTER | DRW_TEX_COMPARE,
+                                                              DRW_TEX_COMPARE,
                                                               NULL);
+    sldata->shadow_cascade_id_pool = DRW_texture_create_2d_array(linfo->shadow_cascade_size,
+                                                                 linfo->shadow_cascade_size,
+                                                                 max_ii(1, linfo->num_cascade_layer),
+                                                                 shadow_id_pool_format,
+                                                                 0,
+                                                                 NULL);                                                          
   }
 
   if (sldata->shadow_fb == NULL) {
@@ -396,6 +416,8 @@ void EEVEE_shadow_output_init(EEVEE_ViewLayerData *sldata,
   DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
   DRW_shgroup_uniform_texture_ref(grp, "shadowCubeTexture", &sldata->shadow_cube_pool);
   DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
+  DRW_shgroup_uniform_texture_ref(grp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+  DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
 
   DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), NULL);
 }

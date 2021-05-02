@@ -833,6 +833,13 @@ void RNA_def_material(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
   RNA_def_property_boolean_array_default(prop, default_groups);
 
+  /* Self shadowing */
+  prop = RNA_def_property(srna, "check_shadow_id", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "check_shadow_id", MA_SHADOW_ID);
+  RNA_def_property_boolean_default(prop, false);
+  RNA_def_property_ui_text(prop, "Ignore Self Shadowing", "Ignore shadows cast by this material");
+  RNA_def_property_update(prop, 0, "rna_Material_draw_update");
+
   /* For Preview Render */
   prop = RNA_def_property(srna, "preview_render_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "pr_type");

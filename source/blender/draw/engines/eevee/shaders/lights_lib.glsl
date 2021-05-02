@@ -93,6 +93,9 @@ layout(std140) uniform light_block
 uniform sampler2DArrayShadow shadowCubeTexture;
 uniform sampler2DArrayShadow shadowCascadeTexture;
 
+uniform usampler2DArray shadowCubeIDTexture;
+uniform usampler2DArray shadowCascadeIDTexture;
+
 uniform int lightGroups;
 
 /** \} */
@@ -184,6 +187,14 @@ float sample_cube_shadow(int shadow_id, vec3 P)
   vec2 coord = cubeFaceCoordEEVEE(cubevec, face, shadowCubeTexture);
   /* tex_id == data_id for cube shadowmap */
   float tex_id = float(data_id);
+
+  #ifdef USE_SHADOW_ID
+  uint shadow_obj_id = texture(shadowCubeIDTexture, vec3(coord, tex_id * 6.0 + face)).x;
+  if (shadow_obj_id == uint(resource_id)) {
+    return 1.0;
+  }
+  #endif
+
   return texture(shadowCubeTexture, vec4(coord, tex_id * 6.0 + face, dist));
 }
 
@@ -204,13 +215,25 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   /* Main cascade. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
-  vis += texture(shadowCascadeTexture, coord) * (1.0 - blend);
+#ifdef USE_SHADOW_ID
+  uint shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
+  if (shadow_obj_id != uint(resource_id)) {
+    vis += 1.0;
+  }
+#endif
+    vis += texture(shadowCascadeTexture, coord) * (1.0 - blend);
 
   cascade = min(3, cascade + 1);
   /* Second cascade. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
-  vis += texture(shadowCascadeTexture, coord) * blend;
+#ifdef USE_SHADOW_ID
+  shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
+  if (shadow_obj_id != uint(resource_id)) {
+    vis += 1.0;
+  }
+#endif
+    vis += texture(shadowCascadeTexture, coord) * blend;
 
   return saturate(vis);
 }

@@ -46,6 +46,8 @@
  \
     .blend_shadow = MA_BS_SOLID, \
  \
+    .check_shadow_id = 0, \
+ \
     .light_group_bits = 0xFFFFFFFF \
   }
 

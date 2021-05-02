@@ -219,6 +219,7 @@ def draw_material_settings(self, context):
     layout.prop(mat, "blend_method")
     layout.prop(mat, "shadow_method")
 
+    layout.prop(mat, "check_shadow_id")
     col = layout.column()
     col.use_property_split = False
     col.prop(mat, "light_group_bits", text="Light groups")
