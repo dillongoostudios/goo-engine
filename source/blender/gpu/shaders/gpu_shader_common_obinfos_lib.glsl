@@ -7,6 +7,7 @@ struct ObjectInfos {
   vec4 drw_OrcoTexCoFactors[2];
   vec4 drw_ObjectColor;
   vec4 drw_Infos;
+  uvec4 drw_ObjectHash;
 };
 
 layout(std140) uniform infoBlock
@@ -17,4 +18,5 @@ layout(std140) uniform infoBlock
 #  define OrcoTexCoFactors (drw_infos[resource_id].drw_OrcoTexCoFactors)
 #  define ObjectInfo (drw_infos[resource_id].drw_Infos)
 #  define ObjectColor (drw_infos[resource_id].drw_ObjectColor)
+#  define ObjectHash (drw_infos[resource_id].drw_ObjectHash.x)
 #endif

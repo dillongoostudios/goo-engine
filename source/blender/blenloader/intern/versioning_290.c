@@ -38,6 +38,7 @@
 #include "DNA_gpencil_types.h"
 #include "DNA_hair_types.h"
 #include "DNA_light_types.h"
+#include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
@@ -2069,6 +2070,16 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
           mmd->bisect_threshold = 0.001f;
         }
       }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 293, 50)) {
+    LISTBASE_FOREACH (Light *, light, &bmain->lights) {
+      light->light_group_bits = LA_GROUPS_ALL;
+    }
+
+    LISTBASE_FOREACH (Material *, mat, &bmain->materials) {
+      mat->light_group_bits = MA_GROUPS_ALL;
     }
   }
 

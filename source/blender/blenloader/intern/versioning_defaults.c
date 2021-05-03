@@ -584,6 +584,7 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
     /* Fix lights defaults. */
     light->clipsta = 0.05f;
     light->att_dist = 40.0f;
+    light->light_group_bits = LA_GROUPS_ALL;
   }
 
   /* Materials */
@@ -600,6 +601,8 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
         }
       }
     }
+
+    ma->light_group_bits = MA_GROUPS_ALL;
   }
 
   /* Brushes */

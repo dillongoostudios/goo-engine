@@ -518,6 +518,7 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
                     /* TODO(fclem): this is rather costly to do at runtime. Maybe we can
                      * put it in ob->runtime and make depsgraph ensure it is up to date. */
                     BLI_hash_int_2d(BLI_hash_string(ob->id.name + 2), 0);
+  ob_infos->ob_hash = random;
   ob_infos->ob_random = random * (1.0f / (float)0xFFFFFFFF);
   /* Object State. */
   ob_infos->ob_flag = 1.0f; /* Required to have a correct sign */

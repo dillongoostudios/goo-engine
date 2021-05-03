@@ -654,7 +654,7 @@ int GPU_material_light_groups_get(GPUMaterial *mat)
   if (ma) {
     return ma->light_group_bits;
   } else {
-    return 0xFFFFFFFF;
+    return MA_GROUPS_ALL;
   }
 }
 

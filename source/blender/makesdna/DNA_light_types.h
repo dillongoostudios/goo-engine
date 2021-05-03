@@ -112,6 +112,8 @@ typedef struct Light {
  */
 #define LA_DS_SHOW_TEXS (1 << 2)
 
+#define LA_GROUPS_ALL 0xFFFFFFFF
+
 /* type */
 #define LA_LOCAL 0
 #define LA_SUN 1

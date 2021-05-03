@@ -229,6 +229,8 @@ typedef struct Material {
 
 /* **************** MATERIAL ********************* */
 
+#define MA_GROUPS_ALL 0xFFFFFFFF
+
 /* maximum number of materials per material array.
  * (on object, mesh, light, etc.). limited by
  * short mat_nr in verts, faces.

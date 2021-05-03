@@ -12,6 +12,7 @@
 #pragma BLENDER_REQUIRE(closure_eval_translucent_lib.glsl)
 #pragma BLENDER_REQUIRE(closure_eval_refraction_lib.glsl)
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
+#pragma BLENDER_REQUIRE(gpu_shader_common_obinfos_lib.glsl)
 
 layout(location = 1) out uint resource_id_out;
 
@@ -86,5 +87,5 @@ void main()
   }
 #endif
 
-  resource_id_out = uint(resource_id);
+  resource_id_out = ObjectHash;
 }

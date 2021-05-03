@@ -3,6 +3,7 @@
 #pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(raytrace_lib.glsl)
 #pragma BLENDER_REQUIRE(ltc_lib.glsl)
+#pragma BLENDER_REQUIRE(gpu_shader_common_obinfos_lib.glsl)
 
 #ifndef MAX_CASCADE_NUM
 #  define MAX_CASCADE_NUM 4
@@ -190,7 +191,7 @@ float sample_cube_shadow(int shadow_id, vec3 P)
 
   #ifdef USE_SHADOW_ID
   uint shadow_obj_id = texture(shadowCubeIDTexture, vec3(coord, tex_id * 6.0 + face)).x;
-  if (shadow_obj_id == uint(resource_id)) {
+  if (shadow_obj_id == ObjectHash) {
     return 1.0;
   }
   #endif
@@ -217,7 +218,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
   uint shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
-  if (shadow_obj_id != uint(resource_id)) {
+  if (shadow_obj_id != ObjectHash) {
     vis += 1.0;
   }
 #endif
@@ -229,7 +230,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
   shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
-  if (shadow_obj_id != uint(resource_id)) {
+  if (shadow_obj_id != ObjectHash) {
     vis += 1.0;
   }
 #endif

@@ -175,6 +175,8 @@ typedef struct DRWObjectInfos {
   float pad; /* UNUSED*/
   float ob_random;
   float ob_flag; /* sign is negative scaling,  */
+  uint ob_hash;
+  char _pad2[12];
 } DRWObjectInfos;
 
 BLI_STATIC_ASSERT_ALIGN(DRWObjectMatrix, 16)
