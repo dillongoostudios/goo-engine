@@ -240,6 +240,7 @@ set(SRC
   shader/nodes/node_shader_output_world.c
   shader/nodes/node_shader_particle_info.c
   shader/nodes/node_shader_rgb.c
+  shader/nodes/node_shader_screenspace_info.c
   shader/nodes/node_shader_script.c
   shader/nodes/node_shader_sepcombHSV.c
   shader/nodes/node_shader_sepcombRGB.cc

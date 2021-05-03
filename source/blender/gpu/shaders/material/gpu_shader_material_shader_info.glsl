@@ -1,22 +1,23 @@
 #pragma BLENDER_REQUIRE(lights_lib.glsl)
-#pragma BLENDER_REQUIRE(raytrace_lib.glsl)
 #pragma BLENDER_REQUIRE(lightprobe_lib.glsl)
 
 
-void node_shader_info(vec3 position, vec3 normal, vec3 misc, out float shadow_map, out vec4 scene_color, out vec3 scene_pos, out vec4 reflection) {
+void node_shader_info(vec3 position, vec3 normal, 
+    out vec4 half_light, out vec4 shadows, out vec4 ambient) {
     ClosureEvalCommon cl_common = closure_Common_eval_init(CLOSURE_INPUT_COMMON_DEFAULT);
     cl_common.P = position;
-    shadow_map = 1.0;
+
+    float shadow_accum = 0.0;
+    half_light = vec4(0.0);
+
     for (int i = 0; i < laNumLight && i < MAX_LIGHT; i++) {
         ClosureLightData light = closure_light_eval_init(cl_common, i);
-        shadow_map *= light.vis;
+        // shadows *= light.data.l_color * (light.data.l_diff * light.vis * light.contact_shadow);
+        shadow_accum += (1 - light.vis);
+
+        half_light += vec4(light.data.l_color, 1.0) * light_diffuse(light.data, normal, cl_common.V, light.L);
     }
-    
-    vec2 uv = get_uvs_from_view(position);
 
-    scene_color.xyz = texture(refractColorBuffer, normal.xy * hizUvScale.xy).xyz;
-    float depth = texture(maxzBuffer, normal.xy * hizUvScale.xy).x;
-    scene_pos = get_view_space_from_depth(normal.xy * hizUvScale.xy, depth);
-
-    reflection = texture(probePlanars, vec3(normal.xy, misc.x));
+    shadows = vec4(1 - (shadow_accum / laNumLight));
+    ambient = vec4(probe_evaluate_world_diff(normal), 1.0);
 }
