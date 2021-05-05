@@ -22,7 +22,7 @@
 /* **************** OUTPUT ******************** */
 
 static bNodeSocketTemplate sh_node_screenspace_in[] = {
-    {SOCK_VECTOR, N_("View Position"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE},
+    {SOCK_VECTOR, N_("View Position"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE, SOCK_HIDE_VALUE},
     {-1, ""},
 };
 
@@ -39,7 +39,11 @@ static int node_shader_gpu_screenspace_info(GPUMaterial *mat,
                                         GPUNodeStack *out)
 {
   GPU_material_flag_set(mat, GPU_MATFLAG_REFRACT);
-  
+
+  if (!in[0].link) {
+      GPU_link(mat, "view_position_get", &in[0].link);
+  }
+
   return GPU_stack_link(mat, node, "node_screenspace_info", in, out);
 }
 

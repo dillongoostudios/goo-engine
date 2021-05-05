@@ -15,7 +15,8 @@ void node_shader_info(vec3 position, vec3 normal,
         // shadows *= light.data.l_color * (light.data.l_diff * light.vis * light.contact_shadow);
         shadow_accum += (1 - light.vis);
 
-        half_light += vec4(light.data.l_color, 1.0) * light_diffuse(light.data, normal, cl_common.V, light.L);
+        // half_light += vec4(light.data.l_color, 1.0) * light_diffuse(light.data, normal, cl_common.V, light.L);
+        half_light += vec4(light.data.l_color, 1.0) * dot(normal, light.L / light.L.w);
     }
 
     shadows = vec4(1 - (shadow_accum / laNumLight));
