@@ -218,7 +218,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
   uint shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
-  if (shadow_obj_id != ObjectHash) {
+  if (shadow_obj_id == ObjectHash) {
     vis += 1.0;
   }
 #endif
@@ -230,7 +230,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
   shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
-  if (shadow_obj_id != ObjectHash) {
+  if (shadow_obj_id == ObjectHash) {
     vis += 1.0;
   }
 #endif
