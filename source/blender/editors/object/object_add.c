@@ -482,9 +482,7 @@ bool ED_object_add_generic_get_opts(bContext *C,
 
   if (local_view_bits) {
     View3D *v3d = CTX_wm_view3d(C);
-    if (v3d && v3d->localvd) {
-      *local_view_bits = v3d->local_view_uuid;
-    }
+    *local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uuid : 0;
   }
 
   /* Location! */
@@ -861,8 +859,9 @@ static int effector_add_exec(bContext *C, wmOperator *op)
 
     float mat[4][4];
     ED_object_new_primitive_matrix(C, ob, loc, rot, mat);
+    mul_mat3_m4_fl(mat, dia);
     BLI_addtail(&cu->editnurb->nurbs,
-                ED_curve_add_nurbs_primitive(C, ob, mat, CU_NURBS | CU_PRIM_PATH, dia));
+                ED_curve_add_nurbs_primitive(C, ob, mat, CU_NURBS | CU_PRIM_PATH, 1));
     if (!enter_editmode) {
       ED_object_editmode_exit_ex(bmain, scene, ob, EM_FREEDATA);
     }

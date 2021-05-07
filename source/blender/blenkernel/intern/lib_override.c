@@ -435,8 +435,8 @@ static bool lib_override_hierarchy_dependencies_recursive_tag(LibOverrideGroupTa
 
   for (MainIDRelationsEntryItem *to_id_entry = entry->to_ids; to_id_entry != NULL;
        to_id_entry = to_id_entry->next) {
-    if ((to_id_entry->usage_flag & IDWALK_CB_LOOPBACK) != 0) {
-      /* Never consider 'loop back' relationships ('from', 'parents', 'owner' etc. pointers) as
+    if ((to_id_entry->usage_flag & IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE) != 0) {
+      /* Never consider non-overridable relationships ('from', 'parents', 'owner' etc. pointers) as
        * actual dependencies. */
       continue;
     }
@@ -480,10 +480,8 @@ static void lib_override_linked_group_tag_recursive(LibOverrideGroupTagData *dat
 
   for (MainIDRelationsEntryItem *to_id_entry = entry->to_ids; to_id_entry != NULL;
        to_id_entry = to_id_entry->next) {
-    if ((to_id_entry->usage_flag &
-         (IDWALK_CB_EMBEDDED | IDWALK_CB_LOOPBACK | IDWALK_CB_OVERRIDE_LIBRARY_REFERENCE)) != 0) {
-      /* Never consider 'loop back' relationships ('from', 'parents', 'owner' etc. pointers), nor
-       * override references or embedded ID pointers, as actual dependencies. */
+    if ((to_id_entry->usage_flag & IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE) != 0) {
+      /* Never consider non-overridable relationships as actual dependencies. */
       continue;
     }
 
@@ -578,10 +576,8 @@ static void lib_override_local_group_tag_recursive(LibOverrideGroupTagData *data
 
   for (MainIDRelationsEntryItem *to_id_entry = entry->to_ids; to_id_entry != NULL;
        to_id_entry = to_id_entry->next) {
-    if ((to_id_entry->usage_flag &
-         (IDWALK_CB_EMBEDDED | IDWALK_CB_LOOPBACK | IDWALK_CB_OVERRIDE_LIBRARY_REFERENCE)) != 0) {
-      /* Never consider 'loop back' relationships ('from', 'parents', 'owner' etc. pointers), nor
-       * override references or embedded ID pointers, as actual dependencies. */
+    if ((to_id_entry->usage_flag & IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE) != 0) {
+      /* Never consider non-overridable relationships as actual dependencies. */
       continue;
     }
 
@@ -723,8 +719,19 @@ static void lib_override_library_create_post_process(Main *bmain,
 
       if (BLI_gset_lookup(all_objects_in_scene, ob_new) == NULL) {
         if (id_root != NULL && default_instantiating_collection == NULL) {
-          switch (GS(id_root->name)) {
+          ID *id_ref = id_root->newid != NULL ? id_root->newid : id_root;
+          switch (GS(id_ref->name)) {
             case ID_GR: {
+              /* Adding the object to a specific collection outside of the root overridden one is a
+               * fairly bad idea (it breaks the override hierarchy concept). But htere is no other
+               * way to do this currently (we cannot add new collections to overridden root one,
+               * this is not currently supported).
+               * Since that will be fairly annoying and noisy, only do that in case the override
+               * object is not part of any existing collection (i.e. its user count is 0). In
+               * practice this should never happen I think. */
+              if (ID_REAL_USERS(ob_new) != 0) {
+                continue;
+              }
               default_instantiating_collection = BKE_collection_add(
                   bmain, (Collection *)id_root, "OVERRIDE_HIDDEN");
               /* Hide the collection from viewport and render. */
@@ -735,9 +742,9 @@ static void lib_override_library_create_post_process(Main *bmain,
             case ID_OB: {
               /* Add the other objects to one of the collections instantiating the
                * root object, or scene's master collection if none found. */
-              Object *ob_root = (Object *)id_root;
+              Object *ob_ref = (Object *)id_ref;
               LISTBASE_FOREACH (Collection *, collection, &bmain->collections) {
-                if (BKE_collection_has_object(collection, ob_root) &&
+                if (BKE_collection_has_object(collection, ob_ref) &&
                     BKE_view_layer_has_collection(view_layer, collection) &&
                     !ID_IS_LINKED(collection) && !ID_IS_OVERRIDE_LIBRARY(collection)) {
                   default_instantiating_collection = collection;
@@ -895,6 +902,15 @@ bool BKE_lib_override_library_resync(Main *bmain,
       BLI_ghashutil_ptrhash, BLI_ghashutil_ptrcmp, __func__);
   ID *id;
   FOREACH_MAIN_ID_BEGIN (bmain, id) {
+    /* IDs that get fully removed from linked data remain as local overrides (using place-holder
+     * linked IDs as reference), but they are often not reachable from any current valid local
+     * override hierarchy anymore. This will ensure they get properly deleted at the end of this
+     * function. */
+    if (!ID_IS_LINKED(id) && ID_IS_OVERRIDE_LIBRARY_REAL(id) &&
+        (id->override_library->reference->tag & LIB_TAG_MISSING) != 0) {
+      id->tag |= LIB_TAG_MISSING;
+    }
+
     if (id->tag & LIB_TAG_DOIT && !ID_IS_LINKED(id) && ID_IS_OVERRIDE_LIBRARY_REAL(id)) {
       /* While this should not happen in typical cases (and won't be properly supported here), user
        * is free to do all kind of very bad things, including having different local overrides of a
@@ -1182,8 +1198,7 @@ void BKE_lib_override_library_main_resync(Main *bmain, Scene *scene, ViewLayer *
 
     for (MainIDRelationsEntryItem *entry_item = entry->to_ids; entry_item != NULL;
          entry_item = entry_item->next) {
-      if (entry_item->usage_flag &
-          (IDWALK_CB_EMBEDDED | IDWALK_CB_LOOPBACK | IDWALK_CB_OVERRIDE_LIBRARY_REFERENCE)) {
+      if (entry_item->usage_flag & IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE) {
         continue;
       }
       ID *id_to = *entry_item->id_pointer.to;
@@ -1223,6 +1238,13 @@ void BKE_lib_override_library_main_resync(Main *bmain, Scene *scene, ViewLayer *
           continue;
         }
         do_continue = true;
+
+        /* In complex non-supported cases, with several different override hierarchies sharing
+         * relations between each-other, we may end up not actually updating/replacing the given
+         * root id (see e.g. pro/shots/110_rextoria/110_0150_A/110_0150_A.anim.blend of sprites
+         * project repository, r2687).
+         * This can lead to infinite loop here, at least avoid this. */
+        id->tag &= ~LIB_TAG_LIB_OVERRIDE_NEED_RESYNC;
 
         CLOG_INFO(&LOG, 2, "Resyncing %s...", id->name);
         const bool success = BKE_lib_override_library_resync(
@@ -2052,8 +2074,8 @@ static void lib_override_library_id_hierarchy_recursive_reset(Main *bmain, ID *i
 
   for (MainIDRelationsEntryItem *to_id_entry = entry->to_ids; to_id_entry != NULL;
        to_id_entry = to_id_entry->next) {
-    if ((to_id_entry->usage_flag & IDWALK_CB_LOOPBACK) != 0) {
-      /* Never consider 'loop back' relationships ('from', 'parents', 'owner' etc. pointers) as
+    if ((to_id_entry->usage_flag & IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE) != 0) {
+      /* Never consider non-overridable relationships ('from', 'parents', 'owner' etc. pointers) as
        * actual dependencies. */
       continue;
     }

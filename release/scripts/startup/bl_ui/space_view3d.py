@@ -938,7 +938,8 @@ class VIEW3D_MT_transform_base:
         layout.operator("transform.bend", text="Bend")
         layout.operator("transform.push_pull", text="Push/Pull")
 
-        if context.mode != 'OBJECT':
+        if context.mode in {'EDIT_MESH', 'EDIT_ARMATURE', 'EDIT_SURFACE', 'EDIT_CURVE',
+                            'EDIT_LATTICE', 'EDIT_METABALL'}:
             layout.operator("transform.vertex_warp", text="Warp")
             layout.operator_context = 'EXEC_REGION_WIN'
             layout.operator("transform.vertex_random", text="Randomize").offset = 0.1
@@ -6190,10 +6191,7 @@ class VIEW3D_PT_overlay_geometry(Panel):
         sub.prop(overlay, "wireframe_opacity", text="Opacity")
 
         row = col.row(align=True)
-        if context.mode not in {
-                'EDIT_ARMATURE', 'POSE', 'OBJECT',
-                'PAINT_GPENCIL', 'VERTEX_GPENCIL', 'WEIGHT_GPENCIL', 'SCULPT_GPENCIL', 'EDIT_GPENCIL',
-        }:
+        if context.mode != 'OBJECT':
             row.prop(overlay, "show_fade_inactive", text="")
             sub = row.row()
             sub.active = overlay.show_fade_inactive
