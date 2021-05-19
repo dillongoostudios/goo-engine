@@ -431,7 +431,7 @@ static void *ocio_transform_ibuf(PlayState *ps,
     display_buffer = ibuf->rect;
     *r_glsl_used = IMB_colormanagement_setup_glsl_draw_from_space(&ps->view_settings,
                                                                   &ps->display_settings,
-                                                                  ibuf->float_colorspace,
+                                                                  ibuf->rect_colorspace,
                                                                   ibuf->dither,
                                                                   false,
                                                                   false);
@@ -488,6 +488,13 @@ static void draw_display_buffer(PlayState *ps, ImBuf *ibuf)
 
   BLI_rctf_init(&canvas, 0.0f, 1.0f, 0.0f, 1.0f);
   BLI_rctf_init(&preview, 0.0f, 1.0f, 0.0f, 1.0f);
+
+  if (ps->draw_flip[0]) {
+    SWAP(float, canvas.xmin, canvas.xmax);
+  }
+  if (ps->draw_flip[1]) {
+    SWAP(float, canvas.ymin, canvas.ymax);
+  }
 
   immAttr2f(texCoord, canvas.xmin, canvas.ymin);
   immVertex2f(pos, preview.xmin, preview.ymin);
@@ -1777,6 +1784,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 #ifdef USE_FRAME_CACHE_LIMIT
   BLI_freelistN(&g_frame_cache.pics);
   g_frame_cache.pics_len = 0;
+  g_frame_cache.pics_size_in_memory = 0;
 #endif
 
 #ifdef WITH_AUDASPACE

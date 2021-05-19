@@ -40,7 +40,6 @@ typedef struct BPy_IDProperty {
   struct ID *id;           /* can be NULL */
   struct IDProperty *prop; /* must be second member */
   struct IDProperty *parent;
-  PyObject *data_wrap;
 } BPy_IDProperty;
 
 typedef struct BPy_IDArray {
@@ -61,6 +60,7 @@ PyObject *BPy_Wrap_GetValues(struct ID *id, struct IDProperty *prop);
 PyObject *BPy_Wrap_GetItems(struct ID *id, struct IDProperty *prop);
 int BPy_Wrap_SetMapItem(struct IDProperty *prop, PyObject *key, PyObject *val);
 
+PyObject *BPy_IDGroup_MapDataToPy(struct IDProperty *prop);
 PyObject *BPy_IDGroup_WrapData(struct ID *id, struct IDProperty *prop, struct IDProperty *parent);
 bool BPy_IDProperty_Map_ValidateAndCreate(PyObject *key, struct IDProperty *group, PyObject *ob);
 

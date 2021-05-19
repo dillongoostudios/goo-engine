@@ -739,12 +739,18 @@ void BlenderSync::free_data_after_sync(BL::Depsgraph &b_depsgraph)
    * caches to be releases from blender side in order to reduce peak memory
    * footprint during synchronization process.
    */
+
   const bool is_interface_locked = b_engine.render() && b_engine.render().use_lock_interface();
-  const bool can_free_caches = (BlenderSession::headless || is_interface_locked) &&
-                               /* Baking re-uses the depsgraph multiple times, clearing crashes
-                                * reading un-evaluated mesh data which isn't aligned with the
-                                * geometry we're baking, see T71012. */
-                               !scene->bake_manager->get_baking();
+  const bool is_persistent_data = b_engine.render() && b_engine.render().use_persistent_data();
+  const bool can_free_caches =
+      (BlenderSession::headless || is_interface_locked) &&
+      /* Baking re-uses the depsgraph multiple times, clearing crashes
+       * reading un-evaluated mesh data which isn't aligned with the
+       * geometry we're baking, see T71012. */
+      !scene->bake_manager->get_baking() &&
+      /* Persistent data must main caches for performance and correctness. */
+      !is_persistent_data;
+
   if (!can_free_caches) {
     return;
   }
@@ -869,6 +875,9 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   /* Clamp samples. */
   params.samples = min(params.samples, Integrator::MAX_SAMPLES);
 
+  /* Adaptive sampling. */
+  params.adaptive_sampling = RNA_boolean_get(&cscene, "use_adaptive_sampling");
+
   /* tiles */
   const bool is_cpu = (params.device.type == DEVICE_CPU);
   if (!is_cpu && !background) {
@@ -921,7 +930,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   BL::RenderSettings b_r = b_scene.render();
   params.progressive_refine = b_engine.is_preview() ||
                               get_boolean(cscene, "use_progressive_refine");
-  if (b_r.use_save_buffers())
+  if (b_r.use_save_buffers() || params.adaptive_sampling)
     params.progressive_refine = false;
 
   if (background) {
@@ -956,8 +965,6 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
   params.use_profiling = params.device.has_profiling && !b_engine.is_preview() && background &&
                          BlenderSession::print_render_stats;
-
-  params.adaptive_sampling = RNA_boolean_get(&cscene, "use_adaptive_sampling");
 
   return params;
 }

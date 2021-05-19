@@ -121,7 +121,7 @@ void EEVEE_cryptomatte_renderpasses_init(EEVEE_Data *vedata)
   ViewLayer *view_layer = draw_ctx->view_layer;
 
   /* Cryptomatte is only rendered for final image renders */
-  if (!DRW_state_is_image_render()) {
+  if (!DRW_state_is_scene_render()) {
     return;
   }
   const eViewLayerCryptomatteFlags active_layers = eevee_cryptomatte_active_layers(view_layer);
