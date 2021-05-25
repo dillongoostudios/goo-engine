@@ -238,7 +238,7 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
                                                            linfo->shadow_cube_size,
                                                            max_ii(1, linfo->num_cube_layer * 6),
                                                            shadow_pool_format,
-                                                           DRW_TEX_COMPARE,
+                                                           DRW_TEX_COMPARE | DRW_TEX_FILTER,
                                                            NULL);
     sldata->shadow_cube_id_pool = DRW_texture_create_2d_array(linfo->shadow_cube_size,
                                                               linfo->shadow_cube_size,
@@ -253,7 +253,7 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
                                                               linfo->shadow_cascade_size,
                                                               max_ii(1, linfo->num_cascade_layer),
                                                               shadow_pool_format,
-                                                              DRW_TEX_COMPARE,
+                                                              DRW_TEX_COMPARE | DRW_TEX_FILTER,
                                                               NULL);
     sldata->shadow_cascade_id_pool = DRW_texture_create_2d_array(linfo->shadow_cascade_size,
                                                                  linfo->shadow_cascade_size,

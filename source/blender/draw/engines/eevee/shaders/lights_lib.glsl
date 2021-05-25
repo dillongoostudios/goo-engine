@@ -5,6 +5,8 @@
 #pragma BLENDER_REQUIRE(ltc_lib.glsl)
 #pragma BLENDER_REQUIRE(gpu_shader_common_obinfos_lib.glsl)
 
+#extension GL_ARB_texture_gather : enable
+
 #ifndef MAX_CASCADE_NUM
 #  define MAX_CASCADE_NUM 4
 #endif
@@ -176,6 +178,26 @@ vec4 sample_cascade(sampler2DArray tex, vec2 co, float cascade_id)
 #define scube(x) shadows_cube_data[x]
 #define scascade(x) shadows_cascade_data[x]
 
+/*
+  Gather samples and manually compare against the ObjectHash uniform, then interpolate the results.
+*/
+float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord) 
+{
+  uvec4 id_kernel = textureGather(TEX_ID, coord);
+  vec4 matches = vec4(equal(id_kernel, uvec4(ObjectHash)));
+
+  ivec3 tex_size = textureSize(TEX_ID, 0);
+  // WHY THE FLYING FUCK DO WE NEED AN EXTRA 0.00195?
+  vec2 fra = fract((coord.xy * tex_size.xy) + vec2(0.50195, 0.50195));
+
+  return mix(
+    mix(matches.w, matches.z, fra.x), 
+    mix(matches.x, matches.y, fra.x), 
+    fra.y
+  );
+}
+
+
 float sample_cube_shadow(int shadow_id, vec3 P)
 {
   int data_id = int(sd(shadow_id).sh_data_index);
@@ -189,14 +211,16 @@ float sample_cube_shadow(int shadow_id, vec3 P)
   /* tex_id == data_id for cube shadowmap */
   float tex_id = float(data_id);
 
+  float vis = 0.0;
+  vec4 coord_f = vec4(coord, tex_id * 6.0 + face, dist);
+
   #ifdef USE_SHADOW_ID
-  uint shadow_obj_id = texture(shadowCubeIDTexture, vec3(coord, tex_id * 6.0 + face)).x;
-  if (shadow_obj_id == ObjectHash) {
-    return 1.0;
-  }
+  vis += sample_ID_texture(shadowCubeIDTexture, coord_f.xyz);
   #endif
 
-  return texture(shadowCubeTexture, vec4(coord, tex_id * 6.0 + face, dist));
+  vis += texture(shadowCubeTexture, coord_f);
+
+  return saturate(vis);
 }
 
 float sample_cascade_shadow(int shadow_id, vec3 P)
@@ -217,24 +241,22 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
-  uint shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
-  if (shadow_obj_id == ObjectHash) {
-    vis += 1.0;
-  }
+  float id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz);
+  vis += saturate(texture(shadowCascadeTexture, coord) + id_sample)  * (1.0 - blend);
+#else
+  vis += texture(shadowCascadeTexture, coord) * (1.0 - blend);
 #endif
-    vis += texture(shadowCascadeTexture, coord) * (1.0 - blend);
 
   cascade = min(3, cascade + 1);
   /* Second cascade. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
-  shadow_obj_id = texture(shadowCascadeIDTexture, coord.xyz).x;
-  if (shadow_obj_id == ObjectHash) {
-    vis += 1.0;
-  }
+  id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz);
+  vis += saturate(texture(shadowCascadeTexture, coord) + id_sample) * blend;
+#else
+  vis += texture(shadowCascadeTexture, coord) * blend;
 #endif
-    vis += texture(shadowCascadeTexture, coord) * blend;
 
   return saturate(vis);
 }
