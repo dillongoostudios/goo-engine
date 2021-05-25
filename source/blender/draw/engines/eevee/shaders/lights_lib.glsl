@@ -211,16 +211,13 @@ float sample_cube_shadow(int shadow_id, vec3 P)
   /* tex_id == data_id for cube shadowmap */
   float tex_id = float(data_id);
 
-  float vis = 0.0;
   vec4 coord_f = vec4(coord, tex_id * 6.0 + face, dist);
 
-  #ifdef USE_SHADOW_ID
-  vis += sample_ID_texture(shadowCubeIDTexture, coord_f.xyz);
-  #endif
-
-  vis += texture(shadowCubeTexture, coord_f);
-
-  return saturate(vis);
+#ifdef USE_SHADOW_ID
+  return max(sample_ID_texture(shadowCubeIDTexture, coord_f.xyz), texture(shadowCubeTexture, coord_f));
+#else
+  return texture(shadowCubeTexture, coord_f);
+#endif
 }
 
 float sample_cascade_shadow(int shadow_id, vec3 P)
@@ -242,7 +239,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
   float id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz);
-  vis += saturate(texture(shadowCascadeTexture, coord) + id_sample)  * (1.0 - blend);
+  vis += max(texture(shadowCascadeTexture, coord), id_sample)  * (1.0 - blend);
 #else
   vis += texture(shadowCascadeTexture, coord) * (1.0 - blend);
 #endif
@@ -253,7 +250,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
 #ifdef USE_SHADOW_ID
   id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz);
-  vis += saturate(texture(shadowCascadeTexture, coord) + id_sample) * blend;
+  vis += max(texture(shadowCascadeTexture, coord), id_sample) * blend;
 #else
   vis += texture(shadowCascadeTexture, coord) * blend;
 #endif
