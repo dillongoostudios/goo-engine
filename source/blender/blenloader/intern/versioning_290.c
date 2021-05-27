@@ -2081,6 +2081,11 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
       }
     }
+
+    LISTBASE_FOREACH (Curve *, cu, &bmain->curves) {
+      /* Turn on clamping as this was implicit before. */
+      cu->flag |= CU_PATH_CLAMP;
+    }
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 293, 50)) {

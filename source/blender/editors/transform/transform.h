@@ -154,11 +154,11 @@ typedef enum {
 
 /** #TransInfo.modifiers */
 typedef enum {
-  MOD_CONSTRAINT_SELECT = 1 << 0,
+  MOD_CONSTRAINT_SELECT_AXIS = 1 << 0,
   MOD_PRECISION = 1 << 1,
   MOD_SNAP = 1 << 2,
   MOD_SNAP_INVERT = 1 << 3,
-  MOD_CONSTRAINT_PLANE = 1 << 4,
+  MOD_CONSTRAINT_SELECT_PLANE = 1 << 4,
 } eTModifier;
 
 /** #TransSnap.status */
@@ -598,11 +598,18 @@ typedef struct TransInfo {
    * mouse button then.) */
   bool is_launch_event_tweak;
 
+  bool is_orient_set;
+
   struct {
     short type;
     float matrix[3][3];
   } orient[3];
-  short orient_curr;
+
+  enum {
+    O_DEFAULT = 0,
+    O_SCENE,
+    O_SET,
+  } orient_curr;
 
   /** backup from view3d, to restore on end. */
   short gizmo_flag;
