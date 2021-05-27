@@ -21,50 +21,38 @@
 
 /* **************** OUTPUT ******************** */
 
-static bNodeSocketTemplate sh_node_shader_info_in[] = {
-    {SOCK_VECTOR, N_("WorldPosition"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE, SOCK_HIDE_VALUE},
-    {SOCK_VECTOR, N_("Normal"), 0.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, PROP_NONE, SOCK_HIDE_VALUE},
+static bNodeSocketTemplate sh_node_combine_closure_in[] = {
+    {SOCK_RGBA, N_("Color"), 1.0f, 1.0f, 1.0f, 1.0f},
+    {SOCK_FLOAT, N_("Alpha"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_FACTOR},
+    {SOCK_FLOAT, N_("Holdout"), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_FACTOR},
     {-1, ""},
 };
 
-static bNodeSocketTemplate sh_node_shader_info_out[] = {
-    {SOCK_RGBA, N_("Diffuse Shading")},
-    {SOCK_FLOAT, N_("Cast Shadows")},
-    {SOCK_FLOAT, N_("Self Shadows")},
-    {SOCK_RGBA, N_("Ambient Lighting")},
+static bNodeSocketTemplate sh_node_combine_closure_out[] = {
+    {SOCK_SHADER, N_("BSDF")},
     {-1, ""},
 };
 
-static int node_shader_gpu_shader_info(GPUMaterial *mat,
+static int node_shader_gpu_combine_closure(GPUMaterial *mat,
                                         bNode *node,
                                         bNodeExecData *UNUSED(execdata),
                                         GPUNodeStack *in,
                                         GPUNodeStack *out)
 {
-  if (!in[0].link) {
-    GPU_link(mat, "world_position_get", &in[0].link);
-  }
-  if (!in[1].link) {
-    GPU_link(mat, "world_normals_get", &in[1].link);
-  }
-
-  // Set this to ensure shadowmap eval.
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
-
-  return GPU_stack_link(mat, node, "node_shader_info", in, out);
+  return GPU_stack_link(mat, node, "node_combine_closure", in, out);
 }
 
 /* node type definition */
-void register_node_type_sh_shader_info(void)
+void register_node_type_sh_combine_closure(void)
 {
   static bNodeType ntype;
 
-  sh_node_type_base(&ntype, SH_NODE_SHADER_INFO, "Shader Info", NODE_CLASS_INPUT, 0);
-  node_type_socket_templates(&ntype, sh_node_shader_info_in, sh_node_shader_info_out);
+  sh_node_type_base(&ntype, SH_NODE_COMBINE_CLOSURE, "Combine Shader", NODE_CLASS_SHADER, 0);
+  node_type_socket_templates(&ntype, sh_node_combine_closure_in, sh_node_combine_closure_out);
   node_type_size_preset(&ntype, NODE_SIZE_MIDDLE);
   node_type_init(&ntype, NULL);
   node_type_storage(&ntype, "", NULL, NULL);
-  node_type_gpu(&ntype, node_shader_gpu_shader_info);
+  node_type_gpu(&ntype, node_shader_gpu_combine_closure);
 
   nodeRegisterType(&ntype);
 }

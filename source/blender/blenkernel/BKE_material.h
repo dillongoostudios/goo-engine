@@ -75,6 +75,7 @@ enum {
 
 struct Material **BKE_object_material_get_p(struct Object *ob, short act);
 struct Material *BKE_object_material_get(struct Object *ob, short act);
+bool BKE_material_use_custom_holdout(struct Material* ma);
 void BKE_id_material_assign(struct Main *bmain, struct ID *id, struct Material *ma, short act);
 void BKE_object_material_assign(
     struct Main *bmain, struct Object *ob, struct Material *ma, short act, int assign_type);

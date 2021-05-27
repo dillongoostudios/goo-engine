@@ -213,6 +213,7 @@ uniform mat4 ModelMatrixInverse;
 #define DRW_BASE_FROM_DUPLI (1 << 2)
 #define DRW_BASE_FROM_SET (1 << 3)
 #define DRW_BASE_ACTIVE (1 << 4)
+#define DRW_BASE_HOLDOUT (1 << 5)
 
 /* ---- Opengl Depth conversion ---- */
 

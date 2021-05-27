@@ -700,6 +700,14 @@ Material *BKE_object_material_get(Object *ob, short act)
   return ma_p ? *ma_p : NULL;
 }
 
+bool BKE_material_use_custom_holdout(Material* ma) 
+{
+  if (ma == NULL || (ma->use_custom_holdout & MA_CUSTOM_HOLDOUT) == 0) {
+    return false;
+  }
+  return true;
+}
+
 Material *BKE_gpencil_material(Object *ob, short act)
 {
   Material *ma = BKE_object_material_get(ob, act);

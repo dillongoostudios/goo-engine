@@ -211,7 +211,8 @@ typedef struct Material {
 
   /* Light groups */
   int light_group_bits;
-  char _pad4[4];
+  char use_custom_holdout;
+  char _pad4[3];
 
   /**
    * Cached slots for texture painting, must be refreshed in
@@ -355,6 +356,7 @@ enum {
 };
 
 #define MA_SHADOW_ID (1 << 0)
+#define MA_CUSTOM_HOLDOUT (1 << 0)
 
 /* Grease Pencil Stroke styles */
 enum {
