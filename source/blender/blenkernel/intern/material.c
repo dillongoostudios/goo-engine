@@ -702,7 +702,7 @@ Material *BKE_object_material_get(Object *ob, short act)
 
 bool BKE_material_use_custom_holdout(Material* ma) 
 {
-  if (ma == NULL || (ma->use_custom_holdout & MA_CUSTOM_HOLDOUT) == 0) {
+  if (ma == NULL || ma->blend_method == MA_BM_SOLID) {
     return false;
   }
   return true;

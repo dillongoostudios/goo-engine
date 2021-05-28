@@ -295,9 +295,11 @@ float spot_attenuation(LightData ld, vec3 l_vector)
 float light_attenuation(LightData ld, vec4 l_vector)
 {
   float vis = 1.0;
+#ifndef VOLUME_LIGHTING
   if ((ld.light_group_bits.x & lightGroups) == 0) {
     return 0.0;
   }
+#endif
   if (ld.l_type == SPOT) {
     vis *= spot_attenuation(ld, l_vector.xyz);
   }

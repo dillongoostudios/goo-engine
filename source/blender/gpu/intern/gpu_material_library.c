@@ -56,7 +56,6 @@ extern char datatoc_gpu_shader_material_color_ramp_glsl[];
 extern char datatoc_gpu_shader_material_color_util_glsl[];
 extern char datatoc_gpu_shader_material_combine_hsv_glsl[];
 extern char datatoc_gpu_shader_material_combine_rgb_glsl[];
-extern char datatoc_gpu_shader_material_combine_closure_glsl[];
 extern char datatoc_gpu_shader_material_combine_xyz_glsl[];
 extern char datatoc_gpu_shader_material_diffuse_glsl[];
 extern char datatoc_gpu_shader_material_displacement_glsl[];
@@ -231,11 +230,6 @@ static GPUMaterialLibrary gpu_shader_material_combine_hsv_library = {
 
 static GPUMaterialLibrary gpu_shader_material_combine_rgb_library = {
     .code = datatoc_gpu_shader_material_combine_rgb_glsl,
-    .dependencies = {NULL},
-};
-
-static GPUMaterialLibrary gpu_shader_material_combine_closure_library = {
-    .code = datatoc_gpu_shader_material_combine_closure_glsl,
     .dependencies = {NULL},
 };
 
@@ -620,7 +614,6 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_color_ramp_library,
     &gpu_shader_material_combine_hsv_library,
     &gpu_shader_material_combine_rgb_library,
-    &gpu_shader_material_combine_closure_library,
     &gpu_shader_material_combine_xyz_library,
     &gpu_shader_material_diffuse_library,
     &gpu_shader_material_displacement_library,

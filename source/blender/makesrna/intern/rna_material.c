@@ -840,13 +840,6 @@ void RNA_def_material(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Check Self Shadowing", "Ignore shadows cast by this object onto itself");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
-  /* Custom holdout */
-  prop = RNA_def_property(srna, "use_custom_holdout", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, NULL, "use_custom_holdout", MA_CUSTOM_HOLDOUT);
-  RNA_def_property_boolean_default(prop, false);
-  RNA_def_property_ui_text(prop, "Use Custom Holdout", "Use CombineShader node output to control holdout alpha");
-  RNA_def_property_update(prop, 0, "rna_Material_draw_update");
-
   /* For Preview Render */
   prop = RNA_def_property(srna, "preview_render_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "pr_type");

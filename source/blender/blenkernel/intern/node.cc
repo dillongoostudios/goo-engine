@@ -4865,7 +4865,6 @@ static void registerShaderNodes()
   register_node_type_sh_subsurface_scattering();
   register_node_type_sh_mix_shader();
   register_node_type_sh_add_shader();
-  register_node_type_sh_combine_closure();
   register_node_type_sh_uvmap();
   register_node_type_sh_uvalongstroke();
   register_node_type_sh_eevee_specular();
