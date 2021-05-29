@@ -2412,6 +2412,7 @@ enum {
   SCE_EEVEE_OVERSCAN = (1 << 21),
   SCE_EEVEE_DOF_HQ_SLIGHT_FOCUS = (1 << 22),
   SCE_EEVEE_DOF_JITTER = (1 << 23),
+  SCE_EEVEE_SHADOW_ID_HIGH_BITDEPTH = (1 << 24)
 };
 
 /** #SceneEEVEE.shadow_method */

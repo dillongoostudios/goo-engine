@@ -18,5 +18,5 @@ layout(std140) uniform infoBlock
 #  define OrcoTexCoFactors (drw_infos[resource_id].drw_OrcoTexCoFactors)
 #  define ObjectInfo (drw_infos[resource_id].drw_Infos)
 #  define ObjectColor (drw_infos[resource_id].drw_ObjectColor)
-#  define ObjectHash (drw_infos[resource_id].drw_ObjectHash.x)
+#  define ObjectHash ((shadow_id_high_bitdepth) ? drw_infos[resource_id].drw_ObjectHash.x : (drw_infos[resource_id].drw_ObjectHash.x & 0x0000FFFFu))
 #endif

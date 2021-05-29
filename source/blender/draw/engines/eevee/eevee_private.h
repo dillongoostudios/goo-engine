@@ -554,7 +554,7 @@ typedef struct EEVEE_LightsInfo {
   int num_cascade_layer, cache_num_cascade_layer;
   int cube_len, cascade_len, shadow_len;
   int shadow_cube_size, shadow_cascade_size;
-  bool shadow_high_bitdepth, soft_shadows;
+  bool shadow_high_bitdepth, shadow_id_high_bitdepth, soft_shadows;
   /* UBO Storage : data used by UBO */
   struct EEVEE_Light light_data[MAX_LIGHT];
   struct EEVEE_Shadow shadow_data[MAX_SHADOW];
@@ -891,7 +891,7 @@ typedef struct EEVEE_CommonUniformBuffer {
   float ray_depth;         /* float */
   float alpha_hash_offset; /* float */
   float alpha_hash_scale;  /* float */
-  float pad7;              /* float */
+  int shadow_id_high_bitdepth; /* bool */
   float pad8;              /* float */
   float pad9;              /* float */
   float pad10;             /* float */

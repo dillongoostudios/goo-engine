@@ -42,7 +42,7 @@ layout(std140) uniform common_block
   float rayDepth;
   float alphaHashOffset;
   float alphaHashScale;
-  float pad6;
+  bool shadow_id_high_bitdepth;
   float pad7;
   float pad8;
   float pad9;

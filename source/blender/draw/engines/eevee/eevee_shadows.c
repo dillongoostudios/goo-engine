@@ -71,11 +71,13 @@ void EEVEE_shadows_init(EEVEE_ViewLayerData *sldata)
   int sh_cube_size = scene_eval->eevee.shadow_cube_size;
   int sh_cascade_size = scene_eval->eevee.shadow_cascade_size;
   const bool sh_high_bitdepth = (scene_eval->eevee.flag & SCE_EEVEE_SHADOW_HIGH_BITDEPTH) != 0;
+  const bool sh_id_high_bitdepth = (scene_eval->eevee.flag & SCE_EEVEE_SHADOW_ID_HIGH_BITDEPTH) != 0;
   sldata->lights->soft_shadows = (scene_eval->eevee.flag & SCE_EEVEE_SHADOW_SOFT) != 0;
 
   EEVEE_LightsInfo *linfo = sldata->lights;
   if ((linfo->shadow_cube_size != sh_cube_size) ||
-      (linfo->shadow_high_bitdepth != sh_high_bitdepth)) {
+      (linfo->shadow_high_bitdepth != sh_high_bitdepth) || 
+      (linfo->shadow_id_high_bitdepth != sh_id_high_bitdepth)) {
     BLI_assert((sh_cube_size > 0) && (sh_cube_size <= 4096));
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_pool);
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_id_pool);
@@ -83,7 +85,8 @@ void EEVEE_shadows_init(EEVEE_ViewLayerData *sldata)
   }
 
   if ((linfo->shadow_cascade_size != sh_cascade_size) ||
-      (linfo->shadow_high_bitdepth != sh_high_bitdepth)) {
+      (linfo->shadow_high_bitdepth != sh_high_bitdepth) || 
+      (linfo->shadow_id_high_bitdepth != sh_id_high_bitdepth)) {
     BLI_assert((sh_cascade_size > 0) && (sh_cascade_size <= 4096));
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_pool);
     DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_id_pool);
@@ -91,6 +94,7 @@ void EEVEE_shadows_init(EEVEE_ViewLayerData *sldata)
   }
 
   linfo->shadow_high_bitdepth = sh_high_bitdepth;
+  linfo->shadow_id_high_bitdepth = sh_id_high_bitdepth;
   linfo->shadow_cube_size = sh_cube_size;
   linfo->shadow_cascade_size = sh_cascade_size;
 }
@@ -214,7 +218,7 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   eGPUTextureFormat shadow_pool_format = (linfo->shadow_high_bitdepth) ? GPU_DEPTH_COMPONENT24 :
                                                                          GPU_DEPTH_COMPONENT16;
 
-  eGPUTextureFormat shadow_id_pool_format = GPU_R32UI;
+  eGPUTextureFormat shadow_id_pool_format = (linfo->shadow_id_high_bitdepth) ? GPU_R32UI : GPU_R16UI;
   /* Setup enough layers. */
   /* Free textures if number mismatch. */
   if (linfo->num_cube_layer != linfo->cache_num_cube_layer) {
