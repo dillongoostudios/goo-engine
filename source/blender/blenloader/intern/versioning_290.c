@@ -2088,7 +2088,7 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_ATLEAST(bmain, 293, 50)) {
+  if (!DNA_struct_elem_find(fd->filesdna, "Lamp", "int", "light_group_bits")) {
     LISTBASE_FOREACH (Light *, light, &bmain->lights) {
       light->light_group_bits = LA_GROUPS_ALL;
     }
