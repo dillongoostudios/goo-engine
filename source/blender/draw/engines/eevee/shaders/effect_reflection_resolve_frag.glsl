@@ -7,6 +7,7 @@
 #pragma BLENDER_REQUIRE(bsdf_common_lib.glsl)
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
 #pragma BLENDER_REQUIRE(effect_reflection_lib.glsl)
+#pragma BLENDER_REQUIRE(common_colorpacking_lib.glsl)
 
 /* Based on:
  * "Stochastic Screen Space Reflections"
@@ -23,6 +24,8 @@ uniform sampler2D normalBuffer;
 uniform sampler2D specroughBuffer;
 uniform sampler2D hitBuffer;
 uniform sampler2D hitDepth;
+uniform sampler2D ssgiHitBuffer;
+uniform sampler2D ssgiHitDepth;
 
 uniform int samplePoolOffset;
 
@@ -190,6 +193,10 @@ void main()
 
   ivec2 texel = ivec2(gl_FragCoord.xy);
   vec4 speccol_roughness = texelFetch(specroughBuffer, texel, 0).rgba;
+  /* unpack A for Spec, B for Diffuse */ // TODO Separate input buffers
+  vec4 difcol_roughness = vec4(0.0);
+  unpackVec4(speccol_roughness, speccol_roughness, difcol_roughness);
+
   vec3 brdf = speccol_roughness.rgb;
   float roughness = speccol_roughness.a;
 

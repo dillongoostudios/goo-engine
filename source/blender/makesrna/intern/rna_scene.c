@@ -7129,6 +7129,56 @@ static void rna_def_scene_eevee(BlenderRNA *brna)
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
 
+  prop = RNA_def_property(srna, "ssr_diffuse_intensity", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Intensity", "Diffuse bounce light intensity - 0.0 disables all tracing and resolve in shader");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 0.1f, 2);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_thickness", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_ui_text(prop, "Thickness", "Pixel thickness used to detect intersection for diffuse bounce");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.0f, 3.0f, 5, 3);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_resolve_bias", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Resolve Bias", "Diffuse resolve bias - Higher values blur ray hit color sample, potentially reducing noise at the cost of accuracy. Can introduce noticable light bleeding.");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_quality", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Ray Length", "Diffuse trace ray length");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_clamp", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Clamp", "Firefly filter for diffuse resolve");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.0f, 1.0f, 5, 3);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_ao", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Occlusion", "Multiply SSGI output with AO");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_filter", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Denoise Mix", "Mix SSGI output with denoising with a weighted bilateral blur");
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
+  prop = RNA_def_property(srna, "ssr_diffuse_versioning", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_ui_text(prop, "Versioning", "Set settings to defaults if version number is under defined");
+  RNA_def_property_range(prop, 0.0f, 10.0f);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, NULL);
+
   /* Volumetrics */
   prop = RNA_def_property(srna, "volumetric_start", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_ui_text(prop, "Start", "Start distance of the volumetric effect");

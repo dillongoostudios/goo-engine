@@ -195,6 +195,14 @@
     .ssr_thickness = 0.2f, \
     .ssr_border_fade = 0.075f, \
     .ssr_firefly_fac = 10.0f, \
+    .ssr_diffuse_thickness = 1.0f, \
+    .ssr_diffuse_intensity = 1.0f, \
+    .ssr_diffuse_resolve_bias = 0.1f, \
+    .ssr_diffuse_quality = 0.25f, \
+    .ssr_diffuse_clamp = 1.0f, \
+    .ssr_diffuse_ao = 1.0f, \
+    .ssr_diffuse_filter = 1.0f, \
+    .ssr_diffuse_versioning = 1.12f, \
  \
     .volumetric_start = 0.1f, \
     .volumetric_end = 100.0f, \

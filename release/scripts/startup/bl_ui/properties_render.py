@@ -330,7 +330,7 @@ class RENDER_PT_eevee_subsurface_scattering(RenderButtonsPanel, Panel):
 
 
 class RENDER_PT_eevee_screen_space_reflections(RenderButtonsPanel, Panel):
-    bl_label = "Screen Space Reflections"
+    bl_label = "Screen Space Raytracing"
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {'BLENDER_EEVEE'}
 
@@ -354,12 +354,25 @@ class RENDER_PT_eevee_screen_space_reflections(RenderButtonsPanel, Panel):
         col.active = props.use_ssr
         col.prop(props, "use_ssr_refraction", text="Refraction")
         col.prop(props, "use_ssr_halfres")
+        col.prop(props, "ssr_border_fade")
+
+        col.label(text="Specular:", text_ctxt="", translate=False, icon='NONE', icon_value=0)
+
         col.prop(props, "ssr_quality")
         col.prop(props, "ssr_max_roughness")
         col.prop(props, "ssr_thickness")
-        col.prop(props, "ssr_border_fade")
         col.prop(props, "ssr_firefly_fac")
 
+        col.label(text="Diffuse:", text_ctxt="", translate=False, icon='NONE', icon_value=0)
+
+        col.prop(props, "ssr_diffuse_intensity")
+        col.prop(props, "ssr_diffuse_quality")
+        col.prop(props, "ssr_diffuse_thickness")
+        col.prop(props, "ssr_diffuse_resolve_bias")
+        col.prop(props, "ssr_diffuse_clamp")
+        col.prop(props, "ssr_diffuse_ao")
+        #col.prop(props, "ssr_diffuse_filter")
+        #col.prop(props, "ssr_diffuse_versioning") # used for versioning only since can't rely on Blender version (needs cleanup)
 
 class RENDER_PT_eevee_shadows(RenderButtonsPanel, Panel):
     bl_label = "Shadows"

@@ -1613,6 +1613,14 @@ typedef struct SceneEEVEE {
   float ssr_thickness;
   float ssr_border_fade;
   float ssr_firefly_fac;
+  float ssr_diffuse_intensity;
+  float ssr_diffuse_thickness;
+  float ssr_diffuse_resolve_bias;
+  float ssr_diffuse_quality;
+  float ssr_diffuse_clamp;
+  float ssr_diffuse_ao;
+  float ssr_diffuse_filter;
+  float ssr_diffuse_versioning;
 
   float volumetric_start;
   float volumetric_end;

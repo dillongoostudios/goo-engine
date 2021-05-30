@@ -46,6 +46,15 @@ layout(std140) uniform common_block
   float pad7;
   float pad8;
   float pad9;
+  /* SSGI */
+  float ssrDiffuseIntensity;                        /* float */
+  float ssrDiffuseThickness;                        /* float */
+  float ssrDiffuseResolveBias;                      /* float */
+  float ssrDiffuseQuality;                          /* float */
+  float ssrDiffuseClamp;                            /* float */
+  float ssrDiffuseAo;                               /* float */
+  float ssrDiffuseFilter;                           /* float */
+  float ssrDiffuseVersioning;                       /* float */
 };
 
 /* rayType (keep in sync with ray_type) */

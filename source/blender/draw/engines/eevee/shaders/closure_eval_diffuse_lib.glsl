@@ -72,7 +72,10 @@ void closure_Diffuse_indirect_end(ClosureInputDiffuse cl_in,
     cl_out.radiance += cl_common.diffuse_accum * probe_radiance;
   }
   /* Apply occlusion on radiance before the light loop. */
-  cl_out.radiance *= cl_eval.ambient_occlusion;
+  float ao_transfer = 1.0 * cl_eval.ambient_occlusion;
+
+  cl_out.radiance *= ao_transfer;
+  cl_out.AO = ao_transfer;
 }
 
 void closure_Diffuse_eval_end(ClosureInputDiffuse cl_in,

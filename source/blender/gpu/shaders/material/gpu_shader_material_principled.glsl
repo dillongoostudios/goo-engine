@@ -141,7 +141,7 @@ void node_bsdf_principled(vec4 base_color,
     }
 
     closure_load_ssr_data(
-        glossy_radiance_final, in_Glossy_1.roughness, in_Glossy_1.N, ssr_id, result);
+        glossy_radiance_final * alpha, in_Glossy_1.roughness, in_Glossy_1.N, ssr_id, result, (mix(base_color.rgb, subsurface_color.rgb, subsurface) * alpha) * (1 - metallic), out_Diffuse_0.AO);
   }
 
   if (diffuse_weight > 1e-5) {
@@ -192,7 +192,6 @@ void node_bsdf_principled(vec4 base_color,
 
   result.transmittance = vec3(1.0 - alpha);
   result.radiance *= alpha;
-  result.ssr_data.rgb *= alpha;
 #  ifdef USE_SSS
   result.sss_albedo *= alpha;
 #  endif

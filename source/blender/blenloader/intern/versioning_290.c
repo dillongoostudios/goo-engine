@@ -1843,7 +1843,21 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
     FOREACH_NODETREE_END;
   }
-
+  /* using float property check for versioning since can't rely on blender version*/
+  if (!DNA_struct_elem_find(fd->filesdna, "SceneEEVEE", "float", "diffuse_intensity")) {
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      if (scene->eevee.ssr_diffuse_versioning < 1.12f) {
+        scene->eevee.ssr_diffuse_intensity = 1.0f;
+        scene->eevee.ssr_diffuse_thickness = 1.0f;
+        scene->eevee.ssr_diffuse_resolve_bias = 0.1f;
+        scene->eevee.ssr_diffuse_quality = 0.25f;
+        scene->eevee.ssr_diffuse_clamp = 1.0f;
+        scene->eevee.ssr_diffuse_ao = 1.0f;
+        scene->eevee.ssr_diffuse_filter = 1.0f;
+        scene->eevee.ssr_diffuse_versioning = 1.12f;
+      }
+    }
+  }
   if (!MAIN_VERSION_ATLEAST(bmain, 293, 9)) {
     if (!DNA_struct_elem_find(fd->filesdna, "SceneEEVEE", "float", "bokeh_overblur")) {
       LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
