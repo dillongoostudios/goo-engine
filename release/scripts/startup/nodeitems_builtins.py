@@ -279,7 +279,6 @@ shader_node_categories = [
         NodeItem("ShaderNodeMapRange"),
         NodeItem("ShaderNodeClamp"),
         NodeItem("ShaderNodeMath"),
-        NodeItem("ShaderNodeSqueeze"),
         NodeItem("ShaderNodeValToRGB"),
         NodeItem("ShaderNodeRGBToBW"),
         NodeItem("ShaderNodeShaderToRGB", poll=object_eevee_shader_nodes_poll),
