@@ -67,7 +67,6 @@
     .spec_fac = 1.0f, \
     .volume_fac = 1.0f, \
     .att_dist = 40.0f, \
-    .light_group_bits = LA_GROUPS_ALL, \
     .sun_angle = DEG2RADF(0.526f), \
     .area_spread = DEG2RADF(180.0f), \
   }

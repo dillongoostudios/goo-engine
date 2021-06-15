@@ -2102,15 +2102,6 @@ void blo_do_versions_290(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-  if (!DNA_struct_elem_find(fd->filesdna, "Lamp", "int", "light_group_bits")) {
-    LISTBASE_FOREACH (Light *, light, &bmain->lights) {
-      light->light_group_bits = LA_GROUPS_ALL;
-    }
-
-    LISTBASE_FOREACH (Material *, mat, &bmain->materials) {
-      mat->light_group_bits = MA_GROUPS_ALL;
-    }
-  }
 
   /**
    * Versioning code until next subversion bump goes here.

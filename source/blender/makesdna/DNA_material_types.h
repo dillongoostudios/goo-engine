@@ -210,9 +210,9 @@ typedef struct Material {
   char check_shadow_id;
 
   /* Light groups */
-  int light_group_bits;
+  int light_groups[4];
   char use_custom_holdout;
-  char _pad4[3];
+  char _pad4[7];
 
   /**
    * Cached slots for texture painting, must be refreshed in

@@ -80,7 +80,9 @@ typedef struct Light {
   /** Old animation system, deprecated for 2.5. */
   struct Ipo *ipo DNA_DEPRECATED;
   short pr_texture, use_nodes;
-  int light_group_bits;
+  char _pad[4];
+
+  int light_groups[4];
 
   /* Eevee */
   float cascade_max_dist;

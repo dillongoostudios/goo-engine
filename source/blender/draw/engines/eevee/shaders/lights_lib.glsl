@@ -99,7 +99,7 @@ uniform sampler2DArrayShadow shadowCascadeTexture;
 uniform usampler2DArray shadowCubeIDTexture;
 uniform usampler2DArray shadowCascadeIDTexture;
 
-uniform int lightGroups;
+uniform ivec4 lightGroups;
 
 /** \} */
 
@@ -296,7 +296,12 @@ float light_attenuation(LightData ld, vec4 l_vector)
 {
   float vis = 1.0;
 #ifndef VOLUME_LIGHTING
-  if ((ld.light_group_bits.x & lightGroups) == 0) {
+  if (
+    (ld.light_group_bits.x & lightGroups.x) == 0
+     && (ld.light_group_bits.y & lightGroups.y) == 0
+     && (ld.light_group_bits.z & lightGroups.z) == 0
+     && (ld.light_group_bits.w & lightGroups.w) == 0
+    ) {
     return 0.0;
   }
 #endif

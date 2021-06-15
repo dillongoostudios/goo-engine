@@ -648,13 +648,14 @@ bool GPU_material_flag_get(GPUMaterial *mat, eGPUMatFlag flag)
   return (mat->flag & flag) != 0;
 }
 
-int GPU_material_light_groups_get(GPUMaterial *mat) 
+void GPU_material_light_groups_get(GPUMaterial *mat, int* out) 
 {
   Material* ma = mat->ma;
+  const int grps_all[4] = {MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL};
   if (ma) {
-    return ma->light_group_bits;
+    copy_v4_v4_int(out, ma->light_groups);
   } else {
-    return MA_GROUPS_ALL;
+    copy_v4_v4_int(out, grps_all);
   }
 }
 

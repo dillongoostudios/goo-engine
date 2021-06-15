@@ -222,7 +222,7 @@ bool GPU_material_is_volume_shader(GPUMaterial *mat);
 
 void GPU_material_flag_set(GPUMaterial *mat, eGPUMatFlag flag);
 bool GPU_material_flag_get(GPUMaterial *mat, eGPUMatFlag flag);
-int GPU_material_light_groups_get(GPUMaterial *mat);
+void GPU_material_light_groups_get(GPUMaterial *mat, int *out);
 
 void GPU_pass_cache_init(void);
 void GPU_pass_cache_garbage_collect(void);
