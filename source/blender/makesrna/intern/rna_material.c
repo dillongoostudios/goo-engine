@@ -829,7 +829,7 @@ void RNA_def_material(BlenderRNA *brna)
   prop = RNA_def_property(srna, "check_shadow_id", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "check_shadow_id", MA_SHADOW_ID);
   RNA_def_property_boolean_default(prop, false);
-  RNA_def_property_ui_text(prop, "Check Self Shadowing", "Ignore shadows cast by this object onto itself");
+  RNA_def_property_ui_text(prop, "Check Self Shadowing", "Calculate shadows cast by this object onto itself");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
   /* For Preview Render */

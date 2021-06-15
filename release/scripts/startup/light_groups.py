@@ -36,6 +36,8 @@ MAX_LIGHT_GROUP_BIT = 127
 def set_bit(vec, bit):
     index = bit // SIZEOF_INT
     mask = 1 << (bit % (SIZEOF_INT - 1))
+    if index > 3:
+        return
     vec[index] |= mask
 
 
@@ -59,6 +61,9 @@ def sync_light_groups():
         for grp in light.light_groups.groups:
             light_names.add(grp.name)
 
+    if len(light_names) >= MAX_LIGHT_GROUP_BIT:
+        print("WARNING: Max number of light groups (127) reached. Some Light Groups will not be included.")
+
     # Assign bit numbers - default group is reserved at 127
     bit_mapping = {name: index for index, name in enumerate(light_names)}
 
@@ -70,17 +75,39 @@ def sync_light_groups():
         map_bits(light, bit_mapping)
 
 
-def update_handler(self, ctx):
+def update_handler(_s, _c):
     sync_light_groups()
 
 
 @persistent
-def sync_handler(*args):
+def sync_handler(*_):
     sync_light_groups()
+
+
+def rename_group(data, src, tgt):
+    if data.library:
+        return
+    for grp in data.light_groups.groups:
+        if grp.name == src:
+            grp.name = tgt
+
+
+def get_name(self):
+    return self.name
+
+
+# Update all matching names in the entire file
+def set_name(self, value):
+    orig_name = self.name
+    for mat in bpy.data.materials:
+        rename_group(mat, orig_name, value)
+    for light in bpy.data.lights:
+        rename_group(light, orig_name, value)
 
 
 class LightGroup(PropertyGroup):
     name: StringProperty()
+    viz_name: StringProperty(get=get_name, set=set_name)
 
 
 class LightGroups(PropertyGroup):
@@ -90,7 +117,6 @@ class LightGroups(PropertyGroup):
 
 
 def get_name_set():
-    # Slightly expensive... not really any other way though unfortunately
     names = set()
     for mat in bpy.data.materials:
         for grp in mat.light_groups.groups:
@@ -125,10 +151,9 @@ class MAT_UL_LightGroupList(UIList):
                   index: int = 0,
                   flt_flag: int = 0):
         row = layout.row(align=True)
-        row.prop(item, "name", emboss=False, text="")
+        row.prop(item, "viz_name", emboss=False, text="")
 
     def filter_items(self, context: 'Context', data: 'AnyType', property: str):
-        shown = self.bitflag_filter_item
         keys = getattr(data, property)
         flt_flags = []
         flt_order = []
@@ -171,14 +196,14 @@ class ALightGroupPanel(Panel):
         row = layout.row()
         row.template_list("MAT_UL_LightGroupList", "",
                           groups, "groups", groups, "group_index",
-                          rows=3, type='DEFAULT')
+                          rows=5, type='DEFAULT')
         # Right hand column with operators
         col = row.column(align=True)
-        col.operator('light_groups.new', icon='ADD', text="")
-        col.operator('light_groups.remove', icon='REMOVE', text="")
-        col.separator()
         col.operator('light_groups.link', icon='LINKED', text="")
         col.operator('light_groups.unlink', icon='UNLINKED', text="")
+        col.separator()
+        col.operator('light_groups.new', icon='ADD', text="")
+        col.operator('light_groups.remove', icon='REMOVE', text="")
         col.separator()
         col.operator('light_groups.resync', icon='FILE_REFRESH', text="")
 
