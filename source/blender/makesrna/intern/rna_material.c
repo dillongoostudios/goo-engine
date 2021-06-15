@@ -817,11 +817,12 @@ void RNA_def_material(BlenderRNA *brna)
                            "event (0 is disabled)");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
-  prop = RNA_def_property(srna, "light_groups", PROP_INT, PROP_NONE);
-  RNA_def_property_int_sdna(prop, NULL, "light_groups");
+  prop = RNA_def_property(srna, "light_group_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_bits");
   RNA_def_property_array(prop, 4);
   RNA_def_property_ui_text(prop, "Light Groups", "Light group bitfield");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
   /* Self shadowing */

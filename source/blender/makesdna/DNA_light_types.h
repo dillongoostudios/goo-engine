@@ -82,7 +82,7 @@ typedef struct Light {
   short pr_texture, use_nodes;
   char _pad[4];
 
-  int light_groups[4];
+  int light_group_bits[4];
 
   /* Eevee */
   float cascade_max_dist;

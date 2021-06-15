@@ -210,7 +210,7 @@ typedef struct Material {
   char check_shadow_id;
 
   /* Light groups */
-  int light_groups[4];
+  int light_group_bits[4];
   char use_custom_holdout;
   char _pad4[7];
 

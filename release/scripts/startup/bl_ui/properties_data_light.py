@@ -123,7 +123,8 @@ class DATA_PT_EEVEE_light(DataButtonsPanel, Panel):
         
         col = layout.column()
         col.use_property_split = False
-        col.prop(light, "light_groups", text="Light groups")
+        col.prop(light, "light_group_bits", text="Light groups")
+        col.active = False
         col.use_property_split = True
         col = layout.column()
 
