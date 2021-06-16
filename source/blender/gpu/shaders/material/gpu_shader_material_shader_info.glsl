@@ -30,6 +30,7 @@ void node_shader_info(vec3 position, vec3 normal,
 
     for (int i = 0; i < laNumLight && i < MAX_LIGHT; i++) {
         ClosureLightData light = closure_light_eval_init(cl_common, i);
+        LightData ld = light.data;
         if (
           (ld.light_group_bits.x & lightGroups.x) == 0
           && (ld.light_group_bits.y & lightGroups.y) == 0
