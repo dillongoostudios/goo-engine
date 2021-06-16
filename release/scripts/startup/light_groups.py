@@ -83,6 +83,21 @@ def update_handler(_s, _c):
 def sync_handler(*_):
     sync_light_groups()
 
+@persistent
+def sync_dg_handler(scn, dg):
+    if dg.mode == 'RENDER':
+        return
+
+    for update in dg.updates:
+        uid = update.id
+
+        if not uid:
+            continue
+
+        if isinstance(uid, bpy.types.Material):
+            sync_light_groups()
+            return
+
 
 def rename_group(data, src, tgt):
     if data.library:
@@ -364,6 +379,7 @@ def register():
 
     bpy.app.handlers.render_init.append(sync_handler)
     bpy.app.handlers.load_post.append(sync_handler)
+    bpy.app.handlers.depsgraph_update_post.append(sync_dg_handler)
 
 
 def unregister():
