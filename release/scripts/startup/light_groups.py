@@ -94,7 +94,7 @@ def sync_dg_handler(scn, dg):
         if not uid:
             continue
 
-        if isinstance(uid, bpy.types.Material):
+        if isinstance(uid, bpy.types.Material) or isinstance(uid, bpy.types.Light):
             sync_light_groups()
             return
 
