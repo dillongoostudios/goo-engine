@@ -67,7 +67,9 @@ def git_branch_release_version(branch, tag):
         release_version = re.search(r"^v([0-9]*\.[0-9]*).*", tag)
         if release_version:
             release_version = release_version.group(1)
-    return release_version
+    # return release_version
+    # TODO Update with custom version update to 3.0
+    return "2.93"
 
 
 def svn_libraries_base_url(release_version):
