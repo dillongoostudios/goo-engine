@@ -1,7 +1,7 @@
 [submodule "release/scripts/addons"]
 	path = release/scripts/addons
-	url = https://git.blender.org/blender-addons.git
-	branch = blender-v2.93-release 
+	url = git@github.com:studiogoobot/goo-blender-addons.git
+	branch = custom-eevee 
 	ignore = all
 [submodule "release/scripts/addons_contrib"]
 	path = release/scripts/addons_contrib
