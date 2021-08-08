@@ -4,7 +4,7 @@
 
 float calc_self_shadows_only(LightData ld, vec3 P, vec4 l_vector) 
 {
-  float vis = light_attenuation(ld, l_vector);
+  float vis = light_attenuation(ld, l_vector, lightGroups);
   if (ld.l_shadowid >= 0.0 && vis > 0.001) {
     if (ld.l_type == SUN) {
       vis *= sample_cascade_shadow(int(ld.l_shadowid), P, false);

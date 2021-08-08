@@ -292,15 +292,15 @@ float spot_attenuation(LightData ld, vec3 l_vector)
   return spotmask;
 }
 
-float light_attenuation(LightData ld, vec4 l_vector)
+float light_attenuation(LightData ld, vec4 l_vector, ivec4 light_groups)
 {
   float vis = 1.0;
-#ifndef VOLUME_LIGHTING
+#if !defined(VOLUME_LIGHTING) // && !defined(STEP_RESOLVE)
   if (
-    (ld.light_group_bits.x & lightGroups.x) == 0
-     && (ld.light_group_bits.y & lightGroups.y) == 0
-     && (ld.light_group_bits.z & lightGroups.z) == 0
-     && (ld.light_group_bits.w & lightGroups.w) == 0
+    (ld.light_group_bits.x & light_groups.x) == 0
+     && (ld.light_group_bits.y & light_groups.y) == 0
+     && (ld.light_group_bits.z & light_groups.z) == 0
+     && (ld.light_group_bits.w & light_groups.w) == 0
     ) {
     return 0.0;
   }
@@ -375,9 +375,9 @@ float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_
 }
 #endif /* VOLUMETRICS */
 
-float light_visibility(LightData ld, vec3 P, vec4 l_vector)
+float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups)
 {
-  float l_atten = light_attenuation(ld, l_vector);
+  float l_atten = light_attenuation(ld, l_vector, light_groups);
   return light_shadowing(ld, P, l_atten);
 }
 

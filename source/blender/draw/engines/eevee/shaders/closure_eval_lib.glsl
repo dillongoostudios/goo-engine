@@ -179,9 +179,10 @@
 struct ClosureInputCommon {
   /** Custom occlusion value set by the user. */
   float occlusion;
+  ivec4 light_groups;
 };
 
-#define CLOSURE_INPUT_COMMON_DEFAULT ClosureInputCommon(1.0)
+#define CLOSURE_INPUT_COMMON_DEFAULT ClosureInputCommon(1.0, lightGroups)
 
 struct ClosureEvalCommon {
   /** Result of SSAO. */
@@ -206,6 +207,8 @@ struct ClosureEvalCommon {
   float specular_accum;
   /** Diffuse probe accumulator. */
   float diffuse_accum;
+  /** Light Group values, either from uniform or id buffer. */
+  ivec4 light_groups;
 };
 
 /* Common cl_out struct used by most closures. */
@@ -228,6 +231,7 @@ ClosureEvalCommon closure_Common_eval_init(ClosureInputCommon cl_in)
   cl_eval.vP = viewPosition;
   cl_eval.Ng = safe_normalize(cross(dFdx(cl_eval.P), dFdy(cl_eval.P)));
   cl_eval.vNg = transform_direction(ViewMatrix, cl_eval.Ng);
+  cl_eval.light_groups = cl_in.light_groups;
 
   cl_eval.occlusion_data = occlusion_load(cl_eval.vP, cl_in.occlusion);
 
@@ -259,7 +263,7 @@ ClosureLightData closure_light_eval_init(ClosureEvalCommon cl_common, int light_
   light.L.xyz = light.data.l_position - cl_common.P;
   light.L.w = length(light.L.xyz);
 
-  light.vis = light_visibility(light.data, cl_common.P, light.L);
+  light.vis = light_visibility(light.data, cl_common.P, light.L, cl_common.light_groups);
   light.contact_shadow = light_contact_shadows(
       light.data, cl_common.P, cl_common.vP, cl_common.vNg, cl_common.rand.x, light.vis);
 

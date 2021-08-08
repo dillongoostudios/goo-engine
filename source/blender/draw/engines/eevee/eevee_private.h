@@ -736,6 +736,7 @@ typedef struct EEVEE_EffectsInfo {
   struct GPUTexture *ssr_specrough_input;
   struct GPUTexture *ssr_hit_output;
   struct GPUTexture *ssr_hit_depth;
+  struct GPUTexture *ssr_lightgroup_input;
   /* SSGI (shares ssr data) */
   struct GPUTexture *ssgi_hit_output; //trace
   struct GPUTexture *ssgi_hit_depth; //trace

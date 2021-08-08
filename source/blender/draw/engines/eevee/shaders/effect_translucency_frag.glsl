@@ -260,7 +260,9 @@ void main(void)
     l_vector.xyz = ld.l_position - P;
     l_vector.w = length(l_vector.xyz);
 
-    float att = light_attenuation(ld, l_vector);
+    // TODO Read lightgroup ID buffer here too!
+
+    float att = light_attenuation(ld, l_vector, ivec4(0,0,0,-1));
     if (att < 1e-8) {
       continue;
     }
