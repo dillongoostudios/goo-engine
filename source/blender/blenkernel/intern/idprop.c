@@ -54,15 +54,15 @@
 
 static CLG_LogRef LOG = {"bke.idprop"};
 
-/*local size table.*/
+/* Local size table. */
 static size_t idp_size_table[] = {
     1, /*strings*/
     sizeof(int),
     sizeof(float),
-    sizeof(float[3]),  /*Vector type, deprecated*/
-    sizeof(float[16]), /*Matrix type, deprecated*/
-    0,                 /*arrays don't have a fixed size*/
-    sizeof(ListBase),  /*Group type*/
+    sizeof(float[3]),  /* Vector type, deprecated. */
+    sizeof(float[16]), /* Matrix type, deprecated. */
+    0,                 /* Arrays don't have a fixed size. */
+    sizeof(ListBase),  /* Group type. */
     sizeof(void *),
     sizeof(double),
 };
@@ -99,12 +99,12 @@ IDProperty *IDP_CopyIDPArray(const IDProperty *array, const int flag)
 
   narray->data.pointer = MEM_dupallocN(array->data.pointer);
   for (int i = 0; i < narray->len; i++) {
-    /* ok, the copy functions always allocate a new structure,
+    /* OK, the copy functions always allocate a new structure,
      * which doesn't work here.  instead, simply copy the
      * contents of the new structure into the array cell,
      * then free it.  this makes for more maintainable
      * code than simply re-implementing the copy functions
-     * in this loop.*/
+     * in this loop. */
     IDProperty *tmp = IDP_CopyProperty_ex(GETPROP(narray, i), flag);
     memcpy(GETPROP(narray, i), tmp, sizeof(IDProperty));
     MEM_freeN(tmp);
@@ -186,7 +186,7 @@ void IDP_ResizeIDPArray(IDProperty *prop, int newlen)
     }
   }
 
-  /* - Note: This code comes from python, here's the corresponding comment. - */
+  /* NOTE: This code comes from python, here's the corresponding comment. */
   /* This over-allocates proportional to the list size, making room
    * for additional growth.  The over-allocation is mild, but is
    * enough to give linear-time amortized behavior over a long
@@ -228,7 +228,7 @@ static void idp_resize_group_array(IDProperty *prop, int newlen, void *newarr)
   }
 }
 
-/*this function works for strings too!*/
+/* This function works for strings too! */
 void IDP_ResizeArray(IDProperty *prop, int newlen)
 {
   const bool is_grow = newlen >= prop->len;
@@ -240,7 +240,7 @@ void IDP_ResizeArray(IDProperty *prop, int newlen)
     return;
   }
 
-  /* - Note: This code comes from python, here's the corresponding comment. - */
+  /* NOTE: This code comes from python, here's the corresponding comment. */
   /* This over-allocates proportional to the list size, making room
    * for additional growth.  The over-allocation is mild, but is
    * enough to give linear-time amortized behavior over a long
@@ -390,8 +390,8 @@ void IDP_ConcatStringC(IDProperty *prop, const char *st)
   BLI_assert(prop->type == IDP_STRING);
 
   int newlen = prop->len + (int)strlen(st);
-  /* we have to remember that prop->len includes the null byte for strings.
-   * so there's no need to add +1 to the resize function.*/
+  /* We have to remember that prop->len includes the null byte for strings.
+   * so there's no need to add +1 to the resize function. */
   IDP_ResizeArray(prop, newlen);
   strcat(prop->data.pointer, st);
 }
@@ -400,8 +400,8 @@ void IDP_ConcatString(IDProperty *str1, IDProperty *append)
 {
   BLI_assert(append->type == IDP_STRING);
 
-  /* since ->len for strings includes the NULL byte, we have to subtract one or
-   * we'll get an extra null byte after each concatenation operation.*/
+  /* Since ->len for strings includes the NULL byte, we have to subtract one or
+   * we'll get an extra null byte after each concatenation operation. */
   int newlen = str1->len + append->len - 1;
   IDP_ResizeArray(str1, newlen);
   strcat(str1->data.pointer, append->data.pointer);
@@ -775,10 +775,10 @@ IDProperty *IDP_GetProperties(ID *id, const bool create_if_needed)
   if (create_if_needed) {
     id->properties = MEM_callocN(sizeof(IDProperty), "IDProperty");
     id->properties->type = IDP_GROUP;
-    /* don't overwrite the data's name and type
+    /* NOTE(campbell): Don't overwrite the data's name and type
      * some functions might need this if they
-     * don't have a real ID, should be named elsewhere - Campbell */
-    /* strcpy(id->name, "top_level_group");*/
+     * don't have a real ID, should be named elsewhere. */
+    // strcpy(id->name, "top_level_group");
   }
   return id->properties;
 }
@@ -942,7 +942,7 @@ IDProperty *IDP_New(const char type, const IDPropertyTemplate *val, const char *
 
       prop = MEM_callocN(sizeof(IDProperty), "IDProperty string");
       if (val->string.subtype == IDP_STRING_SUB_BYTE) {
-        /* note, intentionally not null terminated */
+        /* NOTE: Intentionally not null terminated. */
         if (st == NULL) {
           prop->data.pointer = MEM_mallocN(DEFAULT_ALLOC_FOR_NULL_STRINGS, "id property string 1");
           *IDP_String(prop) = '\0';
@@ -1106,7 +1106,7 @@ void IDP_WriteProperty_OnlyData(const IDProperty *prop, BlendWriter *writer);
 
 static void IDP_WriteArray(const IDProperty *prop, BlendWriter *writer)
 {
-  /*REMEMBER to set totalen to len in the linking code!!*/
+  /* Remember to set #IDProperty.totallen to len in the linking code! */
   if (prop->data.pointer) {
     BLO_write_raw(writer, MEM_allocN_len(prop->data.pointer), prop->data.pointer);
 
@@ -1123,7 +1123,7 @@ static void IDP_WriteArray(const IDProperty *prop, BlendWriter *writer)
 
 static void IDP_WriteIDPArray(const IDProperty *prop, BlendWriter *writer)
 {
-  /*REMEMBER to set totalen to len in the linking code!!*/
+  /* Remember to set #IDProperty.totallen to len in the linking code! */
   if (prop->data.pointer) {
     const IDProperty *array = prop->data.pointer;
 
@@ -1137,7 +1137,7 @@ static void IDP_WriteIDPArray(const IDProperty *prop, BlendWriter *writer)
 
 static void IDP_WriteString(const IDProperty *prop, BlendWriter *writer)
 {
-  /*REMEMBER to set totalen to len in the linking code!!*/
+  /* Remember to set #IDProperty.totallen to len in the linking code! */
   BLO_write_raw(writer, (size_t)prop->len, prop->data.pointer);
 }
 
@@ -1183,7 +1183,7 @@ static void IDP_DirectLinkIDPArray(IDProperty *prop, BlendDataReader *reader)
 
   IDProperty *array = (IDProperty *)prop->data.pointer;
 
-  /* note!, idp-arrays didn't exist in 2.4x, so the pointer will be cleared
+  /* NOTE:, idp-arrays didn't exist in 2.4x, so the pointer will be cleared
    * there's not really anything we can do to correct this, at least don't crash */
   if (array == NULL) {
     prop->len = 0;
@@ -1219,7 +1219,7 @@ static void IDP_DirectLinkArray(IDProperty *prop, BlendDataReader *reader)
 
 static void IDP_DirectLinkString(IDProperty *prop, BlendDataReader *reader)
 {
-  /*since we didn't save the extra string buffer, set totallen to len.*/
+  /* Since we didn't save the extra string buffer, set totallen to len. */
   prop->totallen = prop->len;
   BLO_read_data_address(reader, &prop->data.pointer);
 }
@@ -1230,7 +1230,7 @@ static void IDP_DirectLinkGroup(IDProperty *prop, BlendDataReader *reader)
 
   BLO_read_list(reader, lb);
 
-  /*Link child id properties now*/
+  /* Link child id properties now. */
   LISTBASE_FOREACH (IDProperty *, loop, &prop->data.group) {
     IDP_DirectLinkProperty(loop, reader);
   }
@@ -1274,7 +1274,7 @@ static void IDP_DirectLinkProperty(IDProperty *prop, BlendDataReader *reader)
        * IDP are way too polymorphic to do it safely. */
       printf(
           "%s: found unknown IDProperty type %d, reset to Integer one !\n", __func__, prop->type);
-      /* Note: we do not attempt to free unknown prop, we have no way to know how to do that! */
+      /* NOTE: we do not attempt to free unknown prop, we have no way to know how to do that! */
       prop->type = IDP_INT;
       prop->subtype = 0;
       IDP_Int(prop) = 0;

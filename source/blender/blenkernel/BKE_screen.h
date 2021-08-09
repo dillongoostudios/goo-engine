@@ -62,7 +62,7 @@ struct wmWindow;
 struct wmWindowManager;
 
 /* spacetype has everything stored to get an editor working, it gets initialized via
- * ED_spacetypes_init() in editors/space_api/spacetypes.c   */
+ * #ED_spacetypes_init() in `editors/space_api/spacetypes.c` */
 /* an editor in Blender is a combined ScrArea + SpaceType + SpaceData */
 
 #define BKE_ST_MAXNAME 64
@@ -206,7 +206,7 @@ typedef struct ARegionType {
    * performed.
    *
    * This callback is not called on indirect changes of the current viewport (which could happen
-   * when the `v2d->tot is changed and `cur` is adopted accordingly).  */
+   * when the `v2d->tot is changed and `cur` is adopted accordingly). */
   void (*on_view2d_changed)(const struct bContext *C, struct ARegion *region);
 
   /* custom drawing callbacks */
@@ -332,6 +332,9 @@ typedef void (*uiListFilterItemsFunc)(struct uiList *ui_list,
                                       struct PointerRNA *,
                                       const char *propname);
 
+/* Listen to notifiers. Only for lists defined in C. */
+typedef void (*uiListListener)(struct uiList *ui_list, wmRegionListenerParams *params);
+
 typedef struct uiListType {
   struct uiListType *next, *prev;
 
@@ -340,6 +343,9 @@ typedef struct uiListType {
   uiListDrawItemFunc draw_item;
   uiListDrawFilterFunc draw_filter;
   uiListFilterItemsFunc filter_items;
+
+  /* For lists defined in C only. */
+  uiListListener listener;
 
   /* RNA integration */
   ExtensionRNA rna_ext;

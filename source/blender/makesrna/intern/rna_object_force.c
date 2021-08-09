@@ -133,8 +133,9 @@ static bool rna_Cache_get_valid_owner_ID(PointerRNA *ptr, Object **ob, Scene **s
       *scene = (Scene *)ptr->owner_id;
       break;
     default:
-      BLI_assert(!"Trying to get PTCacheID from an invalid ID type "
-                  "(Only scenes and objects are supported).");
+      BLI_assert_msg(0,
+                     "Trying to get PTCacheID from an invalid ID type "
+                     "(Only scenes and objects are supported).");
       break;
   }
 
@@ -287,7 +288,7 @@ static void rna_Cache_idname_change(Main *UNUSED(bmain), Scene *UNUSED(scene), P
         pid2 = pid;
       }
       else if (cache->name[0] != '\0' && STREQ(cache->name, pid->cache->name)) {
-        /*TODO: report "name exists" to user */
+        /* TODO: report "name exists" to user. */
         BLI_strncpy(cache->name, cache->prev_name, sizeof(cache->name));
         use_new_name = false;
       }
@@ -1095,7 +1096,7 @@ static void rna_def_pointcache_active(BlenderRNA *brna)
    * Those caches items have exact same content as 'active' one, except for that collection,
    * to prevent ugly recursive layout pattern.
    *
-   * Note: This shall probably be redone from scratch in a proper way at some point,
+   * NOTE: This shall probably be redone from scratch in a proper way at some point,
    *       but for now that will do, and shall not break anything in the API. */
   prop = RNA_def_property(srna, "point_caches", PROP_COLLECTION, PROP_NONE);
   RNA_def_property_collection_funcs(prop,
@@ -2047,10 +2048,10 @@ static void rna_def_softbody(BlenderRNA *brna)
       prop, "Estimate Transforms", "Store the estimated transforms in the soft body settings");
 
   /***********************************************************************************/
-  /* these are not exactly settings, but reading calculated results*/
-  /* but i did not want to start a new property struct */
-  /* so rather rename this from SoftBodySettings to SoftBody */
-  /* translation */
+  /* These are not exactly settings, but reading calculated results
+   * but i did not want to start a new property struct
+   * so rather rename this from SoftBodySettings to SoftBody
+   * translation. */
   prop = RNA_def_property(srna, "location_mass_center", PROP_FLOAT, PROP_TRANSLATION);
   RNA_def_property_float_sdna(prop, NULL, "lcom");
   RNA_def_property_ui_text(prop, "Center of Mass", "Location of center of mass");

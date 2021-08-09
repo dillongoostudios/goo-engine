@@ -75,6 +75,32 @@
 #include "ED_text.h"
 
 /* -------------------------------------------------------------------- */
+/** \name Immediate redraw helper
+ *
+ * Generally handlers shouldn't do any redrawing, that includes the layout/button definitions. That
+ * violates the Model-View-Controller pattern.
+ *
+ * But there are some operators which really need to re-run the layout definitions for various
+ * reasons. For example, "Edit Source" does it to find out which exact Python code added a button.
+ * Other operators may need to access buttons that aren't currently visible. In Blender's UI code
+ * design that typically means just not adding the button in the first place, for a particular
+ * redraw. So the operator needs to change context and re-create the layout, so the button becomes
+ * available to act on.
+ *
+ * \{ */
+
+static void ui_region_redraw_immediately(bContext *C, ARegion *region)
+{
+  ED_region_do_layout(C, region);
+  WM_draw_region_viewport_bind(region);
+  ED_region_do_draw(C, region);
+  WM_draw_region_viewport_unbind(region);
+  region->do_draw = false;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Copy Data Path Operator
  * \{ */
 
@@ -649,7 +675,7 @@ static int override_remove_button_exec(bContext *C, wmOperator *op)
     PropertyRNA *src_prop;
     RNA_id_pointer_create(id->override_library->reference, &id_refptr);
     if (!RNA_path_resolve_property(&id_refptr, oprop->rna_path, &src, &src_prop)) {
-      BLI_assert(0 && "Failed to create matching source (linked data) RNA pointer");
+      BLI_assert_msg(0, "Failed to create matching source (linked data) RNA pointer");
     }
   }
 
@@ -803,7 +829,7 @@ bool UI_context_copy_to_selected_list(bContext *C,
   }
   else if (RNA_struct_is_a(ptr->type, &RNA_Sequence)) {
     /* Special case when we do this for 'Sequence.lock'.
-     * (if the sequence is locked, it wont be in "selected_editable_sequences"). */
+     * (if the sequence is locked, it won't be in "selected_editable_sequences"). */
     const char *prop_id = RNA_property_identifier(prop);
     if (STREQ(prop_id, "lock")) {
       *r_lb = CTX_data_collection_get(C, "selected_sequences");
@@ -921,7 +947,7 @@ bool UI_context_copy_to_selected_list(bContext *C,
        * to handle situations like T41062... */
       if ((*r_path = RNA_path_resolve_from_type_to_property(ptr, prop, &RNA_Sequence)) != NULL) {
         /* Special case when we do this for 'Sequence.lock'.
-         * (if the sequence is locked, it wont be in "selected_editable_sequences"). */
+         * (if the sequence is locked, it won't be in "selected_editable_sequences"). */
         const char *prop_id = RNA_property_identifier(prop);
         if (STREQ(prop_id, "lock")) {
           *r_lb = CTX_data_collection_get(C, "selected_sequences");
@@ -1215,7 +1241,7 @@ static void UI_OT_jump_to_target_button(wmOperatorType *ot)
 
 /* ------------------------------------------------------------------------- */
 /* EditSource Utility funcs and operator,
- * note, this includes utility functions and button matching checks */
+ * NOTE: this includes utility functions and button matching checks. */
 
 typedef struct uiEditSourceStore {
   uiBut but_orig;
@@ -1340,7 +1366,7 @@ static int editsource_text_edit(bContext *C,
   txt_move_toline(text, line - 1, false);
 
   /* naughty!, find text area to set, not good behavior
-   * but since this is a dev tool lets allow it - campbell */
+   * but since this is a developer tool lets allow it - campbell */
   ScrArea *area = BKE_screen_find_big_area(CTX_wm_screen(C), SPACE_TEXT, 0);
   if (area) {
     SpaceText *st = area->spacedata.first;
@@ -1379,11 +1405,7 @@ static int editsource_exec(bContext *C, wmOperator *op)
     ui_editsource_active_but_set(but);
 
     /* redraw and get active button python info */
-    ED_region_do_layout(C, region);
-    WM_draw_region_viewport_bind(region);
-    ED_region_do_draw(C, region);
-    WM_draw_region_viewport_unbind(region);
-    region->do_draw = false;
+    ui_region_redraw_immediately(C, region);
 
     for (BLI_ghashIterator_init(&ghi, ui_editsource_info->hash);
          BLI_ghashIterator_done(&ghi) == false;
@@ -1495,117 +1517,115 @@ static void edittranslation_find_po_file(const char *root,
 static int edittranslation_exec(bContext *C, wmOperator *op)
 {
   uiBut *but = UI_context_active_but_get(C);
-  int ret = OPERATOR_CANCELLED;
-
-  if (but) {
-    wmOperatorType *ot;
-    PointerRNA ptr;
-    char popath[FILE_MAX];
-    const char *root = U.i18ndir;
-    const char *uilng = BLT_lang_get();
-
-    uiStringInfo but_label = {BUT_GET_LABEL, NULL};
-    uiStringInfo rna_label = {BUT_GET_RNA_LABEL, NULL};
-    uiStringInfo enum_label = {BUT_GET_RNAENUM_LABEL, NULL};
-    uiStringInfo but_tip = {BUT_GET_TIP, NULL};
-    uiStringInfo rna_tip = {BUT_GET_RNA_TIP, NULL};
-    uiStringInfo enum_tip = {BUT_GET_RNAENUM_TIP, NULL};
-    uiStringInfo rna_struct = {BUT_GET_RNASTRUCT_IDENTIFIER, NULL};
-    uiStringInfo rna_prop = {BUT_GET_RNAPROP_IDENTIFIER, NULL};
-    uiStringInfo rna_enum = {BUT_GET_RNAENUM_IDENTIFIER, NULL};
-    uiStringInfo rna_ctxt = {BUT_GET_RNA_LABEL_CONTEXT, NULL};
-
-    if (!BLI_is_dir(root)) {
-      BKE_report(op->reports,
-                 RPT_ERROR,
-                 "Please set your Preferences' 'Translation Branches "
-                 "Directory' path to a valid directory");
-      return OPERATOR_CANCELLED;
-    }
-    ot = WM_operatortype_find(EDTSRC_I18N_OP_NAME, 0);
-    if (ot == NULL) {
-      BKE_reportf(op->reports,
-                  RPT_ERROR,
-                  "Could not find operator '%s'! Please enable ui_translate add-on "
-                  "in the User Preferences",
-                  EDTSRC_I18N_OP_NAME);
-      return OPERATOR_CANCELLED;
-    }
-    /* Try to find a valid po file for current language... */
-    edittranslation_find_po_file(root, uilng, popath, FILE_MAX);
-    /* printf("po path: %s\n", popath); */
-    if (popath[0] == '\0') {
-      BKE_reportf(
-          op->reports, RPT_ERROR, "No valid po found for language '%s' under %s", uilng, root);
-      return OPERATOR_CANCELLED;
-    }
-
-    UI_but_string_info_get(C,
-                           but,
-                           &but_label,
-                           &rna_label,
-                           &enum_label,
-                           &but_tip,
-                           &rna_tip,
-                           &enum_tip,
-                           &rna_struct,
-                           &rna_prop,
-                           &rna_enum,
-                           &rna_ctxt,
-                           NULL);
-
-    WM_operator_properties_create_ptr(&ptr, ot);
-    RNA_string_set(&ptr, "lang", uilng);
-    RNA_string_set(&ptr, "po_file", popath);
-    RNA_string_set(&ptr, "but_label", but_label.strinfo);
-    RNA_string_set(&ptr, "rna_label", rna_label.strinfo);
-    RNA_string_set(&ptr, "enum_label", enum_label.strinfo);
-    RNA_string_set(&ptr, "but_tip", but_tip.strinfo);
-    RNA_string_set(&ptr, "rna_tip", rna_tip.strinfo);
-    RNA_string_set(&ptr, "enum_tip", enum_tip.strinfo);
-    RNA_string_set(&ptr, "rna_struct", rna_struct.strinfo);
-    RNA_string_set(&ptr, "rna_prop", rna_prop.strinfo);
-    RNA_string_set(&ptr, "rna_enum", rna_enum.strinfo);
-    RNA_string_set(&ptr, "rna_ctxt", rna_ctxt.strinfo);
-    ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &ptr);
-
-    /* Clean up */
-    if (but_label.strinfo) {
-      MEM_freeN(but_label.strinfo);
-    }
-    if (rna_label.strinfo) {
-      MEM_freeN(rna_label.strinfo);
-    }
-    if (enum_label.strinfo) {
-      MEM_freeN(enum_label.strinfo);
-    }
-    if (but_tip.strinfo) {
-      MEM_freeN(but_tip.strinfo);
-    }
-    if (rna_tip.strinfo) {
-      MEM_freeN(rna_tip.strinfo);
-    }
-    if (enum_tip.strinfo) {
-      MEM_freeN(enum_tip.strinfo);
-    }
-    if (rna_struct.strinfo) {
-      MEM_freeN(rna_struct.strinfo);
-    }
-    if (rna_prop.strinfo) {
-      MEM_freeN(rna_prop.strinfo);
-    }
-    if (rna_enum.strinfo) {
-      MEM_freeN(rna_enum.strinfo);
-    }
-    if (rna_ctxt.strinfo) {
-      MEM_freeN(rna_ctxt.strinfo);
-    }
-
-    return ret;
+  if (but == NULL) {
+    BKE_report(op->reports, RPT_ERROR, "Active button not found");
+    return OPERATOR_CANCELLED;
   }
 
-  BKE_report(op->reports, RPT_ERROR, "Active button not found");
-  return OPERATOR_CANCELLED;
+  wmOperatorType *ot;
+  PointerRNA ptr;
+  char popath[FILE_MAX];
+  const char *root = U.i18ndir;
+  const char *uilng = BLT_lang_get();
+
+  uiStringInfo but_label = {BUT_GET_LABEL, NULL};
+  uiStringInfo rna_label = {BUT_GET_RNA_LABEL, NULL};
+  uiStringInfo enum_label = {BUT_GET_RNAENUM_LABEL, NULL};
+  uiStringInfo but_tip = {BUT_GET_TIP, NULL};
+  uiStringInfo rna_tip = {BUT_GET_RNA_TIP, NULL};
+  uiStringInfo enum_tip = {BUT_GET_RNAENUM_TIP, NULL};
+  uiStringInfo rna_struct = {BUT_GET_RNASTRUCT_IDENTIFIER, NULL};
+  uiStringInfo rna_prop = {BUT_GET_RNAPROP_IDENTIFIER, NULL};
+  uiStringInfo rna_enum = {BUT_GET_RNAENUM_IDENTIFIER, NULL};
+  uiStringInfo rna_ctxt = {BUT_GET_RNA_LABEL_CONTEXT, NULL};
+
+  if (!BLI_is_dir(root)) {
+    BKE_report(op->reports,
+               RPT_ERROR,
+               "Please set your Preferences' 'Translation Branches "
+               "Directory' path to a valid directory");
+    return OPERATOR_CANCELLED;
+  }
+  ot = WM_operatortype_find(EDTSRC_I18N_OP_NAME, 0);
+  if (ot == NULL) {
+    BKE_reportf(op->reports,
+                RPT_ERROR,
+                "Could not find operator '%s'! Please enable ui_translate add-on "
+                "in the User Preferences",
+                EDTSRC_I18N_OP_NAME);
+    return OPERATOR_CANCELLED;
+  }
+  /* Try to find a valid po file for current language... */
+  edittranslation_find_po_file(root, uilng, popath, FILE_MAX);
+  /* printf("po path: %s\n", popath); */
+  if (popath[0] == '\0') {
+    BKE_reportf(
+        op->reports, RPT_ERROR, "No valid po found for language '%s' under %s", uilng, root);
+    return OPERATOR_CANCELLED;
+  }
+
+  UI_but_string_info_get(C,
+                         but,
+                         &but_label,
+                         &rna_label,
+                         &enum_label,
+                         &but_tip,
+                         &rna_tip,
+                         &enum_tip,
+                         &rna_struct,
+                         &rna_prop,
+                         &rna_enum,
+                         &rna_ctxt,
+                         NULL);
+
+  WM_operator_properties_create_ptr(&ptr, ot);
+  RNA_string_set(&ptr, "lang", uilng);
+  RNA_string_set(&ptr, "po_file", popath);
+  RNA_string_set(&ptr, "but_label", but_label.strinfo);
+  RNA_string_set(&ptr, "rna_label", rna_label.strinfo);
+  RNA_string_set(&ptr, "enum_label", enum_label.strinfo);
+  RNA_string_set(&ptr, "but_tip", but_tip.strinfo);
+  RNA_string_set(&ptr, "rna_tip", rna_tip.strinfo);
+  RNA_string_set(&ptr, "enum_tip", enum_tip.strinfo);
+  RNA_string_set(&ptr, "rna_struct", rna_struct.strinfo);
+  RNA_string_set(&ptr, "rna_prop", rna_prop.strinfo);
+  RNA_string_set(&ptr, "rna_enum", rna_enum.strinfo);
+  RNA_string_set(&ptr, "rna_ctxt", rna_ctxt.strinfo);
+  const int ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &ptr);
+
+  /* Clean up */
+  if (but_label.strinfo) {
+    MEM_freeN(but_label.strinfo);
+  }
+  if (rna_label.strinfo) {
+    MEM_freeN(rna_label.strinfo);
+  }
+  if (enum_label.strinfo) {
+    MEM_freeN(enum_label.strinfo);
+  }
+  if (but_tip.strinfo) {
+    MEM_freeN(but_tip.strinfo);
+  }
+  if (rna_tip.strinfo) {
+    MEM_freeN(rna_tip.strinfo);
+  }
+  if (enum_tip.strinfo) {
+    MEM_freeN(enum_tip.strinfo);
+  }
+  if (rna_struct.strinfo) {
+    MEM_freeN(rna_struct.strinfo);
+  }
+  if (rna_prop.strinfo) {
+    MEM_freeN(rna_prop.strinfo);
+  }
+  if (rna_enum.strinfo) {
+    MEM_freeN(rna_enum.strinfo);
+  }
+  if (rna_ctxt.strinfo) {
+    MEM_freeN(rna_ctxt.strinfo);
+  }
+
+  return ret;
 }
 
 static void UI_OT_edittranslation_init(wmOperatorType *ot)
@@ -1838,6 +1858,64 @@ static void UI_OT_drop_color(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name UI List Search Operator
+ * \{ */
+
+static bool ui_list_focused_poll(bContext *C)
+{
+  const ARegion *region = CTX_wm_region(C);
+  const wmWindow *win = CTX_wm_window(C);
+  const uiList *list = UI_list_find_mouse_over(region, win->eventstate);
+
+  return list != NULL;
+}
+
+/**
+ * Ensure the filter options are set to be visible in the UI list.
+ * \return if the visibility changed, requiring a redraw.
+ */
+static bool ui_list_unhide_filter_options(uiList *list)
+{
+  if (list->filter_flag & UILST_FLT_SHOW) {
+    /* Nothing to be done. */
+    return false;
+  }
+
+  list->filter_flag |= UILST_FLT_SHOW;
+  return true;
+}
+
+static int ui_list_start_filter_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
+{
+  ARegion *region = CTX_wm_region(C);
+  uiList *list = UI_list_find_mouse_over(region, event);
+  /* Poll should check. */
+  BLI_assert(list != NULL);
+
+  if (ui_list_unhide_filter_options(list)) {
+    ui_region_redraw_immediately(C, region);
+  }
+
+  if (!UI_textbutton_activate_rna(C, region, list, "filter_name")) {
+    return OPERATOR_CANCELLED;
+  }
+
+  return OPERATOR_FINISHED;
+}
+
+static void UI_OT_list_start_filter(wmOperatorType *ot)
+{
+  ot->name = "List Filter";
+  ot->idname = "UI_OT_list_start_filter";
+  ot->description = "Start entering filter text for the list in focus";
+
+  ot->invoke = ui_list_start_filter_invoke;
+  ot->poll = ui_list_focused_poll;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Operator & Keymap Registration
  * \{ */
 
@@ -1861,6 +1939,8 @@ void ED_operatortypes_ui(void)
   WM_operatortype_append(UI_OT_reloadtranslation);
   WM_operatortype_append(UI_OT_button_execute);
   WM_operatortype_append(UI_OT_button_string_clear);
+
+  WM_operatortype_append(UI_OT_list_start_filter);
 
   /* external */
   WM_operatortype_append(UI_OT_eyedropper_color);

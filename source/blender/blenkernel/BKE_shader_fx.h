@@ -160,6 +160,8 @@ void BKE_shaderfx_free_ex(struct ShaderFxData *fx, const int flag);
 void BKE_shaderfx_free(struct ShaderFxData *fx);
 bool BKE_shaderfx_unique_name(struct ListBase *shaderfx, struct ShaderFxData *fx);
 bool BKE_shaderfx_depends_ontime(struct ShaderFxData *fx);
+bool BKE_shaderfx_is_nonlocal_in_liboverride(const struct Object *ob,
+                                             const struct ShaderFxData *shaderfx);
 struct ShaderFxData *BKE_shaderfx_findby_type(struct Object *ob, ShaderFxType type);
 struct ShaderFxData *BKE_shaderfx_findby_name(struct Object *ob, const char *name);
 void BKE_shaderfx_copydata_generic(const struct ShaderFxData *fx_src, struct ShaderFxData *fx_dst);
@@ -170,7 +172,7 @@ void BKE_shaderfx_copydata_ex(struct ShaderFxData *fx,
 void BKE_shaderfx_copy(struct ListBase *dst, const struct ListBase *src);
 void BKE_shaderfx_foreach_ID_link(struct Object *ob, ShaderFxIDWalkFunc walk, void *userData);
 
-bool BKE_shaderfx_has_gpencil(struct Object *ob);
+bool BKE_shaderfx_has_gpencil(const struct Object *ob);
 
 void BKE_shaderfx_blend_write(struct BlendWriter *writer, struct ListBase *fxbase);
 void BKE_shaderfx_blend_read_data(struct BlendDataReader *reader, struct ListBase *lb);

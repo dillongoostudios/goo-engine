@@ -54,7 +54,7 @@ Relation *DepsgraphRelationBuilder::add_relation(const KeyFrom &key_from,
   }
   else {
     if (!op_from) {
-      /* XXX TODO handle as error or report if needed */
+      /* XXX TODO: handle as error or report if needed. */
       fprintf(stderr,
               "add_relation(%s) - Could not find op_from (%s)\n",
               description,
@@ -67,7 +67,7 @@ Relation *DepsgraphRelationBuilder::add_relation(const KeyFrom &key_from,
               key_from.identifier().c_str());
     }
     if (!op_to) {
-      /* XXX TODO handle as error or report if needed */
+      /* XXX TODO: handle as error or report if needed. */
       fprintf(stderr,
               "add_relation(%s) - Could not find op_to (%s)\n",
               description,
@@ -192,7 +192,7 @@ bool DepsgraphRelationBuilder::is_same_bone_dependency(const KeyFrom &key_from,
         op_to->opcode == OperationCode::BONE_LOCAL)) {
     return false;
   }
-  /* ... BUT, we also need to check if it's same bone.  */
+  /* ... BUT, we also need to check if it's same bone. */
   if (op_from->owner->name != op_to->owner->name) {
     return false;
   }

@@ -25,7 +25,7 @@
 
 #include "DNA_defs.h"
 
-/* XXX, temp feature - campbell */
+/* XXX(campbell): temp feature. */
 #define DURIAN_CAMERA_SWITCH
 
 /* check for cyclic set-scene,
@@ -233,21 +233,24 @@ typedef struct SceneRenderLayer {
 
 /** #SceneRenderLayer.layflag */
 #define SCE_LAY_SOLID (1 << 0)
-#define SCE_LAY_ZTRA (1 << 1)
-#define SCE_LAY_HALO (1 << 2)
-#define SCE_LAY_EDGE (1 << 3)
+#define SCE_LAY_UNUSED_1 (1 << 1)
+#define SCE_LAY_UNUSED_2 (1 << 2)
+#define SCE_LAY_UNUSED_3 (1 << 3)
 #define SCE_LAY_SKY (1 << 4)
 #define SCE_LAY_STRAND (1 << 5)
 #define SCE_LAY_FRS (1 << 6)
 #define SCE_LAY_AO (1 << 7)
 #define SCE_LAY_VOLUMES (1 << 8)
-/* flags between (1 << 8) and (1 << 15) are set to 1 already, for future options */
+#define SCE_LAY_MOTION_BLUR (1 << 9)
 
-#define SCE_LAY_ALL_Z (1 << 15)
-/* #define SCE_LAY_XOR         (1 << 16) */ /* UNUSED */
+/* Flags between (1 << 9) and (1 << 15) are set to 1 already, for future options. */
+#define SCE_LAY_FLAG_DEFAULT ((1 << 15) - 1)
+
+#define SCE_LAY_UNUSED_4 (1 << 15)
+#define SCE_LAY_UNUSED_5 (1 << 16)
 #define SCE_LAY_DISABLE (1 << 17)
-#define SCE_LAY_ZMASK (1 << 18)
-#define SCE_LAY_NEG_ZMASK (1 << 19)
+#define SCE_LAY_UNUSED_6 (1 << 18)
+#define SCE_LAY_UNUSED_7 (1 << 19)
 
 /** #SceneRenderLayer.passflag */
 typedef enum eScenePassType {
@@ -266,7 +269,7 @@ typedef enum eScenePassType {
   SCE_PASS_UV = (1 << 12),
   SCE_PASS_UNUSED_6 = (1 << 13), /* INDIRECT */
   SCE_PASS_MIST = (1 << 14),
-  SCE_PASS_RAYHITS = (1 << 15),
+  SCE_PASS_UNUSED_7 = (1 << 15), /* RAYHITS */
   SCE_PASS_EMIT = (1 << 16),
   SCE_PASS_ENVIRONMENT = (1 << 17),
   SCE_PASS_INDEXMA = (1 << 18),
@@ -301,7 +304,6 @@ typedef enum eScenePassType {
 #define RE_PASSNAME_INDEXMA "IndexMA"
 #define RE_PASSNAME_MIST "Mist"
 
-#define RE_PASSNAME_RAYHITS "RayHits"
 #define RE_PASSNAME_DIFFUSE_DIRECT "DiffDir"
 #define RE_PASSNAME_DIFFUSE_INDIRECT "DiffInd"
 #define RE_PASSNAME_DIFFUSE_COLOR "DiffCol"
@@ -396,7 +398,7 @@ typedef enum eStereo3dInterlaceType {
 /* Generic image format settings,
  * this is used for NodeImageFile and IMAGE_OT_save_as operator too.
  *
- * note: its a bit strange that even though this is an image format struct
+ * NOTE: its a bit strange that even though this is an image format struct
  * the imtype can still be used to select video formats.
  * RNA ensures these enum's are only selectable for render output.
  */
@@ -699,7 +701,8 @@ typedef struct RenderData {
   float frs_sec_base;
 
   /**
-   * Value used to define filter size for all filter options  */
+   * Value used to define filter size for all filter options.
+   */
   float gauss;
 
   /* color management settings - color profiles, gamma correction, etc */
@@ -732,7 +735,7 @@ typedef struct RenderData {
 
   /* sequencer options */
   char seq_prev_type;
-  /** UNUSED!. */
+  /** UNUSED. */
   char seq_rend_type;
   /** Flag use for sequence render/draw. */
   char seq_flag;
@@ -952,7 +955,8 @@ typedef struct ParticleEditSettings {
   /** Runtime. */
   void *paintcursor;
 
-  float emitterdist, rt;
+  float emitterdist;
+  char _pad0[4];
 
   int selectmode;
   int edittype;
@@ -1333,6 +1337,12 @@ typedef struct MeshStatVis {
 typedef struct SequencerToolSettings {
   /* eSeqImageFitMethod */
   int fit_method;
+  short snap_mode;
+  short snap_flag;
+  int _pad0;
+  /** When there are many snap points, 0-1 range corresponds to resolution from boundbox to all
+   * possible snap points. */
+  int snap_distance;
 } SequencerToolSettings;
 
 typedef enum eSeqImageFitMethod {
@@ -1400,10 +1410,7 @@ typedef struct ToolSettings {
   char gpencil_v3d_align;
   /** General 2D Editor. */
   char gpencil_v2d_align;
-  /** Sequencer Preview. */
-  char gpencil_seq_align;
-  /** Image Editor. */
-  char gpencil_ima_align;
+  char _pad0[2];
 
   /* Annotations */
   /** Stroke placement settings - 3D View. */
@@ -1529,7 +1536,7 @@ typedef struct ToolSettings {
 
 typedef struct UnitSettings {
   /* Display/Editing unit options for each scene */
-  /** Maybe have other unit conversions?. */
+  /** Maybe have other unit conversions? */
   float scale_length;
   /** Imperial, metric etc. */
   char system;
@@ -1550,7 +1557,8 @@ typedef struct UnitSettings {
 
 typedef struct PhysicsSettings {
   float gravity[3];
-  int flag, quick_cache_step, rt;
+  int flag, quick_cache_step;
+  char _pad0[4];
 } PhysicsSettings;
 
 /* ------------------------------------------- */
@@ -1748,7 +1756,7 @@ typedef struct Scene {
   /** (runtime) info/cache used for presenting playback framerate info to the user. */
   void *fps_info;
 
-  /* none of the dependency graph  vars is mean to be saved */
+  /* None of the dependency graph vars is mean to be saved. */
   struct GHash *depsgraph_hash;
   char _pad7[4];
 
@@ -2043,6 +2051,7 @@ enum {
 #define SCE_SNAP_NO_SELF (1 << 4)
 #define SCE_SNAP_ABS_GRID (1 << 5)
 #define SCE_SNAP_BACKFACE_CULLING (1 << 6)
+#define SCE_SNAP_SEQ (1 << 7)
 
 /** #ToolSettings.snap_target */
 #define SCE_SNAP_TARGET_CLOSEST 0
@@ -2055,15 +2064,27 @@ enum {
 #define SCE_SNAP_MODE_EDGE (1 << 1)
 #define SCE_SNAP_MODE_FACE (1 << 2)
 #define SCE_SNAP_MODE_VOLUME (1 << 3)
-#define SCE_SNAP_MODE_INCREMENT (1 << 4)
-#define SCE_SNAP_MODE_EDGE_MIDPOINT (1 << 5)
-#define SCE_SNAP_MODE_EDGE_PERPENDICULAR (1 << 6)
+#define SCE_SNAP_MODE_EDGE_MIDPOINT (1 << 4)
+#define SCE_SNAP_MODE_EDGE_PERPENDICULAR (1 << 5)
+
+/** #SequencerToolSettings.snap_mode */
+#define SEQ_SNAP_TO_STRIPS (1 << 0)
+#define SEQ_SNAP_TO_CURRENT_FRAME (1 << 1)
+#define SEQ_SNAP_TO_STRIP_HOLD (1 << 2)
+
+/** #SequencerToolSettings.snap_flag */
+#define SEQ_SNAP_IGNORE_MUTED (1 << 0)
+#define SEQ_SNAP_IGNORE_SOUND (1 << 1)
+#define SEQ_SNAP_CURRENT_FRAME_TO_STRIPS (1 << 2)
 
 /** #ToolSettings.snap_node_mode */
-#define SCE_SNAP_MODE_NODE_X (1 << 5)
-#define SCE_SNAP_MODE_NODE_Y (1 << 6)
+#define SCE_SNAP_MODE_NODE_X (1 << 0)
+#define SCE_SNAP_MODE_NODE_Y (1 << 1)
 
-/** #ToolSettings.snap_mode and #ToolSettings.snap_node_mode */
+/**
+ * #ToolSettings.snap_mode and #ToolSettings.snap_node_mode
+ */
+#define SCE_SNAP_MODE_INCREMENT (1 << 6)
 #define SCE_SNAP_MODE_GRID (1 << 7)
 
 /** #ToolSettings.snap_transform_mode_flag */
@@ -2262,7 +2283,7 @@ enum {
 #define UVCALC_NO_ASPECT_CORRECT (1 << 1)
 /** Adjust UV's while transforming with Vert or Edge Slide. */
 #define UVCALC_TRANSFORM_CORRECT_SLIDE (1 << 2)
-/** Use mesh data after subsurf to compute UVs*/
+/** Use mesh data after subsurf to compute UV's. */
 #define UVCALC_USESUBSURF (1 << 3)
 /** adjust UV's while transforming to avoid distortion */
 #define UVCALC_TRANSFORM_CORRECT (1 << 4)

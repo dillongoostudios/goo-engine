@@ -40,10 +40,6 @@
     (flag |= DRW_ibo_requested(ibo) ? (value) : 0)
 #endif
 
-/* Test and assign NULL if test fails */
-#define DRW_TEST_ASSIGN_VBO(v) (v = (DRW_vbo_requested(v) ? (v) : NULL))
-#define DRW_TEST_ASSIGN_IBO(v) (v = (DRW_ibo_requested(v) ? (v) : NULL))
-
 BLI_INLINE GPUBatch *DRW_batch_request(GPUBatch **batch)
 {
   /* XXX TODO(fclem): We are writing to batch cache here. Need to make this thread safe. */
@@ -53,13 +49,13 @@ BLI_INLINE GPUBatch *DRW_batch_request(GPUBatch **batch)
   return *batch;
 }
 
-BLI_INLINE bool DRW_batch_requested(GPUBatch *batch, int prim_type)
+BLI_INLINE bool DRW_batch_requested(GPUBatch *batch, GPUPrimType prim_type)
 {
   /* Batch has been requested if it has been created but not initialized. */
   if (batch != NULL && batch->verts[0] == NULL) {
     /* HACK. We init without a valid VBO and let the first vbo binding
      * fill verts[0]. */
-    GPU_batch_init_ex(batch, prim_type, (GPUVertBuf *)1, NULL, 0);
+    GPU_batch_init_ex(batch, prim_type, (GPUVertBuf *)1, NULL, (eGPUBatchFlag)0);
     batch->verts[0] = NULL;
     return true;
   }
@@ -78,8 +74,8 @@ BLI_INLINE void DRW_ibo_request(GPUBatch *batch, GPUIndexBuf **ibo)
 
 BLI_INLINE bool DRW_ibo_requested(GPUIndexBuf *ibo)
 {
-  /* TODO do not rely on data uploaded. This prevents multithreading.
-   * (need access to a gl context) */
+  /* TODO: do not rely on data uploaded. This prevents multi-threading.
+   * (need access to a OpenGL context). */
   return (ibo != NULL && !GPU_indexbuf_is_init(ibo));
 }
 
@@ -89,7 +85,7 @@ BLI_INLINE void DRW_vbo_request(GPUBatch *batch, GPUVertBuf **vbo)
     *vbo = GPU_vertbuf_calloc();
   }
   if (batch != NULL) {
-    /* HACK we set vbos that may not yet be valid. */
+    /* HACK we set VBO's that may not yet be valid. */
     GPU_batch_vertbuf_add(batch, *vbo);
   }
 }

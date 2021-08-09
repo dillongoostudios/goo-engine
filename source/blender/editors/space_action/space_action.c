@@ -153,6 +153,8 @@ static SpaceLink *action_duplicate(SpaceLink *sl)
 {
   SpaceAction *sactionn = MEM_dupallocN(sl);
 
+  memset(&sactionn->runtime, 0x0, sizeof(sactionn->runtime));
+
   /* clear or remove stuff from old */
 
   return (SpaceLink *)sactionn;
@@ -194,7 +196,8 @@ static void action_main_region_draw(const bContext *C, ARegion *region)
   UI_view2d_view_ortho(v2d);
 
   /* time grid */
-  UI_view2d_draw_lines_x__discrete_frames_or_seconds(v2d, scene, saction->flag & SACTION_DRAWTIME);
+  UI_view2d_draw_lines_x__discrete_frames_or_seconds(
+      v2d, scene, saction->flag & SACTION_DRAWTIME, true);
 
   ED_region_draw_cb_draw(C, region, REGION_DRAW_PRE_VIEW);
 
@@ -528,7 +531,7 @@ static void action_listener(const wmSpaceTypeListenerParams *params)
       }
       break;
     case NC_ANIMATION:
-      /* for NLA tweakmode enter/exit, need complete refresh */
+      /* For NLA tweak-mode enter/exit, need complete refresh. */
       if (wmn->data == ND_NLA_ACTCHANGE) {
         saction->runtime.flag |= SACTION_RUNTIME_FLAG_NEED_CHAN_SYNC;
         ED_area_tag_refresh(area);

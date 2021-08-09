@@ -74,11 +74,11 @@
 
 static void drawTransformApply(const struct bContext *C, ARegion *region, void *arg);
 
-static void initSnapSpatial(TransInfo *t, float r_snap[3]);
+static void initSnapSpatial(TransInfo *t, float r_snap[2]);
 
 bool transdata_check_local_islands(TransInfo *t, short around)
 {
-  return ((around == V3D_AROUND_LOCAL_ORIGINS) && ((ELEM(t->obedit_type, OB_MESH, OB_GPENCIL))));
+  return ((around == V3D_AROUND_LOCAL_ORIGINS) && (ELEM(t->obedit_type, OB_MESH, OB_GPENCIL)));
 }
 
 /* ************************** SPACE DEPENDENT CODE **************************** */
@@ -536,7 +536,7 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, NULL);
     }
 
-    /* XXX temp, first hack to get auto-render in compositor work (ton) */
+    /* XXX(ton): temp, first hack to get auto-render in compositor work. */
     WM_event_add_notifier(C, NC_SCENE | ND_TRANSFORM_DONE, CTX_data_scene(C));
   }
 
@@ -650,7 +650,7 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
   return true;
 }
 
-/* called in transform_ops.c, on each regeneration of keymaps */
+/* Called in transform_ops.c, on each regeneration of key-maps. */
 wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
 {
   static const EnumPropertyItem modal_items[] = {
@@ -1631,7 +1631,7 @@ static void initSnapSpatial(TransInfo *t, float r_snap[2])
 
 /**
  * \note  caller needs to free 't' on a 0 return
- * \warning  \a event might be NULL (when tweaking from redo panel)
+ * \warning \a event might be NULL (when tweaking from redo panel)
  * \see #saveTransform which writes these values back.
  */
 bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *event, int mode)
@@ -1697,31 +1697,11 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     t->draw_handle_cursor = WM_paint_cursor_activate(
         SPACE_TYPE_ANY, RGN_TYPE_ANY, transform_draw_cursor_poll, transform_draw_cursor_draw, t);
   }
-  else if (t->spacetype == SPACE_IMAGE) {
+  else if (t->spacetype == SPACE_SEQ) {
     t->draw_handle_view = ED_region_draw_cb_activate(
         t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
-    t->draw_handle_cursor = WM_paint_cursor_activate(
-        SPACE_TYPE_ANY, RGN_TYPE_ANY, transform_draw_cursor_poll, transform_draw_cursor_draw, t);
   }
-  else if (t->spacetype == SPACE_CLIP) {
-    t->draw_handle_view = ED_region_draw_cb_activate(
-        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
-    t->draw_handle_cursor = WM_paint_cursor_activate(
-        SPACE_TYPE_ANY, RGN_TYPE_ANY, transform_draw_cursor_poll, transform_draw_cursor_draw, t);
-  }
-  else if (t->spacetype == SPACE_NODE) {
-    t->draw_handle_view = ED_region_draw_cb_activate(
-        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
-    t->draw_handle_cursor = WM_paint_cursor_activate(
-        SPACE_TYPE_ANY, RGN_TYPE_ANY, transform_draw_cursor_poll, transform_draw_cursor_draw, t);
-  }
-  else if (t->spacetype == SPACE_GRAPH) {
-    t->draw_handle_view = ED_region_draw_cb_activate(
-        t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
-    t->draw_handle_cursor = WM_paint_cursor_activate(
-        SPACE_TYPE_ANY, RGN_TYPE_ANY, transform_draw_cursor_poll, transform_draw_cursor_draw, t);
-  }
-  else if (t->spacetype == SPACE_ACTION) {
+  else if (ELEM(t->spacetype, SPACE_IMAGE, SPACE_CLIP, SPACE_NODE, SPACE_GRAPH, SPACE_ACTION)) {
     t->draw_handle_view = ED_region_draw_cb_activate(
         t->region->type, drawTransformView, t, REGION_DRAW_POST_VIEW);
     t->draw_handle_cursor = WM_paint_cursor_activate(
@@ -1957,7 +1937,7 @@ int transformEnd(bContext *C, TransInfo *t)
   return exit_code;
 }
 
-/* TODO, move to: transform_query.c */
+/* TODO: move to: `transform_query.c`. */
 bool checkUseAxisMatrix(TransInfo *t)
 {
   /* currently only checks for editmode */

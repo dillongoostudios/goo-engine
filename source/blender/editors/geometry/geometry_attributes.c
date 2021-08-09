@@ -47,6 +47,21 @@ static bool geometry_attributes_poll(bContext *C)
          BKE_id_attributes_supported(data);
 }
 
+static bool geometry_attributes_remove_poll(bContext *C)
+{
+  if (!geometry_attributes_poll(C)) {
+    return false;
+  }
+
+  Object *ob = ED_object_context(C);
+  ID *data = (ob) ? ob->data : NULL;
+  if (BKE_id_attributes_active_get(data) != NULL) {
+    return true;
+  }
+
+  return false;
+}
+
 static const EnumPropertyItem *geometry_attribute_domain_itemf(bContext *C,
                                                                PointerRNA *UNUSED(ptr),
                                                                PropertyRNA *UNUSED(prop),
@@ -109,20 +124,20 @@ void GEOMETRY_OT_attribute_add(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_enum(ot->srna,
-                      "data_type",
-                      rna_enum_attribute_type_items,
-                      CD_PROP_FLOAT,
-                      "Data Type",
-                      "Type of data stored in attribute");
-  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
-
-  prop = RNA_def_enum(ot->srna,
                       "domain",
                       rna_enum_attribute_domain_items,
                       ATTR_DOMAIN_POINT,
                       "Domain",
                       "Type of element that attribute is stored on");
   RNA_def_enum_funcs(prop, geometry_attribute_domain_itemf);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  prop = RNA_def_enum(ot->srna,
+                      "data_type",
+                      rna_enum_attribute_type_items,
+                      CD_PROP_FLOAT,
+                      "Data Type",
+                      "Type of data stored in attribute");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
@@ -140,6 +155,11 @@ static int geometry_attribute_remove_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  int *active_index = BKE_id_attributes_active_index_p(id);
+  if (*active_index > 0) {
+    *active_index -= 1;
+  }
+
   DEG_id_tag_update(id, ID_RECALC_GEOMETRY);
   WM_main_add_notifier(NC_GEOM | ND_DATA, id);
 
@@ -155,7 +175,7 @@ void GEOMETRY_OT_attribute_remove(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = geometry_attribute_remove_exec;
-  ot->poll = geometry_attributes_poll;
+  ot->poll = geometry_attributes_remove_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;

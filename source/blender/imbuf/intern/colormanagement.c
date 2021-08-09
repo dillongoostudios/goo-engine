@@ -1409,7 +1409,7 @@ bool IMB_colormanagement_space_name_is_data(const char *name)
   return (colorspace && colorspace->is_data);
 }
 
-const float *IMB_colormangement_get_xyz_to_rgb()
+const float *IMB_colormanagement_get_xyz_to_rgb()
 {
   return &imbuf_xyz_to_rgb[0][0];
 }
@@ -1542,7 +1542,7 @@ static void display_buffer_apply_get_linear_buffer(DisplayBufferThread *handle,
         rgba_uchar_to_float(fp, cp);
       }
       else {
-        BLI_assert(!"Buffers of 3 or 4 channels are only supported here");
+        BLI_assert_msg(0, "Buffers of 3 or 4 channels are only supported here");
       }
     }
 
@@ -3437,7 +3437,7 @@ static void partial_buffer_update_rect(ImBuf *ibuf,
             pixel[0] = linear_buffer[linear_index];
           }
           else {
-            BLI_assert(!"Unsupported number of channels in partial buffer update");
+            BLI_assert_msg(0, "Unsupported number of channels in partial buffer update");
           }
         }
         else if (byte_buffer) {
@@ -3539,12 +3539,11 @@ typedef struct PartialThreadData {
   int xmin, ymin, xmax;
 } PartialThreadData;
 
-static void partial_buffer_update_rect_thread_do(void *data_v,
-                                                 int start_scanline,
-                                                 int num_scanlines)
+static void partial_buffer_update_rect_thread_do(void *data_v, int scanline)
 {
   PartialThreadData *data = (PartialThreadData *)data_v;
-  int ymin = data->ymin + start_scanline;
+  int ymin = data->ymin + scanline;
+  const int num_scanlines = 1;
   partial_buffer_update_rect(data->ibuf,
                              data->display_buffer,
                              data->linear_buffer,

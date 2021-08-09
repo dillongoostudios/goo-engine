@@ -83,8 +83,8 @@ static float bezier_handle_calc_length_v3(const float co_a[3],
   float fac = 1.333333f;
   float len;
   if (dot < 0.0f) {
-    /* scale down to 0.666 if we point directly at each other rough but ok */
-    /* TODO, current blend from dot may not be optimal but its also a detail */
+    /* Scale down to 0.666 if we point directly at each other rough but ok. */
+    /* TODO: current blend from dot may not be optimal but its also a detail. */
     const float t = 1.0f + dot;
     fac = (fac * t) + (0.75f * (1.0f - t));
   }
@@ -244,7 +244,7 @@ static GSet *bm_edgering_pair_calc(BMesh *bm, ListBase *eloops_rim)
 
         el_store_other = BLI_ghash_lookup(vert_eloop_gh, v_other);
 
-        /* in rare cases we cant find a match */
+        /* in rare cases we can't find a match */
         if (el_store_other) {
           pair_test.first = el_store;
           pair_test.second = el_store_other;
@@ -586,7 +586,7 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
   }
   /* now normals are correct, don't touch! */
 
-  /* calculate the center spline, multiple  */
+  /* Calculate the center spline, multiple. */
   if ((interp_mode == SUBD_RING_INTERP_PATH) || falloff_cache) {
     float handle_a[3], handle_b[3];
     float handle_len;
@@ -821,7 +821,7 @@ static void bm_edgering_pair_interpolate(BMesh *bm,
  */
 static void bm_face_slice(BMesh *bm, BMLoop *l, const int cuts)
 {
-  /* TODO, interpolate edge data */
+  /* TODO: interpolate edge data. */
   BMLoop *l_new = l;
   int i;
 
@@ -860,12 +860,12 @@ static bool bm_edgering_pair_order_is_flipped(BMesh *UNUSED(bm),
   /* step around any fan-faces on both sides */
   do {
     v_iter_a_step = v_iter_a_step->next;
-  } while (v_iter_a_step && ((BM_edge_exists(v_iter_a_step->data, v_iter_b_first->data)) ||
-                             (BM_edge_exists(v_iter_a_step->data, v_iter_b_first->next->data))));
+  } while (v_iter_a_step && (BM_edge_exists(v_iter_a_step->data, v_iter_b_first->data) ||
+                             BM_edge_exists(v_iter_a_step->data, v_iter_b_first->next->data)));
   do {
     v_iter_b_step = v_iter_b_step->next;
-  } while (v_iter_b_step && ((BM_edge_exists(v_iter_b_step->data, v_iter_a_first->data)) ||
-                             (BM_edge_exists(v_iter_b_step->data, v_iter_a_first->next->data))));
+  } while (v_iter_b_step && (BM_edge_exists(v_iter_b_step->data, v_iter_a_first->data) ||
+                             BM_edge_exists(v_iter_b_step->data, v_iter_a_first->next->data)));
 
   v_iter_a_step = v_iter_a_step ? v_iter_a_step->prev : lb_a->last;
   v_iter_b_step = v_iter_b_step ? v_iter_b_step->prev : lb_b->last;
@@ -1028,7 +1028,7 @@ static void bm_edgering_pair_subdiv(BMesh *bm,
     } while ((l_iter = l_iter->next) != l_first);
   }
 
-  /* clear tags so subdiv verts don't get tagged too  */
+  /* Clear tags so subdiv verts don't get tagged too. */
   for (el_store_ring = eloops_ring->first; el_store_ring;
        el_store_ring = BM_EDGELOOP_NEXT(el_store_ring)) {
     bm_edgeloop_vert_tag(el_store_ring, false);
@@ -1143,7 +1143,7 @@ void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
   count = BM_mesh_edgeloops_find(bm, &eloops_rim, bm_edge_rim_test_cb, (void *)bm);
 
   if (count < 2) {
-    BMO_error_raise(bm, op, BMERR_INVALID_SELECTION, "No edge rings found");
+    BMO_error_raise(bm, op, BMO_ERROR_CANCEL, "No edge rings found");
     goto cleanup;
   }
   else if (count == 2) {
@@ -1167,7 +1167,7 @@ void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
       changed = true;
     }
     else {
-      BMO_error_raise(bm, op, BMERR_INVALID_SELECTION, "Edge-ring pair isn't connected");
+      BMO_error_raise(bm, op, BMO_ERROR_CANCEL, "Edge-ring pair isn't connected");
       goto cleanup;
     }
   }
@@ -1179,7 +1179,7 @@ void bmo_subdivide_edgering_exec(BMesh *bm, BMOperator *op)
     LoopPairStore **lpair_arr;
 
     if (eloop_pairs_gs == NULL) {
-      BMO_error_raise(bm, op, BMERR_INVALID_SELECTION, "Edge-rings are not connected");
+      BMO_error_raise(bm, op, BMO_ERROR_CANCEL, "Edge-rings are not connected");
       goto cleanup;
     }
 

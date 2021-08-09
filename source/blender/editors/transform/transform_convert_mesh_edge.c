@@ -28,6 +28,7 @@
 #include "BLI_math.h"
 
 #include "BKE_context.h"
+#include "BKE_customdata.h"
 #include "BKE_editmesh.h"
 #include "BKE_mesh.h"
 
@@ -120,6 +121,13 @@ void createTransEdge(TransInfo *t)
         td++;
       }
     }
+  }
+}
+
+void recalcData_mesh_edge(TransInfo *t)
+{
+  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
+    DEG_id_tag_update(tc->obedit->data, ID_RECALC_GEOMETRY);
   }
 }
 

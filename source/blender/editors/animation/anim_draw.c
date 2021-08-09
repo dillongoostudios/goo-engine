@@ -48,6 +48,7 @@
 #include "ED_anim_api.h"
 #include "ED_keyframes_draw.h"
 #include "ED_keyframes_edit.h"
+#include "ED_keyframes_keylist.h"
 
 #include "RNA_access.h"
 
@@ -89,7 +90,7 @@ void ANIM_draw_cfra(const bContext *C, View2D *v2d, short flag)
 
 /* *************************************************** */
 /* PREVIEW RANGE 'CURTAINS' */
-/* Note: 'Preview Range' tools are defined in anim_ops.c */
+/* NOTE: 'Preview Range' tools are defined in `anim_ops.c`. */
 
 /* Draw preview range 'curtains' for highlighting where the animation data is */
 void ANIM_draw_previewrange(const bContext *C, View2D *v2d, int end_frame_width)
@@ -168,7 +169,7 @@ void ANIM_draw_framerange(Scene *scene, View2D *v2d)
 }
 
 /* *************************************************** */
-/* NLA-MAPPING UTILITIES (required for drawing and also editing keyframes)  */
+/* NLA-MAPPING UTILITIES (required for drawing and also editing keyframes). */
 
 /**
  * Obtain the AnimData block providing NLA-mapping for the given channel (if applicable).
@@ -413,7 +414,7 @@ static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, flo
             else {
               /* Calculate min/max using full fcurve evaluation.
                * [slower than bezier forward differencing but evaluates Back/Elastic interpolation
-               * as well].*/
+               * as well]. */
               float step_size = (bezt->vec[1][0] - prev_bezt->vec[1][0]) / resol;
               for (int j = 0; j <= resol; j++) {
                 float eval_time = prev_bezt->vec[1][0] + step_size * j;

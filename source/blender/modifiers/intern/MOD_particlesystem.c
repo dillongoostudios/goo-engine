@@ -120,7 +120,6 @@ static void deformVerts(ModifierData *md,
   Mesh *mesh_src = mesh;
   ParticleSystemModifierData *psmd = (ParticleSystemModifierData *)md;
   ParticleSystem *psys = NULL;
-  /* float cfra = BKE_scene_frame_get(md->scene); */ /* UNUSED */
 
   if (ctx->object->particlesystem.first) {
     psys = psmd->psys;
@@ -283,13 +282,13 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   if (!(ob->mode & OB_MODE_PARTICLE_EDIT)) {
     if (ELEM(psys->part->ren_as, PART_DRAW_GR, PART_DRAW_OB)) {
       uiItemO(layout,
-              CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Convert"),
+              CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Make Instances Real"),
               ICON_NONE,
               "OBJECT_OT_duplicates_make_real");
     }
     else if (psys->part->ren_as == PART_DRAW_PATH) {
       uiItemO(layout,
-              CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Convert"),
+              CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Convert to Mesh"),
               ICON_NONE,
               "OBJECT_OT_modifier_convert");
     }
@@ -337,7 +336,6 @@ ModifierTypeInfo modifierType_ParticleSystem = {
     /* modifyMesh */ NULL,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

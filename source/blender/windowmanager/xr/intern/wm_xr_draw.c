@@ -24,6 +24,7 @@
 
 #include <string.h>
 
+#include "BLI_listbase.h"
 #include "BLI_math.h"
 
 #include "ED_view3d_offscreen.h"
@@ -45,6 +46,12 @@ void wm_xr_pose_to_viewmat(const GHOST_XrPose *pose, float r_viewmat[4][4])
   translate_m4(r_viewmat, -pose->position[0], -pose->position[1], -pose->position[2]);
 }
 
+void wm_xr_controller_pose_to_mat(const GHOST_XrPose *pose, float r_mat[4][4])
+{
+  quat_to_mat4(r_mat, pose->orientation_quat);
+  copy_v3_v3(r_mat[3], pose->position);
+}
+
 static void wm_xr_draw_matrices_create(const wmXrDrawData *draw_data,
                                        const GHOST_XrDrawViewInfo *draw_view,
                                        const XrSessionSettings *session_settings,
@@ -55,9 +62,11 @@ static void wm_xr_draw_matrices_create(const wmXrDrawData *draw_data,
 
   copy_qt_qt(eye_pose.orientation_quat, draw_view->eye_pose.orientation_quat);
   copy_v3_v3(eye_pose.position, draw_view->eye_pose.position);
-  sub_v3_v3(eye_pose.position, draw_data->eye_position_ofs);
   if ((session_settings->flag & XR_SESSION_USE_POSITION_TRACKING) == 0) {
     sub_v3_v3(eye_pose.position, draw_view->local_pose.position);
+  }
+  if ((session_settings->flag & XR_SESSION_USE_ABSOLUTE_TRACKING) == 0) {
+    sub_v3_v3(eye_pose.position, draw_data->eye_position_ofs);
   }
 
   perspective_m4_fov(r_proj_mat,
@@ -83,6 +92,9 @@ static void wm_xr_draw_viewport_buffers_to_active_framebuffer(
     const wmXrSurfaceData *surface_data,
     const GHOST_XrDrawViewInfo *draw_view)
 {
+  const wmXrViewportPair *vp = BLI_findlink(&surface_data->viewports, draw_view->view_idx);
+  BLI_assert(vp && vp->viewport);
+
   const bool is_upside_down = GHOST_XrSessionNeedsUpsideDownDrawing(runtime_data->context);
   rcti rect = {.xmin = 0, .ymin = 0, .xmax = draw_view->width - 1, .ymax = draw_view->height - 1};
 
@@ -92,8 +104,7 @@ static void wm_xr_draw_viewport_buffers_to_active_framebuffer(
   if (is_upside_down) {
     SWAP(int, rect.ymin, rect.ymax);
   }
-  GPU_viewport_draw_to_screen_ex(
-      surface_data->viewport, 0, &rect, draw_view->expects_srgb_buffer, true);
+  GPU_viewport_draw_to_screen_ex(vp->viewport, 0, &rect, draw_view->expects_srgb_buffer, true);
 }
 
 /**
@@ -124,6 +135,9 @@ void wm_xr_draw_view(const GHOST_XrDrawViewInfo *draw_view, void *customdata)
     return;
   }
 
+  const wmXrViewportPair *vp = BLI_findlink(&surface_data->viewports, draw_view->view_idx);
+  BLI_assert(vp && vp->offscreen && vp->viewport);
+
   /* In case a framebuffer is still bound from drawing the last eye. */
   GPU_framebuffer_restore();
   /* Some systems have drawing glitches without this. */
@@ -145,8 +159,8 @@ void wm_xr_draw_view(const GHOST_XrDrawViewInfo *draw_view, void *customdata)
                                   true,
                                   NULL,
                                   false,
-                                  surface_data->offscreen,
-                                  surface_data->viewport);
+                                  vp->offscreen,
+                                  vp->viewport);
 
   /* The draw-manager uses both GPUOffscreen and GPUViewport to manage frame and texture buffers. A
    * call to GPU_viewport_draw_to_screen() is still needed to get the final result from the
@@ -156,7 +170,7 @@ void wm_xr_draw_view(const GHOST_XrDrawViewInfo *draw_view, void *customdata)
    * In a next step, Ghost-XR will use the currently bound frame-buffer to retrieve the image
    * to be submitted to the OpenXR swap-chain. So do not un-bind the off-screen yet! */
 
-  GPU_offscreen_bind(surface_data->offscreen, false);
+  GPU_offscreen_bind(vp->offscreen, false);
 
   wm_xr_draw_viewport_buffers_to_active_framebuffer(xr_data->runtime, surface_data, draw_view);
 }

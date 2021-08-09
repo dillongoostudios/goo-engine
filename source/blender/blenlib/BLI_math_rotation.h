@@ -90,7 +90,7 @@ void tri_to_quat_ex(float quat[4],
                     const float no_orig[3]);
 float tri_to_quat(float q[4], const float a[3], const float b[3], const float c[3]);
 void vec_to_quat(float q[4], const float vec[3], short axis, const short upflag);
-/* note: v1 and v2 must be normalized */
+/* NOTE: v1 and v2 must be normalized. */
 void rotation_between_vecs_to_mat3(float m[3][3], const float v1[3], const float v2[3]);
 void rotation_between_vecs_to_quat(float q[4], const float v1[3], const float v2[3]);
 void rotation_between_quats_to_quat(float q[4], const float q1[4], const float q2[4]);
@@ -163,6 +163,9 @@ void quat_to_compatible_eul(float eul[3], const float oldrot[3], const float qua
 void compatible_eul(float eul[3], const float old[3]);
 
 void rotate_eul(float eul[3], const char axis, const float angle);
+
+void add_eul_euleul(float r_eul[3], float a[3], float b[3], const short order);
+void sub_eul_euleul(float r_eul[3], float a[3], float b[3], const short order);
 
 /************************** Arbitrary Order Eulers ***************************/
 

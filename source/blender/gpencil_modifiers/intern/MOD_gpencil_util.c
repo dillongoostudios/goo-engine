@@ -54,6 +54,7 @@ void gpencil_modifier_type_init(GpencilModifierTypeInfo *types[])
   INIT_GP_TYPE(Build);
   INIT_GP_TYPE(Opacity);
   INIT_GP_TYPE(Lattice);
+  INIT_GP_TYPE(Length);
   INIT_GP_TYPE(Mirror);
   INIT_GP_TYPE(Smooth);
   INIT_GP_TYPE(Hook);
@@ -62,6 +63,7 @@ void gpencil_modifier_type_init(GpencilModifierTypeInfo *types[])
   INIT_GP_TYPE(Time);
   INIT_GP_TYPE(Multiply);
   INIT_GP_TYPE(Texture);
+  INIT_GP_TYPE(Weight);
   INIT_GP_TYPE(Lineart);
 #undef INIT_GP_TYPE
 }
@@ -151,16 +153,16 @@ float get_modifier_point_weight(MDeformVert *dvert, bool inverse, int def_nr)
   if ((dvert != NULL) && (def_nr != -1)) {
     MDeformWeight *dw = BKE_defvert_find_index(dvert, def_nr);
     weight = dw ? dw->weight : -1.0f;
-    if ((weight >= 0.0f) && (inverse == 1)) {
+    if ((weight >= 0.0f) && (inverse)) {
       return -1.0f;
     }
 
-    if ((weight < 0.0f) && (inverse == 0)) {
+    if ((weight < 0.0f) && (!inverse)) {
       return -1.0f;
     }
 
     /* if inverse, weight is always 1 */
-    if ((weight < 0.0f) && (inverse == 1)) {
+    if ((weight < 0.0f) && (inverse)) {
       return 1.0f;
     }
   }

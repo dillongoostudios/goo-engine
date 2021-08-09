@@ -406,7 +406,7 @@ static void blf_texture_draw(const unsigned char color[4],
                              float y2)
 {
   /* Only one vertex per glyph, geometry shader expand it into a quad. */
-  /* TODO Get rid of Geom Shader because it's not optimal AT ALL for the GPU */
+  /* TODO: Get rid of Geom Shader because it's not optimal AT ALL for the GPU. */
   copy_v4_fl4(GPU_vertbuf_raw_step(&g_batch.pos_step),
               x1 + g_batch.ofs[0],
               y1 + g_batch.ofs[1],
@@ -506,7 +506,7 @@ void blf_glyph_render(FontBLF *font, GlyphCacheBLF *gc, GlyphBLF *g, float x, fl
       if (gc->texture) {
         GPU_texture_free(gc->texture);
       }
-      gc->texture = GPU_texture_create_1d_array(__func__, w, h, 1, GPU_R8, NULL);
+      gc->texture = GPU_texture_create_2d(__func__, w, h, 1, GPU_R8, NULL);
 
       gc->bitmap_len_landed = 0;
     }

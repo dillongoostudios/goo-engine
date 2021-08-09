@@ -22,8 +22,8 @@
 #include "BLI_float2.hh"
 #include "BLI_float3.hh"
 
-struct Object;
 struct Collection;
+struct Object;
 
 namespace blender::ed::spreadsheet {
 
@@ -50,7 +50,7 @@ class CellValue {
   std::optional<bool> value_bool;
   std::optional<float2> value_float2;
   std::optional<float3> value_float3;
-  std::optional<Color4f> value_color;
+  std::optional<ColorGeometry4f> value_color;
   std::optional<ObjectCellValue> value_object;
   std::optional<CollectionCellValue> value_collection;
 };

@@ -351,7 +351,7 @@ static bool get_show_adaptive_options(const bContext *C, Panel *panel)
     return false;
   }
 
-  /* Don't show adaptive options if regular subdivision used*/
+  /* Don't show adaptive options if regular subdivision used. */
   if (!RNA_boolean_get(ptr, "use_limit_surface")) {
     return false;
   }
@@ -509,7 +509,6 @@ ModifierTypeInfo modifierType_Subsurf = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

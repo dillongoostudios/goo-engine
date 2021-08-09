@@ -110,17 +110,17 @@ extern PyTypeObject pyrna_func_Type;
 /* 'in_weakreflist' MUST be aligned */
 
 typedef struct {
-  PyObject_HEAD /* required python macro   */
+  PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
-      PyObject *in_weakreflist;
+  PyObject *in_weakreflist;
 #endif
   PointerRNA ptr;
 } BPy_DummyPointerRNA;
 
 typedef struct {
-  PyObject_HEAD /* required python macro   */
+  PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
-      PyObject *in_weakreflist;
+  PyObject *in_weakreflist;
 #endif
   PointerRNA ptr;
 #ifdef USE_PYRNA_STRUCT_REFERENCE
@@ -135,18 +135,18 @@ typedef struct {
 } BPy_StructRNA;
 
 typedef struct {
-  PyObject_HEAD /* required python macro   */
+  PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
-      PyObject *in_weakreflist;
+  PyObject *in_weakreflist;
 #endif
   PointerRNA ptr;
   PropertyRNA *prop;
 } BPy_PropertyRNA;
 
 typedef struct {
-  PyObject_HEAD /* required python macro   */
+  PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
-      PyObject *in_weakreflist;
+  PyObject *in_weakreflist;
 #endif
   PointerRNA ptr;
   PropertyRNA *prop;
@@ -159,9 +159,9 @@ typedef struct {
 } BPy_PropertyArrayRNA;
 
 typedef struct {
-  PyObject_HEAD /* required python macro   */
+  PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
-      PyObject *in_weakreflist;
+  PyObject *in_weakreflist;
 #endif
 
   /* collection iterator specific parts */
@@ -169,9 +169,9 @@ typedef struct {
 } BPy_PropertyCollectionIterRNA;
 
 typedef struct {
-  PyObject_HEAD /* required python macro   */
+  PyObject_HEAD /* Required Python macro. */
 #ifdef USE_WEAKREFS
-      PyObject *in_weakreflist;
+  PyObject *in_weakreflist;
 #endif
   PointerRNA ptr;
   FunctionRNA *func;
@@ -183,7 +183,7 @@ StructRNA *pyrna_struct_as_srna(PyObject *self, const bool parent, const char *e
 void BPY_rna_init(void);
 PyObject *BPY_rna_module(void);
 void BPY_update_rna_module(void);
-/*PyObject *BPY_rna_doc(void);*/
+// PyObject *BPY_rna_doc(void);
 PyObject *BPY_rna_types(void);
 
 PyObject *pyrna_struct_CreatePyObject(PointerRNA *ptr);
@@ -212,6 +212,25 @@ int pyrna_set_to_enum_bitfield(const struct EnumPropertyItem *items,
                                PyObject *value,
                                int *r_value,
                                const char *error_prefix);
+
+/**
+ * Data for #pyrna_enum_value_parse_string & #pyrna_enum_bitfield_parse_set parsing utilities.
+ * Use with #PyArg_ParseTuple's `O&` formatting.
+ */
+struct BPy_EnumProperty_Parse {
+  const EnumPropertyItem *items;
+  /**
+   * Set when the value was successfully parsed.
+   * Useful if the input ever needs to be included in an error message.
+   * (if the value is not supported under certain conditions).
+   */
+  PyObject *value_orig;
+
+  int value;
+  bool is_set;
+};
+int pyrna_enum_value_parse_string(PyObject *o, void *p);
+int pyrna_enum_bitfield_parse_set(PyObject *o, void *p);
 
 int pyrna_enum_value_from_id(const EnumPropertyItem *item,
                              const char *identifier,

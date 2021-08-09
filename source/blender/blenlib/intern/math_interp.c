@@ -625,7 +625,7 @@ void BLI_ewa_filter(const int width,
    * Use a different radius based on interpolation switch,
    * just enough to anti-alias when interpolation is off,
    * and slightly larger to make result a bit smoother than bilinear interpolation when
-   * interpolation is on (minimum values: const float rmin = intpol ? 1.0f : 0.5f;) */
+   * interpolation is on (minimum values: `const float rmin = intpol ? 1.0f : 0.5f;`) */
   const float rmin = (intpol ? 1.5625f : 0.765625f) / ff2;
   BLI_ewa_imp2radangle(A, B, C, F, &a, &b, &th, &ecc);
   if ((b2 = b * b) < rmin) {
@@ -655,7 +655,7 @@ void BLI_ewa_filter(const int width,
   v2 = (int)(ceilf(V0 + ve));
 
   /* sane clamping to avoid unnecessarily huge loops */
-  /* note: if eccentricity gets clamped (see above),
+  /* NOTE: if eccentricity gets clamped (see above),
    * the ue/ve limits can also be lowered accordingly
    */
   if (U0 - (float)u1 > EWA_MAXIDX) {

@@ -283,6 +283,20 @@
     .colorband = NULL, \
   }
 
+#define _DNA_DEFAULT_WeightGpencilModifierData \
+  { \
+    .target_vgname = "", \
+    .material = NULL, \
+    .layername = "", \
+    .vgname = "", \
+    .pass_index = 0, \
+    .flag = 0, \
+    .axis = 1, \
+    .layer_pass = 0, \
+    .dist_start = 0.0f, \
+    .dist_end = 20.0f, \
+  }
+
 #define _DNA_DEFAULT_LineartGpencilModifierData \
   { \
     .edge_types = LRT_EDGE_FLAG_ALL_TYPE, \
@@ -293,6 +307,17 @@
     .calculation_flags = LRT_ALLOW_DUPLI_OBJECTS | LRT_ALLOW_CLIPPING_BOUNDARIES, \
     .angle_splitting_threshold = DEG2RAD(60.0f), \
     .chaining_image_threshold = 0.001f, \
+    .overscan = 0.1f,\
   }
+
+#define _DNA_DEFAULT_LengthGpencilModifierData \
+  { \
+    .start_fac = 0.1f,\
+    .end_fac = 0.1f,\
+    .overshoot_fac = 0.01f,\
+    .pass_index = 0,\
+    .material = NULL,\
+  }
+
 
 /* clang-format off */

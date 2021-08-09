@@ -112,7 +112,7 @@ static void wm_block_splash_image_roundcorners_add(ImBuf *ibuf)
           const float distance = sqrt(u * u + v * v);
 
           /* Pointer offset to the alpha value of pixel. */
-          /* Note, the left corner is flipped in the X-axis. */
+          /* NOTE: the left corner is flipped in the X-axis. */
           const int offset_l = 4 * (size - x - x - 1) + 3;
           const int offset_r = 4 * (ibuf->x - size) + 3;
 
@@ -238,8 +238,8 @@ static uiBlock *wm_block_create_splash(bContext *C, ARegion *region, void *UNUSE
   if (!BLI_exists(userpref)) {
     mt = WM_menutype_find("WM_MT_splash_quick_setup", true);
 
-    /* The UI_BLOCK_QUICK_SETUP flag prevents the button text from being left-aligned,
-       as it is for all menus due to the UI_BLOCK_LOOP flag, see in 'ui_def_but'. */
+    /* The #UI_BLOCK_QUICK_SETUP flag prevents the button text from being left-aligned,
+     * as it is for all menus due to the #UI_BLOCK_LOOP flag, see in #ui_def_but. */
     UI_block_flag_enable(block, UI_BLOCK_QUICK_SETUP);
   }
   else {

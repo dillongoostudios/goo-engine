@@ -382,7 +382,7 @@ static void overlay_gpencil_draw_stroke_color_name(bGPDlayer *UNUSED(gpl),
                                                    void *thunk)
 {
   Object *ob = (Object *)thunk;
-  Material *ma = BKE_object_material_get(ob, gps->mat_nr + 1);
+  Material *ma = BKE_object_material_get_eval(ob, gps->mat_nr + 1);
   if (ma == NULL) {
     return;
   }
@@ -431,7 +431,7 @@ static void OVERLAY_gpencil_color_names(Object *ob)
   const DRWContextState *draw_ctx = DRW_context_state_get();
   int cfra = DEG_get_ctime(draw_ctx->depsgraph);
 
-  BKE_gpencil_visible_stroke_iter(
+  BKE_gpencil_visible_stroke_advanced_iter(
       NULL, ob, NULL, overlay_gpencil_draw_stroke_color_name, ob, false, cfra);
 }
 

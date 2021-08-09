@@ -157,10 +157,6 @@ bool edit_modifier_poll_generic(struct bContext *C,
                                 const bool is_liboverride_allowed);
 void edit_modifier_properties(struct wmOperatorType *ot);
 bool edit_modifier_invoke_properties(struct bContext *C, struct wmOperator *op);
-bool edit_modifier_invoke_properties_with_hover(struct bContext *C,
-                                                struct wmOperator *op,
-                                                const struct wmEvent *event,
-                                                int *r_retval);
 
 struct ModifierData *edit_modifier_property_get(struct wmOperator *op,
                                                 struct Object *ob,
@@ -251,7 +247,6 @@ void OBJECT_OT_vertex_group_assign_new(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_remove_from(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_select(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_deselect(struct wmOperatorType *ot);
-void OBJECT_OT_vertex_group_copy_to_linked(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_copy_to_selected(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_copy(struct wmOperatorType *ot);
 void OBJECT_OT_vertex_group_normalize(struct wmOperatorType *ot);
@@ -308,7 +303,7 @@ void OBJECT_OT_bake(wmOperatorType *ot);
 /* object_random.c */
 void TRANSFORM_OT_vertex_random(struct wmOperatorType *ot);
 
-/* object_remesh.c */
+/* object_remesh.cc */
 void OBJECT_OT_voxel_remesh(struct wmOperatorType *ot);
 void OBJECT_OT_voxel_size_edit(struct wmOperatorType *ot);
 void OBJECT_OT_quadriflow_remesh(struct wmOperatorType *ot);

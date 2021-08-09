@@ -72,7 +72,7 @@ class GHOST_EventDragnDrop : public GHOST_Event {
    * \param y: The y-coordinate of the location the cursor was at the time of the event.
    * \param data: The "content" dropped in the window.
    */
-  GHOST_EventDragnDrop(GHOST_TUns64 time,
+  GHOST_EventDragnDrop(uint64_t time,
                        GHOST_TEventType type,
                        GHOST_TDragnDropTypes dataType,
                        GHOST_IWindow *window,
@@ -90,7 +90,7 @@ class GHOST_EventDragnDrop : public GHOST_Event {
 
   ~GHOST_EventDragnDrop()
   {
-    // Free the dropped object data
+    /* Free the dropped object data. */
     if (m_dragnDropEventData.data == NULL)
       return;
 

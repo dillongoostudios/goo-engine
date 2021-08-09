@@ -126,6 +126,97 @@ static const EnumPropertyItem rna_enum_override_library_property_operation_items
     {0, NULL, 0, NULL, NULL},
 };
 
+/**
+ * \note Uses #IDFilterEnumPropertyItem, not EnumPropertyItem, to support 64 bit items.
+ */
+const struct IDFilterEnumPropertyItem rna_enum_id_type_filter_items[] = {
+    /* Datablocks */
+    {FILTER_ID_AC, "filter_action", ICON_ANIM_DATA, "Actions", "Show Action data-blocks"},
+    {FILTER_ID_AR,
+     "filter_armature",
+     ICON_ARMATURE_DATA,
+     "Armatures",
+     "Show Armature data-blocks"},
+    {FILTER_ID_BR, "filter_brush", ICON_BRUSH_DATA, "Brushes", "Show Brushes data-blocks"},
+    {FILTER_ID_CA, "filter_camera", ICON_CAMERA_DATA, "Cameras", "Show Camera data-blocks"},
+    {FILTER_ID_CF, "filter_cachefile", ICON_FILE, "Cache Files", "Show Cache File data-blocks"},
+    {FILTER_ID_CU, "filter_curve", ICON_CURVE_DATA, "Curves", "Show Curve data-blocks"},
+    {FILTER_ID_GD,
+     "filter_grease_pencil",
+     ICON_GREASEPENCIL,
+     "Grease Pencil",
+     "Show Grease pencil data-blocks"},
+    {FILTER_ID_GR,
+     "filter_group",
+     ICON_OUTLINER_COLLECTION,
+     "Collections",
+     "Show Collection data-blocks"},
+    {FILTER_ID_HA, "filter_hair", ICON_HAIR_DATA, "Hairs", "Show/hide Hair data-blocks"},
+    {FILTER_ID_IM, "filter_image", ICON_IMAGE_DATA, "Images", "Show Image data-blocks"},
+    {FILTER_ID_LA, "filter_light", ICON_LIGHT_DATA, "Lights", "Show Light data-blocks"},
+    {FILTER_ID_LP,
+     "filter_light_probe",
+     ICON_OUTLINER_DATA_LIGHTPROBE,
+     "Light Probes",
+     "Show Light Probe data-blocks"},
+    {FILTER_ID_LS,
+     "filter_linestyle",
+     ICON_LINE_DATA,
+     "Freestyle Linestyles",
+     "Show Freestyle's Line Style data-blocks"},
+    {FILTER_ID_LT, "filter_lattice", ICON_LATTICE_DATA, "Lattices", "Show Lattice data-blocks"},
+    {FILTER_ID_MA,
+     "filter_material",
+     ICON_MATERIAL_DATA,
+     "Materials",
+     "Show Material data-blocks"},
+    {FILTER_ID_MB, "filter_metaball", ICON_META_DATA, "Metaballs", "Show Metaball data-blocks"},
+    {FILTER_ID_MC,
+     "filter_movie_clip",
+     ICON_TRACKER_DATA,
+     "Movie Clips",
+     "Show Movie Clip data-blocks"},
+    {FILTER_ID_ME, "filter_mesh", ICON_MESH_DATA, "Meshes", "Show Mesh data-blocks"},
+    {FILTER_ID_MSK, "filter_mask", ICON_MOD_MASK, "Masks", "Show Mask data-blocks"},
+    {FILTER_ID_NT, "filter_node_tree", ICON_NODETREE, "Node Trees", "Show Node Tree data-blocks"},
+    {FILTER_ID_OB, "filter_object", ICON_OBJECT_DATA, "Objects", "Show Object data-blocks"},
+    {FILTER_ID_PA,
+     "filter_particle_settings",
+     ICON_PARTICLE_DATA,
+     "Particles Settings",
+     "Show Particle Settings data-blocks"},
+    {FILTER_ID_PAL, "filter_palette", ICON_COLOR, "Palettes", "Show Palette data-blocks"},
+    {FILTER_ID_PC,
+     "filter_paint_curve",
+     ICON_CURVE_BEZCURVE,
+     "Paint Curves",
+     "Show Paint Curve data-blocks"},
+    {FILTER_ID_PT,
+     "filter_pointcloud",
+     ICON_POINTCLOUD_DATA,
+     "Point Clouds",
+     "Show/hide Point Cloud data-blocks"},
+    {FILTER_ID_SCE, "filter_scene", ICON_SCENE_DATA, "Scenes", "Show Scene data-blocks"},
+    {FILTER_ID_SIM,
+     "filter_simulation",
+     ICON_PHYSICS,
+     "Simulations",
+     "Show Simulation data-blocks"}, /* TODO: Use correct icon. */
+    {FILTER_ID_SPK, "filter_speaker", ICON_SPEAKER, "Speakers", "Show Speaker data-blocks"},
+    {FILTER_ID_SO, "filter_sound", ICON_SOUND, "Sounds", "Show Sound data-blocks"},
+    {FILTER_ID_TE, "filter_texture", ICON_TEXTURE_DATA, "Textures", "Show Texture data-blocks"},
+    {FILTER_ID_TXT, "filter_text", ICON_TEXT, "Texts", "Show Text data-blocks"},
+    {FILTER_ID_VF, "filter_font", ICON_FONT_DATA, "Fonts", "Show Font data-blocks"},
+    {FILTER_ID_VO, "filter_volume", ICON_VOLUME_DATA, "Volumes", "Show/hide Volume data-blocks"},
+    {FILTER_ID_WO, "filter_world", ICON_WORLD_DATA, "Worlds", "Show World data-blocks"},
+    {FILTER_ID_WS,
+     "filter_work_space",
+     ICON_WORKSPACE,
+     "Workspaces",
+     "Show workspace data-blocks"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 #ifdef RNA_RUNTIME
 
 #  include "DNA_anim_types.h"
@@ -147,6 +238,8 @@ static const EnumPropertyItem rna_enum_override_library_property_operation_items
 #  include "DEG_depsgraph.h"
 #  include "DEG_depsgraph_build.h"
 #  include "DEG_depsgraph_query.h"
+
+#  include "ED_asset.h"
 
 #  include "WM_api.h"
 
@@ -344,7 +437,7 @@ short RNA_type_to_ID_code(const StructRNA *type)
   if (base_type == &RNA_Screen) {
     return ID_SCR;
   }
-#  ifdef WITH_GEOMETRY_NODES
+#  ifdef WITH_SIMULATION_DATABLOCK
   if (base_type == &RNA_Simulation) {
     return ID_SIM;
   }
@@ -382,7 +475,7 @@ short RNA_type_to_ID_code(const StructRNA *type)
 
 StructRNA *ID_code_to_RNA_type(short idcode)
 {
-  /* Note, this switch doesn't use a 'default',
+  /* NOTE: this switch doesn't use a 'default',
    * so adding new ID's causes a warning. */
   switch ((ID_Type)idcode) {
     case ID_AC:
@@ -452,7 +545,7 @@ StructRNA *ID_code_to_RNA_type(short idcode)
     case ID_SCR:
       return &RNA_Screen;
     case ID_SIM:
-#  ifdef WITH_GEOMETRY_NODES
+#  ifdef WITH_SIMULATION_DATABLOCK
       return &RNA_Simulation;
 #  else
       return &RNA_ID;
@@ -491,9 +584,10 @@ StructRNA *rna_ID_refine(PointerRNA *ptr)
   return ID_code_to_RNA_type(GS(id->name));
 }
 
-IDProperty *rna_ID_idprops(PointerRNA *ptr, bool create)
+IDProperty **rna_ID_idprops(PointerRNA *ptr)
 {
-  return IDP_GetProperties(ptr->data, create);
+  ID *id = (ID *)ptr->data;
+  return &id->properties;
 }
 
 void rna_ID_fake_user_set(PointerRNA *ptr, bool value)
@@ -508,9 +602,9 @@ void rna_ID_fake_user_set(PointerRNA *ptr, bool value)
   }
 }
 
-IDProperty *rna_PropertyGroup_idprops(PointerRNA *ptr, bool UNUSED(create))
+IDProperty **rna_PropertyGroup_idprops(PointerRNA *ptr)
 {
-  return ptr->data;
+  return (IDProperty **)&ptr->data;
 }
 
 void rna_PropertyGroup_unregister(Main *UNUSED(bmain), StructRNA *type)
@@ -536,7 +630,7 @@ StructRNA *rna_PropertyGroup_register(Main *UNUSED(bmain),
     return NULL;
   }
 
-  /* note: it looks like there is no length limit on the srna id since its
+  /* NOTE: it looks like there is no length limit on the srna id since its
    * just a char pointer, but take care here, also be careful that python
    * owns the string pointer which it could potentially free while blender
    * is running. */
@@ -575,6 +669,22 @@ static ID *rna_ID_copy(ID *id, Main *bmain)
   return newid;
 }
 
+static void rna_ID_asset_mark(ID *id, bContext *C)
+{
+  if (ED_asset_mark_id(C, id)) {
+    WM_main_add_notifier(NC_ID | NA_EDITED, NULL);
+    WM_main_add_notifier(NC_ASSET | NA_ADDED, NULL);
+  }
+}
+
+static void rna_ID_asset_clear(ID *id)
+{
+  if (ED_asset_clear_id(id)) {
+    WM_main_add_notifier(NC_ID | NA_EDITED, NULL);
+    WM_main_add_notifier(NC_ASSET | NA_REMOVED, NULL);
+  }
+}
+
 static ID *rna_ID_override_create(ID *id, Main *bmain, bool remap_local_usages)
 {
   if (!ID_IS_OVERRIDABLE_LIBRARY(id)) {
@@ -590,7 +700,27 @@ static ID *rna_ID_override_create(ID *id, Main *bmain, bool remap_local_usages)
   if (remap_local_usages) {
     BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
   }
+
+  WM_main_add_notifier(NC_ID | NA_ADDED, NULL);
+
   return local_id;
+}
+
+static ID *rna_ID_override_hierarchy_create(
+    ID *id, Main *bmain, Scene *scene, ViewLayer *view_layer, ID *id_reference)
+{
+  if (!ID_IS_OVERRIDABLE_LIBRARY(id)) {
+    return NULL;
+  }
+
+  BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
+
+  ID *id_root_override = NULL;
+  BKE_lib_override_library_create(bmain, scene, view_layer, id, id_reference, &id_root_override);
+
+  WM_main_add_notifier(NC_ID | NA_ADDED, NULL);
+
+  return id_root_override;
 }
 
 static void rna_ID_override_template_create(ID *id, ReportList *reports)
@@ -734,7 +864,7 @@ static struct ID *rna_ID_make_local(struct ID *self, Main *bmain, bool clear_pro
 
 static AnimData *rna_ID_animation_data_create(ID *id, Main *bmain)
 {
-  AnimData *adt = BKE_animdata_add_id(id);
+  AnimData *adt = BKE_animdata_ensure_id(id);
   DEG_relations_tag_update(bmain);
   return adt;
 }
@@ -1119,17 +1249,17 @@ static void rna_ImagePreview_icon_reload(PreviewImage *prv)
 static PointerRNA rna_IDPreview_get(PointerRNA *ptr)
 {
   ID *id = (ID *)ptr->data;
-  PreviewImage *prv_img = BKE_previewimg_id_ensure(id);
+  PreviewImage *prv_img = BKE_previewimg_id_get(id);
 
   return rna_pointer_inherit_refine(ptr, &RNA_ImagePreview, prv_img);
 }
 
-static IDProperty *rna_IDPropertyWrapPtr_idprops(PointerRNA *ptr, bool UNUSED(create))
+static IDProperty **rna_IDPropertyWrapPtr_idprops(PointerRNA *ptr)
 {
   if (ptr == NULL) {
     return NULL;
   }
-  return ptr->data;
+  return (IDProperty **)&ptr->data;
 }
 
 static void rna_Library_version_get(PointerRNA *ptr, int *value)
@@ -1689,12 +1819,12 @@ static void rna_def_ID(BlenderRNA *brna)
       srna, "override_library", "IDOverrideLibrary", "Library Override", "Library override data");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-  prop = RNA_def_pointer(
-      srna,
-      "preview",
-      "ImagePreview",
-      "Preview",
-      "Preview image and icon of this data-block (None if not supported for this type of data)");
+  prop = RNA_def_pointer(srna,
+                         "preview",
+                         "ImagePreview",
+                         "Preview",
+                         "Preview image and icon of this data-block (always None if not supported "
+                         "for this type of data)");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   RNA_def_property_pointer_funcs(prop, "rna_IDPreview_get", NULL, NULL, NULL);
@@ -1716,6 +1846,18 @@ static void rna_def_ID(BlenderRNA *brna)
   parm = RNA_def_pointer(func, "id", "ID", "", "New copy of the ID");
   RNA_def_function_return(func, parm);
 
+  func = RNA_def_function(srna, "asset_mark", "rna_ID_asset_mark");
+  RNA_def_function_ui_description(
+      func,
+      "Enable easier reuse of the data-block through the Asset Browser, with the help of "
+      "customizable metadata (like previews, descriptions and tags)");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+
+  func = RNA_def_function(srna, "asset_clear", "rna_ID_asset_clear");
+  RNA_def_function_ui_description(
+      func,
+      "Delete all asset metadata and turn the asset data-block back into a normal data-block");
+
   func = RNA_def_function(srna, "override_create", "rna_ID_override_create");
   RNA_def_function_ui_description(func,
                                   "Create an overridden local copy of this linked data-block (not "
@@ -1729,6 +1871,30 @@ static void rna_def_ID(BlenderRNA *brna)
                   "",
                   "Whether local usages of the linked ID should be remapped to the new "
                   "library override of it");
+
+  func = RNA_def_function(srna, "override_hierarchy_create", "rna_ID_override_hierarchy_create");
+  RNA_def_function_ui_description(
+      func,
+      "Create an overridden local copy of this linked data-block, and most of its dependencies "
+      "when it is a Collection or and Object");
+  RNA_def_function_flag(func, FUNC_USE_MAIN);
+  parm = RNA_def_pointer(func, "id", "ID", "", "New overridden local copy of the root ID");
+  RNA_def_function_return(func, parm);
+  parm = RNA_def_pointer(
+      func, "scene", "Scene", "", "In which scene the new overrides should be instantiated");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  parm = RNA_def_pointer(func,
+                         "view_layer",
+                         "ViewLayer",
+                         "",
+                         "In which view layer the new overrides should be instantiated");
+  RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED);
+  RNA_def_pointer(func,
+                  "reference",
+                  "ID",
+                  "",
+                  "Another ID (usually an Object or Collection) used to decide where to "
+                  "instantiate the new overrides");
 
   func = RNA_def_function(srna, "override_template_create", "rna_ID_override_template_create");
   RNA_def_function_ui_description(func, "Create an override template for this ID");
@@ -1795,6 +1961,13 @@ static void rna_def_ID(BlenderRNA *brna)
                                   "Tag the ID to update its display data, "
                                   "e.g. when calling :class:`bpy.types.Scene.update`");
   RNA_def_enum_flag(func, "refresh", update_flag_items, 0, "", "Type of updates to perform");
+
+  func = RNA_def_function(srna, "preview_ensure", "BKE_previewimg_id_ensure");
+  RNA_def_function_ui_description(func,
+                                  "Ensure that this ID has preview data (if ID type supports it)");
+  parm = RNA_def_pointer(
+      func, "preview_image", "ImagePreview", "", "The existing or created preview");
+  RNA_def_function_return(func, parm);
 
 #  ifdef WITH_PYTHON
   RNA_def_struct_register_funcs(srna, NULL, NULL, "rna_ID_instance");

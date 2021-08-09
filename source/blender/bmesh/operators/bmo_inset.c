@@ -361,7 +361,7 @@ static void bmo_face_inset_individual(BMesh *bm,
 
     madd_v3_v3fl(v_new_co, tvec, thickness);
 
-    /* Set normal, add depth and write new vertex position*/
+    /* Set normal, add depth and write new vertex position. */
     copy_v3_v3(l_iter->v->no, f->no);
 
     if (depth != 0.0f) {
@@ -822,7 +822,7 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
     /* this could go in its own loop,
      * only use the 'es->l->f' so we don't store loops for faces which have no mixed selection
      *
-     * note: faces on the other side of the inset will be interpolated too since this is hard to
+     * NOTE: faces on the other side of the inset will be interpolated too since this is hard to
      * detect, just allow it even though it will cause some redundant interpolation */
     if (use_interpolate) {
       BMIter viter;
@@ -1016,8 +1016,8 @@ void bmo_inset_region_exec(BMesh *bm, BMOperator *op)
               if (use_even_boundary) {
 
                 /**
-                 * This case where only one edge attached to #v_split
-                 * is used - ei - the face to inset is on a boundary.
+                 * This case where only one edge attached to #v_split is used.
+                 * i.e. the face to inset is on a boundary.
                  *
                  * <pre>
                  *                  We want the inset to align flush with the

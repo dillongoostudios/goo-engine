@@ -60,6 +60,12 @@ Texture::~Texture()
       fb_[i]->attachment_remove(fb_attachment_[i]);
     }
   }
+
+#ifndef GPU_NO_USE_PY_REFERENCES
+  if (this->py_ref) {
+    *this->py_ref = nullptr;
+  }
+#endif
 }
 
 bool Texture::init_1D(int w, int layers, eGPUTextureFormat format)
@@ -148,7 +154,7 @@ void Texture::attach_to(FrameBuffer *fb, GPUAttachmentType type)
       return;
     }
   }
-  BLI_assert(!"GPU: Error: Texture: Not enough attachment");
+  BLI_assert_msg(0, "GPU: Error: Texture: Not enough attachment");
 }
 
 void Texture::detach_from(FrameBuffer *fb)
@@ -160,7 +166,7 @@ void Texture::detach_from(FrameBuffer *fb)
       return;
     }
   }
-  BLI_assert(!"GPU: Error: Texture: Framebuffer is not attached");
+  BLI_assert_msg(0, "GPU: Error: Texture: Framebuffer is not attached");
 }
 
 void Texture::update(eGPUDataFormat format, const void *data)
@@ -394,7 +400,7 @@ void GPU_texture_update(GPUTexture *tex, eGPUDataFormat data_format, const void 
 }
 
 /* Makes data interpretation aware of the source layout.
- * Skipping pixels correctly when changing rows when doing partial update.*/
+ * Skipping pixels correctly when changing rows when doing partial update. */
 void GPU_unpack_row_length_set(uint len)
 {
   Context::get()->state_manager->texture_unpack_row_length_set(len);
@@ -581,7 +587,20 @@ bool GPU_texture_array(const GPUTexture *tex)
   return (reinterpret_cast<const Texture *>(tex)->type_get() & GPU_TEXTURE_ARRAY) != 0;
 }
 
-/* TODO remove */
+#ifndef GPU_NO_USE_PY_REFERENCES
+void **GPU_texture_py_reference_get(GPUTexture *tex)
+{
+  return unwrap(tex)->py_ref;
+}
+
+void GPU_texture_py_reference_set(GPUTexture *tex, void **py_ref)
+{
+  BLI_assert(py_ref == nullptr || unwrap(tex)->py_ref == nullptr);
+  unwrap(tex)->py_ref = py_ref;
+}
+#endif
+
+/* TODO: remove. */
 int GPU_texture_opengl_bindcode(const GPUTexture *tex)
 {
   return reinterpret_cast<const Texture *>(tex)->gl_bindcode_get();

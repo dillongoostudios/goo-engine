@@ -18,7 +18,20 @@
 
 #pragma once
 
+#include "BLI_index_range.hh"
+#include "BLI_rect.h"
+
 namespace blender::compositor {
+
+enum class eExecutionModel {
+  /**
+   * Operations are executed from outputs to inputs grouped in execution groups and rendered
+   * in tiles.
+   */
+  Tiled,
+  /** Operations are fully rendered in order from inputs to outputs. */
+  FullFrame
+};
 
 /**
  * \brief possible data types for sockets
@@ -50,12 +63,33 @@ constexpr int COM_data_type_num_channels(const DataType datatype)
 }
 
 constexpr int COM_DATA_TYPE_VALUE_CHANNELS = COM_data_type_num_channels(DataType::Value);
+constexpr int COM_DATA_TYPE_VECTOR_CHANNELS = COM_data_type_num_channels(DataType::Vector);
 constexpr int COM_DATA_TYPE_COLOR_CHANNELS = COM_data_type_num_channels(DataType::Color);
+
+constexpr float COM_COLOR_TRANSPARENT[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+constexpr float COM_VECTOR_ZERO[3] = {0.0f, 0.0f, 0.0f};
+constexpr float COM_VALUE_ZERO[1] = {0.0f};
+constexpr float COM_VALUE_ONE[1] = {1.0f};
+
+/**
+ * Utility to get data type for given number of channels.
+ */
+constexpr DataType COM_num_channels_data_type(const int num_channels)
+{
+  switch (num_channels) {
+    case 1:
+      return DataType::Value;
+    case 3:
+      return DataType::Vector;
+    case 4:
+    default:
+      return DataType::Color;
+  }
+}
 
 // configurable items
 
 // chunk size determination
-// #define COM_DEBUG
 
 // chunk order
 /**
@@ -78,5 +112,25 @@ enum class ChunkOrdering {
 constexpr float COM_PREVIEW_SIZE = 140.f;
 constexpr float COM_RULE_OF_THIRDS_DIVIDER = 100.0f;
 constexpr float COM_BLUR_BOKEH_PIXELS = 512;
+
+constexpr IndexRange XRange(const rcti &area)
+{
+  return IndexRange(area.xmin, area.xmax - area.xmin);
+}
+
+constexpr IndexRange YRange(const rcti &area)
+{
+  return IndexRange(area.ymin, area.ymax - area.ymin);
+}
+
+constexpr IndexRange XRange(const rcti *area)
+{
+  return XRange(*area);
+}
+
+constexpr IndexRange YRange(const rcti *area)
+{
+  return YRange(*area);
+}
 
 }  // namespace blender::compositor

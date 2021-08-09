@@ -332,7 +332,6 @@ RenderResult *render_result_new(
     BLI_strncpy(rl->name, view_layer->name, sizeof(rl->name));
     rl->layflag = view_layer->layflag;
 
-    /* for debugging: view_layer->passflag | SCE_PASS_RAYHITS; */
     rl->passflag = view_layer->passflag;
 
     rl->rectx = rectx;
@@ -363,7 +362,7 @@ RenderResult *render_result_new(
     } \
   } while (false)
 
-      /* a renderlayer should always have a Combined pass*/
+      /* A renderlayer should always have a Combined pass. */
       render_layer_add_pass(rr, rl, 4, "Combined", view, "RGBA");
 
       if (view_layer->passflag & SCE_PASS_Z) {
@@ -398,9 +397,6 @@ RenderResult *render_result_new(
       }
       if (view_layer->passflag & SCE_PASS_MIST) {
         RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 1, RE_PASSNAME_MIST, view, "Z");
-      }
-      if (rl->passflag & SCE_PASS_RAYHITS) {
-        RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 4, RE_PASSNAME_RAYHITS, view, "RGB");
       }
       if (view_layer->passflag & SCE_PASS_DIFFUSE_DIRECT) {
         RENDER_LAYER_ADD_PASS_SAFE(rr, rl, 3, RE_PASSNAME_DIFFUSE_DIRECT, view, "RGB");
@@ -473,15 +469,15 @@ RenderResult *render_result_new(
       render_layer_add_pass(rr, rl, 4, RE_PASSNAME_COMBINED, view, "RGBA");
     }
 
-    /* note, this has to be in sync with scene.c */
-    rl->layflag = 0x7FFF; /* solid ztra halo strand */
+    /* NOTE: this has to be in sync with `scene.c`. */
+    rl->layflag = SCE_LAY_FLAG_DEFAULT;
     rl->passflag = SCE_PASS_COMBINED;
 
     re->active_view_layer = 0;
   }
 
-  /* border render; calculate offset for use in compositor. compo is centralized coords */
-  /* XXX obsolete? I now use it for drawing border render offset (ton) */
+  /* Border render; calculate offset for use in compositor. compo is centralized coords. */
+  /* XXX(ton): obsolete? I now use it for drawing border render offset. */
   rr->xof = re->disprect.xmin + BLI_rcti_cent_x(&re->disprect) - (re->winx / 2);
   rr->yof = re->disprect.ymin + BLI_rcti_cent_y(&re->disprect) - (re->winy / 2);
 
@@ -581,7 +577,6 @@ static int passtype_from_name(const char *name)
   CHECK_PASS(INDEXOB);
   CHECK_PASS(INDEXMA);
   CHECK_PASS(MIST);
-  CHECK_PASS(RAYHITS);
   CHECK_PASS(DIFFUSE_DIRECT);
   CHECK_PASS(DIFFUSE_INDIRECT);
   CHECK_PASS(DIFFUSE_COLOR);
@@ -804,9 +799,9 @@ void render_result_views_new(RenderResult *rr, const RenderData *rd)
   }
 }
 
-bool render_result_has_views(RenderResult *rr)
+bool render_result_has_views(const RenderResult *rr)
 {
-  RenderView *rv = rr->views.first;
+  const RenderView *rv = rr->views.first;
   return (rv && (rv->next || rv->name[0]));
 }
 
@@ -1016,7 +1011,7 @@ bool RE_WriteRenderResult(ReportList *reports,
     IMB_exr_write_channels(exrhandle);
   }
   else {
-    /* TODO, get the error from openexr's exception */
+    /* TODO: get the error from openexr's exception. */
     BKE_reportf(
         reports, RPT_ERROR, "Error writing render result, %s (see console)", strerror(errno));
   }

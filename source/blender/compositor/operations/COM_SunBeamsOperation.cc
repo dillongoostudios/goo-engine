@@ -46,14 +46,14 @@ void SunBeamsOperation::initExecution()
  * (u,v) is used to designate sector space coordinates
  *
  * For a target point (x,y) the sector should be chosen such that
- *   ``u >= v >= 0``
+ *   `u >= v >= 0`
  * This removes the need to handle all sorts of special cases.
  *
  * Template parameters:
- * fxu : buffer increment in x for sector u+1
- * fxv : buffer increment in x for sector v+1
- * fyu : buffer increment in y for sector u+1
- * fyv : buffer increment in y for sector v+1
+ * \param fxu: buffer increment in x for sector `u + 1`.
+ * \param fxv: buffer increment in x for sector `v + 1`.
+ * \param fyu: buffer increment in y for sector `u + 1`.
+ * \param fyv: buffer increment in y for sector `v + 1`.
  */
 template<int fxu, int fxv, int fyu, int fyv> struct BufferLineAccumulator {
 
@@ -197,7 +197,7 @@ template<int fxu, int fxv, int fyu, int fyv> struct BufferLineAccumulator {
         madd_v4_v4fl(output, border, border[3] * weight);
       }
 
-      /* TODO implement proper filtering here, see
+      /* TODO: implement proper filtering here, see
        * https://en.wikipedia.org/wiki/Lanczos_resampling
        * https://en.wikipedia.org/wiki/Sinc_function
        *

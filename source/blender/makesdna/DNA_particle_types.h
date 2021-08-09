@@ -64,7 +64,7 @@ typedef struct BoidParticle {
   struct BoidData data;
   float gravity[3];
   float wander[3];
-  float rt;
+  char _pad0[4];
 } BoidParticle;
 
 typedef struct ParticleSpring {
@@ -74,15 +74,16 @@ typedef struct ParticleSpring {
 
 /* Child particles are created around or between parent particles */
 typedef struct ChildParticle {
-  /** Num is face index on the final derived mesh. */
-  int num, parent;
+  /** Face index on the final derived mesh. */
+  int num;
+  int parent;
   /** Nearest particles to the child, used for the interpolation. */
   int pa[4];
   /** Interpolation weights for the above particles. */
   float w[4];
   /** Face vertex weights and offset. */
   float fuv[4], foffset;
-  float rt;
+  char _pad0[4];
 } ChildParticle;
 
 typedef struct ParticleTarget {
@@ -99,7 +100,8 @@ typedef struct ParticleDupliWeight {
   short count;
   short flag;
   /** Only updated on file save and used on file load. */
-  short index, rt;
+  short index;
+  char _pad0[2];
 } ParticleDupliWeight;
 
 typedef struct ParticleData {
@@ -156,7 +158,7 @@ typedef struct ParticleData {
 } ParticleData;
 
 typedef struct SPHFluidSettings {
-  /*Particle Fluid*/
+  /* Particle Fluid. */
   float radius, spring_k, rest_length;
   float plasticity_constant, yield_ratio;
   float plasticity_balance, yield_balance;
@@ -191,7 +193,8 @@ typedef struct ParticleSettings {
   struct EffectorWeights *effector_weights;
   struct Collection *collision_group;
 
-  int flag, rt;
+  int flag;
+  char _pad1[4];
   short type, from, distr, texact;
   /* physics modes */
   short phystype, rotmode, avemode, reactevent;
@@ -477,8 +480,8 @@ enum {
 
 #define PART_HAIR_REGROW 16 /* regrow hair for each frame */
 
-#define PART_UNBORN 32 /*show unborn particles*/
-#define PART_DIED 64   /*show died particles*/
+#define PART_UNBORN 32 /* Show unborn particles. */
+#define PART_DIED 64   /* Show died particles. */
 
 #define PART_TRAND 128
 #define PART_EDISTR 256 /* particle/face from face areas */
@@ -506,7 +509,7 @@ enum {
 
 #define PART_CHILD_EFFECT (1 << 27)
 #define PART_CHILD_LONG_HAIR (1 << 28)
-/* #define PART_CHILD_RENDER        (1 << 29) */ /*UNUSED*/
+// #define PART_CHILD_RENDER (1 << 29) /* UNUSED */
 #define PART_CHILD_GUIDE (1 << 30)
 
 #define PART_SELF_EFFECT (1 << 22)
@@ -563,7 +566,7 @@ typedef enum eParticleShapeFlag {
 #define PART_TIME_AUTOSF 1 /* Automatic subframes */
 
 /* part->draw_as */
-/* part->ren_as*/
+/* part->ren_as */
 #define PART_DRAW_NOT 0
 #define PART_DRAW_DOT 1
 #define PART_DRAW_HALO 1

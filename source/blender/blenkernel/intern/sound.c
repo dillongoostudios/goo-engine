@@ -187,8 +187,8 @@ static void sound_blend_read_data(BlendDataReader *reader, ID *id)
 static void sound_blend_read_lib(BlendLibReader *reader, ID *id)
 {
   bSound *sound = (bSound *)id;
-  BLO_read_id_address(
-      reader, sound->id.lib, &sound->ipo); /* XXX deprecated - old animation system */
+  /* XXX: deprecated - old animation system. */
+  BLO_read_id_address(reader, sound->id.lib, &sound->ipo);
 }
 
 static void sound_blend_read_expand(BlendExpander *expander, ID *id)
@@ -824,7 +824,7 @@ void BKE_sound_set_scene_sound_pan(void *handle, float pan, char animated)
 
 void BKE_sound_update_sequencer(Main *main, bSound *sound)
 {
-  BLI_assert(!"is not supposed to be used, is weird function.");
+  BLI_assert_msg(0, "is not supposed to be used, is weird function.");
 
   Scene *scene;
 

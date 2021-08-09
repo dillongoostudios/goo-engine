@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "DNA_asset_types.h"
 #include "DNA_color_types.h" /* for Histogram */
 #include "DNA_defs.h"
 #include "DNA_image_types.h" /* ImageUser */
@@ -338,8 +339,9 @@ typedef enum eSpaceOutliner_Filter {
   SO_FILTER_OB_STATE_SELECTED = (1 << 15), /* Not set via DNA. */
   SO_FILTER_OB_STATE_ACTIVE = (1 << 16),   /* Not set via DNA. */
   SO_FILTER_NO_COLLECTION = (1 << 17),
+  SO_FILTER_NO_VIEW_LAYERS = (1 << 18),
 
-  SO_FILTER_ID_TYPE = (1 << 18),
+  SO_FILTER_ID_TYPE = (1 << 19),
 } eSpaceOutliner_Filter;
 
 #define SO_FILTER_OB_TYPE \
@@ -352,7 +354,7 @@ typedef enum eSpaceOutliner_Filter {
 
 #define SO_FILTER_ANY \
   (SO_FILTER_NO_OB_CONTENT | SO_FILTER_NO_CHILDREN | SO_FILTER_OB_TYPE | SO_FILTER_OB_STATE | \
-   SO_FILTER_NO_COLLECTION | SO_FILTER_NO_LIB_OVERRIDE)
+   SO_FILTER_NO_COLLECTION | SO_FILTER_NO_VIEW_LAYERS | SO_FILTER_NO_LIB_OVERRIDE)
 
 /* SpaceOutliner.filter_state */
 typedef enum eSpaceOutliner_StateFilter {
@@ -447,7 +449,7 @@ typedef struct SpaceGraph {
   /** Mode for the Graph editor (eGraphEdit_Mode). */
   short mode;
   /**
-   * Time-transform autosnapping settings for Graph editor
+   * Time-transform auto-snapping settings for Graph editor
    * (eAnimEdit_AutoSnap in DNA_action_types.h).
    */
   short autosnap;
@@ -652,6 +654,7 @@ typedef enum eSpaceSeq_Flag {
   SEQ_SHOW_STRIP_SOURCE = (1 << 15),
   SEQ_SHOW_STRIP_DURATION = (1 << 16),
   SEQ_USE_PROXIES = (1 << 17),
+  SEQ_SHOW_GRID = (1 << 18),
 } eSpaceSeq_Flag;
 
 /* SpaceSeq.view */
@@ -695,24 +698,6 @@ typedef enum eSpaceSeq_OverlayType {
 /** \name File Selector
  * \{ */
 
-/**
- * Information to identify a asset library. May be either one of the predefined types (current
- * 'Main', builtin library, project library), or a custom type as defined in the Preferences.
- *
- * If the type is set to #FILE_ASSET_LIBRARY_CUSTOM, idname must have the name to identify the
- * custom library. Otherwise idname is not used.
- */
-typedef struct FileSelectAssetLibraryUID {
-  short type; /* eFileAssetLibrary_Type */
-  char _pad[2];
-  /**
-   * If showing a custom asset library (#FILE_ASSET_LIBRARY_CUSTOM), this is the index of the
-   * #bUserAssetLibrary within #UserDef.asset_libraries.
-   * Should be ignored otherwise (but better set to -1 then, for sanity and debugging).
-   */
-  int custom_library_index;
-} FileSelectAssetLibraryUID;
-
 /* Config and Input for File Selector */
 typedef struct FileSelectParams {
   /** Title, also used for the text of the execute button. */
@@ -726,6 +711,12 @@ typedef struct FileSelectParams {
 
   char renamefile[256];
   short rename_flag;
+  char _pad[4];
+  /** An ID that was just renamed. Used to identify a renamed asset file over re-reads, similar to
+   * `renamefile` but for local IDs (takes precedence). Don't keep this stored across handlers!
+   * Would break on undo. */
+  const ID *rename_id;
+  void *_pad3;
 
   /** List of filetypes to filter (FILE_MAXFILE). */
   char filter_glob[256];
@@ -733,7 +724,6 @@ typedef struct FileSelectParams {
   /** Text items name must match to be shown. */
   char filter_search[64];
   /** Same as filter, but for ID types (aka library groups). */
-  int _pad0;
   uint64_t filter_id;
 
   /** Active file used for keyboard navigation. */
@@ -779,8 +769,16 @@ typedef struct FileSelectParams {
 typedef struct FileAssetSelectParams {
   FileSelectParams base_params;
 
-  FileSelectAssetLibraryUID asset_library;
+  AssetLibraryReference asset_library;
+
+  short import_type; /* eFileAssetImportType */
+  char _pad[6];
 } FileAssetSelectParams;
+
+typedef enum eFileAssetImportType {
+  FILE_ASSET_IMPORT_LINK = 0,
+  FILE_ASSET_IMPORT_APPEND = 1,
+} eFileAssetImportType;
 
 /**
  * A wrapper to store previous and next folder lists (#FolderList) for a specific browse mode
@@ -870,22 +868,6 @@ typedef enum eFileBrowse_Mode {
   /* Asset Browser */
   FILE_BROWSE_MODE_ASSETS = 1,
 } eFileBrowse_Mode;
-
-typedef enum eFileAssetLibrary_Type {
-  /* For the future. Display assets bundled with Blender by default. */
-  // FILE_ASSET_LIBRARY_BUNDLED = 0,
-  /** Display assets from the current session (current "Main"). */
-  FILE_ASSET_LIBRARY_LOCAL = 1,
-  /* For the future. Display assets for the current project. */
-  // FILE_ASSET_LIBRARY_PROJECT = 2,
-
-  /** Display assets from custom asset libraries, as defined in the preferences
-   * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library.idname
-   * then.
-   * In RNA, we add the index of the custom library to this to identify it by index. So keep
-   * this last! */
-  FILE_ASSET_LIBRARY_CUSTOM = 100,
-} eFileAssetLibrary_Type;
 
 /* FileSelectParams.display */
 enum eFileDisplayType {
@@ -978,7 +960,7 @@ typedef enum eFileSel_Params_Flag {
 } eFileSel_Params_Flag;
 
 /* sfile->params->rename_flag */
-/* Note: short flag. Defined as bitflags, but currently only used as exclusive status markers... */
+/* NOTE: short flag. Defined as bitflags, but currently only used as exclusive status markers... */
 typedef enum eFileSel_Params_RenameFlag {
   /** Used when we only have the name of the entry we want to rename,
    * but not yet access to its matching file entry. */
@@ -1011,7 +993,7 @@ typedef enum eFileSel_File_Types {
   FILE_TYPE_COLLADA = (1 << 13),
   /** from filter_glob operator property */
   FILE_TYPE_OPERATOR = (1 << 14),
-  FILE_TYPE_APPLICATIONBUNDLE = (1 << 15),
+  FILE_TYPE_BUNDLE = (1 << 15),
   FILE_TYPE_ALEMBIC = (1 << 16),
   /** For all kinds of recognized import/export formats. No need for specialized types. */
   FILE_TYPE_OBJECT_IO = (1 << 17),
@@ -1034,82 +1016,24 @@ typedef enum eDirEntry_SelectFlag {
 
 /* ***** Related to file browser, but never saved in DNA, only here to help with RNA. ***** */
 
-/**
- * About Unique identifier.
- *
- * Stored in a CustomProps once imported.
- * Each engine is free to use it as it likes - it will be the only thing passed to it by blender to
- * identify asset/variant/version (concatenating the three into a single 48 bytes one).
- * Assumed to be 128bits, handled as four integers due to lack of real bytes proptype in RNA :|.
- */
-#define ASSET_UUID_LENGTH 16
-
-/* Used to communicate with asset engines outside of 'import' context. */
-#
-#
-typedef struct AssetUUID {
-  int uuid_asset[4];
-  int uuid_variant[4];
-  int uuid_revision[4];
-} AssetUUID;
-
-#
-#
-typedef struct AssetUUIDList {
-  AssetUUID *uuids;
-  int nbr_uuids;
-  char _pad[4];
-} AssetUUIDList;
-
-/* Container for a revision, only relevant in asset context. */
-#
-#
-typedef struct FileDirEntryRevision {
-  struct FileDirEntryRevision *next, *prev;
-
-  char *comment;
-  void *_pad;
-
-  int uuid[4];
-
-  uint64_t size;
-  int64_t time;
-  /* Temp caching of UI-generated strings... */
-  char size_str[16];
-  char datetime_str[16 + 8];
-} FileDirEntryRevision;
-
-/* Container for a variant, only relevant in asset context.
- * In case there are no variants, a single one shall exist, with NULL name/description. */
-#
-#
-typedef struct FileDirEntryVariant {
-  struct FileDirEntryVariant *next, *prev;
-
-  int uuid[4];
-  char *name;
-  char *description;
-
-  ListBase revisions;
-  int nbr_revisions;
-  int act_revision;
-} FileDirEntryVariant;
-
-/* Container for mere direntry, with additional asset-related data. */
 #
 #
 typedef struct FileDirEntry {
   struct FileDirEntry *next, *prev;
 
-  int uuid[4];
+  uint32_t uid; /* FileUID */
   /* Name needs freeing if FILE_ENTRY_NAME_FREE is set. Otherwise this is a direct pointer to a
    * name buffer. */
   char *name;
-  char *description;
 
-  /* Either point to active variant/revision if available, or own entry
-   * (in mere filebrowser case). */
-  FileDirEntryRevision *entry;
+  uint64_t size;
+  int64_t time;
+
+  struct {
+    /* Temp caching of UI-generated strings. */
+    char size_str[16];
+    char datetime_str[16 + 8];
+  } draw_data;
 
   /** #eFileSel_File_Types. */
   int typeflag;
@@ -1132,32 +1056,16 @@ typedef struct FileDirEntry {
   /* The icon_id for the preview image. */
   int preview_icon_id;
 
-  /* Tags are for info only, most of filtering is done in asset engine. */
-  char **tags;
-  int nbr_tags;
-
-  short status;
   short flags;
   /* eFileAttributes defined in BLI_fileops.h */
   int attributes;
-
-  ListBase variants;
-  int nbr_variants;
-  int act_variant;
 } FileDirEntry;
 
 /**
- * Array of direntries.
+ * Array of directory entries.
  *
- * This struct is used in various, different contexts.
- *
- * In Filebrowser UI, it stores the total number of available entries, the number of visible
- * (filtered) entries, and a subset of those in 'entries' ListBase, from idx_start (included)
- * to idx_end (excluded).
- *
- * In AssetEngine context (i.e. outside of 'browsing' context), entries contain all needed data,
- * there is no filtering, so nbr_entries_filtered, entry_idx_start and entry_idx_end
- * should all be set to -1.
+ * Stores the total number of available entries, the number of visible (filtered) entries, and a
+ * subset of those in 'entries' ListBase, from idx_start (included) to idx_end (excluded).
  */
 #
 #
@@ -1170,14 +1078,6 @@ typedef struct FileDirEntryArr {
   /** FILE_MAX. */
   char root[1024];
 } FileDirEntryArr;
-
-#if 0 /* UNUSED */
-/* FileDirEntry.status */
-enum {
-  ASSET_STATUS_LOCAL = 1 << 0,  /* If active uuid is available locally/immediately. */
-  ASSET_STATUS_LATEST = 1 << 1, /* If active uuid is latest available version. */
-};
-#endif
 
 /* FileDirEntry.flags */
 enum {
@@ -1798,8 +1698,8 @@ typedef enum eSpaceClip_Flag {
 /* SpaceClip.mode */
 typedef enum eSpaceClip_Mode {
   SC_MODE_TRACKING = 0,
-  /*SC_MODE_RECONSTRUCTION = 1,*/ /* DEPRECATED */
-  /*SC_MODE_DISTORTION = 2,*/     /* DEPRECATED */
+  // SC_MODE_RECONSTRUCTION = 1, /* DEPRECATED */
+  // SC_MODE_DISTORTION = 2,     /* DEPRECATED */
   SC_MODE_MASKEDIT = 3,
 } eSpaceClip_Mode;
 
@@ -1866,6 +1766,19 @@ typedef struct SpreadsheetColumn {
    * #SpreadsheetColumnID in the future for different kinds of ids.
    */
   SpreadsheetColumnID *id;
+
+  /**
+   * An indicator of the type of values in the column, set at runtime.
+   * #eSpreadsheetColumnValueType.
+   */
+  uint8_t data_type;
+  char _pad0[7];
+
+  /**
+   * The final column name generated by the data source, also just
+   * cached at runtime when the data source columns are generated.
+   */
+  char *display_name;
 } SpreadsheetColumn;
 
 /**
@@ -1906,10 +1819,13 @@ typedef struct SpaceSpreadsheet {
   /* List of #SpreadsheetColumn. */
   ListBase columns;
 
+  /* SpreadsheetRowFilter. */
+  ListBase row_filters;
+
   /**
    * List of #SpreadsheetContext.
    * This is a path to the data that is displayed in the spreadsheet.
-   * It can be set explicitely by an action of the user (e.g. clicking the preview icon in a
+   * It can be set explicitly by an action of the user (e.g. clicking the preview icon in a
    * geometry node) or it can be derived from context automatically based on some heuristic.
    */
   ListBase context_path;
@@ -1937,11 +1853,48 @@ typedef enum eSpaceSpreadsheet_Flag {
 
 typedef enum eSpaceSpreadsheet_FilterFlag {
   SPREADSHEET_FILTER_SELECTED_ONLY = (1 << 0),
+  SPREADSHEET_FILTER_ENABLE = (1 << 1),
 } eSpaceSpreadsheet_FilterFlag;
+
+typedef struct SpreadsheetRowFilter {
+  struct SpreadsheetRowFilter *next, *prev;
+
+  char column_name[64]; /* MAX_NAME. */
+
+  /* eSpreadsheetFilterOperation. */
+  uint8_t operation;
+  /* eSpaceSpreadsheet_RowFilterFlag. */
+  uint8_t flag;
+
+  char _pad0[2];
+
+  int value_int;
+  char *value_string;
+  float value_float;
+  float threshold;
+  float value_float2[2];
+  float value_float3[3];
+  float value_color[4];
+
+  char _pad1[4];
+} SpreadsheetRowFilter;
+
+typedef enum eSpaceSpreadsheet_RowFilterFlag {
+  SPREADSHEET_ROW_FILTER_UI_EXPAND = (1 << 0),
+  SPREADSHEET_ROW_FILTER_BOOL_VALUE = (1 << 1),
+  SPREADSHEET_ROW_FILTER_ENABLED = (1 << 2),
+} eSpaceSpreadsheet_RowFilterFlag;
+
+typedef enum eSpreadsheetFilterOperation {
+  SPREADSHEET_ROW_FILTER_EQUAL = 0,
+  SPREADSHEET_ROW_FILTER_GREATER = 1,
+  SPREADSHEET_ROW_FILTER_LESS = 2,
+} eSpreadsheetFilterOperation;
 
 typedef enum eSpaceSpreadsheet_ObjectEvalState {
   SPREADSHEET_OBJECT_EVAL_STATE_EVALUATED = 0,
   SPREADSHEET_OBJECT_EVAL_STATE_ORIGINAL = 1,
+  SPREADSHEET_OBJECT_EVAL_STATE_VIEWER_NODE = 2,
 } eSpaceSpreadsheet_Context;
 
 typedef enum eSpaceSpreadsheet_ContextType {
@@ -1949,6 +1902,16 @@ typedef enum eSpaceSpreadsheet_ContextType {
   SPREADSHEET_CONTEXT_MODIFIER = 1,
   SPREADSHEET_CONTEXT_NODE = 2,
 } eSpaceSpreadsheet_ContextType;
+
+typedef enum eSpreadsheetColumnValueType {
+  SPREADSHEET_VALUE_TYPE_BOOL = 0,
+  SPREADSHEET_VALUE_TYPE_INT32 = 1,
+  SPREADSHEET_VALUE_TYPE_FLOAT = 2,
+  SPREADSHEET_VALUE_TYPE_FLOAT2 = 3,
+  SPREADSHEET_VALUE_TYPE_FLOAT3 = 4,
+  SPREADSHEET_VALUE_TYPE_COLOR = 5,
+  SPREADSHEET_VALUE_TYPE_INSTANCES = 6,
+} eSpreadsheetColumnValueType;
 
 /**
  * We can't just use UI_UNIT_X, because it does not take `widget.points` into account, which

@@ -188,7 +188,7 @@ static uiBlock *ui_block_func_POPOVER(bContext *C, uiPopupBlockHandle *handle, v
       }
     }
 
-    /* Estimated a maximum size so we don't go offscreen for low height
+    /* Estimated a maximum size so we don't go off-screen for low height
      * areas near the bottom of the window on refreshes. */
     handle->max_size_y = UI_UNIT_Y * 16.0f;
   }
@@ -420,7 +420,7 @@ void UI_popover_end(bContext *C, uiPopover *pup, wmKeyMap *keymap)
    * For now close this style of popovers when accessed. */
   UI_block_flag_disable(pup->block, UI_BLOCK_KEEP_OPEN);
 
-  /* panels are created flipped (from event handling pov) */
+  /* Panels are created flipped (from event handling POV). */
   pup->block->flag ^= UI_BLOCK_IS_FLIP;
 }
 

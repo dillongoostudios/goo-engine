@@ -85,7 +85,7 @@ struct SmoothView3DState {
 };
 
 struct SmoothView3DStore {
-  /* source*/
+  /* Source. */
   struct SmoothView3DState src; /* source */
   struct SmoothView3DState dst; /* destination */
   struct SmoothView3DState org; /* original */
@@ -235,7 +235,7 @@ void ED_view3d_smooth_view_ex(
       /* grid draw as floor */
       if ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ROTATION) == 0) {
         /* use existing if exists, means multiple calls to smooth view
-         * wont lose the original 'view' setting */
+         * won't lose the original 'view' setting */
         rv3d->view = RV3D_VIEW_USER;
       }
 
@@ -244,7 +244,7 @@ void ED_view3d_smooth_view_ex(
       /* if this is view rotation only
        * we can decrease the time allowed by
        * the angle between quats
-       * this means small rotations wont lag */
+       * this means small rotations won't lag */
       if (sview->quat && !sview->ofs && !sview->dist) {
         /* scale the time allowed by the rotation */
         /* 180deg == 1.0 */
@@ -392,7 +392,7 @@ static void view3d_smoothview_apply(bContext *C, View3D *v3d, ARegion *region, b
     view3d_boxview_copy(CTX_wm_area(C), region);
   }
 
-  /* note: this doesn't work right because the v3d->lens is now used in ortho mode r51636,
+  /* NOTE: this doesn't work right because the v3d->lens is now used in ortho mode r51636,
    * when switching camera in quad-view the other ortho views would zoom & reset.
    *
    * For now only redraw all regions when smooth-view finishes.
@@ -1261,7 +1261,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
 
   if (local_view_bit == 0) {
     /* TODO(dfelinto): We can kick one of the other 3D views out of local view
-     * specially if it is not being used.  */
+     * specially if it is not being used. */
     BKE_report(reports, RPT_ERROR, "No more than 16 local views");
     ok = false;
   }
@@ -1393,6 +1393,7 @@ static void view3d_localview_exit(const Depsgraph *depsgraph,
 
   MEM_freeN(v3d->localvd);
   v3d->localvd = NULL;
+  MEM_SAFE_FREE(v3d->runtime.local_stats);
 
   LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
     if (region->regiontype == RGN_TYPE_WINDOW) {
@@ -1516,7 +1517,7 @@ static int localview_remove_from_exec(bContext *C, wmOperator *op)
   }
 
   if (changed) {
-    DEG_on_visible_update(bmain, false);
+    DEG_tag_on_visible_update(bmain, false);
     DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
     WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
     WM_event_add_notifier(C, NC_SCENE | ND_OB_ACTIVE, scene);
@@ -1564,7 +1565,7 @@ static uint free_localcollection_bit(Main *bmain, ushort local_collections_uuid,
 
   ushort local_view_bits = 0;
 
-  /* Check all areas: which localviews are in use? */
+  /* Check all areas: which local-views are in use? */
   for (screen = bmain->screens.first; screen; screen = screen->id.next) {
     for (area = screen->areabase.first; area; area = area->next) {
       SpaceLink *sl = area->spacedata.first;

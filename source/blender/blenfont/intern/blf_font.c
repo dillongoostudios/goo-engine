@@ -66,7 +66,7 @@
 /* Batching buffer for drawing. */
 BatchBLF g_batch;
 
-/* freetype2 handle ONLY for this file!. */
+/* freetype2 handle ONLY for this file! */
 static FT_Library ft_lib;
 static SpinLock ft_lib_mutex;
 static SpinLock blf_glyph_cache_mutex;
@@ -351,8 +351,7 @@ static void blf_font_ensure_ascii_kerning(FontBLF *font,
  * characters.
  */
 
-/* Note,
- * blf_font_ensure_ascii_table(font, gc); must be called before this macro */
+/* NOTE: `blf_font_ensure_ascii_table(font, gc);` must be called before this macro. */
 
 #define BLF_UTF8_NEXT_FAST(_font, _gc, _g, _str, _i, _c, _glyph_ascii_table) \
   if (((_c) = (_str)[_i]) < 0x80) { \
@@ -376,8 +375,7 @@ static void blf_font_ensure_ascii_kerning(FontBLF *font,
                                                         ft_kerning_default : \
                                                         (FT_UInt)FT_KERNING_UNFITTED)
 
-/* Note,
- * blf_font_ensure_ascii_kerning(font, gc, kern_mode); must be called before this macro */
+/* NOTE: `blf_font_ensure_ascii_kerning(font, gc, kern_mode);` must be called before this macro. */
 
 #define BLF_KERNING_STEP_FAST(_font, _kern_mode, _g_prev, _g, _c_prev, _c, _pen_x) \
   { \
@@ -1466,4 +1464,12 @@ float blf_font_ascender(FontBLF *font)
 
   blf_glyph_cache_release(font);
   return ascender;
+}
+
+char *blf_display_name(FontBLF *font)
+{
+  if (!font->face->family_name) {
+    return NULL;
+  }
+  return BLI_sprintfN("%s %s", font->face->family_name, font->face->style_name);
 }

@@ -73,7 +73,7 @@ class BlenderSync {
                  int width,
                  int height,
                  void **python_thread_state);
-  void sync_view_layer(BL::SpaceView3D &b_v3d, BL::ViewLayer &b_view_layer);
+  void sync_view_layer(BL::ViewLayer &b_view_layer);
   vector<Pass> sync_render_passes(BL::Scene &b_scene,
                                   BL::RenderLayer &b_render_layer,
                                   BL::ViewLayer &b_view_layer,
@@ -104,8 +104,7 @@ class BlenderSync {
       bool background,
       BL::ViewLayer b_view_layer = BL::ViewLayer(PointerRNA_NULL));
   static bool get_session_pause(BL::Scene &b_scene, bool background);
-  static BufferParams get_buffer_params(BL::RenderSettings &b_render,
-                                        BL::SpaceView3D &b_v3d,
+  static BufferParams get_buffer_params(BL::SpaceView3D &b_v3d,
                                         BL::RegionView3D &b_rv3d,
                                         Camera *cam,
                                         int width,
@@ -247,6 +246,7 @@ class BlenderSync {
           use_surfaces(true),
           use_hair(true),
           use_volumes(true),
+          use_motion_blur(true),
           samples(0),
           bound_samples(false)
     {
@@ -259,11 +259,18 @@ class BlenderSync {
     bool use_surfaces;
     bool use_hair;
     bool use_volumes;
+    bool use_motion_blur;
     int samples;
     bool bound_samples;
   } view_layer;
 
   Progress &progress;
+
+ protected:
+  /* Indicates that `sync_recalc()` detected changes in the scene.
+   * If this flag is false then the data is considered to be up-to-date and will not be
+   * synchronized at all. */
+  bool has_updates_ = true;
 };
 
 CCL_NAMESPACE_END

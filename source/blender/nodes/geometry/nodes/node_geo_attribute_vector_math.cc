@@ -15,6 +15,9 @@
  */
 
 #include "BLI_math_base_safe.h"
+#include "BLI_task.hh"
+
+#include "RNA_enum_types.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -58,8 +61,11 @@ static bool operation_use_input_b(const NodeVectorMathOperation operation)
 
 static bool operation_use_input_c(const NodeVectorMathOperation operation)
 {
-  return ELEM(
-      operation, NODE_VECTOR_MATH_WRAP, NODE_VECTOR_MATH_REFRACT, NODE_VECTOR_MATH_FACEFORWARD);
+  return ELEM(operation,
+              NODE_VECTOR_MATH_WRAP,
+              NODE_VECTOR_MATH_REFRACT,
+              NODE_VECTOR_MATH_FACEFORWARD,
+              NODE_VECTOR_MATH_MULTIPLY_ADD);
 }
 
 static void geo_node_attribute_vector_math_layout(uiLayout *layout,
@@ -136,6 +142,7 @@ static CustomDataType operation_get_result_type(const NodeVectorMathOperation op
     case NODE_VECTOR_MATH_TANGENT:
     case NODE_VECTOR_MATH_REFRACT:
     case NODE_VECTOR_MATH_FACEFORWARD:
+    case NODE_VECTOR_MATH_MULTIPLY_ADD:
       return CD_PROP_FLOAT3;
     case NODE_VECTOR_MATH_DOT_PRODUCT:
     case NODE_VECTOR_MATH_DISTANCE:
@@ -148,6 +155,20 @@ static CustomDataType operation_get_result_type(const NodeVectorMathOperation op
 }
 
 namespace blender::nodes {
+
+static void geo_node_vector_math_label(bNodeTree *UNUSED(ntree),
+                                       bNode *node,
+                                       char *label,
+                                       int maxlen)
+{
+  NodeAttributeMath &node_storage = *(NodeAttributeMath *)node->storage;
+  const char *name;
+  bool enum_label = RNA_enum_name(rna_enum_node_vec_math_items, node_storage.operation, &name);
+  if (!enum_label) {
+    name = "Unknown";
+  }
+  BLI_snprintf(label, maxlen, IFACE_("Vector %s"), IFACE_(name));
+}
 
 static void geo_node_attribute_vector_math_update(bNodeTree *UNUSED(ntree), bNode *node)
 {
@@ -168,196 +189,210 @@ static void geo_node_attribute_vector_math_update(bNodeTree *UNUSED(ntree), bNod
       operation_use_input_c(operation));
 }
 
-static void do_math_operation_fl3_fl3_to_fl3(const Float3ReadAttribute &input_a,
-                                             const Float3ReadAttribute &input_b,
-                                             Float3WriteAttribute result,
+static void do_math_operation_fl3_fl3_to_fl3(const VArray<float3> &input_a,
+                                             const VArray<float3> &input_b,
+                                             VMutableArray<float3> &result,
                                              const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  Span<float3> span_b = input_b.get_span();
-  MutableSpan<float3> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VArray_Span<float3> span_b{input_b};
+  VMutableArray_Span<float3> span_result{result, false};
 
   bool success = try_dispatch_float_math_fl3_fl3_to_fl3(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 a = span_a[i];
-          const float3 b = span_b[i];
-          const float3 out = math_function(a, b);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 a = span_a[i];
+            const float3 b = span_b[i];
+            const float3 out = math_function(a, b);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation_fl3_fl3_fl3_to_fl3(const Float3ReadAttribute &input_a,
-                                                 const Float3ReadAttribute &input_b,
-                                                 const Float3ReadAttribute &input_c,
-                                                 Float3WriteAttribute result,
+static void do_math_operation_fl3_fl3_fl3_to_fl3(const VArray<float3> &input_a,
+                                                 const VArray<float3> &input_b,
+                                                 const VArray<float3> &input_c,
+                                                 VMutableArray<float3> &result,
                                                  const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  Span<float3> span_b = input_b.get_span();
-  Span<float3> span_c = input_c.get_span();
-  MutableSpan<float3> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VArray_Span<float3> span_b{input_b};
+  VArray_Span<float3> span_c{input_c};
+  VMutableArray_Span<float3> span_result{result};
 
   bool success = try_dispatch_float_math_fl3_fl3_fl3_to_fl3(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 a = span_a[i];
-          const float3 b = span_b[i];
-          const float3 c = span_c[i];
-          const float3 out = math_function(a, b, c);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 a = span_a[i];
+            const float3 b = span_b[i];
+            const float3 c = span_c[i];
+            const float3 out = math_function(a, b, c);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation_fl3_fl3_fl_to_fl3(const Float3ReadAttribute &input_a,
-                                                const Float3ReadAttribute &input_b,
-                                                const FloatReadAttribute &input_c,
-                                                Float3WriteAttribute result,
+static void do_math_operation_fl3_fl3_fl_to_fl3(const VArray<float3> &input_a,
+                                                const VArray<float3> &input_b,
+                                                const VArray<float> &input_c,
+                                                VMutableArray<float3> &result,
                                                 const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  Span<float3> span_b = input_b.get_span();
-  Span<float> span_c = input_c.get_span();
-  MutableSpan<float3> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VArray_Span<float3> span_b{input_b};
+  VArray_Span<float> span_c{input_c};
+  VMutableArray_Span<float3> span_result{result, false};
 
   bool success = try_dispatch_float_math_fl3_fl3_fl_to_fl3(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 a = span_a[i];
-          const float3 b = span_b[i];
-          const float c = span_c[i];
-          const float3 out = math_function(a, b, c);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 a = span_a[i];
+            const float3 b = span_b[i];
+            const float c = span_c[i];
+            const float3 out = math_function(a, b, c);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation_fl3_fl3_to_fl(const Float3ReadAttribute &input_a,
-                                            const Float3ReadAttribute &input_b,
-                                            FloatWriteAttribute result,
+static void do_math_operation_fl3_fl3_to_fl(const VArray<float3> &input_a,
+                                            const VArray<float3> &input_b,
+                                            VMutableArray<float> &result,
                                             const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  Span<float3> span_b = input_b.get_span();
-  MutableSpan<float> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VArray_Span<float3> span_b{input_b};
+  VMutableArray_Span<float> span_result{result, false};
 
   bool success = try_dispatch_float_math_fl3_fl3_to_fl(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 a = span_a[i];
-          const float3 b = span_b[i];
-          const float out = math_function(a, b);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 a = span_a[i];
+            const float3 b = span_b[i];
+            const float out = math_function(a, b);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation_fl3_fl_to_fl3(const Float3ReadAttribute &input_a,
-                                            const FloatReadAttribute &input_b,
-                                            Float3WriteAttribute result,
+static void do_math_operation_fl3_fl_to_fl3(const VArray<float3> &input_a,
+                                            const VArray<float> &input_b,
+                                            VMutableArray<float3> &result,
                                             const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  Span<float> span_b = input_b.get_span();
-  MutableSpan<float3> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VArray_Span<float> span_b{input_b};
+  VMutableArray_Span<float3> span_result{result, false};
 
   bool success = try_dispatch_float_math_fl3_fl_to_fl3(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 a = span_a[i];
-          const float b = span_b[i];
-          const float3 out = math_function(a, b);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 a = span_a[i];
+            const float b = span_b[i];
+            const float3 out = math_function(a, b);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation_fl3_to_fl3(const Float3ReadAttribute &input_a,
-                                         Float3WriteAttribute result,
+static void do_math_operation_fl3_to_fl3(const VArray<float3> &input_a,
+                                         VMutableArray<float3> &result,
                                          const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  MutableSpan<float3> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VMutableArray_Span<float3> span_result{result, false};
 
   bool success = try_dispatch_float_math_fl3_to_fl3(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 in = span_a[i];
-          const float3 out = math_function(in);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 in = span_a[i];
+            const float3 out = math_function(in);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation_fl3_to_fl(const Float3ReadAttribute &input_a,
-                                        FloatWriteAttribute result,
+static void do_math_operation_fl3_to_fl(const VArray<float3> &input_a,
+                                        VMutableArray<float> &result,
                                         const NodeVectorMathOperation operation)
 {
   const int size = input_a.size();
 
-  Span<float3> span_a = input_a.get_span();
-  MutableSpan<float> span_result = result.get_span_for_write_only();
+  VArray_Span<float3> span_a{input_a};
+  VMutableArray_Span<float> span_result{result, false};
 
   bool success = try_dispatch_float_math_fl3_to_fl(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(size)) {
-          const float3 in = span_a[i];
-          const float out = math_function(in);
-          span_result[i] = out;
-        }
+        threading::parallel_for(IndexRange(size), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            const float3 in = span_a[i];
+            const float out = math_function(in);
+            span_result[i] = out;
+          }
+        });
       });
 
-  result.apply_span();
+  span_result.save();
 
   /* The operation is not supported by this node currently. */
   BLI_assert(success);
@@ -370,9 +405,9 @@ static AttributeDomain get_result_domain(const GeometryComponent &component,
                                          StringRef result_name)
 {
   /* Use the domain of the result attribute if it already exists. */
-  ReadAttributePtr result_attribute = component.attribute_try_get_for_read(result_name);
-  if (result_attribute) {
-    return result_attribute->domain();
+  std::optional<AttributeMetaData> result_info = component.attribute_get_meta_data(result_name);
+  if (result_info) {
+    return result_info->domain;
   }
 
   /* Otherwise use the highest priority domain from existing input attributes, or the default. */
@@ -406,13 +441,13 @@ static void attribute_vector_math_calc(GeometryComponent &component,
   const AttributeDomain result_domain = get_result_domain(
       component, params, operation, result_name);
 
-  ReadAttributePtr attribute_a = params.get_input_attribute(
+  GVArrayPtr attribute_a = params.get_input_attribute(
       "A", component, result_domain, read_type_a, nullptr);
   if (!attribute_a) {
     return;
   }
-  ReadAttributePtr attribute_b;
-  ReadAttributePtr attribute_c;
+  GVArrayPtr attribute_b;
+  GVArrayPtr attribute_c;
   if (use_input_b) {
     attribute_b = params.get_input_attribute("B", component, result_domain, read_type_b, nullptr);
     if (!attribute_b) {
@@ -427,7 +462,7 @@ static void attribute_vector_math_calc(GeometryComponent &component,
   }
 
   /* Get result attribute first, in case it has to overwrite one of the existing attributes. */
-  OutputAttributePtr attribute_result = component.attribute_try_get_for_output(
+  OutputAttribute attribute_result = component.attribute_try_get_for_output_only(
       result_name, result_domain, result_type);
   if (!attribute_result) {
     return;
@@ -445,17 +480,27 @@ static void attribute_vector_math_calc(GeometryComponent &component,
     case NODE_VECTOR_MATH_MODULO:
     case NODE_VECTOR_MATH_MINIMUM:
     case NODE_VECTOR_MATH_MAXIMUM:
-      do_math_operation_fl3_fl3_to_fl3(*attribute_a, *attribute_b, *attribute_result, operation);
+      do_math_operation_fl3_fl3_to_fl3(attribute_a->typed<float3>(),
+                                       attribute_b->typed<float3>(),
+                                       attribute_result->typed<float3>(),
+                                       operation);
       break;
     case NODE_VECTOR_MATH_DOT_PRODUCT:
     case NODE_VECTOR_MATH_DISTANCE:
-      do_math_operation_fl3_fl3_to_fl(*attribute_a, *attribute_b, *attribute_result, operation);
+      do_math_operation_fl3_fl3_to_fl(attribute_a->typed<float3>(),
+                                      attribute_b->typed<float3>(),
+                                      attribute_result->typed<float>(),
+                                      operation);
       break;
     case NODE_VECTOR_MATH_LENGTH:
-      do_math_operation_fl3_to_fl(*attribute_a, *attribute_result, operation);
+      do_math_operation_fl3_to_fl(
+          attribute_a->typed<float3>(), attribute_result->typed<float>(), operation);
       break;
     case NODE_VECTOR_MATH_SCALE:
-      do_math_operation_fl3_fl_to_fl3(*attribute_a, *attribute_b, *attribute_result, operation);
+      do_math_operation_fl3_fl_to_fl3(attribute_a->typed<float3>(),
+                                      attribute_b->typed<float>(),
+                                      attribute_result->typed<float3>(),
+                                      operation);
       break;
     case NODE_VECTOR_MATH_NORMALIZE:
     case NODE_VECTOR_MATH_FLOOR:
@@ -465,16 +510,24 @@ static void attribute_vector_math_calc(GeometryComponent &component,
     case NODE_VECTOR_MATH_SINE:
     case NODE_VECTOR_MATH_COSINE:
     case NODE_VECTOR_MATH_TANGENT:
-      do_math_operation_fl3_to_fl3(*attribute_a, *attribute_result, operation);
+      do_math_operation_fl3_to_fl3(
+          attribute_a->typed<float3>(), attribute_result->typed<float3>(), operation);
       break;
     case NODE_VECTOR_MATH_WRAP:
     case NODE_VECTOR_MATH_FACEFORWARD:
-      do_math_operation_fl3_fl3_fl3_to_fl3(
-          *attribute_a, *attribute_b, *attribute_c, *attribute_result, operation);
+    case NODE_VECTOR_MATH_MULTIPLY_ADD:
+      do_math_operation_fl3_fl3_fl3_to_fl3(attribute_a->typed<float3>(),
+                                           attribute_b->typed<float3>(),
+                                           attribute_c->typed<float3>(),
+                                           attribute_result->typed<float3>(),
+                                           operation);
       break;
     case NODE_VECTOR_MATH_REFRACT:
-      do_math_operation_fl3_fl3_fl_to_fl3(
-          *attribute_a, *attribute_b, *attribute_c, *attribute_result, operation);
+      do_math_operation_fl3_fl3_fl_to_fl3(attribute_a->typed<float3>(),
+                                          attribute_b->typed<float3>(),
+                                          attribute_c->typed<float>(),
+                                          attribute_result->typed<float3>(),
+                                          operation);
       break;
   }
   attribute_result.save();
@@ -493,6 +546,9 @@ static void geo_node_attribute_vector_math_exec(GeoNodeExecParams params)
     attribute_vector_math_calc(geometry_set.get_component_for_write<PointCloudComponent>(),
                                params);
   }
+  if (geometry_set.has<CurveComponent>()) {
+    attribute_vector_math_calc(geometry_set.get_component_for_write<CurveComponent>(), params);
+  }
 
   params.set_output("Geometry", geometry_set);
 }
@@ -509,6 +565,7 @@ void register_node_type_geo_attribute_vector_math()
       &ntype, geo_node_attribute_vector_math_in, geo_node_attribute_vector_math_out);
   ntype.geometry_node_execute = blender::nodes::geo_node_attribute_vector_math_exec;
   ntype.draw_buttons = geo_node_attribute_vector_math_layout;
+  node_type_label(&ntype, blender::nodes::geo_node_vector_math_label);
   node_type_update(&ntype, blender::nodes::geo_node_attribute_vector_math_update);
   node_type_init(&ntype, geo_node_attribute_vector_math_init);
   node_type_storage(

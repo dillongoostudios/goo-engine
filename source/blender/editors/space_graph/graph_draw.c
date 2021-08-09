@@ -414,7 +414,7 @@ static bool draw_fcurve_handles_check(SpaceGraph *sipo, FCurve *fcu)
 }
 
 /* draw lines for F-Curve handles only (this is only done in EditMode)
- * note: draw_fcurve_handles_check must be checked before running this. */
+ * NOTE: draw_fcurve_handles_check must be checked before running this. */
 static void draw_fcurve_handles(SpaceGraph *sipo, FCurve *fcu)
 {
   int sel, b;
@@ -1251,7 +1251,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
     float x = driver->curval;
     float y = fcu->curval * unitfac;
 
-    /* only draw indicators if the point is in range*/
+    /* Only draw indicators if the point is in range. */
     if (x >= v2d->cur.xmin) {
       float co[2];
 
@@ -1259,14 +1259,15 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
       immUniformColor3f(0.9f, 0.9f, 0.9f);
       immUniform1f("dash_width", 10.0f);
       immUniform1f("dash_factor", 0.5f);
+      GPU_line_width(1.0f);
 
-      immBegin(GPU_PRIM_LINES, (y >= v2d->cur.ymin) ? 4 : 2);
+      immBegin(GPU_PRIM_LINES, (y <= v2d->cur.ymax) ? 4 : 2);
 
       /* x-axis lookup */
       co[0] = x;
 
-      if (y >= v2d->cur.ymin) {
-        co[1] = v2d->cur.ymin - 1.0f;
+      if (y <= v2d->cur.ymax) {
+        co[1] = v2d->cur.ymax + 1.0f;
         immVertex2fv(shdr_pos, co);
 
         co[1] = y;
@@ -1428,7 +1429,7 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *region)
   height = ACHANNEL_TOT_HEIGHT(ac, items);
   v2d->tot.ymin = -height;
 
-  /* loop through channels, and set up drawing depending on their type  */
+  /* Loop through channels, and set up drawing depending on their type. */
   { /* first pass: just the standard GL-drawing for backdrop + text */
     size_t channel_index = 0;
     float ymax = ACHANNEL_FIRST_TOP(ac);

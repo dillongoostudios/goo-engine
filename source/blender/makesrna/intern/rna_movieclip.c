@@ -354,7 +354,7 @@ static void rna_def_movieclip(BlenderRNA *brna)
                             0,
                             0,
                             "Size",
-                            "Width and height in pixels, zero when image data cant be loaded",
+                            "Width and height in pixels, zero when image data can't be loaded",
                             0,
                             0);
   RNA_def_property_int_funcs(prop, "rna_MovieClip_size_get", NULL, NULL);
@@ -402,7 +402,7 @@ static void rna_def_movieclip(BlenderRNA *brna)
                            "Start Frame",
                            "Global scene frame number at which this movie starts playing "
                            "(affects all data associated with a clip)");
-  RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, "rna_MovieClip_reload_update");
+  RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, NULL);
 
   /* frame_offset */
   prop = RNA_def_property(srna, "frame_offset", PROP_INT, PROP_NONE);
@@ -412,7 +412,7 @@ static void rna_def_movieclip(BlenderRNA *brna)
       "Frame Offset",
       "Offset of footage first frame relative to its file name "
       "(affects only how footage is loading, does not change data associated with a clip)");
-  RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, "rna_MovieClip_reload_update");
+  RNA_def_property_update(prop, NC_MOVIECLIP | ND_DISPLAY, NULL);
 
   /* length */
   prop = RNA_def_property(srna, "frame_duration", PROP_INT, PROP_NONE);

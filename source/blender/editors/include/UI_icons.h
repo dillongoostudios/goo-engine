@@ -21,7 +21,7 @@
  * \ingroup editorui
  */
 
-/* Note: this is included multiple times with different #defines for DEF_ICON. */
+/* NOTE: this is included multiple times with different #defines for DEF_ICON. */
 
 /* Auto define more specific types for places that do not need the distinction. */
 #ifndef DEF_ICON_SCENE
@@ -989,7 +989,7 @@ DEF_ICON_VECTOR(COLLECTION_COLOR_06)
 DEF_ICON_VECTOR(COLLECTION_COLOR_07)
 DEF_ICON_VECTOR(COLLECTION_COLOR_08)
 
-/* Events  */
+/* Events. */
 DEF_ICON_COLOR(EVENT_A)
 DEF_ICON_COLOR(EVENT_B)
 DEF_ICON_COLOR(EVENT_C)

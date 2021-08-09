@@ -331,7 +331,7 @@ void psys_apply_child_modifiers(ParticleThreadContext *ctx,
   int totkeys, k;
   float max_length;
 
-  /* TODO for the future: use true particle modifiers that work on the whole curve */
+  /* TODO: for the future: use true particle modifiers that work on the whole curve. */
 
   (void)modifiers;
   (void)mod;
@@ -785,7 +785,7 @@ static void do_twist(const ParticleChildModifierContext *modifier_ctx,
     return;
   }
   if (part->twist == 0.0f) {
-    /* No twist along the strand.  */
+    /* No twist along the strand. */
     return;
   }
   /* Dependent on whether it's threaded update or not, curve comes

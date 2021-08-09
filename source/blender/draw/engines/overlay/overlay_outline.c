@@ -36,7 +36,7 @@
 /* Returns the normal plane in NDC space. */
 static void gpencil_depth_plane(Object *ob, float r_plane[4])
 {
-  /* TODO put that into private data. */
+  /* TODO: put that into private data. */
   float viewinv[4][4];
   DRW_view_viewmat_get(NULL, viewinv, true);
   float *camera_z_axis = viewinv[2];
@@ -77,7 +77,7 @@ static void gpencil_depth_plane(Object *ob, float r_plane[4])
 
   transpose_m4(mat);
   /* mat is now a "normal" matrix which will transform
-   * BBox space normal to world space.  */
+   * BBox space normal to world space. */
   mul_mat3_m4_v3(mat, r_plane);
   normalize_v3(r_plane);
 
@@ -92,7 +92,7 @@ void OVERLAY_outline_init(OVERLAY_Data *vedata)
   DefaultTextureList *dtxl = DRW_viewport_texture_list_get();
 
   if (DRW_state_is_fbo()) {
-    /* TODO only alloc if needed. */
+    /* TODO: only alloc if needed. */
     DRW_texture_ensure_fullscreen_2d(&txl->temp_depth_tx, GPU_DEPTH24_STENCIL8, 0);
     DRW_texture_ensure_fullscreen_2d(&txl->outlines_id_tx, GPU_R16UI, 0);
 
@@ -196,7 +196,7 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
 
   float object_scale = mat4_to_scale(iter->ob->obmat);
   /* Negate thickness sign to tag that strokes are in screen space.
-   * Convert to world units (by default, 1 meter = 2000 px). */
+   * Convert to world units (by default, 1 meter = 2000 pixels). */
   float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / 2000.0f);
 
   DRWShadingGroup *grp = iter->stroke_grp = DRW_shgroup_create_sub(iter->stroke_grp);
@@ -263,13 +263,13 @@ static void OVERLAY_outline_gpencil(OVERLAY_PrivateData *pd, Object *ob)
     gpencil_depth_plane(ob, iter.plane);
   }
 
-  BKE_gpencil_visible_stroke_iter(NULL,
-                                  ob,
-                                  gpencil_layer_cache_populate,
-                                  gpencil_stroke_cache_populate,
-                                  &iter,
-                                  false,
-                                  pd->cfra);
+  BKE_gpencil_visible_stroke_advanced_iter(NULL,
+                                           ob,
+                                           gpencil_layer_cache_populate,
+                                           gpencil_stroke_cache_populate,
+                                           &iter,
+                                           false,
+                                           pd->cfra);
 }
 
 static void OVERLAY_outline_volume(OVERLAY_PrivateData *pd, Object *ob)
@@ -340,7 +340,7 @@ void OVERLAY_outline_cache_populate(OVERLAY_Data *vedata,
 
   if (shgroup && geom) {
     if (ob->type == OB_POINTCLOUD) {
-      /* Draw range to avoid drawcall batching messing up the instance attrib. */
+      /* Draw range to avoid drawcall batching messing up the instance attribute. */
       DRW_shgroup_call_instance_range(shgroup, ob, geom, 0, 0);
     }
     else {

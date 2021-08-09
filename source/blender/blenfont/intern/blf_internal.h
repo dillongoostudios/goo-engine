@@ -38,7 +38,7 @@ unsigned int blf_hash(unsigned int val);
 
 char *blf_dir_search(const char *file);
 char *blf_dir_metrics_search(const char *filename);
-/* int blf_dir_split(const char *str, char *file, int *size);  */ /* UNUSED */
+/* int blf_dir_split(const char *str, char *file, int *size); */ /* UNUSED */
 
 int blf_font_init(void);
 void blf_font_exit(void);
@@ -98,6 +98,8 @@ int blf_font_height_max(struct FontBLF *font);
 int blf_font_width_max(struct FontBLF *font);
 float blf_font_descender(struct FontBLF *font);
 float blf_font_ascender(struct FontBLF *font);
+
+char *blf_display_name(struct FontBLF *font);
 
 void blf_font_boundbox_foreach_glyph(struct FontBLF *font,
                                      const char *str,

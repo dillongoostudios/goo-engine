@@ -114,7 +114,7 @@ static void rna_generate_static_parameter_prototypes(FILE *f,
 
 static int replace_if_different(const char *tmpfile, const char *dep_files[])
 {
-  /* return 0;  */ /* use for testing had edited rna */
+  /* return 0; */ /* use for testing had edited rna */
 
 #define REN_IF_DIFF \
   { \
@@ -641,7 +641,7 @@ static char *rna_def_property_get_func(
       return NULL;
     }
 
-    /* typecheck,  */
+    /* Type check. */
     if (dp->dnatype && *dp->dnatype) {
 
       if (prop->type == PROP_FLOAT) {
@@ -682,6 +682,29 @@ static char *rna_def_property_get_func(
           DefRNA.error = true;
           return NULL;
         }
+      }
+    }
+
+    /* Check log scale sliders for negative range. */
+    if (prop->type == PROP_FLOAT) {
+      FloatPropertyRNA *fprop = (FloatPropertyRNA *)prop;
+      /* NOTE: UI_BTYPE_NUM_SLIDER can't have a softmin of zero. */
+      if ((fprop->ui_scale_type == PROP_SCALE_LOG) && (fprop->hardmin < 0 || fprop->softmin < 0)) {
+        CLOG_ERROR(
+            &LOG, "\"%s.%s\", range for log scale < 0.", srna->identifier, prop->identifier);
+        DefRNA.error = true;
+        return NULL;
+      }
+    }
+    if (prop->type == PROP_INT) {
+      IntPropertyRNA *iprop = (IntPropertyRNA *)prop;
+      /* Only UI_BTYPE_NUM_SLIDER is implemented and that one can't have a softmin of zero. */
+      if ((iprop->ui_scale_type == PROP_SCALE_LOG) &&
+          (iprop->hardmin <= 0 || iprop->softmin <= 0)) {
+        CLOG_ERROR(
+            &LOG, "\"%s.%s\", range for log scale <= 0.", srna->identifier, prop->identifier);
+        DefRNA.error = true;
+        return NULL;
       }
     }
   }
@@ -2117,7 +2140,7 @@ static void rna_def_property_funcs_header_cpp(FILE *f, StructRNA *srna, Property
     return;
   }
 
-  /* disabled for now to avoid msvc compiler error due to large file size */
+  /* Disabled for now to avoid MSVC compiler error due to large file size. */
 #if 0
   if (prop->name && prop->description && prop->description[0] != '\0') {
     fprintf(f, "\t/* %s: %s */\n", prop->name, prop->description);
@@ -2384,7 +2407,7 @@ static void rna_def_struct_function_prototype_cpp(FILE *f,
 static void rna_def_struct_function_header_cpp(FILE *f, StructRNA *srna, FunctionDefRNA *dfunc)
 {
   if (dfunc->call) {
-    /* disabled for now to avoid msvc compiler error due to large file size */
+    /* Disabled for now to avoid MSVC compiler error due to large file size. */
 #if 0
     FunctionRNA *func = dfunc->func;
     fprintf(f, "\n\t/* %s */\n", func->description);
@@ -3060,7 +3083,7 @@ static void rna_auto_types(void)
   PropertyDefRNA *dp;
 
   for (ds = DefRNA.structs.first; ds; ds = ds->cont.next) {
-    /* DNA name for Screen is patched in 2.5, we do the reverse here .. */
+    /* DNA name for Screen is patched in 2.5, we do the reverse here. */
     if (ds->dnaname) {
       if (STREQ(ds->dnaname, "Screen")) {
         ds->dnaname = "bScreen";
@@ -3178,6 +3201,8 @@ static const char *rna_property_subtypename(PropertySubType type)
       return "PROP_ANGLE";
     case PROP_TIME:
       return "PROP_TIME";
+    case PROP_TIME_ABSOLUTE:
+      return "PROP_TIME_ABSOLUTE";
     case PROP_DISTANCE:
       return "PROP_DISTANCE";
     case PROP_DISTANCE_CAMERA:
@@ -3243,6 +3268,8 @@ static const char *rna_property_subtype_unit(PropertySubType type)
       return "PROP_UNIT_ROTATION";
     case PROP_UNIT_TIME:
       return "PROP_UNIT_TIME";
+    case PROP_UNIT_TIME_ABSOLUTE:
+      return "PROP_UNIT_TIME_ABSOLUTE";
     case PROP_UNIT_VELOCITY:
       return "PROP_UNIT_VELOCITY";
     case PROP_UNIT_ACCELERATION:
@@ -3935,6 +3962,8 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
               rna_function_string(iprop->getarray_ex),
               rna_function_string(iprop->setarray_ex),
               rna_function_string(iprop->range_ex));
+      rna_int_print(f, iprop->ui_scale_type);
+      fprintf(f, ", ");
       rna_int_print(f, iprop->softmin);
       fprintf(f, ", ");
       rna_int_print(f, iprop->softmax);
@@ -3969,6 +3998,8 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
               rna_function_string(fprop->getarray_ex),
               rna_function_string(fprop->setarray_ex),
               rna_function_string(fprop->range_ex));
+      rna_float_print(f, fprop->ui_scale_type);
+      fprintf(f, ", ");
       rna_float_print(f, fprop->softmin);
       fprintf(f, ", ");
       rna_float_print(f, fprop->softmax);
@@ -4198,7 +4229,7 @@ static void rna_generate_struct(BlenderRNA *UNUSED(brna), StructRNA *srna, FILE 
   }
   fprintf(f, "\t");
   rna_print_c_string(f, srna->identifier);
-  fprintf(f, ", NULL, NULL"); /* PyType - Cant initialize here */
+  fprintf(f, ", NULL, NULL"); /* PyType - Can't initialize here */
   fprintf(f, ", %d, NULL, ", srna->flag);
   rna_print_c_string(f, srna->name);
   fprintf(f, ",\n\t");
@@ -4341,7 +4372,7 @@ static RNAProcessItem PROCESS_ITEMS[] = {
     {"rna_screen.c", NULL, RNA_def_screen},
     {"rna_sculpt_paint.c", NULL, RNA_def_sculpt_paint},
     {"rna_sequencer.c", "rna_sequencer_api.c", RNA_def_sequencer},
-#ifdef WITH_GEOMETRY_NODES
+#ifdef WITH_SIMULATION_DATABLOCK
     {"rna_simulation.c", NULL, RNA_def_simulation},
 #endif
     {"rna_space.c", "rna_space_api.c", RNA_def_space},
@@ -4418,7 +4449,7 @@ static void rna_generate(BlenderRNA *brna, FILE *f, const char *filename, const 
   fprintf(f, "#pragma GCC diagnostic ignored \"-Wunused-parameter\"\n\n");
 #endif
 
-  fprintf(f, "/* Autogenerated Functions */\n\n");
+  fprintf(f, "/* Auto-generated Functions. */\n\n");
 
   for (ds = DefRNA.structs.first; ds; ds = ds->cont.next) {
     if (!filename || ds->filename == filename) {

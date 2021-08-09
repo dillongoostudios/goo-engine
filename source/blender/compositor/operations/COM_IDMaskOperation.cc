@@ -25,6 +25,7 @@ IDMaskOperation::IDMaskOperation()
   this->addInputSocket(DataType::Value);
   this->addOutputSocket(DataType::Value);
   this->flags.complex = true;
+  flags.can_be_constant = true;
 }
 
 void *IDMaskOperation::initializeTileData(rcti *rect)
@@ -40,6 +41,24 @@ void IDMaskOperation::executePixel(float output[4], int x, int y, void *data)
   float *buffer = input_buffer->getBuffer();
   int buffer_index = (y * buffer_width + x);
   output[0] = (roundf(buffer[buffer_index]) == this->m_objectIndex) ? 1.0f : 0.0f;
+}
+
+void IDMaskOperation::update_memory_buffer_partial(MemoryBuffer *output,
+                                                   const rcti &area,
+                                                   Span<MemoryBuffer *> inputs)
+{
+  const MemoryBuffer *input = inputs[0];
+  const int width = BLI_rcti_size_x(&area);
+  for (int y = area.ymin; y < area.ymax; y++) {
+    float *out = output->get_elem(area.xmin, y);
+    const float *in = input->get_elem(area.xmin, y);
+    const float *row_end = out + width * output->elem_stride;
+    while (out < row_end) {
+      out[0] = (roundf(in[0]) == m_objectIndex) ? 1.0f : 0.0f;
+      in += input->elem_stride;
+      out += output->elem_stride;
+    }
+  }
 }
 
 }  // namespace blender::compositor

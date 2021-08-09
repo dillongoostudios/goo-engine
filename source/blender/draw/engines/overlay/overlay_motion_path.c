@@ -177,7 +177,7 @@ static void motion_path_cache(OVERLAY_Data *vedata,
   if (show_frame_no || (show_keyframes_no && show_keyframes)) {
     int i;
     uchar col[4], col_kf[4];
-    /* Color Management: Exception here as texts are drawn in sRGB space directly.  */
+    /* Color Management: Exception here as texts are drawn in sRGB space directly. */
     UI_GetThemeColor3ubv(TH_TEXT_HI, col);
     UI_GetThemeColor3ubv(TH_VERTEX_SELECT, col_kf);
     col[3] = col_kf[3] = 255;
@@ -190,7 +190,7 @@ static void motion_path_cache(OVERLAY_Data *vedata,
       bool is_keyframe = (mpv->flag & MOTIONPATH_VERT_KEY) != 0;
 
       if ((show_keyframes && show_keyframes_no && is_keyframe) || (show_frame_no && (i == 0))) {
-        numstr_len = BLI_snprintf(numstr, sizeof(numstr), " %d", frame);
+        numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), " %d", frame);
         DRW_text_cache_add(
             dt, mpv->co, numstr, numstr_len, 0, 0, txt_flag, (is_keyframe) ? col_kf : col);
       }
@@ -200,7 +200,7 @@ static void motion_path_cache(OVERLAY_Data *vedata,
         /* Only draw frame number if several consecutive highlighted points
          * don't occur on same point. */
         if ((equals_v3v3(mpv->co, mpvP->co) == 0) || (equals_v3v3(mpv->co, mpvN->co) == 0)) {
-          numstr_len = BLI_snprintf(numstr, sizeof(numstr), " %d", frame);
+          numstr_len = BLI_snprintf_rlen(numstr, sizeof(numstr), " %d", frame);
           DRW_text_cache_add(dt, mpv->co, numstr, numstr_len, 0, 0, txt_flag, col);
         }
       }

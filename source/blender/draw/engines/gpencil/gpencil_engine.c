@@ -262,7 +262,7 @@ void GPENCIL_cache_init(void *ved)
         pd->sbuffer_gpd = gpd;
         pd->sbuffer_stroke = DRW_cache_gpencil_sbuffer_stroke_data_get(pd->obact);
         pd->sbuffer_layer = BKE_gpencil_layer_active_get(pd->sbuffer_gpd);
-        pd->do_fast_drawing = false; /* TODO option */
+        pd->do_fast_drawing = false; /* TODO: option. */
       }
     }
   }
@@ -320,7 +320,7 @@ void GPENCIL_cache_init(void *ved)
     float focal_len = cam->lens;
 
     const float scale_camera = 0.001f;
-    /* we want radius here for the aperture number  */
+    /* We want radius here for the aperture number. */
     float aperture = 0.5f * scale_camera * focal_len / fstop;
     float focal_len_scaled = scale_camera * focal_len;
     float sensor_scaled = scale_camera * sensor;
@@ -640,13 +640,13 @@ void GPENCIL_cache_populate(void *ved, Object *ob)
       }
     }
 
-    BKE_gpencil_visible_stroke_iter(is_final_render ? pd->view_layer : NULL,
-                                    ob,
-                                    gpencil_layer_cache_populate,
-                                    gpencil_stroke_cache_populate,
-                                    &iter,
-                                    do_onion,
-                                    pd->cfra);
+    BKE_gpencil_visible_stroke_advanced_iter(is_final_render ? pd->view_layer : NULL,
+                                             ob,
+                                             gpencil_layer_cache_populate,
+                                             gpencil_stroke_cache_populate,
+                                             &iter,
+                                             do_onion,
+                                             pd->cfra);
 
     gpencil_drawcall_flush(&iter);
 

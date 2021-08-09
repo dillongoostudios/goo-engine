@@ -28,7 +28,6 @@ extern "C" {
 #endif
 
 struct AnimationEvalContext;
-struct bAction;
 struct BMEditMesh;
 struct Bone;
 struct Depsgraph;
@@ -39,6 +38,7 @@ struct Mesh;
 struct Object;
 struct PoseTree;
 struct Scene;
+struct bAction;
 struct bArmature;
 struct bConstraint;
 struct bGPDstroke;
@@ -49,24 +49,30 @@ typedef struct EditBone {
   struct EditBone *next, *prev;
   /** User-Defined Properties on this Bone */
   struct IDProperty *prop;
-  /** Editbones have a one-way link  (i.e. children refer
+  /**
+   * Editbones have a one-way link  (i.e. children refer
    * to parents.  This is converted to a two-way link for
-   * normal bones when leaving editmode. */
+   * normal bones when leaving editmode.
+   */
   struct EditBone *parent;
   /** (64 == MAXBONENAME) */
   char name[64];
-  /** Roll along axis.  We'll ultimately use the axis/angle method
+  /**
+   * Roll along axis.  We'll ultimately use the axis/angle method
    * for determining the transformation matrix of the bone.  The axis
    * is tail-head while roll provides the angle. Refer to Graphics
-   * Gems 1 p. 466 (section IX.6) if it's not already in here somewhere*/
+   * Gems 1 p. 466 (section IX.6) if it's not already in here somewhere.
+   */
   float roll;
 
   /** Orientation and length is implicit during editing */
   float head[3];
   float tail[3];
-  /** All joints are considered to have zero rotation with respect to
+  /**
+   * All joints are considered to have zero rotation with respect to
    * their parents. Therefore any rotations specified during the
-   * animation are automatically relative to the bones' rest positions*/
+   * animation are automatically relative to the bones' rest positions.
+   */
   int flag;
   int layer;
   char inherit_scale_mode;
@@ -80,11 +86,10 @@ typedef struct EditBone {
   /* Bendy-Bone parameters */
   short segments;
   float roll1, roll2;
-  float curve_in_x, curve_in_y;
-  float curve_out_x, curve_out_y;
+  float curve_in_x, curve_in_z;
+  float curve_out_x, curve_out_z;
   float ease1, ease2;
-  float scale_in_x, scale_in_y;
-  float scale_out_x, scale_out_y;
+  float scale_in[3], scale_out[3];
 
   /** for envelope scaling */
   float oldlength;
@@ -92,6 +97,10 @@ typedef struct EditBone {
   /** Type of next/prev bone handles */
   char bbone_prev_type;
   char bbone_next_type;
+  /** B-Bone flags. */
+  int bbone_flag;
+  short bbone_prev_flag;
+  short bbone_next_flag;
   /** Next/prev bones to use as handle references when calculating bbones (optional) */
   struct EditBone *bbone_prev;
   struct EditBone *bbone_next;
@@ -142,7 +151,7 @@ typedef struct PoseTree {
 
 struct bArmature *BKE_armature_add(struct Main *bmain, const char *name);
 struct bArmature *BKE_armature_from_object(struct Object *ob);
-int BKE_armature_bonelist_count(struct ListBase *lb);
+int BKE_armature_bonelist_count(const struct ListBase *lb);
 void BKE_armature_bonelist_free(struct ListBase *lb, const bool do_id_user);
 void BKE_armature_editbonelist_free(struct ListBase *lb, const bool do_id_user);
 
@@ -198,9 +207,18 @@ void BKE_pose_where_is_bone_tail(struct bPoseChannel *pchan);
 
 /* Evaluate the action and apply it to the pose. If any pose bones are selected, only FCurves that
  * relate to those bones are evaluated. */
-void BKE_pose_apply_action(struct Object *ob,
-                           struct bAction *action,
-                           struct AnimationEvalContext *anim_eval_context);
+void BKE_pose_apply_action_selected_bones(struct Object *ob,
+                                          struct bAction *action,
+                                          struct AnimationEvalContext *anim_eval_context);
+/* Evaluate the action and apply it to the pose. Ignore selection state of the bones. */
+void BKE_pose_apply_action_all_bones(struct Object *ob,
+                                     struct bAction *action,
+                                     struct AnimationEvalContext *anim_eval_context);
+
+void BKE_pose_apply_action_blend(struct Object *ob,
+                                 struct bAction *action,
+                                 struct AnimationEvalContext *anim_eval_context,
+                                 float blend_factor);
 
 void vec_roll_to_mat3(const float vec[3], const float roll, float r_mat[3][3]);
 void vec_roll_to_mat3_normalized(const float nor[3], const float roll, float r_mat[3][3]);
@@ -298,8 +316,8 @@ typedef struct BBoneSplineParameters {
   /* Control values. */
   float ease1, ease2;
   float roll1, roll2;
-  float scale_in_x, scale_in_y, scale_out_x, scale_out_y;
-  float curve_in_x, curve_in_y, curve_out_x, curve_out_y;
+  float scale_in[3], scale_out[3];
+  float curve_in_x, curve_in_z, curve_out_x, curve_out_z;
 } BBoneSplineParameters;
 
 void BKE_pchan_bbone_handles_get(struct bPoseChannel *pchan,

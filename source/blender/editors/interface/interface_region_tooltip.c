@@ -188,11 +188,11 @@ static void ui_tooltip_region_draw_cb(const bContext *UNUSED(C), ARegion *region
   /* tone_fg = rgb_to_grayscale(main_color); */
 
   /* mix the colors */
-  rgb_tint(value_color, 0.0f, 0.0f, tone_bg, 0.2f);  /* light gray */
-  rgb_tint(active_color, 0.6f, 0.2f, tone_bg, 0.2f); /* light blue */
-  rgb_tint(normal_color, 0.0f, 0.0f, tone_bg, 0.4f); /* gray       */
-  rgb_tint(python_color, 0.0f, 0.0f, tone_bg, 0.5f); /* dark gray  */
-  rgb_tint(alert_color, 0.0f, 0.8f, tone_bg, 0.1f);  /* red        */
+  rgb_tint(value_color, 0.0f, 0.0f, tone_bg, 0.2f);  /* Light gray. */
+  rgb_tint(active_color, 0.6f, 0.2f, tone_bg, 0.2f); /* Light blue. */
+  rgb_tint(normal_color, 0.0f, 0.0f, tone_bg, 0.4f); /* Gray. */
+  rgb_tint(python_color, 0.0f, 0.0f, tone_bg, 0.5f); /* Dark gray. */
+  rgb_tint(alert_color, 0.0f, 0.8f, tone_bg, 0.1f);  /* Red. */
 
   /* draw text */
   BLF_wordwrap(data->fstyle.uifont_id, data->wrap_width);
@@ -435,7 +435,7 @@ static uiTooltipData *ui_tooltip_data_from_tool(bContext *C, uiBut *but, bool is
       }
     }
     else {
-      /* Note, this is an exceptional case, we could even remove it
+      /* NOTE: this is an exceptional case, we could even remove it
        * however there have been reports of tooltips failing, so keep it for now. */
       expr_result = BLI_strdup(IFACE_("Internal error!"));
       is_error = true;
@@ -492,7 +492,7 @@ static uiTooltipData *ui_tooltip_data_from_tool(bContext *C, uiBut *but, bool is
       }
     }
     else {
-      /* Note, this is an exceptional case, we could even remove it
+      /* NOTE: this is an exceptional case, we could even remove it
        * however there have been reports of tooltips failing, so keep it for now. */
       expr_result = BLI_strdup(TIP_("Internal error!"));
       is_error = true;
@@ -574,7 +574,7 @@ static uiTooltipData *ui_tooltip_data_from_tool(bContext *C, uiBut *but, bool is
                                        shortcut_toolbar,
                                        ARRAY_SIZE(shortcut_toolbar))) {
         /* Generate keymap in order to inspect it.
-         * Note, we could make a utility to avoid the keymap generation part of this. */
+         * NOTE: we could make a utility to avoid the keymap generation part of this. */
         const char *expr_imports[] = {
             "bpy", "bl_keymap_utils", "bl_keymap_utils.keymap_from_toolbar", NULL};
         const char *expr =
@@ -947,12 +947,13 @@ static uiTooltipData *ui_tooltip_data_from_button(bContext *C, uiBut *but)
   /* button is disabled, we may be able to tell user why */
   if (but->flag & UI_BUT_DISABLED) {
     const char *disabled_msg = NULL;
+    bool disabled_msg_free = false;
 
     /* if operator poll check failed, it can give pretty precise info why */
     if (but->optype) {
-      CTX_wm_operator_poll_msg_set(C, NULL);
+      CTX_wm_operator_poll_msg_clear(C);
       WM_operator_poll_context(C, but->optype, but->opcontext);
-      disabled_msg = CTX_wm_operator_poll_msg_get(C);
+      disabled_msg = CTX_wm_operator_poll_msg_get(C, &disabled_msg_free);
     }
     /* alternatively, buttons can store some reasoning too */
     else if (but->disabled_info) {
@@ -966,6 +967,9 @@ static uiTooltipData *ui_tooltip_data_from_button(bContext *C, uiBut *but)
                                                  .color_id = UI_TIP_LC_ALERT,
                                              });
       field->text = BLI_sprintfN(TIP_("Disabled: %s"), disabled_msg);
+    }
+    if (disabled_msg_free) {
+      MEM_freeN((void *)disabled_msg);
     }
   }
 

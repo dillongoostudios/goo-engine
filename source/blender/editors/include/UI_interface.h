@@ -25,6 +25,7 @@
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_sys_types.h" /* size_t */
+#include "BLI_utildefines.h"
 #include "UI_interface_icons.h"
 
 #ifdef __cplusplus
@@ -34,8 +35,11 @@ extern "C" {
 /* Struct Declarations */
 
 struct ARegion;
+struct AssetHandle;
+struct AssetFilterSettings;
 struct AutoComplete;
 struct EnumPropertyItem;
+struct FileDirEntry;
 struct FileSelectParams;
 struct ID;
 struct IDProperty;
@@ -58,6 +62,7 @@ struct bNodeTree;
 struct bScreen;
 struct rctf;
 struct rcti;
+struct uiBlockInteraction_Handle;
 struct uiButSearch;
 struct uiFontStyle;
 struct uiList;
@@ -129,12 +134,6 @@ enum {
   UI_DIR_ALL = UI_DIR_UP | UI_DIR_DOWN | UI_DIR_LEFT | UI_DIR_RIGHT,
 };
 
-#if 0
-/* uiBlock->autofill (not yet used) */
-#  define UI_BLOCK_COLLUMNS 1
-#  define UI_BLOCK_ROWS 2
-#endif
-
 /** #uiBlock.flag (controls) */
 enum {
   UI_BLOCK_LOOP = 1 << 0,
@@ -186,17 +185,17 @@ enum {
   UI_RETURN_POPUP_OK = 1 << 5,
 };
 
-/* but->flag - general state flags. */
+/** #uiBut.flag general state flags. */
 enum {
-  /** Warning, the first 6 flags are internal. */
-  UI_BUT_ICON_SUBMENU = 1 << 6,
-  UI_BUT_ICON_PREVIEW = 1 << 7,
+  /* WARNING: the first 7 flags are internal (see #UI_SELECT definition). */
+  UI_BUT_ICON_SUBMENU = 1 << 7,
+  UI_BUT_ICON_PREVIEW = 1 << 8,
 
-  UI_BUT_NODE_LINK = 1 << 8,
-  UI_BUT_NODE_ACTIVE = 1 << 9,
-  UI_BUT_DRAG_LOCK = 1 << 10,
+  UI_BUT_NODE_LINK = 1 << 9,
+  UI_BUT_NODE_ACTIVE = 1 << 10,
+  UI_BUT_DRAG_LOCK = 1 << 11,
   /** Grayed out and un-editable. */
-  UI_BUT_DISABLED = 1 << 11,
+  UI_BUT_DISABLED = 1 << 12,
 
   UI_BUT_ANIMATED = 1 << 13,
   UI_BUT_ANIMATED_KEY = 1 << 14,
@@ -251,7 +250,7 @@ enum {
 #define UI_PANEL_BOX_STYLE_MARGIN (U.widget_unit * 0.2f)
 
 /* but->drawflag - these flags should only affect how the button is drawn. */
-/* Note: currently, these flags _are not passed_ to the widget's state() or draw() functions
+/* NOTE: currently, these flags *are not passed* to the widget's state() or draw() functions
  *       (except for the 'align' ones)!
  */
 enum {
@@ -290,18 +289,14 @@ enum {
   /** Active right part of number button */
   UI_BUT_ACTIVE_RIGHT = 1 << 22,
 
-  /* (also used by search buttons to enforce shortcut display for their items). */
-  /** Button has shortcut text. */
-  UI_BUT_HAS_SHORTCUT = 1 << 23,
-
   /** Reverse order of consecutive off/on icons */
-  UI_BUT_ICON_REVERSE = 1 << 24,
+  UI_BUT_ICON_REVERSE = 1 << 23,
 
   /** Value is animated, but the current value differs from the animated one. */
-  UI_BUT_ANIMATED_CHANGED = 1 << 25,
+  UI_BUT_ANIMATED_CHANGED = 1 << 24,
 
   /* Draw the checkbox buttons inverted. */
-  UI_BUT_CHECKBOX_INVERT = 1 << 26,
+  UI_BUT_CHECKBOX_INVERT = 1 << 25,
 };
 
 /* scale fixed button widths by this to account for DPI */
@@ -322,8 +317,8 @@ typedef enum {
   UI_BUT_POIN_SHORT = 64,
   UI_BUT_POIN_INT = 96,
   UI_BUT_POIN_FLOAT = 128,
-  /*  UI_BUT_POIN_FUNCTION = 192, */ /*UNUSED*/
-  UI_BUT_POIN_BIT = 256,             /* OR'd with a bit index*/
+  // UI_BUT_POIN_FUNCTION = 192, /* UNUSED */
+  UI_BUT_POIN_BIT = 256, /* OR'd with a bit index. */
 } eButPointerType;
 
 /* requires (but->poin != NULL) */
@@ -375,6 +370,9 @@ typedef enum {
   /** Buttons with value >= #UI_BTYPE_SEARCH_MENU don't get undo pushes. */
   UI_BTYPE_SEARCH_MENU = 41 << 9,
   UI_BTYPE_EXTRA = 42 << 9,
+  /** A preview image (#PreviewImage), with text under it. Typically bigger than normal buttons and
+   * laid out in a grid, e.g. like the File Browser in thumbnail display mode. */
+  UI_BTYPE_PREVIEW_TILE = 43 << 9,
   UI_BTYPE_HOTKEY_EVENT = 46 << 9,
   /** Non-interactive image, used for splash screen */
   UI_BTYPE_IMAGE = 47 << 9,
@@ -390,6 +388,7 @@ typedef enum {
   /** Resize handle (resize uilist). */
   UI_BTYPE_GRIP = 57 << 9,
   UI_BTYPE_DECORATOR = 58 << 9,
+  UI_BTYPE_DATASETROW = 59 << 9,
 } eButType;
 
 #define BUTTYPE (63 << 9)
@@ -507,7 +506,6 @@ typedef void (*uiButSearchUpdateFn)(const struct bContext *C,
                                     const char *str,
                                     uiSearchItems *items,
                                     const bool is_first);
-typedef void (*uiButSearchArgFreeFn)(void *arg);
 typedef bool (*uiButSearchContextMenuFn)(struct bContext *C,
                                          void *arg,
                                          void *active,
@@ -520,9 +518,57 @@ typedef struct ARegion *(*uiButSearchTooltipFn)(struct bContext *C,
 
 /* Must return allocated string. */
 typedef char *(*uiButToolTipFunc)(struct bContext *C, void *argN, const char *tip);
-typedef int (*uiButPushedStateFunc)(struct bContext *C, void *arg);
+typedef int (*uiButPushedStateFunc)(struct uiBut *but, const void *arg);
 
 typedef void (*uiBlockHandleFunc)(struct bContext *C, void *arg, int event);
+
+/* -------------------------------------------------------------------- */
+/** \name Custom Interaction
+ *
+ * Sometimes it's useful to create data that remains available
+ * while the user interacts with a button.
+ *
+ * A common case is dragging a number button or slider
+ * however this could be used in other cases too.
+ * \{ */
+
+struct uiBlockInteraction_Params {
+  /**
+   * When true, this interaction is not modal
+   * (user clicking on a number button arrows or pasting a value for example).
+   */
+  bool is_click;
+  /**
+   * Array of unique event ID's (values from #uiBut.retval).
+   * There may be more than one for multi-button editing (see #UI_BUT_DRAG_MULTI).
+   */
+  int *unique_retval_ids;
+  uint unique_retval_ids_len;
+};
+
+/** Returns 'user_data', freed by #uiBlockInteractionEndFn. */
+typedef void *(*uiBlockInteractionBeginFn)(struct bContext *C,
+                                           const struct uiBlockInteraction_Params *params,
+                                           void *arg1);
+typedef void (*uiBlockInteractionEndFn)(struct bContext *C,
+                                        const struct uiBlockInteraction_Params *params,
+                                        void *arg1,
+                                        void *user_data);
+typedef void (*uiBlockInteractionUpdateFn)(struct bContext *C,
+                                           const struct uiBlockInteraction_Params *params,
+                                           void *arg1,
+                                           void *user_data);
+
+typedef struct uiBlockInteraction_CallbackData {
+  uiBlockInteractionBeginFn begin_fn;
+  uiBlockInteractionEndFn end_fn;
+  uiBlockInteractionUpdateFn update_fn;
+  void *arg1;
+} uiBlockInteraction_CallbackData;
+
+void UI_block_interaction_set(uiBlock *block, uiBlockInteraction_CallbackData *callbacks);
+
+/** \} */
 
 /* Menu Callbacks */
 
@@ -536,6 +582,8 @@ typedef void (*uiMenuHandleFunc)(struct bContext *C, void *arg, int event);
  */
 typedef bool (*uiMenuStepFunc)(struct bContext *C, int direction, void *arg1);
 
+typedef void (*uiFreeArgFunc)(void *arg);
+
 /* interface_query.c */
 bool UI_but_has_tooltip_label(const uiBut *but);
 bool UI_but_is_tool(const uiBut *but);
@@ -545,6 +593,8 @@ bool UI_but_is_utf8(const uiBut *but);
 bool UI_block_is_empty_ex(const uiBlock *block, const bool skip_title);
 bool UI_block_is_empty(const uiBlock *block);
 bool UI_block_can_add_separator(const uiBlock *block);
+
+struct uiList *UI_list_find_mouse_over(const struct ARegion *region, const struct wmEvent *event);
 
 /* interface_region_menu_popup.c */
 /**
@@ -622,11 +672,11 @@ typedef void (*uiBlockCancelFunc)(struct bContext *C, void *arg1);
 void UI_popup_block_invoke(struct bContext *C,
                            uiBlockCreateFunc func,
                            void *arg,
-                           void (*arg_free)(void *arg));
+                           uiFreeArgFunc arg_free);
 void UI_popup_block_invoke_ex(struct bContext *C,
                               uiBlockCreateFunc func,
                               void *arg,
-                              void (*arg_free)(void *arg),
+                              uiFreeArgFunc arg_free,
                               bool can_refresh);
 void UI_popup_block_ex(struct bContext *C,
                        uiBlockCreateFunc func,
@@ -663,6 +713,7 @@ void UI_block_end_ex(const struct bContext *C, uiBlock *block, const int xy[2], 
 void UI_block_end(const struct bContext *C, uiBlock *block);
 void UI_block_draw(const struct bContext *C, struct uiBlock *block);
 void UI_blocklist_update_window_matrix(const struct bContext *C, const struct ListBase *lb);
+void UI_blocklist_update_view_for_buttons(const struct bContext *C, const struct ListBase *lb);
 void UI_blocklist_draw(const struct bContext *C, const struct ListBase *lb);
 void UI_block_update_from_old(const struct bContext *C, struct uiBlock *block);
 
@@ -671,7 +722,7 @@ enum {
   UI_BLOCK_THEME_STYLE_POPUP = 1,
 };
 void UI_block_theme_style_set(uiBlock *block, char theme_style);
-char UI_block_emboss_get(uiBlock *block);
+eUIEmbossType UI_block_emboss_get(uiBlock *block);
 void UI_block_emboss_set(uiBlock *block, eUIEmbossType emboss);
 bool UI_block_is_search_only(const uiBlock *block);
 void UI_block_set_search_only(uiBlock *block, bool search_only);
@@ -686,7 +737,7 @@ void UI_block_region_set(uiBlock *block, struct ARegion *region);
 void UI_block_lock_set(uiBlock *block, bool val, const char *lockstr);
 void UI_block_lock_clear(uiBlock *block);
 
-/* automatic aligning, horiz or verical */
+/* Automatic aligning, horizontal or vertical. */
 void UI_block_align_begin(uiBlock *block);
 void UI_block_align_end(uiBlock *block);
 
@@ -720,9 +771,9 @@ int UI_but_return_value_get(uiBut *but);
 
 void UI_but_drag_set_id(uiBut *but, struct ID *id);
 void UI_but_drag_set_asset(uiBut *but,
-                           const char *name,
+                           const struct AssetHandle *asset,
                            const char *path,
-                           int id_type,
+                           int import_type, /* eFileAssetImportType */
                            int icon,
                            struct ImBuf *imb,
                            float scale);
@@ -1371,7 +1422,7 @@ typedef struct uiStringInfo {
   char *strinfo;
 } uiStringInfo;
 
-/* Note: Expects pointers to uiStringInfo structs as parameters.
+/* NOTE: Expects pointers to uiStringInfo structs as parameters.
  *       Will fill them with translated strings, when possible.
  *       Strings in uiStringInfo must be MEM_freeN'ed by caller. */
 void UI_but_string_info_get(struct bContext *C, uiBut *but, ...) ATTR_SENTINEL(0);
@@ -1601,7 +1652,7 @@ void UI_but_func_search_set(uiBut *but,
                             uiButSearchUpdateFn search_update_fn,
                             void *arg,
                             const bool free_arg,
-                            uiButSearchArgFreeFn search_arg_free_fn,
+                            uiFreeArgFunc search_arg_free_fn,
                             uiButHandleFunc search_exec_fn,
                             void *active);
 void UI_but_func_search_set_context_menu(uiBut *but, uiButSearchContextMenuFn context_menu_fn);
@@ -1614,6 +1665,13 @@ int UI_searchbox_size_y(void);
 int UI_searchbox_size_x(void);
 /* check if a string is in an existing search box */
 int UI_search_items_find_index(uiSearchItems *items, const char *name);
+
+void UI_but_hint_drawstr_set(uiBut *but, const char *string);
+void UI_but_datasetrow_indentation_set(uiBut *but, int indentation);
+void UI_but_datasetrow_component_set(uiBut *but, uint8_t geometry_component_type);
+void UI_but_datasetrow_domain_set(uiBut *but, uint8_t attribute_domain);
+uint8_t UI_but_datasetrow_component_get(uiBut *but);
+uint8_t UI_but_datasetrow_domain_get(uiBut *but);
 
 void UI_but_node_link_set(uiBut *but, struct bNodeSocket *socket, const float draw_color[4]);
 
@@ -1639,7 +1697,7 @@ void UI_but_func_drawextra_set(
 
 void UI_but_func_menu_step_set(uiBut *but, uiMenuStepFunc func);
 
-void UI_but_func_tooltip_set(uiBut *but, uiButToolTipFunc func, void *argN);
+void UI_but_func_tooltip_set(uiBut *but, uiButToolTipFunc func, void *arg, uiFreeArgFunc free_arg);
 void UI_but_tooltip_refresh(struct bContext *C, uiBut *but);
 void UI_but_tooltip_timer_remove(struct bContext *C, uiBut *but);
 
@@ -1653,7 +1711,7 @@ void UI_but_focus_on_enter_event(struct wmWindow *win, uiBut *but);
 
 void UI_but_func_hold_set(uiBut *but, uiButHandleHoldFunc func, void *argN);
 
-void UI_but_func_pushed_state_set(uiBut *but, uiButPushedStateFunc func, void *arg);
+void UI_but_func_pushed_state_set(uiBut *but, uiButPushedStateFunc func, const void *arg);
 
 struct PointerRNA *UI_but_extra_operator_icon_add(uiBut *but,
                                                   const char *opname,
@@ -2137,7 +2195,7 @@ void uiTemplateComponentMenu(uiLayout *layout,
                              struct PointerRNA *ptr,
                              const char *propname,
                              const char *name);
-void uiTemplateNodeSocket(uiLayout *layout, struct bContext *C, float *color);
+void uiTemplateNodeSocket(uiLayout *layout, struct bContext *C, float color[4]);
 void uiTemplateCacheFile(uiLayout *layout,
                          const struct bContext *C,
                          struct PointerRNA *ptr,
@@ -2145,6 +2203,17 @@ void uiTemplateCacheFile(uiLayout *layout,
 
 /* Default UIList class name, keep in sync with its declaration in bl_ui/__init__.py */
 #define UI_UL_DEFAULT_CLASS_NAME "UI_UL_list"
+enum uiTemplateListFlags {
+  UI_TEMPLATE_LIST_FLAG_NONE = 0,
+  UI_TEMPLATE_LIST_SORT_REVERSE = (1 << 0),
+  UI_TEMPLATE_LIST_SORT_LOCK = (1 << 1),
+  /* Don't allow resizing the list, i.e. don't add the grip button. */
+  UI_TEMPLATE_LIST_NO_GRIP = (1 << 2),
+
+  UI_TEMPLATE_LIST_FLAGS_LAST
+};
+ENUM_OPERATORS(enum uiTemplateListFlags, UI_TEMPLATE_LIST_FLAGS_LAST);
+
 void uiTemplateList(uiLayout *layout,
                     struct bContext *C,
                     const char *listtype_name,
@@ -2158,8 +2227,23 @@ void uiTemplateList(uiLayout *layout,
                     int maxrows,
                     int layout_type,
                     int columns,
-                    bool sort_reverse,
-                    bool sort_lock);
+                    enum uiTemplateListFlags flags);
+struct uiList *uiTemplateList_ex(uiLayout *layout,
+                                 struct bContext *C,
+                                 const char *listtype_name,
+                                 const char *list_id,
+                                 struct PointerRNA *dataptr,
+                                 const char *propname,
+                                 struct PointerRNA *active_dataptr,
+                                 const char *active_propname,
+                                 const char *item_dyntip_propname,
+                                 int rows,
+                                 int maxrows,
+                                 int layout_type,
+                                 int columns,
+                                 enum uiTemplateListFlags flags,
+                                 void *customdata);
+
 void uiTemplateNodeLink(uiLayout *layout,
                         struct bContext *C,
                         struct bNodeTree *ntree,
@@ -2205,6 +2289,27 @@ int uiTemplateRecentFiles(struct uiLayout *layout, int rows);
 void uiTemplateFileSelectPath(uiLayout *layout,
                               struct bContext *C,
                               struct FileSelectParams *params);
+void uiTemplateAssetView(struct uiLayout *layout,
+                         struct bContext *C,
+                         const char *list_id,
+                         struct PointerRNA *asset_library_dataptr,
+                         const char *asset_library_propname,
+                         struct PointerRNA *assets_dataptr,
+                         const char *assets_propname,
+                         struct PointerRNA *active_dataptr,
+                         const char *active_propname,
+                         const struct AssetFilterSettings *filter_settings,
+                         const char *activate_opname,
+                         struct PointerRNA *r_activate_op_properties,
+                         const char *drag_opname,
+                         struct PointerRNA *r_drag_op_properties);
+
+struct PointerRNA *UI_list_custom_activate_operator_set(struct uiList *ui_list,
+                                                        const char *opname,
+                                                        bool create_properties);
+struct PointerRNA *UI_list_custom_drag_operator_set(struct uiList *ui_list,
+                                                    const char *opname,
+                                                    bool create_properties);
 
 /* items */
 void uiItemO(uiLayout *layout, const char *name, int icon, const char *opname);
@@ -2405,9 +2510,12 @@ void uiItemS_ex(uiLayout *layout, float factor);
 void uiItemSpacer(uiLayout *layout);
 
 void uiItemPopoverPanel_ptr(
-    uiLayout *layout, struct bContext *C, struct PanelType *pt, const char *name, int icon);
-void uiItemPopoverPanel(
-    uiLayout *layout, struct bContext *C, const char *panel_type, const char *name, int icon);
+    uiLayout *layout, const struct bContext *C, struct PanelType *pt, const char *name, int icon);
+void uiItemPopoverPanel(uiLayout *layout,
+                        const struct bContext *C,
+                        const char *panel_type,
+                        const char *name,
+                        int icon);
 void uiItemPopoverPanelFromGroup(uiLayout *layout,
                                  struct bContext *C,
                                  int space_id,
@@ -2417,12 +2525,20 @@ void uiItemPopoverPanelFromGroup(uiLayout *layout,
 
 void uiItemMenuF(uiLayout *layout, const char *name, int icon, uiMenuCreateFunc func, void *arg);
 void uiItemMenuFN(uiLayout *layout, const char *name, int icon, uiMenuCreateFunc func, void *argN);
-void uiItemMenuEnumO_ptr(uiLayout *layout,
+void uiItemMenuEnumFullO_ptr(uiLayout *layout,
+                             struct bContext *C,
+                             struct wmOperatorType *ot,
+                             const char *propname,
+                             const char *name,
+                             int icon,
+                             struct PointerRNA *r_opptr);
+void uiItemMenuEnumFullO(uiLayout *layout,
                          struct bContext *C,
-                         struct wmOperatorType *ot,
+                         const char *opname,
                          const char *propname,
                          const char *name,
-                         int icon);
+                         int icon,
+                         struct PointerRNA *r_opptr);
 void uiItemMenuEnumO(uiLayout *layout,
                      struct bContext *C,
                      const char *opname,
@@ -2458,6 +2574,7 @@ typedef struct uiDragColorHandle {
 
 void ED_operatortypes_ui(void);
 void ED_keymap_ui(struct wmKeyConfig *keyconf);
+void ED_uilisttypes_ui(void);
 
 void UI_drop_color_copy(struct wmDrag *drag, struct wmDropBox *drop);
 bool UI_drop_color_poll(struct bContext *C,
@@ -2557,6 +2674,8 @@ void UI_template_fix_linking(void);
 bool UI_editsource_enable_check(void);
 void UI_editsource_active_but_test(uiBut *but);
 void UI_editsource_but_replace(const uiBut *old_but, uiBut *new_but);
+
+void UI_but_ensure_in_view(const struct bContext *C, struct ARegion *region, const uiBut *but);
 
 /* UI_butstore_ helpers */
 typedef struct uiButStore uiButStore;

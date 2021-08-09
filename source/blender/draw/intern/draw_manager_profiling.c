@@ -43,7 +43,7 @@
 
 #define MAX_TIMER_NAME 32
 #define MAX_NESTED_TIMER 8
-#define CHUNK_SIZE 8
+#define MIM_RANGE_LEN 8
 #define GPU_TIMER_FALLOFF_DEFAULT 0.1
 
 typedef struct DRWTimer {
@@ -85,7 +85,7 @@ void DRW_stats_begin(void)
 
   if (DTP.is_recording && DTP.timers == NULL) {
     DTP.chunk_count = 1;
-    DTP.timer_count = DTP.chunk_count * CHUNK_SIZE;
+    DTP.timer_count = DTP.chunk_count * MIM_RANGE_LEN;
     DTP.timers = MEM_callocN(sizeof(DRWTimer) * DTP.timer_count, "DRWTimer stack");
   }
   else if (!DTP.is_recording && DTP.timers != NULL) {
@@ -102,7 +102,7 @@ static DRWTimer *drw_stats_timer_get(void)
   if (UNLIKELY(DTP.timer_increment >= DTP.timer_count)) {
     /* Resize the stack. */
     DTP.chunk_count++;
-    DTP.timer_count = DTP.chunk_count * CHUNK_SIZE;
+    DTP.timer_count = DTP.chunk_count * MIM_RANGE_LEN;
     DTP.timers = MEM_recallocN(DTP.timers, sizeof(DRWTimer) * DTP.timer_count);
   }
 

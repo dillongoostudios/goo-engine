@@ -87,7 +87,7 @@ int EEVEE_screen_raytrace_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     const int divisor = (effects->reflection_trace_full) ? 1 : 2;
     int tracing_res[2] = {(int)viewport_size[0] / divisor, (int)viewport_size[1] / divisor};
     const int size_fs[2] = {(int)viewport_size[0], (int)viewport_size[1]};
-    //const bool high_qual_input = true; /* TODO dither low quality input */
+    //const bool high_qual_input = true; /* TODO: dither low quality input. */
     //const eGPUTextureFormat format = (high_qual_input) ? GPU_RGBA16F : GPU_RGBA8;
     const eGPUTextureFormat format = GPU_RGBA32F;
 
@@ -99,7 +99,7 @@ int EEVEE_screen_raytrace_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
     /* MRT for the shading pass in order to output needed data for the SSR pass. */
     effects->ssr_specrough_input = DRW_texture_pool_query_2d(UNPACK2(size_fs), format, owner);
-    /* TODO SSGI separate input */ 
+    /* TODO SSGI separate input */
 
     GPU_framebuffer_texture_attach(fbl->main_fb, effects->ssr_specrough_input, 2, 0);
 
@@ -229,7 +229,7 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *v
     DRW_shgroup_uniform_int(grp, "samplePoolOffset", &effects->taa_current_sample, 1);
     DRW_shgroup_uniform_texture_ref(grp, "horizonBuffer", &effects->gtao_horizons);
     DRW_shgroup_call_procedural_triangles(grp, NULL, 1);
-    
+
     DRW_PASS_CREATE(psl->ssgi_resolve, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD); /* F - default blend mode */
     grp_ssgi = DRW_shgroup_create(ssgi_resolve_shader, psl->ssgi_resolve);
     DRW_shgroup_uniform_texture_ref(grp_ssgi, "normalBuffer", &effects->ssr_normal_input);

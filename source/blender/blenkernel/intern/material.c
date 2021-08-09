@@ -77,6 +77,7 @@
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph_query.h"
 
 #include "GPU_material.h"
 
@@ -134,7 +135,7 @@ static void material_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const 
 
   BLI_listbase_clear(&material_dst->gpumaterial);
 
-  /* TODO Duplicate Engine Settings and set runtime to NULL */
+  /* TODO: Duplicate Engine Settings and set runtime to NULL. */
 }
 
 static void material_free_data(ID *id)
@@ -700,12 +701,120 @@ Material *BKE_object_material_get(Object *ob, short act)
   return ma_p ? *ma_p : NULL;
 }
 
-bool BKE_material_use_custom_holdout(Material* ma) 
+bool BKE_material_use_custom_holdout(Material* ma)
 {
   if (ma == NULL || ma->blend_method == MA_BM_SOLID) {
     return false;
   }
   return true;
+}
+
+static ID *get_evaluated_object_data_with_materials(Object *ob)
+{
+  ID *data = ob->data;
+  /* Meshes in edit mode need special handling. */
+  if (ob->type == OB_MESH && ob->mode == OB_MODE_EDIT) {
+    Mesh *mesh = ob->data;
+    if (mesh->edit_mesh && mesh->edit_mesh->mesh_eval_final) {
+      data = &mesh->edit_mesh->mesh_eval_final->id;
+    }
+  }
+  return data;
+}
+
+/**
+ * On evaluated objects the number of materials on an object and its data might go out of sync.
+ * This is because during evaluation materials can be added/removed on the object data.
+ *
+ * For rendering or exporting we generally use the materials on the object data. However, some
+ * material indices might be overwritten by the object.
+ */
+Material *BKE_object_material_get_eval(Object *ob, short act)
+{
+  BLI_assert(DEG_is_evaluated_object(ob));
+  const int slot_index = act - 1;
+
+  if (slot_index < 0) {
+    return NULL;
+  }
+  ID *data = get_evaluated_object_data_with_materials(ob);
+  const short *tot_slots_data_ptr = BKE_id_material_len_p(data);
+  const int tot_slots_data = tot_slots_data_ptr ? *tot_slots_data_ptr : 0;
+  if (slot_index >= tot_slots_data) {
+    return NULL;
+  }
+  const int tot_slots_object = ob->totcol;
+
+  Material ***materials_data_ptr = BKE_id_material_array_p(data);
+  Material **materials_data = materials_data_ptr ? *materials_data_ptr : NULL;
+  Material **materials_object = ob->mat;
+
+  /* Check if slot is overwritten by object. */
+  if (slot_index < tot_slots_object) {
+    if (ob->matbits) {
+      if (ob->matbits[slot_index]) {
+        Material *material = materials_object[slot_index];
+        if (material != NULL) {
+          return material;
+        }
+      }
+    }
+  }
+  /* Otherwise use data from object-data. */
+  if (slot_index < tot_slots_data) {
+    Material *material = materials_data[slot_index];
+    return material;
+  }
+  return NULL;
+}
+
+int BKE_object_material_count_eval(Object *ob)
+{
+  BLI_assert(DEG_is_evaluated_object(ob));
+  ID *id = get_evaluated_object_data_with_materials(ob);
+  const short *len_p = BKE_id_material_len_p(id);
+  return len_p ? *len_p : 0;
+}
+
+void BKE_id_material_eval_assign(ID *id, int slot, Material *material)
+{
+  BLI_assert(slot >= 1);
+  Material ***materials_ptr = BKE_id_material_array_p(id);
+  short *len_ptr = BKE_id_material_len_p(id);
+  if (ELEM(NULL, materials_ptr, len_ptr)) {
+    BLI_assert_unreachable();
+    return;
+  }
+
+  const int slot_index = slot - 1;
+  const int old_length = *len_ptr;
+
+  if (slot_index >= old_length) {
+    /* Need to grow slots array. */
+    const int new_length = slot_index + 1;
+    *materials_ptr = MEM_reallocN(*materials_ptr, sizeof(void *) * new_length);
+    *len_ptr = new_length;
+    for (int i = old_length; i < new_length; i++) {
+      (*materials_ptr)[i] = NULL;
+    }
+  }
+
+  (*materials_ptr)[slot_index] = material;
+}
+
+/**
+ * Add an empty material slot if the id has no material slots. This material slot allows the
+ * material to be overwritten by object-linked materials.
+ */
+void BKE_id_material_eval_ensure_default_slot(ID *id)
+{
+  short *len_ptr = BKE_id_material_len_p(id);
+  if (len_ptr == NULL) {
+    return;
+  }
+  if (*len_ptr == 0) {
+    BKE_id_material_eval_assign(id, 1, NULL);
+  }
 }
 
 Material *BKE_gpencil_material(Object *ob, short act)
@@ -763,7 +872,7 @@ void BKE_object_material_resize(Main *bmain, Object *ob, const short totcol, boo
     ob->mat = newmatar;
     ob->matbits = newmatbits;
   }
-  /* XXX, why not realloc on shrink? - campbell */
+  /* XXX(campbell): why not realloc on shrink? */
 
   ob->totcol = totcol;
   if (ob->totcol && ob->actcol == 0) {
@@ -866,12 +975,6 @@ void BKE_object_material_assign(Main *bmain, Object *ob, Material *ma, short act
   }
   if (act < 1) {
     act = 1;
-  }
-
-  /* prevent crashing when using accidentally */
-  BLI_assert(!ID_IS_LINKED(ob));
-  if (ID_IS_LINKED(ob)) {
-    return;
   }
 
   /* test arraylens */
@@ -1036,7 +1139,44 @@ void BKE_object_material_remap_calc(Object *ob_dst, Object *ob_src, short *remap
   BLI_ghash_free(gh_mat_map, NULL, NULL);
 }
 
-/* XXX - this calls many more update calls per object then are needed, could be optimized */
+/**
+ * Copy materials from evaluated geometry to the original geometry of an object.
+ */
+void BKE_object_material_from_eval_data(Main *bmain, Object *ob_orig, ID *data_eval)
+{
+  ID *data_orig = ob_orig->data;
+
+  short *orig_totcol = BKE_id_material_len_p(data_orig);
+  Material ***orig_mat = BKE_id_material_array_p(data_orig);
+
+  short *eval_totcol = BKE_id_material_len_p(data_eval);
+  Material ***eval_mat = BKE_id_material_array_p(data_eval);
+
+  if (ELEM(NULL, orig_totcol, orig_mat, eval_totcol, eval_mat)) {
+    return;
+  }
+
+  /* Remove old materials from original geometry. */
+  for (int i = 0; i < *orig_totcol; i++) {
+    id_us_min(&(*orig_mat)[i]->id);
+  }
+  MEM_SAFE_FREE(*orig_mat);
+
+  /* Create new material slots based on materials on evaluated geometry. */
+  *orig_totcol = *eval_totcol;
+  *orig_mat = MEM_callocN(sizeof(void *) * (*eval_totcol), __func__);
+  for (int i = 0; i < *eval_totcol; i++) {
+    Material *material_eval = (*eval_mat)[i];
+    if (material_eval != NULL) {
+      Material *material_orig = (Material *)DEG_get_original_id(&material_eval->id);
+      (*orig_mat)[i] = material_orig;
+      id_us_plus(&material_orig->id);
+    }
+  }
+  BKE_object_materials_test(bmain, ob_orig, data_orig);
+}
+
+/* XXX: this calls many more update calls per object then are needed, could be optimized. */
 void BKE_object_material_array_assign(Main *bmain,
                                       struct Object *ob,
                                       struct Material ***matar,
@@ -1375,16 +1515,16 @@ void BKE_texpaint_slots_refresh_object(Scene *scene, struct Object *ob)
 }
 
 struct FindTexPaintNodeData {
-  bNode *node;
-  short iter_index;
-  short index;
+  Image *ima;
+  bNode *r_node;
 };
 
 static bool texpaint_slot_node_find_cb(bNode *node, void *userdata)
 {
   struct FindTexPaintNodeData *find_data = userdata;
-  if (find_data->iter_index++ == find_data->index) {
-    find_data->node = node;
+  Image *ima = (Image *)node->id;
+  if (find_data->ima == ima) {
+    find_data->r_node = node;
     return false;
   }
 
@@ -1393,10 +1533,10 @@ static bool texpaint_slot_node_find_cb(bNode *node, void *userdata)
 
 bNode *BKE_texpaint_slot_material_find_node(Material *ma, short texpaint_slot)
 {
-  struct FindTexPaintNodeData find_data = {NULL, 0, texpaint_slot};
+  struct FindTexPaintNodeData find_data = {ma->texpaintslot[texpaint_slot].ima, NULL};
   ntree_foreach_texnode_recursive(ma->nodetree, texpaint_slot_node_find_cb, &find_data);
 
-  return find_data.node;
+  return find_data.r_node;
 }
 
 /* r_col = current value, col = new value, (fac == 0) is no change */
@@ -1691,7 +1831,7 @@ void BKE_material_copybuf_copy(Main *bmain, Material *ma)
 
   matcopybuf.preview = NULL;
   BLI_listbase_clear(&matcopybuf.gpumaterial);
-  /* TODO Duplicate Engine Settings and set runtime to NULL */
+  /* TODO: Duplicate Engine Settings and set runtime to NULL. */
   matcopied = 1;
 }
 

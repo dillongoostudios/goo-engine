@@ -65,7 +65,7 @@
 
 /***************************** Render Engines ********************************/
 
-/* Update 3D viewport render or draw engine on changes to the scene or view settings . */
+/* Update 3D viewport render or draw engine on changes to the scene or view settings. */
 void ED_render_view3d_update(Depsgraph *depsgraph,
                              wmWindow *window,
                              ScrArea *area,
@@ -216,7 +216,7 @@ void ED_render_view_layer_changed(Main *bmain, bScreen *screen)
 /***************************** Updates ***********************************
  * ED_render_id_flush_update gets called from DEG_id_tag_update, to do   *
  * editor level updates when the ID changes. when these ID blocks are in *
- * the dependency graph, we can get rid of the manual dependency checks  */
+ * the dependency graph, we can get rid of the manual dependency checks. */
 
 static void material_changed(Main *UNUSED(bmain), Material *ma)
 {

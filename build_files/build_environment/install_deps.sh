@@ -37,7 +37,7 @@ if [ $USE_DEBUG_TRAP -ne 0 ]; then
   trap 'err_report $LINENO' ERR
 fi
 
-# Noisy, show every line that runs with it's line number.
+# Noisy, show every line that runs with its line number.
 if [ $USE_DEBUG_LOG -ne 0 ]; then
   PS4='\e[0;33m$(printf %4d ${LINENO}):\e\033[0m '
   set -x
@@ -474,25 +474,25 @@ OPENEXR_FORCE_REBUILD=false
 OPENEXR_SKIP=false
 _with_built_openexr=false
 
-OIIO_VERSION="2.1.15.0"
-OIIO_VERSION_SHORT="2.1"
+OIIO_VERSION="2.2.15.1"
+OIIO_VERSION_SHORT="2.2"
 OIIO_VERSION_MIN="2.1.12"
-OIIO_VERSION_MAX="2.2.10"
+OIIO_VERSION_MAX="2.3.0"
 OIIO_FORCE_BUILD=false
 OIIO_FORCE_REBUILD=false
 OIIO_SKIP=false
 
-LLVM_VERSION="9.0.1"
-LLVM_VERSION_SHORT="9.0"
-LLVM_VERSION_MIN="6.0"
-LLVM_VERSION_MAX="12.0"
+LLVM_VERSION="12.0.0"
+LLVM_VERSION_SHORT="12.0"
+LLVM_VERSION_MIN="11.0"
+LLVM_VERSION_MAX="13.0"
 LLVM_VERSION_FOUND=""
 LLVM_FORCE_BUILD=false
 LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.11.10.0"
+OSL_VERSION="1.11.14.1"
 OSL_VERSION_SHORT="1.11"
 OSL_VERSION_MIN="1.11"
 OSL_VERSION_MAX="2.0"
@@ -553,18 +553,18 @@ EMBREE_FORCE_BUILD=false
 EMBREE_FORCE_REBUILD=false
 EMBREE_SKIP=false
 
-OIDN_VERSION="1.3.0"
-OIDN_VERSION_SHORT="1.3"
-OIDN_VERSION_MIN="1.3.0"
-OIDN_VERSION_MAX="1.4"
+OIDN_VERSION="1.4.1"
+OIDN_VERSION_SHORT="1.4"
+OIDN_VERSION_MIN="1.4.0"
+OIDN_VERSION_MAX="1.5"
 OIDN_FORCE_BUILD=false
 OIDN_FORCE_REBUILD=false
 OIDN_SKIP=false
 
-ISPC_VERSION="1.14.1"
+ISPC_VERSION="1.16.0"
 
-FFMPEG_VERSION="4.2.3"
-FFMPEG_VERSION_SHORT="4.2"
+FFMPEG_VERSION="4.4"
+FFMPEG_VERSION_SHORT="4.4"
 FFMPEG_VERSION_MIN="3.0"
 FFMPEG_VERSION_MAX="5.0"
 FFMPEG_FORCE_BUILD=false
@@ -572,7 +572,7 @@ FFMPEG_FORCE_REBUILD=false
 FFMPEG_SKIP=false
 _ffmpeg_list_sep=";"
 
-XR_OPENXR_VERSION="1.0.14"
+XR_OPENXR_VERSION="1.0.17"
 XR_OPENXR_VERSION_SHORT="1.0"
 XR_OPENXR_VERSION_MIN="1.0.8"
 XR_OPENXR_VERSION_MAX="2.0"
@@ -602,9 +602,6 @@ MP3LAME_USE=false
 MP3LAME_DEV=""
 OPENJPEG_USE=false
 OPENJPEG_DEV=""
-
-# Whether to use system GLEW or not (OpenSubDiv needs recent glew to work).
-NO_SYSTEM_GLEW=false
 
 # Switch to english language, else some things (like check_package_DEB()) won't work!
 LANG_BACK=$LANG
@@ -1073,7 +1070,7 @@ OPENVDB_SOURCE=( "https://github.com/AcademySoftwareFoundation/openvdb/archive/v
 #~ OPENVDB_SOURCE_REPO_BRANCH="dev"
 
 NANOVDB_USE_REPO=false
-NANOVDB_SOURCE_REPO_UID="e62f7a0bf1e27397223c61ddeaaf57edf111b77f"
+NANOVDB_SOURCE_REPO_UID="dc37d8a631922e7bef46712947dc19b755f3e841"
 NANOVDB_SOURCE=( "https://github.com/AcademySoftwareFoundation/openvdb/archive/${NANOVDB_SOURCE_REPO_UID}.tar.gz" )
 
 ALEMBIC_USE_REPO=false
@@ -1108,9 +1105,9 @@ FFMPEG_SOURCE=( "http://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" )
 
 XR_OPENXR_USE_REPO=false
 XR_OPENXR_SOURCE=("https://github.com/KhronosGroup/OpenXR-SDK/archive/release-${XR_OPENXR_VERSION}.tar.gz")
-#~ XR_OPENXR_SOURCE_REPO=("https://github.com/KhronosGroup/OpenXR-SDK.git")
-#~ XR_OPENXR_REPO_UID="5900c51562769b03bea699dc0352cae56acb6419d"
-#~ XR_OPENXR_REPO_BRANCH="master"
+XR_OPENXR_SOURCE_REPO=("https://github.com/KhronosGroup/OpenXR-SDK.git")
+XR_OPENXR_REPO_UID="bf21ccb1007bb531b45d9978919a56ea5059c245"
+XR_OPENXR_REPO_BRANCH="master"
 
 # C++11 is required now
 CXXFLAGS_BACK=$CXXFLAGS
@@ -1128,7 +1125,8 @@ Those libraries should be available as packages in all recent distributions (opt
     * Basics of dev environment (cmake, gcc, svn , git, ...).
     * libjpeg, libpng, libtiff, [openjpeg2], [libopenal].
     * libx11, libxcursor, libxi, libxrandr, libxinerama (and other libx... as needed).
-    * libsqlite3, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp.
+    * libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, libdbus-1-3, libegl1 (Wayland)
+    * libsqlite3, libzstd, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp, flex.
     * libsdl2, libglew, libpugixml, libpotrace, [libgmp], [libglewmx], fontconfig, [libharu/libhpdf].\""
 
 DEPS_SPECIFIC_INFO="\"BUILDABLE DEPENDENCIES:
@@ -1797,6 +1795,10 @@ compile_OCIO() {
     cmake_d="$cmake_d -D OCIO_BUILD_PYTHON=OFF"
     cmake_d="$cmake_d -D OCIO_BUILD_GPU_TESTS=OFF"
 
+    if [ $(uname -m) == "aarch64" ]; then
+      cmake_d="$cmake_d -D OCIO_USE_SSE=OFF"
+    fi
+
     if file /bin/cp | grep -q '32-bit'; then
       cflags="-fPIC -m32 -march=i686"
     else
@@ -2059,7 +2061,10 @@ compile_OIIO() {
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D LINKSTATIC=OFF"
-    cmake_d="$cmake_d -D USE_SIMD=sse2"
+
+    if [ $(uname -m) != "aarch64" ]; then
+      cmake_d="$cmake_d -D USE_SIMD=sse2"
+    fi
 
     cmake_d="$cmake_d -D OPENEXR_VERSION=$OPENEXR_VERSION"
 
@@ -2079,7 +2084,7 @@ compile_OIIO() {
     cmake_d="$cmake_d -D USE_OPENCV=OFF"
     cmake_d="$cmake_d -D BUILD_TESTING=OFF"
     cmake_d="$cmake_d -D OIIO_BUILD_TESTS=OFF"
-    cmake_d="$cmake_d -D OIIO_BUILD_TOOLS=ON"
+    cmake_d="$cmake_d -D OIIO_BUILD_TOOLS=OFF"
     cmake_d="$cmake_d -D TXT2MAN="
     #cmake_d="$cmake_d -D CMAKE_EXPORT_COMPILE_COMMANDS=ON"
     #cmake_d="$cmake_d -D CMAKE_VERBOSE_MAKEFILE=ON"
@@ -2209,10 +2214,15 @@ compile_LLVM() {
     mkdir build
     cd build
 
+    LLVM_TARGETS="X86"
+    if [ $(uname -m) == "aarch64" ]; then
+      LLVM_TARGETS="AArch64"
+    fi
+
     cmake_d="-D CMAKE_BUILD_TYPE=Release"
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D LLVM_ENABLE_FFI=ON"
-    cmake_d="$cmake_d -D LLVM_TARGETS_TO_BUILD=X86"
+    cmake_d="$cmake_d -D LLVM_TARGETS_TO_BUILD=$LLVM_TARGETS"
     cmake_d="$cmake_d -D LLVM_ENABLE_TERMINFO=OFF"
 
     if [ -d $_FFI_INCLUDE_DIR ]; then
@@ -2303,6 +2313,7 @@ compile_OSL() {
         tar -C $SRC --transform "s,(.*/?)OpenShadingLanguage-[^/]*(.*),\1OpenShadingLanguage-$OSL_VERSION\2,x" \
             -xf $_src.tar.gz
       fi
+      patch -d $_src -p1 < $SCRIPT_DIR/patches/osl.diff
     fi
 
     cd $_src
@@ -2325,16 +2336,21 @@ compile_OSL() {
 
     cmake_d="-D CMAKE_BUILD_TYPE=Release"
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
-    cmake_d="$cmake_d -D BUILD_TESTING=OFF"
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D OSL_BUILD_PLUGINS=OFF"
     cmake_d="$cmake_d -D OSL_BUILD_TESTS=OFF"
-    cmake_d="$cmake_d -D USE_SIMD=sse2"
     cmake_d="$cmake_d -D USE_LLVM_BITCODE=OFF"
     cmake_d="$cmake_d -D USE_PARTIO=OFF"
     cmake_d="$cmake_d -D OSL_BUILD_MATERIALX=OFF"
     cmake_d="$cmake_d -D USE_QT=OFF"
+    cmake_d="$cmake_d -D USE_Qt5=OFF"
     cmake_d="$cmake_d -D USE_PYTHON=OFF"
+    cmake_d="$cmake_d -D USE_PARTIO=OFF"
+    cmake_d="$cmake_d -D INSTALL_DOCS=OFF"
+
+    if [ $(uname -m) != "aarch64" ]; then
+      cmake_d="$cmake_d -D USE_SIMD=sse2"
+    fi
 
     cmake_d="$cmake_d -D CMAKE_CXX_STANDARD=14"
 
@@ -2352,10 +2368,7 @@ compile_OSL() {
     fi
 
     if [ -d $INST/oiio ]; then
-      cmake_d="$cmake_d -D OPENIMAGEIO_ROOT_DIR=$INST/oiio"
-      # HACK! SIC!!!!
-      # Quiet incredible, but if root dir is given, path to lib is found, but not path to include...
-      cmake_d="$cmake_d -D OPENIMAGEIO_INCLUDE_DIR=$INST/oiio/include"
+      cmake_d="$cmake_d -D OpenImageIO_ROOT=$INST/oiio"
     fi
 
     if [ ! -z $LLVM_VERSION_FOUND ]; then
@@ -2722,7 +2735,7 @@ _init_openvdb() {
   _git=false
   _inst=$INST/openvdb-$OPENVDB_VERSION_SHORT
   _inst_shortcut=$INST/openvdb
-  
+
   _openvdb_source=$OPENVDB_SOURCE
   if [ "$WITH_NANOVDB" = true ]; then
     _openvdb_source=$NANOVDB_SOURCE
@@ -2827,7 +2840,7 @@ compile_OPENVDB() {
     if [ -d $INST/blosc ]; then
       cmake_d="$cmake_d -D Blosc_ROOT=$INST/blosc"
     fi
-  
+
     cmake $cmake_d ..
 
     make -j$THREADS install
@@ -3824,10 +3837,11 @@ install_DEB() {
   _packages="gawk cmake cmake-curses-gui build-essential libjpeg-dev libpng-dev libtiff-dev \
              git libfreetype6-dev libfontconfig-dev libx11-dev flex bison libxxf86vm-dev \
              libxcursor-dev libxi-dev wget libsqlite3-dev libxrandr-dev libxinerama-dev \
+             libwayland-dev wayland-protocols libegl-dev libxkbcommon-dev libdbus-1-dev linux-libc-dev \
              libbz2-dev libncurses5-dev libssl-dev liblzma-dev libreadline-dev \
              libopenal-dev libglew-dev yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV \
              libsdl2-dev libfftw3-dev patch bzip2 libxml2-dev libtinyxml-dev libjemalloc-dev \
-             libgmp-dev libpugixml-dev libpotrace-dev libhpdf-dev"
+             libgmp-dev libpugixml-dev libpotrace-dev libhpdf-dev libzstd-dev"
              # libglewmx-dev  (broken in deb testing currently...)
 
   VORBIS_USE=true
@@ -3968,13 +3982,9 @@ install_DEB() {
     version_ge $_glew "1.7.0"
     if [ $? -eq 1 ]; then
       WARNING "OpenSubdiv disabled because GLEW-$_glew is not enough"
-      WARNING "Blender will not use system GLEW library"
       OSD_SKIP=true
-      NO_SYSTEM_GLEW=true
     else
       WARNING "OpenSubdiv will compile with GLEW-$_glew but with limited capability"
-      WARNING "Blender will not use system GLEW library"
-      NO_SYSTEM_GLEW=true
     fi
   fi
 
@@ -4095,6 +4105,8 @@ install_DEB() {
 
 
   PRINT ""
+  # Debian OIIO includes again libopencv, without even properly dealing with this dependency...
+  OIIO_FORCE_BUILD=true
   if [ "$OIIO_SKIP" = true ]; then
     WARNING "Skipping OpenImageIO installation, as requested..."
   elif [ "$OIIO_FORCE_BUILD" = true ]; then
@@ -4493,10 +4505,11 @@ install_RPM() {
   _packages="gcc gcc-c++ git make cmake tar bzip2 xz findutils flex bison fontconfig-devel \
              libtiff-devel libjpeg-devel libpng-devel sqlite-devel fftw-devel SDL2-devel \
              libX11-devel libXi-devel libXcursor-devel libXrandr-devel libXinerama-devel \
+             wayland-devel wayland-protocols-devel mesa-libEGL-devel libxkbcommon-devel dbus-devel kernel-headers \
              wget ncurses-devel readline-devel $OPENJPEG_DEV openal-soft-devel \
              glew-devel yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV patch \
              libxml2-devel yaml-cpp-devel tinyxml-devel jemalloc-devel \
-             gmp-devel pugixml-devel potrace-devel libharu-devel"
+             gmp-devel pugixml-devel potrace-devel libharu-devel libzstd-devel"
 
   OPENJPEG_USE=true
   VORBIS_USE=true
@@ -5074,10 +5087,11 @@ install_ARCH() {
     BASE_DEVEL=`pacman -Sgq base-devel | sed -e 's/^gcc$/gcc-multilib/g' | paste -s -d' '`
   fi
 
-  _packages="$BASE_DEVEL git cmake fontconfig \
+  _packages="$BASE_DEVEL git cmake fontconfig flex \
              libxi libxcursor libxrandr libxinerama glew libpng libtiff wget openal \
              $OPENJPEG_DEV $VORBIS_DEV $OGG_DEV $THEORA_DEV yasm sdl2 fftw \
-             libxml2 yaml-cpp tinyxml python-requests jemalloc gmp potrace pugixml libharu"
+             libxml2 yaml-cpp tinyxml python-requests jemalloc gmp potrace pugixml libharu \
+             zstd"
 
   OPENJPEG_USE=true
   VORBIS_USE=true
@@ -5939,12 +5953,6 @@ print_info() {
       PRINT "  $_1"
       _buildargs="$_buildargs $_1"
     fi
-  fi
-
-  if [ "$NO_SYSTEM_GLEW" = true ]; then
-    _1="-D WITH_SYSTEM_GLEW=OFF"
-    PRINT "  $_1"
-    _buildargs="$_buildargs $_1"
   fi
 
   if [ "$FFMPEG_SKIP" = false ]; then

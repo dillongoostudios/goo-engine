@@ -314,7 +314,7 @@ static void gpencil_primitive_set_initdata(bContext *C, tGPDprimitive *tgpi)
 
   /* if layer doesn't exist, create a new one */
   if (gpl == NULL) {
-    gpl = BKE_gpencil_layer_addnew(tgpi->gpd, DATA_("Primitives"), true);
+    gpl = BKE_gpencil_layer_addnew(tgpi->gpd, DATA_("Primitives"), true, false);
   }
   tgpi->gpl = gpl;
 
@@ -792,7 +792,7 @@ static void gpencil_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
                              (ts->gpencil_v3d_align & GP_PROJECT_DEPTH_STROKE) ?
                                  V3D_DEPTH_GPENCIL_ONLY :
                                  V3D_DEPTH_NO_GPENCIL,
-                             false);
+                             NULL);
 
     depth_arr = MEM_mallocN(sizeof(float) * gps->totpoints, "depth_points");
     tGPspoint *ptc = &points2D[0];
@@ -1315,8 +1315,8 @@ static void gpencil_primitive_interaction_end(bContext *C,
   Brush *brush = tgpi->brush;
   BrushGpencilSettings *brush_settings = brush->gpencil_settings;
 
-  const int def_nr = tgpi->ob->actdef - 1;
-  const bool have_weight = (bool)BLI_findlink(&tgpi->ob->defbase, def_nr);
+  const int def_nr = tgpi->gpd->vertex_group_active_index - 1;
+  const bool have_weight = BLI_findlink(&tgpi->gpd->vertex_group_names, def_nr) != NULL;
 
   /* return to normal cursor and header status */
   ED_workspace_status_text(C, NULL);
@@ -1536,24 +1536,22 @@ static void gpencil_primitive_strength(tGPDprimitive *tgpi, bool reset)
   Brush *brush = tgpi->brush;
   BrushGpencilSettings *brush_settings = brush->gpencil_settings;
 
-  if (brush) {
-    if (reset) {
-      brush_settings->draw_strength = tgpi->brush_strength;
-      tgpi->brush_strength = 0.0f;
-    }
-    else {
-      if (tgpi->brush_strength == 0.0f) {
-        tgpi->brush_strength = brush_settings->draw_strength;
-      }
-      float move[2];
-      sub_v2_v2v2(move, tgpi->mval, tgpi->mvalo);
-      float adjust = (move[1] > 0.0f) ? 0.01f : -0.01f;
-      brush_settings->draw_strength += adjust * fabsf(len_manhattan_v2(move));
-    }
-
-    /* limit low limit because below 0.2f the stroke is invisible */
-    CLAMP(brush_settings->draw_strength, 0.2f, 1.0f);
+  if (reset) {
+    brush_settings->draw_strength = tgpi->brush_strength;
+    tgpi->brush_strength = 0.0f;
   }
+  else {
+    if (tgpi->brush_strength == 0.0f) {
+      tgpi->brush_strength = brush_settings->draw_strength;
+    }
+    float move[2];
+    sub_v2_v2v2(move, tgpi->mval, tgpi->mvalo);
+    float adjust = (move[1] > 0.0f) ? 0.01f : -0.01f;
+    brush_settings->draw_strength += adjust * fabsf(len_manhattan_v2(move));
+  }
+
+  /* limit low limit because below 0.2f the stroke is invisible */
+  CLAMP(brush_settings->draw_strength, 0.2f, 1.0f);
 }
 
 /* brush size */

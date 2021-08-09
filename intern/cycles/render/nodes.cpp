@@ -4374,7 +4374,7 @@ NODE_DEFINE(HairInfoNode)
   SOCKET_OUT_FLOAT(intercept, "Intercept");
   SOCKET_OUT_FLOAT(thickness, "Thickness");
   SOCKET_OUT_NORMAL(tangent_normal, "Tangent Normal");
-#if 0 /*output for minimum hair width transparency - deactivated */
+#if 0 /* Output for minimum hair width transparency - deactivated. */
   SOCKET_OUT_FLOAT(fade, "Fade");
 #endif
   SOCKET_OUT_FLOAT(index, "Random");
@@ -4425,12 +4425,12 @@ void HairInfoNode::compile(SVMCompiler &compiler)
   if (!out->links.empty()) {
     compiler.add_node(NODE_HAIR_INFO, NODE_INFO_CURVE_TANGENT_NORMAL, compiler.stack_assign(out));
   }
-
-  /*out = output("Fade");
+#if 0
+  out = output("Fade");
   if(!out->links.empty()) {
     compiler.add_node(NODE_HAIR_INFO, NODE_INFO_CURVE_FADE, compiler.stack_assign(out));
-  }*/
-
+  }
+#endif
   out = output("Random");
   if (!out->links.empty()) {
     int attr = compiler.attribute(ATTR_STD_CURVE_RANDOM);
@@ -6093,6 +6093,7 @@ NODE_DEFINE(VectorMathNode)
   type_enum.insert("reflect", NODE_VECTOR_MATH_REFLECT);
   type_enum.insert("refract", NODE_VECTOR_MATH_REFRACT);
   type_enum.insert("faceforward", NODE_VECTOR_MATH_FACEFORWARD);
+  type_enum.insert("multiply_add", NODE_VECTOR_MATH_MULTIPLY_ADD);
 
   type_enum.insert("dot_product", NODE_VECTOR_MATH_DOT_PRODUCT);
 
@@ -6165,7 +6166,8 @@ void VectorMathNode::compile(SVMCompiler &compiler)
   int vector_stack_offset = compiler.stack_assign_if_linked(vector_out);
 
   /* 3 Vector Operators */
-  if (math_type == NODE_VECTOR_MATH_WRAP || math_type == NODE_VECTOR_MATH_FACEFORWARD) {
+  if (math_type == NODE_VECTOR_MATH_WRAP || math_type == NODE_VECTOR_MATH_FACEFORWARD ||
+      math_type == NODE_VECTOR_MATH_MULTIPLY_ADD) {
     ShaderInput *vector3_in = input("Vector3");
     int vector3_stack_offset = compiler.stack_assign(vector3_in);
     compiler.add_node(

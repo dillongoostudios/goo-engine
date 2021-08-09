@@ -224,16 +224,10 @@ static void rna_BoneGroup_name_set(PointerRNA *ptr, const char *value)
                  sizeof(agrp->name));
 }
 
-static IDProperty *rna_PoseBone_idprops(PointerRNA *ptr, bool create)
+static IDProperty **rna_PoseBone_idprops(PointerRNA *ptr)
 {
   bPoseChannel *pchan = ptr->data;
-
-  if (create && !pchan->prop) {
-    IDPropertyTemplate val = {0};
-    pchan->prop = IDP_New(IDP_GROUP, &val, "RNA_PoseBone group");
-  }
-
-  return pchan->prop;
+  return &pchan->prop;
 }
 
 static void rna_Pose_ik_solver_set(struct PointerRNA *ptr, int value)
@@ -620,8 +614,8 @@ static void rna_PoseChannel_constraints_remove(
 
   ED_object_constraint_update(bmain, ob);
 
-  BKE_constraints_active_set(&pchan->constraints,
-                             NULL); /* XXX, is this really needed? - Campbell */
+  /* XXX(Campbell): is this really needed? */
+  BKE_constraints_active_set(&pchan->constraints, NULL);
 
   WM_main_add_notifier(NC_OBJECT | ND_CONSTRAINT | NA_REMOVED, id);
 
@@ -932,7 +926,7 @@ static void rna_def_bone_group(BlenderRNA *brna)
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_BoneGroup_name_set");
   RNA_def_struct_name_property(srna, prop);
 
-  /* TODO: add some runtime-collections stuff to access grouped bones  */
+  /* TODO: add some runtime-collections stuff to access grouped bones. */
 
   /* color set */
   rna_def_actionbone_group_common(srna, NC_OBJECT | ND_POSE, "rna_Pose_update");
@@ -1359,10 +1353,25 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   RNA_def_property_editable_func(prop, "rna_PoseChannel_proxy_editable");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_dependency_update");
 
-  prop = RNA_def_property(srna, "custom_shape_scale", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_float_sdna(prop, NULL, "custom_scale");
-  RNA_def_property_range(prop, 0.0f, 1000.0f);
+  prop = RNA_def_property(srna, "custom_shape_scale_xyz", PROP_FLOAT, PROP_XYZ);
+  RNA_def_property_float_sdna(prop, NULL, "custom_scale_xyz");
+  RNA_def_property_flag(prop, PROP_PROPORTIONAL);
+  RNA_def_property_float_array_default(prop, rna_default_scale_3d);
   RNA_def_property_ui_text(prop, "Custom Shape Scale", "Adjust the size of the custom shape");
+  RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+
+  prop = RNA_def_property(srna, "custom_shape_translation", PROP_FLOAT, PROP_XYZ);
+  RNA_def_property_float_sdna(prop, NULL, "custom_translation");
+  RNA_def_property_flag(prop, PROP_PROPORTIONAL);
+  RNA_def_property_ui_text(
+      prop, "Custom Shape Translation", "Adjust the location of the custom shape");
+  RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 1, RNA_TRANSLATION_PREC_DEFAULT);
+  RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
+
+  prop = RNA_def_property(srna, "custom_shape_rotation_euler", PROP_FLOAT, PROP_EULER);
+  RNA_def_property_float_sdna(prop, NULL, "custom_rotation_euler");
+  RNA_def_property_ui_text(
+      prop, "Custom Shape Rotation", "Adjust the rotation of the custom shape");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_update");
 
   prop = RNA_def_property(srna, "use_custom_shape_bone_size", PROP_BOOLEAN, PROP_NONE);

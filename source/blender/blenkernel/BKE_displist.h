@@ -32,11 +32,11 @@ extern "C" {
 
 /** #DispList.type */
 enum {
-  /** A closed polygon (that can be filled).  */
+  /** A closed polygon (that can be filled). */
   DL_POLY = 0,
-  /** An open polygon.  */
+  /** An open polygon. */
   DL_SEGM = 1,
-  /** A grid surface that respects #DL_CYCL_U & #DL_CYCL_V.  */
+  /** A grid surface that respects #DL_CYCL_U & #DL_CYCL_V. */
   DL_SURF = 2,
   /** Triangles. */
   DL_INDEX3 = 4,
@@ -65,12 +65,12 @@ struct Mesh;
 struct Object;
 struct Scene;
 
-/* used for curves, nurbs, mball, importing */
+/* Used for curves, nurbs, meta-balls. */
 typedef struct DispList {
   struct DispList *next, *prev;
   short type, flag;
   int parts, nr;
-  short col, rt; /* rt used by initrenderNurbs */
+  short col, rt; /* Currently only used for smooth flag. */
   float *verts, *nors;
   int *index;
   int charidx;
@@ -78,32 +78,21 @@ typedef struct DispList {
 } DispList;
 
 void BKE_displist_copy(struct ListBase *lbn, const struct ListBase *lb);
-void BKE_displist_elem_free(DispList *dl);
-DispList *BKE_displist_find_or_create(struct ListBase *lb, int type);
 DispList *BKE_displist_find(struct ListBase *lb, int type);
 void BKE_displist_normals_add(struct ListBase *lb);
 void BKE_displist_count(const struct ListBase *lb, int *totvert, int *totface, int *tottri);
 void BKE_displist_free(struct ListBase *lb);
 bool BKE_displist_has_faces(const struct ListBase *lb);
 
-void BKE_displist_make_surf(struct Depsgraph *depsgraph,
-                            const struct Scene *scene,
-                            struct Object *ob,
-                            struct ListBase *dispbase,
-                            struct Mesh **r_final,
-                            const bool for_render,
-                            const bool for_orco);
 void BKE_displist_make_curveTypes(struct Depsgraph *depsgraph,
                                   const struct Scene *scene,
                                   struct Object *ob,
-                                  const bool for_render,
-                                  const bool for_orco);
+                                  const bool for_render);
 void BKE_displist_make_curveTypes_forRender(struct Depsgraph *depsgraph,
                                             const struct Scene *scene,
                                             struct Object *ob,
                                             struct ListBase *dispbase,
-                                            struct Mesh **r_final,
-                                            const bool for_orco);
+                                            struct Mesh **r_final);
 void BKE_displist_make_mball(struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob);
 void BKE_displist_make_mball_forRender(struct Depsgraph *depsgraph,
                                        struct Scene *scene,

@@ -644,7 +644,7 @@ static int txtfmt_pov_find_specialvar(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "ratio",              len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "open",               len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "ior",                len)) { i = len;
-  /* Light Types and options*/
+  /* Light Types and options. */
   } else if (STR_LITERAL_STARTSWITH(string, "area_light",         len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "looks_like",         len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "fade_power",         len)) { i = len;
@@ -654,7 +654,7 @@ static int txtfmt_pov_find_specialvar(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "point_at",           len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "falloff",            len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "radius",             len)) { i = len;
-  /* Camera Types and options*/
+  /* Camera Types and options. */
   } else if (STR_LITERAL_STARTSWITH(string, "omni_directional_stereo",  len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "lambert_cylindrical",      len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "miller_cylindrical",       len)) { i = len;
@@ -762,11 +762,11 @@ static char txtfmt_pov_format_identifier(const char *str)
   /* Keep aligned args for readability. */
   /* clang-format off */
 
-  if        ((txtfmt_pov_find_specialvar(str))        != -1) { fmt = FMT_TYPE_SPECIAL;
-  } else if ((txtfmt_pov_find_keyword(str))           != -1) { fmt = FMT_TYPE_KEYWORD;
-  } else if ((txtfmt_pov_find_reserved_keywords(str)) != -1) { fmt = FMT_TYPE_RESERVED;
-  } else if ((txtfmt_pov_find_reserved_builtins(str)) != -1) { fmt = FMT_TYPE_DIRECTIVE;
-  } else                                                     { fmt = FMT_TYPE_DEFAULT;
+  if        (txtfmt_pov_find_specialvar(str)        != -1) { fmt = FMT_TYPE_SPECIAL;
+  } else if (txtfmt_pov_find_keyword(str)           != -1) { fmt = FMT_TYPE_KEYWORD;
+  } else if (txtfmt_pov_find_reserved_keywords(str) != -1) { fmt = FMT_TYPE_RESERVED;
+  } else if (txtfmt_pov_find_reserved_builtins(str) != -1) { fmt = FMT_TYPE_DIRECTIVE;
+  } else                                                   { fmt = FMT_TYPE_DEFAULT;
   }
 
   /* clang-format on */

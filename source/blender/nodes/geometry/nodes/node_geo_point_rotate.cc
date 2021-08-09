@@ -59,127 +59,6 @@ static void geo_node_point_rotate_layout(uiLayout *layout, bContext *UNUSED(C), 
 
 namespace blender::nodes {
 
-static void point_rotate__axis_angle__object_space(const int domain_size,
-                                                   const Float3ReadAttribute &axis,
-                                                   const FloatReadAttribute &angles,
-                                                   MutableSpan<float3> rotations)
-{
-  for (const int i : IndexRange(domain_size)) {
-    float old_rotation[3][3];
-    eul_to_mat3(old_rotation, rotations[i]);
-    float rotation[3][3];
-    axis_angle_to_mat3(rotation, axis[i], angles[i]);
-    float new_rotation[3][3];
-    mul_m3_m3m3(new_rotation, rotation, old_rotation);
-    mat3_to_eul(rotations[i], new_rotation);
-  }
-}
-
-static void point_rotate__axis_angle__point_space(const int domain_size,
-                                                  const Float3ReadAttribute &axis,
-                                                  const FloatReadAttribute &angles,
-                                                  MutableSpan<float3> rotations)
-{
-  for (const int i : IndexRange(domain_size)) {
-    float old_rotation[3][3];
-    eul_to_mat3(old_rotation, rotations[i]);
-    float rotation[3][3];
-    axis_angle_to_mat3(rotation, axis[i], angles[i]);
-    float new_rotation[3][3];
-    mul_m3_m3m3(new_rotation, old_rotation, rotation);
-    mat3_to_eul(rotations[i], new_rotation);
-  }
-}
-
-static void point_rotate__euler__object_space(const int domain_size,
-                                              const Float3ReadAttribute &eulers,
-                                              MutableSpan<float3> rotations)
-{
-  for (const int i : IndexRange(domain_size)) {
-    float old_rotation[3][3];
-    eul_to_mat3(old_rotation, rotations[i]);
-    float rotation[3][3];
-    eul_to_mat3(rotation, eulers[i]);
-    float new_rotation[3][3];
-    mul_m3_m3m3(new_rotation, rotation, old_rotation);
-    mat3_to_eul(rotations[i], new_rotation);
-  }
-}
-
-static void point_rotate__euler__point_space(const int domain_size,
-                                             const Float3ReadAttribute &eulers,
-                                             MutableSpan<float3> rotations)
-{
-  for (const int i : IndexRange(domain_size)) {
-    float old_rotation[3][3];
-    eul_to_mat3(old_rotation, rotations[i]);
-    float rotation[3][3];
-    eul_to_mat3(rotation, eulers[i]);
-    float new_rotation[3][3];
-    mul_m3_m3m3(new_rotation, old_rotation, rotation);
-    mat3_to_eul(rotations[i], new_rotation);
-  }
-}
-
-static void point_rotate_on_component(GeometryComponent &component,
-                                      const GeoNodeExecParams &params)
-{
-  const bNode &node = params.node();
-  const NodeGeometryRotatePoints &storage = *(const NodeGeometryRotatePoints *)node.storage;
-
-  OutputAttributePtr rotation_attribute = component.attribute_try_get_for_output(
-      "rotation", ATTR_DOMAIN_POINT, CD_PROP_FLOAT3);
-  if (!rotation_attribute) {
-    return;
-  }
-
-  MutableSpan<float3> rotations = rotation_attribute->get_span<float3>();
-  const int domain_size = rotations.size();
-
-  if (storage.type == GEO_NODE_POINT_ROTATE_TYPE_AXIS_ANGLE) {
-    Float3ReadAttribute axis = params.get_input_attribute<float3>(
-        "Axis", component, ATTR_DOMAIN_POINT, {0, 0, 1});
-    FloatReadAttribute angles = params.get_input_attribute<float>(
-        "Angle", component, ATTR_DOMAIN_POINT, 0);
-
-    if (storage.space == GEO_NODE_POINT_ROTATE_SPACE_OBJECT) {
-      point_rotate__axis_angle__object_space(domain_size, axis, angles, rotations);
-    }
-    else {
-      point_rotate__axis_angle__point_space(domain_size, axis, angles, rotations);
-    }
-  }
-  else {
-    Float3ReadAttribute eulers = params.get_input_attribute<float3>(
-        "Rotation", component, ATTR_DOMAIN_POINT, {0, 0, 0});
-
-    if (storage.space == GEO_NODE_POINT_ROTATE_SPACE_OBJECT) {
-      point_rotate__euler__object_space(domain_size, eulers, rotations);
-    }
-    else {
-      point_rotate__euler__point_space(domain_size, eulers, rotations);
-    }
-  }
-
-  rotation_attribute.apply_span_and_save();
-}
-
-static void geo_node_point_rotate_exec(GeoNodeExecParams params)
-{
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-
-  geometry_set = geometry_set_realize_instances(geometry_set);
-
-  if (geometry_set.has<MeshComponent>()) {
-    point_rotate_on_component(geometry_set.get_component_for_write<MeshComponent>(), params);
-  }
-  if (geometry_set.has<PointCloudComponent>()) {
-    point_rotate_on_component(geometry_set.get_component_for_write<PointCloudComponent>(), params);
-  }
-
-  params.set_output("Geometry", geometry_set);
-}
-
 static void geo_node_point_rotate_init(bNodeTree *UNUSED(ntree), bNode *node)
 {
   NodeGeometryRotatePoints *node_storage = (NodeGeometryRotatePoints *)MEM_callocN(
@@ -212,6 +91,130 @@ static void geo_node_point_rotate_update(bNodeTree *UNUSED(ntree), bNode *node)
       "Rotation",
       (GeometryNodeAttributeInputMode)node_storage->input_type_rotation,
       node_storage->type == GEO_NODE_POINT_ROTATE_TYPE_EULER);
+}
+
+static void point_rotate__axis_angle__object_space(const int domain_size,
+                                                   const VArray<float3> &axis,
+                                                   const VArray<float> &angles,
+                                                   MutableSpan<float3> rotations)
+{
+  for (const int i : IndexRange(domain_size)) {
+    float old_rotation[3][3];
+    eul_to_mat3(old_rotation, rotations[i]);
+    float rotation[3][3];
+    axis_angle_to_mat3(rotation, axis[i], angles[i]);
+    float new_rotation[3][3];
+    mul_m3_m3m3(new_rotation, rotation, old_rotation);
+    mat3_to_eul(rotations[i], new_rotation);
+  }
+}
+
+static void point_rotate__axis_angle__point_space(const int domain_size,
+                                                  const VArray<float3> &axis,
+                                                  const VArray<float> &angles,
+                                                  MutableSpan<float3> rotations)
+{
+  for (const int i : IndexRange(domain_size)) {
+    float old_rotation[3][3];
+    eul_to_mat3(old_rotation, rotations[i]);
+    float rotation[3][3];
+    axis_angle_to_mat3(rotation, axis[i], angles[i]);
+    float new_rotation[3][3];
+    mul_m3_m3m3(new_rotation, old_rotation, rotation);
+    mat3_to_eul(rotations[i], new_rotation);
+  }
+}
+
+static void point_rotate__euler__object_space(const int domain_size,
+                                              const VArray<float3> &eulers,
+                                              MutableSpan<float3> rotations)
+{
+  for (const int i : IndexRange(domain_size)) {
+    float old_rotation[3][3];
+    eul_to_mat3(old_rotation, rotations[i]);
+    float rotation[3][3];
+    eul_to_mat3(rotation, eulers[i]);
+    float new_rotation[3][3];
+    mul_m3_m3m3(new_rotation, rotation, old_rotation);
+    mat3_to_eul(rotations[i], new_rotation);
+  }
+}
+
+static void point_rotate__euler__point_space(const int domain_size,
+                                             const VArray<float3> &eulers,
+                                             MutableSpan<float3> rotations)
+{
+  for (const int i : IndexRange(domain_size)) {
+    float old_rotation[3][3];
+    eul_to_mat3(old_rotation, rotations[i]);
+    float rotation[3][3];
+    eul_to_mat3(rotation, eulers[i]);
+    float new_rotation[3][3];
+    mul_m3_m3m3(new_rotation, old_rotation, rotation);
+    mat3_to_eul(rotations[i], new_rotation);
+  }
+}
+
+static void point_rotate_on_component(GeometryComponent &component,
+                                      const GeoNodeExecParams &params)
+{
+  const bNode &node = params.node();
+  const NodeGeometryRotatePoints &storage = *(const NodeGeometryRotatePoints *)node.storage;
+
+  OutputAttribute_Typed<float3> rotation_attribute =
+      component.attribute_try_get_for_output<float3>("rotation", ATTR_DOMAIN_POINT, {0, 0, 0});
+  if (!rotation_attribute) {
+    return;
+  }
+
+  MutableSpan<float3> rotations = rotation_attribute.as_span();
+  const int domain_size = rotations.size();
+
+  if (storage.type == GEO_NODE_POINT_ROTATE_TYPE_AXIS_ANGLE) {
+    GVArray_Typed<float3> axis = params.get_input_attribute<float3>(
+        "Axis", component, ATTR_DOMAIN_POINT, {0, 0, 1});
+    GVArray_Typed<float> angles = params.get_input_attribute<float>(
+        "Angle", component, ATTR_DOMAIN_POINT, 0);
+
+    if (storage.space == GEO_NODE_POINT_ROTATE_SPACE_OBJECT) {
+      point_rotate__axis_angle__object_space(domain_size, axis, angles, rotations);
+    }
+    else {
+      point_rotate__axis_angle__point_space(domain_size, axis, angles, rotations);
+    }
+  }
+  else {
+    GVArray_Typed<float3> eulers = params.get_input_attribute<float3>(
+        "Rotation", component, ATTR_DOMAIN_POINT, {0, 0, 0});
+
+    if (storage.space == GEO_NODE_POINT_ROTATE_SPACE_OBJECT) {
+      point_rotate__euler__object_space(domain_size, eulers, rotations);
+    }
+    else {
+      point_rotate__euler__point_space(domain_size, eulers, rotations);
+    }
+  }
+
+  rotation_attribute.save();
+}
+
+static void geo_node_point_rotate_exec(GeoNodeExecParams params)
+{
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+
+  geometry_set = geometry_set_realize_instances(geometry_set);
+
+  if (geometry_set.has<MeshComponent>()) {
+    point_rotate_on_component(geometry_set.get_component_for_write<MeshComponent>(), params);
+  }
+  if (geometry_set.has<PointCloudComponent>()) {
+    point_rotate_on_component(geometry_set.get_component_for_write<PointCloudComponent>(), params);
+  }
+  if (geometry_set.has<CurveComponent>()) {
+    point_rotate_on_component(geometry_set.get_component_for_write<CurveComponent>(), params);
+  }
+
+  params.set_output("Geometry", geometry_set);
 }
 
 }  // namespace blender::nodes

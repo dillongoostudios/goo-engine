@@ -216,7 +216,7 @@ static bool binary_search_anim_path(const float *accum_len_arr,
     if (UNLIKELY(cur_step == 0)) {
       /* This should never happen unless there is something horribly wrong. */
       CLOG_ERROR(&LOG, "Couldn't find any valid point on the animation path!");
-      BLI_assert(!"Couldn't find any valid point on the animation path!");
+      BLI_assert_msg(0, "Couldn't find any valid point on the animation path!");
       return false;
     }
 
@@ -327,7 +327,7 @@ bool BKE_where_on_path(const Object *ob,
   }
   const Nurb *nu = nurbs->first;
 
-  /* make sure that first and last frame are included in the vectors here  */
+  /* Make sure that first and last frame are included in the vectors here. */
   if (ELEM(nu->type, CU_POLY, CU_BEZIER, CU_NURBS)) {
     key_curve_position_weights(frac, w, KEY_LINEAR);
   }

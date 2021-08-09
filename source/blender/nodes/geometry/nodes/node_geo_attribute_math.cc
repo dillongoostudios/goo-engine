@@ -14,6 +14,10 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include "BLI_task.hh"
+
+#include "RNA_enum_types.h"
+
 #include "UI_interface.h"
 #include "UI_resources.h"
 
@@ -130,6 +134,17 @@ static void geo_node_attribute_math_init(bNodeTree *UNUSED(tree), bNode *node)
 
 namespace blender::nodes {
 
+static void geo_node_math_label(bNodeTree *UNUSED(ntree), bNode *node, char *label, int maxlen)
+{
+  NodeAttributeMath &node_storage = *(NodeAttributeMath *)node->storage;
+  const char *name;
+  bool enum_label = RNA_enum_name(rna_enum_node_math_items, node_storage.operation, &name);
+  if (!enum_label) {
+    name = "Unknown";
+  }
+  BLI_strncpy(label, IFACE_(name), maxlen);
+}
+
 static void geo_node_attribute_math_update(bNodeTree *UNUSED(ntree), bNode *node)
 {
   NodeAttributeMath &node_storage = *(NodeAttributeMath *)node->storage;
@@ -149,46 +164,52 @@ static void geo_node_attribute_math_update(bNodeTree *UNUSED(ntree), bNode *node
       operation_use_input_c(operation));
 }
 
-static void do_math_operation(Span<float> span_a,
-                              Span<float> span_b,
-                              Span<float> span_c,
+static void do_math_operation(const VArray<float> &span_a,
+                              const VArray<float> &span_b,
+                              const VArray<float> &span_c,
                               MutableSpan<float> span_result,
                               const NodeMathOperation operation)
 {
   bool success = try_dispatch_float_math_fl_fl_fl_to_fl(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(span_result.size())) {
-          span_result[i] = math_function(span_a[i], span_b[i], span_c[i]);
-        }
+        threading::parallel_for(IndexRange(span_result.size()), 512, [&](IndexRange range) {
+          for (const int i : range) {
+            span_result[i] = math_function(span_a[i], span_b[i], span_c[i]);
+          }
+        });
       });
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation(Span<float> span_a,
-                              Span<float> span_b,
+static void do_math_operation(const VArray<float> &span_a,
+                              const VArray<float> &span_b,
                               MutableSpan<float> span_result,
                               const NodeMathOperation operation)
 {
   bool success = try_dispatch_float_math_fl_fl_to_fl(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(span_result.size())) {
-          span_result[i] = math_function(span_a[i], span_b[i]);
-        }
+        threading::parallel_for(IndexRange(span_result.size()), 1024, [&](IndexRange range) {
+          for (const int i : range) {
+            span_result[i] = math_function(span_a[i], span_b[i]);
+          }
+        });
       });
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
 }
 
-static void do_math_operation(Span<float> span_input,
+static void do_math_operation(const VArray<float> &span_input,
                               MutableSpan<float> span_result,
                               const NodeMathOperation operation)
 {
   bool success = try_dispatch_float_math_fl_to_fl(
       operation, [&](auto math_function, const FloatMathOperationInfo &UNUSED(info)) {
-        for (const int i : IndexRange(span_result.size())) {
-          span_result[i] = math_function(span_input[i]);
-        }
+        threading::parallel_for(IndexRange(span_result.size()), 1024, [&](IndexRange range) {
+          for (const int i : range) {
+            span_result[i] = math_function(span_input[i]);
+          }
+        });
       });
   BLI_assert(success);
   UNUSED_VARS_NDEBUG(success);
@@ -200,9 +221,9 @@ static AttributeDomain get_result_domain(const GeometryComponent &component,
                                          StringRef result_name)
 {
   /* Use the domain of the result attribute if it already exists. */
-  ReadAttributePtr result_attribute = component.attribute_try_get_for_read(result_name);
-  if (result_attribute) {
-    return result_attribute->domain();
+  std::optional<AttributeMetaData> result_info = component.attribute_get_meta_data(result_name);
+  if (result_info) {
+    return result_info->domain;
   }
 
   /* Otherwise use the highest priority domain from existing input attributes, or the default. */
@@ -224,56 +245,39 @@ static void attribute_math_calc(GeometryComponent &component, const GeoNodeExecP
   const std::string result_name = params.get_input<std::string>("Result");
 
   /* The result type of this node is always float. */
-  const CustomDataType result_type = CD_PROP_FLOAT;
   const AttributeDomain result_domain = get_result_domain(
       component, params, operation, result_name);
 
-  OutputAttributePtr attribute_result = component.attribute_try_get_for_output(
-      result_name, result_domain, result_type);
+  OutputAttribute_Typed<float> attribute_result =
+      component.attribute_try_get_for_output_only<float>(result_name, result_domain);
   if (!attribute_result) {
     return;
   }
 
-  ReadAttributePtr attribute_a = params.get_input_attribute(
-      "A", component, result_domain, result_type, nullptr);
-  if (!attribute_a) {
-    return;
-  }
+  GVArray_Typed<float> attribute_a = params.get_input_attribute<float>(
+      "A", component, result_domain, 0.0f);
 
-  /* Note that passing the data with `get_span<float>()` works
+  MutableSpan<float> result_span = attribute_result.as_span();
+
+  /* Note that passing the data with `get_internal_span<float>()` works
    * because the attributes were accessed with #CD_PROP_FLOAT. */
   if (operation_use_input_b(operation)) {
-    ReadAttributePtr attribute_b = params.get_input_attribute(
-        "B", component, result_domain, result_type, nullptr);
-    if (!attribute_b) {
-      return;
-    }
+    GVArray_Typed<float> attribute_b = params.get_input_attribute<float>(
+        "B", component, result_domain, 0.0f);
     if (operation_use_input_c(operation)) {
-      ReadAttributePtr attribute_c = params.get_input_attribute(
-          "C", component, result_domain, result_type, nullptr);
-      if (!attribute_c) {
-        return;
-      }
-      do_math_operation(attribute_a->get_span<float>(),
-                        attribute_b->get_span<float>(),
-                        attribute_c->get_span<float>(),
-                        attribute_result->get_span_for_write_only<float>(),
-                        operation);
+      GVArray_Typed<float> attribute_c = params.get_input_attribute<float>(
+          "C", component, result_domain, 0.0f);
+      do_math_operation(attribute_a, attribute_b, attribute_c, result_span, operation);
     }
     else {
-      do_math_operation(attribute_a->get_span<float>(),
-                        attribute_b->get_span<float>(),
-                        attribute_result->get_span_for_write_only<float>(),
-                        operation);
+      do_math_operation(attribute_a, attribute_b, result_span, operation);
     }
   }
   else {
-    do_math_operation(attribute_a->get_span<float>(),
-                      attribute_result->get_span_for_write_only<float>(),
-                      operation);
+    do_math_operation(attribute_a, result_span, operation);
   }
 
-  attribute_result.apply_span_and_save();
+  attribute_result.save();
 }
 
 static void geo_node_attribute_math_exec(GeoNodeExecParams params)
@@ -287,6 +291,9 @@ static void geo_node_attribute_math_exec(GeoNodeExecParams params)
   }
   if (geometry_set.has<PointCloudComponent>()) {
     attribute_math_calc(geometry_set.get_component_for_write<PointCloudComponent>(), params);
+  }
+  if (geometry_set.has<CurveComponent>()) {
+    attribute_math_calc(geometry_set.get_component_for_write<CurveComponent>(), params);
   }
 
   params.set_output("Geometry", geometry_set);
@@ -302,6 +309,7 @@ void register_node_type_geo_attribute_math()
   node_type_socket_templates(&ntype, geo_node_attribute_math_in, geo_node_attribute_math_out);
   ntype.geometry_node_execute = blender::nodes::geo_node_attribute_math_exec;
   ntype.draw_buttons = geo_node_attribute_math_layout;
+  node_type_label(&ntype, blender::nodes::geo_node_math_label);
   node_type_update(&ntype, blender::nodes::geo_node_attribute_math_update);
   node_type_init(&ntype, geo_node_attribute_math_init);
   node_type_storage(

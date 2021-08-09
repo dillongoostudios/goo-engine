@@ -198,11 +198,6 @@ enum {
   FLUID_DOMAIN_TYPE_LIQUID = 1,
 };
 
-/* Smoke noise types. */
-enum {
-  FLUID_NOISE_TYPE_WAVELET = (1 << 0),
-};
-
 /* Mesh levelset generator types. */
 enum {
   FLUID_DOMAIN_MESH_IMPROVED = 0,
@@ -289,7 +284,7 @@ enum {
 #define FLUID_NAME_PARTICLES "fluid_particles"
 #define FLUID_NAME_GUIDING "fluid_guiding"
 
-/* Fluid object names.*/
+/* Fluid object names. */
 #define FLUID_NAME_FLAGS "flags"       /* == OpenVDB grid attribute name. */
 #define FLUID_NAME_VELOCITY "velocity" /* == OpenVDB grid attribute name. */
 #define FLUID_NAME_VEL "vel"
@@ -544,7 +539,7 @@ typedef struct FluidDomainSettings {
   int boundary_width;     /* Usually this is just 1. */
   float gravity_final[3]; /* Scene or domain gravity multiplied with gravity weight. */
 
-  /* -- User-accesible fields (from here on). -- */
+  /* -- User-accessible fields (from here on). -- */
 
   /* Adaptive domain options. */
   int adapt_margin;
@@ -580,8 +575,7 @@ typedef struct FluidDomainSettings {
   float noise_time_anim;
   int res_noise[3];
   int noise_scale;
-  short noise_type; /* Noise type: wave, curl, anisotropic. */
-  char _pad3[2];    /* Unused. */
+  char _pad3[4]; /* Unused. */
 
   /* Liquid domain options. */
   float particle_randomness;
@@ -640,7 +634,7 @@ typedef struct FluidDomainSettings {
 
   /* Fluid guiding options. */
   float guide_alpha;      /* Guiding weight scalar (determines strength). */
-  int guide_beta;         /* Guiding blur radius (affects size of vortices). */
+  int guide_beta;         /* Guiding blur radius (affects size of vortices vortices). */
   float guide_vel_factor; /* Multiply guiding velocity by this factor. */
   int guide_res[3];       /* Res for velocity guide grids - independent from base res. */
   short guide_source;
@@ -790,7 +784,7 @@ typedef struct FluidFlowSettings {
   float vel_coord[3];
   char _pad1[4];
 
-  /* -- User-accesible fields (from here on). -- */
+  /* -- User-accessible fields (from here on). -- */
 
   /* Emission. */
   float density;
@@ -813,8 +807,8 @@ typedef struct FluidFlowSettings {
   char uvlayer_name[64];
   short vgroup_density;
 
-  short type;     /* Smoke, flames, both, outflow, liquid.  */
-  short behavior; /* Inflow, outflow, static.  */
+  short type;     /* Smoke, flames, both, outflow, liquid. */
+  short behavior; /* Inflow, outflow, static. */
   short source;
   short texture_type;
   short _pad3[3];
@@ -856,7 +850,7 @@ typedef struct FluidEffectorSettings {
   float *verts_old;
   int numverts;
 
-  /* -- User-accesible fields (from here on). -- */
+  /* -- User-accessible fields (from here on). -- */
 
   float surface_distance; /* Thickness of mesh surface, used in obstacle sdf. */
   int flags;

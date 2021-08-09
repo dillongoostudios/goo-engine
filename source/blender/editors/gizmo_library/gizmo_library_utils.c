@@ -118,10 +118,10 @@ void gizmo_property_data_update(wmGizmo *gz,
                                 const bool inverted)
 {
   if (gz_prop->custom_func.value_get_fn != NULL) {
-    /* pass  */
+    /* Pass. */
   }
   else if (gz_prop->prop != NULL) {
-    /* pass  */
+    /* Pass. */
   }
   else {
     data->offset = 0.0f;
@@ -237,7 +237,7 @@ bool gizmo_window_project_3d(
   if (gz->parent_gzgroup->type->flag & WM_GIZMOGROUPTYPE_3D) {
     View3D *v3d = CTX_wm_view3d(C);
     ARegion *region = CTX_wm_region(C);
-    /* Note: we might want a custom reference point passed in,
+    /* NOTE: we might want a custom reference point passed in,
      * instead of the gizmo center. */
     ED_view3d_win_to_3d(v3d, region, mat[3], mval, r_co);
     invert_m4(mat);

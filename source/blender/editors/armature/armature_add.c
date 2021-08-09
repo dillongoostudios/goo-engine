@@ -89,15 +89,14 @@ EditBone *ED_armature_ebone_add(bArmature *arm, const char *name)
   bone->roll1 = 0.0f;
   bone->roll2 = 0.0f;
   bone->curve_in_x = 0.0f;
-  bone->curve_in_y = 0.0f;
+  bone->curve_in_z = 0.0f;
   bone->curve_out_x = 0.0f;
-  bone->curve_out_y = 0.0f;
+  bone->curve_out_z = 0.0f;
   bone->ease1 = 1.0f;
   bone->ease2 = 1.0f;
-  bone->scale_in_x = 1.0f;
-  bone->scale_in_y = 1.0f;
-  bone->scale_out_x = 1.0f;
-  bone->scale_out_y = 1.0f;
+
+  copy_v3_fl(bone->scale_in, 1.0f);
+  copy_v3_fl(bone->scale_out, 1.0f);
 
   return bone;
 }
@@ -226,7 +225,7 @@ static int armature_click_extrude_exec(bContext *C, wmOperator *UNUSED(op))
 
 static int armature_click_extrude_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  /* TODO most of this code is copied from set3dcursor_invoke,
+  /* TODO: most of this code is copied from set3dcursor_invoke,
    * it would be better to reuse code in set3dcursor_invoke */
 
   /* temporarily change 3d cursor position */
@@ -339,7 +338,7 @@ void postEditBoneDuplicate(struct ListBase *editbones, Object *ob)
   }
 
   BKE_pose_channels_hash_free(ob->pose);
-  BKE_pose_channels_hash_make(ob->pose);
+  BKE_pose_channels_hash_ensure(ob->pose);
 
   GHash *name_map = BLI_ghash_str_new(__func__);
 
@@ -390,7 +389,7 @@ static void updateDuplicateSubtarget(EditBone *dup_bone,
   bConstraint *curcon;
   ListBase *conlist;
 
-  if ((pchan = BKE_pose_channel_verify(ob->pose, dup_bone->name))) {
+  if ((pchan = BKE_pose_channel_ensure(ob->pose, dup_bone->name))) {
     if ((conlist = &pchan->constraints)) {
       for (curcon = conlist->first; curcon; curcon = curcon->next) {
         /* does this constraint have a subtarget in
@@ -439,17 +438,15 @@ static void updateDuplicateSubtarget(EditBone *dup_bone,
   }
 }
 
-static void updateDuplicateActionConstraintSettings(EditBone *dup_bone,
-                                                    EditBone *orig_bone,
-                                                    Object *ob,
-                                                    bConstraint *curcon)
+static void updateDuplicateActionConstraintSettings(
+    EditBone *dup_bone, EditBone *orig_bone, Object *ob, bPoseChannel *pchan, bConstraint *curcon)
 {
   bActionConstraint *act_con = (bActionConstraint *)curcon->data;
   bAction *act = (bAction *)act_con->act;
 
   float mat[4][4];
 
-  bConstraintOb cob = {.depsgraph = NULL, .scene = NULL, .ob = ob, .pchan = NULL};
+  bConstraintOb cob = {.depsgraph = NULL, .scene = NULL, .ob = ob, .pchan = pchan};
   BKE_constraint_custom_object_space_get(cob.space_obj_world_matrix, curcon);
 
   unit_m4(mat);
@@ -825,7 +822,7 @@ static void updateDuplicateConstraintSettings(EditBone *dup_bone, EditBone *orig
   bConstraint *curcon;
   ListBase *conlist;
 
-  if ((pchan = BKE_pose_channel_verify(ob->pose, dup_bone->name)) == NULL ||
+  if ((pchan = BKE_pose_channel_ensure(ob->pose, dup_bone->name)) == NULL ||
       (conlist = &pchan->constraints) == NULL) {
     return;
   }
@@ -833,7 +830,7 @@ static void updateDuplicateConstraintSettings(EditBone *dup_bone, EditBone *orig
   for (curcon = conlist->first; curcon; curcon = curcon->next) {
     switch (curcon->type) {
       case CONSTRAINT_TYPE_ACTION:
-        updateDuplicateActionConstraintSettings(dup_bone, orig_bone, ob, curcon);
+        updateDuplicateActionConstraintSettings(dup_bone, orig_bone, ob, pchan, curcon);
         break;
       case CONSTRAINT_TYPE_KINEMATIC:
         updateDuplicateKinematicConstraintSettings(curcon);
@@ -855,7 +852,7 @@ static void updateDuplicateCustomBoneShapes(bContext *C, EditBone *dup_bone, Obj
     return;
   }
   bPoseChannel *pchan;
-  pchan = BKE_pose_channel_verify(ob->pose, dup_bone->name);
+  pchan = BKE_pose_channel_ensure(ob->pose, dup_bone->name);
 
   if (pchan->custom != NULL) {
     Main *bmain = CTX_data_main(C);
@@ -885,12 +882,12 @@ static void copy_pchan(EditBone *src_bone, EditBone *dst_bone, Object *src_ob, O
   if (src_ob->pose) {
     bPoseChannel *chanold, *channew;
 
-    chanold = BKE_pose_channel_verify(src_ob->pose, src_bone->name);
+    chanold = BKE_pose_channel_ensure(src_ob->pose, src_bone->name);
     if (chanold) {
       /* WARNING: this creates a new posechannel, but there will not be an attached bone
        * yet as the new bones created here are still 'EditBones' not 'Bones'.
        */
-      channew = BKE_pose_channel_verify(dst_ob->pose, dst_bone->name);
+      channew = BKE_pose_channel_ensure(dst_ob->pose, dst_bone->name);
 
       if (channew) {
         BKE_pose_channel_copy_data(channew, chanold);
@@ -1193,7 +1190,7 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
            * is synchronized. */
           bPoseChannel *pchan;
           /* Make sure we clean up the old data before overwriting it */
-          pchan = BKE_pose_channel_verify(obedit->pose, ebone_iter->temp.ebone->name);
+          pchan = BKE_pose_channel_ensure(obedit->pose, ebone_iter->temp.ebone->name);
           BKE_pose_channel_free(pchan);
           /* Sync pchan data */
           copy_pchan(ebone_iter, ebone_iter->temp.ebone, obedit, obedit);
@@ -1264,6 +1261,10 @@ static int armature_symmetrize_exec(bContext *C, wmOperator *op)
         /* Sync bbone handle types */
         ebone->bbone_prev_type = ebone_iter->bbone_prev_type;
         ebone->bbone_next_type = ebone_iter->bbone_next_type;
+
+        ebone->bbone_flag = ebone_iter->bbone_flag;
+        ebone->bbone_prev_flag = ebone_iter->bbone_prev_flag;
+        ebone->bbone_next_flag = ebone_iter->bbone_next_flag;
 
         /* Lets try to fix any constraint subtargets that might
          * have been duplicated
@@ -1464,15 +1465,14 @@ static int armature_extrude_exec(bContext *C, wmOperator *op)
             newbone->roll1 = ebone->roll1;
             newbone->roll2 = ebone->roll2;
             newbone->curve_in_x = ebone->curve_in_x;
-            newbone->curve_in_y = ebone->curve_in_y;
+            newbone->curve_in_z = ebone->curve_in_z;
             newbone->curve_out_x = ebone->curve_out_x;
-            newbone->curve_out_y = ebone->curve_out_y;
+            newbone->curve_out_z = ebone->curve_out_z;
             newbone->ease1 = ebone->ease1;
             newbone->ease2 = ebone->ease2;
-            newbone->scale_in_x = ebone->scale_in_x;
-            newbone->scale_in_y = ebone->scale_in_y;
-            newbone->scale_out_x = ebone->scale_out_x;
-            newbone->scale_out_y = ebone->scale_out_y;
+
+            copy_v3_v3(newbone->scale_in, ebone->scale_in);
+            copy_v3_v3(newbone->scale_out, ebone->scale_out);
 
             BLI_strncpy(newbone->name, ebone->name, sizeof(newbone->name));
 
@@ -1556,7 +1556,7 @@ void ARMATURE_OT_extrude(wmOperatorType *ot)
 
 /* ********************** Bone Add *************************************/
 
-/*op makes a new bone and returns it with its tip selected */
+/* Op makes a new bone and returns it with its tip selected. */
 
 static int armature_bone_primitive_add_exec(bContext *C, wmOperator *op)
 {
@@ -1601,7 +1601,7 @@ static int armature_bone_primitive_add_exec(bContext *C, wmOperator *op)
 
   ED_armature_edit_refresh_layer_used(obedit->data);
 
-  /* note, notifier might evolve */
+  /* NOTE: notifier might evolve. */
   WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, obedit);
   DEG_id_tag_update(&obedit->id, ID_RECALC_SELECT);
   ED_outliner_select_sync_from_edit_bone_tag(C);
@@ -1692,7 +1692,7 @@ static int armature_subdivide_exec(bContext *C, wmOperator *op)
   }
   CTX_DATA_END;
 
-  /* note, notifier might evolve */
+  /* NOTE: notifier might evolve. */
   WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, obedit);
   DEG_id_tag_update(&obedit->id, ID_RECALC_SELECT);
   ED_outliner_select_sync_from_edit_bone_tag(C);

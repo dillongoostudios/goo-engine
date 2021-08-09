@@ -23,8 +23,10 @@
  * that benefit from accessing connectivity information.
  */
 
+#include "BLI_assert.h"
+
 /* disable holes for now,
- * these are ifdef'd because they use more memory and cant be saved in DNA currently */
+ * these are ifdef'd because they use more memory and can't be saved in DNA currently */
 // #define USE_BMESH_HOLES
 
 struct BMEdge;
@@ -37,7 +39,7 @@ struct MLoopNorSpaceArray;
 
 struct BLI_mempool;
 
-/* note: it is very important for BMHeader to start with two
+/* NOTE: it is very important for BMHeader to start with two
  * pointers. this is a requirement of mempool's method of
  * iteration.
  *
@@ -89,9 +91,9 @@ typedef struct BMHeader {
 
 BLI_STATIC_ASSERT((sizeof(BMHeader) <= 16), "BMHeader size has grown!");
 
-/* note: need some way to specify custom locations for custom data layers.  so we can
+/* NOTE: need some way to specify custom locations for custom data layers.  so we can
  * make them point directly into structs.  and some way to make it only happen to the
- * active layer, and properly update when switching active layers.*/
+ * active layer, and properly update when switching active layers. */
 
 typedef struct BMVert {
   BMHeader head;
@@ -142,7 +144,7 @@ typedef struct BMEdge {
   /**
    * Disk Cycle Pointers
    *
-   * relative data: d1 indicates indicates the next/prev
+   * relative data: d1 indicates the next/prev
    * edge around vertex v1 and d2 does the same for v2.
    */
   BMDiskLink v1_disk_link, v2_disk_link;
@@ -183,7 +185,7 @@ typedef struct BMLoop {
   struct BMFace *f;
 
   /**
-   * Other loops connected to this edge,.
+   * Other loops connected to this edge.
    *
    * This is typically use for accessing an edges faces,
    * however this is done by stepping over it's loops.
@@ -267,7 +269,7 @@ typedef struct BMFace {
   BMHeader head;
 
 #ifdef USE_BMESH_HOLES
-  int totbounds; /*total boundaries, is one plus the number of holes in the face*/
+  int totbounds; /* Total boundaries, is one plus the number of holes in the face. */
   ListBase loops;
 #else
   BMLoop *l_first;
@@ -346,7 +348,7 @@ typedef struct BMesh {
   /* Should be copy of scene select mode. */
   /* Stored in #BMEditMesh too, this is a bit confusing,
    * make sure they're in sync!
-   * Only use when the edit mesh cant be accessed - campbell */
+   * Only use when the edit mesh can't be accessed - campbell */
   short selectmode;
 
   /* ID of the shape key this bmesh came from */
@@ -545,7 +547,7 @@ typedef bool (*BMLoopPairFilterFunc)(const BMLoop *, const BMLoop *, void *user_
 #define BM_ELEM_CD_GET_FLOAT_AS_UCHAR(ele, offset) \
   (BLI_assert(offset != -1), (uchar)(BM_ELEM_CD_GET_FLOAT(ele, offset) * 255.0f))
 
-/*forward declarations*/
+/* Forward declarations. */
 
 #ifdef USE_BMESH_HOLES
 #  define BM_FACE_FIRST_LOOP(p) (((BMLoopList *)((p)->loops.first))->first)

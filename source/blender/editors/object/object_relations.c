@@ -153,8 +153,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 
     em = me->edit_mesh;
 
-    EDBM_mesh_normals_update(em);
-    BKE_editmesh_looptri_calc(em);
+    BKE_editmesh_looptri_and_normals_calc(em);
 
     /* Make sure the evaluated mesh is updated.
      *
@@ -594,7 +593,7 @@ void ED_object_parent_clear(Object *ob, const int type)
   DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
 }
 
-/* note, poll should check for editable scene */
+/* NOTE: poll should check for editable scene. */
 static int parent_clear_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -716,7 +715,7 @@ bool ED_object_parent_set(ReportList *reports,
         cu->flag |= CU_PATH | CU_FOLLOW;
         cu_eval->flag |= CU_PATH | CU_FOLLOW;
         /* force creation of path data */
-        BKE_displist_make_curveTypes(depsgraph, scene, par, false, false);
+        BKE_displist_make_curveTypes(depsgraph, scene, par, false);
       }
       else {
         cu->flag |= CU_FOLLOW;
@@ -792,8 +791,8 @@ bool ED_object_parent_set(ReportList *reports,
        * NOTE: the old (2.4x) method was to set ob->partype = PARSKEL,
        * creating the virtual modifiers.
        */
-      ob->partype = PAROBJECT;     /* Note: DNA define, not operator property. */
-      /* ob->partype = PARSKEL; */ /* Note: DNA define, not operator property. */
+      ob->partype = PAROBJECT;     /* NOTE: DNA define, not operator property. */
+      /* ob->partype = PARSKEL; */ /* NOTE: DNA define, not operator property. */
 
       /* BUT, to keep the deforms, we need a modifier,
        * and then we need to set the object that it uses
@@ -801,7 +800,7 @@ bool ED_object_parent_set(ReportList *reports,
        *   so we check this by assuming that the parent is selected too.
        */
       /* XXX currently this should only happen for meshes, curves, surfaces,
-       * and lattices - this stuff isn't available for metas yet */
+       * and lattices - this stuff isn't available for meta-balls yet. */
       if (ELEM(ob->type, OB_MESH, OB_CURVE, OB_SURF, OB_FONT, OB_LATTICE)) {
         ModifierData *md;
 
@@ -838,14 +837,14 @@ bool ED_object_parent_set(ReportList *reports,
       }
       break;
     case PAR_BONE:
-      ob->partype = PARBONE; /* Note: DNA define, not operator property. */
+      ob->partype = PARBONE; /* NOTE: DNA define, not operator property. */
       if (pchan->bone) {
         pchan->bone->flag &= ~BONE_RELATIVE_PARENTING;
         pchan_eval->bone->flag &= ~BONE_RELATIVE_PARENTING;
       }
       break;
     case PAR_BONE_RELATIVE:
-      ob->partype = PARBONE; /* Note: DNA define, not operator property. */
+      ob->partype = PARBONE; /* NOTE: DNA define, not operator property. */
       if (pchan->bone) {
         pchan->bone->flag |= BONE_RELATIVE_PARENTING;
         pchan_eval->bone->flag |= BONE_RELATIVE_PARENTING;
@@ -861,7 +860,7 @@ bool ED_object_parent_set(ReportList *reports,
       break;
     case PAR_OBJECT:
     case PAR_FOLLOW:
-      ob->partype = PAROBJECT; /* Note: DNA define, not operator property. */
+      ob->partype = PAROBJECT; /* NOTE: DNA define, not operator property. */
       break;
   }
 
@@ -1249,7 +1248,7 @@ static int parent_noinv_set_exec(bContext *C, wmOperator *op)
 
         /* set parenting type for object - object only... */
         ob->parent = par;
-        ob->partype = PAROBJECT; /* note, dna define, not operator property */
+        ob->partype = PAROBJECT; /* NOTE: DNA define, not operator property. */
       }
     }
   }
@@ -1299,7 +1298,7 @@ static const EnumPropertyItem prop_clear_track_types[] = {
     {0, NULL, 0, NULL, NULL},
 };
 
-/* note, poll should check for editable scene */
+/* NOTE: poll should check for editable scene. */
 static int object_track_clear_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -1932,7 +1931,7 @@ static void single_object_users(
 }
 
 /* not an especially efficient function, only added so the single user
- * button can be functional.*/
+ * button can be functional. */
 void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
   FOREACH_SCENE_OBJECT_BEGIN (scene, ob_iter) {
@@ -1944,7 +1943,7 @@ void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
   ob->flag |= OB_DONE;
 
   single_object_users(bmain, scene, NULL, OB_DONE, false);
-  BKE_main_id_clear_newpoins(bmain);
+  BKE_main_id_newptr_and_tag_clear(bmain);
 }
 
 static void single_obdata_users(
@@ -2023,7 +2022,7 @@ static void single_obdata_users(
             break;
           default:
             printf("ERROR %s: can't copy %s\n", __func__, id->name);
-            BLI_assert(!"This should never happen.");
+            BLI_assert_msg(0, "This should never happen.");
 
             /* We need to end the FOREACH_OBJECT_FLAG_BEGIN iterator to prevent memory leak. */
             BKE_scene_objects_iterator_end(&iter_macro);
@@ -2057,6 +2056,23 @@ static void single_object_action_users(
     if (!ID_IS_LINKED(ob)) {
       DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       BKE_animdata_copy_id_action(bmain, &ob->id);
+    }
+  }
+  FOREACH_OBJECT_FLAG_END;
+}
+
+static void single_objectdata_action_users(
+    Main *bmain, Scene *scene, ViewLayer *view_layer, View3D *v3d, const int flag)
+{
+  FOREACH_OBJECT_FLAG_BEGIN (scene, view_layer, v3d, flag, ob) {
+    if (!ID_IS_LINKED(ob) && ob->data != NULL) {
+      ID *id_obdata = (ID *)ob->data;
+      AnimData *adt = BKE_animdata_from_id(id_obdata);
+      ID *id_act = (ID *)adt->action;
+      if (id_act && id_act->us > 1) {
+        DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+        BKE_animdata_copy_id_action(bmain, id_obdata);
+      }
     }
   }
   FOREACH_OBJECT_FLAG_END;
@@ -2237,7 +2253,7 @@ static int make_local_exec(bContext *C, wmOperator *op)
   const int mode = RNA_enum_get(op->ptr, "type");
   int a;
 
-  /* Note: we (ab)use LIB_TAG_PRE_EXISTING to cherry pick which ID to make local... */
+  /* NOTE: we (ab)use LIB_TAG_PRE_EXISTING to cherry pick which ID to make local... */
   if (mode == MAKE_LOCAL_ALL) {
     ViewLayer *view_layer = CTX_data_view_layer(C);
     Collection *collection = CTX_data_collection(C);
@@ -2454,7 +2470,7 @@ static int make_override_library_exec(bContext *C, wmOperator *op)
   BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
 
   const bool success = BKE_lib_override_library_create(
-      bmain, scene, view_layer, id_root, &obact->id);
+      bmain, scene, view_layer, id_root, &obact->id, NULL);
 
   /* Remove the instance empty from this scene, the items now have an overridden collection
    * instead. */
@@ -2570,14 +2586,14 @@ static int convert_proxy_to_override_exec(bContext *C, wmOperator *op)
 
   /* Remove the instance empty from this scene, the items now have an overridden collection
    * instead. */
-  if (success && is_override_instancing_object) {
+  if (is_override_instancing_object) {
     ED_object_base_free_and_unlink(bmain, scene, ob_proxy_group);
   }
 
   DEG_id_tag_update(&CTX_data_scene(C)->id, ID_RECALC_BASE_FLAGS | ID_RECALC_COPY_ON_WRITE);
   WM_event_add_notifier(C, NC_WINDOW, NULL);
 
-  return success ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
+  return OPERATOR_FINISHED;
 }
 
 void OBJECT_OT_convert_proxy_to_override(wmOperatorType *ot)
@@ -2644,7 +2660,11 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
     single_object_action_users(bmain, scene, view_layer, v3d, flag);
   }
 
-  BKE_main_id_clear_newpoins(bmain);
+  if (RNA_boolean_get(op->ptr, "obdata_animation")) {
+    single_objectdata_action_users(bmain, scene, view_layer, v3d, flag);
+  }
+
+  BKE_main_id_newptr_and_tag_clear(bmain);
 
   WM_event_add_notifier(C, NC_WINDOW, NULL);
 
@@ -2685,8 +2705,16 @@ void OBJECT_OT_make_single_user(wmOperatorType *ot)
   RNA_def_boolean(ot->srna, "object", 0, "Object", "Make single user objects");
   RNA_def_boolean(ot->srna, "obdata", 0, "Object Data", "Make single user object data");
   RNA_def_boolean(ot->srna, "material", 0, "Materials", "Make materials local to each data-block");
-  RNA_def_boolean(
-      ot->srna, "animation", 0, "Object Animation", "Make animation data local to each object");
+  RNA_def_boolean(ot->srna,
+                  "animation",
+                  0,
+                  "Object Animation",
+                  "Make object animation data local to each object");
+  RNA_def_boolean(ot->srna,
+                  "obdata_animation",
+                  0,
+                  "Object Data Animation",
+                  "Make object data (mesh, curve etc.) animation data local to each object");
 }
 
 /** \} */

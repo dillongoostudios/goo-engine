@@ -104,20 +104,20 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
   /* -------------------------------------------------------------------- */
   /* Interpret Time (the reading functions also do some of this ) */
   if (mcmd->play_mode == MOD_MESHCACHE_PLAY_CFEA) {
-    const float cfra = BKE_scene_frame_get(scene);
+    const float ctime = BKE_scene_ctime_get(scene);
 
     switch (mcmd->time_mode) {
       case MOD_MESHCACHE_TIME_FRAME: {
-        time = cfra;
+        time = ctime;
         break;
       }
       case MOD_MESHCACHE_TIME_SECONDS: {
-        time = cfra / fps;
+        time = ctime / fps;
         break;
       }
       case MOD_MESHCACHE_TIME_FACTOR:
       default: {
-        time = cfra / fps;
+        time = ctime / fps;
         break;
       }
     }
@@ -198,11 +198,11 @@ static void meshcache_do(MeshCacheModifierData *mcmd,
           me->mloop,
           me->totvert,
 
-          (const float(*)[3])vertexCos_Source, /* from the original Mesh*/
+          (const float(*)[3])vertexCos_Source, /* From the original Mesh. */
           (const float(*)[3])vertexCos_Real,   /* the input we've been given (shape keys!) */
 
-          (const float(*)[3])vertexCos, /* the result of this modifier */
-          vertexCos_New                 /* the result of this function */
+          (const float(*)[3])vertexCos, /* The result of this modifier. */
+          vertexCos_New                 /* The result of this function. */
       );
 
       /* write the corrected locations back into the result */
@@ -389,7 +389,6 @@ ModifierTypeInfo modifierType_MeshCache = {
     /* modifyMesh */ NULL,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ NULL,

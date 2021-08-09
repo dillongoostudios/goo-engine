@@ -295,7 +295,7 @@ void GpencilExporterSVG::export_stroke_to_path(bGPDlayer *gpl,
     const float2 screen_co = gpencil_3D_point_to_2D(&pt.x);
     txt.append(std::to_string(screen_co.x) + "," + std::to_string(screen_co.y));
   }
-  /* Close patch (cyclic)*/
+  /* Close patch (cyclic). */
   if (gps->flag & GP_STROKE_CYCLIC) {
     txt.append("z");
   }
@@ -353,8 +353,8 @@ void GpencilExporterSVG::export_stroke_to_polyline(bGPDlayer *gpl,
 
 /**
  * Set color SVG string for stroke
- * \param node_gps: Stroke node
- * @param do_fill: True if the stroke is only fill
+ * \param node_gps: Stroke node.
+ * \param do_fill: True if the stroke is only fill.
  */
 void GpencilExporterSVG::color_string_set(bGPDlayer *gpl,
                                           bGPDstroke *gps,

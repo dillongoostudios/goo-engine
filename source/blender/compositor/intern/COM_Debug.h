@@ -21,10 +21,17 @@
 #include <map>
 #include <string>
 
+#include "COM_ExecutionSystem.h"
 #include "COM_NodeOperation.h"
 #include "COM_defines.h"
 
 namespace blender::compositor {
+
+static constexpr bool COM_EXPORT_GRAPHVIZ = false;
+static constexpr bool COM_GRAPHVIZ_SHOW_NODE_NAME = false;
+
+/* Saves operations results to image files. */
+static constexpr bool COM_EXPORT_OPERATION_BUFFERS = false;
 
 class Node;
 class ExecutionSystem;
@@ -41,34 +48,6 @@ class DebugInfo {
   static std::string node_name(const Node *node);
   static std::string operation_name(const NodeOperation *op);
 
-  static void convert_started();
-  static void execute_started(const ExecutionSystem *system);
-
-  static void node_added(const Node *node);
-  static void node_to_operations(const Node *node);
-  static void operation_added(const NodeOperation *operation);
-  static void operation_read_write_buffer(const NodeOperation *operation);
-
-  static void execution_group_started(const ExecutionGroup *group);
-  static void execution_group_finished(const ExecutionGroup *group);
-
-  static void graphviz(const ExecutionSystem *system);
-
-#ifdef COM_DEBUG
- protected:
-  static int graphviz_operation(const ExecutionSystem *system,
-                                NodeOperation *operation,
-                                const ExecutionGroup *group,
-                                char *str,
-                                int maxlen);
-  static int graphviz_legend_color(const char *name, const char *color, char *str, int maxlen);
-  static int graphviz_legend_line(
-      const char *name, const char *color, const char *style, char *str, int maxlen);
-  static int graphviz_legend_group(
-      const char *name, const char *color, const char *style, char *str, int maxlen);
-  static int graphviz_legend(char *str, int maxlen);
-  static bool graphviz_system(const ExecutionSystem *system, char *str, int maxlen);
-
  private:
   static int m_file_index;
   /** Map nodes to usable names for debug output. */
@@ -81,7 +60,96 @@ class DebugInfo {
   static std::string m_current_op_name;
   /** For visualizing group states. */
   static GroupStateMap m_group_states;
-#endif
+
+ public:
+  static void convert_started()
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_op_names.clear();
+    }
+  }
+
+  static void execute_started(const ExecutionSystem *system)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_file_index = 1;
+      m_group_states.clear();
+      for (ExecutionGroup *execution_group : system->m_groups) {
+        m_group_states[execution_group] = EG_WAIT;
+      }
+    }
+    if (COM_EXPORT_OPERATION_BUFFERS) {
+      delete_operation_exports();
+    }
+  };
+
+  static void node_added(const Node *node)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_node_names[node] = std::string(node->getbNode() ? node->getbNode()->name : "");
+    }
+  }
+
+  static void node_to_operations(const Node *node)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_current_node_name = m_node_names[node];
+    }
+  }
+
+  static void operation_added(const NodeOperation *operation)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_op_names[operation] = m_current_node_name;
+    }
+  };
+
+  static void operation_read_write_buffer(const NodeOperation *operation)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_current_op_name = m_op_names[operation];
+    }
+  };
+
+  static void execution_group_started(const ExecutionGroup *group)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_group_states[group] = EG_RUNNING;
+    }
+  };
+  static void execution_group_finished(const ExecutionGroup *group)
+  {
+    if (COM_EXPORT_GRAPHVIZ) {
+      m_group_states[group] = EG_FINISHED;
+    }
+  };
+
+  static void operation_rendered(const NodeOperation *op, MemoryBuffer *render)
+  {
+    /* Don't export constant operations as there are too many and it's rarely useful. */
+    if (COM_EXPORT_OPERATION_BUFFERS && render && !render->is_a_single_elem()) {
+      export_operation(op, render);
+    }
+  }
+
+  static void graphviz(const ExecutionSystem *system, StringRefNull name = "");
+
+ protected:
+  static int graphviz_operation(const ExecutionSystem *system,
+                                NodeOperation *operation,
+                                const ExecutionGroup *group,
+                                char *str,
+                                int maxlen);
+  static int graphviz_legend_color(const char *name, const char *color, char *str, int maxlen);
+  static int graphviz_legend_line(
+      const char *name, const char *color, const char *style, char *str, int maxlen);
+  static int graphviz_legend_group(
+      const char *name, const char *color, const char *style, char *str, int maxlen);
+  static int graphviz_legend(char *str, int maxlen, bool has_execution_groups);
+  static bool graphviz_system(const ExecutionSystem *system, char *str, int maxlen);
+
+  static void export_operation(const NodeOperation *op, MemoryBuffer *render);
+  static void delete_operation_exports();
 };
 
 }  // namespace blender::compositor

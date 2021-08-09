@@ -67,7 +67,7 @@ static const char *bpyunits_ucategorie_items[] = {
 /**
  * These fields are just empty placeholders, actual values get set in initializations functions.
  * This allows us to avoid many handwriting, and above all,
- * to keep all systems/categories definition stuff in ``BKE_unit.h``.
+ * to keep all systems/categories definition stuff in `BKE_unit.h`.
  */
 static PyStructSequence_Field bpyunits_systems_fields[ARRAY_SIZE(bpyunits_usystem_items)];
 static PyStructSequence_Field bpyunits_categories_fields[ARRAY_SIZE(bpyunits_ucategorie_items)];
@@ -183,7 +183,7 @@ static PyObject *bpyunits_to_value(PyObject *UNUSED(self), PyObject *args, PyObj
       "str_ref_unit",
       NULL,
   };
-  static _PyArg_Parser _parser = {"sss#|z:to_value", _keywords, 0};
+  static _PyArg_Parser _parser = {"sss#|$z:to_value", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(
           args, kw, &_parser, &usys_str, &ucat_str, &inpt, &str_len, &uref)) {
     return NULL;
@@ -260,7 +260,7 @@ static PyObject *bpyunits_to_string(PyObject *UNUSED(self), PyObject *args, PyOb
       "compatible_unit",
       NULL,
   };
-  static _PyArg_Parser _parser = {"ssd|iO&O&:to_string", _keywords, 0};
+  static _PyArg_Parser _parser = {"ssd|$iO&O&:to_string", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,

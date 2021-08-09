@@ -17,8 +17,8 @@
  * All rights reserved.
  */
 
-/** \file snap3d_gizmo.c
- *  \ingroup edgizmolib
+/** \file
+ * \ingroup edgizmolib
  *
  * \name Snap Gizmo
  *
@@ -68,7 +68,9 @@ typedef struct SnapGizmo3D {
   struct {
     int x;
     int y;
+#ifdef USE_SNAP_DETECT_FROM_KEYMAP_HACK
     short shift, ctrl, alt, oskey;
+#endif
   } last_eventstate;
 
 #ifdef USE_SNAP_DETECT_FROM_KEYMAP_HACK
@@ -99,28 +101,30 @@ static bool eventstate_has_changed(SnapGizmo3D *snap_gizmo, const wmWindowManage
   if (wm && wm->winactive) {
     const wmEvent *event = wm->winactive->eventstate;
     if ((event->x != snap_gizmo->last_eventstate.x) ||
-        (event->y != snap_gizmo->last_eventstate.y) ||
-        (event->ctrl != snap_gizmo->last_eventstate.ctrl) ||
-        (event->shift != snap_gizmo->last_eventstate.shift) ||
-        (event->alt != snap_gizmo->last_eventstate.alt) ||
-        (event->oskey != snap_gizmo->last_eventstate.oskey)) {
+        (event->y != snap_gizmo->last_eventstate.y)) {
       return true;
     }
+#ifdef USE_SNAP_DETECT_FROM_KEYMAP_HACK
+    if (!(snap_gizmo->flag & ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE)) {
+      if ((event->ctrl != snap_gizmo->last_eventstate.ctrl) ||
+          (event->shift != snap_gizmo->last_eventstate.shift) ||
+          (event->alt != snap_gizmo->last_eventstate.alt) ||
+          (event->oskey != snap_gizmo->last_eventstate.oskey)) {
+        return true;
+      }
+    }
+#endif
   }
   return false;
 }
 
 /* Copies the current eventstate. */
-static void eventstate_save(SnapGizmo3D *snap_gizmo, const wmWindowManager *wm)
+static void eventstate_save_xy(SnapGizmo3D *snap_gizmo, const wmWindowManager *wm)
 {
   if (wm && wm->winactive) {
     const wmEvent *event = wm->winactive->eventstate;
     snap_gizmo->last_eventstate.x = event->x;
     snap_gizmo->last_eventstate.y = event->y;
-    snap_gizmo->last_eventstate.ctrl = event->ctrl;
-    snap_gizmo->last_eventstate.shift = event->shift;
-    snap_gizmo->last_eventstate.alt = event->alt;
-    snap_gizmo->last_eventstate.oskey = event->oskey;
   }
 }
 
@@ -139,6 +143,12 @@ static bool invert_snap(SnapGizmo3D *snap_gizmo, const wmWindowManager *wm)
     /* Nothing has changed. */
     return snap_gizmo->invert_snap;
   }
+
+  /* Save new eventstate. */
+  snap_gizmo->last_eventstate.ctrl = event->ctrl;
+  snap_gizmo->last_eventstate.shift = event->shift;
+  snap_gizmo->last_eventstate.alt = event->alt;
+  snap_gizmo->last_eventstate.oskey = event->oskey;
 
   const int snap_on = snap_gizmo->snap_on;
 
@@ -309,9 +319,9 @@ bool ED_gizmotypes_snap_3d_invert_snap_get(struct wmGizmo *gz)
 #endif
 }
 
-bool ED_gizmotypes_snap_3d_is_enabled(wmGizmo *gz)
+bool ED_gizmotypes_snap_3d_is_enabled(const wmGizmo *gz)
 {
-  SnapGizmo3D *snap_gizmo = (SnapGizmo3D *)gz;
+  const SnapGizmo3D *snap_gizmo = (const SnapGizmo3D *)gz;
   return snap_gizmo->is_enabled;
 }
 
@@ -328,23 +338,17 @@ short ED_gizmotypes_snap_3d_update(wmGizmo *gz,
   Scene *scene = DEG_get_input_scene(depsgraph);
 
 #ifdef USE_SNAP_DETECT_FROM_KEYMAP_HACK
-  if ((snap_gizmo->flag & ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE) == 0) {
-    bool invert_snap_toggle = invert_snap(snap_gizmo, wm);
-    if (invert_snap_toggle != snap_gizmo->invert_snap) {
-      snap_gizmo->invert_snap = invert_snap_toggle;
-
-      /* Status has changed, be sure to save before early return. */
-      eventstate_save(snap_gizmo, wm);
-    }
+  if (!(snap_gizmo->flag & ED_SNAPGIZMO_TOGGLE_ALWAYS_TRUE)) {
+    snap_gizmo->invert_snap = invert_snap(snap_gizmo, wm);
 
     const ToolSettings *ts = scene->toolsettings;
-    if (invert_snap_toggle != !(ts->snap_flag & SCE_SNAP)) {
+    if (snap_gizmo->invert_snap != !(ts->snap_flag & SCE_SNAP)) {
       snap_gizmo->snap_elem = 0;
       return 0;
     }
   }
 #endif
-  eventstate_save(snap_gizmo, wm);
+  eventstate_save_xy(snap_gizmo, wm);
 
   snap_gizmo->is_enabled = true;
 
@@ -364,25 +368,39 @@ short ED_gizmotypes_snap_3d_update(wmGizmo *gz,
       snap_elements &= ~SCE_SNAP_MODE_EDGE_PERPENDICULAR;
     }
 
+    eSnapSelect snap_select = (snap_gizmo->flag & ED_SNAPGIZMO_SNAP_ONLY_ACTIVE) ?
+                                  SNAP_ONLY_ACTIVE :
+                                  SNAP_ALL;
+
+    eSnapEditType edit_mode_type = (snap_gizmo->flag & ED_SNAPGIZMO_SNAP_EDIT_GEOM_FINAL) ?
+                                       SNAP_GEOM_FINAL :
+                                   (snap_gizmo->flag & ED_SNAPGIZMO_SNAP_EDIT_GEOM_CAGE) ?
+                                       SNAP_GEOM_CAGE :
+                                       SNAP_GEOM_EDIT;
+
+    bool use_occlusion_test = (snap_gizmo->flag & ED_SNAPGIZMO_OCCLUSION_ALWAYS_TRUE) ? false :
+                                                                                        true;
+
     float dist_px = 12.0f * U.pixelsize;
 
     ED_gizmotypes_snap_3d_context_ensure(scene, region, v3d, gz);
-    snap_elem = ED_transform_snap_object_project_view3d_ex(snap_gizmo->snap_context_v3d,
-                                                           depsgraph,
-                                                           snap_elements,
-                                                           &(const struct SnapObjectParams){
-                                                               .snap_select = SNAP_ALL,
-                                                               .use_object_edit_cage = true,
-                                                               .use_occlusion_test = true,
-                                                           },
-                                                           mval_fl,
-                                                           prev_co,
-                                                           &dist_px,
-                                                           co,
-                                                           no,
-                                                           &index,
-                                                           NULL,
-                                                           NULL);
+    snap_elem = ED_transform_snap_object_project_view3d_ex(
+        snap_gizmo->snap_context_v3d,
+        depsgraph,
+        snap_elements,
+        &(const struct SnapObjectParams){
+            .snap_select = snap_select,
+            .edit_mode_type = edit_mode_type,
+            .use_occlusion_test = use_occlusion_test,
+        },
+        mval_fl,
+        prev_co,
+        &dist_px,
+        co,
+        no,
+        &index,
+        NULL,
+        NULL);
   }
 
   if (snap_elem == 0) {
@@ -596,8 +614,8 @@ static void snap_gizmo_draw(const bContext *C, wmGizmo *gz)
 
   GPU_line_width(1.0f);
 
-  const float *prev_point = snap_gizmo_snap_elements(snap_gizmo) &
-                                    SCE_SNAP_MODE_EDGE_PERPENDICULAR ?
+  const float *prev_point = (snap_gizmo_snap_elements(snap_gizmo) &
+                             SCE_SNAP_MODE_EDGE_PERPENDICULAR) ?
                                 snap_gizmo->prevpoint :
                                 NULL;
 

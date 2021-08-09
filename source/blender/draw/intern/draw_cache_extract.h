@@ -24,6 +24,10 @@
 
 struct TaskGraph;
 
+#include "GPU_batch.h"
+#include "GPU_index_buffer.h"
+#include "GPU_vertex_buffer.h"
+
 /* Vertex Group Selection and display options */
 typedef struct DRW_MeshWeightState {
   int defgroup_active;
@@ -32,7 +36,7 @@ typedef struct DRW_MeshWeightState {
   short flags;
   char alert_mode;
 
-  /* Set of all selected bones for Multipaint. */
+  /* Set of all selected bones for Multi-paint. */
   bool *defgroup_sel; /* [defgroup_len] */
   int defgroup_sel_count;
 
@@ -64,30 +68,36 @@ typedef struct DRW_MeshCDMask {
  * bit-wise and atomic operations are used to compare and update the struct.
  * See `mesh_cd_layers_type_*` functions. */
 BLI_STATIC_ASSERT(sizeof(DRW_MeshCDMask) <= sizeof(uint64_t), "DRW_MeshCDMask exceeds 64 bits")
-
 typedef enum eMRIterType {
   MR_ITER_LOOPTRI = 1 << 0,
   MR_ITER_POLY = 1 << 1,
   MR_ITER_LEDGE = 1 << 2,
   MR_ITER_LVERT = 1 << 3,
 } eMRIterType;
+ENUM_OPERATORS(eMRIterType, MR_ITER_LVERT)
 
 typedef enum eMRDataType {
+  MR_DATA_NONE = 0,
   MR_DATA_POLY_NOR = 1 << 1,
   MR_DATA_LOOP_NOR = 1 << 2,
   MR_DATA_LOOPTRI = 1 << 3,
-  /** Force loop normals calculation.  */
-  MR_DATA_TAN_LOOP_NOR = 1 << 4,
+  MR_DATA_LOOSE_GEOM = 1 << 4,
+  /** Force loop normals calculation. */
+  MR_DATA_TAN_LOOP_NOR = 1 << 5,
+  MR_DATA_POLYS_SORTED = 1 << 6,
 } eMRDataType;
+ENUM_OPERATORS(eMRDataType, MR_DATA_POLYS_SORTED)
 
-typedef enum eMRExtractType {
-  MR_EXTRACT_BMESH,
-  MR_EXTRACT_MAPPED,
-  MR_EXTRACT_MESH,
-} eMRExtractType;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-BLI_INLINE int mesh_render_mat_len_get(Mesh *me)
+BLI_INLINE int mesh_render_mat_len_get(const Mesh *me)
 {
+  /* In edit mode, the displayed mesh is stored in the edit-mesh. */
+  if (me->edit_mesh && me->edit_mesh->mesh_eval_final) {
+    return MAX2(1, me->edit_mesh->mesh_eval_final->totcol);
+  }
   return MAX2(1, me->totcol);
 }
 
@@ -146,40 +156,25 @@ typedef struct MeshBufferCache {
   GPUIndexBuf **tris_per_mat;
 } MeshBufferCache;
 
-typedef enum DRWBatchFlag {
-  MBC_SURFACE = (1 << 0),
-  MBC_SURFACE_WEIGHTS = (1 << 1),
-  MBC_EDIT_TRIANGLES = (1 << 2),
-  MBC_EDIT_VERTICES = (1 << 3),
-  MBC_EDIT_EDGES = (1 << 4),
-  MBC_EDIT_VNOR = (1 << 5),
-  MBC_EDIT_LNOR = (1 << 6),
-  MBC_EDIT_FACEDOTS = (1 << 7),
-  MBC_EDIT_MESH_ANALYSIS = (1 << 8),
-  MBC_EDITUV_FACES_STRETCH_AREA = (1 << 9),
-  MBC_EDITUV_FACES_STRETCH_ANGLE = (1 << 10),
-  MBC_EDITUV_FACES = (1 << 11),
-  MBC_EDITUV_EDGES = (1 << 12),
-  MBC_EDITUV_VERTS = (1 << 13),
-  MBC_EDITUV_FACEDOTS = (1 << 14),
-  MBC_EDIT_SELECTION_VERTS = (1 << 15),
-  MBC_EDIT_SELECTION_EDGES = (1 << 16),
-  MBC_EDIT_SELECTION_FACES = (1 << 17),
-  MBC_EDIT_SELECTION_FACEDOTS = (1 << 18),
-  MBC_ALL_VERTS = (1 << 19),
-  MBC_ALL_EDGES = (1 << 20),
-  MBC_LOOSE_EDGES = (1 << 21),
-  MBC_EDGE_DETECTION = (1 << 22),
-  MBC_WIRE_EDGES = (1 << 23),
-  MBC_WIRE_LOOPS = (1 << 24),
-  MBC_WIRE_LOOPS_UVS = (1 << 25),
-  MBC_SKIN_ROOTS = (1 << 26),
-  MBC_SCULPT_OVERLAYS = (1 << 27),
-} DRWBatchFlag;
+/**
+ * Data that are kept around between extractions to reduce rebuilding time.
+ *
+ * - Loose geometry.
+ */
+typedef struct MeshBufferExtractionCache {
+  struct {
+    int edge_len;
+    int vert_len;
+    int *verts;
+    int *edges;
+  } loose_geom;
 
-#define MBC_EDITUV \
-  (MBC_EDITUV_FACES_STRETCH_AREA | MBC_EDITUV_FACES_STRETCH_ANGLE | MBC_EDITUV_FACES | \
-   MBC_EDITUV_EDGES | MBC_EDITUV_VERTS | MBC_EDITUV_FACEDOTS | MBC_WIRE_LOOPS_UVS)
+  struct {
+    int *tri_first_index;
+    int *mat_tri_len;
+    int visible_tri_len;
+  } poly_sorted;
+} MeshBufferExtractionCache;
 
 #define FOREACH_MESH_BUFFER_CACHE(batch_cache, mbc) \
   for (MeshBufferCache *mbc = &batch_cache->final; \
@@ -190,6 +185,10 @@ typedef enum DRWBatchFlag {
 
 typedef struct MeshBatchCache {
   MeshBufferCache final, cage, uv_cage;
+
+  MeshBufferExtractionCache final_extraction_cache;
+  MeshBufferExtractionCache cage_extraction_cache;
+  MeshBufferExtractionCache uv_cage_extraction_cache;
 
   struct {
     /* Surfaces / Render */
@@ -229,8 +228,8 @@ typedef struct MeshBatchCache {
 
   GPUBatch **surface_per_mat;
 
-  DRWBatchFlag batch_requested;
-  DRWBatchFlag batch_ready;
+  uint32_t batch_requested; /* DRWBatchFlag */
+  uint32_t batch_ready;     /* DRWBatchFlag */
 
   /* settings to determine if cache is invalid */
   int edge_len;
@@ -260,9 +259,55 @@ typedef struct MeshBatchCache {
   bool no_loose_wire;
 } MeshBatchCache;
 
+#define MBC_BATCH_LEN (sizeof(((MeshBatchCache){0}).batch) / sizeof(void *))
+#define MBC_VBO_LEN (sizeof(((MeshBufferCache){0}).vbo) / sizeof(void *))
+#define MBC_IBO_LEN (sizeof(((MeshBufferCache){0}).ibo) / sizeof(void *))
+
+#define MBC_BATCH_INDEX(batch_name) \
+  ((offsetof(MeshBatchCache, batch_name) - offsetof(MeshBatchCache, batch)) / sizeof(void *))
+
+typedef enum DRWBatchFlag {
+  MBC_SURFACE = (1u << MBC_BATCH_INDEX(batch.surface)),
+  MBC_SURFACE_WEIGHTS = (1u << MBC_BATCH_INDEX(batch.surface_weights)),
+  MBC_EDIT_TRIANGLES = (1u << MBC_BATCH_INDEX(batch.edit_triangles)),
+  MBC_EDIT_VERTICES = (1u << MBC_BATCH_INDEX(batch.edit_vertices)),
+  MBC_EDIT_EDGES = (1u << MBC_BATCH_INDEX(batch.edit_edges)),
+  MBC_EDIT_VNOR = (1u << MBC_BATCH_INDEX(batch.edit_vnor)),
+  MBC_EDIT_LNOR = (1u << MBC_BATCH_INDEX(batch.edit_lnor)),
+  MBC_EDIT_FACEDOTS = (1u << MBC_BATCH_INDEX(batch.edit_fdots)),
+  MBC_EDIT_MESH_ANALYSIS = (1u << MBC_BATCH_INDEX(batch.edit_mesh_analysis)),
+  MBC_SKIN_ROOTS = (1u << MBC_BATCH_INDEX(batch.edit_skin_roots)),
+  MBC_EDITUV_FACES_STRETCH_AREA = (1u << MBC_BATCH_INDEX(batch.edituv_faces_stretch_area)),
+  MBC_EDITUV_FACES_STRETCH_ANGLE = (1u << MBC_BATCH_INDEX(batch.edituv_faces_stretch_angle)),
+  MBC_EDITUV_FACES = (1u << MBC_BATCH_INDEX(batch.edituv_faces)),
+  MBC_EDITUV_EDGES = (1u << MBC_BATCH_INDEX(batch.edituv_edges)),
+  MBC_EDITUV_VERTS = (1u << MBC_BATCH_INDEX(batch.edituv_verts)),
+  MBC_EDITUV_FACEDOTS = (1u << MBC_BATCH_INDEX(batch.edituv_fdots)),
+  MBC_EDIT_SELECTION_VERTS = (1u << MBC_BATCH_INDEX(batch.edit_selection_verts)),
+  MBC_EDIT_SELECTION_EDGES = (1u << MBC_BATCH_INDEX(batch.edit_selection_edges)),
+  MBC_EDIT_SELECTION_FACES = (1u << MBC_BATCH_INDEX(batch.edit_selection_faces)),
+  MBC_EDIT_SELECTION_FACEDOTS = (1u << MBC_BATCH_INDEX(batch.edit_selection_fdots)),
+  MBC_ALL_VERTS = (1u << MBC_BATCH_INDEX(batch.all_verts)),
+  MBC_ALL_EDGES = (1u << MBC_BATCH_INDEX(batch.all_edges)),
+  MBC_LOOSE_EDGES = (1u << MBC_BATCH_INDEX(batch.loose_edges)),
+  MBC_EDGE_DETECTION = (1u << MBC_BATCH_INDEX(batch.edge_detection)),
+  MBC_WIRE_EDGES = (1u << MBC_BATCH_INDEX(batch.wire_edges)),
+  MBC_WIRE_LOOPS = (1u << MBC_BATCH_INDEX(batch.wire_loops)),
+  MBC_WIRE_LOOPS_UVS = (1u << MBC_BATCH_INDEX(batch.wire_loops_uvs)),
+  MBC_SCULPT_OVERLAYS = (1u << MBC_BATCH_INDEX(batch.sculpt_overlays)),
+} DRWBatchFlag;
+
+BLI_STATIC_ASSERT(MBC_BATCH_INDEX(surface_per_mat) < 32,
+                  "Number of batches exceeded the limit of bit fields");
+
+#define MBC_EDITUV \
+  (MBC_EDITUV_FACES_STRETCH_AREA | MBC_EDITUV_FACES_STRETCH_ANGLE | MBC_EDITUV_FACES | \
+   MBC_EDITUV_EDGES | MBC_EDITUV_VERTS | MBC_EDITUV_FACEDOTS | MBC_WIRE_LOOPS_UVS)
+
 void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
                                         MeshBatchCache *cache,
-                                        MeshBufferCache mbc,
+                                        MeshBufferCache *mbc,
+                                        MeshBufferExtractionCache *extraction_cache,
                                         Mesh *me,
                                         const bool is_editmode,
                                         const bool is_paint_mode,
@@ -271,7 +316,10 @@ void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
                                         const bool do_final,
                                         const bool do_uvedit,
                                         const bool use_subsurf_fdots,
-                                        const DRW_MeshCDMask *cd_layer_used,
                                         const Scene *scene,
                                         const ToolSettings *ts,
                                         const bool use_hide);
+
+#ifdef __cplusplus
+}
+#endif

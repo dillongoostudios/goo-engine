@@ -41,6 +41,7 @@
 #include "BKE_gpencil_geom.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
+#include "BKE_scene.h"
 
 #include "UI_view2d.h"
 
@@ -69,25 +70,28 @@ GpencilIO::GpencilIO(const GpencilIOParams *iparams)
   cfra_ = iparams->frame_cur;
 
   /* Calculate camera matrix. */
-  prepare_camera_params(iparams);
+  prepare_camera_params(scene_, iparams);
 }
 
-void GpencilIO::prepare_camera_params(const GpencilIOParams *iparams)
+void GpencilIO::prepare_camera_params(Scene *scene, const GpencilIOParams *iparams)
 {
   params_ = *iparams;
   const bool is_pdf = params_.mode == GP_EXPORT_TO_PDF;
   const bool any_camera = (params_.v3d->camera != nullptr);
   const bool force_camera_view = is_pdf && any_camera;
 
+  /* Ensure camera switch is applied. */
+  BKE_scene_camera_switch_update(scene);
+
   /* Calculate camera matrix. */
-  Object *cam_ob = params_.v3d->camera;
+  Object *cam_ob = scene->camera;
   if (cam_ob != nullptr) {
     /* Set up parameters. */
     CameraParams params;
     BKE_camera_params_init(&params);
     BKE_camera_params_from_object(&params, cam_ob);
 
-    /* Compute matrix, viewplane, .. */
+    /* Compute matrix, view-plane, etc. */
     RenderData *rd = &scene_->r;
     BKE_camera_params_compute_viewplane(&params, rd->xsch, rd->ysch, rd->xasp, rd->yasp);
     BKE_camera_params_compute_matrix(&params);
@@ -96,11 +100,9 @@ void GpencilIO::prepare_camera_params(const GpencilIOParams *iparams)
     invert_m4_m4(viewmat, cam_ob->obmat);
 
     mul_m4_m4m4(persmat_, params.winmat, viewmat);
-    is_ortho_ = params.is_ortho;
   }
   else {
     unit_m4(persmat_);
-    is_ortho_ = false;
   }
 
   winx_ = params_.region->winx;
@@ -125,7 +127,6 @@ void GpencilIO::prepare_camera_params(const GpencilIOParams *iparams)
   }
   else {
     is_camera_ = false;
-    is_ortho_ = false;
     /* Calc selected object boundbox. Need set initial value to some variables. */
     camera_ratio_ = 1.0f;
     offset_.x = 0.0f;
@@ -244,19 +245,14 @@ bool GpencilIO::gpencil_3D_point_to_screen_space(const float3 co, float2 &r_co)
 }
 
 /** Convert to render space. */
-float2 GpencilIO::gpencil_3D_point_to_render_space(const float3 co, const bool is_ortho)
+float2 GpencilIO::gpencil_3D_point_to_render_space(const float3 co)
 {
   float3 parent_co = diff_mat_ * co;
-  mul_m4_v3(persmat_, parent_co);
-
-  if (!is_ortho) {
-    parent_co.x = parent_co.x / max_ff(FLT_MIN, parent_co.z);
-    parent_co.y = parent_co.y / max_ff(FLT_MIN, parent_co.z);
-  }
 
   float2 r_co;
-  r_co.x = (parent_co.x + 1.0f) / 2.0f * (float)render_x_;
-  r_co.y = (parent_co.y + 1.0f) / 2.0f * (float)render_y_;
+  mul_v2_project_m4_v3(&r_co.x, persmat_, &parent_co.x);
+  r_co.x = (r_co.x + 1.0f) / 2.0f * (float)render_x_;
+  r_co.y = (r_co.y + 1.0f) / 2.0f * (float)render_y_;
 
   /* Invert X axis. */
   if (invert_axis_[0]) {
@@ -275,7 +271,7 @@ float2 GpencilIO::gpencil_3D_point_to_2D(const float3 co)
 {
   const bool is_camera = (bool)(rv3d_->persp == RV3D_CAMOB);
   if (is_camera) {
-    return gpencil_3D_point_to_render_space(co, is_orthographic());
+    return gpencil_3D_point_to_render_space(co);
   }
   float2 result;
   gpencil_3D_point_to_screen_space(co, result);
@@ -340,11 +336,6 @@ float GpencilIO::stroke_average_opacity_get()
 bool GpencilIO::is_camera_mode()
 {
   return is_camera_;
-}
-
-bool GpencilIO::is_orthographic()
-{
-  return is_ortho_;
 }
 
 /* Calculate selected strokes boundbox. */

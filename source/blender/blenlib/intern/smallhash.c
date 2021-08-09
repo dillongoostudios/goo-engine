@@ -34,11 +34,11 @@
  * Otherwise #GHash should be used instead.
  *
  * #SmallHashEntry.key
- * - ``SMHASH_KEY_UNUSED`` means the key in the cell has not been initialized.
+ * - `SMHASH_KEY_UNUSED` means the key in the cell has not been initialized.
  *
  * #SmallHashEntry.val
- * - ``SMHASH_CELL_UNUSED`` means this cell is inside a key series.
- * - ``SMHASH_CELL_FREE`` means this cell terminates a key series.
+ * - `SMHASH_CELL_UNUSED` means this cell is inside a key series.
+ * - `SMHASH_CELL_FREE` means this cell terminates a key series.
  *
  * Note that the values and keys are often pointers or index values,
  * use the maximum values to avoid real pointers colliding with magic numbers.
@@ -124,7 +124,7 @@ BLI_INLINE SmallHashEntry *smallhash_lookup(const SmallHash *sh, const uintptr_t
 
   BLI_assert(key != SMHASH_KEY_UNUSED);
 
-  /* note: there are always more buckets than entries,
+  /* NOTE: there are always more buckets than entries,
    * so we know there will always be a free bucket if the key isn't found. */
   for (e = &sh->buckets[h % sh->nbuckets]; e->val != SMHASH_CELL_FREE;
        h = SMHASH_NEXT(h, hoff), e = &sh->buckets[h % sh->nbuckets]) {
@@ -353,8 +353,8 @@ void **BLI_smallhash_iternew_p(const SmallHash *sh, SmallHashIter *iter, uintptr
 /** \name Debugging & Introspection
  * \{ */
 
-/* note, this was called _print_smhash in knifetool.c
- * it may not be intended for general use - campbell */
+/* NOTE(campbell): this was called _print_smhash in knifetool.c
+ * it may not be intended for general use. */
 #if 0
 void BLI_smallhash_print(SmallHash *sh)
 {

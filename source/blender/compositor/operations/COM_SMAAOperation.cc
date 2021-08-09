@@ -19,6 +19,7 @@
  */
 
 #include "COM_SMAAOperation.h"
+#include "BKE_node.h"
 #include "BLI_math.h"
 #include "COM_SMAAAreaTexture.h"
 
@@ -36,14 +37,14 @@ namespace blender::compositor {
  *
  *   http://www.iryoku.com/smaa/
  *
- * This file is based on smaa-cpp:
+ * This file is based on SMAA-CPP:
  *
  *   https://github.com/iRi-E/smaa-cpp
  *
  * Currently only SMAA 1x mode is provided, so the operation will be done
- * with no spatial multisampling nor temporal supersampling.
+ * with no spatial multi-sampling nor temporal super-sampling.
  *
- * Note: This program assumes the screen coordinates are DirectX style, so
+ * NOTE: This program assumes the screen coordinates are DirectX style, so
  * the vertical direction is upside-down. "top" and "bottom" actually mean
  * bottom and top, respectively.
  */
@@ -166,8 +167,8 @@ SMAAEdgeDetectionOperation::SMAAEdgeDetectionOperation()
   this->flags.complex = true;
   this->m_imageReader = nullptr;
   this->m_valueReader = nullptr;
-  this->m_threshold = 0.1f;
-  this->m_contrast_limit = 2.0f;
+  this->setThreshold(CMP_DEFAULT_SMAA_THRESHOLD);
+  this->setLocalContrastAdaptationFactor(CMP_DEFAULT_SMAA_CONTRAST_LIMIT);
 }
 
 void SMAAEdgeDetectionOperation::initExecution()
@@ -297,7 +298,7 @@ SMAABlendingWeightCalculationOperation::SMAABlendingWeightCalculationOperation()
   this->addOutputSocket(DataType::Color);
   this->flags.complex = true;
   this->m_imageReader = nullptr;
-  this->m_corner_rounding = 25;
+  this->setCornerRounding(CMP_DEFAULT_SMAA_CORNER_ROUNDING);
 }
 
 void *SMAABlendingWeightCalculationOperation::initializeTileData(rcti *rect)
@@ -332,7 +333,7 @@ void SMAABlendingWeightCalculationOperation::executePixel(float output[4],
     /* in one of the boundaries is enough. */
     calculateDiagWeights(x, y, edges, output);
 
-    /* We give priority to diagonals, so if we find a diagonal we skip  */
+    /* We give priority to diagonals, so if we find a diagonal we skip. */
     /* horizontal/vertical processing. */
     if (!is_zero_v2(output)) {
       return;

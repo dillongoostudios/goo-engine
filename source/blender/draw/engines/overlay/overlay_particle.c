@@ -174,7 +174,7 @@ void OVERLAY_particle_cache_populate(OVERLAY_Data *vedata, Object *ob)
     int draw_as = (part->draw_as == PART_DRAW_REND) ? part->ren_as : part->draw_as;
 
     if (part->type == PART_HAIR) {
-      /* Hairs should have been rendered by the render engine.*/
+      /* Hairs should have been rendered by the render engine. */
       continue;
     }
 
@@ -186,7 +186,7 @@ void OVERLAY_particle_cache_populate(OVERLAY_Data *vedata, Object *ob)
       /* TODO(fclem): Here would be a good place for preemptive culling. */
 
       /* NOTE(fclem): Is color even useful in our modern context? */
-      Material *ma = BKE_object_material_get(ob, part->omat);
+      Material *ma = BKE_object_material_get_eval(ob, part->omat);
       float color[4] = {0.6f, 0.6f, 0.6f, part->draw_size};
       if (ma != NULL) {
         copy_v3_v3(color, &ma->r);

@@ -604,6 +604,55 @@ TEST(map, GenericAlgorithms)
   EXPECT_EQ(std::count(map.keys().begin(), map.keys().end(), 7), 1);
 }
 
+TEST(map, AddAsVariadic)
+{
+  Map<int, StringRef> map;
+  map.add_as(3, "hello", 2);
+  map.add_as(2, "test", 1);
+  EXPECT_EQ(map.lookup(3), "he");
+  EXPECT_EQ(map.lookup(2), "t");
+}
+
+TEST(map, RemoveDuringIteration)
+{
+  Map<int, int> map;
+  map.add(2, 1);
+  map.add(5, 2);
+  map.add(1, 2);
+  map.add(6, 0);
+  map.add(3, 3);
+
+  EXPECT_EQ(map.size(), 5);
+
+  using Iter = Map<int, int>::MutableItemIterator;
+  Iter begin = map.items().begin();
+  Iter end = map.items().end();
+  for (Iter iter = begin; iter != end; ++iter) {
+    Map<int, int>::MutableItem item = *iter;
+    if (item.value == 2) {
+      map.remove(iter);
+    }
+  }
+
+  EXPECT_EQ(map.size(), 3);
+  EXPECT_EQ(map.lookup(2), 1);
+  EXPECT_EQ(map.lookup(6), 0);
+  EXPECT_EQ(map.lookup(3), 3);
+}
+
+TEST(map, LookupKey)
+{
+  Map<std::string, int> map;
+  map.add("a", 0);
+  map.add("b", 1);
+  map.add("c", 2);
+  EXPECT_EQ(map.lookup_key("a"), "a");
+  EXPECT_EQ(map.lookup_key_as("c"), "c");
+  EXPECT_EQ(map.lookup_key_ptr_as("d"), nullptr);
+  EXPECT_EQ(map.lookup_key_ptr_as("b")->size(), 1);
+  EXPECT_EQ(map.lookup_key_ptr("a"), map.lookup_key_ptr_as("a"));
+}
+
 /**
  * Set this to 1 to activate the benchmark. It is disabled by default, because it prints a lot.
  */

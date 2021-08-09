@@ -158,7 +158,7 @@ static void metaball_blend_read_data(BlendDataReader *reader, ID *id)
   mb->editelems = NULL;
   /* Must always be cleared (meta's don't have their own edit-data). */
   mb->needs_flush_to_id = 0;
-  /*  mb->edit_elems.first= mb->edit_elems.last= NULL;*/
+  // mb->edit_elems.first = mb->edit_elems.last = NULL;
   mb->lastelem = NULL;
   mb->batch_cache = NULL;
 }
@@ -559,7 +559,7 @@ bool BKE_mball_minmax_ex(
         copy_v3_v3(centroid, &ml->x);
       }
 
-      /* TODO, non circle shapes cubes etc, probably nobody notices - campbell */
+      /* TODO(campbell): non circle shapes cubes etc, probably nobody notices. */
       for (int i = -1; i != 3; i += 2) {
         copy_v3_v3(vec, centroid);
         add_v3_fl(vec, scale_mb * i);

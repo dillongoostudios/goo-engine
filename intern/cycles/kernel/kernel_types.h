@@ -182,9 +182,8 @@ CCL_NAMESPACE_BEGIN
 #  undef __SHADER_RAYTRACE__
 #endif
 
-/* Features that enable others */
-#ifdef WITH_CYCLES_DEBUG
-#  define __KERNEL_DEBUG__
+#ifdef WITH_CYCLES_DEBUG_NAN
+#  define __KERNEL_DEBUG_NAN__
 #endif
 
 #if defined(__SUBSURFACE__) || defined(__SHADER_RAYTRACE__)
@@ -302,7 +301,7 @@ enum PathRayFlag {
   PATH_RAY_DIFFUSE_ANCESTOR = (1 << 15),
   /* Single pass has been written. */
   PATH_RAY_SINGLE_PASS_DONE = (1 << 16),
-  /* Ray is behind a shadow catcher .*/
+  /* Ray is behind a shadow catcher. */
   PATH_RAY_SHADOW_CATCHER = (1 << 17),
   /* Store shadow data for shadow catcher or denoising. */
   PATH_RAY_STORE_SHADOW_INFO = (1 << 18),
@@ -356,12 +355,6 @@ typedef enum PassType {
   PASS_MATERIAL_ID,
   PASS_MOTION,
   PASS_MOTION_WEIGHT,
-#ifdef __KERNEL_DEBUG__
-  PASS_BVH_TRAVERSED_NODES,
-  PASS_BVH_TRAVERSED_INSTANCES,
-  PASS_BVH_INTERSECTIONS,
-  PASS_RAY_BOUNCES,
-#endif
   PASS_RENDER_TIME,
   PASS_CRYPTOMATTE,
   PASS_AOV_COLOR,
@@ -465,18 +458,6 @@ typedef enum DenoiseFlag {
   DENOISING_CLEAN_ALL_PASSES = (1 << 6) - 1,
 } DenoiseFlag;
 
-#ifdef __KERNEL_DEBUG__
-/* NOTE: This is a runtime-only struct, alignment is not
- * really important here.
- */
-typedef struct DebugData {
-  int num_bvh_traversed_nodes;
-  int num_bvh_traversed_instances;
-  int num_bvh_intersections;
-  int num_ray_bounces;
-} DebugData;
-#endif
-
 typedef ccl_addr_space struct PathRadianceState {
 #ifdef __PASSES__
   float3 diffuse;
@@ -552,10 +533,6 @@ typedef ccl_addr_space struct PathRadiance {
   float3 denoising_albedo;
   float denoising_depth;
 #endif /* __DENOISING_FEATURES__ */
-
-#ifdef __KERNEL_DEBUG__
-  DebugData debug_data;
-#endif /* __KERNEL_DEBUG__ */
 } PathRadiance;
 
 typedef struct BsdfEval {
@@ -671,12 +648,6 @@ typedef struct Intersection {
   int prim;
   int object;
   int type;
-
-#ifdef __KERNEL_DEBUG__
-  int num_traversed_nodes;
-  int num_traversed_instances;
-  int num_intersections;
-#endif
 } Intersection;
 
 /* Primitives */
@@ -689,22 +660,24 @@ typedef enum PrimitiveType {
   PRIMITIVE_MOTION_CURVE_THICK = (1 << 3),
   PRIMITIVE_CURVE_RIBBON = (1 << 4),
   PRIMITIVE_MOTION_CURVE_RIBBON = (1 << 5),
+  PRIMITIVE_VOLUME = (1 << 6),
   /* Lamp primitive is not included below on purpose,
    * since it is no real traceable primitive.
    */
-  PRIMITIVE_LAMP = (1 << 6),
+  PRIMITIVE_LAMP = (1 << 7),
 
   PRIMITIVE_ALL_TRIANGLE = (PRIMITIVE_TRIANGLE | PRIMITIVE_MOTION_TRIANGLE),
   PRIMITIVE_ALL_CURVE = (PRIMITIVE_CURVE_THICK | PRIMITIVE_MOTION_CURVE_THICK |
                          PRIMITIVE_CURVE_RIBBON | PRIMITIVE_MOTION_CURVE_RIBBON),
+  PRIMITIVE_ALL_VOLUME = (PRIMITIVE_VOLUME),
   PRIMITIVE_ALL_MOTION = (PRIMITIVE_MOTION_TRIANGLE | PRIMITIVE_MOTION_CURVE_THICK |
                           PRIMITIVE_MOTION_CURVE_RIBBON),
-  PRIMITIVE_ALL = (PRIMITIVE_ALL_TRIANGLE | PRIMITIVE_ALL_CURVE),
+  PRIMITIVE_ALL = (PRIMITIVE_ALL_TRIANGLE | PRIMITIVE_ALL_CURVE | PRIMITIVE_ALL_VOLUME),
 
   /* Total number of different traceable primitives.
    * NOTE: This is an actual value, not a bitflag.
    */
-  PRIMITIVE_NUM_TOTAL = 6,
+  PRIMITIVE_NUM_TOTAL = 7,
 } PrimitiveType;
 
 #define PRIMITIVE_PACK_SEGMENT(type, segment) ((segment << PRIMITIVE_NUM_TOTAL) | (type))
@@ -891,6 +864,8 @@ enum ShaderDataFlag {
   SD_HAS_CONSTANT_EMISSION = (1 << 27),
   /* Needs to access attributes for volume rendering */
   SD_NEED_VOLUME_ATTRIBUTES = (1 << 28),
+  /* Shader has emission */
+  SD_HAS_EMISSION = (1 << 29),
 
   SD_SHADER_FLAGS = (SD_USE_MIS | SD_HAS_TRANSPARENT_SHADOW | SD_HAS_VOLUME | SD_HAS_ONLY_VOLUME |
                      SD_HETEROGENEOUS_VOLUME | SD_HAS_BSSRDF_BUMP | SD_VOLUME_EQUIANGULAR |
@@ -1261,13 +1236,6 @@ typedef struct KernelFilm {
   int pass_bake_differential;
   int pad;
 
-#ifdef __KERNEL_DEBUG__
-  int pass_bvh_traversed_nodes;
-  int pass_bvh_traversed_instances;
-  int pass_bvh_intersections;
-  int pass_ray_bounces;
-#endif
-
   /* viewport rendering options */
   int display_pass_stride;
   int display_pass_components;
@@ -1477,7 +1445,8 @@ typedef struct KernelObject {
   float cryptomatte_object;
   float cryptomatte_asset;
 
-  float shadow_terminator_offset;
+  float shadow_terminator_shading_offset;
+  float shadow_terminator_geometry_offset;
   float pad1, pad2, pad3;
 } KernelObject;
 static_assert_align(KernelObject, 16);

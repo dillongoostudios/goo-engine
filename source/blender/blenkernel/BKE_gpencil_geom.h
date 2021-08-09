@@ -90,7 +90,7 @@ typedef struct GPencilPointCoordinates {
   float pressure;
 } GPencilPointCoordinates;
 
-int BKE_gpencil_stroke_point_count(struct bGPdata *gpd);
+int BKE_gpencil_stroke_point_count(const struct bGPdata *gpd);
 void BKE_gpencil_point_coords_get(struct bGPdata *gpd, GPencilPointCoordinates *elem_data);
 void BKE_gpencil_point_coords_apply(struct bGPdata *gpd, const GPencilPointCoordinates *elem_data);
 void BKE_gpencil_point_coords_apply_with_mat4(struct bGPdata *gpd,
@@ -111,7 +111,10 @@ void BKE_gpencil_dissolve_points(struct bGPdata *gpd,
                                  struct bGPDstroke *gps,
                                  const short tag);
 
-bool BKE_gpencil_stroke_stretch(struct bGPDstroke *gps, const float dist, const float tip_length);
+bool BKE_gpencil_stroke_stretch(struct bGPDstroke *gps,
+                                const float dist,
+                                const float overshoot_fac,
+                                const short mode);
 bool BKE_gpencil_stroke_trim_points(struct bGPDstroke *gps,
                                     const int index_from,
                                     const int index_to);
@@ -135,7 +138,7 @@ bool BKE_gpencil_stroke_split(struct bGPdata *gpd,
                               struct bGPDstroke *gps,
                               const int before_index,
                               struct bGPDstroke **remaining_gps);
-bool BKE_gpencil_stroke_shrink(struct bGPDstroke *gps, const float dist);
+bool BKE_gpencil_stroke_shrink(struct bGPDstroke *gps, const float dist, const short mode);
 
 float BKE_gpencil_stroke_length(const struct bGPDstroke *gps, bool use_3d);
 float BKE_gpencil_stroke_segment_length(const struct bGPDstroke *gps,

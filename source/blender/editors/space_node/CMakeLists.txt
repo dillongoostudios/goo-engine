@@ -24,6 +24,7 @@ set(INC
   ../../compositor
   ../../depsgraph
   ../../draw
+  ../../functions
   ../../gpu
   ../../imbuf
   ../../makesdna
@@ -37,20 +38,19 @@ set(INC
 
 
 set(SRC
-  drawnode.c
-  node_add.c
-  node_buttons.c
+  drawnode.cc
+  node_add.cc
   node_draw.cc
-  node_edit.c
+  node_edit.cc
   node_geometry_attribute_search.cc
   node_gizmo.c
-  node_group.c
+  node_group.cc
   node_ops.c
-  node_relationships.c
-  node_select.c
-  node_templates.c
-  node_toolbar.c
-  node_view.c
+  node_relationships.cc
+  node_select.cc
+  node_templates.cc
+  node_toolbar.cc
+  node_view.cc
   space_node.c
 
   node_intern.h
@@ -76,6 +76,22 @@ endif()
 
 if(WITH_OPENSUBDIV)
   add_definitions(-DWITH_OPENSUBDIV)
+endif()
+
+if(WITH_TBB)
+  add_definitions(-DWITH_TBB)
+  if(WIN32)
+    # TBB includes Windows.h which will define min/max macros
+    # that will collide with the stl versions.
+    add_definitions(-DNOMINMAX)
+  endif()
+  list(APPEND INC_SYS
+    ${TBB_INCLUDE_DIRS}
+  )
+
+  list(APPEND LIB
+    ${TBB_LIBRARIES}
+  )
 endif()
 
 blender_add_lib(bf_editor_space_node "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

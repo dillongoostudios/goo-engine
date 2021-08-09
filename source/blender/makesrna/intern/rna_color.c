@@ -650,7 +650,7 @@ static void rna_ColorManagedColorspaceSettings_reload_update(Main *bmain,
           seq->strip->proxy->anim = NULL;
         }
 
-        SEQ_relations_invalidate_cache_preprocessed(scene, seq);
+        SEQ_relations_invalidate_cache_raw(scene, seq);
       }
       else {
         SEQ_ALL_BEGIN (scene->ed, seq) {
@@ -971,7 +971,7 @@ static void rna_def_color_ramp_element_api(BlenderRNA *brna, PropertyRNA *cprop)
   RNA_def_struct_path_func(srna, "rna_ColorRampElement_path");
   RNA_def_struct_ui_text(srna, "Color Ramp Elements", "Collection of Color Ramp Elements");
 
-  /* TODO, make these functions generic in texture.c */
+  /* TODO: make these functions generic in `texture.c`. */
   func = RNA_def_function(srna, "new", "rna_ColorRampElement_new");
   RNA_def_function_ui_description(func, "Add element to ColorRamp");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
@@ -1206,7 +1206,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
-  /* ** Display Settings  **  */
+  /* ** Display Settings ** */
   srna = RNA_def_struct(brna, "ColorManagedDisplaySettings", NULL);
   RNA_def_struct_path_func(srna, "rna_ColorManagedDisplaySettings_path");
   RNA_def_struct_ui_text(
@@ -1222,7 +1222,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
   RNA_def_property_update(
       prop, NC_WINDOW, "rna_ColorManagedDisplaySettings_display_device_update");
 
-  /* ** View Settings  **  */
+  /* ** View Settings ** */
   srna = RNA_def_struct(brna, "ColorManagedViewSettings", NULL);
   RNA_def_struct_path_func(srna, "rna_ColorManagedViewSettings_path");
   RNA_def_struct_ui_text(srna,
@@ -1276,7 +1276,7 @@ static void rna_def_colormanage(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Use Curves", "Use RGB curved for pre-display transformation");
   RNA_def_property_update(prop, NC_WINDOW, "rna_ColorManagement_update");
 
-  /* ** Colorspace **  */
+  /* ** Colorspace ** */
   srna = RNA_def_struct(brna, "ColorManagedInputColorspaceSettings", NULL);
   RNA_def_struct_path_func(srna, "rna_ColorManagedInputColorspaceSettings_path");
   RNA_def_struct_ui_text(

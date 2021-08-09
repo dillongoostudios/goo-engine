@@ -19,7 +19,7 @@
  * \brief Generic memory manipulation API.
  *
  * This is to extend on existing functions
- * such as ``memcpy`` & ``memcmp``.
+ * such as `memcpy` & `memcmp`.
  */
 #include <string.h>
 
@@ -31,7 +31,7 @@
 #include "BLI_strict_flags.h"
 
 /**
- * Check if memory is zero'd, as with memset(arr, 0, arr_size)
+ * Check if memory is zeroed, as with `memset(arr, 0, arr_size)`.
  */
 bool BLI_memory_is_zero(const void *arr, const size_t arr_size)
 {

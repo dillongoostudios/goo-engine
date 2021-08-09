@@ -398,6 +398,55 @@ class VectorSet {
   }
 
   /**
+   * Return the index of the key in the vector. If the key is not in the set, add it and return its
+   * index.
+   */
+  int64_t index_of_or_add(const Key &key)
+  {
+    return this->index_of_or_add_as(key);
+  }
+  int64_t index_of_or_add(Key &&key)
+  {
+    return this->index_of_or_add_as(std::move(key));
+  }
+  template<typename ForwardKey> int64_t index_of_or_add_as(ForwardKey &&key)
+  {
+    return this->index_of_or_add__impl(std::forward<ForwardKey>(key), hash_(key));
+  }
+
+  /**
+   * Returns the key that is stored in the vector set that compares equal to the given key. This
+   * invokes undefined behavior when the key is not in the set.
+   */
+  const Key &lookup_key(const Key &key) const
+  {
+    return this->lookup_key_as(key);
+  }
+  template<typename ForwardKey> const Key &lookup_key_as(const ForwardKey &key) const
+  {
+    const Key *key_ptr = this->lookup_key_ptr_as(key);
+    BLI_assert(key_ptr != nullptr);
+    return *key_ptr;
+  }
+
+  /**
+   * Returns a pointer to the key that is stored in the vector set that compares equal to the given
+   * key. If the key is not in the set, null is returned.
+   */
+  const Key *lookup_key_ptr(const Key &key) const
+  {
+    return this->lookup_key_ptr_as(key);
+  }
+  template<typename ForwardKey> const Key *lookup_key_ptr_as(const ForwardKey &key) const
+  {
+    const int64_t index = this->index_of_try__impl(key, hash_(key));
+    if (index >= 0) {
+      return keys_ + index;
+    }
+    return nullptr;
+  }
+
+  /**
    * Get a pointer to the beginning of the array containing all keys.
    */
   const Key *data() const
@@ -481,6 +530,14 @@ class VectorSet {
     if (usable_slots_ < n) {
       this->realloc_and_reinsert(n);
     }
+  }
+
+  /**
+   * Remove all keys from the vector set.
+   */
+  void clear()
+  {
+    this->noexcept_reset();
   }
 
   /**
@@ -647,6 +704,26 @@ class VectorSet {
       }
       if (slot.is_empty()) {
         return -1;
+      }
+    }
+    VECTOR_SET_SLOT_PROBING_END();
+  }
+
+  template<typename ForwardKey>
+  int64_t index_of_or_add__impl(ForwardKey &&key, const uint64_t hash)
+  {
+    this->ensure_can_add();
+
+    VECTOR_SET_SLOT_PROBING_BEGIN (hash, slot) {
+      if (slot.contains(key, is_equal_, hash, keys_)) {
+        return slot.index();
+      }
+      if (slot.is_empty()) {
+        const int64_t index = this->size();
+        new (keys_ + index) Key(std::forward<ForwardKey>(key));
+        slot.occupy(index, hash);
+        occupied_and_removed_slots_++;
+        return index;
       }
     }
     VECTOR_SET_SLOT_PROBING_END();

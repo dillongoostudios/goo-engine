@@ -26,6 +26,7 @@
 #include <string.h>
 
 #include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
 #include "MEM_guardedalloc.h"
@@ -143,7 +144,7 @@ wmDrag *WM_event_start_drag(
   wmWindowManager *wm = CTX_wm_manager(C);
   wmDrag *drag = MEM_callocN(sizeof(struct wmDrag), "new drag");
 
-  /* keep track of future multitouch drag too, add a mousepointer id or so */
+  /* Keep track of future multi-touch drag too, add a mouse-pointer id or so. */
   /* if multiple drags are added, they're drawn as list */
 
   BLI_addtail(&wm->drags, drag);
@@ -153,7 +154,7 @@ wmDrag *WM_event_start_drag(
   switch (type) {
     case WM_DRAG_PATH:
       BLI_strncpy(drag->path, poin, FILE_MAX);
-      /* As the path is being copied, free it immediately as `drag` wont "own" the data. */
+      /* As the path is being copied, free it immediately as `drag` won't "own" the data. */
       if (flags & WM_DRAG_FREE_DATA) {
         MEM_freeN(poin);
       }
@@ -320,7 +321,7 @@ void WM_drag_add_local_ID(wmDrag *drag, ID *id, ID *from_parent)
       return;
     }
     if (GS(drag_id->id->name) != GS(id->name)) {
-      BLI_assert(!"All dragged IDs must have the same type");
+      BLI_assert_msg(0, "All dragged IDs must have the same type");
       return;
     }
   }
@@ -377,9 +378,18 @@ wmDragAsset *WM_drag_get_asset_data(const wmDrag *drag, int idcode)
 
 static ID *wm_drag_asset_id_import(wmDragAsset *asset_drag)
 {
-  /* Append only for now, wmDragAsset could have a `link` bool. */
-  return WM_file_append_datablock(
-      G_MAIN, NULL, NULL, NULL, asset_drag->path, asset_drag->id_type, asset_drag->name);
+  const char *name = asset_drag->name;
+  ID_Type idtype = asset_drag->id_type;
+
+  switch ((eFileAssetImportType)asset_drag->import_type) {
+    case FILE_ASSET_IMPORT_LINK:
+      return WM_file_link_datablock(G_MAIN, NULL, NULL, NULL, asset_drag->path, idtype, name);
+    case FILE_ASSET_IMPORT_APPEND:
+      return WM_file_append_datablock(G_MAIN, NULL, NULL, NULL, asset_drag->path, idtype, name);
+  }
+
+  BLI_assert_unreachable();
+  return NULL;
 }
 
 /**
@@ -509,7 +519,7 @@ void wm_drags_draw(bContext *C, wmWindow *win, rcti *rect)
     rect->ymin = rect->ymax = cursory;
   }
 
-  /* Should we support multi-line drag draws? Maybe not, more types mixed wont work well. */
+  /* Should we support multi-line drag draws? Maybe not, more types mixed won't work well. */
   GPU_blend(GPU_BLEND_ALPHA);
   LISTBASE_FOREACH (wmDrag *, drag, &wm->drags) {
     const uchar text_col[] = {255, 255, 255, 255};

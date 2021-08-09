@@ -37,7 +37,8 @@ struct Collection;
 struct ID;
 struct Image;
 struct ListBase;
-struct NodeTreeUIStorage;
+struct Material;
+struct Tex;
 struct bGPdata;
 struct bNodeInstanceHash;
 struct bNodeLink;
@@ -98,8 +99,8 @@ typedef struct bNodeSocket {
   void *storage;
 
   short type, flag;
-  /** Max. number of links. Read via nodeSocketLinkLimit, because the limit might be defined on the
-   * socket type. */
+  /** Max. number of links. Read via nodeSocketLinkLimit,
+   * because the limit might be defined on the socket type. */
   short limit;
   /** Input/output type. */
   short in_out;
@@ -165,9 +166,11 @@ typedef enum eNodeSocketDatatype {
   SOCK_IMAGE = 9,
   SOCK_GEOMETRY = 10,
   SOCK_COLLECTION = 11,
+  SOCK_TEXTURE = 12,
+  SOCK_MATERIAL = 13,
 } eNodeSocketDatatype;
 
-/* socket shape */
+/* Socket shape. */
 typedef enum eNodeSocketDisplayShape {
   SOCK_DISPLAY_SHAPE_CIRCLE = 0,
   SOCK_DISPLAY_SHAPE_SQUARE = 1,
@@ -177,38 +180,43 @@ typedef enum eNodeSocketDisplayShape {
   SOCK_DISPLAY_SHAPE_DIAMOND_DOT = 5,
 } eNodeSocketDisplayShape;
 
-/* socket side (input/output) */
+/* Socket side (input/output). */
 typedef enum eNodeSocketInOut {
   SOCK_IN = 1 << 0,
   SOCK_OUT = 1 << 1,
 } eNodeSocketInOut;
 
-/* sock->flag, first bit is select */
+/* #bNodeSocket.flag, first bit is selection. */
 typedef enum eNodeSocketFlag {
-  /** hidden is user defined, to hide unused */
+  /** Hidden is user defined, to hide unused sockets. */
   SOCK_HIDDEN = (1 << 1),
-  /** for quick check if socket is linked */
+  /** For quick check if socket is linked. */
   SOCK_IN_USE = (1 << 2),
-  /** unavailable is for dynamic sockets */
+  /** Unavailable is for dynamic sockets. */
   SOCK_UNAVAIL = (1 << 3),
   // /** DEPRECATED  dynamic socket (can be modified by user) */
   // SOCK_DYNAMIC = (1 << 4),
   // /** DEPRECATED  group socket should not be exposed */
   // SOCK_INTERNAL = (1 << 5),
-  /** socket collapsed in UI */
+  /** Socket collapsed in UI. */
   SOCK_COLLAPSED = (1 << 6),
-  /** hide socket value, if it gets auto default */
+  /** Hide socket value, if it gets auto default. */
   SOCK_HIDE_VALUE = (1 << 7),
-  /** socket hidden automatically, to distinguish from manually hidden */
+  /** Socket hidden automatically, to distinguish from manually hidden. */
   SOCK_AUTO_HIDDEN__DEPRECATED = (1 << 8),
   SOCK_NO_INTERNAL_LINK = (1 << 9),
   /** Draw socket in a more compact form. */
   SOCK_COMPACT = (1 << 10),
   /** Make the input socket accept multiple incoming links in the UI. */
   SOCK_MULTI_INPUT = (1 << 11),
+  /**
+   * Don't show the socket's label in the interface, for situations where the
+   * type is obvious and the name takes up too much space.
+   */
+  SOCK_HIDE_LABEL = (1 << 12),
 } eNodeSocketFlag;
 
-/* limit data in bNode to what we want to see saved? */
+/* TODO: Limit data in bNode to what we want to see saved. */
 typedef struct bNode {
   struct bNode *next, *prev, *new_node;
 
@@ -316,6 +324,7 @@ typedef struct bNode {
 #define NODE_HIDDEN 8
 #define NODE_ACTIVE 16
 #define NODE_ACTIVE_ID 32
+/* Used to indicate which group output node is used and which viewer node is active. */
 #define NODE_DO_OUTPUT 64
 #define __NODE_GROUP_EDIT 128 /* DEPRECATED */
 /* free test flag, undefined */
@@ -331,7 +340,7 @@ typedef struct bNode {
 #define NODE_TRANSFORM (1 << 13)
 /* node is active texture */
 
-/* note: take care with this flag since its possible it gets
+/* NOTE: take care with this flag since its possible it gets
  * `stuck` inside/outside the active group - which makes buttons
  * window texture not update, we try to avoid it by clearing the
  * flag when toggling group editing - Campbell */
@@ -350,7 +359,7 @@ typedef struct bNode {
  */
 #define NODE_DO_OUTPUT_RECALC (1 << 17)
 /* A preview for the data in this node can be displayed in the spreadsheet editor. */
-#define NODE_ACTIVE_PREVIEW (1 << 18)
+#define __NODE_ACTIVE_PREVIEW (1 << 18) /* deprecated */
 
 /* node->update */
 /* XXX NODE_UPDATE is a generic update flag. More fine-grained updates
@@ -457,7 +466,6 @@ typedef struct bNodeTree {
   short is_updating;
   /** Generic temporary flag for recursion check (DFS/BFS). */
   short done;
-  char _pad2[4];
 
   /** Specific node type this tree is used for. */
   int nodetype DNA_DEPRECATED;
@@ -468,6 +476,8 @@ typedef struct bNodeTree {
   short render_quality;
   /** Tile size for compositor engine. */
   int chunksize;
+  /** Execution mode to use for compositor engine. */
+  int execution_mode;
 
   rctf viewer_border;
 
@@ -498,15 +508,13 @@ typedef struct bNodeTree {
    */
   struct bNodeTreeExec *execdata;
 
-  /* callbacks */
+  /* Callbacks. */
   void (*progress)(void *, float progress);
   /** \warning may be called by different threads */
   void (*stats_draw)(void *, const char *str);
   int (*test_break)(void *);
   void (*update_draw)(void *);
   void *tbh, *prh, *sdh, *udh;
-
-  struct NodeTreeUIStorage *ui_storage;
 } bNodeTree;
 
 /* ntree->type, index */
@@ -540,6 +548,12 @@ typedef enum eNodeTreeUpdate {
   /* group has changed (generic flag including all other group flags) */
   NTREE_UPDATE_GROUP = (NTREE_UPDATE_GROUP_IN | NTREE_UPDATE_GROUP_OUT),
 } eNodeTreeUpdate;
+
+/* tree->execution_mode */
+typedef enum eNodeTreeExecutionMode {
+  NTREE_EXECUTION_MODE_TILED = 0,
+  NTREE_EXECUTION_MODE_FULL_FRAME = 1,
+} eNodeTreeExecutionMode;
 
 /* socket value structs for input buttons
  * DEPRECATED now using ID properties
@@ -593,7 +607,15 @@ typedef struct bNodeSocketValueCollection {
   struct Collection *value;
 } bNodeSocketValueCollection;
 
-/* data structs, for node->storage */
+typedef struct bNodeSocketValueTexture {
+  struct Tex *value;
+} bNodeSocketValueTexture;
+
+typedef struct bNodeSocketValueMaterial {
+  struct Material *value;
+} bNodeSocketValueMaterial;
+
+/* Data structs, for node->storage. */
 enum {
   CMP_NODE_MASKTYPE_ADD = 0,
   CMP_NODE_MASKTYPE_SUBTRACT = 1,
@@ -617,7 +639,7 @@ enum {
   CMP_NODEFLAG_MASK_NO_FEATHER = (1 << 1),
   CMP_NODEFLAG_MASK_MOTION_BLUR = (1 << 2),
 
-  /* we may want multiple aspect options, exposed as an rna enum */
+  /* We may want multiple aspect options, exposed as an rna enum. */
   CMP_NODEFLAG_MASK_FIXED = (1 << 8),
   CMP_NODEFLAG_MASK_FIXED_SCENE = (1 << 9),
 };
@@ -632,7 +654,7 @@ typedef struct NodeFrame {
   short label_size;
 } NodeFrame;
 
-/* this one has been replaced with ImageUser, keep it for do_versions() */
+/* This one has been replaced with ImageUser, keep it for do_versions(). */
 typedef struct NodeImageAnim {
   int frames DNA_DEPRECATED;
   int sfra DNA_DEPRECATED;
@@ -686,7 +708,7 @@ typedef struct NodeEllipseMask {
   char _pad[4];
 } NodeEllipseMask;
 
-/* layer info for image node outputs */
+/* Layer info for image node outputs. */
 typedef struct NodeImageLayer {
   /* index in the Image->layers->passes lists */
   int pass_index DNA_DEPRECATED;
@@ -1184,9 +1206,30 @@ typedef struct NodeAttributeVectorMath {
   uint8_t input_type_c;
 } NodeAttributeVectorMath;
 
+typedef struct NodeAttributeVectorRotate {
+  /* GeometryNodeAttributeVectorRotateMode */
+  uint8_t mode;
+
+  /* GeometryNodeAttributeInputMode */
+  uint8_t input_type_vector;
+  uint8_t input_type_center;
+  uint8_t input_type_axis;
+  uint8_t input_type_angle;
+  uint8_t input_type_rotation;
+  char _pad[2];
+} NodeAttributeVectorRotate;
+
 typedef struct NodeAttributeColorRamp {
   ColorBand color_ramp;
 } NodeAttributeColorRamp;
+
+typedef struct NodeAttributeCurveMap {
+  /* CustomDataType. */
+  uint8_t data_type;
+  char _pad[7];
+  CurveMapping *curve_vec;
+  CurveMapping *curve_rgb;
+} NodeAttributeCurveMap;
 
 typedef struct NodeInputVector {
   float vector[3];
@@ -1280,10 +1323,9 @@ typedef struct NodeAttributeSeparateXYZ {
 
 typedef struct NodeAttributeConvert {
   /* CustomDataType. */
-  uint8_t data_type;
-  char _pad[1];
+  int8_t data_type;
   /* AttributeDomain. */
-  int16_t domain;
+  int8_t domain;
 } NodeAttributeConvert;
 
 typedef struct NodeGeometryMeshCircle {
@@ -1307,6 +1349,74 @@ typedef struct NodeGeometryMeshLine {
   /* GeometryNodeMeshLineCountMode. */
   uint8_t count_mode;
 } NodeGeometryMeshLine;
+
+typedef struct NodeSwitch {
+  /* NodeSwitch. */
+  uint8_t input_type;
+} NodeSwitch;
+
+typedef struct NodeGeometryCurveSetHandles {
+  /* GeometryNodeCurveHandleType. */
+  uint8_t handle_type;
+  /* GeometryNodeCurveHandleMode. */
+  uint8_t mode;
+} NodeGeometryCurveSetHandles;
+
+typedef struct NodeGeometryCurvePrimitiveLine {
+  /* GeometryNodeCurvePrimitiveLineMode. */
+  uint8_t mode;
+} NodeGeometryCurvePrimitiveLine;
+
+typedef struct NodeGeometryCurvePrimitiveBezierSegment {
+  /* GeometryNodeCurvePrimitiveBezierSegmentMode. */
+  uint8_t mode;
+} NodeGeometryCurvePrimitiveBezierSegment;
+
+typedef struct NodeGeometryCurvePrimitiveCircle {
+  /* GeometryNodeCurvePrimitiveMode. */
+  uint8_t mode;
+} NodeGeometryCurvePrimitiveCircle;
+
+typedef struct NodeGeometryCurvePrimitiveQuad {
+  /* GeometryNodeCurvePrimitiveQuadMode. */
+  uint8_t mode;
+} NodeGeometryCurvePrimitiveQuad;
+
+typedef struct NodeGeometryCurveResample {
+  /* GeometryNodeCurveSampleMode. */
+  uint8_t mode;
+} NodeGeometryCurveResample;
+
+typedef struct NodeGeometryCurveSubdivide {
+  /* GeometryNodeAttributeInputMode (integer or attribute). */
+  uint8_t cuts_type;
+} NodeGeometryCurveSubdivide;
+
+typedef struct NodeGeometryCurveTrim {
+  /* GeometryNodeCurveInterpolateMode. */
+  uint8_t mode;
+} NodeGeometryCurveTrim;
+
+typedef struct NodeGeometryCurveToPoints {
+  /* GeometryNodeCurveSampleMode. */
+  uint8_t mode;
+} NodeGeometryCurveToPoints;
+
+typedef struct NodeGeometryAttributeTransfer {
+  /* AttributeDomain. */
+  int8_t domain;
+  /* GeometryNodeAttributeTransferMapMode. */
+  uint8_t mapping;
+} NodeGeometryAttributeTransfer;
+
+typedef struct NodeGeometryRaycast {
+  /* GeometryNodeRaycastMapMode. */
+  uint8_t mapping;
+
+  uint8_t input_type_ray_direction;
+  uint8_t input_type_ray_length;
+  char _pad[1];
+} NodeGeometryRaycast;
 
 /* script node mode */
 #define NODE_SCRIPT_INTERNAL 0
@@ -1482,7 +1592,7 @@ enum {
 #define SHD_AO_INSIDE 1
 #define SHD_AO_LOCAL 2
 
-/* Mapping node vector types */
+/* Mapping node vector types. */
 enum {
   NODE_MAPPING_TYPE_POINT = 0,
   NODE_MAPPING_TYPE_TEXTURE = 1,
@@ -1490,7 +1600,7 @@ enum {
   NODE_MAPPING_TYPE_NORMAL = 3,
 };
 
-/* Rotation node vector types */
+/* Rotation node vector types. */
 enum {
   NODE_VECTOR_ROTATE_TYPE_AXIS = 0,
   NODE_VECTOR_ROTATE_TYPE_AXIS_X = 1,
@@ -1577,6 +1687,7 @@ typedef enum NodeVectorMathOperation {
   NODE_VECTOR_MATH_TANGENT = 23,
   NODE_VECTOR_MATH_REFRACT = 24,
   NODE_VECTOR_MATH_FACEFORWARD = 25,
+  NODE_VECTOR_MATH_MULTIPLY_ADD = 26,
 } NodeVectorMathOperation;
 
 /* Boolean math node operations. */
@@ -1595,6 +1706,14 @@ typedef enum FloatCompareOperation {
   NODE_FLOAT_COMPARE_EQUAL = 4,
   NODE_FLOAT_COMPARE_NOT_EQUAL = 5,
 } FloatCompareOperation;
+
+/* Float to Int node operations. */
+typedef enum FloatToIntRoundingMode {
+  FN_NODE_FLOAT_TO_INT_ROUND = 0,
+  FN_NODE_FLOAT_TO_INT_FLOOR = 1,
+  FN_NODE_FLOAT_TO_INT_CEIL = 2,
+  FN_NODE_FLOAT_TO_INT_TRUNCATE = 3,
+} FloatToIntRoundingMode;
 
 /* Clamp node types. */
 enum {
@@ -1703,14 +1822,29 @@ typedef enum GeometryNodeAttributeProximityTargetType {
   GEO_NODE_ATTRIBUTE_PROXIMITY_TARGET_GEOMETRY_ELEMENT_FACES = 2,
 } GeometryNodeAttributeProximityTargetType;
 
-/* Boolean Node */
 typedef enum GeometryNodeBooleanOperation {
   GEO_NODE_BOOLEAN_INTERSECT = 0,
   GEO_NODE_BOOLEAN_UNION = 1,
   GEO_NODE_BOOLEAN_DIFFERENCE = 2,
 } GeometryNodeBooleanOperation;
 
-/* Triangulate Node */
+typedef enum GeometryNodeCurvePrimitiveCircleMode {
+  GEO_NODE_CURVE_PRIMITIVE_CIRCLE_TYPE_POINTS = 0,
+  GEO_NODE_CURVE_PRIMITIVE_CIRCLE_TYPE_RADIUS = 1
+} GeometryNodeCurvePrimitiveCircleMode;
+
+typedef enum GeometryNodeCurveHandleType {
+  GEO_NODE_CURVE_HANDLE_FREE = 0,
+  GEO_NODE_CURVE_HANDLE_AUTO = 1,
+  GEO_NODE_CURVE_HANDLE_VECTOR = 2,
+  GEO_NODE_CURVE_HANDLE_ALIGN = 3
+} GeometryNodeCurveHandleType;
+
+typedef enum GeometryNodeCurveHandleMode {
+  GEO_NODE_CURVE_HANDLE_LEFT = (1 << 0),
+  GEO_NODE_CURVE_HANDLE_RIGHT = (1 << 1)
+} GeometryNodeCurveHandleMode;
+
 typedef enum GeometryNodeTriangulateNGons {
   GEO_NODE_TRIANGULATE_NGON_BEAUTY = 0,
   GEO_NODE_TRIANGULATE_NGON_EARCLIP = 1,
@@ -1750,6 +1884,14 @@ typedef enum GeometryNodeRotatePointsType {
   GEO_NODE_POINT_ROTATE_TYPE_EULER = 0,
   GEO_NODE_POINT_ROTATE_TYPE_AXIS_ANGLE = 1,
 } GeometryNodeRotatePointsType;
+
+typedef enum GeometryNodeAttributeVectorRotateMode {
+  GEO_NODE_VECTOR_ROTATE_TYPE_AXIS = 0,
+  GEO_NODE_VECTOR_ROTATE_TYPE_AXIS_X = 1,
+  GEO_NODE_VECTOR_ROTATE_TYPE_AXIS_Y = 2,
+  GEO_NODE_VECTOR_ROTATE_TYPE_AXIS_Z = 3,
+  GEO_NODE_VECTOR_ROTATE_TYPE_EULER_XYZ = 4,
+} GeometryNodeAttributeVectorRotateMode;
 
 typedef enum GeometryNodeAttributeRandomizeMode {
   GEO_NODE_ATTRIBUTE_RANDOMIZE_REPLACE_CREATE = 0,
@@ -1801,6 +1943,45 @@ typedef enum GeometryNodeMeshLineCountMode {
   GEO_NODE_MESH_LINE_COUNT_TOTAL = 0,
   GEO_NODE_MESH_LINE_COUNT_RESOLUTION = 1,
 } GeometryNodeMeshLineCountMode;
+
+typedef enum GeometryNodeCurvePrimitiveLineMode {
+  GEO_NODE_CURVE_PRIMITIVE_LINE_MODE_POINTS = 0,
+  GEO_NODE_CURVE_PRIMITIVE_LINE_MODE_DIRECTION = 1
+} GeometryNodeCurvePrimitiveLineMode;
+
+typedef enum GeometryNodeCurvePrimitiveQuadMode {
+  GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_RECTANGLE = 0,
+  GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_PARALLELOGRAM = 1,
+  GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_TRAPEZOID = 2,
+  GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_KITE = 3,
+  GEO_NODE_CURVE_PRIMITIVE_QUAD_MODE_POINTS = 4,
+} GeometryNodeCurvePrimitiveQuadMode;
+
+typedef enum GeometryNodeCurvePrimitiveBezierSegmentMode {
+  GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT_POSITION = 0,
+  GEO_NODE_CURVE_PRIMITIVE_BEZIER_SEGMENT_OFFSET = 1,
+} GeometryNodeCurvePrimitiveBezierSegmentMode;
+
+typedef enum GeometryNodeCurveSampleMode {
+  GEO_NODE_CURVE_SAMPLE_COUNT = 0,
+  GEO_NODE_CURVE_SAMPLE_LENGTH = 1,
+  GEO_NODE_CURVE_SAMPLE_EVALUATED = 2,
+} GeometryNodeCurveSampleMode;
+
+typedef enum GeometryNodeCurveInterpolateMode {
+  GEO_NODE_CURVE_INTERPOLATE_FACTOR = 0,
+  GEO_NODE_CURVE_INTERPOLATE_LENGTH = 1,
+} GeometryNodeCurveInterpolateMode;
+
+typedef enum GeometryNodeAttributeTransferMapMode {
+  GEO_NODE_ATTRIBUTE_TRANSFER_NEAREST_FACE_INTERPOLATED = 0,
+  GEO_NODE_ATTRIBUTE_TRANSFER_NEAREST = 1,
+} GeometryNodeAttributeTransferMapMode;
+
+typedef enum GeometryNodeRaycastMapMode {
+  GEO_NODE_RAYCAST_INTERPOLATED = 0,
+  GEO_NODE_RAYCAST_NEAREST = 1,
+} GeometryNodeRaycastMapMode;
 
 #ifdef __cplusplus
 }

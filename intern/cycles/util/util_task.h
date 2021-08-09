@@ -32,7 +32,7 @@ typedef function<void(void)> TaskRunFunction;
 
 /* Task Pool
  *
- * Pool of tasks that will be executed by the central TaskScheduler.For each
+ * Pool of tasks that will be executed by the central TaskScheduler. For each
  * pool, we can wait for all tasks to be done, or cancel them before they are
  * done.
  *
@@ -68,7 +68,7 @@ class TaskPool {
 
   /* ** Statistics ** */
 
-  /* Time time stamp of first task pushed. */
+  /* Time stamp of first task pushed. */
   double start_time;
 
   /* Number of all tasks pushed to the pool. Cleared after wait_work() and cancel(). */
@@ -77,7 +77,7 @@ class TaskPool {
 
 /* Task Scheduler
  *
- * Central scheduler that holds running threads ready to execute tasks. A singe
+ * Central scheduler that holds running threads ready to execute tasks. A single
  * queue holds the task from all pools. */
 
 class TaskScheduler {
@@ -88,7 +88,7 @@ class TaskScheduler {
 
   /* Approximate number of threads that will work on task, which may be lower
    * or higher than the actual number of threads. Use as little as possible and
-   * leave splitting up tasks to the scheduler.. */
+   * leave splitting up tasks to the scheduler. */
   static int num_threads();
 
  protected:

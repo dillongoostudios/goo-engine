@@ -85,10 +85,10 @@ void WM_event_print(const wmEvent *event)
     event_ids_from_type_and_value(event->prevtype, event->prevval, &prev_type_id, &prev_val_id);
 
     printf(
-        "wmEvent  type:%d / %s, val:%d / %s,\n"
-        "         prev_type:%d / %s, prev_val:%d / %s,\n"
-        "         shift:%d, ctrl:%d, alt:%d, oskey:%d, keymodifier:%d, is_repeat:%d,\n"
-        "         mouse:(%d,%d), ascii:'%c', utf8:'%.*s', pointer:%p\n",
+        "wmEvent type:%d / %s, val:%d / %s,\n"
+        "        prev_type:%d / %s, prev_val:%d / %s,\n"
+        "        shift:%d, ctrl:%d, alt:%d, oskey:%d, keymodifier:%d, is_repeat:%d,\n"
+        "        mouse:(%d,%d), ascii:'%c', utf8:'%.*s', pointer:%p\n",
         event->type,
         type_id,
         event->val,
@@ -218,7 +218,7 @@ bool WM_event_type_mask_test(const int event_type, const enum eEventType_Mask ma
 /** \name Event Motion Queries
  * \{ */
 
-/* for modal callbacks, check configuration for how to interpret exit with tweaks  */
+/* for modal callbacks, check configuration for how to interpret exit with tweaks. */
 bool WM_event_is_modal_tweak_exit(const wmEvent *event, int tweak_event)
 {
   /* if the release-confirm userpref setting is enabled,
@@ -282,15 +282,17 @@ bool WM_event_is_mouse_drag(const wmEvent *event)
 int WM_event_drag_threshold(const struct wmEvent *event)
 {
   int drag_threshold;
-  if (WM_event_is_tablet(event)) {
-    drag_threshold = U.drag_threshold_tablet;
-  }
-  else if (ISMOUSE(event->prevtype)) {
+  if (ISMOUSE(event->prevtype)) {
     BLI_assert(event->prevtype != MOUSEMOVE);
     /* Using the previous type is important is we want to check the last pressed/released button,
      * The `event->type` would include #MOUSEMOVE which is always the case when dragging
      * and does not help us know which threshold to use. */
-    drag_threshold = U.drag_threshold_mouse;
+    if (WM_event_is_tablet(event)) {
+      drag_threshold = U.drag_threshold_tablet;
+    }
+    else {
+      drag_threshold = U.drag_threshold_mouse;
+    }
   }
   else {
     /* Typically keyboard, could be NDOF button or other less common types. */
@@ -482,11 +484,16 @@ int WM_event_absolute_delta_y(const struct wmEvent *event)
  * \{ */
 
 #ifdef WITH_INPUT_IME
-/* most os using ctrl/oskey + space to switch ime, avoid added space */
+/**
+ * Most OS's use `Ctrl+Space` / `OsKey+Space` to switch IME,
+ * so don't type in the space character.
+ *
+ * \note Shift is excluded from this check since it prevented typing `Shift+Space`, see: T85517.
+ */
 bool WM_event_is_ime_switch(const struct wmEvent *event)
 {
   return event->val == KM_PRESS && event->type == EVT_SPACEKEY &&
-         (event->ctrl || event->oskey || event->shift || event->alt);
+         (event->ctrl || event->oskey || event->alt);
 }
 #endif
 

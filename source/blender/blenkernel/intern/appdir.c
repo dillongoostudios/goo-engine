@@ -137,7 +137,7 @@ static char *blender_version_decimal(const int version)
 {
   static char version_str[5];
   BLI_assert(version < 1000);
-  BLI_snprintf(version_str, sizeof(version_str), "%d.%02d", version / 100, version % 100);
+  BLI_snprintf(version_str, sizeof(version_str), "%d.%d", version / 100, version % 100);
   return version_str;
 }
 
@@ -191,8 +191,7 @@ bool BKE_appdir_folder_documents(char *dir)
 {
   dir[0] = '\0';
 
-  const char *documents_path = (const char *)GHOST_getUserSpecialDir(
-      GHOST_kUserSpecialDirDocuments);
+  const char *documents_path = GHOST_getUserSpecialDir(GHOST_kUserSpecialDirDocuments);
 
   /* Usual case: Ghost gave us the documents path. We're done here. */
   if (documents_path && BLI_is_dir(documents_path)) {
@@ -200,7 +199,7 @@ bool BKE_appdir_folder_documents(char *dir)
     return true;
   }
 
-  /* Ghost couldn't give us a documents path, let's try if we can find it ourselves.*/
+  /* Ghost couldn't give us a documents path, let's try if we can find it ourselves. */
 
   const char *home_path = BKE_appdir_folder_home();
   if (!home_path || !BLI_is_dir(home_path)) {
@@ -462,7 +461,7 @@ static bool get_path_user_ex(char *targetpath,
   }
   user_path[0] = '\0';
 
-  user_base_path = (const char *)GHOST_getUserDir(version, blender_version_decimal(version));
+  user_base_path = GHOST_getUserDir(version, blender_version_decimal(version));
   if (user_base_path) {
     BLI_strncpy(user_path, user_base_path, FILE_MAX);
   }
@@ -522,7 +521,7 @@ static bool get_path_system_ex(char *targetpath,
   }
 
   system_path[0] = '\0';
-  system_base_path = (const char *)GHOST_getSystemDir(version, blender_version_decimal(version));
+  system_base_path = GHOST_getSystemDir(version, blender_version_decimal(version));
   if (system_base_path) {
     BLI_strncpy(system_path, system_base_path, FILE_MAX);
   }
@@ -780,7 +779,7 @@ const char *BKE_appdir_folder_id_version(const int folder_id,
     default:
       path[0] = '\0'; /* in case check_is_dir is false */
       ok = false;
-      BLI_assert(!"incorrect ID");
+      BLI_assert_msg(0, "incorrect ID");
       break;
   }
   return ok ? path : NULL;

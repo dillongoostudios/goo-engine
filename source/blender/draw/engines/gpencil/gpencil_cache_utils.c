@@ -60,7 +60,8 @@ GPENCIL_tObject *gpencil_object_cache_add(GPENCIL_PrivateData *pd, Object *ob)
 
   /* Check if any material with holdout flag enabled. */
   tgp_ob->do_mat_holdout = false;
-  for (int i = 0; i < ob->totcol; i++) {
+  const int tot_materials = BKE_object_material_count_eval(ob);
+  for (int i = 0; i < tot_materials; i++) {
     MaterialGPencilStyle *gp_style = BKE_gpencil_material_settings(ob, i + 1);
     if (((gp_style != NULL) && (gp_style->flag & GP_MATERIAL_IS_STROKE_HOLDOUT)) ||
         ((gp_style->flag & GP_MATERIAL_IS_FILL_HOLDOUT))) {
@@ -101,7 +102,7 @@ GPENCIL_tObject *gpencil_object_cache_add(GPENCIL_PrivateData *pd, Object *ob)
 
   transpose_m4(mat);
   /* mat is now a "normal" matrix which will transform
-   * BBox space normal to world space.  */
+   * BBox space normal to world space. */
   mul_mat3_m4_v3(mat, tgp_ob->plane_normal);
   normalize_v3(tgp_ob->plane_normal);
 
@@ -273,14 +274,20 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
   const bool override_vertcol = (pd->v3d_color_type != -1);
   const bool is_vert_col_mode = (pd->v3d_color_type == V3D_SHADING_VERTEX_COLOR) ||
                                 GPENCIL_VERTEX_MODE(gpd) || pd->is_render;
-  bool is_masked = (gpl->flag & GP_LAYER_USE_MASK) && !BLI_listbase_is_empty(&gpl->mask_layers);
+  const bool is_viewlayer_render = pd->is_render && (gpl->viewlayername[0] != '\0') &&
+                                   STREQ(pd->view_layer->name, gpl->viewlayername);
+  const bool disable_masks_render = is_viewlayer_render &&
+                                    (gpl->flag & GP_LAYER_DISABLE_MASKS_IN_VIEWLAYER);
+  bool is_masked = disable_masks_render ? false :
+                                          (gpl->flag & GP_LAYER_USE_MASK) &&
+                                              !BLI_listbase_is_empty(&gpl->mask_layers);
 
   float vert_col_opacity = (override_vertcol) ?
-                               (is_vert_col_mode ? pd->vertex_paint_opacity : 0.0f) :
-                               pd->is_render ? gpl->vertex_paint_opacity :
-                                               pd->vertex_paint_opacity;
+                                           (is_vert_col_mode ? pd->vertex_paint_opacity : 0.0f) :
+                           pd->is_render ? gpl->vertex_paint_opacity :
+                                           pd->vertex_paint_opacity;
   /* Negate thickness sign to tag that strokes are in screen space.
-   * Convert to world units (by default, 1 meter = 2000 px). */
+   * Convert to world units (by default, 1 meter = 2000 pixels). */
   float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / GPENCIL_PIXEL_FACTOR);
   float layer_opacity = gpencil_layer_final_opacity_get(pd, ob, gpl);
   float layer_tint[4];

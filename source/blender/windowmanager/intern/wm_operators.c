@@ -53,7 +53,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_dial_2d.h"
-#include "BLI_dynstr.h" /*for WM_operator_pystring */
+#include "BLI_dynstr.h" /* For #WM_operator_pystring. */
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
@@ -126,8 +126,8 @@ void WM_operator_py_idname(char *to, const char *from)
   if (sep) {
     int ofs = (sep - from);
 
-    /* note, we use ascii tolower instead of system tolower, because the
-     * latter depends on the locale, and can lead to idname mismatch */
+    /* NOTE: we use ascii `tolower` instead of system `tolower`, because the
+     * latter depends on the locale, and can lead to `idname` mismatch. */
     memcpy(to, from, sizeof(char) * ofs);
     BLI_str_tolower_ascii(to, ofs);
 
@@ -323,16 +323,16 @@ bool WM_operator_pystring_abbreviate(char *str, int str_len_max)
       if (parens_len > str_len_max) {
         const char *comma_first = strchr(parens_start, ',');
 
-        /* truncate after the first comma */
+        /* Truncate after the first comma. */
         if (comma_first) {
           const char end_str[] = " ... )";
           const int end_str_len = sizeof(end_str) - 1;
 
-          /* leave a place for the first argument*/
+          /* Leave a place for the first argument. */
           const int new_str_len = (comma_first - parens_start) + 1;
 
           if (str_len >= new_str_len + parens_start_pos + end_str_len + 1) {
-            /* append " ... )" to the string after the comma */
+            /* Append " ... )" to the string after the comma. */
             memcpy(str + new_str_len + parens_start_pos, end_str, end_str_len + 1);
 
             return true;
@@ -604,6 +604,12 @@ void WM_operator_properties_create(PointerRNA *ptr, const char *opstring)
  * used for keymaps and macros */
 void WM_operator_properties_alloc(PointerRNA **ptr, IDProperty **properties, const char *opstring)
 {
+  IDProperty *tmp_properties = NULL;
+  /* Allow passing NULL for properties, just create the properties here then. */
+  if (properties == NULL) {
+    properties = &tmp_properties;
+  }
+
   if (*properties == NULL) {
     IDPropertyTemplate val = {0};
     *properties = IDP_New(IDP_GROUP, &val, "wmOpItemProp");
@@ -745,7 +751,7 @@ static bool operator_last_properties_init_impl(wmOperator *op, IDProperty *last_
         if (idp_src) {
           IDProperty *idp_dst = IDP_CopyProperty(idp_src);
 
-          /* note - in the future this may need to be done recursively,
+          /* NOTE: in the future this may need to be done recursively,
            * but for now RNA doesn't access nested operators */
           idp_dst->flag |= IDP_FLAG_GHOST;
 
@@ -1156,7 +1162,7 @@ bool WM_operator_filesel_ensure_ext_imtype(wmOperator *op, const struct ImageFor
   RNA_property_string_get(op->ptr, prop, filepath);
   if (BKE_image_path_ensure_ext_from_imformat(filepath, im_format)) {
     RNA_property_string_set(op->ptr, prop, filepath);
-    /* note, we could check for and update 'filename' here,
+    /* NOTE: we could check for and update 'filename' here,
      * but so far nothing needs this. */
     return true;
   }
@@ -1346,7 +1352,7 @@ static void dialog_exec_cb(bContext *C, void *arg1, void *arg2)
   wmOperator *op;
   {
     /* Execute will free the operator.
-     * In this case, wm_operator_ui_popup_cancel wont run. */
+     * In this case, wm_operator_ui_popup_cancel won't run. */
     wmOpPopUp *data = arg1;
     op = data->op;
     MEM_freeN(data);
@@ -2361,7 +2367,7 @@ static void radial_control_paint_cursor(bContext *UNUSED(C), int x, int y, void 
       strdrawlen = BLI_strlen_utf8(str);
       break;
     default:
-      tex_radius = WM_RADIAL_CONTROL_DISPLAY_SIZE; /* note, this is a dummy value */
+      tex_radius = WM_RADIAL_CONTROL_DISPLAY_SIZE; /* NOTE: this is a dummy value. */
       alpha = 0.75;
       break;
   }
@@ -2885,7 +2891,7 @@ static int radial_control_modal(bContext *C, wmOperator *op, const wmEvent *even
           }
         }
 
-        /* calculate new value and apply snapping  */
+        /* Calculate new value and apply snapping. */
         switch (rc->subtype) {
           case PROP_NONE:
           case PROP_DISTANCE:
@@ -3202,7 +3208,7 @@ static void redraw_timer_step(bContext *C,
     int tot = (scene->r.efra - scene->r.sfra) + 1;
 
     while (tot--) {
-      /* todo, ability to escape! */
+      /* TODO: ability to escape! */
       scene->r.cfra++;
       if (scene->r.cfra > scene->r.efra) {
         scene->r.cfra = scene->r.sfra;
@@ -3806,7 +3812,7 @@ static void gesture_circle_modal_keymap(wmKeyConfig *keyconf)
       {0, NULL, 0, NULL, NULL},
   };
 
-  /* WARNING - name is incorrect, use for non-3d views */
+  /* WARNING: Name is incorrect, use for non-3d views. */
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "View3D Gesture Circle");
 
   /* this function is called for each spacetype, only needs to add map once */

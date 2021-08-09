@@ -16,6 +16,7 @@
 
 #include "BLI_hash.h"
 #include "BLI_rand.hh"
+#include "BLI_task.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -125,28 +126,36 @@ static void randomize_attribute(MutableSpan<T> span,
   /* The operations could be templated too, but it doesn't make the code much shorter. */
   switch (operation) {
     case GEO_NODE_ATTRIBUTE_RANDOMIZE_REPLACE_CREATE:
-      for (const int i : span.index_range()) {
-        const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
-        span[i] = random_value;
-      }
+      threading::parallel_for(span.index_range(), 512, [&](IndexRange range) {
+        for (const int i : range) {
+          const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
+          span[i] = random_value;
+        }
+      });
       break;
     case GEO_NODE_ATTRIBUTE_RANDOMIZE_ADD:
-      for (const int i : span.index_range()) {
-        const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
-        span[i] = span[i] + random_value;
-      }
+      threading::parallel_for(span.index_range(), 512, [&](IndexRange range) {
+        for (const int i : range) {
+          const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
+          span[i] = span[i] + random_value;
+        }
+      });
       break;
     case GEO_NODE_ATTRIBUTE_RANDOMIZE_SUBTRACT:
-      for (const int i : span.index_range()) {
-        const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
-        span[i] = span[i] - random_value;
-      }
+      threading::parallel_for(span.index_range(), 512, [&](IndexRange range) {
+        for (const int i : range) {
+          const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
+          span[i] = span[i] - random_value;
+        }
+      });
       break;
     case GEO_NODE_ATTRIBUTE_RANDOMIZE_MULTIPLY:
-      for (const int i : span.index_range()) {
-        const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
-        span[i] = span[i] * random_value;
-      }
+      threading::parallel_for(span.index_range(), 512, [&](IndexRange range) {
+        for (const int i : range) {
+          const T random_value = random_value_in_range<T>(ids[i], seed, min, max);
+          span[i] = span[i] * random_value;
+        }
+      });
       break;
     default:
       BLI_assert(false);
@@ -161,10 +170,12 @@ static void randomize_attribute_bool(MutableSpan<bool> span,
 {
   BLI_assert(operation == GEO_NODE_ATTRIBUTE_RANDOMIZE_REPLACE_CREATE);
   UNUSED_VARS_NDEBUG(operation);
-  for (const int i : span.index_range()) {
-    const bool random_value = BLI_hash_int_2d_to_float(ids[i], seed) > 0.5f;
-    span[i] = random_value;
-  }
+  threading::parallel_for(span.index_range(), 512, [&](IndexRange range) {
+    for (const int i : range) {
+      const bool random_value = BLI_hash_int_2d_to_float(ids[i], seed) > 0.5f;
+      span[i] = random_value;
+    }
+  });
 }
 
 Array<uint32_t> get_geometry_element_ids_as_uints(const GeometryComponent &component,
@@ -173,15 +184,18 @@ Array<uint32_t> get_geometry_element_ids_as_uints(const GeometryComponent &compo
   const int domain_size = component.attribute_domain_size(domain);
 
   /* Hash the reserved name attribute "id" as a (hopefully) stable seed for each point. */
-  ReadAttributePtr hash_attribute = component.attribute_try_get_for_read("id", domain);
+  GVArrayPtr hash_attribute = component.attribute_try_get_for_read("id", domain);
   Array<uint32_t> hashes(domain_size);
   if (hash_attribute) {
     BLI_assert(hashes.size() == hash_attribute->size());
-    const CPPType &cpp_type = hash_attribute->cpp_type();
-    fn::GSpan items = hash_attribute->get_span();
-    for (const int i : hashes.index_range()) {
-      hashes[i] = cpp_type.hash(items[i]);
-    }
+    const CPPType &cpp_type = hash_attribute->type();
+    BLI_assert(cpp_type.is_hashable());
+    GVArray_GSpan items{*hash_attribute};
+    threading::parallel_for(hashes.index_range(), 512, [&](IndexRange range) {
+      for (const int i : range) {
+        hashes[i] = cpp_type.hash(items[i]);
+      }
+    });
   }
   else {
     /* If there is no "id" attribute for per-point variation, just create it here. */
@@ -196,12 +210,12 @@ Array<uint32_t> get_geometry_element_ids_as_uints(const GeometryComponent &compo
 
 static AttributeDomain get_result_domain(const GeometryComponent &component,
                                          const GeoNodeExecParams &params,
-                                         StringRef attribute_name)
+                                         const StringRef name)
 {
   /* Use the domain of the result attribute if it already exists. */
-  ReadAttributePtr result_attribute = component.attribute_try_get_for_read(attribute_name);
-  if (result_attribute) {
-    return result_attribute->domain();
+  std::optional<AttributeMetaData> result_info = component.attribute_get_meta_data(name);
+  if (result_info) {
+    return result_info->domain;
   }
 
   /* Otherwise use the input domain chosen in the interface. */
@@ -228,15 +242,13 @@ static void randomize_attribute_on_component(GeometryComponent &component,
 
   const AttributeDomain domain = get_result_domain(component, params, attribute_name);
 
-  OutputAttributePtr attribute = component.attribute_try_get_for_output(
+  OutputAttribute attribute = component.attribute_try_get_for_output(
       attribute_name, domain, data_type);
   if (!attribute) {
     return;
   }
 
-  fn::GMutableSpan span = (operation == GEO_NODE_ATTRIBUTE_RANDOMIZE_REPLACE_CREATE) ?
-                              attribute->get_span_for_write_only() :
-                              attribute->get_span();
+  GMutableSpan span = attribute.as_span();
 
   Array<uint32_t> hashes = get_geometry_element_ids_as_uints(component, domain);
 
@@ -269,8 +281,8 @@ static void randomize_attribute_on_component(GeometryComponent &component,
     }
   }
 
-  attribute.apply_span_and_save();
-}  // namespace blender::nodes
+  attribute.save();
+}
 
 static void geo_node_random_attribute_exec(GeoNodeExecParams params)
 {
@@ -298,6 +310,14 @@ static void geo_node_random_attribute_exec(GeoNodeExecParams params)
   }
   if (geometry_set.has<PointCloudComponent>()) {
     randomize_attribute_on_component(geometry_set.get_component_for_write<PointCloudComponent>(),
+                                     params,
+                                     attribute_name,
+                                     data_type,
+                                     operation,
+                                     seed);
+  }
+  if (geometry_set.has<CurveComponent>()) {
+    randomize_attribute_on_component(geometry_set.get_component_for_write<CurveComponent>(),
                                      params,
                                      attribute_name,
                                      data_type,

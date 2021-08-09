@@ -142,7 +142,7 @@ static void distribute_grid(Mesh *mesh, ParticleSystem *psys)
   size[(axis + 1) % 3] = (int)ceil(delta[(axis + 1) % 3] / d);
   size[(axis + 2) % 3] = (int)ceil(delta[(axis + 2) % 3] / d);
 
-  /* float errors grrr.. */
+  /* float errors grrr. */
   size[(axis + 1) % 3] = MIN2(size[(axis + 1) % 3], res);
   size[(axis + 2) % 3] = MIN2(size[(axis + 2) % 3], res);
 
@@ -472,7 +472,7 @@ static int distribute_binary_search(const float *sum, int n, float value)
  * be sure to keep up to date if this changes */
 #define PSYS_RND_DIST_SKIP 3
 
-/* note: this function must be thread safe, for from == PART_FROM_CHILD */
+/* NOTE: this function must be thread safe, for `from == PART_FROM_CHILD`. */
 #define ONLY_WORKING_WITH_PA_VERTS 0
 static void distribute_from_verts_exec(ParticleTask *thread, ParticleData *pa, int p)
 {
@@ -481,7 +481,7 @@ static void distribute_from_verts_exec(ParticleTask *thread, ParticleData *pa, i
 
   mface = ctx->mesh->mface;
 
-  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls wont need skipping */
+  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
   /* TODO_PARTICLE - use original index */
   pa->num = ctx->index[p];
@@ -538,7 +538,7 @@ static void distribute_from_faces_exec(ParticleTask *thread, ParticleData *pa, i
   float randu, randv;
   int distr = ctx->distr;
   int i;
-  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls wont need skipping */
+  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
   MFace *mface;
 
@@ -587,7 +587,7 @@ static void distribute_from_volume_exec(ParticleTask *thread, ParticleData *pa, 
   float cur_d, min_d, randu, randv;
   int distr = ctx->distr;
   int i, intersect, tot;
-  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls wont need skipping */
+  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
   MFace *mface;
   MVert *mvert = mesh->mvert;
@@ -692,7 +692,7 @@ static void distribute_children_exec(ParticleTask *thread, ChildParticle *cpa, i
   float randu, randv;
   int cfrom = ctx->cfrom;
   int i;
-  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls wont need skipping */
+  int rng_skip_tot = PSYS_RND_DIST_SKIP; /* count how many rng_* calls won't need skipping */
 
   MFace *mf;
 
@@ -1214,7 +1214,7 @@ static int psys_thread_context_init_distribute(ParticleThreadContext *ctx,
      * It allows us to consider pos as 'midpoint between v and v+1'
      * (or 'p and p+1', depending whether we have more vertices than particles or not),
      * and avoid stumbling over float impression in element_sum.
-     * Note: moved face and volume distribution to this as well (instead of starting at zero),
+     * NOTE: moved face and volume distribution to this as well (instead of starting at zero),
      * for the same reasons, see T52682. */
     pos = (totpart < totmapped) ? 0.5 / (double)totmapped :
                                   step * 0.5; /* We choose the smaller step. */

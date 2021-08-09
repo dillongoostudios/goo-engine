@@ -277,6 +277,20 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     btheme->space_spreadsheet = btheme->space_outliner;
   }
 
+  if (!USER_VERSION_ATLEAST(300, 5)) {
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.active);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.list);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.list_text);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.list_text_hi);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.hilite);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.selected_highlight);
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 15)) {
+    copy_v4_uchar(btheme->space_sequencer.grid, 33);
+    btheme->space_sequencer.grid[3] = 255;
+  }
+
   /**
    * Versioning code until next subversion bump goes here.
    *
@@ -872,6 +886,10 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
 
     userdef->sequencer_proxy_setup = USER_SEQ_PROXY_SETUP_AUTOMATIC;
+  }
+
+  if (!USER_VERSION_ATLEAST(293, 13)) {
+    BKE_addon_ensure(&userdef->addons, "pose_library");
   }
 
   /**

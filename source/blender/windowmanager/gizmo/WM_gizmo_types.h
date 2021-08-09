@@ -107,7 +107,7 @@ typedef enum eWM_GizmoFlagGroupTypeFlag {
   /** Mark gizmo-group as being 3D */
   WM_GIZMOGROUPTYPE_3D = (1 << 0),
   /** Scale gizmos as 3D object that respects zoom (otherwise zoom independent draw size).
-   * note: currently only for 3D views, 2D support needs adding. */
+   * NOTE: currently only for 3D views, 2D support needs adding. */
   WM_GIZMOGROUPTYPE_SCALE = (1 << 1),
   /** Gizmos can be depth culled with scene objects (covered by other geometry - TODO) */
   WM_GIZMOGROUPTYPE_DEPTH_3D = (1 << 2),
@@ -186,12 +186,12 @@ typedef enum eWM_GizmoFlagMapTypeUpdateFlag {
  * \brief Gizmo tweak flag.
  * Bitflag passed to gizmo while tweaking.
  *
- * \note Gizmos are responsible for handling this #wmGizmo.modal callback!.
+ * \note Gizmos are responsible for handling this #wmGizmo.modal callback.
  */
 typedef enum {
   /* Drag with extra precision (Shift). */
   WM_GIZMO_TWEAK_PRECISE = (1 << 0),
-  /* Drag with snap enabled (Ctrl).  */
+  /* Drag with snap enabled (Ctrl). */
   WM_GIZMO_TWEAK_SNAP = (1 << 1),
 } eWM_GizmoFlagTweak;
 
@@ -301,7 +301,7 @@ typedef struct wmGizmoProperty {
   PropertyRNA *prop;
   int index;
 
-  /* Optional functions for converting to/from RNA  */
+  /* Optional functions for converting to/from RNA. */
   struct {
     wmGizmoPropertyFnGet value_get_fn;
     wmGizmoPropertyFnSet value_set_fn;
@@ -341,7 +341,7 @@ typedef struct wmGizmoType {
   const char *idname; /* MAX_NAME */
 
   /** Set to 'sizeof(wmGizmo)' or larger for instances of this type,
-   * use so we can cant to other types without the hassle of a custom-data pointer. */
+   * use so we can cast to other types without the hassle of a custom-data pointer. */
   uint struct_size;
 
   /** Initialize struct (calloc'd 'struct_size' region). */
@@ -445,7 +445,7 @@ typedef struct wmGizmoGroupType {
   /** Only for convenient removal. */
   struct wmKeyConfig *keyconf;
 
-  /* Note: currently gizmo-group instances don't store properties,
+  /* NOTE: currently gizmo-group instances don't store properties,
    * they're kept in the tool properties. */
 
   /** RNA for properties. */

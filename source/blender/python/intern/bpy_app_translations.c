@@ -51,8 +51,8 @@
 
 typedef struct {
   PyObject_HEAD
-      /** The string used to separate context from actual message in PY_TRANSLATE RNA props. */
-      const char *context_separator;
+  /** The string used to separate context from actual message in PY_TRANSLATE RNA props. */
+  const char *context_separator;
   /** A "named tuple" (StructSequence actually...) containing all C-defined contexts. */
   PyObject *contexts;
   /** A readonly mapping {C context id: python id}  (actually, a MappingProxy). */
@@ -101,7 +101,7 @@ static bool _ghashutil_keycmp(const void *a, const void *b)
   const GHashKey *A = a;
   const GHashKey *B = b;
 
-  /* Note: comparing msgid first, most of the time it will be enough! */
+  /* NOTE: comparing msgid first, most of the time it will be enough! */
   if (BLI_ghashutil_strcmp(A->msgid, B->msgid) == false) {
     return BLI_ghashutil_strcmp(A->msgctxt, B->msgctxt);
   }
@@ -497,7 +497,7 @@ static PyObject *app_translations_locale_get(PyObject *UNUSED(self), void *UNUSE
   return PyUnicode_FromString(BLT_lang_get());
 }
 
-/* Note: defining as getter, as (even if quite unlikely), this *may* change during runtime... */
+/* NOTE: defining as getter, as (even if quite unlikely), this *may* change during runtime... */
 PyDoc_STRVAR(app_translations_locales_doc,
              "All locales currently known by Blender (i.e. available as translations).");
 static PyObject *app_translations_locales_get(PyObject *UNUSED(self), void *UNUSED(userdata))
@@ -855,12 +855,12 @@ static PyTypeObject BlenderAppTranslationsType = {
                                 /* newfunc tp_new; */
     (newfunc)app_translations_new,
     /*  Low-level free-memory routine */
-    app_translations_free, /* freefunc tp_free;  */
+    app_translations_free, /* freefunc tp_free; */
     /* For PyObject_IS_GC */
-    NULL, /* inquiry tp_is_gc;  */
+    NULL, /* inquiry tp_is_gc; */
     NULL, /* PyObject *tp_bases; */
     /* method resolution order */
-    NULL, /* PyObject *tp_mro;  */
+    NULL, /* PyObject *tp_mro; */
     NULL, /* PyObject *tp_cache; */
     NULL, /* PyObject *tp_subclasses; */
     NULL, /* PyObject *tp_weaklist; */

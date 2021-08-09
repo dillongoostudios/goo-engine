@@ -154,6 +154,9 @@ MINLINE int max_iii(int a, int b, int c);
 MINLINE int min_iiii(int a, int b, int c, int d);
 MINLINE int max_iiii(int a, int b, int c, int d);
 
+MINLINE uint min_uu(uint a, uint b);
+MINLINE uint max_uu(uint a, uint b);
+
 MINLINE size_t min_zz(size_t a, size_t b);
 MINLINE size_t max_zz(size_t a, size_t b);
 
@@ -234,6 +237,7 @@ float ceil_power_of_10(float f);
 #ifndef NDEBUG
 /** \note 0.0001 is too small because normals may be converted from short's: see T34322. */
 #  define BLI_ASSERT_UNIT_EPSILON 0.0002f
+#  define BLI_ASSERT_UNIT_EPSILON_DB 0.0002
 /**
  * \note Checks are flipped so NAN doesn't assert.
  * This is done because we're making sure the value was normalized and in the case we
@@ -250,8 +254,8 @@ float ceil_power_of_10(float f);
 #  define BLI_ASSERT_UNIT_V3_DB(v) \
     { \
       const double _test_unit = len_squared_v3_db(v); \
-      BLI_assert(!(fabs(_test_unit - 1.0) >= BLI_ASSERT_UNIT_EPSILON) || \
-                 !(fabs(_test_unit) >= BLI_ASSERT_UNIT_EPSILON)); \
+      BLI_assert(!(fabs(_test_unit - 1.0) >= BLI_ASSERT_UNIT_EPSILON_DB) || \
+                 !(fabs(_test_unit) >= BLI_ASSERT_UNIT_EPSILON_DB)); \
     } \
     (void)0
 
@@ -292,6 +296,7 @@ float ceil_power_of_10(float f);
 #else
 #  define BLI_ASSERT_UNIT_V2(v) (void)(v)
 #  define BLI_ASSERT_UNIT_V3(v) (void)(v)
+#  define BLI_ASSERT_UNIT_V3_DB(v) (void)(v)
 #  define BLI_ASSERT_UNIT_QUAT(v) (void)(v)
 #  define BLI_ASSERT_ZERO_M3(m) (void)(m)
 #  define BLI_ASSERT_ZERO_M4(m) (void)(m)

@@ -97,7 +97,6 @@ struct BoundBox *BKE_curve_boundbox_get(struct Object *ob);
 
 void BKE_curve_texspace_calc(struct Curve *cu);
 void BKE_curve_texspace_ensure(struct Curve *cu);
-void BKE_curve_texspace_get(struct Curve *cu, float r_loc[3], float r_size[3]);
 
 bool BKE_curve_minmax(struct Curve *cu, bool use_radius, float min[3], float max[3]);
 bool BKE_curve_center_median(struct Curve *cu, float cent[3]);
@@ -121,6 +120,7 @@ void BKE_curve_material_remap(struct Curve *cu, const unsigned int *remap, unsig
 void BKE_curve_smooth_flag_set(struct Curve *cu, const bool use_smooth);
 
 ListBase *BKE_curve_nurbs_get(struct Curve *cu);
+const ListBase *BKE_curve_nurbs_get_for_read(const struct Curve *cu);
 
 int BKE_curve_nurb_vert_index_get(const struct Nurb *nu, const void *vert);
 void BKE_curve_nurb_active_set(struct Curve *cu, const struct Nurb *nu);
@@ -153,10 +153,11 @@ void BKE_curve_editNurb_keyIndex_delCV(struct GHash *keyindex, const void *cv);
 void BKE_curve_editNurb_keyIndex_free(struct GHash **keyindex);
 void BKE_curve_editNurb_free(struct Curve *cu);
 struct ListBase *BKE_curve_editNurbs_get(struct Curve *cu);
+const struct ListBase *BKE_curve_editNurbs_get_for_read(const struct Curve *cu);
 
 void BKE_curve_bevelList_free(struct ListBase *bev);
-void BKE_curve_bevelList_make(struct Object *ob, struct ListBase *nurbs, bool for_render);
-void BKE_curve_bevel_make(struct Object *ob, struct ListBase *disp);
+void BKE_curve_bevelList_make(struct Object *ob, const struct ListBase *nurbs, bool for_render);
+ListBase BKE_curve_bevel_make(const struct Curve *curve);
 
 void BKE_curve_forward_diff_bezier(
     float q0, float q1, float q2, float q3, float *p, int it, int stride);

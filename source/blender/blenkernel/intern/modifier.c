@@ -156,7 +156,7 @@ ModifierData *BKE_modifier_new(int type)
   const ModifierTypeInfo *mti = BKE_modifier_get_info(type);
   ModifierData *md = MEM_callocN(mti->structSize, mti->structName);
 
-  /* note, this name must be made unique later */
+  /* NOTE: this name must be made unique later. */
   BLI_strncpy(md->name, DATA_(mti->name), sizeof(md->name));
 
   md->type = type;
@@ -729,7 +729,6 @@ Object *BKE_modifiers_is_deformed_by_armature(Object *ob)
     ArmatureGpencilModifierData *agmd = NULL;
     GpencilModifierData *gmd = BKE_gpencil_modifiers_get_virtual_modifierlist(
         ob, &gpencilvirtualModifierData);
-    gmd = ob->greasepencil_modifiers.first;
 
     /* return the first selected armature, this lets us use multiple armatures */
     for (; gmd; gmd = gmd->next) {
@@ -749,7 +748,6 @@ Object *BKE_modifiers_is_deformed_by_armature(Object *ob)
     VirtualModifierData virtualModifierData;
     ArmatureModifierData *amd = NULL;
     ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob, &virtualModifierData);
-    md = ob->modifiers.first;
 
     /* return the first selected armature, this lets us use multiple armatures */
     for (; md; md = md->next) {

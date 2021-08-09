@@ -842,7 +842,7 @@ static void *bmw_IslandManifoldWalker_step(BMWalker *walker)
 /* utility function to see if an edge is a part of an ngon boundary */
 static bool bm_edge_is_single(BMEdge *e)
 {
-  return ((BM_edge_is_boundary(e)) && (e->l->f->len > 4) &&
+  return (BM_edge_is_boundary(e) && (e->l->f->len > 4) &&
           (BM_edge_is_boundary(e->l->next->e) || BM_edge_is_boundary(e->l->prev->e)));
 }
 
@@ -1631,7 +1631,7 @@ static void *bmw_NonManifoldedgeWalker_yield(BMWalker *walker)
 /**
  * Walk over manifold loops around `v` until loop-edge is found with `face_count` users.
  * or return NULL if not found.
- * */
+ */
 static BMLoop *bmw_NonManifoldLoop_find_next_around_vertex(BMLoop *l, BMVert *v, int face_count)
 {
   BLI_assert(!BM_loop_is_manifold(l));
@@ -1667,7 +1667,7 @@ static void *bmw_NonManifoldedgeWalker_step(BMWalker *walker)
     v = BM_edge_other_vert(e, lwalk->lastv);
 
     /* If `lwalk.lastv` can't be walked along, start walking in the opposite direction
-     * on the initial edge, do this at most one time during this walk operation.  */
+     * on the initial edge, do this at most one time during this walk operation. */
     if (UNLIKELY(pass == 1)) {
       e = lwalk->start;
       v = lwalk->startv;

@@ -123,7 +123,7 @@ ListBase *ED_animcontext_get_markers(const bAnimContext *ac)
  * so don't assume anything.
  * \param scene: Current scene (for getting current frame)
  * \param mode: (TfmMode) transform mode that this transform is for
- * \param value: From the transform code, this is ``t->vec[0]``
+ * \param value: From the transform code, this is `t->vec[0]`
  * (which is delta transform for grab/extend, and scale factor for scale)
  * \param side: (B/L/R) for 'extend' functionality, which side of current frame to use
  */
@@ -483,7 +483,8 @@ static int marker_get_icon_id(TimeMarker *marker, int flag)
 {
   if (flag & DRAW_MARKERS_LOCAL) {
     return (marker->flag & ACTIVE) ? ICON_PMARKER_ACT :
-                                     (marker->flag & SELECT) ? ICON_PMARKER_SEL : ICON_PMARKER;
+           (marker->flag & SELECT) ? ICON_PMARKER_SEL :
+                                     ICON_PMARKER;
   }
 #ifdef DURIAN_CAMERA_SWITCH
   if (marker->camera) {
@@ -687,7 +688,7 @@ static int ed_marker_add_exec(bContext *C, wmOperator *UNUSED(op))
   marker = MEM_callocN(sizeof(TimeMarker), "TimeMarker");
   marker->flag = SELECT;
   marker->frame = frame;
-  BLI_snprintf(marker->name, sizeof(marker->name), "F_%02d", frame); /* XXX - temp code only */
+  BLI_snprintf(marker->name, sizeof(marker->name), "F_%02d", frame); /* XXX: temp code only. */
   BLI_addtail(markers, marker);
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, NULL);
@@ -897,7 +898,7 @@ static int ed_marker_move_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   return OPERATOR_CANCELLED;
 }
 
-/* note, init has to be called successfully */
+/* NOTE: init has to be called successfully. */
 static void ed_marker_move_apply(bContext *C, wmOperator *op)
 {
 #ifdef DURIAN_CAMERA_SWITCH

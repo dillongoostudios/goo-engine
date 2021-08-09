@@ -354,10 +354,9 @@ static void gizmo_get_axis_color(const int axis_idx,
       if (is_plane) {
         idot_axis = 1.0f - idot_axis;
       }
-      alpha_fac = ((idot_axis > idot_max) ?
-                       1.0f :
-                       (idot_axis < idot_min) ? 0.0f :
-                                                ((idot_axis - idot_min) / (idot_max - idot_min)));
+      alpha_fac = ((idot_axis > idot_max) ? 1.0f :
+                   (idot_axis < idot_min) ? 0.0f :
+                                            ((idot_axis - idot_min) / (idot_max - idot_min)));
     }
     else {
       alpha_fac = 1.0f;
@@ -521,7 +520,7 @@ static void protectflag_to_drawflags_pchan(RegionView3D *rv3d,
   }
 }
 
-/* for editmode*/
+/* For editmode. */
 static void protectflag_to_drawflags_ebone(RegionView3D *rv3d, const EditBone *ebo)
 {
   if (ebo->flag & BONE_EDITMODE_LOCKED) {

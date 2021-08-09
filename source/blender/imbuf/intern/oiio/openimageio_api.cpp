@@ -28,7 +28,7 @@
 #  define _USE_MATH_DEFINES
 #endif
 
-// NOTE: Keep first, BLI_path_util conflicts with OIIO's format.
+/* NOTE: Keep first, #BLI_path_util conflicts with OIIO's format. */
 #include "openimageio_api.h"
 #include <OpenImageIO/imageio.h>
 #include <memory>
@@ -156,7 +156,7 @@ static ImBuf *imb_oiio_load_image_float(
   /* ImBuf always needs 4 channels */
   fill_all_channels((float *)ibuf->rect_float, width, height, components, 1.0f);
 
-  /* Note: Photoshop 16 bit files never has alpha with it,
+  /* NOTE: Photoshop 16 bit files never has alpha with it,
    * so no need to handle associated/unassociated alpha. */
   return ibuf;
 }

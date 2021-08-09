@@ -656,7 +656,7 @@ static void txt_add_object(bContext *C,
   obedit = BKE_object_add(bmain, view_layer, OB_FONT, NULL);
   base = view_layer->basact;
 
-  /* seems to assume view align ? TODO - look into this, could be an operator option */
+  /* seems to assume view align ? TODO: look into this, could be an operator option. */
   ED_object_base_init_transform_on_add(base->object, NULL, rot);
 
   BKE_object_where_is_calc(depsgraph, scene, obedit);
@@ -1573,7 +1573,8 @@ static int delete_exec(bContext *C, wmOperator *op)
         else if (*sel >= range[1]) {
           *sel -= len_remove;
         }
-        else if (*sel < range[1]) {
+        else {
+          BLI_assert(*sel < range[1]);
           /* pass */
           *sel = range[0];
         }

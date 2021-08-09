@@ -37,6 +37,7 @@
 
 #include "BKE_action.h"
 #include "BKE_armature.h"
+#include "BKE_deform.h"
 #include "BKE_modifier.h"
 
 #include "DEG_depsgraph_query.h"
@@ -699,7 +700,7 @@ static void drw_shgroup_bone_ik_spline_lines(ArmatureDrawContext *ctx,
 /* -------------------------------------------------------------------- */
 /** \name Drawing Theme Helpers
  *
- * Note, this section is duplicate of code in 'drawarmature.c'.
+ * \note this section is duplicate of code in 'drawarmature.c'.
  *
  * \{ */
 
@@ -1031,32 +1032,32 @@ static void pchan_draw_data_init(bPoseChannel *pchan)
 static void draw_bone_update_disp_matrix_default(EditBone *eBone, bPoseChannel *pchan)
 {
   float ebmat[4][4];
-  float length;
+  float bone_scale[3];
   float(*bone_mat)[4];
   float(*disp_mat)[4];
   float(*disp_tail_mat)[4];
 
-  /* TODO : This should be moved to depsgraph or armature refresh
+  /* TODO: This should be moved to depsgraph or armature refresh
    * and not be tight to the draw pass creation.
    * This would refresh armature without invalidating the draw cache */
   if (pchan) {
-    length = pchan->bone->length;
     bone_mat = pchan->pose_mat;
     disp_mat = pchan->disp_mat;
     disp_tail_mat = pchan->disp_tail_mat;
+    copy_v3_fl(bone_scale, pchan->bone->length);
   }
   else {
     eBone->length = len_v3v3(eBone->tail, eBone->head);
     ED_armature_ebone_to_mat4(eBone, ebmat);
 
-    length = eBone->length;
+    copy_v3_fl(bone_scale, eBone->length);
     bone_mat = ebmat;
     disp_mat = eBone->disp_mat;
     disp_tail_mat = eBone->disp_tail_mat;
   }
 
   copy_m4_m4(disp_mat, bone_mat);
-  rescale_m4(disp_mat, (float[3]){length, length, length});
+  rescale_m4(disp_mat, bone_scale);
   copy_m4_m4(disp_tail_mat, disp_mat);
   translate_m4(disp_tail_mat, 0.0f, 1.0f, 0.0f);
 }
@@ -1167,21 +1168,28 @@ static void ebone_spline_preview(EditBone *ebone, const float result_array[MAX_B
   param.roll1 = ebone->roll1;
   param.roll2 = ebone->roll2;
 
-  if (prev && (ebone->flag & BONE_ADD_PARENT_END_ROLL)) {
+  if (prev && (ebone->bbone_flag & BBONE_ADD_PARENT_END_ROLL)) {
     param.roll1 += prev->roll2;
   }
 
-  param.scale_in_x = ebone->scale_in_x;
-  param.scale_in_y = ebone->scale_in_y;
-
-  param.scale_out_x = ebone->scale_out_x;
-  param.scale_out_y = ebone->scale_out_y;
+  copy_v3_v3(param.scale_in, ebone->scale_in);
+  copy_v3_v3(param.scale_out, ebone->scale_out);
 
   param.curve_in_x = ebone->curve_in_x;
-  param.curve_in_y = ebone->curve_in_y;
+  param.curve_in_z = ebone->curve_in_z;
 
   param.curve_out_x = ebone->curve_out_x;
-  param.curve_out_y = ebone->curve_out_y;
+  param.curve_out_z = ebone->curve_out_z;
+
+  if (ebone->bbone_flag & BBONE_SCALE_EASING) {
+    param.ease1 *= param.scale_in[1];
+    param.curve_in_x *= param.scale_in[1];
+    param.curve_in_z *= param.scale_in[1];
+
+    param.ease2 *= param.scale_out[1];
+    param.curve_out_x *= param.scale_out[1];
+    param.curve_out_z *= param.scale_out[1];
+  }
 
   ebone->segments = BKE_pchan_bbone_spline_compute(&param, false, (Mat4 *)result_array);
 }
@@ -1193,9 +1201,9 @@ static void draw_bone_update_disp_matrix_bbone(EditBone *eBone, bPoseChannel *pc
   float(*bone_mat)[4];
   short bbone_segments;
 
-  /* TODO : This should be moved to depsgraph or armature refresh
+  /* TODO: This should be moved to depsgraph or armature refresh
    * and not be tight to the draw pass creation.
-   * This would refresh armature without invalidating the draw cache */
+   * This would refresh armature without invalidating the draw cache. */
   if (pchan) {
     length = pchan->bone->length;
     xwidth = pchan->bone->xwidth;
@@ -1255,19 +1263,27 @@ static void draw_bone_update_disp_matrix_bbone(EditBone *eBone, bPoseChannel *pc
 
 static void draw_bone_update_disp_matrix_custom(bPoseChannel *pchan)
 {
-  float length;
+  float bone_scale[3];
   float(*bone_mat)[4];
   float(*disp_mat)[4];
   float(*disp_tail_mat)[4];
+  float rot_mat[3][3];
 
-  /* See TODO above */
-  length = PCHAN_CUSTOM_DRAW_SIZE(pchan);
+  /* See TODO: above. */
+  mul_v3_v3fl(bone_scale, pchan->custom_scale_xyz, PCHAN_CUSTOM_BONE_LENGTH(pchan));
   bone_mat = pchan->custom_tx ? pchan->custom_tx->pose_mat : pchan->pose_mat;
   disp_mat = pchan->disp_mat;
   disp_tail_mat = pchan->disp_tail_mat;
 
+  eulO_to_mat3(rot_mat, pchan->custom_rotation_euler, ROT_MODE_XYZ);
+
   copy_m4_m4(disp_mat, bone_mat);
-  rescale_m4(disp_mat, (float[3]){length, length, length});
+  translate_m4(disp_mat,
+               pchan->custom_translation[0],
+               pchan->custom_translation[1],
+               pchan->custom_translation[2]);
+  mul_m4_m4m3(disp_mat, disp_mat, rot_mat);
+  rescale_m4(disp_mat, bone_scale);
   copy_m4_m4(disp_tail_mat, disp_mat);
   translate_m4(disp_tail_mat, 0.0f, 1.0f, 0.0f);
 }
@@ -1278,10 +1294,9 @@ static void draw_axes(ArmatureDrawContext *ctx,
                       const bArmature *arm)
 {
   float final_col[4];
-  const float *col = (ctx->const_color) ?
-                         ctx->const_color :
-                         (BONE_FLAG(eBone, pchan) & BONE_SELECTED) ? G_draw.block.colorTextHi :
-                                                                     G_draw.block.colorText;
+  const float *col = (ctx->const_color)                        ? ctx->const_color :
+                     (BONE_FLAG(eBone, pchan) & BONE_SELECTED) ? G_draw.block.colorTextHi :
+                                                                 G_draw.block.colorText;
   copy_v4_v4(final_col, col);
   /* Mix with axes color. */
   final_col[3] = (ctx->const_color) ? 1.0 : (BONE_FLAG(eBone, pchan) & BONE_SELECTED) ? 0.1 : 0.65;
@@ -1874,7 +1889,7 @@ static void draw_bone_name(ArmatureDrawContext *ctx,
   bool highlight = (pchan && (arm->flag & ARM_POSEMODE) && (boneflag & BONE_SELECTED)) ||
                    (eBone && (eBone->flag & BONE_SELECTED));
 
-  /* Color Management: Exception here as texts are drawn in sRGB space directly.  */
+  /* Color Management: Exception here as texts are drawn in sRGB space directly. */
   UI_GetThemeColor4ubv(highlight ? TH_TEXT_HI : TH_TEXT, color);
 
   float *head = pchan ? pchan->pose_head : eBone->head;
@@ -2003,7 +2018,7 @@ static void draw_armature_pose(ArmatureDrawContext *ctx)
                  ((draw_ctx->object_mode == OB_MODE_OBJECT) &&
                   (scene->toolsettings->object_flag & SCE_OBJECT_MODE_LOCK) == 0) ||
                  /* Allow selection when in weight-paint mode
-                  * (selection code ensures this wont become active). */
+                  * (selection code ensures this won't become active). */
                  ((draw_ctx->object_mode & OB_MODE_ALL_WEIGHT_PAINT) &&
                   (draw_ctx->object_pose != NULL))))) &&
         DRW_state_is_select();
@@ -2025,7 +2040,8 @@ static void draw_armature_pose(ArmatureDrawContext *ctx)
 
     const Object *obact_orig = DEG_get_original_object(draw_ctx->obact);
 
-    LISTBASE_FOREACH (bDeformGroup *, dg, &obact_orig->defbase) {
+    const ListBase *defbase = BKE_object_defgroup_list(obact_orig);
+    LISTBASE_FOREACH (const bDeformGroup *, dg, defbase) {
       if (dg->flag & DG_LOCK_WEIGHT) {
         pchan = BKE_pose_channel_find_name(ob->pose, dg->name);
 
@@ -2055,9 +2071,8 @@ static void draw_armature_pose(ArmatureDrawContext *ctx)
           set_pchan_colorset(ctx, ob, pchan);
         }
 
-        int boneflag = bone->flag;
         /* catch exception for bone with hidden parent */
-        boneflag = bone->flag;
+        int boneflag = bone->flag;
         if ((bone->parent) && (bone->parent->flag & (BONE_HIDDEN_P | BONE_HIDDEN_PG))) {
           boneflag &= ~BONE_CONNECTED;
         }

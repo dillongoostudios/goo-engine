@@ -156,11 +156,11 @@ class BONE_PT_curved(BoneButtonsPanel, Panel):
 
         col = topcol.column(align=True)
         col.prop(bbone, "bbone_curveinx", text="Curve In X")
-        col.prop(bbone, "bbone_curveiny", text="In Y")
+        col.prop(bbone, "bbone_curveinz", text="Z")
 
         col = topcol.column(align=True)
         col.prop(bbone, "bbone_curveoutx", text="Curve Out X")
-        col.prop(bbone, "bbone_curveouty", text="Out Y")
+        col.prop(bbone, "bbone_curveoutz", text="Z")
 
         col = topcol.column(align=True)
         col.prop(bbone, "bbone_rollin", text="Roll In")
@@ -168,30 +168,55 @@ class BONE_PT_curved(BoneButtonsPanel, Panel):
         col.prop(bone, "use_endroll_as_inroll")
 
         col = topcol.column(align=True)
-        col.prop(bbone, "bbone_scaleinx", text="Scale In X")
-        col.prop(bbone, "bbone_scaleiny", text="In Y")
+        col.prop(bbone, "bbone_scalein", text="Scale In")
 
         col = topcol.column(align=True)
-        col.prop(bbone, "bbone_scaleoutx", text="Scale Out X")
-        col.prop(bbone, "bbone_scaleouty", text="Out Y")
+        col.prop(bbone, "bbone_scaleout", text="Scale Out")
 
         col = topcol.column(align=True)
         col.prop(bbone, "bbone_easein", text="Ease In")
         col.prop(bbone, "bbone_easeout", text="Out")
+        col.prop(bone, "use_scale_easing")
 
         col = topcol.column(align=True)
         col.prop(bone, "bbone_handle_type_start", text="Start Handle")
 
-        col = col.column(align=True)
-        col.active = (bone.bbone_handle_type_start != 'AUTO')
-        col.prop_search(bone, "bbone_custom_handle_start", arm, bone_list, text="Custom")
+        col2 = col.column(align=True)
+        col2.active = (bone.bbone_handle_type_start != 'AUTO')
+        col2.prop_search(bone, "bbone_custom_handle_start", arm, bone_list, text="Custom")
+
+        row = col.row(align=True)
+        row.use_property_split = False
+        split = row.split(factor=0.4)
+        split.alignment = 'RIGHT'
+        split.label(text="Scale")
+        split2 = split.split(factor=0.7)
+        row2 = split2.row(align=True)
+        row2.prop(bone, "bbone_handle_use_scale_start", index=0, text="X", toggle=True)
+        row2.prop(bone, "bbone_handle_use_scale_start", index=1, text="Y", toggle=True)
+        row2.prop(bone, "bbone_handle_use_scale_start", index=2, text="Z", toggle=True)
+        split2.prop(bone, "bbone_handle_use_ease_start", text="Ease", toggle=True)
+        row.label(icon="BLANK1")
 
         col = topcol.column(align=True)
         col.prop(bone, "bbone_handle_type_end", text="End Handle")
 
-        col = col.column(align=True)
-        col.active = (bone.bbone_handle_type_end != 'AUTO')
-        col.prop_search(bone, "bbone_custom_handle_end", arm, bone_list, text="Custom")
+        col2 = col.column(align=True)
+        col2.active = (bone.bbone_handle_type_end != 'AUTO')
+        col2.prop_search(bone, "bbone_custom_handle_end", arm, bone_list, text="Custom")
+
+        row = col.row(align=True)
+        row.use_property_split = False
+        split = row.split(factor=0.4)
+        split.alignment = 'RIGHT'
+        split.label(text="Scale")
+        split2 = split.split(factor=0.7)
+        row2 = split2.row(align=True)
+        row2.prop(bone, "bbone_handle_use_scale_end", index=0, text="X", toggle=True)
+        row2.prop(bone, "bbone_handle_use_scale_end", index=1, text="Y", toggle=True)
+        row2.prop(bone, "bbone_handle_use_scale_end", index=2, text="Z", toggle=True)
+        split2.prop(bone, "bbone_handle_use_ease_end", text="Ease", toggle=True)
+        row.label(icon="BLANK1")
 
 
 class BONE_PT_relations(BoneButtonsPanel, Panel):
@@ -292,10 +317,15 @@ class BONE_PT_display_custom_shape(BoneButtonsPanel, Panel):
             sub = col.column()
             sub.active = bool(pchan and pchan.custom_shape)
             sub.separator()
-            sub.prop(pchan, "custom_shape_scale", text="Scale")
+
+            sub.prop(pchan, "custom_shape_scale_xyz", text="Scale")
+            sub.prop(pchan, "custom_shape_translation", text="Translation")
+            sub.prop(pchan, "custom_shape_rotation_euler", text="Rotation")
+
             sub.prop_search(pchan, "custom_shape_transform",
                             ob.pose, "bones", text="Override Transform")
             sub.prop(pchan, "use_custom_shape_bone_size")
+
             sub.separator()
             sub.prop(bone, "show_wire", text="Wireframe")
 

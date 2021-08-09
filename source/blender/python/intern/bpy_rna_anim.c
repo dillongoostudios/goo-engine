@@ -240,7 +240,7 @@ static int pyrna_struct_keyframe_parse(PointerRNA *ptr,
   PyObject *pyoptions = NULL;
   const char *path;
 
-  /* note, parse_str MUST start with 's|ifsO!' */
+  /* NOTE: `parse_str` MUST start with `s|ifsO!`. */
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kw,
                                    parse_str,
@@ -324,7 +324,7 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
   if (pyrna_struct_keyframe_parse(&self->ptr,
                                   args,
                                   kw,
-                                  "s|ifsO!:bpy_struct.keyframe_insert()",
+                                  "s|$ifsO!:bpy_struct.keyframe_insert()",
                                   "bpy_struct.keyframe_insert()",
                                   &path_full,
                                   &index,
@@ -443,7 +443,7 @@ PyObject *pyrna_struct_keyframe_delete(BPy_StructRNA *self, PyObject *args, PyOb
   if (pyrna_struct_keyframe_parse(&self->ptr,
                                   args,
                                   kw,
-                                  "s|ifsO!:bpy_struct.keyframe_delete()",
+                                  "s|$ifsO!:bpy_struct.keyframe_delete()",
                                   "bpy_struct.keyframe_insert()",
                                   &path_full,
                                   &index,
@@ -605,7 +605,7 @@ PyObject *pyrna_struct_driver_add(BPy_StructRNA *self, PyObject *args)
     DEG_relations_tag_update(CTX_data_main(context));
   }
   else {
-    /* XXX, should be handled by reports, */
+    /* XXX: should be handled by reports. */
     PyErr_SetString(PyExc_TypeError,
                     "bpy_struct.driver_add(): failed because of an internal error");
     return NULL;

@@ -105,6 +105,11 @@ bool is_quad_flip_v3_first_third_fast(const float v1[3],
                                       const float v2[3],
                                       const float v3[3],
                                       const float v4[3]);
+bool is_quad_flip_v3_first_third_fast_with_normal(const float v1[3],
+                                                  const float v2[3],
+                                                  const float v3[3],
+                                                  const float v4[3],
+                                                  const float normal[3]);
 
 /********************************* Distance **********************************/
 
@@ -119,10 +124,10 @@ float dist_signed_to_plane_v3(const float p[3], const float plane[4]);
 float dist_to_plane_v3(const float p[3], const float plane[4]);
 
 /* plane3 versions */
-float dist_signed_squared_to_plane3_v3(const float p[3], const float plane[4]);
-float dist_squared_to_plane3_v3(const float p[3], const float plane[4]);
-float dist_signed_to_plane3_v3(const float p[3], const float plane[4]);
-float dist_to_plane3_v3(const float p[3], const float plane[4]);
+float dist_signed_squared_to_plane3_v3(const float p[3], const float plane[3]);
+float dist_squared_to_plane3_v3(const float p[3], const float plane[3]);
+float dist_signed_to_plane3_v3(const float p[3], const float plane[3]);
+float dist_to_plane3_v3(const float p[3], const float plane[3]);
 
 float dist_squared_to_line_segment_v3(const float p[3], const float l1[3], const float l2[3]);
 float dist_to_line_segment_v3(const float p[3], const float l1[3], const float l2[3]);
@@ -250,7 +255,7 @@ void limit_dist_v3(float v1[3], float v2[3], const float dist);
 
 /******************************* Intersection ********************************/
 
-/* TODO int return value consistency */
+/* TODO: int return value consistency. */
 
 /* line-line */
 #define ISECT_LINE_LINE_COLINEAR -1
@@ -672,8 +677,8 @@ void window_translate_m4(float winmat[4][4], float perspmat[4][4], const float x
 void planes_from_projmat(const float mat[4][4],
                          float left[4],
                          float right[4],
-                         float top[4],
                          float bottom[4],
+                         float top[4],
                          float near[4],
                          float far[4]);
 
@@ -778,7 +783,7 @@ MINLINE float dot_shsh(const float a[9], const float b[9]);
 MINLINE float eval_shv3(float r[9], const float v[3]);
 MINLINE float diffuse_shv3(float r[9], const float v[3]);
 MINLINE void vec_fac_to_sh(float r[9], const float v[3], const float f);
-MINLINE void madd_sh_shfl(float r[9], const float sh[3], const float f);
+MINLINE void madd_sh_shfl(float r[9], const float sh[9], const float f);
 
 /********************************* Form Factor *******************************/
 

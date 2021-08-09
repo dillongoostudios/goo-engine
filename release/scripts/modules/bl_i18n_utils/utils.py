@@ -781,7 +781,6 @@ class I18nMessages:
             print("Could not import bpy, find_best_messages_matches must be run from whithin Blender.")
             return
 
-
         # Build helper mappings.
         # Note it's user responsibility to know when to invalidate (and hence force rebuild) this cache!
         if self._reverse_cache is None:
@@ -1572,7 +1571,7 @@ class I18n:
             if not os.path.isfile(dst):
                 print("WARNING: trying to write as python code into {}, which is not a file! Aborting.".format(dst))
                 return
-            prev, txt, nxt, has_trans = self._parser_check_file(dst)
+            prev, txt, nxt, _has_trans = self._parser_check_file(dst)
             if prev is None and nxt is None:
                 print("WARNING: Looks like given python file {} has no auto-generated translations yet, will be added "
                       "at the end of the file, you can move that section later if needed...".format(dst))

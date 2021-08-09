@@ -20,7 +20,7 @@
 
 set(INC
   .
-  # ../blenkernel  # dont add this back!
+  # ../blenkernel  # don't add this back!
   ../makesdna
   ../../../intern/atomic
   ../../../intern/eigen
@@ -39,6 +39,7 @@ set(SRC
   intern/BLI_args.c
   intern/BLI_array.c
   intern/BLI_assert.c
+  intern/BLI_color.cc
   intern/BLI_dial_2d.c
   intern/BLI_dynstr.c
   intern/BLI_filelist.c
@@ -102,6 +103,7 @@ set(SRC
   intern/math_rotation.c
   intern/math_solvers.c
   intern/math_statistics.c
+  intern/math_time.c
   intern/math_vec.cc
   intern/math_vector.c
   intern/math_vector_inline.c
@@ -144,6 +146,9 @@ set(SRC
   intern/winstuff.c
   intern/winstuff_dir.c
 
+  # Private headers.
+  intern/BLI_mempool_private.h
+
   # Header as source (included in C files above).
   intern/kdtree_impl.h
   intern/list_sort_impl.h
@@ -183,8 +188,10 @@ set(SRC
   BLI_dynstr.h
   BLI_easing.h
   BLI_edgehash.h
+  BLI_endian_defines.h
   BLI_endian_switch.h
   BLI_endian_switch_inline.h
+  BLI_enumerable_thread_specific.hh
   BLI_expr_pylike_eval.h
   BLI_fileops.h
   BLI_fileops_types.h
@@ -236,6 +243,7 @@ set(SRC
   BLI_math_rotation.h
   BLI_math_solvers.h
   BLI_math_statistics.h
+  BLI_math_time.h
   BLI_math_vector.h
   BLI_memarena.h
   BLI_memblock.h
@@ -388,6 +396,7 @@ if(WITH_GTESTS)
     tests/BLI_array_store_test.cc
     tests/BLI_array_test.cc
     tests/BLI_array_utils_test.cc
+    tests/BLI_color_test.cc
     tests/BLI_delaunay_2d_test.cc
     tests/BLI_disjoint_set_test.cc
     tests/BLI_edgehash_test.cc
@@ -413,6 +422,7 @@ if(WITH_GTESTS)
     tests/BLI_math_matrix_test.cc
     tests/BLI_math_rotation_test.cc
     tests/BLI_math_solvers_test.cc
+    tests/BLI_math_time_test.cc
     tests/BLI_math_vector_test.cc
     tests/BLI_memiter_test.cc
     tests/BLI_memory_utils_test.cc

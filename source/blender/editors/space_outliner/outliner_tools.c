@@ -86,6 +86,8 @@
 #include "UI_resources.h"
 #include "UI_view2d.h"
 
+#include "../../blender/blenloader/BLO_readfile.h"
+
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
@@ -166,7 +168,7 @@ static void get_element_operation_type(
         case ID_WM:
         case ID_SCR:
           /* Those are ignored here. */
-          /* Note: while Screens should be manageable here, deleting a screen used by a workspace
+          /* NOTE: while Screens should be manageable here, deleting a screen used by a workspace
            * will cause crashes when trying to use that workspace, so for now let's play minimal,
            * safe change. */
           break;
@@ -740,7 +742,7 @@ static void id_local_fn(bContext *C,
       BKE_lib_id_clear_library_data(bmain, tselem->id);
     }
     else {
-      BKE_main_id_clear_newpoins(bmain);
+      BKE_main_id_newptr_and_tag_clear(bmain);
     }
   }
   else if (ID_IS_OVERRIDE_LIBRARY_REAL(tselem->id)) {
@@ -846,13 +848,13 @@ static void id_override_library_create_fn(bContext *C,
         te->store_elem->id->tag |= LIB_TAG_DOIT;
       }
       success = BKE_lib_override_library_create(
-          bmain, CTX_data_scene(C), CTX_data_view_layer(C), id_root, id_reference);
+          bmain, CTX_data_scene(C), CTX_data_view_layer(C), id_root, id_reference, NULL);
     }
     else if (ID_IS_OVERRIDABLE_LIBRARY(id_root)) {
       success = BKE_lib_override_library_create_from_id(bmain, id_root, true) != NULL;
 
       /* Cleanup. */
-      BKE_main_id_clear_newpoins(bmain);
+      BKE_main_id_newptr_and_tag_clear(bmain);
       BKE_main_id_tag_all(bmain, LIB_TAG_DOIT, false);
     }
 
@@ -902,7 +904,7 @@ static void id_override_library_reset_fn(bContext *C,
 }
 
 static void id_override_library_resync_fn(bContext *C,
-                                          ReportList *UNUSED(reports),
+                                          ReportList *reports,
                                           Scene *scene,
                                           TreeElement *te,
                                           TreeStoreElem *UNUSED(tsep),
@@ -930,8 +932,14 @@ static void id_override_library_resync_fn(bContext *C,
       te->store_elem->id->tag |= LIB_TAG_DOIT;
     }
 
-    BKE_lib_override_library_resync(
-        bmain, scene, CTX_data_view_layer(C), id_root, NULL, do_hierarchy_enforce, true);
+    BKE_lib_override_library_resync(bmain,
+                                    scene,
+                                    CTX_data_view_layer(C),
+                                    id_root,
+                                    NULL,
+                                    do_hierarchy_enforce,
+                                    true,
+                                    &(struct BlendFileReadReport){.reports = reports});
 
     WM_event_add_notifier(C, NC_WINDOW, NULL);
   }
@@ -1739,8 +1747,6 @@ typedef enum eOutlinerIdOpTypes {
   OUTLINER_IDOP_INVALID = 0,
 
   OUTLINER_IDOP_UNLINK,
-  OUTLINER_IDOP_MARK_ASSET,
-  OUTLINER_IDOP_CLEAR_ASSET,
   OUTLINER_IDOP_LOCAL,
   OUTLINER_IDOP_OVERRIDE_LIBRARY_CREATE,
   OUTLINER_IDOP_OVERRIDE_LIBRARY_CREATE_HIERARCHY,
@@ -1767,8 +1773,6 @@ typedef enum eOutlinerIdOpTypes {
 /* TODO: implement support for changing the ID-block used. */
 static const EnumPropertyItem prop_id_op_types[] = {
     {OUTLINER_IDOP_UNLINK, "UNLINK", 0, "Unlink", ""},
-    {OUTLINER_IDOP_MARK_ASSET, "MARK_ASSET", 0, "Mark Asset", ""},
-    {OUTLINER_IDOP_CLEAR_ASSET, "CLEAR_ASSET", 0, "Clear Asset", ""},
     {OUTLINER_IDOP_LOCAL, "LOCAL", 0, "Make Local", ""},
     {OUTLINER_IDOP_SINGLE, "SINGLE", 0, "Make Single User", ""},
     {OUTLINER_IDOP_DELETE, "DELETE", ICON_X, "Delete", ""},
@@ -1851,9 +1855,6 @@ static bool outliner_id_operation_item_poll(bContext *C,
   }
 
   switch (enum_value) {
-    case OUTLINER_IDOP_MARK_ASSET:
-    case OUTLINER_IDOP_CLEAR_ASSET:
-      return U.experimental.use_asset_browser;
     case OUTLINER_IDOP_OVERRIDE_LIBRARY_CREATE:
       if (ID_IS_OVERRIDABLE_LIBRARY(tselem->id)) {
         return true;
@@ -2006,14 +2007,6 @@ static int outliner_id_operation_exec(bContext *C, wmOperator *op)
           BKE_report(op->reports, RPT_WARNING, "Not yet implemented");
           break;
       }
-      break;
-    }
-    case OUTLINER_IDOP_MARK_ASSET: {
-      WM_operator_name_call(C, "ASSET_OT_mark", WM_OP_EXEC_DEFAULT, NULL);
-      break;
-    }
-    case OUTLINER_IDOP_CLEAR_ASSET: {
-      WM_operator_name_call(C, "ASSET_OT_clear", WM_OP_EXEC_DEFAULT, NULL);
       break;
     }
     case OUTLINER_IDOP_LOCAL: {

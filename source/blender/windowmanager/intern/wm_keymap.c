@@ -135,7 +135,7 @@ static void wm_keymap_item_properties_update_ot(wmKeyMapItem *kmi)
         /* matches wm_keymap_item_properties_set but doesn't alloc new ptr */
         WM_operator_properties_create_ptr(kmi->ptr, ot);
         /* 'kmi->ptr->data' NULL'd above, keep using existing properties.
-         * Note: the operators property types may have changed,
+         * NOTE: the operators property types may have changed,
          * we will need a more comprehensive sanitize function to support this properly.
          */
         if (kmi->properties) {
@@ -971,7 +971,7 @@ static const wmKeyMapItem *wm_modalkeymap_find_propvalue_iter(const wmKeyMap *km
     }
   }
   else {
-    BLI_assert(!"called with non modal keymap");
+    BLI_assert_msg(0, "called with non modal keymap");
   }
 
   return NULL;
@@ -1787,7 +1787,7 @@ void WM_keyconfig_update(wmWindowManager *wm)
   }
 
   if (wm_keymap_update_flag & WM_KEYMAP_UPDATE_OPERATORTYPE) {
-    /* an operatortype has been removed, this wont happen often
+    /* an operatortype has been removed, this won't happen often
      * but when it does we have to check _every_ keymap item */
     ListBase *keymaps_lb[] = {
         &U.user_keymaps,

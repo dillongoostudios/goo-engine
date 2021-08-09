@@ -49,20 +49,20 @@ GHOST_TSuccess GHOST_DisplayManager::initialize(void)
   return success;
 }
 
-GHOST_TSuccess GHOST_DisplayManager::getNumDisplays(GHOST_TUns8 & /*numDisplays*/) const
+GHOST_TSuccess GHOST_DisplayManager::getNumDisplays(uint8_t & /*numDisplays*/) const
 {
-  // Don't know if we have a display...
+  /* Don't know if we have a display. */
   return GHOST_kFailure;
 }
 
-GHOST_TSuccess GHOST_DisplayManager::getNumDisplaySettings(GHOST_TUns8 display,
-                                                           GHOST_TInt32 &numSettings) const
+GHOST_TSuccess GHOST_DisplayManager::getNumDisplaySettings(uint8_t display,
+                                                           int32_t &numSettings) const
 {
   GHOST_TSuccess success;
 
   GHOST_ASSERT(m_settingsInitialized,
                "GHOST_DisplayManager::getNumDisplaySettings(): m_settingsInitialized=false");
-  GHOST_TUns8 numDisplays;
+  uint8_t numDisplays;
   success = getNumDisplays(numDisplays);
   if (success == GHOST_kSuccess) {
     if (display < numDisplays) {
@@ -75,18 +75,18 @@ GHOST_TSuccess GHOST_DisplayManager::getNumDisplaySettings(GHOST_TUns8 display,
   return success;
 }
 
-GHOST_TSuccess GHOST_DisplayManager::getDisplaySetting(GHOST_TUns8 display,
-                                                       GHOST_TInt32 index,
+GHOST_TSuccess GHOST_DisplayManager::getDisplaySetting(uint8_t display,
+                                                       int32_t index,
                                                        GHOST_DisplaySetting &setting) const
 {
   GHOST_TSuccess success;
 
   GHOST_ASSERT(m_settingsInitialized,
                "GHOST_DisplayManager::getNumDisplaySettings(): m_settingsInitialized=false");
-  GHOST_TUns8 numDisplays;
+  uint8_t numDisplays;
   success = getNumDisplays(numDisplays);
   if (success == GHOST_kSuccess) {
-    if (display < numDisplays && ((GHOST_TUns8)index < m_settings[display].size())) {
+    if (display < numDisplays && ((uint8_t)index < m_settings[display].size())) {
       setting = m_settings[display][index];
     }
     else {
@@ -97,18 +97,18 @@ GHOST_TSuccess GHOST_DisplayManager::getDisplaySetting(GHOST_TUns8 display,
 }
 
 GHOST_TSuccess GHOST_DisplayManager::getCurrentDisplaySetting(
-    GHOST_TUns8 /*display*/, GHOST_DisplaySetting & /*setting*/) const
+    uint8_t /*display*/, GHOST_DisplaySetting & /*setting*/) const
 {
   return GHOST_kFailure;
 }
 
 GHOST_TSuccess GHOST_DisplayManager::setCurrentDisplaySetting(
-    GHOST_TUns8 /*display*/, const GHOST_DisplaySetting & /*setting*/)
+    uint8_t /*display*/, const GHOST_DisplaySetting & /*setting*/)
 {
   return GHOST_kFailure;
 }
 
-GHOST_TSuccess GHOST_DisplayManager::findMatch(GHOST_TUns8 display,
+GHOST_TSuccess GHOST_DisplayManager::findMatch(uint8_t display,
                                                const GHOST_DisplaySetting &setting,
                                                GHOST_DisplaySetting &match) const
 {
@@ -120,18 +120,18 @@ GHOST_TSuccess GHOST_DisplayManager::findMatch(GHOST_TUns8 display,
       (int)setting.xPixels, (int)setting.yPixels, (int)setting.bpp, (int)setting.frequency};
   int capabilities[4];
   double field, score;
-  double best = 1e12;  // A big number
+  double best = 1e12; /* A big number. */
   int found = 0;
 
-  // Look at all the display modes
+  /* Look at all the display modes. */
   for (int i = 0; (i < (int)m_settings[display].size()); i++) {
-    // Store the capabilities of the display device
+    /* Store the capabilities of the display device. */
     capabilities[0] = m_settings[display][i].xPixels;
     capabilities[1] = m_settings[display][i].yPixels;
     capabilities[2] = m_settings[display][i].bpp;
     capabilities[3] = m_settings[display][i].frequency;
 
-    // Match against all the fields of the display settings
+    /* Match against all the fields of the display settings. */
     score = 0;
     for (int j = 0; j < 4; j++) {
       field = capabilities[j] - criteria[j];
@@ -157,17 +157,16 @@ GHOST_TSuccess GHOST_DisplayManager::findMatch(GHOST_TUns8 display,
 
 GHOST_TSuccess GHOST_DisplayManager::initializeSettings(void)
 {
-  GHOST_TUns8 numDisplays;
+  uint8_t numDisplays;
   GHOST_TSuccess success = getNumDisplays(numDisplays);
   if (success == GHOST_kSuccess) {
-    for (GHOST_TUns8 display = 0; (display < numDisplays) && (success == GHOST_kSuccess);
-         display++) {
+    for (uint8_t display = 0; (display < numDisplays) && (success == GHOST_kSuccess); display++) {
       GHOST_DisplaySettings displaySettings;
       m_settings.push_back(displaySettings);
-      GHOST_TInt32 numSettings;
+      int32_t numSettings;
       success = getNumDisplaySettings(display, numSettings);
       if (success == GHOST_kSuccess) {
-        GHOST_TInt32 index;
+        int32_t index;
         GHOST_DisplaySetting setting;
         for (index = 0; (index < numSettings) && (success == GHOST_kSuccess); index++) {
           success = getDisplaySetting(display, index, setting);

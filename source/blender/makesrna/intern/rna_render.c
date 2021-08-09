@@ -72,9 +72,6 @@ const EnumPropertyItem rna_enum_render_pass_type_items[] = {
     {SCE_PASS_SUBSURFACE_DIRECT, "SUBSURFACE_DIRECT", 0, "Subsurface Direct", ""},
     {SCE_PASS_SUBSURFACE_INDIRECT, "SUBSURFACE_INDIRECT", 0, "Subsurface Indirect", ""},
     {SCE_PASS_SUBSURFACE_COLOR, "SUBSURFACE_COLOR", 0, "Subsurface Color", ""},
-#ifdef WITH_CYCLES_DEBUG
-    {SCE_PASS_DEBUG, "DEBUG", 0, "Pass used for render engine debugging", ""},
-#endif
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -855,6 +852,16 @@ static void rna_def_render_engine(BlenderRNA *brna)
       prop,
       "Use Custom Freestyle",
       "Handles freestyle rendering on its own, instead of delegating it to EEVEE");
+
+  prop = RNA_def_property(srna, "bl_use_image_save", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "type->flag", RE_USE_NO_IMAGE_SAVE);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+  RNA_def_property_ui_text(
+      prop,
+      "Use Image Save",
+      "Save images/movie to disk while rendering an animation. "
+      "Disabling image saving is only supported when bl_use_postprocess is also disabled");
 
   prop = RNA_def_property(srna, "bl_use_gpu_context", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "type->flag", RE_USE_GPU_CONTEXT);

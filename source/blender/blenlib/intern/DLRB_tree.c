@@ -128,7 +128,9 @@ void BLI_dlrbTree_linkedlist_sync(DLRBT_Tree *tree)
 /* Tree Search Utilities */
 
 /* Find the node which matches or is the closest to the requested node */
-DLRBT_Node *BLI_dlrbTree_search(DLRBT_Tree *tree, DLRBT_Comparator_FP cmp_cb, void *search_data)
+DLRBT_Node *BLI_dlrbTree_search(const DLRBT_Tree *tree,
+                                DLRBT_Comparator_FP cmp_cb,
+                                void *search_data)
 {
   DLRBT_Node *node = (tree) ? tree->root : NULL;
   short found = 0;
@@ -174,7 +176,7 @@ DLRBT_Node *BLI_dlrbTree_search(DLRBT_Tree *tree, DLRBT_Comparator_FP cmp_cb, vo
 }
 
 /* Find the node which exactly matches the required data */
-DLRBT_Node *BLI_dlrbTree_search_exact(DLRBT_Tree *tree,
+DLRBT_Node *BLI_dlrbTree_search_exact(const DLRBT_Tree *tree,
                                       DLRBT_Comparator_FP cmp_cb,
                                       void *search_data)
 {
@@ -222,7 +224,7 @@ DLRBT_Node *BLI_dlrbTree_search_exact(DLRBT_Tree *tree,
 }
 
 /* Find the node which occurs immediately before the best matching node */
-DLRBT_Node *BLI_dlrbTree_search_prev(DLRBT_Tree *tree,
+DLRBT_Node *BLI_dlrbTree_search_prev(const DLRBT_Tree *tree,
                                      DLRBT_Comparator_FP cmp_cb,
                                      void *search_data)
 {
@@ -253,7 +255,7 @@ DLRBT_Node *BLI_dlrbTree_search_prev(DLRBT_Tree *tree,
 }
 
 /* Find the node which occurs immediately after the best matching node */
-DLRBT_Node *BLI_dlrbTree_search_next(DLRBT_Tree *tree,
+DLRBT_Node *BLI_dlrbTree_search_next(const DLRBT_Tree *tree,
                                      DLRBT_Comparator_FP cmp_cb,
                                      void *search_data)
 {
@@ -414,7 +416,7 @@ static void rotate_right(DLRBT_Tree *tree, DLRBT_Node *root)
 }
 
 /* *********************************************** */
-/* Post-Insertion Balancing  */
+/* Post-Insertion Balancing */
 
 /* forward defines for insertion checks */
 static void insert_check_1(DLRBT_Tree *tree, DLRBT_Node *node);
@@ -472,7 +474,7 @@ static void insert_check_2(DLRBT_Tree *tree, DLRBT_Node *node)
   }
 }
 
-/* W. 4+5) Perform rotation on sub-tree containing the 'new' node, then do any  */
+/* W. 4+5) Perform rotation on sub-tree containing the 'new' node, then do any. */
 static void insert_check_3(DLRBT_Tree *tree, DLRBT_Node *node)
 {
   DLRBT_Node *gp = get_grandparent(node);

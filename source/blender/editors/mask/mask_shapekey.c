@@ -173,7 +173,7 @@ static int mask_shape_key_feather_reset_exec(bContext *C, wmOperator *UNUSED(op)
               MaskSplinePoint *point = &spline->points[i];
 
               if (MASKPOINT_ISSEL_ANY(point)) {
-                /* TODO - nicer access here */
+                /* TODO: nicer access here. */
                 shape_ele_dst->value[6] = shape_ele_src->value[6];
               }
 
@@ -220,8 +220,8 @@ void MASK_OT_shape_key_feather_reset(wmOperatorType *ot)
 }
 
 /*
- * - loop over selected shapekeys.
- * - find firstsel/lastsel pairs.
+ * - loop over selected shape-keys.
+ * - find first-selected/last-selected pairs.
  * - move these into a temp list.
  * - re-key all the original shapes.
  * - copy unselected values back from the original.
@@ -291,7 +291,7 @@ static int mask_shape_key_rekey_exec(bContext *C, wmOperator *op)
             BLI_addtail(&shapes_tmp, mask_layer_shape_tmp);
           }
 
-          /* re-key, note: cant modify the keys here since it messes uop */
+          /* re-key, NOTE: can't modify the keys here since it messes up. */
           for (mask_layer_shape_tmp = shapes_tmp.first; mask_layer_shape_tmp;
                mask_layer_shape_tmp = mask_layer_shape_tmp->next) {
             BKE_mask_layer_evaluate(mask_layer, mask_layer_shape_tmp->frame, true);

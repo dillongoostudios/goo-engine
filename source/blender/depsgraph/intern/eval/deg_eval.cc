@@ -45,6 +45,7 @@
 
 #include "intern/depsgraph.h"
 #include "intern/depsgraph_relation.h"
+#include "intern/depsgraph_tag.h"
 #include "intern/eval/deg_eval_copy_on_write.h"
 #include "intern/eval/deg_eval_flush.h"
 #include "intern/eval/deg_eval_stats.h"
@@ -102,7 +103,7 @@ void evaluate_node(const DepsgraphEvalState *state, OperationNode *operation_nod
   ::Depsgraph *depsgraph = reinterpret_cast<::Depsgraph *>(state->graph);
 
   /* Sanity checks. */
-  BLI_assert(!operation_node->is_noop() && "NOOP nodes should not actually be scheduled");
+  BLI_assert_msg(!operation_node->is_noop(), "NOOP nodes should not actually be scheduled");
   /* Perform operation. */
   if (state->do_stats) {
     const double start_time = PIL_check_seconds_timer();
@@ -222,7 +223,7 @@ bool need_evaluate_operation_at_stage(DepsgraphEvalState *state,
     case EvaluationStage::SINGLE_THREADED_WORKAROUND:
       return true;
   }
-  BLI_assert(!"Unhandled evaluation stage, should never happen.");
+  BLI_assert_msg(0, "Unhandled evaluation stage, should never happen.");
   return false;
 }
 
@@ -365,6 +366,8 @@ static TaskPool *deg_evaluate_task_pool_create(DepsgraphEvalState *state)
  */
 void deg_evaluate_on_refresh(Depsgraph *graph)
 {
+  graph_tag_ids_for_visible_update(graph);
+
   /* Nothing to update, early out. */
   if (graph->entry_tags.is_empty()) {
     return;

@@ -132,7 +132,7 @@ void BLI_kdtree_nd_(insert)(KDTree *tree, int index, const float co[KD_DIMS])
   BLI_assert(tree->nodes_len <= tree->nodes_len_capacity);
 #endif
 
-  /* note, array isn't calloc'd,
+  /* NOTE: array isn't calloc'd,
    * need to initialize all struct members */
 
   node->left = node->right = KD_NODE_UNSET;
@@ -882,7 +882,7 @@ static void deduplicate_recursive(const struct DeDuplicateParams *p, uint i)
  * although it can still be used as a target.
  * \returns The number of merges found (includes any merges already in the \a duplicates array).
  *
- * \note Merging is always a single step (target indices wont be marked for merging).
+ * \note Merging is always a single step (target indices won't be marked for merging).
  */
 int BLI_kdtree_nd_(calc_duplicates_fast)(const KDTree *tree,
                                          const float range,
@@ -967,7 +967,7 @@ static int kdtree_node_cmp_deduplicate(const void *n0_p, const void *n1_p)
 }
 
 /**
- * Remove exact duplicates (run before before balancing).
+ * Remove exact duplicates (run before balancing).
  *
  * Keep the first element added when duplicates are found.
  */

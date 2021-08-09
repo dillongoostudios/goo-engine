@@ -205,6 +205,13 @@ static void composite_node_add_init(bNodeTree *UNUSED(bnodetree), bNode *bnode)
   }
 }
 
+static bool composite_node_tree_socket_type_valid(bNodeTreeType *UNUSED(ntreetype),
+                                                  bNodeSocketType *socket_type)
+{
+  return nodeIsStaticSocketType(socket_type) &&
+         ELEM(socket_type->type, SOCK_FLOAT, SOCK_VECTOR, SOCK_RGBA);
+}
+
 bNodeTreeType *ntreeType_Composite;
 
 void register_node_tree_type_cmp(void)
@@ -227,6 +234,7 @@ void register_node_tree_type_cmp(void)
   tt->update = update;
   tt->get_from_context = composite_get_from_context;
   tt->node_add_init = composite_node_add_init;
+  tt->valid_socket_type = composite_node_tree_socket_type_valid;
 
   tt->rna_ext.srna = &RNA_CompositorNodeTree;
 
@@ -256,14 +264,15 @@ void ntreeCompositExecTree(Scene *scene,
 
 /* *********************************************** */
 
-/* Update the outputs of the render layer nodes.
+/**
+ * Update the outputs of the render layer nodes.
  * Since the outputs depend on the render engine, this part is a bit complex:
- * - ntreeCompositUpdateRLayers is called and loops over all render layer nodes.
+ * - #ntreeCompositUpdateRLayers is called and loops over all render layer nodes.
  * - Each render layer node calls the update function of the
  *   render engine that's used for its scene.
  * - The render engine calls RE_engine_register_pass for each pass.
- * - RE_engine_register_pass calls ntreeCompositRegisterPass,.
- *   which calls node_cmp_rlayers_register_pass for every render layer node.
+ * - #RE_engine_register_pass calls #ntreeCompositRegisterPass,
+ *   which calls #node_cmp_rlayers_register_pass for every render layer node.
  */
 void ntreeCompositUpdateRLayers(bNodeTree *ntree)
 {

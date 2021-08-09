@@ -51,9 +51,11 @@
 
 /*********************** utilities for finding areas *************************/
 
-/* returns biggest area that is not uv/image editor. Note that it uses buttons */
-/* window as the last possible alternative.                                    */
-/* would use BKE_screen_find_big_area(...) but this is too specific            */
+/**
+ * Returns biggest area that is not uv/image editor. Note that it uses buttons
+ * window as the last possible alternative.
+ * would use #BKE_screen_find_big_area(...) but this is too specific.
+ */
 static ScrArea *biggest_non_image_area(bContext *C)
 {
   bScreen *screen = CTX_wm_screen(C);
@@ -164,6 +166,7 @@ ScrArea *render_view_open(bContext *C, int mx, int my, ReportList *reports)
                        sizex,
                        sizey,
                        SPACE_IMAGE,
+                       true,
                        false,
                        true,
                        WIN_ALIGN_LOCATION_CENTER) == NULL) {

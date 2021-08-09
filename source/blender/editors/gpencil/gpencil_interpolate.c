@@ -278,7 +278,7 @@ static void gpencil_stroke_pair_table(bContext *C,
                                       tGPDinterpolate_layer *tgpil)
 {
   bGPdata *gpd = tgpi->gpd;
-  const bool only_selected = ((GPENCIL_EDIT_MODE(gpd)) &&
+  const bool only_selected = (GPENCIL_EDIT_MODE(gpd) &&
                               ((tgpi->flag & GP_TOOLFLAG_INTERPOLATE_ONLY_SELECTED) != 0));
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
 
@@ -291,8 +291,7 @@ static void gpencil_stroke_pair_table(bContext *C,
   LISTBASE_FOREACH (bGPDstroke *, gps_from, &tgpil->prevFrame->strokes) {
     bGPDstroke *gps_to = NULL;
     /* only selected */
-    if ((GPENCIL_EDIT_MODE(gpd)) && (only_selected) &&
-        ((gps_from->flag & GP_STROKE_SELECT) == 0)) {
+    if (GPENCIL_EDIT_MODE(gpd) && (only_selected) && ((gps_from->flag & GP_STROKE_SELECT) == 0)) {
       continue;
     }
     /* skip strokes that are invalid for current view */
@@ -712,7 +711,7 @@ static bool gpencil_interpolate_set_init_values(bContext *C, wmOperator *op, tGP
       tgpi->flag, (RNA_enum_get(op->ptr, "layers") == 1), GP_TOOLFLAG_INTERPOLATE_ALL_LAYERS);
   SET_FLAG_FROM_TEST(
       tgpi->flag,
-      ((GPENCIL_EDIT_MODE(tgpi->gpd)) && (RNA_boolean_get(op->ptr, "interpolate_selected_only"))),
+      (GPENCIL_EDIT_MODE(tgpi->gpd) && (RNA_boolean_get(op->ptr, "interpolate_selected_only"))),
       GP_TOOLFLAG_INTERPOLATE_ONLY_SELECTED);
 
   tgpi->flipmode = RNA_enum_get(op->ptr, "flip");
@@ -1249,7 +1248,7 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
   const int step = RNA_int_get(op->ptr, "step");
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gpd);
   const bool all_layers = (bool)(RNA_enum_get(op->ptr, "layers") == 1);
-  const bool only_selected = ((GPENCIL_EDIT_MODE(gpd)) &&
+  const bool only_selected = (GPENCIL_EDIT_MODE(gpd) &&
                               (RNA_boolean_get(op->ptr, "interpolate_selected_only") != 0));
 
   eGP_InterpolateFlipMode flipmode = RNA_enum_get(op->ptr, "flip");
@@ -1309,7 +1308,7 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
     LISTBASE_FOREACH (bGPDstroke *, gps_from, &prevFrame->strokes) {
       bGPDstroke *gps_to = NULL;
       /* Only selected. */
-      if ((GPENCIL_EDIT_MODE(gpd)) && (only_selected) &&
+      if (GPENCIL_EDIT_MODE(gpd) && (only_selected) &&
           ((gps_from->flag & GP_STROKE_SELECT) == 0)) {
         continue;
       }
@@ -1434,36 +1433,32 @@ static int gpencil_interpolate_seq_exec(bContext *C, wmOperator *op)
 static void gpencil_interpolate_seq_ui(bContext *C, wmOperator *op)
 {
   uiLayout *layout = op->layout;
-  wmWindowManager *wm = CTX_wm_manager(C);
   uiLayout *col, *row;
-  PointerRNA ptr;
-
-  RNA_pointer_create(&wm->id, op->type->srna, op->properties, &ptr);
 
   const eGP_Interpolate_Type type = RNA_enum_get(op->ptr, "type");
 
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
   row = uiLayoutRow(layout, true);
-  uiItemR(row, &ptr, "step", 0, NULL, ICON_NONE);
+  uiItemR(row, op->ptr, "step", 0, NULL, ICON_NONE);
 
   row = uiLayoutRow(layout, true);
-  uiItemR(row, &ptr, "layers", 0, NULL, ICON_NONE);
+  uiItemR(row, op->ptr, "layers", 0, NULL, ICON_NONE);
 
   if (CTX_data_mode_enum(C) == CTX_MODE_EDIT_GPENCIL) {
     row = uiLayoutRow(layout, true);
-    uiItemR(row, &ptr, "interpolate_selected_only", 0, NULL, ICON_NONE);
+    uiItemR(row, op->ptr, "interpolate_selected_only", 0, NULL, ICON_NONE);
   }
 
   row = uiLayoutRow(layout, true);
-  uiItemR(row, &ptr, "flip", 0, NULL, ICON_NONE);
+  uiItemR(row, op->ptr, "flip", 0, NULL, ICON_NONE);
 
   col = uiLayoutColumn(layout, true);
-  uiItemR(col, &ptr, "smooth_factor", 0, NULL, ICON_NONE);
-  uiItemR(col, &ptr, "smooth_steps", 0, NULL, ICON_NONE);
+  uiItemR(col, op->ptr, "smooth_factor", 0, NULL, ICON_NONE);
+  uiItemR(col, op->ptr, "smooth_steps", 0, NULL, ICON_NONE);
 
   row = uiLayoutRow(layout, true);
-  uiItemR(row, &ptr, "type", 0, NULL, ICON_NONE);
+  uiItemR(row, op->ptr, "type", 0, NULL, ICON_NONE);
 
   if (type == GP_IPO_CURVEMAP) {
     /* Get an RNA pointer to ToolSettings to give to the custom curve. */
@@ -1477,16 +1472,16 @@ static void gpencil_interpolate_seq_ui(bContext *C, wmOperator *op)
   }
   else if (type != GP_IPO_LINEAR) {
     row = uiLayoutRow(layout, false);
-    uiItemR(row, &ptr, "easing", 0, NULL, ICON_NONE);
+    uiItemR(row, op->ptr, "easing", 0, NULL, ICON_NONE);
     if (type == GP_IPO_BACK) {
       row = uiLayoutRow(layout, false);
-      uiItemR(row, &ptr, "back", 0, NULL, ICON_NONE);
+      uiItemR(row, op->ptr, "back", 0, NULL, ICON_NONE);
     }
     else if (type == GP_IPO_ELASTIC) {
       row = uiLayoutRow(layout, false);
-      uiItemR(row, &ptr, "amplitude", 0, NULL, ICON_NONE);
+      uiItemR(row, op->ptr, "amplitude", 0, NULL, ICON_NONE);
       row = uiLayoutRow(layout, false);
-      uiItemR(row, &ptr, "period", 0, NULL, ICON_NONE);
+      uiItemR(row, op->ptr, "period", 0, NULL, ICON_NONE);
     }
   }
 }

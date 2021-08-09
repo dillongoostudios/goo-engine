@@ -105,8 +105,8 @@ int constrain_rgb(float *r, float *g, float *b);
 void minmax_rgb(short c[3]);
 void hsv_clamp_v(float hsv[3], float v_max);
 
-void rgb_float_set_hue_float_offset(float *rgb, float hue_offset);
-void rgb_byte_set_hue_float_offset(unsigned char *rgb, float hue_offset);
+void rgb_float_set_hue_float_offset(float rgb[3], float hue_offset);
+void rgb_byte_set_hue_float_offset(unsigned char rgb[3], float hue_offset);
 
 void rgb_uchar_to_float(float r_col[3], const unsigned char col_ub[3]);
 void rgba_uchar_to_float(float r_col[4], const unsigned char col_ub[4]);
@@ -143,6 +143,7 @@ MINLINE void rgba_uchar_args_test_set(unsigned char col[4],
 MINLINE void cpack_cpy_3ub(unsigned char r_col[3], const unsigned int pack);
 
 void blackbody_temperature_to_rgb_table(float *r_table, int width, float min, float max);
+void wavelength_to_xyz_table(float *r_table, int width);
 
 /********* lift/gamma/gain / ASC-CDL conversion ***********/
 

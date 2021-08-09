@@ -69,10 +69,10 @@ void SVMShaderManager::device_update_shader(Scene *scene,
           << summary.full_report();
 }
 
-void SVMShaderManager::device_update(Device *device,
-                                     DeviceScene *dscene,
-                                     Scene *scene,
-                                     Progress &progress)
+void SVMShaderManager::device_update_specific(Device *device,
+                                              DeviceScene *dscene,
+                                              Scene *scene,
+                                              Progress &progress)
 {
   if (!need_update())
     return;
@@ -304,7 +304,7 @@ int SVMCompiler::stack_assign(ShaderOutput *output)
 
 int SVMCompiler::stack_assign_if_linked(ShaderInput *input)
 {
-  if (input->link)
+  if (input->link || input->constant_folded_in)
     return stack_assign(input);
 
   return SVM_STACK_INVALID;
@@ -776,7 +776,7 @@ void SVMCompiler::compile_type(Shader *shader, ShaderGraph *graph, ShaderType ty
     add_node(NODE_ENTER_BUMP_EVAL, bump_state_offset);
   }
 
-  if (shader->used) {
+  if (shader->reference_count()) {
     CompilerState state(graph);
     if (clin->link) {
       bool generate = false;

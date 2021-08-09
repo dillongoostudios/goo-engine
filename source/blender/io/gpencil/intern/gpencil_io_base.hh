@@ -37,9 +37,9 @@ struct Object;
 struct RegionView3D;
 struct Scene;
 
-struct bGPdata;
 struct bGPDlayer;
 struct bGPDstroke;
+struct bGPdata;
 
 using blender::Vector;
 
@@ -50,7 +50,7 @@ class GpencilIO {
   GpencilIO(const GpencilIOParams *iparams);
 
   void frame_number_set(const int value);
-  void prepare_camera_params(const GpencilIOParams *iparams);
+  void prepare_camera_params(Scene *scene, const GpencilIOParams *iparams);
 
  protected:
   GpencilIOParams params_;
@@ -88,14 +88,13 @@ class GpencilIO {
 
   /* Geometry functions. */
   bool gpencil_3D_point_to_screen_space(const float3 co, float2 &r_co);
-  float2 gpencil_3D_point_to_render_space(const float3 co, const bool is_ortho);
+  float2 gpencil_3D_point_to_render_space(const float3 co);
   float2 gpencil_3D_point_to_2D(const float3 co);
 
   float stroke_point_radius_get(struct bGPDlayer *gpl, struct bGPDstroke *gps);
   void create_object_list();
 
   bool is_camera_mode();
-  bool is_orthographic();
 
   float stroke_average_opacity_get();
 
@@ -109,7 +108,6 @@ class GpencilIO {
  private:
   float avg_opacity_;
   bool is_camera_;
-  bool is_ortho_;
   rctf select_boundbox_;
 
   /* Camera matrix. */

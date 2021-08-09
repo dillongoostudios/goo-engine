@@ -52,7 +52,7 @@ static CLG_LogRef LOG = {"rna.define"};
 #  define ASSERT_SOFT_HARD_LIMITS \
     if (softmin < hardmin || softmax > hardmax) { \
       CLOG_ERROR(&LOG, "error with soft/hard limits: %s.%s", CONTAINER_RNA_ID(cont), identifier); \
-      BLI_assert(!"invalid soft/hard limits"); \
+      BLI_assert_msg(0, "invalid soft/hard limits"); \
     } \
     (void)0
 #else
@@ -781,9 +781,9 @@ void RNA_struct_free_extension(StructRNA *srna, ExtensionRNA *rna_ext)
 {
 #ifdef RNA_RUNTIME
   rna_ext->free(rna_ext->data);            /* decref's the PyObject that the srna owns */
-  RNA_struct_blender_type_set(srna, NULL); /* this gets accessed again - XXX fixme */
+  RNA_struct_blender_type_set(srna, NULL); /* FIXME: this gets accessed again. */
 
-  /* NULL the srna's value so RNA_struct_free wont complain of a leak */
+  /* NULL the srna's value so RNA_struct_free won't complain of a leak */
   RNA_struct_py_type_set(srna, NULL);
 
 #else
@@ -1053,7 +1053,7 @@ StructRNA *RNA_def_struct(BlenderRNA *brna, const char *identifier, const char *
 
   if (from) {
     /* find struct to derive from */
-    /* Inline RNA_struct_find(...) because it wont link from here. */
+    /* Inline RNA_struct_find(...) because it won't link from here. */
     srnafrom = BLI_ghash_lookup(brna->structs_map, from);
     if (!srnafrom) {
       CLOG_ERROR(&LOG, "struct %s not found to define %s.", from, identifier);
@@ -1281,7 +1281,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
                               int type,
                               int subtype)
 {
-  /*StructRNA *srna = DefRNA.laststruct;*/ /* invalid for python defined props */
+  // StructRNA *srna = DefRNA.laststruct; /* Invalid for Python defined props. */
   ContainerRNA *cont = cont_;
   ContainerDefRNA *dcont;
   PropertyDefRNA *dprop = NULL;
@@ -1351,7 +1351,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
       iprop->hardmin = (subtype == PROP_UNSIGNED) ? 0 : INT_MIN;
       iprop->hardmax = INT_MAX;
 
-      iprop->softmin = (subtype == PROP_UNSIGNED) ? 0 : -10000; /* rather arbitrary .. */
+      iprop->softmin = (subtype == PROP_UNSIGNED) ? 0 : -10000; /* rather arbitrary. */
       iprop->softmax = 10000;
       iprop->step = 1;
       break;
@@ -1371,7 +1371,7 @@ PropertyRNA *RNA_def_property(StructOrFunctionRNA *cont_,
         fprop->softmax = fprop->hardmax = 1.0f;
       }
       else {
-        fprop->softmin = (subtype == PROP_UNSIGNED) ? 0.0f : -10000.0f; /* rather arbitrary .. */
+        fprop->softmin = (subtype == PROP_UNSIGNED) ? 0.0f : -10000.0f; /* rather arbitrary. */
         fprop->softmax = 10000.0f;
       }
       fprop->step = 10;
@@ -1670,7 +1670,7 @@ void RNA_def_property_multi_array(PropertyRNA *prop, int dimension, const int le
     memset(prop->arraylength, 0, sizeof(prop->arraylength));
   }
 
-  /* TODO make sure arraylength values are sane  */
+  /* TODO: make sure `arraylength` values are sane. */
 }
 
 void RNA_def_property_ui_text(PropertyRNA *prop, const char *name, const char *description)
@@ -1749,6 +1749,28 @@ void RNA_def_property_ui_range(
     default:
       CLOG_ERROR(
           &LOG, "\"%s.%s\", invalid type for ui range.", srna->identifier, prop->identifier);
+      DefRNA.error = true;
+      break;
+  }
+}
+
+void RNA_def_property_ui_scale_type(PropertyRNA *prop, PropertyScaleType ui_scale_type)
+{
+  StructRNA *srna = DefRNA.laststruct;
+
+  switch (prop->type) {
+    case PROP_INT: {
+      IntPropertyRNA *iprop = (IntPropertyRNA *)prop;
+      iprop->ui_scale_type = ui_scale_type;
+      break;
+    }
+    case PROP_FLOAT: {
+      FloatPropertyRNA *fprop = (FloatPropertyRNA *)prop;
+      fprop->ui_scale_type = ui_scale_type;
+      break;
+    }
+    default:
+      CLOG_ERROR(&LOG, "\"%s.%s\", invalid type for scale.", srna->identifier, prop->identifier);
       DefRNA.error = true;
       break;
   }
@@ -2394,7 +2416,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
       }
     }
 
-    /* SDNA doesn't pass us unsigned unfortunately .. */
+    /* SDNA doesn't pass us unsigned unfortunately. */
     if (dp->dnatype && STREQ(dp->dnatype, "char")) {
       iprop->hardmin = iprop->softmin = CHAR_MIN;
       iprop->hardmax = iprop->softmax = CHAR_MAX;
@@ -2407,7 +2429,7 @@ void RNA_def_property_int_sdna(PropertyRNA *prop, const char *structname, const 
       iprop->hardmin = INT_MIN;
       iprop->hardmax = INT_MAX;
 
-      iprop->softmin = -10000; /* rather arbitrary .. */
+      iprop->softmin = -10000; /* rather arbitrary. */
       iprop->softmax = 10000;
     }
     else if (dp->dnatype && STREQ(dp->dnatype, "int8_t")) {
@@ -4737,25 +4759,60 @@ static void rna_def_property_free(StructOrFunctionRNA *cont_, PropertyRNA *prop)
   }
 }
 
-/* note: only intended for removing dynamic props */
+static PropertyRNA *rna_def_property_find_py_id(ContainerRNA *cont, const char *identifier)
+{
+  for (PropertyRNA *prop = cont->properties.first; prop; prop = prop->next) {
+    if (STREQ(prop->identifier, identifier)) {
+      return prop;
+    }
+  }
+  return NULL;
+}
+
+/* NOTE: only intended for removing dynamic props. */
 int RNA_def_property_free_identifier(StructOrFunctionRNA *cont_, const char *identifier)
 {
   ContainerRNA *cont = cont_;
-  PropertyRNA *prop;
-
-  for (prop = cont->properties.first; prop; prop = prop->next) {
-    if (STREQ(prop->identifier, identifier)) {
-      if (prop->flag_internal & PROP_INTERN_RUNTIME) {
-        rna_def_property_free(cont_, prop);
-        return 1;
-      }
-      else {
-        return -1;
-      }
+  PropertyRNA *prop = rna_def_property_find_py_id(cont, identifier);
+  if (prop != NULL) {
+    if (prop->flag_internal & PROP_INTERN_RUNTIME) {
+      rna_def_property_free(cont, prop);
+      return 1;
+    }
+    else {
+      return -1;
     }
   }
   return 0;
 }
+
+int RNA_def_property_free_identifier_deferred_prepare(StructOrFunctionRNA *cont_,
+                                                      const char *identifier,
+                                                      void **r_handle)
+{
+  ContainerRNA *cont = cont_;
+  PropertyRNA *prop = rna_def_property_find_py_id(cont, identifier);
+  if (prop != NULL) {
+    if (prop->flag_internal & PROP_INTERN_RUNTIME) {
+      *r_handle = prop;
+      return 1;
+    }
+    else {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+void RNA_def_property_free_identifier_deferred_finish(StructOrFunctionRNA *cont_, void *handle)
+{
+  ContainerRNA *cont = cont_;
+  PropertyRNA *prop = handle;
+  BLI_assert(BLI_findindex(&cont->properties, prop) != -1);
+  BLI_assert(prop->flag_internal & PROP_INTERN_RUNTIME);
+  rna_def_property_free(cont, prop);
+}
+
 #endif /* RNA_RUNTIME */
 
 const char *RNA_property_typename(PropertyType type)

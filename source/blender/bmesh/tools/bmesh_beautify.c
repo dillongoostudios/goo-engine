@@ -277,10 +277,10 @@ float BM_verts_calc_rotate_beauty(const BMVert *v1,
 static float bm_edge_calc_rotate_beauty(const BMEdge *e, const short flag, const short method)
 {
   const BMVert *v1, *v2, *v3, *v4;
-  v1 = e->l->prev->v;              /* first vert co */
-  v2 = e->l->v;                    /* e->v1 or e->v2*/
-  v3 = e->l->radial_next->prev->v; /* second vert co */
-  v4 = e->l->next->v;              /* e->v1 or e->v2*/
+  v1 = e->l->prev->v;              /* First vert co */
+  v2 = e->l->v;                    /* `e->v1` or `e->v2`. */
+  v3 = e->l->radial_next->prev->v; /* Second vert co */
+  v4 = e->l->next->v;              /* `e->v1` or `e->v2`. */
 
   return BM_verts_calc_rotate_beauty(v1, v2, v3, v4, flag, method);
 }
@@ -429,7 +429,7 @@ void BM_mesh_beautify_fill(BMesh *bm,
       GSet *e_state_set = edge_state_arr[i];
 
       /* add the new state into the set so we don't move into this state again
-       * note: we could add the previous state too but this isn't essential)
+       * NOTE: we could add the previous state too but this isn't essential)
        *       for avoiding eternal loops */
       EdRotState *e_state = BLI_mempool_alloc(edge_state_pool);
       erot_state_current(e, e_state);

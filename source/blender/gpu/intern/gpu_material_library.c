@@ -47,6 +47,7 @@ extern char datatoc_gpu_shader_material_anisotropic_glsl[];
 extern char datatoc_gpu_shader_material_attribute_glsl[];
 extern char datatoc_gpu_shader_material_background_glsl[];
 extern char datatoc_gpu_shader_material_bevel_glsl[];
+extern char datatoc_gpu_shader_material_wavelength_glsl[];
 extern char datatoc_gpu_shader_material_blackbody_glsl[];
 extern char datatoc_gpu_shader_material_bright_contrast_glsl[];
 extern char datatoc_gpu_shader_material_bump_glsl[];
@@ -190,6 +191,11 @@ static GPUMaterialLibrary gpu_shader_material_background_library = {
 
 static GPUMaterialLibrary gpu_shader_material_bevel_library = {
     .code = datatoc_gpu_shader_material_bevel_glsl,
+    .dependencies = {NULL},
+};
+
+static GPUMaterialLibrary gpu_shader_material_wavelength_library = {
+    .code = datatoc_gpu_shader_material_wavelength_glsl,
     .dependencies = {NULL},
 };
 
@@ -606,6 +612,7 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_attribute_library,
     &gpu_shader_material_background_library,
     &gpu_shader_material_bevel_library,
+    &gpu_shader_material_wavelength_library,
     &gpu_shader_material_blackbody_library,
     &gpu_shader_material_bright_contrast_library,
     &gpu_shader_material_bump_library,
@@ -692,7 +699,7 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
 
 static GHash *FUNCTION_HASH = NULL;
 
-char *gpu_str_skip_token(char *str, char *token, int max)
+const char *gpu_str_skip_token(const char *str, char *token, int max)
 {
   int len = 0;
 
@@ -760,7 +767,7 @@ static void gpu_parse_material_library(GHash *hash, GPUMaterialLibrary *library)
   eGPUType type;
   GPUFunctionQual qual;
   int i;
-  char *code = library->code;
+  const char *code = library->code;
 
   while ((code = strstr(code, "void "))) {
     function = MEM_callocN(sizeof(GPUFunction), "GPUFunction");

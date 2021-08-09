@@ -56,7 +56,7 @@ set(SRC
   object_ops.c
   object_random.c
   object_relations.c
-  object_remesh.c
+  object_remesh.cc
   object_select.c
   object_shader_fx.c
   object_shapekey.c
@@ -87,7 +87,7 @@ if(WITH_INTERNATIONAL)
 endif()
 
 if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_GEOMETRY_NODES)
+  add_definitions(-DWITH_SIMULATION_DATABLOCK)
   add_definitions(-DWITH_POINT_CLOUD)
   add_definitions(-DWITH_HAIR_NODES)
 endif()

@@ -747,7 +747,7 @@ static bool animedit_poll_channels_active(bContext *C)
   return 1;
 }
 
-/* poll callback for Animation Editor channels list region + not in NLA-tweakmode for NLA */
+/* Poll callback for Animation Editor channels list region + not in NLA-tweak-mode for NLA. */
 static bool animedit_poll_channels_nla_tweakmode_off(bContext *C)
 {
   ScrArea *area = CTX_wm_area(C);
@@ -763,7 +763,7 @@ static bool animedit_poll_channels_nla_tweakmode_off(bContext *C)
     return 0;
   }
 
-  /* NLA TweakMode test */
+  /* NLA tweak-mode test. */
   if (area->spacetype == SPACE_NLA) {
     if ((scene == NULL) || (scene->flag & SCE_NLA_EDIT_ON)) {
       return 0;
@@ -1283,6 +1283,9 @@ static void split_groups_action_temp(bAction *act, bActionGroup *tgrp)
     else {
       group_fcurves_last->next->prev = group_fcurves_first->prev;
     }
+
+    /* Clear links pointing outside the per-group list. */
+    group_fcurves_first->prev = group_fcurves_last->next = NULL;
   }
 
   /* Initialize memory for temp-group */
@@ -1337,22 +1340,12 @@ static void join_groups_action_temp(bAction *act)
     if (agrp->flag & AGRP_TEMP) {
       LISTBASE_FOREACH (FCurve *, fcu, &agrp->channels) {
         fcu->grp = NULL;
-        if (fcu == agrp->channels.last) {
-          break;
-        }
       }
 
       BLI_remlink(&act->groups, agrp);
       break;
     }
   }
-
-  /* BLI_movelisttolist() doesn't touch first->prev and last->next pointers in its "dst" list.
-   * Ensure that after the reshuffling the list is properly terminated. */
-  FCurve *act_fcurves_first = act->curves.first;
-  act_fcurves_first->prev = NULL;
-  FCurve *act_fcurves_last = act->curves.last;
-  act_fcurves_last->next = NULL;
 }
 
 /* Change the order of anim-channels within action
@@ -1683,7 +1676,7 @@ static void animchannels_group_channels(bAnimContext *ac,
       agrp = action_groups_add_new(act, name);
       BLI_assert(agrp != NULL);
 
-      /* transfer selected F-Curves across to new group  */
+      /* Transfer selected F-Curves across to new group. */
       for (ale = anim_data.first; ale; ale = ale->next) {
         FCurve *fcu = (FCurve *)ale->data;
         bActionGroup *grp = fcu->grp;
@@ -1724,7 +1717,7 @@ static int animchannels_group_exec(bContext *C, wmOperator *op)
     bAnimListElem *ale;
     int filter;
 
-    /* handle each animdata block separately, so that the regrouping doesn't flow into blocks  */
+    /* Handle each animdata block separately, so that the regrouping doesn't flow into blocks. */
     filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_ANIMDATA |
               ANIMFILTER_NODUPLIS);
     ANIM_animdata_filter(&ac, &anim_data, filter, ac.data, ac.datatype);
@@ -2033,7 +2026,7 @@ static const EnumPropertyItem prop_animchannel_settings_types[] = {
  * \param mode: eAnimChannels_SetFlag.
  * \param onlysel: only selected channels get the flag set.
  *
- * TODO: enable a setting which turns flushing on/off?.
+ * TODO: enable a setting which turns flushing on/off?
  */
 static void setflag_anim_channels(bAnimContext *ac,
                                   eAnimChannel_Settings setting,
@@ -2432,6 +2425,7 @@ static int animchannels_clean_empty_exec(bContext *C, wmOperator *UNUSED(op))
 
   /* send notifier that things have changed */
   WM_event_add_notifier(C, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_NLA | NA_REMOVED, NULL);
 
   return OPERATOR_FINISHED;
 }
@@ -2689,8 +2683,9 @@ static void box_select_anim_channels(bAnimContext *ac, rcti *rect, short selectm
   /* loop over data, doing box select */
   for (ale = anim_data.first; ale; ale = ale->next) {
     float ymin;
-    /* Skip grease pencil datablock. Only use grease pencil layers. */
+
     if (ale->type == ANIMTYPE_GPDATABLOCK) {
+      ymax -= ACHANNEL_STEP(ac);
       continue;
     }
 
@@ -3441,12 +3436,14 @@ static void ANIM_OT_channels_click(wmOperatorType *ot)
   ot->flag = OPTYPE_UNDO;
 
   /* properties */
-  /* NOTE: don't save settings, otherwise, can end up with some weird behavior (sticky extend) */
-  prop = RNA_def_boolean(ot->srna, "extend", false, "Extend Select", ""); /* SHIFTKEY */
+  /* NOTE: don't save settings, otherwise, can end up with some weird behavior (sticky extend)
+   *
+   * Key-map: Enable with `Shift`. */
+  prop = RNA_def_boolean(ot->srna, "extend", false, "Extend Select", "");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  prop = RNA_def_boolean(
-      ot->srna, "children_only", false, "Select Children Only", ""); /* CTRLKEY|SHIFTKEY */
+  /* Key-map: Enable with `Ctrl-Shift`. */
+  prop = RNA_def_boolean(ot->srna, "children_only", false, "Select Children Only", "");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 

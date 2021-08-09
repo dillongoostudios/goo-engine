@@ -79,7 +79,11 @@ enum ShaderNodeSpecialType {
 class ShaderInput {
  public:
   ShaderInput(const SocketType &socket_type_, ShaderNode *parent_)
-      : socket_type(socket_type_), parent(parent_), link(NULL), stack_offset(SVM_STACK_INVALID)
+      : socket_type(socket_type_),
+        parent(parent_),
+        link(NULL),
+        stack_offset(SVM_STACK_INVALID),
+        constant_folded_in(false)
   {
   }
 
@@ -111,6 +115,10 @@ class ShaderInput {
   ShaderNode *parent;
   ShaderOutput *link;
   int stack_offset; /* for SVM compiler */
+
+  /* Keeps track of whether a constant was folded in this socket, to avoid over-optimizing when the
+   * link is null. */
+  bool constant_folded_in;
 };
 
 /* Output
@@ -348,7 +356,7 @@ class ShaderGraph : public NodeOwner {
   /* This function is used to create a node of a specified type instead of
    * calling 'new', and sets the graph as the owner of the node.
    */
-  template<typename T, typename... Args> T *create_node(Args &&... args)
+  template<typename T, typename... Args> T *create_node(Args &&...args)
   {
     T *node = new T(args...);
     node->set_owner(this);

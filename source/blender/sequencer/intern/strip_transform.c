@@ -34,6 +34,7 @@
 #include "BKE_sound.h"
 
 #include "SEQ_effects.h"
+#include "SEQ_iterator.h"
 #include "SEQ_relations.h"
 #include "SEQ_sequencer.h"
 #include "SEQ_time.h"
@@ -48,24 +49,12 @@ static int seq_tx_get_end(Sequence *seq)
   return seq->start + seq->len;
 }
 
-int SEQ_transform_get_left_handle_frame(Sequence *seq, bool metaclip)
+int SEQ_transform_get_left_handle_frame(Sequence *seq)
 {
-  if (metaclip && seq->tmp) {
-    /* return the range clipped by the parents range */
-    return max_ii(SEQ_transform_get_left_handle_frame(seq, false),
-                  SEQ_transform_get_left_handle_frame((Sequence *)seq->tmp, true));
-  }
-
   return (seq->start - seq->startstill) + seq->startofs;
 }
-int SEQ_transform_get_right_handle_frame(Sequence *seq, bool metaclip)
+int SEQ_transform_get_right_handle_frame(Sequence *seq)
 {
-  if (metaclip && seq->tmp) {
-    /* return the range clipped by the parents range */
-    return min_ii(SEQ_transform_get_right_handle_frame(seq, false),
-                  SEQ_transform_get_right_handle_frame((Sequence *)seq->tmp, true));
-  }
-
   return ((seq->start + seq->len) + seq->endstill) - seq->endofs;
 }
 
@@ -146,23 +135,21 @@ bool SEQ_transform_seqbase_isolated_sel_check(ListBase *seqbase)
 
 /**
  * Use to impose limits when dragging/extending - so impossible situations don't happen.
- * Cant use the #SEQ_LEFTSEL and #SEQ_LEFTSEL directly because the strip may be in a meta-strip.
+ * Can't use the #SEQ_LEFTSEL and #SEQ_LEFTSEL directly because the strip may be in a meta-strip.
  */
 void SEQ_transform_handle_xlimits(Sequence *seq, int leftflag, int rightflag)
 {
   if (leftflag) {
-    if (SEQ_transform_get_left_handle_frame(seq, false) >=
-        SEQ_transform_get_right_handle_frame(seq, false)) {
-      SEQ_transform_set_left_handle_frame(seq,
-                                          SEQ_transform_get_right_handle_frame(seq, false) - 1);
+    if (SEQ_transform_get_left_handle_frame(seq) >= SEQ_transform_get_right_handle_frame(seq)) {
+      SEQ_transform_set_left_handle_frame(seq, SEQ_transform_get_right_handle_frame(seq) - 1);
     }
 
     if (SEQ_transform_single_image_check(seq) == 0) {
-      if (SEQ_transform_get_left_handle_frame(seq, false) >= seq_tx_get_end(seq)) {
+      if (SEQ_transform_get_left_handle_frame(seq) >= seq_tx_get_end(seq)) {
         SEQ_transform_set_left_handle_frame(seq, seq_tx_get_end(seq) - 1);
       }
 
-      /* doesn't work now - TODO */
+      /* TODO: This doesn't work at the moment. */
 #if 0
       if (seq_tx_get_start(seq) >= seq_tx_get_final_right(seq, 0)) {
         int ofs;
@@ -175,14 +162,12 @@ void SEQ_transform_handle_xlimits(Sequence *seq, int leftflag, int rightflag)
   }
 
   if (rightflag) {
-    if (SEQ_transform_get_right_handle_frame(seq, false) <=
-        SEQ_transform_get_left_handle_frame(seq, false)) {
-      SEQ_transform_set_right_handle_frame(seq,
-                                           SEQ_transform_get_left_handle_frame(seq, false) + 1);
+    if (SEQ_transform_get_right_handle_frame(seq) <= SEQ_transform_get_left_handle_frame(seq)) {
+      SEQ_transform_set_right_handle_frame(seq, SEQ_transform_get_left_handle_frame(seq) + 1);
     }
 
     if (SEQ_transform_single_image_check(seq) == 0) {
-      if (SEQ_transform_get_right_handle_frame(seq, false) <= seq_tx_get_start(seq)) {
+      if (SEQ_transform_get_right_handle_frame(seq) <= seq_tx_get_start(seq)) {
         SEQ_transform_set_right_handle_frame(seq, seq_tx_get_start(seq) + 1);
       }
     }
@@ -204,14 +189,12 @@ void SEQ_transform_fix_single_image_seq_offsets(Sequence *seq)
 
   /* make sure the image is always at the start since there is only one,
    * adjusting its start should be ok */
-  left = SEQ_transform_get_left_handle_frame(seq, false);
+  left = SEQ_transform_get_left_handle_frame(seq);
   start = seq->start;
   if (start != left) {
     offset = left - start;
-    SEQ_transform_set_left_handle_frame(seq,
-                                        SEQ_transform_get_left_handle_frame(seq, false) - offset);
-    SEQ_transform_set_right_handle_frame(
-        seq, SEQ_transform_get_right_handle_frame(seq, false) - offset);
+    SEQ_transform_set_left_handle_frame(seq, SEQ_transform_get_left_handle_frame(seq) - offset);
+    SEQ_transform_set_right_handle_frame(seq, SEQ_transform_get_right_handle_frame(seq) - offset);
     seq->start += offset;
   }
 }
@@ -251,14 +234,22 @@ void SEQ_transform_translate_sequence(Scene *evil_scene, Sequence *seq, int delt
   SEQ_offset_animdata(evil_scene, seq, delta);
   seq->start += delta;
 
+  /* Meta strips requires special handling: their content is to be translated, and then frame range
+   * of the meta is to be updated for the updated content. */
   if (seq->type == SEQ_TYPE_META) {
     Sequence *seq_child;
     for (seq_child = seq->seqbase.first; seq_child; seq_child = seq_child->next) {
       SEQ_transform_translate_sequence(evil_scene, seq_child, delta);
     }
+    /* Ensure that meta bounds are updated, but this function prevents resets seq->start and
+     * start/end point in timeline. */
+    SEQ_time_update_meta_strip_range(evil_scene, seq);
+    /* Move meta start/end points. */
+    SEQ_transform_set_left_handle_frame(seq, seq->startdisp + delta);
+    SEQ_transform_set_right_handle_frame(seq, seq->enddisp + delta);
   }
 
-  SEQ_time_update_sequence_bounds(evil_scene, seq);
+  SEQ_time_update_sequence(evil_scene, seq);
 }
 
 /* return 0 if there weren't enough space */
@@ -278,9 +269,9 @@ bool SEQ_transform_seqbase_shuffle_ex(ListBase *seqbasep,
     }
 
     test->machine += channel_delta;
-    SEQ_time_update_sequence(
-        evil_scene,
-        test);  // XXX - I don't think this is needed since were only moving vertically, Campbell.
+
+    /* XXX: I don't think this is needed since were only moving vertically, Campbell. */
+    SEQ_time_update_sequence(evil_scene, test);
   }
 
   if ((test->machine < 1) || (test->machine > MAXSEQ)) {
@@ -312,73 +303,69 @@ bool SEQ_transform_seqbase_shuffle(ListBase *seqbasep, Sequence *test, Scene *ev
   return SEQ_transform_seqbase_shuffle_ex(seqbasep, test, evil_scene, 1);
 }
 
-static int shuffle_seq_time_offset_test(ListBase *seqbasep, char dir)
+static int shuffle_seq_time_offset_test(SeqCollection *strips_to_shuffle,
+                                        ListBase *seqbasep,
+                                        char dir)
 {
   int offset = 0;
-  Sequence *seq, *seq_other;
+  Sequence *seq;
 
-  for (seq = seqbasep->first; seq; seq = seq->next) {
-    if (seq->tmp) {
-      for (seq_other = seqbasep->first; seq_other; seq_other = seq_other->next) {
-        if (!seq_other->tmp && seq_overlap(seq, seq_other)) {
-          if (dir == 'L') {
-            offset = min_ii(offset, seq_other->startdisp - seq->enddisp);
-          }
-          else {
-            offset = max_ii(offset, seq_other->enddisp - seq->startdisp);
-          }
-        }
+  SEQ_ITERATOR_FOREACH (seq, strips_to_shuffle) {
+    LISTBASE_FOREACH (Sequence *, seq_other, seqbasep) {
+      if (!seq_overlap(seq, seq_other)) {
+        continue;
+      }
+      if (dir == 'L') {
+        offset = min_ii(offset, seq_other->startdisp - seq->enddisp);
+      }
+      else {
+        offset = max_ii(offset, seq_other->enddisp - seq->startdisp);
       }
     }
   }
   return offset;
 }
 
-static int shuffle_seq_time_offset(Scene *scene, ListBase *seqbasep, char dir)
+static int shuffle_seq_time_offset(SeqCollection *strips_to_shuffle,
+                                   ListBase *seqbasep,
+                                   Scene *scene,
+                                   char dir)
 {
   int ofs = 0;
   int tot_ofs = 0;
   Sequence *seq;
-  while ((ofs = shuffle_seq_time_offset_test(seqbasep, dir))) {
-    for (seq = seqbasep->first; seq; seq = seq->next) {
-      if (seq->tmp) {
-        /* seq_test_overlap only tests display values */
-        seq->startdisp += ofs;
-        seq->enddisp += ofs;
-      }
+  while ((ofs = shuffle_seq_time_offset_test(strips_to_shuffle, seqbasep, dir))) {
+    SEQ_ITERATOR_FOREACH (seq, strips_to_shuffle) {
+      /* seq_test_overlap only tests display values */
+      seq->startdisp += ofs;
+      seq->enddisp += ofs;
     }
 
     tot_ofs += ofs;
   }
 
-  for (seq = seqbasep->first; seq; seq = seq->next) {
-    if (seq->tmp) {
-      SEQ_time_update_sequence_bounds(scene, seq); /* corrects dummy startdisp/enddisp values */
-    }
+  SEQ_ITERATOR_FOREACH (seq, strips_to_shuffle) {
+    SEQ_time_update_sequence_bounds(scene, seq); /* corrects dummy startdisp/enddisp values */
   }
 
   return tot_ofs;
 }
 
-bool SEQ_transform_seqbase_shuffle_time(ListBase *seqbasep,
+bool SEQ_transform_seqbase_shuffle_time(SeqCollection *strips_to_shuffle,
+                                        ListBase *seqbasep,
                                         Scene *evil_scene,
                                         ListBase *markers,
                                         const bool use_sync_markers)
 {
-  /* note: seq->tmp is used to tag strips to move */
-
-  Sequence *seq;
-
-  int offset_l = shuffle_seq_time_offset(evil_scene, seqbasep, 'L');
-  int offset_r = shuffle_seq_time_offset(evil_scene, seqbasep, 'R');
+  int offset_l = shuffle_seq_time_offset(strips_to_shuffle, seqbasep, evil_scene, 'L');
+  int offset_r = shuffle_seq_time_offset(strips_to_shuffle, seqbasep, evil_scene, 'R');
   int offset = (-offset_l < offset_r) ? offset_l : offset_r;
 
   if (offset) {
-    for (seq = seqbasep->first; seq; seq = seq->next) {
-      if (seq->tmp) {
-        SEQ_transform_translate_sequence(evil_scene, seq, offset);
-        seq->flag &= ~SEQ_OVERLAP;
-      }
+    Sequence *seq;
+    SEQ_ITERATOR_FOREACH (seq, strips_to_shuffle) {
+      SEQ_transform_translate_sequence(evil_scene, seq, offset);
+      seq->flag &= ~SEQ_OVERLAP;
     }
 
     if (use_sync_markers && !(evil_scene->toolsettings->lock_markers) && (markers != NULL)) {

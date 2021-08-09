@@ -61,6 +61,7 @@
 
 #include "BLT_translation.h"
 
+#include "ED_asset.h"
 #include "ED_fileselect.h"
 #include "ED_info.h"
 #include "ED_screen.h"
@@ -96,7 +97,7 @@
  *
  * Without tools using press events which would prevent click/drag events getting to the gizmos.
  *
- * This is not a fool proof solution since since it's possible the gizmo operators would pass
+ * This is not a fool proof solution since it's possible the gizmo operators would pass
  * through these events when called, see: T65479.
  */
 #define USE_GIZMO_MOUSE_PRIORITY_HACK
@@ -129,7 +130,7 @@ wmEvent *wm_event_add_ex(wmWindow *win,
     BLI_addtail(&win->event_queue, event);
   }
   else {
-    /* Note: strictly speaking this breaks const-correctness,
+    /* NOTE: strictly speaking this breaks const-correctness,
      * however we're only changing 'next' member. */
     BLI_insertlinkafter(&win->event_queue, (void *)event_to_add_after, event);
   }
@@ -189,7 +190,7 @@ void wm_event_free(wmEvent *event)
 
   if (event->customdata) {
     if (event->customdatafree) {
-      /* Note: pointer to listbase struct elsewhere. */
+      /* NOTE: pointer to listbase struct elsewhere. */
       if (event->custom == EVT_DATA_DRAGDROP) {
         ListBase *lb = event->customdata;
         WM_drag_free_list(lb);
@@ -326,6 +327,7 @@ void WM_main_remap_editor_id_reference(ID *old_id, ID *new_id)
       }
     }
   }
+  ED_assetlist_storage_id_remap(old_id, new_id);
 
   wmWindowManager *wm = bmain->wm.first;
   if (wm && wm->message_bus) {
@@ -380,8 +382,7 @@ void wm_event_do_depsgraph(bContext *C, bool is_after_open_file)
      */
     Depsgraph *depsgraph = BKE_scene_ensure_depsgraph(bmain, scene, view_layer);
     if (is_after_open_file) {
-      DEG_graph_relations_update(depsgraph);
-      DEG_graph_on_visible_update(bmain, depsgraph, true);
+      DEG_graph_tag_on_visible_update(depsgraph, true);
     }
     DEG_make_active(depsgraph);
     BKE_scene_graph_update_tagged(depsgraph, bmain);
@@ -520,7 +521,7 @@ void wm_event_do_notifiers(bContext *C)
     if (clear_info_stats) {
       /* Only do once since adding notifiers is slow when there are many. */
       ViewLayer *view_layer = CTX_data_view_layer(C);
-      ED_info_stats_clear(view_layer);
+      ED_info_stats_clear(wm, view_layer);
       WM_event_add_notifier(C, NC_SPACE | ND_SPACE_INFO, NULL);
     }
 
@@ -628,7 +629,7 @@ void wm_event_do_notifiers(bContext *C)
     CTX_wm_window_set(C, NULL);
   }
 
-  /* Autorun warning */
+  /* Auto-run warning. */
   wm_test_autorun_warning(C);
 }
 
@@ -916,7 +917,7 @@ static void wm_operator_reports(bContext *C, wmOperator *op, int retval, bool ca
 {
   if (G.background == 0 && caller_owns_reports == false) { /* popup */
     if (op->reports->list.first) {
-      /* FIXME, temp setting window, see other call to UI_popup_menu_reports for why. */
+      /* FIXME: temp setting window, see other call to #UI_popup_menu_reports for why. */
       wmWindow *win_prev = CTX_wm_window(C);
       ScrArea *area_prev = CTX_wm_area(C);
       ARegion *region_prev = CTX_wm_region(C);
@@ -1048,7 +1049,7 @@ static int wm_operator_exec(bContext *C, wmOperator *op, const bool repeat, cons
   wmWindowManager *wm = CTX_wm_manager(C);
   int retval = OPERATOR_CANCELLED;
 
-  CTX_wm_operator_poll_msg_set(C, NULL);
+  CTX_wm_operator_poll_msg_clear(C);
 
   if (op == NULL || op->type == NULL) {
     return retval;
@@ -1371,7 +1372,7 @@ static int wm_operator_invoke(bContext *C,
       CLOG_ERROR(WM_LOG_OPERATORS, "invalid operator call '%s'", op->idname);
     }
 
-    /* Note, if the report is given as an argument then assume the caller will deal with displaying
+    /* NOTE: if the report is given as an argument then assume the caller will deal with displaying
      * them currently Python only uses this. */
     if (!(retval & OPERATOR_HANDLED) && (retval & (OPERATOR_FINISHED | OPERATOR_CANCELLED))) {
       /* Only show the report if the report list was not given in the function. */
@@ -1469,7 +1470,7 @@ static int wm_operator_call_internal(bContext *C,
 {
   int retval;
 
-  CTX_wm_operator_poll_msg_set(C, NULL);
+  CTX_wm_operator_poll_msg_clear(C);
 
   /* Dummy test. */
   if (ot) {
@@ -2085,7 +2086,7 @@ static int wm_handler_operator_call(bContext *C,
         wm->op_undo_depth--;
       }
 
-      /* When the window changes the the modal modifier may have loaded a new blend file
+      /* When the window changes the modal modifier may have loaded a new blend file
        * (the `system_demo_mode` add-on does this), so we have to assume the event,
        * operator, area, region etc have all been freed. */
       if ((CTX_wm_window(C) == win)) {
@@ -2380,9 +2381,9 @@ static int wm_handler_fileselect_do(bContext *C,
 
         if (handler->op->reports->list.first) {
 
-          /* FIXME, temp setting window, this is really bad!
+          /* FIXME(campbell): temp setting window, this is really bad!
            * only have because lib linking errors need to be seen by users :(
-           * it can be removed without breaking anything but then no linking errors - campbell */
+           * it can be removed without breaking anything but then no linking errors. */
           wmWindow *win_prev = CTX_wm_window(C);
           ScrArea *area_prev = CTX_wm_area(C);
           ARegion *region_prev = CTX_wm_region(C);
@@ -2394,7 +2395,7 @@ static int wm_handler_fileselect_do(bContext *C,
           BKE_report_print_level_set(handler->op->reports, RPT_WARNING);
           UI_popup_menu_reports(C, handler->op->reports);
 
-          /* XXX - copied from 'wm_operator_finished()' */
+          /* XXX: copied from 'wm_operator_finished()'. */
           /* add reports to the global list, otherwise they are not seen */
           BLI_movelisttolist(&CTX_wm_reports(C)->list, &handler->op->reports->list);
 
@@ -2797,7 +2798,7 @@ static int wm_handlers_do_intern(bContext *C, wmEvent *event, ListBase *handlers
 
   /* Modal handlers can get removed in this loop, we keep the loop this way.
    *
-   * Note: check 'handlers->first' because in rare cases the handlers can be cleared
+   * NOTE: check 'handlers->first' because in rare cases the handlers can be cleared
    * by the event that's called, for eg:
    *
    * Calling a python script which changes the area.type, see T32232. */
@@ -3399,7 +3400,7 @@ void wm_event_do_handlers(bContext *C)
       wm_tweakevent_test(C, event, action);
 
       if ((action & WM_HANDLER_BREAK) == 0) {
-        /* Note: setting subwin active should be done here, after modal handlers have been done */
+        /* NOTE: setting subwin active should be done here, after modal handlers have been done. */
         if (event->type == MOUSEMOVE) {
           /* State variables in screen, cursors.
            * Also used in wm_draw.c, fails for modal handlers though. */
@@ -3494,7 +3495,7 @@ void wm_event_do_handlers(bContext *C)
       }
 
       /* If press was handled, we don't want to do click. This way
-       * press in tool keymap can override click in editor keymap.*/
+       * press in tool key-map can override click in editor key-map. */
       if (ISMOUSE_BUTTON(event->type) && event->val == KM_PRESS &&
           !wm_action_not_handled(action)) {
         win->event_queue_check_click = false;
@@ -4012,7 +4013,7 @@ wmEventHandler_Dropbox *WM_event_add_dropbox_handler(ListBase *handlers, ListBas
   return handler;
 }
 
-/* XXX solution works, still better check the real cause (ton) */
+/* XXX(ton): solution works, still better check the real cause. */
 void WM_event_remove_area_handler(ListBase *handlers, void *area)
 {
   LISTBASE_FOREACH_MUTABLE (wmEventHandler *, handler_base, handlers) {
@@ -4478,16 +4479,21 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, void 
   event.prevtype = event.type;
   event.prevval = event.val;
 
-  /* Ensure the event state is correct, any deviation from this may cause bugs. */
+  /* Ensure the event state is correct, any deviation from this may cause bugs.
+   *
+   * NOTE: #EVENT_NONE is set when unknown keys are pressed,
+   * while not common, avoid a false alarm. */
 #ifndef NDEBUG
   if ((event_state->type || event_state->val) && /* Ignore cleared event state. */
-      !(ISMOUSE_BUTTON(event_state->type) || ISKEYBOARD(event_state->type))) {
+      !(ISMOUSE_BUTTON(event_state->type) || ISKEYBOARD(event_state->type) ||
+        (event_state->type == EVENT_NONE))) {
     CLOG_WARN(WM_LOG_HANDLERS,
               "Non-keyboard/mouse button found in 'win->eventstate->type = %d'",
               event_state->type);
   }
   if ((event_state->prevtype || event_state->prevval) && /* Ignore cleared event state. */
-      !(ISMOUSE_BUTTON(event_state->prevtype) || ISKEYBOARD(event_state->prevtype))) {
+      !(ISMOUSE_BUTTON(event_state->prevtype) || ISKEYBOARD(event_state->prevtype) ||
+        (event_state->type == EVENT_NONE))) {
     CLOG_WARN(WM_LOG_HANDLERS,
               "Non-keyboard/mouse button found in 'win->eventstate->prevtype = %d'",
               event_state->prevtype);
@@ -4749,8 +4755,8 @@ void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, void 
         event.val = KM_DBL_CLICK;
       }
 
-      /* This case happens on holding a key pressed, it should not generate
-       * press events events with the same key as modifier. */
+      /* This case happens on holding a key pressed,
+       * it should not generate press events with the same key as modifier. */
       if (event.keymodifier == event.type) {
         event.keymodifier = 0;
       }

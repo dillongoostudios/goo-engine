@@ -62,11 +62,14 @@ namespace blender::deg {
 Depsgraph::Depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, eEvaluationMode mode)
     : time_source(nullptr),
       need_update(true),
+      need_visibility_update(true),
+      need_visibility_time_update(false),
       bmain(bmain),
       scene(scene),
       view_layer(view_layer),
       mode(mode),
-      ctime(BKE_scene_frame_get(scene)),
+      frame(BKE_scene_frame_get(scene)),
+      ctime(BKE_scene_ctime_get(scene)),
       scene_cow(nullptr),
       is_active(false),
       is_evaluating(false),
@@ -265,7 +268,7 @@ ID *Depsgraph::get_cow_id(const ID *id_orig) const
        * - Object or mesh has material at a slot which is not used (for
        *   example, object has material slot by materials are set to
        *   object data). */
-      // BLI_assert(!"Request for non-existing copy-on-write ID");
+      // BLI_assert_msg(0, "Request for non-existing copy-on-write ID");
     }
     return (ID *)id_orig;
   }

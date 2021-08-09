@@ -33,6 +33,7 @@ struct Depsgraph;
 /* ------------------------------------------------ */
 
 struct CacheFile;
+struct Collection;
 struct CustomData_MeshMasks;
 struct ID;
 struct Main;
@@ -40,7 +41,6 @@ struct Object;
 struct Scene;
 struct Simulation;
 struct bNodeTree;
-struct Collection;
 
 #include "BLI_sys_types.h"
 
@@ -75,7 +75,7 @@ void DEG_graph_tag_relations_update(struct Depsgraph *graph);
 /* Create or update relations in the specified graph. */
 void DEG_graph_relations_update(struct Depsgraph *graph);
 
-/* Tag all relations in the database for update.*/
+/* Tag all relations in the database for update. */
 void DEG_relations_tag_update(struct Main *bmain);
 
 /* Add Dependencies  ----------------------------- */
@@ -92,7 +92,7 @@ typedef enum eDepsSceneComponentType {
    * (i.e. just SDNA property setting). */
   DEG_SCENE_COMP_PARAMETERS,
   /* Animation Component
-   * TODO(sergey): merge in with parameters?  */
+   * TODO(sergey): merge in with parameters? */
   DEG_SCENE_COMP_ANIMATION,
   /* Sequencer Component (Scene Only). */
   DEG_SCENE_COMP_SEQUENCER,

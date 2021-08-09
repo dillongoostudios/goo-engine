@@ -198,6 +198,9 @@ void BKE_cachefile_reader_open(CacheFile *cache_file,
 void BKE_cachefile_reader_free(CacheFile *cache_file, struct CacheReader **reader)
 {
 #ifdef WITH_ALEMBIC
+  /* Multiple modifiers and constraints can call this function concurrently, and
+   * cachefile_handle_free() can also be called at the same time. */
+  BLI_spin_lock(&spin);
   if (*reader != NULL) {
     if (cache_file) {
       BLI_assert(cache_file->id.tag & LIB_TAG_COPIED_ON_WRITE);
@@ -206,13 +209,11 @@ void BKE_cachefile_reader_free(CacheFile *cache_file, struct CacheReader **reade
     CacheReader_free(*reader);
     *reader = NULL;
 
-    /* Multiple modifiers and constraints can call this function concurrently. */
-    BLI_spin_lock(&spin);
     if (cache_file && cache_file->handle_readers) {
       BLI_gset_remove(cache_file->handle_readers, reader, NULL);
     }
-    BLI_spin_unlock(&spin);
   }
+  BLI_spin_unlock(&spin);
 #else
   UNUSED_VARS(cache_file, reader);
 #endif
@@ -313,7 +314,7 @@ bool BKE_cachefile_filepath_get(const Main *bmain,
 
   if (cache_file->is_sequence && BLI_path_frame_get(r_filepath, &fframe, &frame_len)) {
     Scene *scene = DEG_get_evaluated_scene(depsgraph);
-    const float ctime = BKE_scene_frame_get(scene);
+    const float ctime = BKE_scene_ctime_get(scene);
     const float fps = (((double)scene->r.frs_sec) / (double)scene->r.frs_sec_base);
     const float frame = BKE_cachefile_time_offset(cache_file, ctime, fps);
 

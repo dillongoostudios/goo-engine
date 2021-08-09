@@ -21,16 +21,11 @@
 #include "BLI_utildefines.h"
 #include "PIL_time.h"
 
-#include "BKE_node.h"
-
-#include "BLT_translation.h"
-
-#include "COM_Converter.h"
 #include "COM_Debug.h"
-#include "COM_ExecutionGroup.h"
+#include "COM_FullFrameExecutionModel.h"
 #include "COM_NodeOperation.h"
 #include "COM_NodeOperationBuilder.h"
-#include "COM_ReadBufferOperation.h"
+#include "COM_TiledExecutionModel.h"
 #include "COM_WorkScheduler.h"
 
 #ifdef WITH_CXX_GUARDEDALLOC
@@ -48,6 +43,7 @@ ExecutionSystem::ExecutionSystem(RenderData *rd,
                                  const ColorManagedDisplaySettings *displaySettings,
                                  const char *viewName)
 {
+  num_work_threads_ = WorkScheduler::get_num_cpu_threads();
   this->m_context.setViewName(viewName);
   this->m_context.setScene(scene);
   this->m_context.setbNodeTree(editingtree);
@@ -68,46 +64,34 @@ ExecutionSystem::ExecutionSystem(RenderData *rd,
   this->m_context.setViewSettings(viewSettings);
   this->m_context.setDisplaySettings(displaySettings);
 
+  BLI_mutex_init(&work_mutex_);
+  BLI_condition_init(&work_finished_cond_);
+
   {
-    NodeOperationBuilder builder(&m_context, editingtree);
+    NodeOperationBuilder builder(&m_context, editingtree, this);
     builder.convertToOperations(this);
   }
 
-  unsigned int resolution[2];
-
-  rctf *viewer_border = &editingtree->viewer_border;
-  bool use_viewer_border = (editingtree->flag & NTREE_VIEWER_BORDER) &&
-                           viewer_border->xmin < viewer_border->xmax &&
-                           viewer_border->ymin < viewer_border->ymax;
-
-  editingtree->stats_draw(editingtree->sdh, TIP_("Compositing | Determining resolution"));
-
-  for (ExecutionGroup *executionGroup : m_groups) {
-    resolution[0] = 0;
-    resolution[1] = 0;
-    executionGroup->determineResolution(resolution);
-
-    if (rendering) {
-      /* case when cropping to render border happens is handled in
-       * compositor output and render layer nodes
-       */
-      if ((rd->mode & R_BORDER) && !(rd->mode & R_CROP)) {
-        executionGroup->setRenderBorder(
-            rd->border.xmin, rd->border.xmax, rd->border.ymin, rd->border.ymax);
-      }
-    }
-
-    if (use_viewer_border) {
-      executionGroup->setViewerBorder(
-          viewer_border->xmin, viewer_border->xmax, viewer_border->ymin, viewer_border->ymax);
-    }
+  switch (m_context.get_execution_model()) {
+    case eExecutionModel::Tiled:
+      execution_model_ = new TiledExecutionModel(m_context, m_operations, m_groups);
+      break;
+    case eExecutionModel::FullFrame:
+      execution_model_ = new FullFrameExecutionModel(m_context, active_buffers_, m_operations);
+      break;
+    default:
+      BLI_assert_msg(0, "Non implemented execution model");
+      break;
   }
-
-  //  DebugInfo::graphviz(this);
 }
 
 ExecutionSystem::~ExecutionSystem()
 {
+  BLI_condition_end(&work_finished_cond_);
+  BLI_mutex_end(&work_mutex_);
+
+  delete execution_model_;
+
   for (NodeOperation *operation : m_operations) {
     delete operation;
   }
@@ -126,100 +110,83 @@ void ExecutionSystem::set_operations(const Vector<NodeOperation *> &operations,
   m_groups = groups;
 }
 
-static void update_read_buffer_offset(Vector<NodeOperation *> &operations)
-{
-  unsigned int order = 0;
-  for (NodeOperation *operation : operations) {
-    if (operation->get_flags().is_read_buffer_operation) {
-      ReadBufferOperation *readOperation = (ReadBufferOperation *)operation;
-      readOperation->setOffset(order);
-      order++;
-    }
-  }
-}
-
-static void init_write_operations_for_execution(Vector<NodeOperation *> &operations,
-                                                const bNodeTree *bTree)
-{
-  for (NodeOperation *operation : operations) {
-    if (operation->get_flags().is_write_buffer_operation) {
-      operation->setbNodeTree(bTree);
-      operation->initExecution();
-    }
-  }
-}
-
-static void link_write_buffers(Vector<NodeOperation *> &operations)
-{
-  for (NodeOperation *operation : operations) {
-    if (operation->get_flags().is_read_buffer_operation) {
-      ReadBufferOperation *readOperation = static_cast<ReadBufferOperation *>(operation);
-      readOperation->updateMemoryBuffer();
-    }
-  }
-}
-
-static void init_non_write_operations_for_execution(Vector<NodeOperation *> &operations,
-                                                    const bNodeTree *bTree)
-{
-  for (NodeOperation *operation : operations) {
-    if (!operation->get_flags().is_write_buffer_operation) {
-      operation->setbNodeTree(bTree);
-      operation->initExecution();
-    }
-  }
-}
-
-static void init_execution_groups_for_execution(Vector<ExecutionGroup *> &groups,
-                                                const int chunk_size)
-{
-  for (ExecutionGroup *execution_group : groups) {
-    execution_group->setChunksize(chunk_size);
-    execution_group->initExecution();
-  }
-}
-
 void ExecutionSystem::execute()
 {
-  const bNodeTree *editingtree = this->m_context.getbNodeTree();
-  editingtree->stats_draw(editingtree->sdh, TIP_("Compositing | Initializing execution"));
-
   DebugInfo::execute_started(this);
-  update_read_buffer_offset(m_operations);
-
-  init_write_operations_for_execution(m_operations, m_context.getbNodeTree());
-  link_write_buffers(m_operations);
-  init_non_write_operations_for_execution(m_operations, m_context.getbNodeTree());
-  init_execution_groups_for_execution(m_groups, m_context.getChunksize());
-
-  WorkScheduler::start(this->m_context);
-  execute_groups(eCompositorPriority::High);
-  if (!this->getContext().isFastCalculation()) {
-    execute_groups(eCompositorPriority::Medium);
-    execute_groups(eCompositorPriority::Low);
+  for (NodeOperation *op : m_operations) {
+    op->init_data();
   }
-  WorkScheduler::finish();
-  WorkScheduler::stop();
-
-  editingtree->stats_draw(editingtree->sdh, TIP_("Compositing | De-initializing execution"));
-
-  for (NodeOperation *operation : m_operations) {
-    operation->deinitExecution();
-  }
-
-  for (ExecutionGroup *execution_group : m_groups) {
-    execution_group->deinitExecution();
-  }
+  execution_model_->execute(*this);
 }
 
-void ExecutionSystem::execute_groups(eCompositorPriority priority)
+/**
+ * Multi-threadedly execute given work function passing work_rect splits as argument.
+ */
+void ExecutionSystem::execute_work(const rcti &work_rect,
+                                   std::function<void(const rcti &split_rect)> work_func)
 {
-  for (ExecutionGroup *execution_group : m_groups) {
-    if (execution_group->get_flags().is_output &&
-        execution_group->getRenderPriority() == priority) {
-      execution_group->execute(this);
-    }
+  if (is_breaked()) {
+    return;
   }
+
+  /* Split work vertically to maximize continuous memory. */
+  const int work_height = BLI_rcti_size_y(&work_rect);
+  const int num_sub_works = MIN2(num_work_threads_, work_height);
+  const int split_height = num_sub_works == 0 ? 0 : work_height / num_sub_works;
+  int remaining_height = work_height - split_height * num_sub_works;
+
+  Vector<WorkPackage> sub_works(num_sub_works);
+  int sub_work_y = work_rect.ymin;
+  int num_sub_works_finished = 0;
+  for (int i = 0; i < num_sub_works; i++) {
+    int sub_work_height = split_height;
+
+    /* Distribute remaining height between sub-works. */
+    if (remaining_height > 0) {
+      sub_work_height++;
+      remaining_height--;
+    }
+
+    WorkPackage &sub_work = sub_works[i];
+    sub_work.type = eWorkPackageType::CustomFunction;
+    sub_work.execute_fn = [=, &work_func, &work_rect]() {
+      if (is_breaked()) {
+        return;
+      }
+      rcti split_rect;
+      BLI_rcti_init(
+          &split_rect, work_rect.xmin, work_rect.xmax, sub_work_y, sub_work_y + sub_work_height);
+      work_func(split_rect);
+    };
+    sub_work.executed_fn = [&]() {
+      BLI_mutex_lock(&work_mutex_);
+      num_sub_works_finished++;
+      if (num_sub_works_finished == num_sub_works) {
+        BLI_condition_notify_one(&work_finished_cond_);
+      }
+      BLI_mutex_unlock(&work_mutex_);
+    };
+    WorkScheduler::schedule(&sub_work);
+    sub_work_y += sub_work_height;
+  }
+  BLI_assert(sub_work_y == work_rect.ymax);
+
+  WorkScheduler::finish();
+
+  /* Ensure all sub-works finished.
+   * TODO: This a workaround for WorkScheduler::finish() not waiting all works on queue threading
+   * model. Sync code should be removed once it's fixed. */
+  BLI_mutex_lock(&work_mutex_);
+  if (num_sub_works_finished < num_sub_works) {
+    BLI_condition_wait(&work_finished_cond_, &work_mutex_);
+  }
+  BLI_mutex_unlock(&work_mutex_);
+}
+
+bool ExecutionSystem::is_breaked() const
+{
+  const bNodeTree *btree = m_context.getbNodeTree();
+  return btree->test_break(btree->tbh);
 }
 
 }  // namespace blender::compositor

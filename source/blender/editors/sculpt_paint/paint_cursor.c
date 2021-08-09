@@ -940,7 +940,7 @@ static void paint_draw_curve_cursor(Brush *brush, ViewContext *vc)
       int j;
       PaintCurvePoint *cp_next = cp + 1;
       float data[(PAINT_CURVE_NUM_SEGMENTS + 1) * 2];
-      /* Use color coding to distinguish handles vs curve segments.  */
+      /* Use color coding to distinguish handles vs curve segments. */
       draw_bezier_handle_lines(pos, selec_col, &cp->bez);
       draw_tri_point(pos, selec_col, pivot_col, &cp->bez.vec[1][0], 10.0f, cp->bez.f2);
       draw_rect_point(
@@ -1039,7 +1039,7 @@ static void cursor_draw_point_screen_space(const uint gpuattr,
   float translation_vertex_cursor[3], location[3];
   copy_v3_v3(location, true_location);
   mul_m4_v3(obmat, location);
-  ED_view3d_project(region, location, translation_vertex_cursor);
+  ED_view3d_project_v3(region, location, translation_vertex_cursor);
   /* Do not draw points behind the view. Z [near, far] is mapped to [-1, 1]. */
   if (translation_vertex_cursor[2] <= 1.0f) {
     imm_draw_circle_fill_3d(
@@ -1321,6 +1321,13 @@ static bool paint_cursor_context_init(bContext *C,
 
   if (pcontext->ss && pcontext->ss->draw_faded_cursor) {
     pcontext->outline_alpha = 0.3f;
+    copy_v3_fl(pcontext->outline_col, 0.8f);
+  }
+
+  const bool is_brush_tool = PAINT_brush_tool_poll(C);
+  if (!is_brush_tool) {
+    /* Use a default color for tools that are not brushes. */
+    pcontext->outline_alpha = 0.8f;
     copy_v3_fl(pcontext->outline_col, 0.8f);
   }
 
@@ -1610,9 +1617,11 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
                                     pcontext->radius);
   }
 
+  const bool is_brush_tool = PAINT_brush_tool_poll(pcontext->C);
+
   /* Pose brush updates and rotation origins. */
 
-  if (brush->sculpt_tool == SCULPT_TOOL_POSE) {
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_POSE) {
     /* Just after switching to the Pose Brush, the active vertex can be the same and the
      * cursor won't be tagged to update, so always initialize the preview chain if it is
      * null before drawing it. */
@@ -1645,7 +1654,7 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
         2);
   }
 
-  if (brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) {
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) {
     paint_cursor_preview_boundary_data_update(pcontext, update_previews);
     paint_cursor_preview_boundary_data_pivot_draw(pcontext);
   }
@@ -1666,17 +1675,18 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   GPU_matrix_mul(pcontext->vc.obact->obmat);
 
   /* Drawing Cursor overlays in 3D object space. */
-  if (brush->sculpt_tool == SCULPT_TOOL_GRAB && (brush->flag & BRUSH_GRAB_ACTIVE_VERTEX)) {
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_GRAB &&
+      (brush->flag & BRUSH_GRAB_ACTIVE_VERTEX)) {
     SCULPT_geometry_preview_lines_update(pcontext->C, pcontext->ss, pcontext->radius);
     sculpt_geometry_preview_lines_draw(
         pcontext->pos, pcontext->brush, pcontext->is_multires, pcontext->ss);
   }
 
-  if (brush->sculpt_tool == SCULPT_TOOL_POSE) {
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_POSE) {
     paint_cursor_pose_brush_segments_draw(pcontext);
   }
 
-  if (brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) {
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_BOUNDARY) {
     SCULPT_boundary_edges_preview_draw(
         pcontext->pos, pcontext->ss, pcontext->outline_col, pcontext->outline_alpha);
     SCULPT_boundary_pivot_line_preview_draw(pcontext->pos, pcontext->ss);
@@ -1692,7 +1702,7 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   paint_cursor_draw_main_inactive_cursor(pcontext);
 
   /* Cloth brush local simulation areas. */
-  if (brush->sculpt_tool == SCULPT_TOOL_CLOTH &&
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_CLOTH &&
       brush->cloth_simulation_area_type != BRUSH_CLOTH_SIMULATION_AREA_GLOBAL) {
     const float white[3] = {1.0f, 1.0f, 1.0f};
     const float zero_v[3] = {0.0f};
@@ -1704,7 +1714,7 @@ static void paint_cursor_draw_3d_view_brush_cursor_inactive(PaintCursorContext *
   }
 
   /* Layer brush height. */
-  if (brush->sculpt_tool == SCULPT_TOOL_LAYER) {
+  if (is_brush_tool && brush->sculpt_tool == SCULPT_TOOL_LAYER) {
     SCULPT_layer_brush_height_preview_draw(pcontext->pos,
                                            brush,
                                            pcontext->radius,

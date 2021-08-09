@@ -121,7 +121,7 @@ BLI_INLINE float sum_v3(const float v[3])
 typedef struct SortVertsElem {
   int vertex_num; /* The original index of the vertex, prior to sorting */
   float co[3];    /* Its coordinates */
-  float sum_co;   /* sum_v3(co), just so we don't do the sum many times.  */
+  float sum_co;   /* `sum_v3(co)`: just so we don't do the sum many times. */
 } SortVertsElem;
 
 static int svert_sum_cmp(const void *e1, const void *e2)
@@ -194,8 +194,8 @@ static void dm_mvert_map_doubles(int *doubles_map,
   i_target_low_bound = 0;
   target_scan_completed = false;
 
-  /* Scan source vertices, in SortVertsElem sorted array, */
-  /* all the while maintaining the lower bound of possible doubles in target vertices */
+  /* Scan source vertices, in #SortVertsElem sorted array,
+   * all the while maintaining the lower bound of possible doubles in target vertices. */
   for (i_source = 0, sve_source = sorted_verts_source; i_source < source_num_verts;
        i_source++, sve_source++) {
     int best_target_vertex = -1;
@@ -427,7 +427,7 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
     }
   }
 
-  /* Build up offset array, cumulating all settings options */
+  /* Build up offset array, accumulating all settings options. */
 
   unit_m4(offset);
   src_mvert = mesh->mvert;
@@ -1021,7 +1021,6 @@ ModifierTypeInfo modifierType_Array = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ NULL,

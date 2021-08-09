@@ -125,7 +125,7 @@ static void workbench_volume_modifier_cache_populate(WORKBENCH_Data *vedata,
                          fds->slice_axis - 1;
     float dim[3];
     BKE_object_dimensions_get(ob, dim);
-    /* 0.05f to achieve somewhat the same opacity as the full view.  */
+    /* 0.05f to achieve somewhat the same opacity as the full view. */
     float step_length = max_ff(1e-16f, dim[axis] * 0.05f);
 
     grp = DRW_shgroup_create(sh, vedata->psl->volume_ps);
@@ -202,7 +202,7 @@ static void workbench_volume_material_color(WORKBENCH_PrivateData *wpd,
                                             eV3DShadingColorType color_type,
                                             float color[3])
 {
-  Material *ma = BKE_object_material_get(ob, VOLUME_MATERIAL_NR);
+  Material *ma = BKE_object_material_get_eval(ob, VOLUME_MATERIAL_NR);
   WORKBENCH_UBO_Material ubo_data;
   workbench_material_ubo_data(wpd, ob, ma, &ubo_data, color_type);
   copy_v3_v3(color, ubo_data.base_color);
@@ -266,7 +266,7 @@ static void workbench_volume_object_cache_populate(WORKBENCH_Data *vedata,
 
     float dim[3];
     BKE_object_dimensions_get(ob, dim);
-    /* 0.05f to achieve somewhat the same opacity as the full view.  */
+    /* 0.05f to achieve somewhat the same opacity as the full view. */
     float step_length = max_ff(1e-16f, dim[axis] * 0.05f);
 
     const float slice_position = volume->display.slice_depth;

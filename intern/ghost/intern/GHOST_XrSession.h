@@ -52,6 +52,44 @@ class GHOST_XrSession {
 
   void draw(void *draw_customdata);
 
+  /** Action functions to be called pre-session start.
+   * Note: The "destroy" functions can also be called post-session start. */
+  bool createActionSet(const GHOST_XrActionSetInfo &info);
+  void destroyActionSet(const char *action_set_name);
+  bool createActions(const char *action_set_name, uint32_t count, const GHOST_XrActionInfo *infos);
+  void destroyActions(const char *action_set_name,
+                      uint32_t count,
+                      const char *const *action_names);
+  bool createActionSpaces(const char *action_set_name,
+                          uint32_t count,
+                          const GHOST_XrActionSpaceInfo *infos);
+  void destroyActionSpaces(const char *action_set_name,
+                           uint32_t count,
+                           const GHOST_XrActionSpaceInfo *infos);
+  bool createActionBindings(const char *action_set_name,
+                            uint32_t count,
+                            const GHOST_XrActionProfileInfo *infos);
+  void destroyActionBindings(const char *action_set_name,
+                             uint32_t count,
+                             const GHOST_XrActionProfileInfo *infos);
+  bool attachActionSets();
+
+  /**
+   * Action functions to be called post-session start.
+   * \param action_set_name: When `nullptr`, all attached action sets will be synced.
+   */
+  bool syncActions(const char *action_set_name = nullptr);
+  bool applyHapticAction(const char *action_set_name,
+                         const char *action_name,
+                         const int64_t &duration,
+                         const float &frequency,
+                         const float &amplitude);
+  void stopHapticAction(const char *action_set_name, const char *action_name);
+
+  /* Custom data (owned by Blender, not GHOST) accessors. */
+  void *getActionSetCustomdata(const char *action_set_name);
+  void *getActionCustomdata(const char *action_set_name, const char *action_name);
+
  private:
   /** Pointer back to context managing this session. Would be nice to avoid, but needed to access
    * custom callbacks set before session start. */
@@ -79,6 +117,7 @@ class GHOST_XrSession {
                 XrCompositionLayerProjectionView &r_proj_layer_view,
                 XrSpaceLocation &view_location,
                 XrView &view,
+                uint32_t view_idx,
                 void *draw_customdata);
   void beginFrameDrawing();
   void endFrameDrawing(std::vector<XrCompositionLayerBaseHeader *> &layers);

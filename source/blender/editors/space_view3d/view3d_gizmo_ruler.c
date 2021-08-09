@@ -338,7 +338,7 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
                                                   SCE_SNAP_MODE_FACE,
                                                   &(const struct SnapObjectParams){
                                                       .snap_select = SNAP_ALL,
-                                                      .use_object_edit_cage = true,
+                                                      .edit_mode_type = SNAP_GEOM_CAGE,
                                                   },
                                                   mval_fl,
                                                   NULL,
@@ -352,7 +352,7 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
                                              depsgraph,
                                              &(const struct SnapObjectParams){
                                                  .snap_select = SNAP_ALL,
-                                                 .use_object_edit_cage = true,
+                                                 .edit_mode_type = SNAP_GEOM_CAGE,
                                              },
                                              ray_start,
                                              ray_normal,
@@ -446,7 +446,7 @@ static bool view3d_ruler_to_gpencil(bContext *C, wmGizmoGroup *gzgroup)
 
   gpl = view3d_ruler_layer_get(gpd);
   if (gpl == NULL) {
-    gpl = BKE_gpencil_layer_addnew(gpd, ruler_name, false);
+    gpl = BKE_gpencil_layer_addnew(gpd, ruler_name, false, false);
     copy_v4_v4(gpl->color, U.gpencil_new_layer_col);
     gpl->thickness = 1;
     gpl->flag |= GP_LAYER_HIDE | GP_LAYER_IS_RULER;
@@ -580,7 +580,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
   UI_GetThemeColor3ubv(TH_TEXT, color_text);
   UI_GetThemeColor3ubv(TH_WIRE, color_wire);
 
-  /* Avoid white on white text. (TODO Fix by using theme) */
+  /* Avoid white on white text. (TODO: Fix by using theme). */
   if ((int)color_text[0] + (int)color_text[1] + (int)color_text[2] > 127 * 3 * 0.6f) {
     copy_v3_fl(color_back, 0.0f);
   }
@@ -1124,12 +1124,13 @@ static void WIDGETGROUP_ruler_setup(const bContext *C, wmGizmoGroup *gzgroup)
     const wmGizmoType *gzt_snap;
     gzt_snap = WM_gizmotype_find("GIZMO_GT_snap_3d", true);
     gizmo = WM_gizmo_new_ptr(gzt_snap, gzgroup, NULL);
+
     RNA_enum_set(gizmo->ptr,
                  "snap_elements_force",
                  (SCE_SNAP_MODE_VERTEX | SCE_SNAP_MODE_EDGE | SCE_SNAP_MODE_FACE |
                   /* SCE_SNAP_MODE_VOLUME | SCE_SNAP_MODE_GRID | SCE_SNAP_MODE_INCREMENT | */
                   SCE_SNAP_MODE_EDGE_PERPENDICULAR | SCE_SNAP_MODE_EDGE_MIDPOINT));
-
+    ED_gizmotypes_snap_3d_flag_set(gizmo, ED_SNAPGIZMO_SNAP_EDIT_GEOM_CAGE);
     WM_gizmo_set_color(gizmo, (float[4]){1.0f, 1.0f, 1.0f, 1.0f});
 
     wmOperatorType *ot = WM_operatortype_find("VIEW3D_OT_ruler_add", true);

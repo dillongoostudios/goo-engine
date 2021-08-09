@@ -168,17 +168,15 @@ static bool calc_curve_deform(
      *
      * Now for Neg Up XYZ, the colors are all dark, and ordered clockwise - Campbell
      *
-     * note: moved functions into quat_apply_track/vec_apply_track
+     * NOTE: moved functions into quat_apply_track/vec_apply_track
      */
     copy_qt_qt(quat, new_quat);
     copy_v3_v3(cent, co);
 
-    /* zero the axis which is not used,
-     * the big block of text above now applies to these 3 lines */
-    quat_apply_track(quat,
-                     axis,
-                     (ELEM(axis, 0, 2)) ? 1 :
-                                          0); /* up flag is a dummy, set so no rotation is done */
+    /* Zero the axis which is not used,
+     * the big block of text above now applies to these 3 lines.
+     * The `upflag` argument may be a dummy, set so no rotation is done. */
+    quat_apply_track(quat, axis, (ELEM(axis, 0, 2)) ? 1 : 0);
     vec_apply_track(cent, axis);
     cent[index] = 0.0f;
 

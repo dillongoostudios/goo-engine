@@ -47,6 +47,7 @@
 #endif
 
 #include "GPU_buffers.h"
+#include "GPU_capabilities.h"
 #include "GPU_material.h"
 #include "GPU_uniform_buffer.h"
 
@@ -73,7 +74,7 @@ static void draw_call_sort(DRWCommand *array, DRWCommand *array_tmp, int array_l
       return;
     }
   }
-  /* Cumulate batch indices */
+  /* Accumulate batch indices */
   for (int i = 1; i < ARRAY_SIZE(idx); i++) {
     idx[i] += idx[i - 1];
   }
@@ -93,7 +94,7 @@ void drw_resource_buffer_finish(ViewportMemoryPool *vmempool)
   int ubo_len = 1 + chunk_id - ((elem_id == 0) ? 1 : 0);
   size_t list_size = sizeof(GPUUniformBuf *) * ubo_len;
 
-  /* TODO find a better system. currently a lot of obinfos UBO are going to be unused
+  /* TODO: find a better system. currently a lot of obinfos UBO are going to be unused
    * if not rendering with Eevee. */
 
   if (vmempool->matrices_ubo == NULL) {
@@ -446,6 +447,19 @@ void DRW_shgroup_uniform_vec4_array_copy(DRWShadingGroup *shgroup,
   }
 }
 
+void DRW_shgroup_vertex_buffer(DRWShadingGroup *shgroup,
+                               const char *name,
+                               GPUVertBuf *vertex_buffer)
+{
+  int location = GPU_shader_get_ssbo(shgroup->shader, name);
+  if (location == -1) {
+    BLI_assert_msg(0, "Unable to locate binding of shader storage buffer objects.");
+    return;
+  }
+  drw_shgroup_uniform_create_ex(
+      shgroup, location, DRW_UNIFORM_VERTEX_BUFFER_AS_STORAGE, vertex_buffer, 0, 0, 1);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -514,10 +528,10 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
   drw_call_calc_orco(ob, ob_infos->orcotexfac);
   /* Random float value. */
   uint random = (DST.dupli_source) ?
-                    DST.dupli_source->random_id :
-                    /* TODO(fclem): this is rather costly to do at runtime. Maybe we can
-                     * put it in ob->runtime and make depsgraph ensure it is up to date. */
-                    BLI_hash_int_2d(BLI_hash_string(ob->id.name + 2), 0);
+                     DST.dupli_source->random_id :
+                     /* TODO(fclem): this is rather costly to do at runtime. Maybe we can
+                      * put it in ob->runtime and make depsgraph ensure it is up to date. */
+                     BLI_hash_int_2d(BLI_hash_string(ob->id.name + 2), 0);
   ob_infos->ob_hash = random;
   ob_infos->ob_random = random * (1.0f / (float)0xFFFFFFFF);
   /* Object State. */
@@ -702,6 +716,17 @@ static void drw_command_draw_intance_range(
   cmd->inst_count = count;
 }
 
+static void drw_command_compute(DRWShadingGroup *shgroup,
+                                int groups_x_len,
+                                int groups_y_len,
+                                int groups_z_len)
+{
+  DRWCommandCompute *cmd = drw_command_create(shgroup, DRW_CMD_COMPUTE);
+  cmd->groups_x_len = groups_x_len;
+  cmd->groups_y_len = groups_y_len;
+  cmd->groups_z_len = groups_z_len;
+}
+
 static void drw_command_draw_procedural(DRWShadingGroup *shgroup,
                                         GPUBatch *batch,
                                         DRWResourceHandle handle,
@@ -759,7 +784,7 @@ static void drw_command_set_mutable_state(DRWShadingGroup *shgroup,
                                           DRWState enable,
                                           DRWState disable)
 {
-  /* TODO Restrict what state can be changed. */
+  /* TODO: Restrict what state can be changed. */
   DRWCommandSetMutableState *cmd = drw_command_create(shgroup, DRW_CMD_DRWSTATE);
   cmd->enable = enable;
   cmd->disable = disable;
@@ -815,6 +840,17 @@ void DRW_shgroup_call_instance_range(
   }
   DRWResourceHandle handle = drw_resource_handle(shgroup, ob ? ob->obmat : NULL, ob);
   drw_command_draw_intance_range(shgroup, geom, handle, i_sta, i_ct);
+}
+
+void DRW_shgroup_call_compute(DRWShadingGroup *shgroup,
+                              int groups_x_len,
+                              int groups_y_len,
+                              int groups_z_len)
+{
+  BLI_assert(groups_x_len > 0 && groups_y_len > 0 && groups_z_len > 0);
+  BLI_assert(GPU_compute_shader_support());
+
+  drw_command_compute(shgroup, groups_x_len, groups_y_len, groups_z_len);
 }
 
 static void drw_shgroup_call_procedural_add_ex(DRWShadingGroup *shgroup,
@@ -1229,7 +1265,7 @@ static void drw_shgroup_init(DRWShadingGroup *shgroup, GPUShader *shader)
         shgroup, model_ubo_location, DRW_UNIFORM_BLOCK_OBMATS, NULL, 0, 0, 1);
   }
   else {
-    /* Note: This is only here to support old hardware fallback where uniform buffer is still
+    /* NOTE: This is only here to support old hardware fallback where uniform buffer is still
      * too slow or buggy. */
     int model = GPU_shader_get_builtin_uniform(shader, GPU_UNIFORM_MODEL);
     int modelinverse = GPU_shader_get_builtin_uniform(shader, GPU_UNIFORM_MODEL_INV);
@@ -1426,7 +1462,7 @@ void DRW_shgroup_stencil_set(DRWShadingGroup *shgroup,
   drw_command_set_stencil_mask(shgroup, write_mask, reference, compare_mask);
 }
 
-/* TODO remove this function. */
+/* TODO: remove this function. */
 void DRW_shgroup_stencil_mask(DRWShadingGroup *shgroup, uint mask)
 {
   drw_command_set_stencil_mask(shgroup, 0xFF, mask, 0xFF);
@@ -1542,8 +1578,8 @@ static void draw_frustum_culling_planes_calc(const float (*persmat)[4], float (*
   planes_from_projmat(persmat,
                       frustum_planes[0],
                       frustum_planes[5],
-                      frustum_planes[3],
                       frustum_planes[1],
+                      frustum_planes[3],
                       frustum_planes[4],
                       frustum_planes[2]);
 
@@ -2087,8 +2123,8 @@ void DRW_pass_sort_shgroup_z(DRWPass *pass)
         }
       }
     }
-    /* To be sorted a shgroup needs to have at least one draw command.  */
-    /* FIXME(fclem) In some case, we can still have empty shading group to sort. However their
+    /* To be sorted a shgroup needs to have at least one draw command. */
+    /* FIXME(fclem): In some case, we can still have empty shading group to sort. However their
      * final order is not well defined.
      * (see T76730 & D7729). */
     // BLI_assert(handle != 0);

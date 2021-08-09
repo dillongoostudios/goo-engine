@@ -20,10 +20,12 @@
 
 #include "BLI_float4x4.hh"
 
+#include "DNA_mesh_types.h"
 #include "DNA_pointcloud_types.h"
 #include "DNA_volume_types.h"
 
 #include "BKE_mesh.h"
+#include "BKE_spline.hh"
 #include "BKE_volume.h"
 
 #include "DEG_depsgraph_query.h"
@@ -71,7 +73,8 @@ void transform_mesh(Mesh *mesh,
   else {
     const float4x4 matrix = float4x4::from_loc_eul_scale(translation, rotation, scale);
     BKE_mesh_transform(mesh, matrix.values, false);
-    BKE_mesh_calc_normals(mesh);
+    mesh->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+    mesh->runtime.cd_dirty_poly |= CD_MASK_NORMAL;
   }
 }
 
@@ -100,7 +103,7 @@ static void transform_instances(InstancesComponent &instances,
                                 const float3 rotation,
                                 const float3 scale)
 {
-  MutableSpan<float4x4> transforms = instances.transforms();
+  MutableSpan<float4x4> transforms = instances.instance_transforms();
 
   /* Use only translation if rotation and scale don't apply. */
   if (use_translate(rotation, scale)) {
@@ -152,6 +155,20 @@ static void transform_volume(Volume *volume,
 #endif
 }
 
+static void transform_curve(CurveEval &curve,
+                            const float3 translation,
+                            const float3 rotation,
+                            const float3 scale)
+{
+  if (use_translate(rotation, scale)) {
+    curve.translate(translation);
+  }
+  else {
+    const float4x4 matrix = float4x4::from_loc_eul_scale(translation, rotation, scale);
+    curve.transform(matrix);
+  }
+}
+
 static void geo_node_transform_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
@@ -163,20 +180,21 @@ static void geo_node_transform_exec(GeoNodeExecParams params)
     Mesh *mesh = geometry_set.get_mesh_for_write();
     transform_mesh(mesh, translation, rotation, scale);
   }
-
   if (geometry_set.has_pointcloud()) {
     PointCloud *pointcloud = geometry_set.get_pointcloud_for_write();
     transform_pointcloud(pointcloud, translation, rotation, scale);
   }
-
   if (geometry_set.has_instances()) {
     InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
     transform_instances(instances, translation, rotation, scale);
   }
-
   if (geometry_set.has_volume()) {
     Volume *volume = geometry_set.get_volume_for_write();
     transform_volume(volume, translation, rotation, scale, params);
+  }
+  if (geometry_set.has_curve()) {
+    CurveEval *curve = geometry_set.get_curve_for_write();
+    transform_curve(*curve, translation, rotation, scale);
   }
 
   params.set_output("Geometry", std::move(geometry_set));

@@ -27,6 +27,8 @@
 extern "C" {
 #endif
 
+#include "BLI_compiler_attrs.h"
+
 struct ARegion;
 struct BMBVHTree;
 struct BMEdge;
@@ -36,6 +38,7 @@ struct BMFace;
 struct BMLoop;
 struct BMVert;
 struct BMesh;
+struct BMeshNormalsUpdate_Params;
 struct Base;
 struct Depsgraph;
 struct ID;
@@ -76,19 +79,21 @@ struct BMFace *EDBM_verts_mirror_get_face(struct BMEditMesh *em, struct BMFace *
 void EDBM_verts_mirror_cache_clear(struct BMEditMesh *em, struct BMVert *v);
 void EDBM_verts_mirror_cache_end(struct BMEditMesh *em);
 
+void EDBM_mesh_normals_update_ex(struct BMEditMesh *em,
+                                 const struct BMeshNormalsUpdate_Params *params);
 void EDBM_mesh_normals_update(struct BMEditMesh *em);
 void EDBM_mesh_clear(struct BMEditMesh *em);
 
 void EDBM_selectmode_to_scene(struct bContext *C);
 void EDBM_mesh_make(struct Object *ob, const int select_mode, const bool add_key_index);
-void EDBM_mesh_free(struct BMEditMesh *em);
+void EDBM_mesh_free_data(struct BMEditMesh *em);
 void EDBM_mesh_load_ex(struct Main *bmain, struct Object *ob, bool free_data);
 void EDBM_mesh_load(struct Main *bmain, struct Object *ob);
 
 /* flushes based on the current select mode.  if in vertex select mode,
  * verts select/deselect edges and faces, if in edge select mode,
  * edges select/deselect faces and vertices, and in face select mode faces select/deselect
- * edges and vertices.*/
+ * edges and vertices. */
 void EDBM_select_more(struct BMEditMesh *em, const bool use_face_step);
 void EDBM_select_less(struct BMEditMesh *em, const bool use_face_step);
 
@@ -103,7 +108,14 @@ bool EDBM_vert_color_check(struct BMEditMesh *em);
 bool EDBM_mesh_hide(struct BMEditMesh *em, bool swap);
 bool EDBM_mesh_reveal(struct BMEditMesh *em, bool select);
 
-void EDBM_update_generic(struct Mesh *me, const bool do_tessellation, const bool is_destructive);
+struct EDBMUpdate_Params {
+  uint calc_looptri : 1;
+  uint calc_normals : 1;
+  uint is_destructive : 1;
+};
+
+void EDBM_update(struct Mesh *me, const struct EDBMUpdate_Params *params);
+void EDBM_update_extern(struct Mesh *me, const bool do_tessellation, const bool is_destructive);
 
 struct UvElementMap *BM_uv_element_map_create(struct BMesh *bm,
                                               const struct Scene *scene,
@@ -445,12 +457,14 @@ typedef struct BMBackup {
   struct BMesh *bmcopy;
 } BMBackup;
 
-/* save a copy of the bmesh for restoring later */
 struct BMBackup EDBM_redo_state_store(struct BMEditMesh *em);
 /* restore a bmesh from backup */
-void EDBM_redo_state_restore(struct BMBackup, struct BMEditMesh *em, int recalctess);
-/* delete the backup, optionally flushing it to an editmesh */
-void EDBM_redo_state_free(struct BMBackup *, struct BMEditMesh *em, int recalctess);
+void EDBM_redo_state_restore(struct BMBackup *backup, struct BMEditMesh *em, bool recalc_looptri)
+    ATTR_NONNULL(1, 2);
+void EDBM_redo_state_restore_and_free(struct BMBackup *backup,
+                                      struct BMEditMesh *em,
+                                      bool recalc_looptri) ATTR_NONNULL(1, 2);
+void EDBM_redo_state_free(struct BMBackup *backup) ATTR_NONNULL(1);
 
 /* *** meshtools.c *** */
 int ED_mesh_join_objects_exec(struct bContext *C, struct wmOperator *op);
@@ -471,9 +485,8 @@ int ED_mesh_mirror_spatial_table_lookup(struct Object *ob,
 void ED_mesh_mirror_topo_table_begin(struct Object *ob, struct Mesh *me_eval);
 void ED_mesh_mirror_topo_table_end(struct Object *ob);
 
-/* retrieves mirrored cache vert, or NULL if there isn't one.
- * note: calling this without ensuring the mirror cache state
- * is bad.*/
+/* Retrieves mirrored cache vert, or NULL if there isn't one.
+ * NOTE: calling this without ensuring the mirror cache state is bad. */
 int mesh_get_x_mirror_vert(struct Object *ob,
                            struct Mesh *me_eval,
                            int index,

@@ -77,6 +77,7 @@ set(SRC
   intern/proxy_job.c
   intern/render.c
   intern/render.h
+  intern/sequence_lookup.c
   intern/sequencer.c
   intern/sequencer.h
   intern/sound.c

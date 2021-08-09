@@ -252,7 +252,7 @@ static int dot_v3_array_find_max_index(const float dirs[][3],
 }
 
 /**
- * Re-order \a mat so \a axis_align uses it's own axis which is closest to \a v.
+ * Re-order \a mat so \a axis_align uses its own axis which is closest to \a v.
  */
 static bool mat3_align_axis_to_v3(float mat[3][3], const int axis_align, const float v[3])
 {
@@ -323,7 +323,7 @@ static bool idp_poject_surface_normal(SnapObjectContext *snap_context,
                                                  SCE_SNAP_MODE_FACE,
                                                  &(const struct SnapObjectParams){
                                                      .snap_select = SNAP_ALL,
-                                                     .use_object_edit_cage = true,
+                                                     .edit_mode_type = SNAP_GEOM_EDIT,
                                                  },
                                                  mval_fl,
                                                  NULL,
@@ -584,7 +584,7 @@ static bool calc_bbox(struct InteractivePlaceData *ipd, BoundBox *bounds)
     delta_a[x_axis] = 0.0f;
     delta_b[y_axis] = 0.0f;
 
-    /* Assign here in case secondary  */
+    /* Assign here in case secondary. */
     fixed_aspect_dimension = max_ff(fabsf(delta_a[y_axis]), fabsf(delta_b[x_axis]));
 
     if (ipd->step[0].is_fixed_aspect) {
@@ -941,7 +941,7 @@ static void view3d_interactive_add_calc_plane(bContext *C,
                                                   SCE_SNAP_MODE_FACE,
                                                   &(const struct SnapObjectParams){
                                                       .snap_select = SNAP_ALL,
-                                                      .use_object_edit_cage = true,
+                                                      .edit_mode_type = SNAP_GEOM_EDIT,
                                                   },
                                                   mval_fl,
                                                   NULL,
@@ -961,7 +961,7 @@ static void view3d_interactive_add_calc_plane(bContext *C,
       const float view_axis_dot = fabsf(dot_v3v3(rv3d->viewinv[2], r_matrix_orient[plane_axis]));
       if (view_axis_dot < eps_view_align) {
         /* In this case, just project onto the view plane as it's important the location
-         * is _always_ under the mouse cursor, even if it turns out that wont lie on
+         * is _always_ under the mouse cursor, even if it turns out that won't lie on
          * the original 'plane' that's been calculated for us. */
         plane_normal = rv3d->viewinv[2];
       }
@@ -974,7 +974,7 @@ static void view3d_interactive_add_calc_plane(bContext *C,
 
       /* Even if the calculation works, it's possible the point found is behind the view,
        * or very far away (past the far clipping).
-       * In either case creating objects wont be useful. */
+       * In either case creating objects won't be useful. */
       if (rv3d->is_persp) {
         float dir[3];
         sub_v3_v3v3(dir, rv3d->viewinv[3], r_co_src);
@@ -1196,7 +1196,7 @@ static void view3d_interactive_add_begin(bContext *C, wmOperator *op, const wmEv
       }
       else {
         /* If the user runs this as an operator they should set the 'primitive_type',
-         * however running from operator search will end up at this point.  */
+         * however running from operator search will end up at this point. */
         ipd->primitive_type = PLACE_PRIMITIVE_TYPE_CUBE;
         ipd->use_tool = false;
       }
@@ -1610,7 +1610,7 @@ void VIEW3D_OT_interactive_add(struct wmOperatorType *ot)
   ot->cancel = view3d_interactive_add_cancel;
   ot->poll = view3d_interactive_add_poll;
 
-  /* Note, let the operator we call handle undo and registering itself. */
+  /* NOTE: let the operator we call handle undo and registering itself. */
   /* flags */
   ot->flag = 0;
 
@@ -1762,7 +1762,7 @@ static void WIDGETGROUP_placement_setup(const bContext *UNUSED(C), wmGizmoGroup 
     gizmo->flag |= WM_GIZMO_HIDDEN_KEYMAP;
   }
 
-  /* Sets the gizmos custom-data which has it's own free callback. */
+  /* Sets the gizmos custom-data which has its own free callback. */
   preview_plane_cursor_setup(gzgroup);
 }
 
@@ -1830,7 +1830,7 @@ static void gizmo_plane_update_cursor(const bContext *C,
   /* This ensures the snap gizmo has settings from this tool.
    * This function call could be moved a more appropriate place,
    * responding to the setting being changed for example,
-   * however setting the value isn't expensive, so do it here.  */
+   * however setting the value isn't expensive, so do it here. */
   idp_snap_gizmo_update_snap_elements(scene, snap_to, snap_gizmo);
 
   view3d_interactive_add_calc_plane((bContext *)C,
@@ -1957,7 +1957,7 @@ struct PlacementCursor {
 
   /**
    * Enable this while the modal operator is running,
-   * so the preview-plane doesn't show at the same time time as add-object preview shape
+   * so the preview-plane doesn't show at the same time as add-object preview shape
    * since it's distracting & not helpful.
    */
   bool do_draw;
@@ -2061,7 +2061,7 @@ static void cursor_plane_draw(bContext *C, int x, int y, void *customdata)
     GPU_matrix_projection_set(rv3d->winmat);
     GPU_matrix_set(rv3d->viewmat);
 
-    const float scale_mod = U.gizmo_size * 2 * U.dpi_fac;
+    const float scale_mod = U.gizmo_size * 2 * U.dpi_fac / U.pixelsize;
 
     float final_scale = (scale_mod * pixel_size);
 

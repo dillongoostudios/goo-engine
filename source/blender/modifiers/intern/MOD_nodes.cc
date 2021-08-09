@@ -10,7 +10,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software  Foundation,
+ * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  *
  * The Original Code is Copyright (C) 2005 by the Blender Foundation.
@@ -36,6 +36,7 @@
 
 #include "DNA_collection_types.h"
 #include "DNA_defaults.h"
+#include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
@@ -47,6 +48,7 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
+#include "BKE_attribute_math.hh"
 #include "BKE_customdata.h"
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_global.h"
@@ -55,7 +57,6 @@
 #include "BKE_main.h"
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
-#include "BKE_node_ui_storage.hh"
 #include "BKE_object.h"
 #include "BKE_pointcloud.h"
 #include "BKE_screen.h"
@@ -75,17 +76,17 @@
 
 #include "MOD_modifiertypes.h"
 #include "MOD_nodes.h"
+#include "MOD_nodes_evaluator.hh"
 #include "MOD_ui_common.h"
 
 #include "ED_spreadsheet.h"
 
 #include "NOD_derived_node_tree.hh"
 #include "NOD_geometry.h"
-#include "NOD_geometry_exec.hh"
+#include "NOD_geometry_nodes_eval_log.hh"
 #include "NOD_node_tree_multi_function.hh"
-#include "NOD_type_callbacks.hh"
-#include "NOD_type_conversions.hh"
 
+using blender::destruct_ptr;
 using blender::float3;
 using blender::FunctionRef;
 using blender::IndexRange;
@@ -95,13 +96,10 @@ using blender::Span;
 using blender::StringRef;
 using blender::StringRefNull;
 using blender::Vector;
-using blender::bke::PersistentCollectionHandle;
-using blender::bke::PersistentDataHandleMap;
-using blender::bke::PersistentObjectHandle;
 using blender::fn::GMutablePointer;
 using blender::fn::GPointer;
-using blender::fn::GValueMap;
 using blender::nodes::GeoNodeExecParams;
+using blender::threading::EnumerableThreadSpecific;
 using namespace blender::fn::multi_function_types;
 using namespace blender::nodes::derived_node_tree_types;
 
@@ -127,6 +125,18 @@ static void addIdsUsedBySocket(const ListBase *sockets, Set<ID *> &ids)
       Collection *collection = ((bNodeSocketValueCollection *)socket->default_value)->value;
       if (collection != nullptr) {
         ids.add(&collection->id);
+      }
+    }
+    else if (socket->type == SOCK_MATERIAL) {
+      Material *material = ((bNodeSocketValueMaterial *)socket->default_value)->value;
+      if (material != nullptr) {
+        ids.add(&material->id);
+      }
+    }
+    else if (socket->type == SOCK_TEXTURE) {
+      Tex *texture = ((bNodeSocketValueTexture *)socket->default_value)->value;
+      if (texture != nullptr) {
+        ids.add(&texture->id);
       }
     }
   }
@@ -203,18 +213,28 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
     find_used_ids_from_settings(nmd->settings, used_ids);
     find_used_ids_from_nodes(*nmd->node_group, used_ids);
     for (ID *id : used_ids) {
-      if (GS(id->name) == ID_OB) {
-        Object *object = reinterpret_cast<Object *>(id);
-        add_object_relation(ctx, *object);
-      }
-      if (GS(id->name) == ID_GR) {
-        Collection *collection = reinterpret_cast<Collection *>(id);
-        add_collection_relation(ctx, *collection);
+      switch ((ID_Type)GS(id->name)) {
+        case ID_OB: {
+          Object *object = reinterpret_cast<Object *>(id);
+          add_object_relation(ctx, *object);
+          break;
+        }
+        case ID_GR: {
+          Collection *collection = reinterpret_cast<Collection *>(id);
+          add_collection_relation(ctx, *collection);
+          break;
+        }
+        case ID_TE: {
+          DEG_add_generic_id_relation(ctx->node, id, "Nodes Modifier");
+        }
+        default: {
+          /* Purposefully don't add relations for materials. While there are material sockets,
+           * the pointers are only passed around as handles rather than dereferenced. */
+          break;
+        }
       }
     }
   }
-
-  /* TODO: Add dependency for adding and removing objects in collections. */
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
@@ -268,368 +288,6 @@ static bool logging_enabled(const ModifierEvalContext *ctx)
   return true;
 }
 
-class GeometryNodesEvaluator {
- public:
-  using LogSocketValueFn = std::function<void(DSocket, Span<GPointer>)>;
-
- private:
-  blender::LinearAllocator<> allocator_;
-  Map<std::pair<DInputSocket, DOutputSocket>, GMutablePointer> value_by_input_;
-  Vector<DInputSocket> group_outputs_;
-  blender::nodes::MultiFunctionByNode &mf_by_node_;
-  const blender::nodes::DataTypeConversions &conversions_;
-  const PersistentDataHandleMap &handle_map_;
-  const Object *self_object_;
-  const ModifierData *modifier_;
-  Depsgraph *depsgraph_;
-  LogSocketValueFn log_socket_value_fn_;
-
- public:
-  GeometryNodesEvaluator(const Map<DOutputSocket, GMutablePointer> &group_input_data,
-                         Vector<DInputSocket> group_outputs,
-                         blender::nodes::MultiFunctionByNode &mf_by_node,
-                         const PersistentDataHandleMap &handle_map,
-                         const Object *self_object,
-                         const ModifierData *modifier,
-                         Depsgraph *depsgraph,
-                         LogSocketValueFn log_socket_value_fn)
-      : group_outputs_(std::move(group_outputs)),
-        mf_by_node_(mf_by_node),
-        conversions_(blender::nodes::get_implicit_type_conversions()),
-        handle_map_(handle_map),
-        self_object_(self_object),
-        modifier_(modifier),
-        depsgraph_(depsgraph),
-        log_socket_value_fn_(std::move(log_socket_value_fn))
-  {
-    for (auto item : group_input_data.items()) {
-      this->log_socket_value(item.key, item.value);
-      this->forward_to_inputs(item.key, item.value);
-    }
-  }
-
-  Vector<GMutablePointer> execute()
-  {
-    Vector<GMutablePointer> results;
-    for (const DInputSocket &group_output : group_outputs_) {
-      Vector<GMutablePointer> result = this->get_input_values(group_output);
-      this->log_socket_value(group_output, result);
-      results.append(result[0]);
-    }
-    for (GMutablePointer value : value_by_input_.values()) {
-      value.destruct();
-    }
-    return results;
-  }
-
- private:
-  Vector<GMutablePointer> get_input_values(const DInputSocket socket_to_compute)
-  {
-    Vector<DSocket> from_sockets;
-    socket_to_compute.foreach_origin_socket([&](DSocket socket) { from_sockets.append(socket); });
-
-    if (from_sockets.is_empty()) {
-      /* The input is not connected, use the value from the socket itself. */
-      const CPPType &type = *blender::nodes::socket_cpp_type_get(*socket_to_compute->typeinfo());
-      return {get_unlinked_input_value(socket_to_compute, type)};
-    }
-
-    /* Multi-input sockets contain a vector of inputs. */
-    if (socket_to_compute->is_multi_input_socket()) {
-      return this->get_inputs_from_incoming_links(socket_to_compute, from_sockets);
-    }
-
-    const DSocket from_socket = from_sockets[0];
-    GMutablePointer value = this->get_input_from_incoming_link(socket_to_compute, from_socket);
-    return {value};
-  }
-
-  Vector<GMutablePointer> get_inputs_from_incoming_links(const DInputSocket socket_to_compute,
-                                                         const Span<DSocket> from_sockets)
-  {
-    Vector<GMutablePointer> values;
-    for (const int i : from_sockets.index_range()) {
-      const DSocket from_socket = from_sockets[i];
-      const int first_occurence = from_sockets.take_front(i).first_index_try(from_socket);
-      if (first_occurence == -1) {
-        values.append(this->get_input_from_incoming_link(socket_to_compute, from_socket));
-      }
-      else {
-        /* If the same from-socket occurs more than once, we make a copy of the first value. This
-         * can happen when a node linked to a multi-input-socket is muted. */
-        GMutablePointer value = values[first_occurence];
-        const CPPType *type = value.type();
-        void *copy_buffer = allocator_.allocate(type->size(), type->alignment());
-        type->copy_to_uninitialized(value.get(), copy_buffer);
-        values.append({type, copy_buffer});
-      }
-    }
-    return values;
-  }
-
-  GMutablePointer get_input_from_incoming_link(const DInputSocket socket_to_compute,
-                                               const DSocket from_socket)
-  {
-    if (from_socket->is_output()) {
-      const DOutputSocket from_output_socket{from_socket};
-      const std::pair<DInputSocket, DOutputSocket> key = std::make_pair(socket_to_compute,
-                                                                        from_output_socket);
-      std::optional<GMutablePointer> value = value_by_input_.pop_try(key);
-      if (value.has_value()) {
-        /* This input has been computed before, return it directly. */
-        return {*value};
-      }
-
-      /* Compute the socket now. */
-      this->compute_output_and_forward(from_output_socket);
-      return {value_by_input_.pop(key)};
-    }
-
-    /* Get value from an unlinked input socket. */
-    const CPPType &type = *blender::nodes::socket_cpp_type_get(*socket_to_compute->typeinfo());
-    const DInputSocket from_input_socket{from_socket};
-    return {get_unlinked_input_value(from_input_socket, type)};
-  }
-
-  void compute_output_and_forward(const DOutputSocket socket_to_compute)
-  {
-    const DNode node{socket_to_compute.context(), &socket_to_compute->node()};
-
-    if (!socket_to_compute->is_available()) {
-      /* If the output is not available, use a default value. */
-      const CPPType &type = *blender::nodes::socket_cpp_type_get(*socket_to_compute->typeinfo());
-      void *buffer = allocator_.allocate(type.size(), type.alignment());
-      type.copy_to_uninitialized(type.default_value(), buffer);
-      this->forward_to_inputs(socket_to_compute, {type, buffer});
-      return;
-    }
-
-    /* Prepare inputs required to execute the node. */
-    GValueMap<StringRef> node_inputs_map{allocator_};
-    for (const InputSocketRef *input_socket : node->inputs()) {
-      if (input_socket->is_available()) {
-        DInputSocket dsocket{node.context(), input_socket};
-        Vector<GMutablePointer> values = this->get_input_values(dsocket);
-        this->log_socket_value(dsocket, values);
-        for (int i = 0; i < values.size(); ++i) {
-          /* Values from Multi Input Sockets are stored in input map with the format
-           * <identifier>[<index>]. */
-          blender::StringRefNull key = allocator_.copy_string(
-              input_socket->identifier() + (i > 0 ? ("[" + std::to_string(i)) + "]" : ""));
-          node_inputs_map.add_new_direct(key, std::move(values[i]));
-        }
-      }
-    }
-
-    /* Execute the node. */
-    GValueMap<StringRef> node_outputs_map{allocator_};
-    GeoNodeExecParams params{
-        node, node_inputs_map, node_outputs_map, handle_map_, self_object_, modifier_, depsgraph_};
-    this->execute_node(node, params);
-
-    /* Forward computed outputs to linked input sockets. */
-    for (const OutputSocketRef *output_socket : node->outputs()) {
-      if (output_socket->is_available()) {
-        const DOutputSocket dsocket{node.context(), output_socket};
-        GMutablePointer value = node_outputs_map.extract(output_socket->identifier());
-        this->log_socket_value(dsocket, value);
-        this->forward_to_inputs(dsocket, value);
-      }
-    }
-  }
-
-  void log_socket_value(const DSocket socket, Span<GPointer> values)
-  {
-    if (log_socket_value_fn_) {
-      log_socket_value_fn_(socket, values);
-    }
-  }
-
-  void log_socket_value(const DSocket socket, Span<GMutablePointer> values)
-  {
-    this->log_socket_value(socket, values.cast<GPointer>());
-  }
-
-  void log_socket_value(const DSocket socket, GPointer value)
-  {
-    this->log_socket_value(socket, Span<GPointer>(&value, 1));
-  }
-
-  void execute_node(const DNode node, GeoNodeExecParams params)
-  {
-    const bNode &bnode = params.node();
-
-    /* Use the geometry-node-execute callback if it exists. */
-    if (bnode.typeinfo->geometry_node_execute != nullptr) {
-      bnode.typeinfo->geometry_node_execute(params);
-      return;
-    }
-
-    /* Use the multi-function implementation if it exists. */
-    const MultiFunction *multi_function = mf_by_node_.lookup_default(node, nullptr);
-    if (multi_function != nullptr) {
-      this->execute_multi_function_node(node, params, *multi_function);
-      return;
-    }
-
-    /* Just output default values if no implementation exists. */
-    this->execute_unknown_node(node, params);
-  }
-
-  void execute_multi_function_node(const DNode node,
-                                   GeoNodeExecParams params,
-                                   const MultiFunction &fn)
-  {
-    MFContextBuilder fn_context;
-    MFParamsBuilder fn_params{fn, 1};
-    Vector<GMutablePointer> input_data;
-    for (const InputSocketRef *socket_ref : node->inputs()) {
-      if (socket_ref->is_available()) {
-        GMutablePointer data = params.extract_input(socket_ref->identifier());
-        fn_params.add_readonly_single_input(GSpan(*data.type(), data.get(), 1));
-        input_data.append(data);
-      }
-    }
-    Vector<GMutablePointer> output_data;
-    for (const OutputSocketRef *socket_ref : node->outputs()) {
-      if (socket_ref->is_available()) {
-        const CPPType &type = *blender::nodes::socket_cpp_type_get(*socket_ref->typeinfo());
-        void *buffer = allocator_.allocate(type.size(), type.alignment());
-        fn_params.add_uninitialized_single_output(GMutableSpan(type, buffer, 1));
-        output_data.append(GMutablePointer(type, buffer));
-      }
-    }
-    fn.call(IndexRange(1), fn_params, fn_context);
-    for (GMutablePointer value : input_data) {
-      value.destruct();
-    }
-    int output_index = 0;
-    for (const int i : node->outputs().index_range()) {
-      if (node->output(i).is_available()) {
-        GMutablePointer value = output_data[output_index];
-        params.set_output_by_move(node->output(i).identifier(), value);
-        value.destruct();
-        output_index++;
-      }
-    }
-  }
-
-  void execute_unknown_node(const DNode node, GeoNodeExecParams params)
-  {
-    for (const OutputSocketRef *socket : node->outputs()) {
-      if (socket->is_available()) {
-        const CPPType &type = *blender::nodes::socket_cpp_type_get(*socket->typeinfo());
-        params.set_output_by_copy(socket->identifier(), {type, type.default_value()});
-      }
-    }
-  }
-
-  void forward_to_inputs(const DOutputSocket from_socket, GMutablePointer value_to_forward)
-  {
-    /* For all sockets that are linked with the from_socket push the value to their node. */
-    Vector<DInputSocket> to_sockets_all;
-
-    auto handle_target_socket_fn = [&](DInputSocket to_socket) {
-      to_sockets_all.append_non_duplicates(to_socket);
-    };
-    auto handle_skipped_socket_fn = [&, this](DSocket socket) {
-      this->log_socket_value(socket, value_to_forward);
-    };
-
-    from_socket.foreach_target_socket(handle_target_socket_fn, handle_skipped_socket_fn);
-
-    const CPPType &from_type = *value_to_forward.type();
-    Vector<DInputSocket> to_sockets_same_type;
-    for (const DInputSocket &to_socket : to_sockets_all) {
-      const CPPType &to_type = *blender::nodes::socket_cpp_type_get(*to_socket->typeinfo());
-      const std::pair<DInputSocket, DOutputSocket> key = std::make_pair(to_socket, from_socket);
-      if (from_type == to_type) {
-        to_sockets_same_type.append(to_socket);
-      }
-      else {
-        void *buffer = allocator_.allocate(to_type.size(), to_type.alignment());
-        if (conversions_.is_convertible(from_type, to_type)) {
-          conversions_.convert_to_uninitialized(
-              from_type, to_type, value_to_forward.get(), buffer);
-        }
-        else {
-          to_type.copy_to_uninitialized(to_type.default_value(), buffer);
-        }
-        add_value_to_input_socket(key, GMutablePointer{to_type, buffer});
-      }
-    }
-
-    if (to_sockets_same_type.size() == 0) {
-      /* This value is not further used, so destruct it. */
-      value_to_forward.destruct();
-    }
-    else if (to_sockets_same_type.size() == 1) {
-      /* This value is only used on one input socket, no need to copy it. */
-      const DInputSocket to_socket = to_sockets_same_type[0];
-      const std::pair<DInputSocket, DOutputSocket> key = std::make_pair(to_socket, from_socket);
-
-      add_value_to_input_socket(key, value_to_forward);
-    }
-    else {
-      /* Multiple inputs use the value, make a copy for every input except for one. */
-      const DInputSocket first_to_socket = to_sockets_same_type[0];
-      Span<DInputSocket> other_to_sockets = to_sockets_same_type.as_span().drop_front(1);
-      const CPPType &type = *value_to_forward.type();
-      const std::pair<DInputSocket, DOutputSocket> first_key = std::make_pair(first_to_socket,
-                                                                              from_socket);
-      add_value_to_input_socket(first_key, value_to_forward);
-      for (const DInputSocket &to_socket : other_to_sockets) {
-        const std::pair<DInputSocket, DOutputSocket> key = std::make_pair(to_socket, from_socket);
-        void *buffer = allocator_.allocate(type.size(), type.alignment());
-        type.copy_to_uninitialized(value_to_forward.get(), buffer);
-        add_value_to_input_socket(key, GMutablePointer{type, buffer});
-      }
-    }
-  }
-
-  void add_value_to_input_socket(const std::pair<DInputSocket, DOutputSocket> key,
-                                 GMutablePointer value)
-  {
-    value_by_input_.add_new(key, value);
-  }
-
-  GMutablePointer get_unlinked_input_value(const DInputSocket &socket,
-                                           const CPPType &required_type)
-  {
-    bNodeSocket *bsocket = socket->bsocket();
-    const CPPType &type = *blender::nodes::socket_cpp_type_get(*socket->typeinfo());
-    void *buffer = allocator_.allocate(type.size(), type.alignment());
-
-    if (bsocket->type == SOCK_OBJECT) {
-      Object *object = socket->default_value<bNodeSocketValueObject>()->value;
-      PersistentObjectHandle object_handle = handle_map_.lookup(object);
-      new (buffer) PersistentObjectHandle(object_handle);
-    }
-    else if (bsocket->type == SOCK_COLLECTION) {
-      Collection *collection = socket->default_value<bNodeSocketValueCollection>()->value;
-      PersistentCollectionHandle collection_handle = handle_map_.lookup(collection);
-      new (buffer) PersistentCollectionHandle(collection_handle);
-    }
-    else {
-      blender::nodes::socket_cpp_value_get(*bsocket, buffer);
-    }
-
-    if (type == required_type) {
-      return {type, buffer};
-    }
-    if (conversions_.is_convertible(type, required_type)) {
-      void *converted_buffer = allocator_.allocate(required_type.size(),
-                                                   required_type.alignment());
-      conversions_.convert_to_uninitialized(type, required_type, buffer, converted_buffer);
-      type.destruct(buffer);
-      return {required_type, converted_buffer};
-    }
-    void *default_buffer = allocator_.allocate(required_type.size(), required_type.alignment());
-    required_type.copy_to_uninitialized(required_type.default_value(), default_buffer);
-    return {required_type, default_buffer};
-  }
-};
-
 /**
  * This code is responsible for creating the new property and also creating the group of
  * properties in the prop_ui_container group for the UI info, the mapping for which is
@@ -649,9 +307,7 @@ struct SocketPropertyType {
   IDProperty *(*create_default_ui_prop)(const bNodeSocket &socket, const char *name);
   PropertyType (*rna_subtype_get)(const bNodeSocket &socket);
   bool (*is_correct_type)(const IDProperty &property);
-  void (*init_cpp_value)(const IDProperty &property,
-                         const PersistentDataHandleMap &handles,
-                         void *r_value);
+  void (*init_cpp_value)(const IDProperty &property, void *r_value);
 };
 
 static IDProperty *socket_add_property(IDProperty *settings_prop_group,
@@ -744,9 +400,7 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
             return (PropertyType)((bNodeSocketValueFloat *)socket.default_value)->subtype;
           },
           [](const IDProperty &property) { return ELEM(property.type, IDP_FLOAT, IDP_DOUBLE); },
-          [](const IDProperty &property,
-             const PersistentDataHandleMap &UNUSED(handles),
-             void *r_value) {
+          [](const IDProperty &property, void *r_value) {
             if (property.type == IDP_FLOAT) {
               *(float *)r_value = IDP_Float(&property);
             }
@@ -787,9 +441,7 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
             return (PropertyType)((bNodeSocketValueInt *)socket.default_value)->subtype;
           },
           [](const IDProperty &property) { return property.type == IDP_INT; },
-          [](const IDProperty &property,
-             const PersistentDataHandleMap &UNUSED(handles),
-             void *r_value) { *(int *)r_value = IDP_Int(&property); },
+          [](const IDProperty &property, void *r_value) { *(int *)r_value = IDP_Int(&property); },
       };
       return &int_type;
     }
@@ -832,9 +484,9 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
             return property.type == IDP_ARRAY && property.subtype == IDP_FLOAT &&
                    property.len == 3;
           },
-          [](const IDProperty &property,
-             const PersistentDataHandleMap &UNUSED(handles),
-             void *r_value) { copy_v3_v3((float *)r_value, (const float *)IDP_Array(&property)); },
+          [](const IDProperty &property, void *r_value) {
+            copy_v3_v3((float *)r_value, (const float *)IDP_Array(&property));
+          },
       };
       return &vector_type;
     }
@@ -864,9 +516,9 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
           },
           nullptr,
           [](const IDProperty &property) { return property.type == IDP_INT; },
-          [](const IDProperty &property,
-             const PersistentDataHandleMap &UNUSED(handles),
-             void *r_value) { *(bool *)r_value = IDP_Int(&property) != 0; },
+          [](const IDProperty &property, void *r_value) {
+            *(bool *)r_value = IDP_Int(&property) != 0;
+          },
       };
       return &boolean_type;
     }
@@ -886,9 +538,9 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
           },
           nullptr,
           [](const IDProperty &property) { return property.type == IDP_STRING; },
-          [](const IDProperty &property,
-             const PersistentDataHandleMap &UNUSED(handles),
-             void *r_value) { new (r_value) std::string(IDP_String(&property)); },
+          [](const IDProperty &property, void *r_value) {
+            new (r_value) std::string(IDP_String(&property));
+          },
       };
       return &string_type;
     }
@@ -905,10 +557,10 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
           nullptr,
           nullptr,
           [](const IDProperty &property) { return property.type == IDP_ID; },
-          [](const IDProperty &property, const PersistentDataHandleMap &handles, void *r_value) {
+          [](const IDProperty &property, void *r_value) {
             ID *id = IDP_Id(&property);
             Object *object = (id && GS(id->name) == ID_OB) ? (Object *)id : nullptr;
-            new (r_value) PersistentObjectHandle(handles.lookup(object));
+            *(Object **)r_value = object;
           },
       };
       return &object_type;
@@ -926,13 +578,55 @@ static const SocketPropertyType *get_socket_property_type(const bNodeSocket &bso
           nullptr,
           nullptr,
           [](const IDProperty &property) { return property.type == IDP_ID; },
-          [](const IDProperty &property, const PersistentDataHandleMap &handles, void *r_value) {
+          [](const IDProperty &property, void *r_value) {
             ID *id = IDP_Id(&property);
             Collection *collection = (id && GS(id->name) == ID_GR) ? (Collection *)id : nullptr;
-            new (r_value) PersistentCollectionHandle(handles.lookup(collection));
+            *(Collection **)r_value = collection;
           },
       };
       return &collection_type;
+    }
+    case SOCK_TEXTURE: {
+      static const SocketPropertyType texture_type = {
+          [](const bNodeSocket &socket, const char *name) {
+            bNodeSocketValueTexture *value = (bNodeSocketValueTexture *)socket.default_value;
+            IDPropertyTemplate idprop = {0};
+            idprop.id = (ID *)value->value;
+            return IDP_New(IDP_ID, &idprop, name);
+          },
+          nullptr,
+          nullptr,
+          nullptr,
+          nullptr,
+          [](const IDProperty &property) { return property.type == IDP_ID; },
+          [](const IDProperty &property, void *r_value) {
+            ID *id = IDP_Id(&property);
+            Tex *texture = (id && GS(id->name) == ID_TE) ? (Tex *)id : nullptr;
+            *(Tex **)r_value = texture;
+          },
+      };
+      return &texture_type;
+    }
+    case SOCK_MATERIAL: {
+      static const SocketPropertyType material_type = {
+          [](const bNodeSocket &socket, const char *name) {
+            bNodeSocketValueMaterial *value = (bNodeSocketValueMaterial *)socket.default_value;
+            IDPropertyTemplate idprop = {0};
+            idprop.id = (ID *)value->value;
+            return IDP_New(IDP_ID, &idprop, name);
+          },
+          nullptr,
+          nullptr,
+          nullptr,
+          nullptr,
+          [](const IDProperty &property) { return property.type == IDP_ID; },
+          [](const IDProperty &property, void *r_value) {
+            ID *id = IDP_Id(&property);
+            Material *material = (id && GS(id->name) == ID_MA) ? (Material *)id : nullptr;
+            *(Material **)r_value = material;
+          },
+      };
+      return &material_type;
     }
     default: {
       return nullptr;
@@ -1017,14 +711,13 @@ void MOD_nodes_init(Main *bmain, NodesModifierData *nmd)
 }
 
 static void initialize_group_input(NodesModifierData &nmd,
-                                   const PersistentDataHandleMap &handle_map,
                                    const bNodeSocket &socket,
                                    const CPPType &cpp_type,
                                    void *r_value)
 {
   const SocketPropertyType *property_type = get_socket_property_type(socket);
   if (property_type == nullptr) {
-    cpp_type.copy_to_uninitialized(cpp_type.default_value(), r_value);
+    cpp_type.copy_construct(cpp_type.default_value(), r_value);
     return;
   }
   if (nmd.settings.properties == nullptr) {
@@ -1041,35 +734,7 @@ static void initialize_group_input(NodesModifierData &nmd,
     blender::nodes::socket_cpp_value_get(socket, r_value);
     return;
   }
-  property_type->init_cpp_value(*property, handle_map, r_value);
-}
-
-static void fill_data_handle_map(const NodesModifierSettings &settings,
-                                 const DerivedNodeTree &tree,
-                                 PersistentDataHandleMap &handle_map)
-{
-  Set<ID *> used_ids;
-  find_used_ids_from_settings(settings, used_ids);
-  find_used_ids_from_nodes(*tree.root_context().tree().btree(), used_ids);
-
-  int current_handle = 0;
-  for (ID *id : used_ids) {
-    handle_map.add(current_handle, *id);
-    current_handle++;
-  }
-}
-
-static void reset_tree_ui_storage(Span<const blender::nodes::NodeTreeRef *> trees,
-                                  const Object &object,
-                                  const ModifierData &modifier)
-{
-  const NodeTreeEvaluationContext context = {object, modifier};
-
-  for (const blender::nodes::NodeTreeRef *tree : trees) {
-    bNodeTree *btree_cow = tree->btree();
-    bNodeTree *btree_original = (bNodeTree *)DEG_get_original_id((ID *)btree_cow);
-    BKE_nodetree_ui_storage_free_for_context(*btree_original, context);
-  }
+  property_type->init_cpp_value(*property, r_value);
 }
 
 static Vector<SpaceSpreadsheet *> find_spreadsheet_editors(Main *bmain)
@@ -1089,24 +754,6 @@ static Vector<SpaceSpreadsheet *> find_spreadsheet_editors(Main *bmain)
     }
   }
   return spreadsheets;
-}
-
-using PreviewSocketMap = blender::MultiValueMap<DSocket, uint64_t>;
-
-static DSocket try_find_preview_socket_in_node(const DNode node)
-{
-  for (const SocketRef *socket : node->outputs()) {
-    if (socket->bsocket()->type == SOCK_GEOMETRY) {
-      return {node.context(), socket};
-    }
-  }
-  for (const SocketRef *socket : node->inputs()) {
-    if (socket->bsocket()->type == SOCK_GEOMETRY &&
-        (socket->bsocket()->flag & SOCK_MULTI_INPUT) == 0) {
-      return {node.context(), socket};
-    }
-  }
-  return {};
 }
 
 static DSocket try_get_socket_to_preview_for_spreadsheet(SpaceSpreadsheet *sspreadsheet,
@@ -1162,9 +809,10 @@ static DSocket try_get_socket_to_preview_for_spreadsheet(SpaceSpreadsheet *sspre
   }
 
   const NodeTreeRef &tree_ref = context->tree();
-  for (const NodeRef *node_ref : tree_ref.nodes()) {
+  for (const NodeRef *node_ref : tree_ref.nodes_by_type("GeometryNodeViewer")) {
     if (node_ref->name() == last_context->node_name) {
-      return try_find_preview_socket_in_node({context, node_ref});
+      const DNode viewer_node{context, node_ref};
+      return viewer_node.input(0);
     }
   }
   return {};
@@ -1173,7 +821,7 @@ static DSocket try_get_socket_to_preview_for_spreadsheet(SpaceSpreadsheet *sspre
 static void find_sockets_to_preview(NodesModifierData *nmd,
                                     const ModifierEvalContext *ctx,
                                     const DerivedNodeTree &tree,
-                                    PreviewSocketMap &r_sockets_to_preview)
+                                    Set<DSocket> &r_sockets_to_preview)
 {
   Main *bmain = DEG_get_bmain(ctx->depsgraph);
 
@@ -1183,51 +831,16 @@ static void find_sockets_to_preview(NodesModifierData *nmd,
   for (SpaceSpreadsheet *sspreadsheet : spreadsheets) {
     const DSocket socket = try_get_socket_to_preview_for_spreadsheet(sspreadsheet, nmd, ctx, tree);
     if (socket) {
-      const uint64_t key = ED_spreadsheet_context_path_hash(sspreadsheet);
-      r_sockets_to_preview.add_non_duplicates(socket, key);
+      r_sockets_to_preview.add(socket);
     }
   }
 }
 
-static void log_preview_socket_value(const Span<GPointer> values,
-                                     Object *object,
-                                     Span<uint64_t> keys)
+static void clear_runtime_data(NodesModifierData *nmd)
 {
-  GeometrySet geometry_set = *(const GeometrySet *)values[0].get();
-  geometry_set.ensure_owns_direct_data();
-  for (uint64_t key : keys) {
-    BKE_object_preview_geometry_set_add(object, key, new GeometrySet(geometry_set));
-  }
-}
-
-static void log_ui_hints(const DSocket socket,
-                         const Span<GPointer> values,
-                         Object *self_object,
-                         NodesModifierData *nmd)
-{
-  const DNode node = socket.node();
-  if (node->is_reroute_node() || socket->typeinfo()->type != SOCK_GEOMETRY) {
-    return;
-  }
-  bNodeTree *btree_cow = node->btree();
-  bNodeTree *btree_original = (bNodeTree *)DEG_get_original_id((ID *)btree_cow);
-  const NodeTreeEvaluationContext context{*self_object, nmd->modifier};
-  for (const GPointer &data : values) {
-    if (data.type() == &CPPType::get<GeometrySet>()) {
-      const GeometrySet &geometry_set = *(const GeometrySet *)data.get();
-      blender::bke::geometry_set_instances_attribute_foreach(
-          geometry_set,
-          [&](StringRefNull attribute_name, const AttributeMetaData &meta_data) {
-            BKE_nodetree_attribute_hint_add(*btree_original,
-                                            context,
-                                            *node->bnode(),
-                                            attribute_name,
-                                            meta_data.domain,
-                                            meta_data.data_type);
-            return true;
-          },
-          8);
-    }
+  if (nmd->runtime_eval_log != nullptr) {
+    delete (geo_log::ModifierLog *)nmd->runtime_eval_log;
+    nmd->runtime_eval_log = nullptr;
   }
 }
 
@@ -1246,9 +859,6 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
   blender::ResourceScope scope;
   blender::LinearAllocator<> &allocator = scope.linear_allocator();
   blender::nodes::MultiFunctionByNode mf_by_node = get_multi_function_per_node(tree, scope);
-
-  PersistentDataHandleMap handle_map;
-  fill_data_handle_map(nmd->settings, tree, handle_map);
 
   Map<DOutputSocket, GMutablePointer> group_inputs;
 
@@ -1275,7 +885,7 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
     for (const OutputSocketRef *socket : remaining_input_sockets) {
       const CPPType &cpp_type = *blender::nodes::socket_cpp_type_get(*socket->typeinfo());
       void *value_in = allocator.allocate(cpp_type.size(), cpp_type.alignment());
-      initialize_group_input(*nmd, handle_map, *socket->bsocket(), cpp_type, value_in);
+      initialize_group_input(*nmd, *socket->bsocket(), cpp_type, value_in);
       group_inputs.add_new({root_context, socket}, {cpp_type, value_in});
     }
   }
@@ -1286,35 +896,35 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
   Vector<DInputSocket> group_outputs;
   group_outputs.append({root_context, &socket_to_compute});
 
-  PreviewSocketMap preview_sockets;
-  find_sockets_to_preview(nmd, ctx, tree, preview_sockets);
+  std::optional<geo_log::GeoLogger> geo_logger;
 
-  auto log_socket_value = [&](const DSocket socket, const Span<GPointer> values) {
-    if (!logging_enabled(ctx)) {
-      return;
-    }
-    Span<uint64_t> keys = preview_sockets.lookup(socket);
-    if (!keys.is_empty()) {
-      log_preview_socket_value(values, ctx->object, keys);
-    }
-    log_ui_hints(socket, values, ctx->object, nmd);
-  };
+  blender::modifiers::geometry_nodes::GeometryNodesEvaluationParams eval_params;
 
-  GeometryNodesEvaluator evaluator{group_inputs,
-                                   group_outputs,
-                                   mf_by_node,
-                                   handle_map,
-                                   ctx->object,
-                                   (ModifierData *)nmd,
-                                   ctx->depsgraph,
-                                   log_socket_value};
+  if (logging_enabled(ctx)) {
+    Set<DSocket> preview_sockets;
+    find_sockets_to_preview(nmd, ctx, tree, preview_sockets);
+    eval_params.force_compute_sockets.extend(preview_sockets.begin(), preview_sockets.end());
+    geo_logger.emplace(std::move(preview_sockets));
+  }
 
-  Vector<GMutablePointer> results = evaluator.execute();
-  BLI_assert(results.size() == 1);
-  GMutablePointer result = results[0];
+  eval_params.input_values = group_inputs;
+  eval_params.output_sockets = group_outputs;
+  eval_params.mf_by_node = &mf_by_node;
+  eval_params.modifier_ = nmd;
+  eval_params.depsgraph = ctx->depsgraph;
+  eval_params.self_object = ctx->object;
+  eval_params.geo_logger = geo_logger.has_value() ? &*geo_logger : nullptr;
+  blender::modifiers::geometry_nodes::evaluate_geometry_nodes(eval_params);
 
-  GeometrySet output_geometry = std::move(*(GeometrySet *)result.get());
-  return output_geometry;
+  if (geo_logger.has_value()) {
+    NodesModifierData *nmd_orig = (NodesModifierData *)BKE_modifier_get_original(&nmd->modifier);
+    clear_runtime_data(nmd_orig);
+    nmd_orig->runtime_eval_log = new geo_log::ModifierLog(*geo_logger);
+  }
+
+  BLI_assert(eval_params.r_output_values.size() == 1);
+  GMutablePointer result = eval_params.r_output_values[0];
+  return result.relocate_out<GeometrySet>();
 }
 
 /**
@@ -1401,10 +1011,6 @@ static void modifyGeometry(ModifierData *md,
     return;
   }
 
-  if (logging_enabled(ctx)) {
-    reset_tree_ui_storage(tree.used_node_tree_refs(), *ctx->object, *md);
-  }
-
   geometry_set = compute_geometry(
       tree, input_nodes, *group_outputs[0], std::move(geometry_set), nmd, ctx);
 }
@@ -1412,13 +1018,14 @@ static void modifyGeometry(ModifierData *md,
 static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   GeometrySet geometry_set = GeometrySet::create_with_mesh(mesh, GeometryOwnershipType::Editable);
-  geometry_set.get_component_for_write<MeshComponent>().copy_vertex_group_names_from_object(
-      *ctx->object);
+
   modifyGeometry(md, ctx, geometry_set);
 
-  /* This function is only called when applying modifiers. In this case it makes sense to realize
-   * instances, otherwise in some cases there might be no results when applying the modifier. */
-  geometry_set = blender::bke::geometry_set_realize_mesh_for_modifier(geometry_set);
+  if (ctx->flag & MOD_APPLY_TO_BASE_MESH) {
+    /* In this case it makes sense to realize instances, otherwise in some cases there might be no
+     * results when applying the modifier. */
+    geometry_set = blender::bke::geometry_set_realize_mesh_for_modifier(geometry_set);
+  }
 
   Mesh *new_mesh = geometry_set.get_component_for_write<MeshComponent>().release();
   if (new_mesh == nullptr) {
@@ -1436,7 +1043,7 @@ static void modifyGeometrySet(ModifierData *md,
 
 /* Drawing the properties manually with #uiItemR instead of #uiDefAutoButsRNA allows using
  * the node socket identifier for the property names, since they are unique, but also having
- * the correct label displayed in the UI.  */
+ * the correct label displayed in the UI. */
 static void draw_property_for_socket(uiLayout *layout,
                                      PointerRNA *bmain_ptr,
                                      PointerRNA *md_ptr,
@@ -1453,36 +1060,45 @@ static void draw_property_for_socket(uiLayout *layout,
 
   /* IDProperties can be removed with python, so there could be a situation where
    * there isn't a property for a socket or it doesn't have the correct type. */
-  if (property != nullptr && property_type->is_correct_type(*property)) {
+  if (property == nullptr || !property_type->is_correct_type(*property)) {
+    return;
+  }
 
-    char socket_id_esc[sizeof(socket.identifier) * 2];
-    BLI_str_escape(socket_id_esc, socket.identifier, sizeof(socket_id_esc));
+  char socket_id_esc[sizeof(socket.identifier) * 2];
+  BLI_str_escape(socket_id_esc, socket.identifier, sizeof(socket_id_esc));
 
-    char rna_path[sizeof(socket_id_esc) + 4];
-    BLI_snprintf(rna_path, ARRAY_SIZE(rna_path), "[\"%s\"]", socket_id_esc);
+  char rna_path[sizeof(socket_id_esc) + 4];
+  BLI_snprintf(rna_path, ARRAY_SIZE(rna_path), "[\"%s\"]", socket_id_esc);
 
-    /* Use #uiItemPointerR to draw pointer properties because #uiItemR would not have enough
-     * information about what type of ID to select for editing the values. This is because
-     * pointer IDProperties contain no information about their type. */
-    switch (socket.type) {
-      case SOCK_OBJECT: {
-        uiItemPointerR(
-            layout, md_ptr, rna_path, bmain_ptr, "objects", socket.name, ICON_OBJECT_DATA);
-        break;
-      }
-      case SOCK_COLLECTION: {
-        uiItemPointerR(layout,
-                       md_ptr,
-                       rna_path,
-                       bmain_ptr,
-                       "collections",
-                       socket.name,
-                       ICON_OUTLINER_COLLECTION);
-        break;
-      }
-      default:
-        uiItemR(layout, md_ptr, rna_path, 0, socket.name, ICON_NONE);
+  /* Use #uiItemPointerR to draw pointer properties because #uiItemR would not have enough
+   * information about what type of ID to select for editing the values. This is because
+   * pointer IDProperties contain no information about their type. */
+  switch (socket.type) {
+    case SOCK_OBJECT: {
+      uiItemPointerR(
+          layout, md_ptr, rna_path, bmain_ptr, "objects", socket.name, ICON_OBJECT_DATA);
+      break;
     }
+    case SOCK_COLLECTION: {
+      uiItemPointerR(layout,
+                     md_ptr,
+                     rna_path,
+                     bmain_ptr,
+                     "collections",
+                     socket.name,
+                     ICON_OUTLINER_COLLECTION);
+      break;
+    }
+    case SOCK_MATERIAL: {
+      uiItemPointerR(layout, md_ptr, rna_path, bmain_ptr, "materials", socket.name, ICON_MATERIAL);
+      break;
+    }
+    case SOCK_TEXTURE: {
+      uiItemPointerR(layout, md_ptr, rna_path, bmain_ptr, "textures", socket.name, ICON_TEXTURE);
+      break;
+    }
+    default:
+      uiItemR(layout, md_ptr, rna_path, 0, socket.name, ICON_NONE);
   }
 }
 
@@ -1517,6 +1133,18 @@ static void panel_draw(const bContext *C, Panel *panel)
     }
   }
 
+  /* Draw node warnings. */
+  if (nmd->runtime_eval_log != nullptr) {
+    const geo_log::ModifierLog &log = *static_cast<geo_log::ModifierLog *>(nmd->runtime_eval_log);
+    log.foreach_node_log([layout](const geo_log::NodeLog &node_log) {
+      for (const geo_log::NodeWarning &warning : node_log.warnings()) {
+        if (warning.type != geo_log::NodeWarningType::Info) {
+          uiItemL(layout, warning.message.c_str(), ICON_ERROR);
+        }
+      }
+    });
+  }
+
   modifier_panel_end(layout, ptr);
 }
 
@@ -1540,6 +1168,7 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   BLO_read_data_address(reader, &nmd->settings.properties);
   IDP_BlendDataRead(reader, &nmd->settings.properties);
+  nmd->runtime_eval_log = nullptr;
 }
 
 static void copyData(const ModifierData *md, ModifierData *target, const int flag)
@@ -1548,6 +1177,8 @@ static void copyData(const ModifierData *md, ModifierData *target, const int fla
   NodesModifierData *tnmd = reinterpret_cast<NodesModifierData *>(target);
 
   BKE_modifier_copydata_generic(md, target, flag);
+
+  tnmd->runtime_eval_log = nullptr;
 
   if (nmd->settings.properties != nullptr) {
     tnmd->settings.properties = IDP_CopyProperty_ex(nmd->settings.properties, flag);
@@ -1561,6 +1192,8 @@ static void freeData(ModifierData *md)
     IDP_FreeProperty_ex(nmd->settings.properties, false);
     nmd->settings.properties = nullptr;
   }
+
+  clear_runtime_data(nmd);
 }
 
 static void requiredDataMask(Object *UNUSED(ob),
@@ -1594,7 +1227,6 @@ ModifierTypeInfo modifierType_Nodes = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ nullptr,
     /* modifyGeometrySet */ modifyGeometrySet,
-    /* modifyVolume */ nullptr,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

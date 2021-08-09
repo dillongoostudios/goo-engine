@@ -568,14 +568,9 @@ static StructRNA *rna_OperatorProperties_refine(PointerRNA *ptr)
   }
 }
 
-static IDProperty *rna_OperatorProperties_idprops(PointerRNA *ptr, bool create)
+static IDProperty **rna_OperatorProperties_idprops(PointerRNA *ptr)
 {
-  if (create && !ptr->data) {
-    IDPropertyTemplate val = {0};
-    ptr->data = IDP_New(IDP_GROUP, &val, "RNA_OperatorProperties group");
-  }
-
-  return ptr->data;
+  return (IDProperty **)&ptr->data;
 }
 
 static void rna_Operator_name_get(PointerRNA *ptr, char *value)
@@ -751,7 +746,7 @@ static void rna_Window_scene_update(bContext *C, PointerRNA *ptr)
   Main *bmain = CTX_data_main(C);
   wmWindow *win = ptr->data;
 
-  /* exception: must use context so notifier gets to the right window  */
+  /* Exception: must use context so notifier gets to the right window. */
   if (win->new_scene) {
 #  ifdef WITH_PYTHON
     BPy_BEGIN_ALLOW_THREADS;
@@ -892,7 +887,7 @@ static PointerRNA rna_KeyMapItem_properties_get(PointerRNA *ptr)
     return *(kmi->ptr);
   }
 
-  /*return rna_pointer_inherit_refine(ptr, &RNA_OperatorProperties, op->properties); */
+  // return rna_pointer_inherit_refine(ptr, &RNA_OperatorProperties, op->properties);
   return PointerRNA_NULL;
 }
 
@@ -1120,13 +1115,9 @@ static PointerRNA rna_wmKeyConfig_preferences_get(PointerRNA *ptr)
   }
 }
 
-static IDProperty *rna_wmKeyConfigPref_idprops(PointerRNA *ptr, bool create)
+static IDProperty **rna_wmKeyConfigPref_idprops(PointerRNA *ptr)
 {
-  if (create && !ptr->data) {
-    IDPropertyTemplate val = {0};
-    ptr->data = IDP_New(IDP_GROUP, &val, "RNA_KeyConfigPreferences group");
-  }
-  return ptr->data;
+  return (IDProperty **)&ptr->data;
 }
 
 static void rna_wmKeyConfigPref_unregister(Main *UNUSED(bmain), StructRNA *type)
@@ -1774,7 +1765,7 @@ static void rna_Operator_bl_idname_set(PointerRNA *ptr, const char *value)
     BLI_strncpy(str, value, OP_MAX_TYPENAME); /* utf8 already ensured */
   }
   else {
-    BLI_assert(!"setting the bl_idname on a non-builtin operator");
+    BLI_assert_msg(0, "setting the bl_idname on a non-builtin operator");
   }
 }
 
@@ -1786,7 +1777,7 @@ static void rna_Operator_bl_label_set(PointerRNA *ptr, const char *value)
     BLI_strncpy(str, value, OP_MAX_TYPENAME); /* utf8 already ensured */
   }
   else {
-    BLI_assert(!"setting the bl_label on a non-builtin operator");
+    BLI_assert_msg(0, "setting the bl_label on a non-builtin operator");
   }
 }
 
@@ -1834,7 +1825,7 @@ static void rna_KeyMapItem_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Poi
 #else /* RNA_RUNTIME */
 
 /**
- * expose ``Operator.options`` as its own type so we can control each flags use
+ * expose `Operator.options` as its own type so we can control each flags use
  * (some are read-only).
  */
 static void rna_def_operator_options_runtime(BlenderRNA *brna)
@@ -1921,7 +1912,7 @@ static void rna_def_operator(BlenderRNA *brna)
   /* Registration */
   prop = RNA_def_property(srna, "bl_idname", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, NULL, "type->idname");
-  /* else it uses the pointer size!. -3 because '.' -> '_OT_' */
+  /* Without setting the length the pointer size would be used. -3 because `.` -> `_OT_`. */
   RNA_def_property_string_maxlength(prop, OP_MAX_TYPENAME - 3);
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_Operator_bl_idname_set");
   /* RNA_def_property_clear_flag(prop, PROP_EDITABLE); */

@@ -158,7 +158,7 @@ static int bake_modal(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
 
 /**
  * for exec() when there is no render job
- * note: this wont check for the escape key being pressed, but doing so isn't thread-safe.
+ * NOTE: this won't check for the escape key being pressed, but doing so isn't thread-safe.
  */
 static int bake_break(void *UNUSED(rjv))
 {
@@ -416,7 +416,6 @@ static bool is_noncolor_pass(eScenePassType pass_type)
               SCE_PASS_VECTOR,
               SCE_PASS_INDEXOB,
               SCE_PASS_UV,
-              SCE_PASS_RAYHITS,
               SCE_PASS_INDEXMA);
 }
 
@@ -1374,7 +1373,7 @@ static int bake(const BakeAPIRender *bkr,
          * the cage is supposed to have interpolated normals
          * between the faces unless the geometry is physically
          * split. So we create a copy of the low poly mesh without
-         * the eventual edge split.*/
+         * the eventual edge split. */
 
         if (md->type == eModifierType_EdgeSplit) {
           BLI_remlink(&ob_low_eval->modifiers, md);
@@ -1939,7 +1938,7 @@ static int bake_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event)
                        WM_JOB_EXCL_RENDER | WM_JOB_PRIORITY | WM_JOB_PROGRESS,
                        WM_JOB_TYPE_OBJECT_BAKE);
   WM_jobs_customdata_set(wm_job, bkr, bake_freejob);
-  /* TODO - only draw bake image, can we enforce this */
+  /* TODO: only draw bake image, can we enforce this. */
   WM_jobs_timer(
       wm_job, 0.5, (bkr->target == R_BAKE_TARGET_VERTEX_COLORS) ? NC_GEOM | ND_DATA : NC_IMAGE, 0);
   WM_jobs_callbacks(wm_job, bake_startjob, NULL, NULL, NULL);

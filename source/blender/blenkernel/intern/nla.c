@@ -254,7 +254,7 @@ NlaTrack *BKE_nlatrack_copy(Main *bmain,
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
  * flags in BKE_lib_id.h
  */
-void BKE_nla_tracks_copy(Main *bmain, ListBase *dst, ListBase *src, const int flag)
+void BKE_nla_tracks_copy(Main *bmain, ListBase *dst, const ListBase *src, const int flag)
 {
   NlaTrack *nlt, *nlt_d;
 
@@ -273,6 +273,54 @@ void BKE_nla_tracks_copy(Main *bmain, ListBase *dst, ListBase *src, const int fl
     nlt_d = BKE_nlatrack_copy(bmain, nlt, true, flag);
     BLI_addtail(dst, nlt_d);
   }
+}
+
+/* Set adt_dest->actstrip to the strip with the same index as adt_source->actstrip. */
+static void update_active_strip(AnimData *adt_dest,
+                                NlaTrack *track_dest,
+                                const AnimData *adt_source,
+                                NlaTrack *track_source)
+{
+  BLI_assert(BLI_listbase_count(&track_source->strips) == BLI_listbase_count(&track_dest->strips));
+
+  NlaStrip *strip_dest = track_dest->strips.first;
+  LISTBASE_FOREACH (NlaStrip *, strip_source, &track_source->strips) {
+    if (strip_source == adt_source->actstrip) {
+      adt_dest->actstrip = strip_dest;
+    }
+
+    strip_dest = strip_dest->next;
+  }
+}
+
+/* Set adt_dest->act_track to the track with the same index as adt_source->act_track. */
+static void update_active_track(AnimData *adt_dest, const AnimData *adt_source)
+{
+  BLI_assert(BLI_listbase_count(&adt_source->nla_tracks) ==
+             BLI_listbase_count(&adt_dest->nla_tracks));
+
+  NlaTrack *track_dest = adt_dest->nla_tracks.first;
+  LISTBASE_FOREACH (NlaTrack *, track_source, &adt_source->nla_tracks) {
+    if (track_source == adt_source->act_track) {
+      adt_dest->act_track = track_dest;
+      /* Assumption: the active strip is on the active track. */
+      update_active_strip(adt_dest, track_dest, adt_source, track_source);
+    }
+
+    track_dest = track_dest->next;
+  }
+}
+
+void BKE_nla_tracks_copy_from_adt(Main *bmain,
+                                  AnimData *adt_dest,
+                                  const AnimData *adt_source,
+                                  const int flag)
+{
+  adt_dest->act_track = NULL;
+  adt_dest->actstrip = NULL;
+
+  BKE_nla_tracks_copy(bmain, &adt_dest->nla_tracks, &adt_source->nla_tracks, flag);
+  update_active_track(adt_dest, adt_source);
 }
 
 /* Adding ------------------------------------------- */
@@ -583,10 +631,10 @@ float BKE_nla_tweakedit_remap(AnimData *adt, float cframe, short mode)
 {
   NlaStrip *strip;
 
-  /* sanity checks
-   * - obviously we've got to have some starting data
-   * - when not in tweakmode, the active Action does not have any scaling applied :)
-   * - when in tweakmode, if the no-mapping flag is set, do not map
+  /* Sanity checks:
+   * - Obviously we've got to have some starting data.
+   * - When not in tweak-mode, the active Action does not have any scaling applied :)
+   * - When in tweak-mode, if the no-mapping flag is set, do not map.
    */
   if ((adt == NULL) || (adt->flag & ADT_NLA_EDIT_ON) == 0 || (adt->flag & ADT_NLA_EDIT_NOMAP)) {
     return cframe;
@@ -1241,7 +1289,7 @@ void BKE_nlastrip_set_active(AnimData *adt, NlaStrip *strip)
     return;
   }
 
-  /* loop over tracks, deactivating*/
+  /* Loop over tracks, deactivating. */
   for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
     for (nls = nlt->strips.first; nls; nls = nls->next) {
       if (nls != strip) {
@@ -1512,7 +1560,7 @@ bool BKE_nlatracks_have_animated_strips(ListBase *tracks)
   return false;
 }
 
-/* Validate the NLA-Strips 'control' F-Curves based on the flags set*/
+/* Validate the NLA-Strips 'control' F-Curves based on the flags set. */
 void BKE_nlastrip_validate_fcurves(NlaStrip *strip)
 {
   FCurve *fcu;
@@ -2041,9 +2089,8 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
     return false;
   }
 
-  /* if block is already in tweakmode, just leave, but we should report
-   * that this block is in tweakmode (as our returncode)
-   */
+  /* If block is already in tweak-mode, just leave, but we should report
+   * that this block is in tweak-mode (as our returncode). */
   if (adt->flag & ADT_NLA_EDIT_ON) {
     return true;
   }
@@ -2063,8 +2110,8 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
     }
   }
 
-  /* There are situations where we may have multiple strips selected and we want to enter tweakmode
-   * on all of those at once. Usually in those cases,
+  /* There are situations where we may have multiple strips selected and we want to enter
+   * tweak-mode on all of those at once. Usually in those cases,
    * it will usually just be a single strip per AnimData.
    * In such cases, compromise and take the last selected track and/or last selected strip, T28468.
    */
@@ -2094,7 +2141,7 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
 
   if (ELEM(NULL, activeTrack, activeStrip, activeStrip->act)) {
     if (G.debug & G_DEBUG) {
-      printf("NLA tweakmode enter - neither active requirement found\n");
+      printf("NLA tweak-mode enter - neither active requirement found\n");
       printf("\tactiveTrack = %p, activeStrip = %p\n", (void *)activeTrack, (void *)activeStrip);
     }
     return false;
@@ -2144,7 +2191,7 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
   return true;
 }
 
-/* Exit tweakmode for this AnimData block */
+/* Exit tweak-mode for this AnimData block. */
 void BKE_nla_tweakmode_exit(AnimData *adt)
 {
   NlaStrip *strip;

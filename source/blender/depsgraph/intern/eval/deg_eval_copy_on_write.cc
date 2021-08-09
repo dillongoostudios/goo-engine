@@ -320,7 +320,6 @@ bool id_copy_inplace_no_main(const ID *id, ID *newid)
  * is already allocated. */
 bool scene_copy_inplace_no_main(const Scene *scene, Scene *new_scene)
 {
-  const ID *id_for_copy = &scene->id;
 
   if (G.debug & G_DEBUG_DEPSGRAPH_UUID) {
     SEQ_relations_check_uuids_unique_and_report(scene);
@@ -328,9 +327,10 @@ bool scene_copy_inplace_no_main(const Scene *scene, Scene *new_scene)
 
 #ifdef NESTED_ID_NASTY_WORKAROUND
   NestedIDHackTempStorage id_hack_storage;
-  id_for_copy = nested_id_hack_get_discarded_pointers(&id_hack_storage, &scene->id);
+  const ID *id_for_copy = nested_id_hack_get_discarded_pointers(&id_hack_storage, &scene->id);
+#else
+  const ID *id_for_copy = &scene->id;
 #endif
-
   bool result = (BKE_id_copy_ex(nullptr,
                                 id_for_copy,
                                 (ID **)&new_scene,
@@ -348,7 +348,7 @@ bool scene_copy_inplace_no_main(const Scene *scene, Scene *new_scene)
 
 /* For the given scene get view layer which corresponds to an original for the
  * scene's evaluated one. This depends on how the scene is pulled into the
- * dependency  graph. */
+ * dependency graph. */
 ViewLayer *get_original_view_layer(const Depsgraph *depsgraph, const IDNode *id_node)
 {
   if (id_node->linked_state == DEG_ID_LINKED_DIRECTLY) {
@@ -606,20 +606,12 @@ void update_lattice_edit_mode_pointers(const Depsgraph * /*depsgraph*/,
 
 void update_mesh_edit_mode_pointers(const ID *id_orig, ID *id_cow)
 {
-  /* For meshes we need to update edit_mesh to make it to point
-   * to the CoW version of object.
-   *
-   * This is kind of confusing, because actual bmesh is not owned by
-   * the CoW object, so need to be accurate about using link from
-   * edit_mesh to object. */
   const Mesh *mesh_orig = (const Mesh *)id_orig;
   Mesh *mesh_cow = (Mesh *)id_cow;
   if (mesh_orig->edit_mesh == nullptr) {
     return;
   }
-  mesh_cow->edit_mesh = (BMEditMesh *)MEM_dupallocN(mesh_orig->edit_mesh);
-  mesh_cow->edit_mesh->mesh_eval_cage = nullptr;
-  mesh_cow->edit_mesh->mesh_eval_final = nullptr;
+  mesh_cow->edit_mesh = mesh_orig->edit_mesh;
 }
 
 /* Edit data is stored and owned by original datablocks, copied ones
@@ -907,7 +899,7 @@ ID *deg_expand_copy_on_write_datablock(const Depsgraph *depsgraph,
     done = id_copy_inplace_no_main(id_orig, id_cow);
   }
   if (!done) {
-    BLI_assert(!"No idea how to perform CoW on datablock");
+    BLI_assert_msg(0, "No idea how to perform CoW on datablock");
   }
   /* Update pointers to nested ID datablocks. */
   DEG_COW_PRINT(
@@ -1001,11 +993,6 @@ void discard_lattice_edit_mode_pointers(ID *id_cow)
 void discard_mesh_edit_mode_pointers(ID *id_cow)
 {
   Mesh *mesh_cow = (Mesh *)id_cow;
-  if (mesh_cow->edit_mesh == nullptr) {
-    return;
-  }
-  BKE_editmesh_free_derivedmesh(mesh_cow->edit_mesh);
-  MEM_freeN(mesh_cow->edit_mesh);
   mesh_cow->edit_mesh = nullptr;
 }
 

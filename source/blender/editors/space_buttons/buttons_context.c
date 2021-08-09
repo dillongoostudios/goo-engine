@@ -126,7 +126,7 @@ static bool buttons_context_path_view_layer(ButsContextPath *path, wmWindow *win
   return false;
 }
 
-/* note: this function can return true without adding a world to the path
+/* NOTE: this function can return true without adding a world to the path
  * so the buttons stay visible, but be sure to check the ID type if a ID_WO */
 static bool buttons_context_path_world(ButsContextPath *path)
 {
@@ -154,7 +154,9 @@ static bool buttons_context_path_world(ButsContextPath *path)
   return false;
 }
 
-static bool buttons_context_path_collection(ButsContextPath *path, wmWindow *window)
+static bool buttons_context_path_collection(const bContext *C,
+                                            ButsContextPath *path,
+                                            wmWindow *window)
 {
   PointerRNA *ptr = &path->ptr[path->len - 1];
 
@@ -162,10 +164,19 @@ static bool buttons_context_path_collection(ButsContextPath *path, wmWindow *win
   if (RNA_struct_is_a(ptr->type, &RNA_Collection)) {
     return true;
   }
+
+  Scene *scene = CTX_data_scene(C);
+
   /* if we have a view layer, use the view layer's active collection */
   if (buttons_context_path_view_layer(path, window)) {
     ViewLayer *view_layer = path->ptr[path->len - 1].data;
     Collection *c = view_layer->active_collection->collection;
+
+    /* Do not show collection tab for master collection. */
+    if (c == scene->master_collection) {
+      return false;
+    }
+
     if (c) {
       RNA_id_pointer_create(&c->id, &path->ptr[path->len]);
       path->len++;
@@ -600,7 +611,7 @@ static bool buttons_context_path(
       found = buttons_context_path_world(path);
       break;
     case BCONTEXT_COLLECTION: /* This is for Line Art collection flags */
-      found = buttons_context_path_collection(path, window);
+      found = buttons_context_path_collection(C, path, window);
       break;
     case BCONTEXT_TOOL:
       found = true;
@@ -975,7 +986,8 @@ int /*eContextResult*/ buttons_context(const bContext *C,
         if (matnr < 0) {
           matnr = 0;
         }
-        CTX_data_pointer_set(result, &ob->id, &RNA_MaterialSlot, &ob->mat[matnr]);
+        /* Keep aligned with rna_Object_material_slots_get. */
+        CTX_data_pointer_set(result, &ob->id, &RNA_MaterialSlot, POINTER_FROM_INT(matnr + 1));
       }
     }
 
@@ -1219,7 +1231,7 @@ static void buttons_panel_context_draw(const bContext *C, Panel *panel)
       continue;
     }
 
-    /* Add icon and name .*/
+    /* Add icon and name. */
     int icon = RNA_struct_ui_icon(ptr->type);
     char namebuf[128];
     char *name = RNA_struct_name_get_alloc(ptr, namebuf, sizeof(namebuf), NULL);
@@ -1272,7 +1284,7 @@ ID *buttons_context_id_path(const bContext *C)
   for (int i = path->len - 1; i >= 0; i--) {
     PointerRNA *ptr = &path->ptr[i];
 
-    /* pin particle settings instead of system, since only settings are an idblock*/
+    /* Pin particle settings instead of system, since only settings are an idblock. */
     if (sbuts->mainb == BCONTEXT_PARTICLE && sbuts->flag & SB_PIN_CONTEXT) {
       if (ptr->type == &RNA_ParticleSystem && ptr->data) {
         ParticleSystem *psys = ptr->data;
@@ -1280,7 +1292,7 @@ ID *buttons_context_id_path(const bContext *C)
       }
     }
 
-    /* There is no valid image ID panel, Image Empty objects need this workaround.*/
+    /* There is no valid image ID panel, Image Empty objects need this workaround. */
     if (sbuts->mainb == BCONTEXT_DATA && sbuts->flag & SB_PIN_CONTEXT) {
       if (ptr->type == &RNA_Image && ptr->data) {
         continue;

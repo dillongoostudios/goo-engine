@@ -89,7 +89,7 @@ static void rna_Scene_frame_set(Scene *scene, Main *bmain, int frame, float subf
   /* don't do notifier when we're rendering, avoid some viewport crashes
    * redrawing while the data is being modified for render */
   if (!G.is_rendering) {
-    /* cant use NC_SCENE|ND_FRAME because this causes wm_event_do_notifiers to call
+    /* can't use NC_SCENE|ND_FRAME because this causes wm_event_do_notifiers to call
      * BKE_scene_graph_update_for_newframe which will lose any un-keyed changes T24690. */
     /* WM_main_add_notifier(NC_SCENE|ND_FRAME, scene); */
 
@@ -98,7 +98,7 @@ static void rna_Scene_frame_set(Scene *scene, Main *bmain, int frame, float subf
   }
 }
 
-static void rna_Scene_uvedit_aspect(Scene *UNUSED(scene), Object *ob, float *aspect)
+static void rna_Scene_uvedit_aspect(Scene *UNUSED(scene), Object *ob, float aspect[2])
 {
   if ((ob->type == OB_MESH) && (ob->mode == OB_MODE_EDIT)) {
     BMEditMesh *em;
@@ -207,7 +207,6 @@ static void rna_Scene_alembic_export(Scene *scene,
                                      bool apply_subdiv,
                                      bool flatten_hierarchy,
                                      bool visible_objects_only,
-                                     bool renderable_only,
                                      bool face_sets,
                                      bool use_subdiv_schema,
                                      bool export_hair,
@@ -241,7 +240,6 @@ static void rna_Scene_alembic_export(Scene *scene,
       .apply_subdiv = apply_subdiv,
       .flatten_hierarchy = flatten_hierarchy,
       .visible_objects_only = visible_objects_only,
-      .renderable_only = renderable_only,
       .face_sets = face_sets,
       .use_subdiv_schema = use_subdiv_schema,
       .export_hair = export_hair,
@@ -383,11 +381,6 @@ void RNA_api_scene(StructRNA *srna)
                   0,
                   "Visible layers only",
                   "Export only objects in visible layers");
-  RNA_def_boolean(func,
-                  "renderable_only",
-                  0,
-                  "Renderable objects only",
-                  "Export only objects marked renderable in the outliner");
   RNA_def_boolean(func, "face_sets", 0, "Facesets", "Export face sets");
   RNA_def_boolean(func,
                   "subdiv_schema",

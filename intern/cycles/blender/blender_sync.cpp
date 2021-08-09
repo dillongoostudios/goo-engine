@@ -69,7 +69,8 @@ BlenderSync::BlenderSync(BL::RenderEngine &b_engine,
       experimental(false),
       dicing_rate(1.0f),
       max_subdivisions(12),
-      progress(progress)
+      progress(progress),
+      has_updates_(true)
 {
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
   dicing_rate = preview ? RNA_float_get(&cscene, "preview_dicing_rate") :
@@ -84,7 +85,9 @@ BlenderSync::~BlenderSync()
 void BlenderSync::reset(BL::BlendData &b_data, BL::Scene &b_scene)
 {
   /* Update data and scene pointers in case they change in session reset,
-   * for example after undo. */
+   * for example after undo.
+   * Note that we do not modify the `has_updates_` flag here because the sync
+   * reset is also used during viewport navigation. */
   this->b_data = b_data;
   this->b_scene = b_scene;
 }
@@ -117,6 +120,8 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
     }
 
     if (dicing_prop_changed) {
+      has_updates_ = true;
+
       for (const pair<const GeometryKey, Geometry *> &iter : geometry_map.key_to_scene_data()) {
         Geometry *geom = iter.second;
         if (geom->is_mesh()) {
@@ -133,6 +138,12 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
 
   /* Iterate over all IDs in this depsgraph. */
   for (BL::DepsgraphUpdate &b_update : b_depsgraph.updates) {
+    /* TODO(sergey): Can do more selective filter here. For example, ignore changes made to
+     * screen datablock. Note that sync_data() needs to be called after object deletion, and
+     * currently this is ensured by the scene ID tagged for update, which sets the `has_updates_`
+     * flag. */
+    has_updates_ = true;
+
     BL::ID b_id(b_update.id());
 
     /* Material */
@@ -213,9 +224,13 @@ void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d
 
   if (b_v3d) {
     BlenderViewportParameters new_viewport_parameters(b_v3d);
-    if (viewport_parameters.modified(new_viewport_parameters)) {
+
+    if (viewport_parameters.shader_modified(new_viewport_parameters)) {
       world_recalc = true;
+      has_updates_ = true;
     }
+
+    has_updates_ |= viewport_parameters.modified(new_viewport_parameters);
   }
 }
 
@@ -227,11 +242,15 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
                             int height,
                             void **python_thread_state)
 {
+  if (!has_updates_) {
+    return;
+  }
+
   scoped_timer timer;
 
   BL::ViewLayer b_view_layer = b_depsgraph.view_layer_eval();
 
-  sync_view_layer(b_v3d, b_view_layer);
+  sync_view_layer(b_view_layer);
   sync_integrator();
   sync_film(b_v3d);
   sync_shaders(b_depsgraph, b_v3d);
@@ -254,13 +273,14 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
   free_data_after_sync(b_depsgraph);
 
   VLOG(1) << "Total time spent synchronizing data: " << timer.get_time();
+
+  has_updates_ = false;
 }
 
 /* Integrator */
 
 void BlenderSync::sync_integrator()
 {
-  BL::RenderSettings r = b_scene.render();
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
   experimental = (get_enum(cscene, "feature_set") != 0);
@@ -304,7 +324,7 @@ void BlenderSync::sync_integrator()
   integrator->set_sample_clamp_direct(get_float(cscene, "sample_clamp_direct"));
   integrator->set_sample_clamp_indirect(get_float(cscene, "sample_clamp_indirect"));
   if (!preview) {
-    integrator->set_motion_blur(r.use_motion_blur());
+    integrator->set_motion_blur(view_layer.use_motion_blur);
   }
 
   integrator->set_method((Integrator::Method)get_enum(
@@ -384,8 +404,6 @@ void BlenderSync::sync_film(BL::SpaceView3D &b_v3d)
 
   Film *film = scene->film;
 
-  vector<Pass> prevpasses = scene->passes;
-
   if (b_v3d) {
     film->set_display_pass(update_viewport_display_passes(b_v3d, scene->passes));
   }
@@ -415,16 +433,11 @@ void BlenderSync::sync_film(BL::SpaceView3D &b_v3d)
         break;
     }
   }
-
-  if (!Pass::equals(prevpasses, scene->passes)) {
-    film->tag_passes_update(scene, prevpasses, false);
-    film->tag_modified();
-  }
 }
 
 /* Render Layer */
 
-void BlenderSync::sync_view_layer(BL::SpaceView3D & /*b_v3d*/, BL::ViewLayer &b_view_layer)
+void BlenderSync::sync_view_layer(BL::ViewLayer &b_view_layer)
 {
   view_layer.name = b_view_layer.name();
 
@@ -435,6 +448,8 @@ void BlenderSync::sync_view_layer(BL::SpaceView3D & /*b_v3d*/, BL::ViewLayer &b_
   view_layer.use_surfaces = b_view_layer.use_solid() || scene->bake_manager->get_baking();
   view_layer.use_hair = b_view_layer.use_strand();
   view_layer.use_volumes = b_view_layer.use_volumes();
+  view_layer.use_motion_blur = b_view_layer.use_motion_blur() &&
+                               b_scene.render().use_motion_blur();
 
   /* Material override. */
   view_layer.material_override = b_view_layer.material_override();
@@ -523,12 +538,6 @@ PassType BlenderSync::get_pass_type(BL::RenderPass &b_pass)
   MAP_PASS("BakePrimitive", PASS_BAKE_PRIMITIVE);
   MAP_PASS("BakeDifferential", PASS_BAKE_DIFFERENTIAL);
 
-#ifdef __KERNEL_DEBUG__
-  MAP_PASS("Debug BVH Traversed Nodes", PASS_BVH_TRAVERSED_NODES);
-  MAP_PASS("Debug BVH Traversed Instances", PASS_BVH_TRAVERSED_INSTANCES);
-  MAP_PASS("Debug BVH Intersections", PASS_BVH_INTERSECTIONS);
-  MAP_PASS("Debug Ray Bounces", PASS_RAY_BOUNCES);
-#endif
   MAP_PASS("Debug Render Time", PASS_RENDER_TIME);
   MAP_PASS("AdaptiveAuxBuffer", PASS_ADAPTIVE_AUX_BUFFER);
   MAP_PASS("Debug Sample Count", PASS_SAMPLE_COUNT);
@@ -581,8 +590,10 @@ vector<Pass> BlenderSync::sync_render_passes(BL::Scene &b_scene,
   for (BL::RenderPass &b_pass : b_rlay.passes) {
     PassType pass_type = get_pass_type(b_pass);
 
-    if (pass_type == PASS_MOTION && b_scene.render().use_motion_blur())
+    if (pass_type == PASS_MOTION &&
+        (b_view_layer.use_motion_blur() && b_scene.render().use_motion_blur())) {
       continue;
+    }
     if (pass_type != PASS_NONE)
       Pass::add(pass_type, passes, b_pass.name().c_str());
   }
@@ -624,24 +635,6 @@ vector<Pass> BlenderSync::sync_render_passes(BL::Scene &b_scene,
     }
   }
 
-#ifdef __KERNEL_DEBUG__
-  if (get_boolean(crl, "pass_debug_bvh_traversed_nodes")) {
-    b_engine.add_pass("Debug BVH Traversed Nodes", 1, "X", b_view_layer.name().c_str());
-    Pass::add(PASS_BVH_TRAVERSED_NODES, passes, "Debug BVH Traversed Nodes");
-  }
-  if (get_boolean(crl, "pass_debug_bvh_traversed_instances")) {
-    b_engine.add_pass("Debug BVH Traversed Instances", 1, "X", b_view_layer.name().c_str());
-    Pass::add(PASS_BVH_TRAVERSED_INSTANCES, passes, "Debug BVH Traversed Instances");
-  }
-  if (get_boolean(crl, "pass_debug_bvh_intersections")) {
-    b_engine.add_pass("Debug BVH Intersections", 1, "X", b_view_layer.name().c_str());
-    Pass::add(PASS_BVH_INTERSECTIONS, passes, "Debug BVH Intersections");
-  }
-  if (get_boolean(crl, "pass_debug_ray_bounces")) {
-    b_engine.add_pass("Debug Ray Bounces", 1, "X", b_view_layer.name().c_str());
-    Pass::add(PASS_RAY_BOUNCES, passes, "Debug Ray Bounces");
-  }
-#endif
   if (get_boolean(crl, "pass_debug_render_time")) {
     b_engine.add_pass("Debug Render Time", 1, "X", b_view_layer.name().c_str());
     Pass::add(PASS_RENDER_TIME, passes, "Debug Render Time");
@@ -725,10 +718,13 @@ vector<Pass> BlenderSync::sync_render_passes(BL::Scene &b_scene,
                                         DENOISING_CLEAN_ALL_PASSES);
   scene->film->set_denoising_prefiltered_pass(denoising.store_passes &&
                                               denoising.type == DENOISER_NLM);
-
   scene->film->set_pass_alpha_threshold(b_view_layer.pass_alpha_threshold());
-  scene->film->tag_passes_update(scene, passes);
-  scene->integrator->tag_update(scene, Integrator::UPDATE_ALL);
+
+  if (!Pass::equals(passes, scene->passes)) {
+    scene->film->tag_passes_update(scene, passes);
+    scene->film->tag_modified();
+    scene->integrator->tag_update(scene, Integrator::UPDATE_ALL);
+  }
 
   return passes;
 }

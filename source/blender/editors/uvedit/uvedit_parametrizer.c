@@ -82,10 +82,10 @@ typedef struct PVert {
   struct PVert *nextlink;
 
   union PVertUnion {
-    PHashKey key;       /* construct */
-    int id;             /* abf/lscm matrix index */
-    float distortion;   /* area smoothing */
-    HeapNode *heaplink; /* edge collapsing */
+    PHashKey key;       /* Construct. */
+    int id;             /* ABF/LSCM matrix index. */
+    float distortion;   /* Area smoothing. */
+    HeapNode *heaplink; /* Edge collapsing. */
   } u;
 
   struct PEdge *edge;
@@ -99,10 +99,10 @@ typedef struct PEdge {
   struct PEdge *nextlink;
 
   union PEdgeUnion {
-    PHashKey key;               /* construct */
-    int id;                     /* abf matrix index */
-    HeapNode *heaplink;         /* fill holes */
-    struct PEdge *nextcollapse; /* simplification */
+    PHashKey key;               /* Construct. */
+    int id;                     /* ABF matrix index. */
+    HeapNode *heaplink;         /* Fill holes. */
+    struct PEdge *nextcollapse; /* Simplification. */
   } u;
 
   struct PVert *vert;
@@ -118,10 +118,10 @@ typedef struct PFace {
   struct PFace *nextlink;
 
   union PFaceUnion {
-    PHashKey key; /* construct */
-    int chart;    /* construct splitting*/
-    float area3d; /* stretch */
-    int id;       /* abf matrix index */
+    PHashKey key; /* Construct. */
+    int chart;    /* Construct splitting. */
+    float area3d; /* Stretch. */
+    int id;       /* ABF matrix index. */
   } u;
 
   struct PEdge *edge;
@@ -2154,7 +2154,7 @@ static void p_collapse_cost_vertex(PVert *vert, float *r_mincost, PEdge **r_mine
 
 static void p_chart_post_collapse_flush(PChart *chart, PEdge *collapsed)
 {
-  /* move to collapsed_ */
+  /* Move to `collapsed_*`. */
 
   PVert *v, *nextv = NULL, *verts = chart->verts;
   PEdge *e, *nexte = NULL, *edges = chart->edges, *laste = NULL;
@@ -2224,7 +2224,7 @@ static void p_chart_post_collapse_flush(PChart *chart, PEdge *collapsed)
 
 static void p_chart_post_split_flush(PChart *chart)
 {
-  /* move from collapsed_ */
+  /* Move from `collapsed_*`. */
 
   PVert *v, *nextv = NULL;
   PEdge *e, *nexte = NULL;
@@ -2259,7 +2259,7 @@ static void p_chart_post_split_flush(PChart *chart)
 static void p_chart_simplify_compute(PChart *chart)
 {
   /* Computes a list of edge collapses / vertex splits. The collapsed
-   * simplices go in the chart->collapsed_* lists, The original and
+   * simplices go in the `chart->collapsed_*` lists, The original and
    * collapsed may then be view as stacks, where the next collapse/split
    * is at the top of the respective lists. */
 

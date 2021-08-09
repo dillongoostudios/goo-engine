@@ -209,7 +209,7 @@ class SceneParams {
 
   int curve_subdivisions()
   {
-    /* Matching the tesselation rate limit in Embree. */
+    /* Matching the tessellation rate limit in Embree. */
     return clamp(1 << hair_subdivisions, 1, 16);
   }
 };
@@ -299,7 +299,7 @@ class Scene : public NodeOwner {
    * node array (e.g. Scene::geometry for Geometry nodes) and tag the appropriate
    * manager for an update.
    */
-  template<typename T, typename... Args> T *create_node(Args &&... args)
+  template<typename T, typename... Args> T *create_node(Args &&...args)
   {
     T *node = new T(args...);
     node->set_owner(this);

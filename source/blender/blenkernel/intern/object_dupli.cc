@@ -335,14 +335,14 @@ static void make_child_duplis(const DupliContext *ctx,
 /** \name Internal Data Access Utilities
  * \{ */
 
-static Mesh *mesh_data_from_duplicator_object(Object *ob,
-                                              BMEditMesh **r_em,
-                                              const float (**r_vert_coords)[3],
-                                              const float (**r_vert_normals)[3])
+static const Mesh *mesh_data_from_duplicator_object(Object *ob,
+                                                    BMEditMesh **r_em,
+                                                    const float (**r_vert_coords)[3],
+                                                    const float (**r_vert_normals)[3])
 {
   /* Gather mesh info. */
   BMEditMesh *em = BKE_editmesh_from_object(ob);
-  Mesh *me_eval;
+  const Mesh *me_eval;
 
   *r_em = nullptr;
   *r_vert_coords = nullptr;
@@ -603,7 +603,7 @@ static void make_duplis_verts(const DupliContext *ctx)
   BMEditMesh *em = nullptr;
   const float(*vert_coords)[3] = nullptr;
   const float(*vert_normals)[3] = nullptr;
-  Mesh *me_eval = mesh_data_from_duplicator_object(
+  const Mesh *me_eval = mesh_data_from_duplicator_object(
       parent, &em, &vert_coords, use_rotation ? &vert_normals : nullptr);
   if (em == nullptr && me_eval == nullptr) {
     return;
@@ -842,38 +842,38 @@ static void make_duplis_instances_component(const DupliContext *ctx)
     return;
   }
 
-  Span<float4x4> instance_offset_matrices = component->transforms();
+  Span<float4x4> instance_offset_matrices = component->instance_transforms();
+  Span<int> instance_reference_handles = component->instance_reference_handles();
   Span<int> almost_unique_ids = component->almost_unique_ids();
-  Span<InstancedData> instanced_data = component->instanced_data();
+  Span<InstanceReference> references = component->references();
 
-  for (int i = 0; i < component->instances_amount(); i++) {
-    const InstancedData &data = instanced_data[i];
+  for (int64_t i : instance_offset_matrices.index_range()) {
+    const InstanceReference &reference = references[instance_reference_handles[i]];
     const int id = almost_unique_ids[i];
 
-    if (data.type == INSTANCE_DATA_TYPE_OBJECT) {
-      Object *object = data.data.object;
-      if (object != nullptr) {
+    switch (reference.type()) {
+      case InstanceReference::Type::Object: {
+        Object &object = reference.object();
         float matrix[4][4];
         mul_m4_m4m4(matrix, ctx->object->obmat, instance_offset_matrices[i].values);
-        make_dupli(ctx, object, matrix, id);
+        make_dupli(ctx, &object, matrix, id);
 
         float space_matrix[4][4];
-        mul_m4_m4m4(space_matrix, instance_offset_matrices[i].values, object->imat);
+        mul_m4_m4m4(space_matrix, instance_offset_matrices[i].values, object.imat);
         mul_m4_m4_pre(space_matrix, ctx->object->obmat);
-        make_recursive_duplis(ctx, object, space_matrix, id);
+        make_recursive_duplis(ctx, &object, space_matrix, id);
+        break;
       }
-    }
-    else if (data.type == INSTANCE_DATA_TYPE_COLLECTION) {
-      Collection *collection = data.data.collection;
-      if (collection != nullptr) {
+      case InstanceReference::Type::Collection: {
+        Collection &collection = reference.collection();
         float collection_matrix[4][4];
         unit_m4(collection_matrix);
-        sub_v3_v3(collection_matrix[3], collection->instance_offset);
+        sub_v3_v3(collection_matrix[3], collection.instance_offset);
         mul_m4_m4_pre(collection_matrix, instance_offset_matrices[i].values);
         mul_m4_m4_pre(collection_matrix, ctx->object->obmat);
 
         eEvaluationMode mode = DEG_get_mode(ctx->depsgraph);
-        FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN (collection, object, mode) {
+        FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN (&collection, object, mode) {
           if (object == ctx->object) {
             continue;
           }
@@ -885,6 +885,10 @@ static void make_duplis_instances_component(const DupliContext *ctx)
           make_recursive_duplis(ctx, object, collection_matrix, id);
         }
         FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_END;
+        break;
+      }
+      case InstanceReference::Type::None: {
+        break;
       }
     }
   }
@@ -1147,7 +1151,7 @@ static void make_duplis_faces(const DupliContext *ctx)
   /* Gather mesh info. */
   BMEditMesh *em = nullptr;
   const float(*vert_coords)[3] = nullptr;
-  Mesh *me_eval = mesh_data_from_duplicator_object(parent, &em, &vert_coords, nullptr);
+  const Mesh *me_eval = mesh_data_from_duplicator_object(parent, &em, &vert_coords, nullptr);
   if (em == nullptr && me_eval == nullptr) {
     return;
   }

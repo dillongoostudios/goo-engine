@@ -88,7 +88,7 @@ short euler_order_from_string(const char *str, const char *error_prefix)
 #  define MAKE_ID3(a, b, c) (((a) << 24) | ((b) << 16) | ((c) << 8))
 #endif
 
-    switch (*((PY_INT32_T *)str)) {
+    switch (*((const PY_INT32_T *)str)) {
       case MAKE_ID3('X', 'Y', 'Z'):
         return EULER_ORDER_XYZ;
       case MAKE_ID3('X', 'Z', 'Y'):
@@ -110,7 +110,7 @@ short euler_order_from_string(const char *str, const char *error_prefix)
   return -1;
 }
 
-/* note: BaseMath_ReadCallback must be called beforehand */
+/* NOTE: BaseMath_ReadCallback must be called beforehand. */
 static PyObject *Euler_ToTupleExt(EulerObject *self, int ndigits)
 {
   PyObject *ret;
@@ -619,9 +619,9 @@ static PySequenceMethods Euler_SeqMethods = {
     (binaryfunc)NULL,                /* sq_concat */
     (ssizeargfunc)NULL,              /* sq_repeat */
     (ssizeargfunc)Euler_item,        /* sq_item */
-    (ssizessizeargfunc)NULL,         /* sq_slice, deprecated  */
+    (ssizessizeargfunc)NULL,         /* sq_slice (deprecated) */
     (ssizeobjargproc)Euler_ass_item, /* sq_ass_item */
-    (ssizessizeobjargproc)NULL,      /* sq_ass_slice, deprecated */
+    (ssizessizeobjargproc)NULL,      /* sq_ass_slice (deprecated) */
     (objobjproc)NULL,                /* sq_contains */
     (binaryfunc)NULL,                /* sq_inplace_concat */
     (ssizeargfunc)NULL,              /* sq_inplace_repeat */

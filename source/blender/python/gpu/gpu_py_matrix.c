@@ -22,8 +22,8 @@
  * \warning While these functions attempt to ensure correct stack usage.
  * Mixing Python and C functions may still crash on invalid use.
  *
- * - Use ``bpygpu_`` for local API.
- * - Use ``BPyGPU`` for public API.
+ * - Use `bpygpu_` for local API.
+ * - Use `BPyGPU` for public API.
  */
 
 #include <Python.h>
@@ -152,8 +152,8 @@ static PyObject *pygpu_matrix_pop_projection(PyObject *UNUSED(self))
  * \{ */
 
 typedef struct {
-  PyObject_HEAD /* required python macro */
-      int type;
+  PyObject_HEAD /* Required Python macro. */
+  int type;
   int level;
 } BPyGPU_MatrixStackContext;
 

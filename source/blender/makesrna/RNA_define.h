@@ -388,6 +388,7 @@ void RNA_def_property_string_default(PropertyRNA *prop, const char *value);
 void RNA_def_property_ui_text(PropertyRNA *prop, const char *name, const char *description);
 void RNA_def_property_ui_range(
     PropertyRNA *prop, double min, double max, double step, int precision);
+void RNA_def_property_ui_scale_type(PropertyRNA *prop, PropertyScaleType scale_type);
 void RNA_def_property_ui_icon(PropertyRNA *prop, int icon, int consecutive);
 
 void RNA_def_property_update(PropertyRNA *prop, int noteflag, const char *updatefunc);
@@ -504,6 +505,11 @@ void RNA_def_func_free_pointers(FunctionRNA *func);
 void RNA_def_property_duplicate_pointers(StructOrFunctionRNA *cont_, PropertyRNA *prop);
 void RNA_def_property_free_pointers(PropertyRNA *prop);
 int RNA_def_property_free_identifier(StructOrFunctionRNA *cont_, const char *identifier);
+
+int RNA_def_property_free_identifier_deferred_prepare(StructOrFunctionRNA *cont_,
+                                                      const char *identifier,
+                                                      void **handle);
+void RNA_def_property_free_identifier_deferred_finish(StructOrFunctionRNA *cont_, void *handle);
 
 void RNA_def_property_free_pointers_set_py_data_callback(
     void (*py_data_clear_fn)(PropertyRNA *prop));

@@ -65,20 +65,10 @@ ccl_device_forceinline bool kernel_path_scene_intersect(KernelGlobals *kg,
   uint visibility = path_state_ray_visibility(kg, state);
 
   if (path_state_ao_bounce(kg, state)) {
-    visibility = PATH_RAY_SHADOW;
     ray->t = kernel_data.background.ao_distance;
   }
 
   bool hit = scene_intersect(kg, ray, visibility, isect);
-
-#ifdef __KERNEL_DEBUG__
-  if (state->flag & PATH_RAY_CAMERA) {
-    L->debug_data.num_bvh_traversed_nodes += isect->num_traversed_nodes;
-    L->debug_data.num_bvh_traversed_instances += isect->num_traversed_instances;
-    L->debug_data.num_bvh_intersections += isect->num_intersections;
-  }
-  L->debug_data.num_ray_bounces++;
-#endif /* __KERNEL_DEBUG__ */
 
   return hit;
 }
@@ -416,7 +406,13 @@ ccl_device void kernel_path_indirect(KernelGlobals *kg,
         break;
       }
       else if (path_state_ao_bounce(kg, state)) {
-        break;
+        if (intersection_get_shader_flags(kg, &isect) &
+            (SD_HAS_TRANSPARENT_SHADOW | SD_HAS_EMISSION)) {
+          state->flag |= PATH_RAY_TERMINATE_AFTER_TRANSPARENT;
+        }
+        else {
+          break;
+        }
       }
 
       /* Setup shader data. */
@@ -554,7 +550,13 @@ ccl_device_forceinline void kernel_path_integrate(KernelGlobals *kg,
         break;
       }
       else if (path_state_ao_bounce(kg, state)) {
-        break;
+        if (intersection_get_shader_flags(kg, &isect) &
+            (SD_HAS_TRANSPARENT_SHADOW | SD_HAS_EMISSION)) {
+          state->flag |= PATH_RAY_TERMINATE_AFTER_TRANSPARENT;
+        }
+        else {
+          break;
+        }
       }
 
       /* Setup shader data. */

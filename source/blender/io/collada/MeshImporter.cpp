@@ -170,7 +170,7 @@ void VCOLDataWrapper::get_vcol(int v_index, MLoopCol *mloopcol)
     case COLLADAFW::MeshVertexData::DATA_TYPE_FLOAT: {
       COLLADAFW::ArrayPrimitiveType<float> *values = mVData->getFloatValues();
       if (values->empty() || values->getCount() <= (v_index * stride + 2)) {
-        return; /* xxx need to create an error instead */
+        return; /* XXX: need to create an error instead. */
       }
 
       mloopcol->r = unit_float_to_uchar_clamp((*values)[v_index * stride]);
@@ -181,7 +181,7 @@ void VCOLDataWrapper::get_vcol(int v_index, MLoopCol *mloopcol)
     case COLLADAFW::MeshVertexData::DATA_TYPE_DOUBLE: {
       COLLADAFW::ArrayPrimitiveType<double> *values = mVData->getDoubleValues();
       if (values->empty() || values->getCount() <= (v_index * stride + 2)) {
-        return; /* xxx need to create an error instead */
+        return; /* XXX: need to create an error instead. */
       }
 
       mloopcol->r = unit_float_to_uchar_clamp((*values)[v_index * stride]);
@@ -573,7 +573,7 @@ void MeshImporter::mesh_add_edges(Mesh *mesh, int len)
 
   totedge = mesh->totedge + len;
 
-  /* update customdata  */
+  /* Update custom-data. */
   CustomData_copy(&mesh->edata, &edata, CD_MASK_MESH.emask, CD_DEFAULT, totedge);
   CustomData_copy_data(&mesh->edata, &edata, 0, 0, mesh->totedge);
 
@@ -708,7 +708,7 @@ void MeshImporter::read_polys(COLLADAFW::Mesh *collada_mesh, Mesh *me)
           prim.totpoly++;
         }
 
-        /* Moving cursor  to the next triangle fan. */
+        /* Moving cursor to the next triangle fan. */
         if (mp_has_normals) {
           normal_indices += 2;
         }
@@ -967,7 +967,7 @@ static void bc_remove_materials_from_object(Object *ob, Mesh *me)
 
 /**
  * Returns the list of Users of the given Mesh object.
- * Note: This function uses the object user flag to control
+ * NOTE: This function uses the object user flag to control
  * which objects have already been processed.
  */
 std::vector<Object *> MeshImporter::get_all_users_of(Mesh *reference_mesh)

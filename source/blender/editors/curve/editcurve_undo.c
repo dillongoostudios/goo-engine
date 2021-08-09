@@ -97,7 +97,7 @@ static void undocurve_to_editcurve(Main *bmain, UndoCurve *ucu, Curve *cu, short
     BKE_fcurves_copy(&ad->drivers, &ucu->drivers);
   }
 
-  /* copy  */
+  /* Copy. */
   for (nu = undobase->first; nu; nu = nu->next) {
     newnu = BKE_nurb_duplicate(nu);
 
@@ -139,7 +139,7 @@ static void undocurve_from_editcurve(UndoCurve *ucu, Curve *cu, const short shap
     BKE_fcurves_copy(&ucu->drivers, &ad->drivers);
   }
 
-  /* copy  */
+  /* Copy. */
   for (nu = nubase->first; nu; nu = nu->next) {
     newnu = BKE_nurb_duplicate(nu);
 
@@ -267,7 +267,7 @@ static void curve_undosys_step_decode(struct bContext *C,
     }
     undocurve_to_editcurve(bmain, &elem->data, obedit->data, &obedit->shapenr);
     cu->editnurb->needs_flush_to_id = 1;
-    DEG_id_tag_update(&obedit->id, ID_RECALC_GEOMETRY);
+    DEG_id_tag_update(&cu->id, ID_RECALC_GEOMETRY);
   }
 
   /* The first element is always active */

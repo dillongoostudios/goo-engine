@@ -116,18 +116,28 @@ static void deformStroke(GpencilModifierData *md,
   }
 
   float stroke_thickness_inv = 1.0f / max_ii(gps->thickness, 1);
+  const bool is_normalized = (mmd->flag & GP_THICK_NORMALIZE);
+  bool is_inverted = ((mmd->flag & GP_THICK_WEIGHT_FACTOR) == 0) &&
+                     ((mmd->flag & GP_THICK_INVERT_VGROUP) != 0);
 
   for (int i = 0; i < gps->totpoints; i++) {
     bGPDspoint *pt = &gps->points[i];
     MDeformVert *dvert = gps->dvert != NULL ? &gps->dvert[i] : NULL;
     /* Verify point is part of vertex group. */
-    float weight = get_modifier_point_weight(
-        dvert, (mmd->flag & GP_THICK_INVERT_VGROUP) != 0, def_nr);
+    float weight = get_modifier_point_weight(dvert, is_inverted, def_nr);
     if (weight < 0.0f) {
       continue;
     }
 
+    /* Apply weight directly. */
+    if ((!is_normalized) && (mmd->flag & GP_THICK_WEIGHT_FACTOR)) {
+      pt->pressure *= ((mmd->flag & GP_THICK_INVERT_VGROUP) ? 1.0f - weight : weight);
+      CLAMP_MIN(pt->pressure, 0.0f);
+      continue;
+    }
+
     float curvef = 1.0f;
+
     if ((mmd->flag & GP_THICK_CUSTOM_CURVE) && (mmd->curve_thickness)) {
       /* Normalize value to evaluate curve. */
       float value = (float)i / (gps->totpoints - 1);
@@ -135,7 +145,7 @@ static void deformStroke(GpencilModifierData *md,
     }
 
     float target;
-    if (mmd->flag & GP_THICK_NORMALIZE) {
+    if (is_normalized) {
       target = mmd->thickness * stroke_thickness_inv;
       target *= curvef;
     }
@@ -182,12 +192,17 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   uiLayoutSetPropSep(layout, true);
 
   uiItemR(layout, ptr, "normalize_thickness", 0, NULL, ICON_NONE);
-
   if (RNA_boolean_get(ptr, "normalize_thickness")) {
     uiItemR(layout, ptr, "thickness", 0, NULL, ICON_NONE);
   }
   else {
-    uiItemR(layout, ptr, "thickness_factor", 0, NULL, ICON_NONE);
+    const bool is_weighted = !RNA_boolean_get(ptr, "use_weight_factor");
+    uiLayout *row = uiLayoutRow(layout, true);
+    uiLayoutSetActive(row, is_weighted);
+    uiItemR(row, ptr, "thickness_factor", 0, NULL, ICON_NONE);
+    uiLayout *sub = uiLayoutRow(row, true);
+    uiLayoutSetActive(sub, true);
+    uiItemR(row, ptr, "use_weight_factor", 0, "", ICON_MOD_VERTEX_WEIGHT);
   }
 
   gpencil_modifier_panel_end(layout, ptr);

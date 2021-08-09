@@ -445,7 +445,7 @@ int BIF_countTransformOrientation(const bContext *C)
   return BLI_listbase_count(transform_orientations);
 }
 
-void applyTransformOrientation(const TransformOrientation *ts, float r_mat[3][3], char *r_name)
+void applyTransformOrientation(const TransformOrientation *ts, float r_mat[3][3], char r_name[64])
 {
   if (r_name) {
     BLI_strncpy(r_name, ts->name, MAX_NAME);
@@ -455,7 +455,7 @@ void applyTransformOrientation(const TransformOrientation *ts, float r_mat[3][3]
 
 /* Updates all `BONE_TRANSFORM` flags.
  * Returns total number of bones with `BONE_TRANSFORM`.
- * Note: `transform_convert_pose_transflags_update` has a similar logic. */
+ * NOTE: `transform_convert_pose_transflags_update` has a similar logic. */
 static int armature_bone_transflags_update_recursive(bArmature *arm,
                                                      ListBase *lb,
                                                      const bool do_it)
@@ -537,10 +537,10 @@ short ED_transform_calc_orientation_from_type_ex(const bContext *C,
     case V3D_ORIENT_LOCAL: {
       if (ob) {
         if (ob->mode & OB_MODE_POSE) {
-          /* each bone moves on its own local axis, but  to avoid confusion,
+          /* Each bone moves on its own local axis, but to avoid confusion,
            * use the active pones axis for display T33575, this works as expected on a single
            * bone and users who select many bones will understand what's going on and what local
-           * means when they start transforming */
+           * means when they start transforming. */
           ED_getTransformOrientationMatrix(C, ob, obedit, pivot_point, r_mat);
         }
         else {

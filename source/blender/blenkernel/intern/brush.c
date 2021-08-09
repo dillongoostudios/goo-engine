@@ -379,10 +379,10 @@ static void brush_undo_preserve(BlendLibReader *reader, ID *id_new, ID *id_old)
   BKE_lib_id_swap(NULL, id_new, id_old);
 
   /* `id_new` now has content from `id_old`, we need to ensure those old ID pointers are valid.
-   * Note: Since we want to re-use all old pointers here, code is much simpler than for Scene. */
+   * NOTE: Since we want to re-use all old pointers here, code is much simpler than for Scene. */
   BKE_library_foreach_ID_link(NULL, id_new, brush_undo_preserve_cb, reader, IDWALK_NOP);
 
-  /* Note: We do not swap IDProperties, as dealing with potential ID pointers in those would be
+  /* NOTE: We do not swap IDProperties, as dealing with potential ID pointers in those would be
    *       fairly delicate. */
   SWAP(IDProperty *, id_new->properties, id_old->properties);
 }
@@ -989,6 +989,7 @@ void BKE_gpencil_brush_preset_set(Main *bmain, Brush *brush, const short type)
       brush->gpencil_settings->draw_smoothfac = 0.1f;
       brush->gpencil_settings->draw_smoothlvl = 1;
       brush->gpencil_settings->draw_subdivide = 1;
+      brush->gpencil_settings->dilate_pixels = 1;
 
       brush->gpencil_settings->flag |= GP_BRUSH_FILL_SHOW_EXTENDLINES;
 
@@ -1399,13 +1400,11 @@ void BKE_brush_gpencil_paint_presets(Main *bmain, ToolSettings *ts, const bool r
   }
 
   /* Set default Draw brush. */
-  if (reset || brush_prev == NULL) {
-    BKE_paint_brush_set(paint, deft_draw);
+  if ((reset == false) && (brush_prev != NULL)) {
+    BKE_paint_brush_set(paint, brush_prev);
   }
   else {
-    if (brush_prev != NULL) {
-      BKE_paint_brush_set(paint, brush_prev);
-    }
+    BKE_paint_brush_set(paint, deft_draw);
   }
 }
 

@@ -242,8 +242,8 @@ static int gpencil_get_stroke_material_fromcurve(
   float color_fill[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
   /* If the curve has 2 materials, the first is considered as Fill and the second as Stroke.
-   * If the has only one material, if the name contains _stroke, the is used
-   * as stroke, else as fill.*/
+   * If the has only one material, if the name contains "_stroke",
+   * it's used as a stroke, otherwise as fill. */
   if (ob_cu->totcol >= 2) {
     *do_stroke = true;
     *do_fill = true;
@@ -350,7 +350,7 @@ static void gpencil_convert_spline(Main *bmain,
   /* Assign material index to stroke. */
   gps->mat_nr = r_idx;
 
-  /* Add stroke to frame.*/
+  /* Add stroke to frame. */
   BLI_addtail(&gpf->strokes, gps);
 
   float *coord_array = NULL;
@@ -515,7 +515,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
     if (collection != NULL) {
       gpl = BKE_gpencil_layer_named_get(gpd, collection->id.name + 2);
       if (gpl == NULL) {
-        gpl = BKE_gpencil_layer_addnew(gpd, collection->id.name + 2, true);
+        gpl = BKE_gpencil_layer_addnew(gpd, collection->id.name + 2, true, false);
       }
     }
   }
@@ -523,7 +523,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
   if (gpl == NULL) {
     gpl = BKE_gpencil_layer_active_get(gpd);
     if (gpl == NULL) {
-      gpl = BKE_gpencil_layer_addnew(gpd, DATA_("GP_Layer"), true);
+      gpl = BKE_gpencil_layer_addnew(gpd, DATA_("GP_Layer"), true, false);
     }
   }
 

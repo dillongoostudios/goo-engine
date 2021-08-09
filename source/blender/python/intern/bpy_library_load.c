@@ -61,11 +61,13 @@
 #endif
 
 typedef struct {
-  PyObject_HEAD /* required python macro */
-      /* collection iterator specific parts */
-      char relpath[FILE_MAX];
+  PyObject_HEAD /* Required Python macro. */
+  /* Collection iterator specific parts. */
+  char relpath[FILE_MAX];
   char abspath[FILE_MAX]; /* absolute path */
   BlendHandle *blo_handle;
+  /* Referenced by `blo_handle`, so stored here to keep alive for long enough. */
+  BlendFileReadReport bf_reports;
   int flag;
   PyObject *dict;
   /* Borrowed reference to the `bmain`, taken from the RNA instance of #RNA_BlendDataLibraries.
@@ -159,12 +161,12 @@ static PyTypeObject bpy_lib_Type = {
     NULL,                        /* allocfunc tp_alloc; */
     NULL,                        /* newfunc tp_new; */
     /*  Low-level free-memory routine */
-    NULL, /* freefunc tp_free;  */
+    NULL, /* freefunc tp_free; */
     /* For PyObject_IS_GC */
-    NULL, /* inquiry tp_is_gc;  */
+    NULL, /* inquiry tp_is_gc; */
     NULL, /* PyObject *tp_bases; */
     /* method resolution order */
-    NULL, /* PyObject *tp_mro;  */
+    NULL, /* PyObject *tp_mro; */
     NULL, /* PyObject *tp_cache; */
     NULL, /* PyObject *tp_subclasses; */
     NULL, /* PyObject *tp_weaklist; */
@@ -195,7 +197,7 @@ static PyObject *bpy_lib_load(BPy_PropertyRNA *self, PyObject *args, PyObject *k
   bool is_rel = false, is_link = false, use_assets_only = false;
 
   static const char *_keywords[] = {"filepath", "link", "relative", "assets_only", NULL};
-  static _PyArg_Parser _parser = {"s|O&O&O&:load", _keywords, 0};
+  static _PyArg_Parser _parser = {"s|$O&O&O&:load", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -257,8 +259,10 @@ static PyObject *bpy_lib_enter(BPy_Library *self)
   ReportList reports;
 
   BKE_reports_init(&reports, RPT_STORE);
+  BlendFileReadReport bf_reports = {.reports = &reports};
 
-  self->blo_handle = BLO_blendhandle_from_file(self->abspath, &reports);
+  self->bf_reports = bf_reports;
+  self->blo_handle = BLO_blendhandle_from_file(self->abspath, &self->bf_reports);
 
   if (self->blo_handle == NULL) {
     if (BPy_reports_to_error(&reports, PyExc_IOError, true) != -1) {

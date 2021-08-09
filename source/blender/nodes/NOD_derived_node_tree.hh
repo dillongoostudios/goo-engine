@@ -92,13 +92,19 @@ class DNode {
   operator bool() const;
 
   uint64_t hash() const;
+
+  DInputSocket input(int index) const;
+  DOutputSocket output(int index) const;
+
+  DInputSocket input_by_identifier(StringRef identifier) const;
+  DOutputSocket output_by_identifier(StringRef identifier) const;
 };
 
 /* A (nullable) reference to a socket and the context it is in. It is unique within an entire
  * nested node group hierarchy. This type is small and can be passed around by value.
  *
  * A #DSocket can represent an input or an output socket. If the type of a socket is known at
- * compile time is is preferable to use #DInputSocket or #DOutputSocket instead. */
+ * compile time is preferable to use #DInputSocket or #DOutputSocket instead. */
 class DSocket {
  protected:
   const DTreeContext *context_ = nullptr;
@@ -170,6 +176,7 @@ class DerivedNodeTree {
   Span<const NodeTreeRef *> used_node_tree_refs() const;
 
   bool has_link_cycles() const;
+  bool has_undefined_nodes_or_sockets() const;
   void foreach_node(FunctionRef<void(DNode)> callback) const;
 
   std::string to_dot() const;
@@ -272,6 +279,26 @@ inline const NodeRef *DNode::operator->() const
 inline uint64_t DNode::hash() const
 {
   return get_default_hash_2(context_, node_ref_);
+}
+
+inline DInputSocket DNode::input(int index) const
+{
+  return {context_, &node_ref_->input(index)};
+}
+
+inline DOutputSocket DNode::output(int index) const
+{
+  return {context_, &node_ref_->output(index)};
+}
+
+inline DInputSocket DNode::input_by_identifier(StringRef identifier) const
+{
+  return {context_, &node_ref_->input_by_identifier(identifier)};
+}
+
+inline DOutputSocket DNode::output_by_identifier(StringRef identifier) const
+{
+  return {context_, &node_ref_->output_by_identifier(identifier)};
 }
 
 /* --------------------------------------------------------------------

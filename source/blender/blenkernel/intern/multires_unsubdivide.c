@@ -312,7 +312,7 @@ static bool unsubdivide_tag_disconnected_mesh_element(BMesh *bm, int *elem_id, i
 
   /* Also try from the different 4 vertices of a quad in the current
    * disconnected element ID. If a solution exists the search should return a valid solution from
-   * one of these vertices.*/
+   * one of these vertices. */
   BMFace *f, *init_face = NULL;
   BMVert *v;
   BMIter iter_a, iter_b;
@@ -603,7 +603,7 @@ static void write_loop_in_face_grid(
       step_y[1] = 0;
       break;
     default:
-      BLI_assert(!"Should never happen");
+      BLI_assert_msg(0, "Should never happen");
       break;
   }
 

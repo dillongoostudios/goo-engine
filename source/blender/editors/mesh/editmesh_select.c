@@ -35,6 +35,8 @@
 #include "BLI_utildefines_stack.h"
 
 #include "BKE_context.h"
+#include "BKE_customdata.h"
+#include "BKE_deform.h"
 #include "BKE_editmesh.h"
 #include "BKE_layer.h"
 #include "BKE_report.h"
@@ -434,7 +436,7 @@ struct NearestEdgeUserData {
   struct NearestEdgeUserData_Hit hit_cycle;
 };
 
-/* note; uses v3d, so needs active 3d window */
+/* NOTE: uses v3d, so needs active 3d window. */
 static void find_nearest_edge__doClosest(
     void *userData, BMEdge *eed, const float screen_co_a[2], const float screen_co_b[2], int index)
 {
@@ -547,8 +549,10 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
 
       ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
 
-      mesh_foreachScreenEdge(
-          vc, find_nearest_edge_center__doZBuf, &data, V3D_PROJ_TEST_CLIP_DEFAULT);
+      mesh_foreachScreenEdge(vc,
+                             find_nearest_edge_center__doZBuf,
+                             &data,
+                             V3D_PROJ_TEST_CLIP_DEFAULT | V3D_PROJ_TEST_CLIP_CONTENT_DEFAULT);
 
       *r_dist_center_px_manhattan = data.dist;
     }
@@ -601,7 +605,8 @@ BMEdge *EDBM_edge_find_nearest_ex(ViewContext *vc,
         *dist_px_manhattan_p;
 
     ED_view3d_init_mats_rv3d(vc->obedit, vc->rv3d);
-    mesh_foreachScreenEdge(vc, find_nearest_edge__doClosest, &data, clip_flag);
+    mesh_foreachScreenEdge(
+        vc, find_nearest_edge__doClosest, &data, clip_flag | V3D_PROJ_TEST_CLIP_CONTENT_DEFAULT);
 
     hit = (data.use_cycle && data.hit_cycle.edge) ? &data.hit_cycle : &data.hit;
 
@@ -961,7 +966,7 @@ static bool unified_findnearest(ViewContext *vc,
     }
   }
 
-  /* return only one of 3 pointers, for frontbuffer redraws */
+  /* Return only one of 3 pointers, for front-buffer redraws. */
   if (hit.v.ele) {
     hit.f.ele = NULL;
     hit.e.ele = NULL;
@@ -1802,7 +1807,7 @@ static bool mouse_mesh_loop(
               V3D_PROJ_RET_OK) {
             tdist = len_squared_v2v2(mvalf, co);
             if (tdist < best_dist) {
-              /*                          printf("Best face: %p (%f)\n", f, tdist);*/
+              // printf("Best face: %p (%f)\n", f, tdist);
               best_dist = tdist;
               efa = f;
             }
@@ -2568,7 +2573,7 @@ bool EDBM_selectmode_disable(Scene *scene,
                              const short selectmode_fallback)
 {
   /* note essential, but switch out of vertex mode since the
-   * selected regions wont be nicely isolated after flushing */
+   * selected regions won't be nicely isolated after flushing */
   if (em->selectmode & selectmode_disable) {
     if (em->selectmode == selectmode_disable) {
       em->selectmode = selectmode_fallback;
@@ -2980,7 +2985,7 @@ bool EDBM_select_interior_faces(BMEditMesh *em)
           int i_b = BM_elem_index_get(l_pair[1]->f);
           if (i_a != i_b) {
             /* Only for predictable results that don't depend on the order of radial loops,
-             * not essential.  */
+             * not essential. */
             if (i_a > i_b) {
               SWAP(int, i_a, i_b);
             }
@@ -3443,7 +3448,7 @@ static void edbm_select_linked_pick_ex(BMEditMesh *em, BMElem *ele, bool sel, in
     select_linked_delimit_begin(bm, delimit);
   }
 
-  /* Note: logic closely matches 'edbm_select_linked_exec', keep in sync */
+  /* NOTE: logic closely matches #edbm_select_linked_exec, keep in sync. */
 
   if (ele->head.htype == BM_VERT) {
     BMVert *eve = (BMVert *)ele;
@@ -3639,8 +3644,9 @@ static int edbm_select_linked_pick_exec(bContext *C, wmOperator *op)
 
   {
     ViewLayer *view_layer = CTX_data_view_layer(C);
-    const int object_index = RNA_int_get(op->ptr, "object_index");
-    const int index = RNA_int_get(op->ptr, "index");
+    /* Intentionally wrap negative values so the lookup fails. */
+    const uint object_index = (uint)RNA_int_get(op->ptr, "object_index");
+    const uint index = (uint)RNA_int_get(op->ptr, "index");
     ele = EDBM_elem_from_index_any_multi(view_layer, object_index, index, &obedit);
   }
 
@@ -4270,7 +4276,12 @@ static int edbm_select_nth_exec(bContext *C, wmOperator *op)
 
     if (edbm_deselect_nth(em, &op_params) == true) {
       found_active_elt = true;
-      EDBM_update_generic(obedit->data, false, false);
+      EDBM_update(obedit->data,
+                  &(const struct EDBMUpdate_Params){
+                      .calc_looptri = false,
+                      .calc_normals = false,
+                      .is_destructive = false,
+                  });
     }
   }
   MEM_freeN(objects);
@@ -4643,7 +4654,7 @@ static int edbm_select_random_exec(bContext *C, wmOperator *op)
         }
       }
 
-      BLI_array_randomize(elem_map, sizeof(*elem_map), elem_map_len, seed);
+      BLI_array_randomize(elem_map, sizeof(*elem_map), elem_map_len, seed_iter);
       const int count_select = elem_map_len * randfac;
       for (int i = 0; i < count_select; i++) {
         BM_vert_select_set(em->bm, elem_map[i], select);
@@ -4659,7 +4670,7 @@ static int edbm_select_random_exec(bContext *C, wmOperator *op)
           elem_map[elem_map_len++] = eed;
         }
       }
-      BLI_array_randomize(elem_map, sizeof(*elem_map), elem_map_len, seed);
+      BLI_array_randomize(elem_map, sizeof(*elem_map), elem_map_len, seed_iter);
       const int count_select = elem_map_len * randfac;
       for (int i = 0; i < count_select; i++) {
         BM_edge_select_set(em->bm, elem_map[i], select);
@@ -4675,7 +4686,7 @@ static int edbm_select_random_exec(bContext *C, wmOperator *op)
           elem_map[elem_map_len++] = efa;
         }
       }
-      BLI_array_randomize(elem_map, sizeof(*elem_map), elem_map_len, seed);
+      BLI_array_randomize(elem_map, sizeof(*elem_map), elem_map_len, seed_iter);
       const int count_select = elem_map_len * randfac;
       for (int i = 0; i < count_select; i++) {
         BM_face_select_set(em->bm, elem_map[i], select);
@@ -4730,10 +4741,11 @@ static bool edbm_select_ungrouped_poll(bContext *C)
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     const int cd_dvert_offset = CustomData_get_offset(&em->bm->vdata, CD_MDEFORMVERT);
 
+    const ListBase *defbase = BKE_object_defgroup_list(obedit);
     if ((em->selectmode & SCE_SELECT_VERTEX) == 0) {
       CTX_wm_operator_poll_msg_set(C, "Must be in vertex selection mode");
     }
-    else if (BLI_listbase_is_empty(&obedit->defbase) || cd_dvert_offset == -1) {
+    else if (BLI_listbase_is_empty(defbase) || cd_dvert_offset == -1) {
       CTX_wm_operator_poll_msg_set(C, "No weights/vertex groups on object");
     }
     else {

@@ -63,6 +63,7 @@
 #include "BKE_lattice.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
+#include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_mesh_runtime.h"
@@ -124,7 +125,7 @@ static void object_force_modifier_update_for_bind(Depsgraph *depsgraph, Object *
     BKE_displist_make_mball(depsgraph, scene_eval, ob_eval);
   }
   else if (ELEM(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
-    BKE_displist_make_curveTypes(depsgraph, scene_eval, ob_eval, false, false);
+    BKE_displist_make_curveTypes(depsgraph, scene_eval, ob_eval, false);
   }
   else if (ob->type == OB_GPENCIL) {
     BKE_gpencil_modifiers_calc(depsgraph, scene_eval, ob_eval);
@@ -210,7 +211,7 @@ ModifierData *ED_object_modifier_add(
     /* special cases */
     if (type == eModifierType_Softbody) {
       if (!ob->soft) {
-        ob->soft = sbNew(scene);
+        ob->soft = sbNew();
         ob->softflag |= OB_SB_GOAL | OB_SB_EDGES;
       }
     }
@@ -772,6 +773,8 @@ static bool modifier_apply_obdata(
         return false;
       }
 
+      Main *bmain = DEG_get_bmain(depsgraph);
+      BKE_object_material_from_eval_data(bmain, ob, &mesh_applied->id);
       BKE_mesh_nomain_to_mesh(mesh_applied, me, ob, &CD_MASK_MESH, true);
 
       if (md_eval->type == eModifierType_Multires) {
@@ -1120,10 +1123,10 @@ bool edit_modifier_invoke_properties(bContext *C, wmOperator *op)
  * with a UI panel below the mouse cursor, unless a specific modifier is set with a context
  * pointer. Used in order to apply modifier operators on hover over their panels.
  */
-bool edit_modifier_invoke_properties_with_hover(bContext *C,
-                                                wmOperator *op,
-                                                const wmEvent *event,
-                                                int *r_retval)
+static bool edit_modifier_invoke_properties_with_hover(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent *event,
+                                                       int *r_retval)
 {
   if (RNA_struct_property_is_set(op->ptr, "modifier")) {
     return true;
@@ -1920,8 +1923,8 @@ static int multires_subdivide_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  const eMultiresSubdivideModeType subdivide_mode = (eMultiresSubdivideModeType)(
-      RNA_enum_get(op->ptr, "mode"));
+  const eMultiresSubdivideModeType subdivide_mode = (eMultiresSubdivideModeType)(RNA_enum_get(
+      op->ptr, "mode"));
   multiresModifier_subdivide(object, mmd, subdivide_mode);
 
   ED_object_iter_other(
@@ -2144,7 +2147,7 @@ static int multires_external_pack_exec(bContext *C, wmOperator *UNUSED(op))
     return OPERATOR_CANCELLED;
   }
 
-  /* XXX don't remove.. */
+  /* XXX don't remove. */
   CustomData_external_remove(&me->ldata, &me->id, CD_MDISPS, me->totloop);
 
   return OPERATOR_FINISHED;
@@ -2595,7 +2598,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
 
   BLI_bitmap *edges_visited = BLI_BITMAP_NEW(me->totedge, "edge_visited");
 
-  /* note: we use EditBones here, easier to set them up and use
+  /* NOTE: we use EditBones here, easier to set them up and use
    * edit-armature functions to convert back to regular bones */
   for (int v = 0; v < me->totvert; v++) {
     if (mvert_skin[v].flag & MVERT_SKIN_ROOT) {

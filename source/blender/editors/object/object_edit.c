@@ -105,7 +105,7 @@
 
 #include "CLG_log.h"
 
-/* for menu/popup icons etc etc*/
+/* For menu/popup icons etc etc. */
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -134,8 +134,8 @@ Object *ED_object_context(const bContext *C)
   return CTX_data_pointer_get_type(C, "object", &RNA_Object).data;
 }
 
-/* find the correct active object per context
- * note: context can be NULL when called from a enum with PROP_ENUM_NO_CONTEXT */
+/* Find the correct active object per context.
+ * NOTE: context can be NULL when called from a enum with #PROP_ENUM_NO_CONTEXT. */
 Object *ED_object_active_context(const bContext *C)
 {
   Object *ob = NULL;
@@ -157,7 +157,7 @@ Object *ED_object_active_context(const bContext *C)
  *   (assuming they need to be modified).
  */
 Object **ED_object_array_in_mode_or_selected(bContext *C,
-                                             bool (*filter_fn)(Object *ob, void *user_data),
+                                             bool (*filter_fn)(const Object *ob, void *user_data),
                                              void *filter_user_data,
                                              uint *r_objects_len)
 {
@@ -557,7 +557,7 @@ static bool ED_object_editmode_load_free_ex(Main *bmain,
     }
 
     if (free_data) {
-      EDBM_mesh_free(me->edit_mesh);
+      EDBM_mesh_free_data(me->edit_mesh);
       MEM_freeN(me->edit_mesh);
       me->edit_mesh = NULL;
     }
@@ -794,9 +794,7 @@ bool ED_object_editmode_enter_ex(Main *bmain, Scene *scene, Object *ob, int flag
 
     BMEditMesh *em = BKE_editmesh_from_object(ob);
     if (LIKELY(em)) {
-      /* order doesn't matter */
-      EDBM_mesh_normals_update(em);
-      BKE_editmesh_looptri_calc(em);
+      BKE_editmesh_looptri_and_normals_calc(em);
     }
 
     WM_main_add_notifier(NC_SCENE | ND_MODE | NS_EDITMODE_MESH, NULL);
@@ -1154,7 +1152,7 @@ void ED_objects_recalculate_paths(bContext *C, Scene *scene, eObjectPathCalcRang
   Depsgraph *depsgraph;
   bool free_depsgraph = false;
   /* For a single frame update it's faster to re-use existing dependency graph and avoid overhead
-   * of building all the relations and so on for a temporary one.  */
+   * of building all the relations and so on for a temporary one. */
   if (range == OBJECT_PATH_CALC_RANGE_CURRENT_FRAME) {
     /* NOTE: Dependency graph will be evaluated at all the frames, but we first need to access some
      * nested pointers, like animation data. */
@@ -1592,25 +1590,8 @@ static const EnumPropertyItem *object_mode_set_itemsf(bContext *C,
 
   const Object *ob = CTX_data_active_object(C);
   if (ob) {
-    const bool use_mode_particle_edit = ED_object_particle_edit_mode_supported(ob);
     while (input->identifier) {
-      if ((input->value == OB_MODE_EDIT && OB_TYPE_SUPPORT_EDITMODE(ob->type)) ||
-          (input->value == OB_MODE_POSE && (ob->type == OB_ARMATURE)) ||
-          (input->value == OB_MODE_PARTICLE_EDIT && use_mode_particle_edit) ||
-          (ELEM(input->value,
-                OB_MODE_SCULPT,
-                OB_MODE_VERTEX_PAINT,
-                OB_MODE_WEIGHT_PAINT,
-                OB_MODE_TEXTURE_PAINT) &&
-           (ob->type == OB_MESH)) ||
-          (ELEM(input->value,
-                OB_MODE_EDIT_GPENCIL,
-                OB_MODE_PAINT_GPENCIL,
-                OB_MODE_SCULPT_GPENCIL,
-                OB_MODE_WEIGHT_GPENCIL,
-                OB_MODE_VERTEX_GPENCIL) &&
-           (ob->type == OB_GPENCIL)) ||
-          (input->value == OB_MODE_OBJECT)) {
+      if (ED_object_mode_compat_test(ob, input->value)) {
         RNA_enum_item_add(&item, &totitem, input);
       }
       input++;
@@ -2009,7 +1990,7 @@ static int move_to_collection_invoke(bContext *C, wmOperator *op, const wmEvent 
    * Technically we could use #wmOperator.customdata. However there is no free callback
    * called to an operator that exit with OPERATOR_INTERFACE to launch a menu.
    *
-   * So we are left with a memory that will necessarily leak. It's a small leak though.*/
+   * So we are left with a memory that will necessarily leak. It's a small leak though. */
   if (master_collection_menu == NULL) {
     master_collection_menu = MEM_callocN(sizeof(MoveToCollectionData),
                                          "MoveToCollectionData menu - expected eventual memleak");

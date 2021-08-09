@@ -22,8 +22,8 @@
  * This file defines the offscreen functionalities of the 'gpu' module
  * used for off-screen OpenGL rendering.
  *
- * - Use ``bpygpu_`` for local API.
- * - Use ``BPyGPU`` for public API.
+ * - Use `bpygpu_` for local API.
+ * - Use `BPyGPU` for public API.
  */
 
 #include <Python.h>
@@ -53,6 +53,8 @@
 #include "../generic/py_capi_utils.h"
 
 #include "gpu_py.h"
+#include "gpu_py_texture.h"
+
 #include "gpu_py_offscreen.h" /* own include */
 
 /* Define the free method to avoid breakage. */
@@ -95,8 +97,8 @@ static int pygpu_offscreen_valid_check(BPyGPUOffScreen *py_ofs)
  * \{ */
 
 typedef struct {
-  PyObject_HEAD /* required python macro */
-      BPyGPUOffScreen *py_offscreen;
+  PyObject_HEAD /* Required Python macro. */
+  BPyGPUOffScreen *py_offscreen;
   int level;
   bool is_explicitly_bound; /* Bound by "bind" method. */
 } OffScreenStackContext;
@@ -192,7 +194,7 @@ static PyObject *pygpu_offscreen_unbind(BPyGPUOffScreen *self, PyObject *args, P
   BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 
   static const char *_keywords[] = {"restore", NULL};
-  static _PyArg_Parser _parser = {"|O&:unbind", _keywords, 0};
+  static _PyArg_Parser _parser = {"|$O&:unbind", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kwds, &_parser, PyC_ParseBool, &restore)) {
     return NULL;
   }
@@ -262,6 +264,17 @@ static PyObject *pygpu_offscreen_color_texture_get(BPyGPUOffScreen *self, void *
   BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
   GPUTexture *texture = GPU_offscreen_color_texture(self->ofs);
   return PyLong_FromLong(GPU_texture_opengl_bindcode(texture));
+}
+
+PyDoc_STRVAR(pygpu_offscreen_texture_color_doc,
+             "The color texture attached.\n"
+             "\n"
+             ":type: :class:`gpu.types.GPUTexture`");
+static PyObject *pygpu_offscreen_texture_color_get(BPyGPUOffScreen *self, void *UNUSED(type))
+{
+  BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
+  GPUTexture *texture = GPU_offscreen_color_texture(self->ofs);
+  return BPyGPUTexture_CreatePyObject(texture, true);
 }
 
 PyDoc_STRVAR(
@@ -384,6 +397,11 @@ static PyGetSetDef pygpu_offscreen__tp_getseters[] = {
      (getter)pygpu_offscreen_color_texture_get,
      (setter)NULL,
      pygpu_offscreen_color_texture_doc,
+     NULL},
+    {"texture_color",
+     (getter)pygpu_offscreen_texture_color_get,
+     (setter)NULL,
+     pygpu_offscreen_texture_color_doc,
      NULL},
     {"width", (getter)pygpu_offscreen_width_get, (setter)NULL, pygpu_offscreen_width_doc, NULL},
     {"height", (getter)pygpu_offscreen_height_get, (setter)NULL, pygpu_offscreen_height_doc, NULL},

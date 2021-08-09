@@ -245,6 +245,7 @@ class ConstraintButtonsPanel:
         sub.prop(con, "max_z", text="Max")
         row.label(icon='BLANK1')
 
+        layout.prop(con, "euler_order", text="Order")
         layout.prop(con, "use_transform_limit")
         self.space_template(layout, con, target=False, owner=True)
 
@@ -504,6 +505,7 @@ class ConstraintButtonsPanel:
 
         self.target_template(layout, con)
 
+        layout.prop(con, "remove_target_shear")
         layout.prop(con, "mix_mode", text="Mix")
 
         self.space_template(layout, con)

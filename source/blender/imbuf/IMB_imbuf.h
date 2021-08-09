@@ -69,6 +69,7 @@ extern "C" {
  * \attention defined in ???
  */
 struct ImBuf;
+struct rctf;
 struct rcti;
 
 /**
@@ -298,17 +299,22 @@ void IMB_rectblend_threaded(struct ImBuf *dbuf,
 typedef enum IMB_Timecode_Type {
   /** Don't use time-code files at all. */
   IMB_TC_NONE = 0,
-  /** use images in the order as they are recorded
+  /**
+   * Use images in the order as they are recorded
    * (currently, this is the only one implemented
-   * and is a sane default) */
+   * and is a sane default).
+   */
   IMB_TC_RECORD_RUN = 1,
-  /** Use global timestamp written by recording
-   * device (prosumer camcorders e.g. can do that). */
+  /**
+   * Use global timestamp written by recording
+   * device (prosumer camcorders e.g. can do that).
+   */
   IMB_TC_FREE_RUN = 2,
-  /** Interpolate a global timestamp using the
+  /**
+   * Interpolate a global timestamp using the
    * record date and time written by recording
-   * device (*every* consumer camcorder can do
-   * that :) )*/
+   * device (*every* consumer camcorder can do that).
+   */
   IMB_TC_INTERPOLATED_REC_DATE_FREE_RUN = 4,
   IMB_TC_RECORD_RUN_NO_GAPS = 8,
   IMB_TC_MAX_SLOT = 4,
@@ -322,6 +328,11 @@ typedef enum IMB_Proxy_Size {
   IMB_PROXY_100 = 8,
   IMB_PROXY_MAX_SLOT = 4,
 } IMB_Proxy_Size;
+
+typedef enum eIMBInterpolationFilterMode {
+  IMB_FILTER_NEAREST,
+  IMB_FILTER_BILINEAR,
+} eIMBInterpolationFilterMode;
 
 /* Defaults to BL_proxy within the directory of the animation. */
 void IMB_anim_set_index_dir(struct anim *anim, const char *dir);
@@ -380,8 +391,6 @@ bool IMB_anim_can_produce_frames(const struct anim *anim);
  */
 
 int ismovie(const char *filepath);
-void IMB_anim_set_preseek(struct anim *anim, int preseek);
-int IMB_anim_get_preseek(struct anim *anim);
 int IMB_anim_get_image_width(struct anim *anim);
 int IMB_anim_get_image_height(struct anim *anim);
 
@@ -729,10 +738,16 @@ void IMB_processor_apply_threaded(
     void(init_handle)(void *handle, int start_line, int tot_line, void *customdata),
     void *(do_thread)(void *));
 
-typedef void (*ScanlineThreadFunc)(void *custom_data, int start_scanline, int num_scanlines);
+typedef void (*ScanlineThreadFunc)(void *custom_data, int scanline);
 void IMB_processor_apply_threaded_scanlines(int total_scanlines,
                                             ScanlineThreadFunc do_thread,
                                             void *custom_data);
+
+void IMB_transform(struct ImBuf *src,
+                   struct ImBuf *dst,
+                   float transform_matrix[3][3],
+                   struct rctf *src_crop,
+                   const eIMBInterpolationFilterMode filter);
 
 /* ffmpeg */
 void IMB_ffmpeg_init(void);

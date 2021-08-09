@@ -120,7 +120,7 @@ static void action_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, 
   for (fcurve_src = action_src->curves.first; fcurve_src; fcurve_src = fcurve_src->next) {
     /* Duplicate F-Curve. */
 
-    /* XXX TODO pass subdata flag?
+    /* XXX TODO: pass subdata flag?
      * But surprisingly does not seem to be doing any ID refcounting... */
     fcurve_dst = BKE_fcurve_copy(fcurve_src);
 
@@ -370,7 +370,7 @@ void set_active_action_group(bAction *act, bActionGroup *agrp, short select)
 /* Sync colors used for action/bone group with theme settings */
 void action_group_colors_sync(bActionGroup *grp, const bActionGroup *ref_grp)
 {
-  /* only do color copying if using a custom color (i.e. not default color)  */
+  /* Only do color copying if using a custom color (i.e. not default color). */
   if (grp->customCol) {
     if (grp->customCol > 0) {
       /* copy theme colors on-to group's custom color in case user tries to edit color */
@@ -486,8 +486,7 @@ void action_groups_add_channel(bAction *act, bActionGroup *agrp, FCurve *fcurve)
 
     /* If grp is NULL, that means we fell through, and this F-Curve should be added as the new
      * first since group is (effectively) the first group. Thus, the existing first F-Curve becomes
-     * the second in the chain, etc. etc.
-     */
+     * the second in the chain, etc. */
     if (grp == NULL) {
       BLI_insertlinkbefore(&act->curves, act->curves.first, fcurve);
     }
@@ -498,9 +497,8 @@ void action_groups_add_channel(bAction *act, bActionGroup *agrp, FCurve *fcurve)
 }
 
 /* Reconstruct group channel pointers.
- * Assumes that the channels are still in the proper order, i.e. that channels of the same group
- * are adjacent in the act->channels list. It also assumes that the groups
- * referred to by the FCurves are already in act->groups.
+ * Assumes that the groups referred to by the FCurves are already in act->groups.
+ * Reorders the main channel list to match group order.
  */
 void BKE_action_groups_reconstruct(bAction *act)
 {
@@ -515,23 +513,30 @@ void BKE_action_groups_reconstruct(bAction *act)
     BLI_listbase_clear(&group->channels);
   }
 
-  bActionGroup *grp;
-  bActionGroup *last_grp = NULL;
-  LISTBASE_FOREACH (FCurve *, fcurve, &act->curves) {
-    if (fcurve->grp == NULL) {
-      continue;
-    }
+  /* Sort the channels into the group lists, destroying the act->curves list. */
+  ListBase ungrouped = {NULL, NULL};
 
-    grp = fcurve->grp;
-    if (last_grp != grp) {
-      /* If this is the first time we see this group, this must be the first channel. */
-      grp->channels.first = fcurve;
-    }
+  LISTBASE_FOREACH_MUTABLE (FCurve *, fcurve, &act->curves) {
+    if (fcurve->grp) {
+      BLI_assert(BLI_findindex(&act->groups, fcurve->grp) >= 0);
 
-    /* This is the last channel, until it's overwritten by a later iteration. */
-    grp->channels.last = fcurve;
-    last_grp = grp;
+      BLI_addtail(&fcurve->grp->channels, fcurve);
+    }
+    else {
+      BLI_addtail(&ungrouped, fcurve);
+    }
   }
+
+  /* Recombine into the main list. */
+  BLI_listbase_clear(&act->curves);
+
+  LISTBASE_FOREACH (bActionGroup *, group, &act->groups) {
+    /* Copy the list header to preserve the pointers in the group. */
+    ListBase tmp = group->channels;
+    BLI_movelisttolist(&act->curves, &tmp);
+  }
+
+  BLI_movelisttolist(&act->curves, &ungrouped);
 }
 
 /* Remove the given channel from all groups */
@@ -635,7 +640,7 @@ bPoseChannel *BKE_pose_channel_find_name(const bPose *pose, const char *name)
  * \note Use with care, not on Armature poses but for temporal ones.
  * \note (currently used for action constraints and in rebuild_pose).
  */
-bPoseChannel *BKE_pose_channel_verify(bPose *pose, const char *name)
+bPoseChannel *BKE_pose_channel_ensure(bPose *pose, const char *name)
 {
   bPoseChannel *chan;
 
@@ -656,15 +661,17 @@ bPoseChannel *BKE_pose_channel_verify(bPose *pose, const char *name)
 
   BLI_strncpy(chan->name, name, sizeof(chan->name));
 
-  chan->custom_scale = 1.0f;
+  copy_v3_fl(chan->custom_scale_xyz, 1.0f);
+  zero_v3(chan->custom_translation);
+  zero_v3(chan->custom_rotation_euler);
 
   /* init vars to prevent math errors */
   unit_qt(chan->quat);
   unit_axis_angle(chan->rotAxis, &chan->rotAngle);
   chan->size[0] = chan->size[1] = chan->size[2] = 1.0f;
 
-  chan->scale_in_x = chan->scale_in_y = 1.0f;
-  chan->scale_out_x = chan->scale_out_y = 1.0f;
+  copy_v3_fl(chan->scale_in, 1.0f);
+  copy_v3_fl(chan->scale_out, 1.0f);
 
   chan->limitmin[0] = chan->limitmin[1] = chan->limitmin[2] = -M_PI;
   chan->limitmax[0] = chan->limitmax[1] = chan->limitmax[2] = M_PI;
@@ -815,7 +822,7 @@ void BKE_pose_copy_data_ex(bPose **dst,
    */
   if (outPose->chanbase.first != outPose->chanbase.last) {
     outPose->chanhash = NULL;
-    BKE_pose_channels_hash_make(outPose);
+    BKE_pose_channels_hash_ensure(outPose);
   }
 
   outPose->iksolver = src->iksolver;
@@ -844,8 +851,9 @@ void BKE_pose_copy_data_ex(bPose **dst,
     }
 
     if (copy_constraints) {
-      BKE_constraints_copy_ex(
-          &listb, &pchan->constraints, flag, true); /* BKE_constraints_copy NULLs listb */
+      /* #BKE_constraints_copy NULL's `listb` */
+      BKE_constraints_copy_ex(&listb, &pchan->constraints, flag, true);
+
       pchan->constraints = listb;
 
       /* XXX: This is needed for motionpath drawing to work.
@@ -945,7 +953,7 @@ bool BKE_pose_channel_in_IK_chain(Object *ob, bPoseChannel *pchan)
  * Removes the hash for quick lookup of channels, must
  * be done when adding/removing channels.
  */
-void BKE_pose_channels_hash_make(bPose *pose)
+void BKE_pose_channels_hash_ensure(bPose *pose)
 {
   if (!pose->chanhash) {
     bPoseChannel *pchan;
@@ -1191,7 +1199,7 @@ void BKE_pose_free(bPose *pose)
  * and ID-Props, used when duplicating bones in editmode.
  * (unlike copy_pose_channel_data which only does posing-related stuff).
  *
- * \note use when copying bones in editmode (on returned value from #BKE_pose_channel_verify)
+ * \note use when copying bones in editmode (on returned value from #BKE_pose_channel_ensure)
  */
 void BKE_pose_channel_copy_data(bPoseChannel *pchan, const bPoseChannel *pchan_from)
 {
@@ -1235,8 +1243,10 @@ void BKE_pose_channel_copy_data(bPoseChannel *pchan, const bPoseChannel *pchan_f
   if (pchan->custom) {
     id_us_plus(&pchan->custom->id);
   }
+  copy_v3_v3(pchan->custom_scale_xyz, pchan_from->custom_scale_xyz);
+  copy_v3_v3(pchan->custom_translation, pchan_from->custom_translation);
+  copy_v3_v3(pchan->custom_rotation_euler, pchan_from->custom_rotation_euler);
 
-  pchan->custom_scale = pchan_from->custom_scale;
   pchan->drawflag = pchan_from->drawflag;
 }
 
@@ -1655,11 +1665,12 @@ void BKE_pose_rest(bPose *pose, bool selected_bones_only)
     pchan->size[0] = pchan->size[1] = pchan->size[2] = 1.0f;
 
     pchan->roll1 = pchan->roll2 = 0.0f;
-    pchan->curve_in_x = pchan->curve_in_y = 0.0f;
-    pchan->curve_out_x = pchan->curve_out_y = 0.0f;
+    pchan->curve_in_x = pchan->curve_in_z = 0.0f;
+    pchan->curve_out_x = pchan->curve_out_z = 0.0f;
     pchan->ease1 = pchan->ease2 = 0.0f;
-    pchan->scale_in_x = pchan->scale_in_y = 1.0f;
-    pchan->scale_out_x = pchan->scale_out_y = 1.0f;
+
+    copy_v3_fl(pchan->scale_in, 1.0f);
+    copy_v3_fl(pchan->scale_out, 1.0f);
 
     pchan->flag &= ~(POSE_LOC | POSE_ROT | POSE_SIZE | POSE_BBONE_SHAPE);
   }
@@ -1682,15 +1693,14 @@ void BKE_pose_copy_pchan_result(bPoseChannel *pchanto, const bPoseChannel *pchan
   pchanto->roll1 = pchanfrom->roll1;
   pchanto->roll2 = pchanfrom->roll2;
   pchanto->curve_in_x = pchanfrom->curve_in_x;
-  pchanto->curve_in_y = pchanfrom->curve_in_y;
+  pchanto->curve_in_z = pchanfrom->curve_in_z;
   pchanto->curve_out_x = pchanfrom->curve_out_x;
-  pchanto->curve_out_y = pchanfrom->curve_out_y;
+  pchanto->curve_out_z = pchanfrom->curve_out_z;
   pchanto->ease1 = pchanfrom->ease1;
   pchanto->ease2 = pchanfrom->ease2;
-  pchanto->scale_in_x = pchanfrom->scale_in_x;
-  pchanto->scale_in_y = pchanfrom->scale_in_y;
-  pchanto->scale_out_x = pchanfrom->scale_out_x;
-  pchanto->scale_out_y = pchanfrom->scale_out_y;
+
+  copy_v3_v3(pchanto->scale_in, pchanfrom->scale_in);
+  copy_v3_v3(pchanto->scale_out, pchanfrom->scale_out);
 
   pchanto->rotmode = pchanfrom->rotmode;
   pchanto->flag = pchanfrom->flag;
@@ -1774,7 +1784,7 @@ void what_does_obaction(Object *ob,
      * allocation and also will make lookup slower.
      */
     if (pose->chanbase.first != pose->chanbase.last) {
-      BKE_pose_channels_hash_make(pose);
+      BKE_pose_channels_hash_ensure(pose);
     }
     if (pose->flag & POSE_CONSTRAINTS_NEED_UPDATE_FLAGS) {
       BKE_pose_update_constraint_flags(pose);
@@ -1851,7 +1861,7 @@ void BKE_pose_blend_write(BlendWriter *writer, bPose *pose, bArmature *arm)
   /* Write channels */
   LISTBASE_FOREACH (bPoseChannel *, chan, &pose->chanbase) {
     /* Write ID Properties -- and copy this comment EXACTLY for easy finding
-     * of library blocks that implement this.*/
+     * of library blocks that implement this. */
     if (chan->prop) {
       IDP_BlendWrite(writer, chan->prop);
     }

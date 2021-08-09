@@ -47,7 +47,8 @@ ImBuf *IMB_thumb_load_blend(const char *blen_path, const char *blen_group, const
 
   if (blen_group && blen_id) {
     LinkNode *ln, *names, *lp, *previews = NULL;
-    struct BlendHandle *libfiledata = BLO_blendhandle_from_file(blen_path, NULL);
+    BlendFileReadReport bf_reports = {.reports = NULL};
+    struct BlendHandle *libfiledata = BLO_blendhandle_from_file(blen_path, &bf_reports);
     int idcode = BKE_idtype_idcode_from_name(blen_group);
     int i, nprevs, nnames;
 
@@ -55,7 +56,7 @@ ImBuf *IMB_thumb_load_blend(const char *blen_path, const char *blen_group, const
       return ima;
     }
 
-    /* Note: we should handle all previews for a same group at once, would avoid reopening
+    /* NOTE: we should handle all previews for a same group at once, would avoid reopening
      * `.blend` file for each and every ID. However, this adds some complexity,
      * so keep it for later. */
     names = BLO_blendhandle_get_datablock_names(libfiledata, idcode, false, &nnames);

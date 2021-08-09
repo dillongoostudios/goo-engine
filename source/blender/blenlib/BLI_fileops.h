@@ -34,6 +34,7 @@
 #include <limits.h> /* for PATH_MAX */
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_fileops_types.h"
 #include "BLI_utildefines.h"
 
 #ifdef __cplusplus
@@ -87,7 +88,7 @@ typedef enum eFileAttributes {
   FILE_ATTR_RESTRICTED = 1 << 6,      /* Protected by OS. */
   FILE_ATTR_TEMPORARY = 1 << 7,       /* Used for temporary storage. */
   FILE_ATTR_SPARSE_FILE = 1 << 8,     /* Sparse File. */
-  FILE_ATTR_OFFLINE = 1 << 9,         /* Data is not immediately available. */
+  FILE_ATTR_OFFLINE = 1 << 9,         /* Contents available after a short delay. */
   FILE_ATTR_ALIAS = 1 << 10,          /* Mac Alias or Windows LNK. File-based redirection. */
   FILE_ATTR_REPARSE_POINT = 1 << 11,  /* File has associated re-parse point. */
   FILE_ATTR_SYMLINK = 1 << 12,        /* Reference to another file. */
@@ -125,15 +126,20 @@ void BLI_filelist_free(struct direntry *filelist, const unsigned int nrentries);
 void BLI_filelist_entry_size_to_string(const struct stat *st,
                                        const uint64_t sz,
                                        const bool compact,
-                                       char r_size[]);
-void BLI_filelist_entry_mode_to_string(
-    const struct stat *st, const bool compact, char r_mode1[], char r_mode2[], char r_mode3[]);
-void BLI_filelist_entry_owner_to_string(const struct stat *st, const bool compact, char r_owner[]);
+                                       char r_size[FILELIST_DIRENTRY_SIZE_LEN]);
+void BLI_filelist_entry_mode_to_string(const struct stat *st,
+                                       const bool compact,
+                                       char r_mode1[FILELIST_DIRENTRY_MODE_LEN],
+                                       char r_mode2[FILELIST_DIRENTRY_MODE_LEN],
+                                       char r_mode3[FILELIST_DIRENTRY_MODE_LEN]);
+void BLI_filelist_entry_owner_to_string(const struct stat *st,
+                                        const bool compact,
+                                        char r_owner[FILELIST_DIRENTRY_OWNER_LEN]);
 void BLI_filelist_entry_datetime_to_string(const struct stat *st,
                                            const int64_t ts,
                                            const bool compact,
-                                           char r_time[],
-                                           char r_date[],
+                                           char r_time[FILELIST_DIRENTRY_TIME_LEN],
+                                           char r_date[FILELIST_DIRENTRY_DATE_LEN],
                                            bool *r_is_today,
                                            bool *r_is_yesterday);
 

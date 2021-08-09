@@ -161,6 +161,12 @@ void ED_region_do_listen(wmRegionListenerParams *params)
   if (region->type && region->type->listener) {
     region->type->listener(params);
   }
+
+  LISTBASE_FOREACH (uiList *, list, &region->ui_lists) {
+    if (list->type && list->type->listener) {
+      list->type->listener(list, params);
+    }
+  }
 }
 
 /* only exported for WM */
@@ -1172,12 +1178,12 @@ static void region_azones_add(const bScreen *screen, ScrArea *area, ARegion *reg
 }
 
 /* dir is direction to check, not the splitting edge direction! */
-static int rct_fits(const rcti *rect, char dir, int size)
+static int rct_fits(const rcti *rect, const eScreenAxis dir_axis, int size)
 {
-  if (dir == 'h') {
+  if (dir_axis == SCREEN_AXIS_H) {
     return BLI_rcti_size_x(rect) + 1 - size;
   }
-  /* 'v' */
+  /* Vertical. */
   return BLI_rcti_size_y(rect) + 1 - size;
 }
 
@@ -1385,7 +1391,7 @@ static void region_rect_recursive(
       region->flag |= RGN_FLAG_SIZE_CLAMP_Y;
     }
 
-    /* We need to use a test that wont have been previously clamped. */
+    /* We need to use a test that won't have been previously clamped. */
     rcti winrct_test = {
         .xmin = region->winrct.xmin,
         .ymin = region->winrct.ymin,
@@ -1398,7 +1404,8 @@ static void region_rect_recursive(
       region->flag |= RGN_FLAG_TOO_SMALL;
     }
   }
-  else if (rct_fits(remainder, 'v', 1) < 0 || rct_fits(remainder, 'h', 1) < 0) {
+  else if (rct_fits(remainder, SCREEN_AXIS_V, 1) < 0 ||
+           rct_fits(remainder, SCREEN_AXIS_H, 1) < 0) {
     /* remainder is too small for any usage */
     region->flag |= RGN_FLAG_TOO_SMALL;
   }
@@ -1410,11 +1417,11 @@ static void region_rect_recursive(
   else if (ELEM(alignment, RGN_ALIGN_TOP, RGN_ALIGN_BOTTOM)) {
     rcti *winrct = (region->overlap) ? overlap_remainder : remainder;
 
-    if ((prefsizey == 0) || (rct_fits(winrct, 'v', prefsizey) < 0)) {
+    if ((prefsizey == 0) || (rct_fits(winrct, SCREEN_AXIS_V, prefsizey) < 0)) {
       region->flag |= RGN_FLAG_TOO_SMALL;
     }
     else {
-      int fac = rct_fits(winrct, 'v', prefsizey);
+      int fac = rct_fits(winrct, SCREEN_AXIS_V, prefsizey);
 
       if (fac < 0) {
         prefsizey += fac;
@@ -1436,11 +1443,11 @@ static void region_rect_recursive(
   else if (ELEM(alignment, RGN_ALIGN_LEFT, RGN_ALIGN_RIGHT)) {
     rcti *winrct = (region->overlap) ? overlap_remainder : remainder;
 
-    if ((prefsizex == 0) || (rct_fits(winrct, 'h', prefsizex) < 0)) {
+    if ((prefsizex == 0) || (rct_fits(winrct, SCREEN_AXIS_H, prefsizex) < 0)) {
       region->flag |= RGN_FLAG_TOO_SMALL;
     }
     else {
-      int fac = rct_fits(winrct, 'h', prefsizex);
+      int fac = rct_fits(winrct, SCREEN_AXIS_H, prefsizex);
 
       if (fac < 0) {
         prefsizex += fac;
@@ -1460,11 +1467,11 @@ static void region_rect_recursive(
     }
   }
   else if (ELEM(alignment, RGN_ALIGN_VSPLIT, RGN_ALIGN_HSPLIT)) {
-    /* percentage subdiv*/
+    /* Percentage subdiv. */
     region->winrct = *remainder;
 
     if (alignment == RGN_ALIGN_HSPLIT) {
-      if (rct_fits(remainder, 'h', prefsizex) > 4) {
+      if (rct_fits(remainder, SCREEN_AXIS_H, prefsizex) > 4) {
         region->winrct.xmax = BLI_rcti_cent_x(remainder);
         remainder->xmin = region->winrct.xmax + 1;
       }
@@ -1473,7 +1480,7 @@ static void region_rect_recursive(
       }
     }
     else {
-      if (rct_fits(remainder, 'v', prefsizey) > 4) {
+      if (rct_fits(remainder, SCREEN_AXIS_V, prefsizey) > 4) {
         region->winrct.ymax = BLI_rcti_cent_y(remainder);
         remainder->ymin = region->winrct.ymax + 1;
       }
@@ -1526,8 +1533,8 @@ static void region_rect_recursive(
         BLI_rcti_init(remainder, 0, 0, 0, 0);
       }
 
-      /* Fix any negative dimensions. This can happen when a quad split 3d view gets to small. (see
-       * T72200). */
+      /* Fix any negative dimensions. This can happen when a quad split 3d view gets too small.
+       * (see T72200). */
       BLI_rcti_sanitize(&region->winrct);
 
       quad++;
@@ -1538,8 +1545,8 @@ static void region_rect_recursive(
   region->winx = BLI_rcti_size_x(&region->winrct) + 1;
   region->winy = BLI_rcti_size_y(&region->winrct) + 1;
 
-  /* if region opened normally, we store this for hide/reveal usage */
-  /* prevent rounding errors for UI_DPI_FAC mult and divide */
+  /* If region opened normally, we store this for hide/reveal usage. */
+  /* Prevent rounding errors for UI_DPI_FAC multiply and divide. */
   if (region->winx > 1) {
     region->sizex = (region->winx + 0.5f) / UI_DPI_FAC;
   }
@@ -1679,7 +1686,7 @@ static void ed_default_handlers(
 {
   BLI_assert(region ? (&region->handlers == handlers) : (&area->handlers == handlers));
 
-  /* note, add-handler checks if it already exists */
+  /* NOTE: add-handler checks if it already exists. */
 
   /* XXX it would be good to have boundbox checks for some of these... */
   if (flag & ED_KEYMAP_UI) {
@@ -2080,7 +2087,7 @@ void ED_area_data_copy(ScrArea *area_dst, ScrArea *area_src, const bool do_free)
   }
   BKE_spacedata_copylist(&area_dst->spacedata, &area_src->spacedata);
 
-  /* Note; SPACE_EMPTY is possible on new screens */
+  /* NOTE: SPACE_EMPTY is possible on new screens. */
 
   /* regions */
   if (do_free) {
@@ -2386,7 +2393,7 @@ void ED_area_newspace(bContext *C, ScrArea *area, int type, const bool skip_regi
      * However, add-on install for example, forces the header to the top which shouldn't
      * be applied back to the previous space type when closing - see: T57724
      *
-     * Newly created windows wont have any space data, use the alignment
+     * Newly-created windows won't have any space data, use the alignment
      * the space type defaults to in this case instead
      * (needed for preferences to have space-type on bottom).
      */
@@ -3017,6 +3024,8 @@ void ED_region_panels_layout_ex(const bContext *C,
     y = -y;
   }
 
+  UI_blocklist_update_view_for_buttons(C, &region->uiblocks);
+
   if (update_tot_size) {
     /* this also changes the 'cur' */
     UI_view2d_totRect_set(v2d, x, y);
@@ -3324,10 +3333,10 @@ void ED_region_header_layout(const bContext *C, ARegion *region)
     maxco += UI_HEADER_OFFSET;
   }
 
-  /* always as last  */
+  /* Always as last. */
   UI_view2d_totRect_set(&region->v2d, maxco, region->winy);
 
-  /* restore view matrix */
+  /* Restore view matrix. */
   UI_view2d_view_restore(C);
 }
 
@@ -3671,7 +3680,7 @@ static void region_visible_rect_calc(ARegion *region, rcti *rect)
           /* Skip floating. */
         }
         else {
-          BLI_assert(!"Region overlap with unknown alignment");
+          BLI_assert_msg(0, "Region overlap with unknown alignment");
         }
       }
     }

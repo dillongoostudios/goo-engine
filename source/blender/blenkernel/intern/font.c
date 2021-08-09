@@ -216,15 +216,15 @@ void BKE_vfont_free_data(struct VFont *vfont)
   }
 }
 
-static void *builtin_font_data = NULL;
+static const void *builtin_font_data = NULL;
 static int builtin_font_size = 0;
 
-bool BKE_vfont_is_builtin(struct VFont *vfont)
+bool BKE_vfont_is_builtin(const struct VFont *vfont)
 {
   return STREQ(vfont->filepath, FO_BUILTIN_NAME);
 }
 
-void BKE_vfont_builtin_register(void *mem, int size)
+void BKE_vfont_builtin_register(const void *mem, int size)
 {
   builtin_font_data = mem;
   builtin_font_size = size;
@@ -984,7 +984,7 @@ static bool vfont_to_curve(Object *ob,
         }
         if (dobreak) {
           if (tb_scale.h == 0.0f) {
-            /* Note: If underlined text is truncated away, the extra space is also truncated. */
+            /* NOTE: If underlined text is truncated away, the extra space is also truncated. */
             custrinfo[i + 1].flag |= CU_CHINFO_OVERFLOW;
           }
           goto makebreak;
@@ -1032,7 +1032,7 @@ static bool vfont_to_curve(Object *ob,
         current_line_length = 0.0f;
       }
 
-      /* XXX, has been unused for years, need to check if this is useful, r4613 r5282 - campbell */
+      /* XXX(campbell): has been unused for years, need to check if this is useful, r4613 r5282. */
 #if 0
       if (ascii == '\n') {
         xof = xof_scale;
@@ -1271,7 +1271,7 @@ static bool vfont_to_curve(Object *ob,
   MEM_freeN(i_textbox_array);
 
   /* TEXT ON CURVE */
-  /* Note: Only OB_CURVE objects could have a path  */
+  /* NOTE: Only OB_CURVE objects could have a path. */
   if (cu->textoncurve && cu->textoncurve->type == OB_CURVE) {
     BLI_assert(cu->textoncurve->runtime.curve_cache != NULL);
     if (cu->textoncurve->runtime.curve_cache != NULL &&
@@ -1746,7 +1746,7 @@ void BKE_vfont_clipboard_set(const char32_t *text_buf, const CharInfo *info_buf,
   char32_t *text;
   CharInfo *info;
 
-  /* clean previous buffers*/
+  /* Clean previous buffers. */
   BKE_vfont_clipboard_free();
 
   text = MEM_malloc_arrayN((len + 1), sizeof(*text), __func__);

@@ -62,7 +62,7 @@
 /* Brush operators */
 static int brush_add_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  /*int type = RNA_enum_get(op->ptr, "type");*/
+  // int type = RNA_enum_get(op->ptr, "type");
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *br = BKE_paint_brush(paint);
   Main *bmain = CTX_data_main(C);
@@ -97,7 +97,7 @@ static void BRUSH_OT_add(wmOperatorType *ot)
 
 static int brush_add_gpencil_exec(bContext *C, wmOperator *UNUSED(op))
 {
-  /*int type = RNA_enum_get(op->ptr, "type");*/
+  // int type = RNA_enum_get(op->ptr, "type");
   ToolSettings *ts = CTX_data_tool_settings(C);
   Paint *paint = &ts->gp_paint->paint;
   Brush *br = BKE_paint_brush(paint);
@@ -139,13 +139,14 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
   Scene *scene = CTX_data_scene(C);
   Paint *paint = BKE_paint_get_active_from_context(C);
   Brush *brush = BKE_paint_brush(paint);
+  const bool is_gpencil = (brush && brush->gpencil_settings != NULL);
   // Object *ob = CTX_data_active_object(C);
   float scalar = RNA_float_get(op->ptr, "scalar");
 
   if (brush) {
     /* pixel radius */
     {
-      const int old_size = BKE_brush_size_get(scene, brush);
+      const int old_size = (!is_gpencil) ? BKE_brush_size_get(scene, brush) : brush->size;
       int size = (int)(scalar * old_size);
 
       if (abs(old_size - size) < U.pixelsize) {
@@ -155,6 +156,12 @@ static int brush_scale_size_exec(bContext *C, wmOperator *op)
         else if (scalar < 1) {
           size -= U.pixelsize;
         }
+      }
+      /* Grease Pencil does not use unified size. */
+      if (is_gpencil) {
+        brush->size = max_ii(size, 1);
+        WM_main_add_notifier(NC_BRUSH | NA_EDITED, brush);
+        return OPERATOR_FINISHED;
       }
 
       BKE_brush_size_set(scene, brush, size);
@@ -1300,7 +1307,7 @@ void ED_operatortypes_paint(void)
   WM_operatortype_append(BRUSH_OT_stencil_fit_image_aspect);
   WM_operatortype_append(BRUSH_OT_stencil_reset_transform);
 
-  /* note, particle uses a different system, can be added with existing operators in wm.py */
+  /* NOTE: particle uses a different system, can be added with existing operators in `wm.py`. */
   WM_operatortype_append(PAINT_OT_brush_select);
 
   /* image */
@@ -1378,7 +1385,7 @@ void ED_keymap_paint(wmKeyConfig *keyconf)
   keymap = WM_keymap_ensure(keyconf, "Weight Paint", 0, 0);
   keymap->poll = weight_paint_mode_poll;
 
-  /*Weight paint's Vertex Selection Mode */
+  /* Weight paint's Vertex Selection Mode. */
   keymap = WM_keymap_ensure(keyconf, "Paint Vertex Selection (Weight, Vertex)", 0, 0);
   keymap->poll = vert_paint_poll;
 

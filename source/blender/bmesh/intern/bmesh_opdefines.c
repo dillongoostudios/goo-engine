@@ -245,7 +245,7 @@ static BMOpDefine bmo_region_extend_def = {
  * Edge Rotate.
  *
  * Rotates edges topologically.  Also known as "spin edge" to some people.
- * Simple example: ``[/] becomes [|] then [\]``.
+ * Simple example: `[/] becomes [|] then [\]`.
  */
 static BMOpDefine bmo_rotate_edges_def = {
   "rotate_edges",
@@ -567,7 +567,7 @@ static BMOpDefine bmo_contextual_create_def = {
   },
   /* slots_out */
   {{"faces.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_FACE}}, /* newly-made face(s) */
-  /* note, this is for stand-alone edges only, not edges which are a part of newly created faces */
+  /* NOTE: this is for stand-alone edges only, not edges which are a part of newly created faces. */
    {"edges.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_EDGE}}, /* newly-made edge(s) */
    {{'\0'}},
   },
@@ -724,7 +724,7 @@ static BMOpDefine bmo_edgenet_fill_def = {
 };
 
 /*
- * Edgenet Prepare.
+ * Edge-net Prepare.
  *
  * Identifies several useful edge loop cases and modifies them so
  * they'll become a face when edgenet_fill is called.  The cases covered are:
@@ -1337,7 +1337,7 @@ static BMOpDefine bmo_bisect_plane_def = {
    {{'\0'}},
   },
   {{"geom_cut.out", BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE}},  /* output geometry aligned with the plane (new and existing) */
-   {"geom.out",     BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}},  /* input and output geometry (result of cut)  */
+   {"geom.out",     BMO_OP_SLOT_ELEMENT_BUF, {BM_VERT | BM_EDGE | BM_FACE}},  /* input and output geometry (result of cut). */
    {{'\0'}}},
   bmo_bisect_plane_exec,
   (BMO_OPTYPE_FLAG_UNTAN_MULTIRES |
@@ -1942,7 +1942,7 @@ static BMOpDefine bmo_inset_region_def = {
 };
 
 /*
- * Edgeloop Offset.
+ * Edge-loop Offset.
  *
  * Creates edge loops based on simple edge-outset method.
  */

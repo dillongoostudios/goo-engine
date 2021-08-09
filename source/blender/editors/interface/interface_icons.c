@@ -66,6 +66,7 @@
 
 #include "ED_datafiles.h"
 #include "ED_keyframes_draw.h"
+#include "ED_keyframes_keylist.h"
 #include "ED_render.h"
 
 #include "UI_interface.h"
@@ -285,18 +286,15 @@ static void vicon_small_tri_right_draw(int x, int y, int w, int UNUSED(h), float
 static void vicon_keytype_draw_wrapper(
     int x, int y, int w, int h, float alpha, short key_type, short handle_type)
 {
-  /* init dummy theme state for Action Editor - where these colors are defined
-   * (since we're doing this offscreen, free from any particular space_id)
-   */
+  /* Initialize dummy theme state for Action Editor - where these colors are defined
+   * (since we're doing this off-screen, free from any particular space_id). */
   struct bThemeState theme_state;
 
   UI_Theme_Store(&theme_state);
   UI_SetTheme(SPACE_ACTION, RGN_TYPE_WINDOW);
 
-  /* the "x" and "y" given are the bottom-left coordinates of the icon,
-   * while the draw_keyframe_shape() function needs the midpoint for
-   * the keyframe
-   */
+  /* The "x" and "y" given are the bottom-left coordinates of the icon,
+   * while the #draw_keyframe_shape() function needs the midpoint for the keyframe. */
   const float xco = x + w / 2 + 0.5f;
   const float yco = y + h / 2 + 0.5f;
 
@@ -1180,7 +1178,7 @@ static DrawInfo *icon_ensure_drawinfo(Icon *icon)
   return di;
 }
 
-/* note!, returns unscaled by DPI */
+/* NOTE:, returns unscaled by DPI. */
 int UI_icon_get_width(int icon_id)
 {
   Icon *icon = BKE_icon_get(icon_id);
@@ -1346,8 +1344,8 @@ void ui_icon_ensure_deferred(const bContext *C, const int icon_id, const bool bi
     case ICON_TYPE_PREVIEW: {
       ID *id = (icon->id_type != 0) ? icon->obj : NULL;
       PreviewImage *prv = id ? BKE_previewimg_id_ensure(id) : icon->obj;
-      /* Using jobs for screen previews crashes due to offscreen rendering.
-       * XXX would be nicer if PreviewImage could store if it supports jobs */
+      /* Using jobs for screen previews crashes due to off-screen rendering.
+       * XXX: would be nicer if #PreviewImage could store if it supports jobs. */
       const bool use_jobs = !id || (GS(id->name) != ID_SCR);
 
       if (prv) {
@@ -1500,7 +1498,7 @@ static void icon_draw_rect(float x,
   /* sanity check */
   if (w <= 0 || h <= 0 || w > 2000 || h > 2000) {
     printf("%s: icons are %i x %i pixels?\n", __func__, w, h);
-    BLI_assert(!"invalid icon size");
+    BLI_assert_msg(0, "invalid icon size");
     return;
   }
   /* modulate color */
@@ -1519,7 +1517,7 @@ static void icon_draw_rect(float x,
       draw_h = h;
       draw_x += (w - draw_w) / 2;
     }
-    /* if the image is squared, the draw_ initialization values are good */
+    /* If the image is squared, the `draw_*` initialization values are good. */
 
     /* first allocate imbuf for scaling and copy preview into it */
     ima = IMB_allocImBuf(rw, rh, 32, IB_rect);
@@ -2143,7 +2141,7 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
 static int ui_id_screen_get_icon(const bContext *C, ID *id)
 {
   BKE_icon_id_ensure(id);
-  /* Don't use jobs here, offscreen rendering doesn't like this and crashes. */
+  /* Don't use jobs here, off-screen rendering doesn't like this and crashes. */
   ui_id_icon_render(C, id, false);
 
   return id->icon_id;
@@ -2201,7 +2199,7 @@ int UI_icon_from_library(const ID *id)
   return ICON_NONE;
 }
 
-int UI_icon_from_rnaptr(bContext *C, PointerRNA *ptr, int rnaicon, const bool big)
+int UI_icon_from_rnaptr(const bContext *C, PointerRNA *ptr, int rnaicon, const bool big)
 {
   ID *id = NULL;
 
@@ -2294,7 +2292,7 @@ int UI_icon_from_idcode(const int idcode)
     case ID_ME:
       return ICON_MESH_DATA;
     case ID_MSK:
-      return ICON_MOD_MASK; /* TODO! this would need its own icon! */
+      return ICON_MOD_MASK; /* TODO: this would need its own icon! */
     case ID_NT:
       return ICON_NODETREE;
     case ID_OB:
@@ -2302,9 +2300,9 @@ int UI_icon_from_idcode(const int idcode)
     case ID_PA:
       return ICON_PARTICLE_DATA;
     case ID_PAL:
-      return ICON_COLOR; /* TODO! this would need its own icon! */
+      return ICON_COLOR; /* TODO: this would need its own icon! */
     case ID_PC:
-      return ICON_CURVE_BEZCURVE; /* TODO! this would need its own icon! */
+      return ICON_CURVE_BEZCURVE; /* TODO: this would need its own icon! */
     case ID_LP:
       return ICON_OUTLINER_DATA_LIGHTPROBE;
     case ID_SCE:

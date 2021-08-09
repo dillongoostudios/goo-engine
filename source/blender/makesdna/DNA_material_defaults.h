@@ -46,6 +46,8 @@
  \
     .blend_shadow = MA_BS_SOLID, \
  \
+    .lineart.mat_occlusion = 1, \
+ \
     .check_shadow_id = 0, \
  \
   }

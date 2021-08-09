@@ -42,6 +42,7 @@
 #include "BKE_collection.h"
 #include "BKE_constraint.h"
 #include "BKE_context.h"
+#include "BKE_deform.h"
 #include "BKE_gpencil.h"
 #include "BKE_gpencil_modifier.h"
 #include "BKE_layer.h"
@@ -450,7 +451,7 @@ static void tree_element_defgroup_activate(bContext *C, TreeElement *te, TreeSto
   /* id in tselem is object */
   Object *ob = (Object *)tselem->id;
   BLI_assert(te->index + 1 >= 0);
-  ob->actdef = te->index + 1;
+  BKE_object_defgroup_active_index_set(ob, te->index + 1);
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_OBJECT | ND_TRANSFORM, ob);
@@ -696,7 +697,9 @@ static void tree_element_sequence_dup_activate(Scene *scene, TreeElement *UNUSED
 {
   Editing *ed = SEQ_editing_get(scene, false);
 
-  /* XXX  select_single_seq(seq, 1); */
+#if 0
+  select_single_seq(seq, 1);
+#endif
   Sequence *p = ed->seqbasep->first;
   while (p) {
     if ((!p->strip) || (!p->strip->stripdata) || (p->strip->stripdata->name[0] == '\0')) {
@@ -704,8 +707,11 @@ static void tree_element_sequence_dup_activate(Scene *scene, TreeElement *UNUSED
       continue;
     }
 
-    /* XXX: if (STREQ(p->strip->stripdata->name, seq->strip->stripdata->name)) select_single_seq(p,
-     * 0); */
+#if 0
+    if (STREQ(p->strip->stripdata->name, seq->strip->stripdata->name)) {
+      select_single_seq(p, 0);
+    }
+#endif
     p = p->next;
   }
 }
@@ -830,7 +836,7 @@ static eOLDrawState tree_element_defgroup_state_get(const ViewLayer *view_layer,
 {
   const Object *ob = (const Object *)tselem->id;
   if (ob == OBACT(view_layer)) {
-    if (ob->actdef == te->index + 1) {
+    if (BKE_object_defgroup_active_index_get(ob) == te->index + 1) {
       return OL_DRAWSEL_NORMAL;
     }
   }
@@ -1654,7 +1660,7 @@ static int outliner_item_do_activate_from_cursor(bContext *C,
   return OPERATOR_FINISHED;
 }
 
-/* event can enterkey, then it opens/closes */
+/* Event can enter-key, then it opens/closes. */
 static int outliner_item_activate_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   const bool extend = RNA_boolean_get(op->ptr, "extend");
@@ -1816,7 +1822,7 @@ static TreeElement *outliner_find_rightmost_visible_child(SpaceOutliner *space_o
   return te;
 }
 
-/* Find previous visible element in the tree  */
+/* Find previous visible element in the tree. */
 static TreeElement *outliner_find_previous_element(SpaceOutliner *space_outliner, TreeElement *te)
 {
   if (te->prev) {

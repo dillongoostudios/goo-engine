@@ -30,207 +30,28 @@
 
 #include "GHOST_TaskbarWin32.h"
 #include "GHOST_Window.h"
+#include "GHOST_Wintab.h"
 #ifdef WITH_INPUT_IME
 #  include "GHOST_ImeWin32.h"
 #endif
 
 #include <vector>
 
-#include <wintab.h>
-// PACKETDATA and PACKETMODE modify structs in pktdef.h, so make sure they come first
-#define PACKETDATA (PK_BUTTONS | PK_NORMAL_PRESSURE | PK_ORIENTATION | PK_CURSOR)
-#define PACKETMODE PK_BUTTONS
-#include <pktdef.h>
-
 class GHOST_SystemWin32;
 class GHOST_DropTargetWin32;
 
-// typedefs for WinTab functions to allow dynamic loading
-typedef UINT(API *GHOST_WIN32_WTInfo)(UINT, UINT, LPVOID);
-typedef HCTX(API *GHOST_WIN32_WTOpen)(HWND, LPLOGCONTEXTA, BOOL);
-typedef BOOL(API *GHOST_WIN32_WTClose)(HCTX);
-typedef BOOL(API *GHOST_WIN32_WTPacket)(HCTX, UINT, LPVOID);
-typedef BOOL(API *GHOST_WIN32_WTEnable)(HCTX, BOOL);
-typedef BOOL(API *GHOST_WIN32_WTOverlap)(HCTX, BOOL);
-
-// typedef to user32 functions to disable gestures on windows
-typedef BOOL(API *GHOST_WIN32_RegisterTouchWindow)(HWND hwnd, ULONG ulFlags);
-
 // typedefs for user32 functions to allow dynamic loading of Windows 10 DPI scaling functions
 typedef UINT(API *GHOST_WIN32_GetDpiForWindow)(HWND);
-#ifndef USER_DEFAULT_SCREEN_DPI
-#  define USER_DEFAULT_SCREEN_DPI 96
-#endif  // USER_DEFAULT_SCREEN_DPI
 
-// typedefs for user32 functions to allow pointer functions
-enum tagPOINTER_INPUT_TYPE {
-  PT_POINTER = 1,  // Generic pointer
-  PT_TOUCH = 2,    // Touch
-  PT_PEN = 3,      // Pen
-  PT_MOUSE = 4,    // Mouse
-#if (WINVER >= 0x0603)
-  PT_TOUCHPAD = 5,  // Touchpad
-#endif              /* WINVER >= 0x0603 */
-};
-
-typedef enum tagPOINTER_BUTTON_CHANGE_TYPE {
-  POINTER_CHANGE_NONE,
-  POINTER_CHANGE_FIRSTBUTTON_DOWN,
-  POINTER_CHANGE_FIRSTBUTTON_UP,
-  POINTER_CHANGE_SECONDBUTTON_DOWN,
-  POINTER_CHANGE_SECONDBUTTON_UP,
-  POINTER_CHANGE_THIRDBUTTON_DOWN,
-  POINTER_CHANGE_THIRDBUTTON_UP,
-  POINTER_CHANGE_FOURTHBUTTON_DOWN,
-  POINTER_CHANGE_FOURTHBUTTON_UP,
-  POINTER_CHANGE_FIFTHBUTTON_DOWN,
-  POINTER_CHANGE_FIFTHBUTTON_UP,
-} POINTER_BUTTON_CHANGE_TYPE;
-
-typedef DWORD POINTER_INPUT_TYPE;
-typedef UINT32 POINTER_FLAGS;
-
-#define POINTER_FLAG_NONE 0x00000000
-#define POINTER_FLAG_NEW 0x00000001
-#define POINTER_FLAG_INRANGE 0x00000002
-#define POINTER_FLAG_INCONTACT 0x00000004
-#define POINTER_FLAG_FIRSTBUTTON 0x00000010
-#define POINTER_FLAG_SECONDBUTTON 0x00000020
-#define POINTER_FLAG_THIRDBUTTON 0x00000040
-#define POINTER_FLAG_FOURTHBUTTON 0x00000080
-#define POINTER_FLAG_FIFTHBUTTON 0x00000100
-#define POINTER_FLAG_PRIMARY 0x00002000
-#define POINTER_FLAG_CONFIDENCE 0x000004000
-#define POINTER_FLAG_CANCELED 0x000008000
-#define POINTER_FLAG_DOWN 0x00010000
-#define POINTER_FLAG_UPDATE 0x00020000
-#define POINTER_FLAG_UP 0x00040000
-#define POINTER_FLAG_WHEEL 0x00080000
-#define POINTER_FLAG_HWHEEL 0x00100000
-#define POINTER_FLAG_CAPTURECHANGED 0x00200000
-#define POINTER_FLAG_HASTRANSFORM 0x00400000
-
-typedef struct tagPOINTER_INFO {
-  POINTER_INPUT_TYPE pointerType;
-  UINT32 pointerId;
-  UINT32 frameId;
-  POINTER_FLAGS pointerFlags;
-  HANDLE sourceDevice;
-  HWND hwndTarget;
-  POINT ptPixelLocation;
-  POINT ptHimetricLocation;
-  POINT ptPixelLocationRaw;
-  POINT ptHimetricLocationRaw;
-  DWORD dwTime;
-  UINT32 historyCount;
-  INT32 InputData;
-  DWORD dwKeyStates;
-  UINT64 PerformanceCount;
-  POINTER_BUTTON_CHANGE_TYPE ButtonChangeType;
-} POINTER_INFO;
-
-typedef UINT32 PEN_FLAGS;
-#define PEN_FLAG_NONE 0x00000000      // Default
-#define PEN_FLAG_BARREL 0x00000001    // The barrel button is pressed
-#define PEN_FLAG_INVERTED 0x00000002  // The pen is inverted
-#define PEN_FLAG_ERASER 0x00000004    // The eraser button is pressed
-
-typedef UINT32 PEN_MASK;
-#define PEN_MASK_NONE 0x00000000      // Default - none of the optional fields are valid
-#define PEN_MASK_PRESSURE 0x00000001  // The pressure field is valid
-#define PEN_MASK_ROTATION 0x00000002  // The rotation field is valid
-#define PEN_MASK_TILT_X 0x00000004    // The tiltX field is valid
-#define PEN_MASK_TILT_Y 0x00000008    // The tiltY field is valid
-
-typedef struct tagPOINTER_PEN_INFO {
-  POINTER_INFO pointerInfo;
-  PEN_FLAGS penFlags;
-  PEN_MASK penMask;
-  UINT32 pressure;
-  UINT32 rotation;
-  INT32 tiltX;
-  INT32 tiltY;
-} POINTER_PEN_INFO;
-
-/*
- * Flags that appear in pointer input message parameters
- */
-#define POINTER_MESSAGE_FLAG_NEW 0x00000001           // New pointer
-#define POINTER_MESSAGE_FLAG_INRANGE 0x00000002       // Pointer has not departed
-#define POINTER_MESSAGE_FLAG_INCONTACT 0x00000004     // Pointer is in contact
-#define POINTER_MESSAGE_FLAG_FIRSTBUTTON 0x00000010   // Primary action
-#define POINTER_MESSAGE_FLAG_SECONDBUTTON 0x00000020  // Secondary action
-#define POINTER_MESSAGE_FLAG_THIRDBUTTON 0x00000040   // Third button
-#define POINTER_MESSAGE_FLAG_FOURTHBUTTON 0x00000080  // Fourth button
-#define POINTER_MESSAGE_FLAG_FIFTHBUTTON 0x00000100   // Fifth button
-#define POINTER_MESSAGE_FLAG_PRIMARY 0x00002000       // Pointer is primary
-#define POINTER_MESSAGE_FLAG_CONFIDENCE \
-  0x00004000  // Pointer is considered unlikely to be accidental
-#define POINTER_MESSAGE_FLAG_CANCELED 0x00008000  // Pointer is departing in an abnormal manner
-
-typedef UINT32 TOUCH_FLAGS;
-#define TOUCH_FLAG_NONE 0x00000000  // Default
-
-typedef UINT32 TOUCH_MASK;
-#define TOUCH_MASK_NONE 0x00000000         // Default - none of the optional fields are valid
-#define TOUCH_MASK_CONTACTAREA 0x00000001  // The rcContact field is valid
-#define TOUCH_MASK_ORIENTATION 0x00000002  // The orientation field is valid
-#define TOUCH_MASK_PRESSURE 0x00000004     // The pressure field is valid
-
-typedef struct tagPOINTER_TOUCH_INFO {
-  POINTER_INFO pointerInfo;
-  TOUCH_FLAGS touchFlags;
-  TOUCH_MASK touchMask;
-  RECT rcContact;
-  RECT rcContactRaw;
-  UINT32 orientation;
-  UINT32 pressure;
-} POINTER_TOUCH_INFO;
-
-/*
- * Macros to retrieve information from pointer input message parameters
- */
-#define GET_POINTERID_WPARAM(wParam) (LOWORD(wParam))
-#define IS_POINTER_FLAG_SET_WPARAM(wParam, flag) (((DWORD)HIWORD(wParam) & (flag)) == (flag))
-#define IS_POINTER_NEW_WPARAM(wParam) IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_NEW)
-#define IS_POINTER_INRANGE_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_INRANGE)
-#define IS_POINTER_INCONTACT_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_INCONTACT)
-#define IS_POINTER_FIRSTBUTTON_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_FIRSTBUTTON)
-#define IS_POINTER_SECONDBUTTON_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_SECONDBUTTON)
-#define IS_POINTER_THIRDBUTTON_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_THIRDBUTTON)
-#define IS_POINTER_FOURTHBUTTON_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_FOURTHBUTTON)
-#define IS_POINTER_FIFTHBUTTON_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_FIFTHBUTTON)
-#define IS_POINTER_PRIMARY_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_PRIMARY)
-#define HAS_POINTER_CONFIDENCE_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_CONFIDENCE)
-#define IS_POINTER_CANCELED_WPARAM(wParam) \
-  IS_POINTER_FLAG_SET_WPARAM(wParam, POINTER_MESSAGE_FLAG_CANCELED)
-
-typedef BOOL(WINAPI *GHOST_WIN32_GetPointerInfoHistory)(UINT32 pointerId,
-                                                        UINT32 *entriesCount,
-                                                        POINTER_INFO *pointerInfo);
-typedef BOOL(WINAPI *GHOST_WIN32_GetPointerPenInfoHistory)(UINT32 pointerId,
-                                                           UINT32 *entriesCount,
-                                                           POINTER_PEN_INFO *penInfo);
-typedef BOOL(WINAPI *GHOST_WIN32_GetPointerTouchInfoHistory)(UINT32 pointerId,
-                                                             UINT32 *entriesCount,
-                                                             POINTER_TOUCH_INFO *touchInfo);
+typedef BOOL(API *GHOST_WIN32_AdjustWindowRectExForDpi)(
+    LPRECT lpRect, DWORD dwStyle, BOOL bMenu, DWORD dwExStyle, UINT dpi);
 
 struct GHOST_PointerInfoWin32 {
-  GHOST_TInt32 pointerId;
-  GHOST_TInt32 isPrimary;
+  int32_t pointerId;
+  int32_t isPrimary;
   GHOST_TButtonMask buttonMask;
   POINT pixelLocation;
-  GHOST_TUns64 time;
-
+  uint64_t time;
   GHOST_TabletData tabletData;
 };
 
@@ -242,7 +63,7 @@ typedef enum {
 } GHOST_MouseCaptureEventWin32;
 
 /**
- * GHOST window on M$ Windows OSs.
+ * GHOST window on MS Windows OSs.
  */
 class GHOST_WindowWin32 : public GHOST_Window {
  public:
@@ -262,10 +83,10 @@ class GHOST_WindowWin32 : public GHOST_Window {
    */
   GHOST_WindowWin32(GHOST_SystemWin32 *system,
                     const char *title,
-                    GHOST_TInt32 left,
-                    GHOST_TInt32 top,
-                    GHOST_TUns32 width,
-                    GHOST_TUns32 height,
+                    int32_t left,
+                    int32_t top,
+                    uint32_t width,
+                    uint32_t height,
                     GHOST_TWindowState state,
                     GHOST_TDrawingContextType type = GHOST_kDrawingContextTypeNone,
                     bool wantStereoVisual = false,
@@ -279,6 +100,14 @@ class GHOST_WindowWin32 : public GHOST_Window {
    * Closes the window and disposes resources allocated.
    */
   ~GHOST_WindowWin32();
+
+  /**
+   * Adjusts a requested window rect to fit and position correctly in monitor.
+   * \param win_rect: pointer to rectangle that will be modified.
+   * \param dwStyle: The Window Style of the window whose required size is to be calculated.
+   * \param dwExStyle: The Extended Window Style of the window.
+   */
+  void adjustWindowRectForClosestMonitor(LPRECT win_rect, DWORD dwStyle, DWORD dwExStyle);
 
   /**
    * Returns indication as to whether the window is valid.
@@ -323,20 +152,20 @@ class GHOST_WindowWin32 : public GHOST_Window {
    * Resizes client rectangle width.
    * \param width: The new width of the client area of the window.
    */
-  GHOST_TSuccess setClientWidth(GHOST_TUns32 width);
+  GHOST_TSuccess setClientWidth(uint32_t width);
 
   /**
    * Resizes client rectangle height.
    * \param height: The new height of the client area of the window.
    */
-  GHOST_TSuccess setClientHeight(GHOST_TUns32 height);
+  GHOST_TSuccess setClientHeight(uint32_t height);
 
   /**
    * Resizes client rectangle.
    * \param width: The new width of the client area of the window.
    * \param height: The new height of the client area of the window.
    */
-  GHOST_TSuccess setClientSize(GHOST_TUns32 width, GHOST_TUns32 height);
+  GHOST_TSuccess setClientSize(uint32_t width, uint32_t height);
 
   /**
    * Returns the state of the window (normal, minimized, maximized).
@@ -351,22 +180,16 @@ class GHOST_WindowWin32 : public GHOST_Window {
    * \param outX: The x-coordinate in the client rectangle.
    * \param outY: The y-coordinate in the client rectangle.
    */
-  void screenToClient(GHOST_TInt32 inX,
-                      GHOST_TInt32 inY,
-                      GHOST_TInt32 &outX,
-                      GHOST_TInt32 &outY) const;
+  void screenToClient(int32_t inX, int32_t inY, int32_t &outX, int32_t &outY) const;
 
   /**
-   * Converts a point in screen coordinates to client rectangle coordinates
+   * Converts a point in client rectangle coordinates to screen coordinates.
    * \param inX: The x-coordinate in the client rectangle.
    * \param inY: The y-coordinate in the client rectangle.
    * \param outX: The x-coordinate on the screen.
    * \param outY: The y-coordinate on the screen.
    */
-  void clientToScreen(GHOST_TInt32 inX,
-                      GHOST_TInt32 inY,
-                      GHOST_TInt32 &outX,
-                      GHOST_TInt32 &outY) const;
+  void clientToScreen(int32_t inX, int32_t inY, int32_t &outX, int32_t &outY) const;
 
   /**
    * Sets the state of the window (normal, minimized, maximized).
@@ -424,16 +247,11 @@ class GHOST_WindowWin32 : public GHOST_Window {
   HCURSOR getStandardCursor(GHOST_TStandardCursor shape) const;
   void loadCursor(bool visible, GHOST_TStandardCursor cursorShape) const;
 
-  const GHOST_TabletData &getTabletData()
-  {
-    return m_tabletData;
-  }
-
   /**
    * Query whether given tablet API should be used.
    * \param api: Tablet API to test.
    */
-  bool useTabletAPI(GHOST_TTabletAPI api) const;
+  bool usingTabletAPI(GHOST_TTabletAPI api) const;
 
   /**
    * Translate WM_POINTER events into GHOST_PointerInfoWin32 structs.
@@ -446,10 +264,34 @@ class GHOST_WindowWin32 : public GHOST_Window {
                                 WPARAM wParam,
                                 LPARAM lParam);
 
-  void processWin32TabletActivateEvent(WORD state);
-  void processWin32TabletInitEvent();
-  void processWin32TabletEvent(WPARAM wParam, LPARAM lParam);
-  void bringTabletContextToFront();
+  /**
+   * Resets pointer pen tablet state.
+   */
+  void resetPointerPenInfo();
+
+  /**
+   * Retrieves pointer to Wintab if Wintab is the set Tablet API.
+   * \return Pointer to Wintab member.
+   */
+  GHOST_Wintab *getWintab() const;
+
+  /**
+   * Loads Wintab context for the window.
+   * \param enable: True if Wintab should be enabled after loading. Wintab should not be enabled if
+   * the window is minimized.
+   */
+  void loadWintab(bool enable);
+
+  /**
+   * Closes Wintab for the window.
+   */
+  void closeWintab();
+
+  /**
+   * Get the most recent Windows Pointer tablet data.
+   * \return Most recent pointer tablet data.
+   */
+  GHOST_TabletData getTabletData();
 
   GHOST_TSuccess beginFullScreen() const
   {
@@ -461,12 +303,12 @@ class GHOST_WindowWin32 : public GHOST_Window {
     return GHOST_kFailure;
   }
 
-  GHOST_TUns16 getDPIHint() override;
+  uint16_t getDPIHint() override;
 
-  /** Whether a tablet stylus is being tracked. */
-  bool m_tabletInRange;
+  /** True if the mouse is either over or captured by the window. */
+  bool m_mousePresent;
 
-  /** if the window currently resizing */
+  /** True if the window currently resizing. */
   bool m_inLiveResize;
 
 #ifdef WITH_INPUT_IME
@@ -475,7 +317,7 @@ class GHOST_WindowWin32 : public GHOST_Window {
     return &m_imeInput;
   }
 
-  void beginIME(GHOST_TInt32 x, GHOST_TInt32 y, GHOST_TInt32 w, GHOST_TInt32 h, int completed);
+  void beginIME(int32_t x, int32_t y, int32_t w, int32_t h, bool completed);
 
   void endIME();
 #endif /* WITH_INPUT_IME */
@@ -511,8 +353,8 @@ class GHOST_WindowWin32 : public GHOST_Window {
    * Sets the cursor shape on the window using
    * native window system calls.
    */
-  GHOST_TSuccess setWindowCustomCursorShape(GHOST_TUns8 *bitmap,
-                                            GHOST_TUns8 *mask,
+  GHOST_TSuccess setWindowCustomCursorShape(uint8_t *bitmap,
+                                            uint8_t *mask,
                                             int sizex,
                                             int sizey,
                                             int hotX,
@@ -550,35 +392,16 @@ class GHOST_WindowWin32 : public GHOST_Window {
   static const wchar_t *s_windowClassName;
   static const int s_maxTitleLength;
 
-  /** Tablet data for GHOST */
-  GHOST_TabletData m_tabletData;
+  /** Pointer to Wintab manager if Wintab is loaded. */
+  GHOST_Wintab *m_wintab;
 
-  /* Wintab API */
-  struct {
-    /** `WinTab.dll` handle. */
-    HMODULE handle = NULL;
-
-    /** API functions */
-    GHOST_WIN32_WTInfo info;
-    GHOST_WIN32_WTOpen open;
-    GHOST_WIN32_WTClose close;
-    GHOST_WIN32_WTPacket packet;
-    GHOST_WIN32_WTEnable enable;
-    GHOST_WIN32_WTOverlap overlap;
-
-    /** Stores the Tablet context if detected Tablet features using `WinTab.dll` */
-    HCTX tablet;
-    LONG maxPressure;
-    LONG maxAzimuth, maxAltitude;
-  } m_wintab;
+  /** Most recent tablet data. */
+  GHOST_TabletData m_lastPointerTabletData;
 
   GHOST_TWindowState m_normal_state;
 
   /** `user32.dll` handle */
   HMODULE m_user32;
-  GHOST_WIN32_GetPointerInfoHistory m_fpGetPointerInfoHistory;
-  GHOST_WIN32_GetPointerPenInfoHistory m_fpGetPointerPenInfoHistory;
-  GHOST_WIN32_GetPointerTouchInfoHistory m_fpGetPointerTouchInfoHistory;
 
   HWND m_parentWindowHwnd;
 

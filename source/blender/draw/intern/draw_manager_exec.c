@@ -29,6 +29,7 @@
 
 #include "BKE_global.h"
 
+#include "GPU_compute.h"
 #include "GPU_platform.h"
 #include "GPU_shader.h"
 #include "GPU_state.h"
@@ -224,7 +225,7 @@ void drw_state_set(DRWState state)
     GPU_shadow_offset(false);
   }
 
-  /* TODO this should be part of shader state. */
+  /* TODO: this should be part of shader state. */
   if (state & DRW_STATE_CLIP_PLANES) {
     GPU_clip_distances(DST.view_active->clip_planes_len);
   }
@@ -382,10 +383,10 @@ static bool draw_culling_sphere_test(const BoundSphere *frustum_bsphere,
   if (center_dist_sq > square_f(radius_sum)) {
     return false;
   }
-  /* TODO we could test against the inscribed sphere of the frustum to early out positively. */
+  /* TODO: we could test against the inscribed sphere of the frustum to early out positively. */
 
   /* Test against the 6 frustum planes. */
-  /* TODO order planes with sides first then far then near clip. Should be better culling
+  /* TODO: order planes with sides first then far then near clip. Should be better culling
    * heuristic when sculpting. */
   for (int p = 0; p < 6; p++) {
     float dist = plane_point_side_v3(frustum_planes[p], bsphere->center);
@@ -672,6 +673,9 @@ static void draw_update_uniforms(DRWShadingGroup *shgroup,
           *use_tfeedback = GPU_shader_transform_feedback_enable(shgroup->shader,
                                                                 ((GPUVertBuf *)uni->pvalue));
           break;
+        case DRW_UNIFORM_VERTEX_BUFFER_AS_STORAGE:
+          GPU_vertbuf_bind_as_ssbo((GPUVertBuf *)uni->pvalue, uni->location);
+          break;
           /* Legacy/Fallback support. */
         case DRW_UNIFORM_BASE_INSTANCE:
           state->baseinst_loc = uni->location;
@@ -697,7 +701,7 @@ BLI_INLINE void draw_select_buffer(DRWShadingGroup *shgroup,
   int count = 1;
   int tot = is_instancing ? GPU_vertbuf_get_vertex_len(batch->inst[0]) :
                             GPU_vertbuf_get_vertex_len(batch->verts[0]);
-  /* Hack : get "vbo" data without actually drawing. */
+  /* HACK: get VBO data without actually drawing. */
   int *select_id = (void *)GPU_vertbuf_get_data(state->select_buf);
 
   /* Batching */
@@ -814,7 +818,7 @@ static void draw_call_single_do(DRWShadingGroup *shgroup,
 
   draw_call_resource_bind(state, &handle);
 
-  /* TODO This is Legacy. Need to be removed. */
+  /* TODO: This is Legacy. Need to be removed. */
   if (state->obmats_loc == -1 && (state->obmat_loc != -1 || state->obinv_loc != -1)) {
     draw_legacy_matrix_update(shgroup, &handle, state->obmat_loc, state->obinv_loc);
   }
@@ -1050,6 +1054,12 @@ static void draw_shgroup(DRWShadingGroup *shgroup, DRWState pass_state)
                               cmd->instance_range.inst_count,
                               false);
           break;
+        case DRW_CMD_COMPUTE:
+          GPU_compute_dispatch(shgroup->shader,
+                               cmd->compute.groups_x_len,
+                               cmd->compute.groups_y_len,
+                               cmd->compute.groups_z_len);
+          break;
       }
     }
 
@@ -1066,7 +1076,7 @@ static void drw_update_view(void)
   /* TODO(fclem): update a big UBO and only bind ranges here. */
   GPU_uniformbuf_update(G_draw.view_ubo, &DST.view_active->storage);
 
-  /* TODO get rid of this. */
+  /* TODO: get rid of this. */
   DST.view_storage_cpy = DST.view_active->storage;
 
   draw_compute_culling(DST.view_active);

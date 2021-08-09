@@ -23,8 +23,8 @@
  * Default operator callbacks for use with gestures (border/circle/lasso/straightline).
  * Operators themselves are defined elsewhere.
  *
- * - Keymaps are in ``wm_operators.c``.
- * - Property definitions are in ``wm_operator_props.c``.
+ * - Keymaps are in `wm_operators.c`.
+ * - Property definitions are in `wm_operator_props.c`.
  */
 
 #include "MEM_guardedalloc.h"
@@ -316,6 +316,7 @@ int WM_gesture_circle_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   if (gesture->wait_for_input == false) {
     gesture->is_active = true;
     gesture_circle_apply(C, op);
+    gesture->is_active_prev = true;
   }
 
   /* add modal handler */
@@ -446,7 +447,7 @@ int WM_gesture_circle_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
 #if 0
   /* Allow view navigation??? */
-  /* note, this gives issues:
+  /* NOTE: this gives issues:
    * 1) other modal ops run on top (box select),
    * 2) middle-mouse is used now 3) tablet/trackpad? */
   else {

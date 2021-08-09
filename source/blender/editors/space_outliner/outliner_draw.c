@@ -355,7 +355,7 @@ static void outliner_base_or_object_pointer_create(
   }
 }
 
-/* Note: Collection is only valid when we want to change the collection data, otherwise we get it
+/* NOTE: Collection is only valid when we want to change the collection data, otherwise we get it
  * from layer collection. Layer collection is valid whenever we are looking at a view layer. */
 static void outliner_collection_set_flag_recursive(Scene *scene,
                                                    ViewLayer *view_layer,
@@ -374,7 +374,7 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
 
   /* Set the same flag for the nested objects as well. */
   if (base_or_object_prop) {
-    /* Note: We can't use BKE_collection_object_cache_get()
+    /* NOTE: We can't use BKE_collection_object_cache_get()
      * otherwise we would not take collection exclusion into account. */
     LISTBASE_FOREACH (CollectionObject *, cob, &layer_collection->collection->gobject) {
 
@@ -414,7 +414,7 @@ static void outliner_collection_set_flag_recursive(Scene *scene,
  * A collection is isolated if all its parents and children are "visible".
  * All the other collections must be "invisible".
  *
- * Note: We could/should boost performance by iterating over the tree twice.
+ * NOTE: We could/should boost performance by iterating over the tree twice.
  * First tagging all the children/parent collections, then getting their values and comparing.
  * To run BKE_collection_has_collection() so many times is silly and slow.
  */
@@ -1090,7 +1090,8 @@ static void outliner_draw_restrictbuts(uiBlock *block,
     RestrictPropertiesActive props_active = props_active_parent;
 
     if (te->ys + 2 * UI_UNIT_Y >= region->v2d.cur.ymin && te->ys <= region->v2d.cur.ymax) {
-      if (tselem->type == TSE_R_LAYER && (space_outliner->outlinevis == SO_SCENES)) {
+      if (tselem->type == TSE_R_LAYER &&
+          ELEM(space_outliner->outlinevis, SO_SCENES, SO_VIEW_LAYER)) {
         if (space_outliner->show_restrict_flags & SO_RESTRICT_RENDER) {
           /* View layer render toggle. */
           ViewLayer *layer = te->directdata;
@@ -2106,7 +2107,7 @@ static void outliner_draw_mode_column_toggle(uiBlock *block,
                             tip);
   UI_but_func_set(but, outliner_mode_toggle_fn, tselem, NULL);
   UI_but_flag_enable(but, UI_BUT_DRAG_LOCK);
-  /* Mode toggling handles it's own undo state because undo steps need to be grouped. */
+  /* Mode toggling handles its own undo state because undo steps need to be grouped. */
   UI_but_flag_disable(but, UI_BUT_UNDO);
 
   if (ID_IS_LINKED(&ob->id)) {
@@ -2354,6 +2355,9 @@ TreeElementIcon tree_element_get_icon(TreeStoreElem *tselem, TreeElement *te)
               break;
             case eGpencilModifierType_Texture:
               data.icon = ICON_TEXTURE;
+              break;
+            case eGpencilModifierType_Weight:
+              data.icon = ICON_MOD_VERTEX_WEIGHT;
               break;
 
               /* Default */
@@ -2960,7 +2964,8 @@ static void outliner_draw_iconrow(bContext *C,
     te->flag &= ~(TE_ICONROW | TE_ICONROW_MERGED);
 
     /* object hierarchy always, further constrained on level */
-    if ((level < 1) || ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB))) {
+    if ((level < 1) || ((tselem->type == TSE_SOME_ID) && (te->idcode == ID_OB)) ||
+        ELEM(tselem->type, TSE_BONE, TSE_EBONE, TSE_POSE_CHANNEL)) {
       /* active blocks get white circle */
       if (tselem->type == TSE_SOME_ID) {
         if (te->idcode == ID_OB) {
@@ -3125,7 +3130,7 @@ static void outliner_draw_tree_element(bContext *C,
       *te_edit = te;
     }
 
-    /* Icons can be ui buts, we don't want it to overlap with restrict .*/
+    /* Icons can be UI buts, we don't want it to overlap with restrict. */
     if (restrict_column_width > 0) {
       xmax -= restrict_column_width + UI_UNIT_X;
     }
@@ -3727,7 +3732,7 @@ static void outliner_update_viewable_area(ARegion *region,
 }
 
 /* ****************************************************** */
-/* Main Entrypoint - Draw contents of Outliner editor */
+/* Main Entry-point - Draw contents of Outliner editor */
 
 void draw_outliner(const bContext *C)
 {

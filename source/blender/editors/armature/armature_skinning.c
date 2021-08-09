@@ -478,7 +478,7 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
   bArmature *arm = par->data;
 
   if (mode == ARM_GROUPS_NAME) {
-    const int defbase_tot = BLI_listbase_count(&ob->defbase);
+    const int defbase_tot = BKE_object_defgroup_count(ob);
     int defbase_add;
     /* Traverse the bone list, trying to create empty vertex
      * groups corresponding to the bone.
@@ -486,8 +486,8 @@ void ED_object_vgroup_calc_from_armature(ReportList *reports,
     defbase_add = bone_looper(ob, arm->bonebase.first, NULL, vgroup_add_unique_bone_cb);
 
     if (defbase_add) {
-      /* its possible there are DWeight's outside the range of the current
-       * objects deform groups, in this case the new groups wont be empty T33889. */
+      /* It's possible there are DWeights outside the range of the current
+       * object's deform groups. In this case the new groups won't be empty T33889. */
       ED_vgroup_data_clamp_range(ob->data, defbase_tot);
     }
   }

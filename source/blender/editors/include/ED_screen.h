@@ -162,7 +162,7 @@ void ED_area_tag_redraw_no_rebuild(ScrArea *area);
 void ED_area_tag_redraw_regiontype(ScrArea *area, int type);
 void ED_area_tag_refresh(ScrArea *area);
 void ED_area_do_refresh(struct bContext *C, ScrArea *area);
-struct AZone *ED_area_azones_update(ScrArea *area, const int mouse_xy[]);
+struct AZone *ED_area_azones_update(ScrArea *area, const int mouse_xy[2]);
 void ED_area_status_text(ScrArea *area, const char *str);
 void ED_area_newspace(struct bContext *C, ScrArea *area, int type, const bool skip_region_exit);
 void ED_area_prevspace(struct bContext *C, ScrArea *area);
@@ -200,8 +200,6 @@ ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area);
 /* screens */
 void ED_screens_init(struct Main *bmain, struct wmWindowManager *wm);
 void ED_screen_draw_edges(struct wmWindow *win);
-void ED_screen_draw_join_shape(struct ScrArea *sa1, struct ScrArea *sa2);
-void ED_screen_draw_split_preview(struct ScrArea *area, const int dir, const float fac);
 void ED_screen_refresh(struct wmWindowManager *wm, struct wmWindow *win);
 void ED_screen_ensure_updated(struct wmWindowManager *wm,
                               struct wmWindow *win,
@@ -217,7 +215,7 @@ void ED_screen_restore_temp_type(struct bContext *C, ScrArea *area);
 ScrArea *ED_screen_full_newspace(struct bContext *C, ScrArea *area, int type);
 void ED_screen_full_prevspace(struct bContext *C, ScrArea *area);
 void ED_screen_full_restore(struct bContext *C, ScrArea *area);
-ScrArea *ED_screen_state_maximized_create(struct bContext *C);
+bScreen *ED_screen_state_maximized_create(struct bContext *C);
 struct ScrArea *ED_screen_state_toggle(struct bContext *C,
                                        struct wmWindow *win,
                                        struct ScrArea *area,
@@ -319,6 +317,9 @@ bool ED_operator_animview_active(struct bContext *C);
 bool ED_operator_outliner_active(struct bContext *C);
 bool ED_operator_outliner_active_no_editobject(struct bContext *C);
 bool ED_operator_file_active(struct bContext *C);
+bool ED_operator_file_browsing_active(struct bContext *C);
+bool ED_operator_asset_browsing_active(struct bContext *C);
+bool ED_operator_spreadsheet_active(struct bContext *C);
 bool ED_operator_action_active(struct bContext *C);
 bool ED_operator_buttons_active(struct bContext *C);
 bool ED_operator_node_active(struct bContext *C);
@@ -356,6 +357,7 @@ bool ED_operator_uvedit(struct bContext *C);
 bool ED_operator_uvedit_space_image(struct bContext *C);
 bool ED_operator_uvmap(struct bContext *C);
 bool ED_operator_posemode_exclusive(struct bContext *C);
+bool ED_operator_object_active_local_editable_posemode_exclusive(struct bContext *C);
 bool ED_operator_posemode_context(struct bContext *C);
 bool ED_operator_posemode(struct bContext *C);
 bool ED_operator_posemode_local(struct bContext *C);
@@ -450,10 +452,10 @@ enum {
 };
 
 /* SCREEN_OT_space_context_cycle direction */
-enum {
+typedef enum eScreenCycle {
   SPACE_CONTEXT_CYCLE_PREV,
   SPACE_CONTEXT_CYCLE_NEXT,
-};
+} eScreenCycle;
 
 #ifdef __cplusplus
 }

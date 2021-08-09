@@ -271,6 +271,7 @@ void SEQ_editing_free(Scene *scene, const bool do_id_user)
   SEQ_ALL_END;
 
   BLI_freelistN(&ed->metastack);
+  SEQ_sequence_lookup_free(scene);
   MEM_freeN(ed);
 
   scene->ed = NULL;
@@ -310,6 +311,9 @@ SequencerToolSettings *SEQ_tool_settings_init(void)
   SequencerToolSettings *tool_settings = MEM_callocN(sizeof(SequencerToolSettings),
                                                      "Sequencer tool settings");
   tool_settings->fit_method = SEQ_SCALE_TO_FIT;
+  tool_settings->snap_mode = SEQ_SNAP_TO_STRIPS | SEQ_SNAP_TO_CURRENT_FRAME |
+                             SEQ_SNAP_TO_STRIP_HOLD;
+  tool_settings->snap_distance = 15;
   return tool_settings;
 }
 
@@ -333,6 +337,24 @@ eSeqImageFitMethod SEQ_tool_settings_fit_method_get(Scene *scene)
 {
   const SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(scene);
   return tool_settings->fit_method;
+}
+
+short SEQ_tool_settings_snap_mode_get(Scene *scene)
+{
+  const SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(scene);
+  return tool_settings->snap_mode;
+}
+
+short SEQ_tool_settings_snap_flag_get(Scene *scene)
+{
+  const SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(scene);
+  return tool_settings->snap_flag;
+}
+
+int SEQ_tool_settings_snap_distance_get(Scene *scene)
+{
+  const SequencerToolSettings *tool_settings = SEQ_tool_settings_ensure(scene);
+  return tool_settings->snap_distance;
 }
 
 void SEQ_tool_settings_fit_method_set(Scene *scene, eSeqImageFitMethod fit_method)
@@ -459,8 +481,8 @@ static Sequence *seq_dupli(const Scene *scene_src,
     seqn->strip->stripdata = NULL;
 
     BLI_listbase_clear(&seqn->seqbase);
-    /* WATCH OUT!!! - This metastrip is not recursively duplicated here - do this after!!! */
-    /* - seq_dupli_recursive(&seq->seqbase, &seqn->seqbase);*/
+    /* WARNING: This meta-strip is not recursively duplicated here - do this after! */
+    // seq_dupli_recursive(&seq->seqbase, &seqn->seqbase);
   }
   else if (seq->type == SEQ_TYPE_SCENE) {
     seqn->strip->stripdata = NULL;
@@ -514,11 +536,7 @@ static Sequence *seq_dupli(const Scene *scene_src,
 
   if (scene_src == scene_dst) {
     if (dupe_flag & SEQ_DUPE_UNIQUE_NAME) {
-      SEQ_sequence_base_unique_name_recursive(&scene_dst->ed->seqbase, seqn);
-    }
-
-    if (dupe_flag & SEQ_DUPE_ANIM) {
-      SEQ_dupe_animdata(scene_dst, seq->name + 2, seqn->name + 2);
+      SEQ_sequence_base_unique_name_recursive(scene_dst, &scene_dst->ed->seqbase, seqn);
     }
   }
 
@@ -565,30 +583,21 @@ void SEQ_sequence_base_dupli_recursive(const Scene *scene_src,
 {
   Sequence *seq;
   Sequence *seqn = NULL;
-  Sequence *last_seq = SEQ_select_active_get((Scene *)scene_src);
-  /* always include meta's strips */
-  int dupe_flag_recursive = dupe_flag | SEQ_DUPE_ALL | SEQ_DUPE_IS_RECURSIVE_CALL;
 
   for (seq = seqbase->first; seq; seq = seq->next) {
     seq->tmp = NULL;
     if ((seq->flag & SELECT) || (dupe_flag & SEQ_DUPE_ALL)) {
       seqn = seq_dupli(scene_src, scene_dst, nseqbase, seq, dupe_flag, flag);
-      if (seqn) { /*should never fail */
-        if (dupe_flag & SEQ_DUPE_CONTEXT) {
-          seq->flag &= ~SEQ_ALLSEL;
-          seqn->flag &= ~(SEQ_LEFTSEL + SEQ_RIGHTSEL + SEQ_LOCK);
-        }
 
-        if (seq->type == SEQ_TYPE_META) {
-          SEQ_sequence_base_dupli_recursive(
-              scene_src, scene_dst, &seqn->seqbase, &seq->seqbase, dupe_flag_recursive, flag);
-        }
+      if (seqn == NULL) {
+        continue; /* Should never fail. */
+      }
 
-        if (dupe_flag & SEQ_DUPE_CONTEXT) {
-          if (seq == last_seq) {
-            SEQ_select_active_set(scene_dst, seqn);
-          }
-        }
+      if (seq->type == SEQ_TYPE_META) {
+        /* Always include meta all strip children. */
+        int dupe_flag_recursive = dupe_flag | SEQ_DUPE_ALL | SEQ_DUPE_IS_RECURSIVE_CALL;
+        SEQ_sequence_base_dupli_recursive(
+            scene_src, scene_dst, &seqn->seqbase, &seq->seqbase, dupe_flag_recursive, flag);
       }
     }
   }
@@ -616,7 +625,7 @@ static size_t sequencer_rna_path_prefix(char str[SEQ_RNAPATH_MAXSTR], const char
       str, SEQ_RNAPATH_MAXSTR, "sequence_editor.sequences_all[\"%s\"]", name_esc);
 }
 
-/* XXX - hackish function needed for transforming strips! TODO - have some better solution */
+/* XXX: hackish function needed for transforming strips! TODO: have some better solution. */
 void SEQ_offset_animdata(Scene *scene, Sequence *seq, int ofs)
 {
   char str[SEQ_RNAPATH_MAXSTR];
@@ -684,7 +693,7 @@ void SEQ_dupe_animdata(Scene *scene, const char *name_src, const char *name_dst)
   BLI_movelisttolist(&scene->adt->action->curves, &lb);
 }
 
-/* XXX - hackish function needed to remove all fcurves belonging to a sequencer strip */
+/* XXX: hackish function needed to remove all fcurves belonging to a sequencer strip. */
 static void seq_free_animdata(Scene *scene, Sequence *seq)
 {
   char str[SEQ_RNAPATH_MAXSTR];

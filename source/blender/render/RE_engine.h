@@ -65,6 +65,7 @@ extern "C" {
 #define RE_USE_STEREO_VIEWPORT 256
 #define RE_USE_GPU_CONTEXT 512
 #define RE_USE_CUSTOM_FREESTYLE 1024
+#define RE_USE_NO_IMAGE_SAVE 2048
 
 /* RenderEngine.flag */
 #define RE_ENGINE_ANIMATION 1
@@ -195,7 +196,7 @@ float RE_engine_get_camera_shift_x(RenderEngine *engine,
 void RE_engine_get_camera_model_matrix(RenderEngine *engine,
                                        struct Object *camera,
                                        bool use_spherical_stereo,
-                                       float *r_modelmat);
+                                       float r_modelmat[16]);
 bool RE_engine_get_spherical_stereo(RenderEngine *engine, struct Object *camera);
 
 bool RE_engine_test_break(RenderEngine *engine);

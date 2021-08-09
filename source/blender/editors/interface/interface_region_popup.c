@@ -341,7 +341,7 @@ static void ui_popup_block_position(wmWindow *window,
       block->safety.ymax = block->rect.ymax + s1;
     }
 
-    /* exception for switched pulldowns... */
+    /* Exception for switched pull-downs. */
     if (dir1 && (dir1 & block->direction) == 0) {
       if (dir2 == UI_DIR_RIGHT) {
         block->safety.xmax = block->rect.xmax + s2;
@@ -773,7 +773,7 @@ uiPopupBlockHandle *ui_popup_block_create(bContext *C,
                                           uiBlockCreateFunc create_func,
                                           uiBlockHandleCreateFunc handle_create_func,
                                           void *arg,
-                                          void (*arg_free)(void *arg))
+                                          uiFreeArgFunc arg_free)
 {
   wmWindow *window = CTX_wm_window(C);
   uiBut *activebut = UI_context_active_but_get(C);

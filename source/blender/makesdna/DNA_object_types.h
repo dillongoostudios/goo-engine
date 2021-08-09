@@ -66,7 +66,7 @@ typedef struct bDeformGroup {
   char flag, _pad0[7];
 } bDeformGroup;
 
-/* Face Maps*/
+/* Face Maps. */
 typedef struct bFaceMap {
   struct bFaceMap *next, *prev;
   /** MAX_VGROUP_NAME. */
@@ -144,6 +144,9 @@ typedef struct Object_Runtime {
    */
   char is_data_eval_owned;
 
+  /** Start time of the mode transfer overlay animation. */
+  double overlay_mode_transfer_start_time;
+
   /** Axis aligned boundbox (in localspace). */
   struct BoundBox *bb;
 
@@ -167,12 +170,6 @@ typedef struct Object_Runtime {
    * the data.
    */
   struct GeometrySet *geometry_set_eval;
-
-  /**
-   * A GHash that contains geometry sets for intermediate stages of evaluation. The keys are just a
-   * hash and are not owned by the map. The geometry sets are owned.
-   */
-  void *geometry_set_previews;
 
   /**
    * Mesh structure created during object evaluation.
@@ -275,8 +272,7 @@ typedef struct Object {
 
   ListBase constraintChannels DNA_DEPRECATED; /* XXX deprecated... old animation system */
   ListBase effect DNA_DEPRECATED;             /* XXX deprecated... keep for readfile */
-  /** List of bDeformGroup (vertex groups) names and flag only. */
-  ListBase defbase;
+  ListBase defbase DNA_DEPRECATED;            /* Only for versioning, moved to object data. */
   /** List of ModifierData structures. */
   ListBase modifiers;
   /** List of GpencilModifierData structures. */
@@ -332,12 +328,6 @@ typedef struct Object {
    */
   float imat[4][4];
 
-  /* Previously 'imat' was used at render time, but as other places use it too
-   * the interactive ui of 2.5 creates problems. So now only 'imat_ren' should
-   * be used when ever the inverse of ob->obmat * re->viewmat is needed! - jahka
-   */
-  float imat_ren[4][4];
-
   /** Copy of Base's layer in the scene. */
   unsigned int lay DNA_DEPRECATED;
 
@@ -346,7 +336,7 @@ typedef struct Object {
   /** Deprecated, use 'matbits'. */
   short colbits DNA_DEPRECATED;
 
-  /** Transformation settings and transform locks . */
+  /** Transformation settings and transform locks. */
   short transflag, protectflag;
   short trackflag, upflag;
   /** Used for DopeSheet filtering settings (expanded/collapsed). */
@@ -383,9 +373,9 @@ typedef struct Object {
 
   /** Custom index, for renderpasses. */
   short index;
-  /** Current deformation group, note: index starts at 1. */
-  unsigned short actdef;
-  /** Current face map, note: index starts at 1. */
+  /** Current deformation group, NOTE: index starts at 1. */
+  unsigned short actdef DNA_DEPRECATED;
+  /** Current face map, NOTE: index starts at 1. */
   unsigned short actfmap;
   char _pad2[2];
   /** Object color (in most cases the material color is used for drawing). */
@@ -473,7 +463,7 @@ typedef struct ObHook {
 
 /* **************** OBJECT ********************* */
 
-/* used many places... should be specialized  */
+/* used many places, should be specialized. */
 #define SELECT 1
 
 #define OBJECT_ACTIVE_MODIFIER_NONE -1
@@ -605,9 +595,9 @@ enum {
   /* OB_DRAWIMAGE = 1 << 4, */ /* UNUSED */
   /* for solid+wire display */
   OB_DRAWWIRE = 1 << 5,
-  /* for overdraw s*/
+  /* For overdrawing. */
   OB_DRAW_IN_FRONT = 1 << 6,
-  /* enable transparent draw */
+  /* Enable transparent draw. */
   OB_DRAWTRANSP = 1 << 7,
   OB_DRAW_ALL_EDGES = 1 << 8, /* only for meshes currently */
   OB_DRAW_NO_SHADOW_CAST = 1 << 9,
@@ -643,9 +633,9 @@ enum {
   OB_BOUND_SPHERE = 1,
   OB_BOUND_CYLINDER = 2,
   OB_BOUND_CONE = 3,
-  /* OB_BOUND_TRIANGLE_MESH = 4, */  /* UNUSED */
-  /* OB_BOUND_CONVEX_HULL = 5, */    /* UNUSED */
-  /*  OB_BOUND_DYN_MESH      = 6, */ /*UNUSED*/
+  // OB_BOUND_TRIANGLE_MESH = 4, /* UNUSED */
+  // OB_BOUND_CONVEX_HULL = 5,   /* UNUSED */
+  // OB_BOUND_DYN_MESH = 6,      /* UNUSED */
   OB_BOUND_CAPSULE = 7,
 };
 
@@ -708,7 +698,7 @@ enum {
   /* OB_ADS_SHOWCONS = 1 << 12, */ /* UNUSED */
   /* object's material channels */
   /* OB_ADS_SHOWMATS = 1 << 13, */ /* UNUSED */
-  /* object's marticle channels */
+  /* object's particle channels */
   /* OB_ADS_SHOWPARTS = 1 << 14, */ /* UNUSED */
 };
 

@@ -35,12 +35,12 @@ class MaskOperation : public NodeOperation {
  protected:
   Mask *m_mask;
 
-  /* note, these are used more like aspect,
+  /* NOTE: these are used more like aspect,
    * but they _do_ impact on mask detail */
   int m_maskWidth;
   int m_maskHeight;
-  float m_maskWidthInv;  /* 1 / m_maskWidth  */
-  float m_maskHeightInv; /* 1 / m_maskHeight */
+  float m_maskWidthInv;  /* `1 / m_maskWidth` */
+  float m_maskHeightInv; /* `1 / m_maskHeight` */
   float m_mask_px_ofs[2];
 
   float m_frame_shutter;

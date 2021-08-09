@@ -14,6 +14,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#pragma once
+
 #include "BLI_array.hh"
 #include "BLI_color.hh"
 #include "BLI_float2.hh"
@@ -21,13 +23,17 @@
 
 #include "DNA_customdata_types.h"
 
+#include "FN_cpp_type.hh"
+
 namespace blender::attribute_math {
+
+using fn::CPPType;
 
 /**
  * Utility function that simplifies calling a templated function based on a custom data type.
  */
 template<typename Func>
-void convert_to_static_type(const CustomDataType data_type, const Func &func)
+inline void convert_to_static_type(const CustomDataType data_type, const Func &func)
 {
   switch (data_type) {
     case CD_PROP_FLOAT:
@@ -46,11 +52,37 @@ void convert_to_static_type(const CustomDataType data_type, const Func &func)
       func(bool());
       break;
     case CD_PROP_COLOR:
-      func(Color4f());
+      func(ColorGeometry4f());
       break;
     default:
       BLI_assert_unreachable();
       break;
+  }
+}
+
+template<typename Func>
+inline void convert_to_static_type(const fn::CPPType &cpp_type, const Func &func)
+{
+  if (cpp_type.is<float>()) {
+    func(float());
+  }
+  else if (cpp_type.is<float2>()) {
+    func(float2());
+  }
+  else if (cpp_type.is<float3>()) {
+    func(float3());
+  }
+  else if (cpp_type.is<int>()) {
+    func(int());
+  }
+  else if (cpp_type.is<bool>()) {
+    func(bool());
+  }
+  else if (cpp_type.is<ColorGeometry4f>()) {
+    func(ColorGeometry4f());
+  }
+  else {
+    BLI_assert_unreachable();
   }
 }
 
@@ -91,10 +123,56 @@ inline float3 mix3(const float3 &weights, const float3 &v0, const float3 &v1, co
 }
 
 template<>
-inline Color4f mix3(const float3 &weights, const Color4f &v0, const Color4f &v1, const Color4f &v2)
+inline ColorGeometry4f mix3(const float3 &weights,
+                            const ColorGeometry4f &v0,
+                            const ColorGeometry4f &v1,
+                            const ColorGeometry4f &v2)
 {
-  Color4f result;
+  ColorGeometry4f result;
   interp_v4_v4v4v4(result, v0, v1, v2, weights);
+  return result;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Mix two values of the same type.
+ *
+ * This is just basic linear interpolation.
+ * \{ */
+
+template<typename T> T mix2(const float factor, const T &a, const T &b);
+
+template<> inline bool mix2(const float factor, const bool &a, const bool &b)
+{
+  return ((1.0f - factor) * a + factor * b) >= 0.5f;
+}
+
+template<> inline int mix2(const float factor, const int &a, const int &b)
+{
+  return static_cast<int>((1.0f - factor) * a + factor * b);
+}
+
+template<> inline float mix2(const float factor, const float &a, const float &b)
+{
+  return (1.0f - factor) * a + factor * b;
+}
+
+template<> inline float2 mix2(const float factor, const float2 &a, const float2 &b)
+{
+  return float2::interpolate(a, b, factor);
+}
+
+template<> inline float3 mix2(const float factor, const float3 &a, const float3 &b)
+{
+  return float3::interpolate(a, b, factor);
+}
+
+template<>
+inline ColorGeometry4f mix2(const float factor, const ColorGeometry4f &a, const ColorGeometry4f &b)
+{
+  ColorGeometry4f result;
+  interp_v4_v4v4(result, a, b, factor);
   return result;
 }
 
@@ -153,8 +231,10 @@ template<typename T> class SimpleMixer {
   }
 };
 
-/** This mixer accumulates values in a type that is different from the one that is mixed. Some
- * types cannot encode the floating point weights in their values (e.g. int and bool). */
+/**
+ * This mixer accumulates values in a type that is different from the one that is mixed.
+ * Some types cannot encode the floating point weights in their values (e.g. int and bool).
+ */
 template<typename T, typename AccumulationT, T (*ConvertToT)(const AccumulationT &value)>
 class SimpleMixerWithAccumulationType {
  private:
@@ -198,15 +278,16 @@ class SimpleMixerWithAccumulationType {
   }
 };
 
-class Color4fMixer {
+class ColorGeometryMixer {
  private:
-  MutableSpan<Color4f> buffer_;
-  Color4f default_color_;
+  MutableSpan<ColorGeometry4f> buffer_;
+  ColorGeometry4f default_color_;
   Array<float> total_weights_;
 
  public:
-  Color4fMixer(MutableSpan<Color4f> buffer, Color4f default_color = {0, 0, 0, 1});
-  void mix_in(const int64_t index, const Color4f &color, const float weight = 1.0f);
+  ColorGeometryMixer(MutableSpan<ColorGeometry4f> buffer,
+                     ColorGeometry4f default_color = ColorGeometry4f(0.0f, 0.0f, 0.0f, 1.0f));
+  void mix_in(const int64_t index, const ColorGeometry4f &color, const float weight = 1.0f);
   void finalize();
 };
 
@@ -223,10 +304,10 @@ template<> struct DefaultMixerStruct<float2> {
 template<> struct DefaultMixerStruct<float3> {
   using type = SimpleMixer<float3>;
 };
-template<> struct DefaultMixerStruct<Color4f> {
-  /* Use a special mixer for colors. Color4f can't be added/multiplied, because this is not
-   * something one should usually do with colors.  */
-  using type = Color4fMixer;
+template<> struct DefaultMixerStruct<ColorGeometry4f> {
+  /* Use a special mixer for colors. ColorGeometry4f can't be added/multiplied, because this is not
+   * something one should usually do with colors. */
+  using type = ColorGeometryMixer;
 };
 template<> struct DefaultMixerStruct<int> {
   static int double_to_int(const double &value)

@@ -604,7 +604,7 @@ int BKE_fcm_envelope_find_index(FCM_EnvelopeData array[],
  * NOTE: this needs to be at the start of the stack to be of use,
  * as it needs to know the extents of the keyframes/sample-data.
  *
- * Possible TODO - store length of cycle information that can be initialized from the extents of
+ * Possible TODO: store length of cycle information that can be initialized from the extents of
  * the keyframes/sample-data, and adjusted as appropriate.
  */
 
@@ -688,7 +688,7 @@ static float fcm_cycles_time(
       ofs = lastkey[0];
     }
   }
-  if ((ELEM(0, side, mode))) {
+  if (ELEM(0, side, mode)) {
     return evaltime;
   }
 
@@ -875,7 +875,7 @@ static void fcm_python_new_data(void *mdata)
 {
   FMod_Python *data = (FMod_Python *)mdata;
 
-  /* everything should be set correctly by calloc, except for the prop->type constant.*/
+  /* Everything should be set correctly by calloc, except for the prop->type constant. */
   data->prop = MEM_callocN(sizeof(IDProperty), "PyFModifierProps");
   data->prop->type = IDP_GROUP;
 }

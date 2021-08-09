@@ -32,6 +32,7 @@ extern "C" {
 struct Editing;
 struct Scene;
 struct Sequence;
+struct SequenceLookup;
 struct SequencerToolSettings;
 
 /* RNA enums, just to be more readable */
@@ -44,12 +45,8 @@ enum {
   SEQ_SIDE_NO_CHANGE,
 };
 
-#define SEQ_CACHE_COST_MAX 10.0f
-
 /* seq_dupli' flags */
 #define SEQ_DUPE_UNIQUE_NAME (1 << 0)
-#define SEQ_DUPE_CONTEXT (1 << 1)
-#define SEQ_DUPE_ANIM (1 << 2)
 #define SEQ_DUPE_ALL (1 << 3) /* otherwise only selected are copied */
 #define SEQ_DUPE_IS_RECURSIVE_CALL (1 << 4)
 
@@ -58,6 +55,9 @@ struct SequencerToolSettings *SEQ_tool_settings_ensure(struct Scene *scene);
 void SEQ_tool_settings_free(struct SequencerToolSettings *tool_settings);
 eSeqImageFitMethod SEQ_tool_settings_fit_method_get(struct Scene *scene);
 void SEQ_tool_settings_fit_method_set(struct Scene *scene, eSeqImageFitMethod fit_method);
+short SEQ_tool_settings_snap_flag_get(struct Scene *scene);
+short SEQ_tool_settings_snap_mode_get(struct Scene *scene);
+int SEQ_tool_settings_snap_distance_get(struct Scene *scene);
 struct SequencerToolSettings *SEQ_tool_settings_copy(struct SequencerToolSettings *tool_settings);
 struct Editing *SEQ_editing_get(struct Scene *scene, bool alloc);
 struct Editing *SEQ_editing_ensure(struct Scene *scene);
@@ -82,6 +82,16 @@ void SEQ_sequence_base_dupli_recursive(const struct Scene *scene_src,
                                        const struct ListBase *seqbase,
                                        int dupe_flag,
                                        const int flag);
+
+/* Defined in sequence_lookup.c */
+
+typedef enum eSequenceLookupTag {
+  SEQ_LOOKUP_TAG_INVALID = (1 << 0),
+} eSequenceLookupTag;
+
+struct Sequence *SEQ_sequence_lookup_by_name(const struct Scene *scene, const char *key);
+void SEQ_sequence_lookup_free(const struct Scene *scene);
+void SEQ_sequence_lookup_tag(const struct Scene *scene, eSequenceLookupTag tag);
 
 #ifdef __cplusplus
 }

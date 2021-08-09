@@ -138,7 +138,7 @@ BlenderStrokeRenderer::BlenderStrokeRenderer(Render *re, int render_count)
 
   // Scene layer.
   ViewLayer *view_layer = (ViewLayer *)freestyle_scene->view_layers.first;
-  view_layer->layflag = SCE_LAY_SOLID | SCE_LAY_ZTRA;
+  view_layer->layflag = SCE_LAY_SOLID;
 
   // Camera
   Object *object_camera = BKE_object_add(freestyle_bmain, view_layer, OB_CAMERA, nullptr);
@@ -671,7 +671,7 @@ void BlenderStrokeRenderer::GenerateStrokeMesh(StrokeGroup *group, bool hasTex)
 
       visible = false;
 
-      // Note: Mesh generation in the following loop assumes stroke strips
+      // NOTE: Mesh generation in the following loop assumes stroke strips
       // to be triangle strips.
       for (int n = 2; n < strip_vertex_count; n++, v[0]++, v[1]++, v[2]++) {
         svRep[0] = *(v[0]);

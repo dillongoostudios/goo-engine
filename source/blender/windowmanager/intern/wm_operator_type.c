@@ -229,7 +229,7 @@ void wm_operatortype_free(void)
 void WM_operatortype_props_advanced_begin(wmOperatorType *ot)
 {
   if (ot_prop_basic_count == -1) {
-    /* Don't do anything if _begin was called before, but not _end  */
+    /* Don't do anything if _begin was called before, but not _end. */
     ot_prop_basic_count = RNA_struct_count_properties(ot->srna);
   }
 }
@@ -343,7 +343,7 @@ static int wm_macro_exec(bContext *C, wmOperator *op)
       }
     }
     else {
-      CLOG_WARN(WM_LOG_OPERATORS, "'%s' cant exec macro", opm->type->idname);
+      CLOG_WARN(WM_LOG_OPERATORS, "'%s' can't exec macro", opm->type->idname);
     }
   }
 
@@ -498,12 +498,11 @@ wmOperatorType *WM_operatortype_append_macro(const char *idname,
   ot->cancel = wm_macro_cancel;
   ot->poll = NULL;
 
-  if (!ot->description) {
-    /* XXX All ops should have a description but for now allow them not to. */
-    ot->description = UNDOCUMENTED_OPERATOR_TIP;
-  }
+  /* XXX All ops should have a description but for now allow them not to. */
+  BLI_assert((ot->description == NULL) || (ot->description[0]));
 
-  RNA_def_struct_ui_text(ot->srna, ot->name, ot->description);
+  RNA_def_struct_ui_text(
+      ot->srna, ot->name, ot->description ? ot->description : UNDOCUMENTED_OPERATOR_TIP);
   RNA_def_struct_identifier(&BLENDER_RNA, ot->srna, ot->idname);
   /* Use i18n context from rna_ext.srna if possible (py operators). */
   i18n_context = ot->rna_ext.srna ? RNA_struct_translation_context(ot->rna_ext.srna) :
@@ -530,16 +529,16 @@ void WM_operatortype_append_macro_ptr(void (*opfunc)(wmOperatorType *, void *), 
   ot->cancel = wm_macro_cancel;
   ot->poll = NULL;
 
-  if (!ot->description) {
-    ot->description = UNDOCUMENTED_OPERATOR_TIP;
-  }
+  /* XXX All ops should have a description but for now allow them not to. */
+  BLI_assert((ot->description == NULL) || (ot->description[0]));
 
   /* Set the default i18n context now, so that opfunc can redefine it if needed! */
   RNA_def_struct_translation_context(ot->srna, BLT_I18NCONTEXT_OPERATOR_DEFAULT);
   ot->translation_context = BLT_I18NCONTEXT_OPERATOR_DEFAULT;
   opfunc(ot, userdata);
 
-  RNA_def_struct_ui_text(ot->srna, ot->name, ot->description);
+  RNA_def_struct_ui_text(
+      ot->srna, ot->name, ot->description ? ot->description : UNDOCUMENTED_OPERATOR_TIP);
   RNA_def_struct_identifier(&BLENDER_RNA, ot->srna, ot->idname);
 
   BLI_ghash_insert(global_ops_hash, (void *)ot->idname, ot);

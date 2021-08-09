@@ -80,10 +80,10 @@ static void py_rna_gizmo_handler_get_cb(const wmGizmo *UNUSED(gz),
     }
     else {
       if (PyC_AsArray(value,
+                      sizeof(*value),
                       ret,
                       gz_prop->type->array_length,
                       &PyFloat_Type,
-                      false,
                       "Gizmo get callback: ") == -1) {
         goto fail;
       }
@@ -102,6 +102,8 @@ static void py_rna_gizmo_handler_get_cb(const wmGizmo *UNUSED(gz),
 fail:
   PyErr_Print();
   PyErr_Clear();
+
+  Py_DECREF(ret);
 
   PyGILState_Release(gilstate);
 }
@@ -139,6 +141,7 @@ static void py_rna_gizmo_handler_set_cb(const wmGizmo *UNUSED(gz),
   if (ret == NULL) {
     goto fail;
   }
+  Py_DECREF(args);
   Py_DECREF(ret);
 
   PyGILState_Release(gilstate);
@@ -199,10 +202,10 @@ static void py_rna_gizmo_handler_range_get_cb(const wmGizmo *UNUSED(gz),
   return;
 
 fail:
-  Py_XDECREF(ret);
-
   PyErr_Print();
   PyErr_Clear();
+
+  Py_XDECREF(ret);
 
   PyGILState_Release(gilstate);
 }
@@ -246,7 +249,7 @@ static PyObject *bpy_gizmo_target_set_handler(PyObject *UNUSED(self), PyObject *
       .py_fn_slots = {NULL},
   };
 
-  /* Note: this is a counter-part to functions:
+  /* NOTE: this is a counter-part to functions:
    * 'Gizmo.target_set_prop & target_set_operator'
    * (see: rna_wm_gizmo_api.c). conventions should match. */
   static const char *const _keywords[] = {"self", "target", "get", "set", "range", NULL};
@@ -426,11 +429,11 @@ static PyObject *bpy_gizmo_target_set_value(PyObject *UNUSED(self), PyObject *ar
       if (array_len != 0) {
         float *value = BLI_array_alloca(value, array_len);
         if (PyC_AsArray(value,
+                        sizeof(*value),
                         params.value,
                         gz_prop->type->array_length,
                         &PyFloat_Type,
-                        false,
-                        "Gizmo target property array") == -1) {
+                        "Gizmo target property array: ") == -1) {
           goto fail;
         }
         WM_gizmo_target_property_float_set_array(BPY_context_get(), gz, gz_prop, value);
@@ -537,7 +540,7 @@ bool BPY_rna_gizmo_module(PyObject *mod_par)
     PyObject *func_inst = PyInstanceMethod_New(func);
     char name_prefix[128];
     PyOS_snprintf(name_prefix, sizeof(name_prefix), "_rna_gizmo_%s", m->ml_name);
-    /* TODO, return a type that binds nearly to a method. */
+    /* TODO: return a type that binds nearly to a method. */
     PyModule_AddObject(mod_par, name_prefix, func_inst);
   }
 

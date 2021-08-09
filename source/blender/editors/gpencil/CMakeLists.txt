@@ -36,10 +36,12 @@ set(SRC
   annotate_paint.c
   drawgpencil.c
   editaction_gpencil.c
+  gpencil_add_blank.c
   gpencil_add_lineart.c
   gpencil_add_monkey.c
   gpencil_add_stroke.c
   gpencil_armature.c
+  gpencil_bake_animation.c
   gpencil_convert.c
   gpencil_data.c
   gpencil_edit.c

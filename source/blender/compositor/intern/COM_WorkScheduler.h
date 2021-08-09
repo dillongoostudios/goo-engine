@@ -65,7 +65,7 @@ struct WorkScheduler {
    * for every device a thread is created.
    * \see initialize Initialization and query of the number of devices
    */
-  static void start(CompositorContext &context);
+  static void start(const CompositorContext &context);
 
   /**
    * \brief stop the execution
@@ -86,6 +86,8 @@ struct WorkScheduler {
    * \see CompositorContext.getHasActiveOpenCLDevices
    */
   static bool has_gpu_devices();
+
+  static int get_num_cpu_threads();
 
   static int current_thread_id();
 

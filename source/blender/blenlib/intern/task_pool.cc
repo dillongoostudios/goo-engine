@@ -111,15 +111,7 @@ class Task {
   Task &operator=(const Task &other) = delete;
   Task &operator=(Task &&other) = delete;
 
-  /* Execute task. */
-  void operator()() const
-  {
-#ifdef WITH_TBB
-    tbb::this_task_arena::isolate([this] { run(pool, taskdata); });
-#else
-    run(pool, taskdata);
-#endif
-  }
+  void operator()() const;
 };
 
 /* TBB Task Group.
@@ -167,8 +159,8 @@ struct TaskPool {
   ThreadMutex user_mutex;
   void *userdata;
 
-  /* TBB task pool. */
 #ifdef WITH_TBB
+  /* TBB task pool. */
   TBBTaskGroup tbb_group;
 #endif
   volatile bool is_suspended;
@@ -179,6 +171,12 @@ struct TaskPool {
   ThreadQueue *background_queue;
   volatile bool background_is_canceling;
 };
+
+/* Execute task. */
+void Task::operator()() const
+{
+  run(pool, taskdata);
+}
 
 /* TBB Task Pool.
  *
@@ -534,7 +532,7 @@ bool BLI_task_pool_current_canceled(TaskPool *pool)
     case TASK_POOL_BACKGROUND_SERIAL:
       return background_task_pool_canceled(pool);
   }
-  BLI_assert("BLI_task_pool_canceled: Control flow should not come here!");
+  BLI_assert_msg(0, "BLI_task_pool_canceled: Control flow should not come here!");
   return false;
 }
 

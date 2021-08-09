@@ -37,10 +37,10 @@ class PlaneTrackCommon {
   char m_trackingObjectName[64];
   char m_planeTrackName[64];
 
-  /* note: this class is not an operation itself (to prevent virtual inheritance issues)
+  /* NOTE: this class is not an operation itself (to prevent virtual inheritance issues)
    * implementation classes must make wrappers to use these methods, see below.
    */
-  void readCornersFromTrack(float corners[4][2], float frame);
+  void read_and_calculate_corners(PlaneDistortBaseOperation *distort_op);
   void determineResolution(unsigned int resolution[2], unsigned int preferredResolution[2]);
 
  public:
@@ -62,6 +62,9 @@ class PlaneTrackCommon {
   {
     this->m_framenumber = framenumber;
   }
+
+ private:
+  void readCornersFromTrack(float corners[4][2], float frame);
 };
 
 class PlaneTrackMaskOperation : public PlaneDistortMaskOperation, public PlaneTrackCommon {

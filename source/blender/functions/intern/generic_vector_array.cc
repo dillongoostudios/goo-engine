@@ -43,7 +43,7 @@ void GVectorArray::append(const int64_t index, const void *value)
   }
 
   void *dst = POINTER_OFFSET(item.start, element_size_ * item.length);
-  type_.copy_to_uninitialized(value, dst);
+  type_.copy_construct(value, dst);
   item.length++;
 }
 
@@ -60,21 +60,21 @@ void GVectorArray::extend(const int64_t index, const GVArray &values)
 
 void GVectorArray::extend(const int64_t index, const GSpan values)
 {
-  GVArrayForGSpan varray{values};
+  GVArray_For_GSpan varray{values};
   this->extend(index, varray);
 }
 
 void GVectorArray::extend(IndexMask mask, const GVVectorArray &values)
 {
   for (const int i : mask) {
-    GVArrayForGVVectorArrayIndex array{values, i};
+    GVArray_For_GVVectorArrayIndex array{values, i};
     this->extend(i, array);
   }
 }
 
 void GVectorArray::extend(IndexMask mask, const GVectorArray &values)
 {
-  GVVectorArrayForGVectorArray virtual_values{values};
+  GVVectorArray_For_GVectorArray virtual_values{values};
   this->extend(mask, virtual_values);
 }
 
@@ -95,7 +95,7 @@ void GVectorArray::realloc_to_at_least(Item &item, int64_t min_capacity)
   const int64_t new_capacity = std::max(min_capacity, item.length * 2);
 
   void *new_buffer = allocator_.allocate(element_size_ * new_capacity, type_.alignment());
-  type_.relocate_to_initialized_n(item.start, new_buffer, item.length);
+  type_.relocate_assign_n(item.start, new_buffer, item.length);
 
   item.start = new_buffer;
   item.capacity = new_capacity;

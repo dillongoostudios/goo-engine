@@ -43,65 +43,6 @@ static void geo_node_point_scale_layout(uiLayout *layout, bContext *UNUSED(C), P
 
 namespace blender::nodes {
 
-static void execute_on_component(GeoNodeExecParams params, GeometryComponent &component)
-{
-  /* Note that scale doesn't necessarily need to be created with a vector type-- it could also use
-   * the highest complexity of the existing attribute's type (if it exists) and the data type used
-   * for the factor. But for it's simpler to simply always use float3, since that is usually
-   * expected anyway. */
-  static const float3 scale_default = float3(1.0f);
-  OutputAttributePtr scale_attribute = component.attribute_try_get_for_output(
-      "scale", ATTR_DOMAIN_POINT, CD_PROP_FLOAT3, &scale_default);
-  if (!scale_attribute) {
-    return;
-  }
-
-  const bNode &node = params.node();
-  const NodeGeometryPointScale &node_storage = *(const NodeGeometryPointScale *)node.storage;
-  const GeometryNodeAttributeInputMode input_type = (GeometryNodeAttributeInputMode)
-                                                        node_storage.input_type;
-  const CustomDataType data_type = (input_type == GEO_NODE_ATTRIBUTE_INPUT_FLOAT) ? CD_PROP_FLOAT :
-                                                                                    CD_PROP_FLOAT3;
-
-  ReadAttributePtr attribute = params.get_input_attribute(
-      "Factor", component, ATTR_DOMAIN_POINT, data_type, nullptr);
-  if (!attribute) {
-    return;
-  }
-
-  MutableSpan<float3> scale_span = scale_attribute->get_span<float3>();
-  if (data_type == CD_PROP_FLOAT) {
-    Span<float> factors = attribute->get_span<float>();
-    for (const int i : scale_span.index_range()) {
-      scale_span[i] = scale_span[i] * factors[i];
-    }
-  }
-  else if (data_type == CD_PROP_FLOAT3) {
-    Span<float3> factors = attribute->get_span<float3>();
-    for (const int i : scale_span.index_range()) {
-      scale_span[i] = scale_span[i] * factors[i];
-    }
-  }
-
-  scale_attribute.apply_span_and_save();
-}
-
-static void geo_node_point_scale_exec(GeoNodeExecParams params)
-{
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-
-  geometry_set = geometry_set_realize_instances(geometry_set);
-
-  if (geometry_set.has<MeshComponent>()) {
-    execute_on_component(params, geometry_set.get_component_for_write<MeshComponent>());
-  }
-  if (geometry_set.has<PointCloudComponent>()) {
-    execute_on_component(params, geometry_set.get_component_for_write<PointCloudComponent>());
-  }
-
-  params.set_output("Geometry", std::move(geometry_set));
-}
-
 static void geo_node_point_scale_init(bNodeTree *UNUSED(tree), bNode *node)
 {
   NodeGeometryPointScale *data = (NodeGeometryPointScale *)MEM_callocN(
@@ -117,6 +58,68 @@ static void geo_node_point_scale_update(bNodeTree *UNUSED(ntree), bNode *node)
 
   update_attribute_input_socket_availabilities(
       *node, "Factor", (GeometryNodeAttributeInputMode)node_storage.input_type);
+}
+
+static void execute_on_component(GeoNodeExecParams params, GeometryComponent &component)
+{
+  /* Note that scale doesn't necessarily need to be created with a vector type-- it could also use
+   * the highest complexity of the existing attribute's type (if it exists) and the data type used
+   * for the factor. But for it's simpler to simply always use float3, since that is usually
+   * expected anyway. */
+  static const float3 scale_default = float3(1.0f);
+  OutputAttribute_Typed<float3> scale_attribute = component.attribute_try_get_for_output(
+      "scale", ATTR_DOMAIN_POINT, CD_PROP_FLOAT3, &scale_default);
+  if (!scale_attribute) {
+    return;
+  }
+
+  const bNode &node = params.node();
+  const NodeGeometryPointScale &node_storage = *(const NodeGeometryPointScale *)node.storage;
+  const GeometryNodeAttributeInputMode input_type = (GeometryNodeAttributeInputMode)
+                                                        node_storage.input_type;
+  const CustomDataType data_type = (input_type == GEO_NODE_ATTRIBUTE_INPUT_FLOAT) ? CD_PROP_FLOAT :
+                                                                                    CD_PROP_FLOAT3;
+
+  GVArrayPtr attribute = params.get_input_attribute(
+      "Factor", component, ATTR_DOMAIN_POINT, data_type, nullptr);
+  if (!attribute) {
+    return;
+  }
+
+  MutableSpan<float3> scale_span = scale_attribute.as_span();
+  if (data_type == CD_PROP_FLOAT) {
+    GVArray_Typed<float> factors{*attribute};
+    for (const int i : scale_span.index_range()) {
+      scale_span[i] = scale_span[i] * factors[i];
+    }
+  }
+  else if (data_type == CD_PROP_FLOAT3) {
+    GVArray_Typed<float3> factors{*attribute};
+    for (const int i : scale_span.index_range()) {
+      scale_span[i] = scale_span[i] * factors[i];
+    }
+  }
+
+  scale_attribute.save();
+}
+
+static void geo_node_point_scale_exec(GeoNodeExecParams params)
+{
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+
+  geometry_set = geometry_set_realize_instances(geometry_set);
+
+  if (geometry_set.has<MeshComponent>()) {
+    execute_on_component(params, geometry_set.get_component_for_write<MeshComponent>());
+  }
+  if (geometry_set.has<PointCloudComponent>()) {
+    execute_on_component(params, geometry_set.get_component_for_write<PointCloudComponent>());
+  }
+  if (geometry_set.has<CurveComponent>()) {
+    execute_on_component(params, geometry_set.get_component_for_write<CurveComponent>());
+  }
+
+  params.set_output("Geometry", std::move(geometry_set));
 }
 
 }  // namespace blender::nodes

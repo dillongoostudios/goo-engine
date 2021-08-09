@@ -135,8 +135,8 @@ static void imbuf_save_post(ImBuf *ibuf, ImBuf *colormanaged_ibuf)
 
 /**
  * \return success.
- * \note ``ima->filepath`` and ``ibuf->name`` should end up the same.
- * \note for multiview the first ``ibuf`` is important to get the settings.
+ * \note `ima->filepath` and `ibuf->name` should end up the same.
+ * \note for multi-view the first `ibuf` is important to get the settings.
  */
 static bool image_save_single(ReportList *reports,
                               Image *ima,
@@ -169,7 +169,7 @@ static bool image_save_single(ReportList *reports,
     }
   }
   else {
-    /* TODO, better solution, if a 24bit image is painted onto it may contain alpha */
+    /* TODO: better solution, if a 24bit image is painted onto it may contain alpha. */
     if ((opts->im_format.planes == R_IMF_PLANES_RGBA) &&
         /* it has been painted onto */
         (ibuf->userflags & IB_BITMAPDIRTY)) {
@@ -207,7 +207,7 @@ static bool image_save_single(ReportList *reports,
         goto cleanup;
       }
 
-      /* it shouldn't ever happen*/
+      /* It shouldn't ever happen. */
       if ((BLI_findstring(&rr->views, STEREO_LEFT_NAME, offsetof(RenderView, name)) == NULL) ||
           (BLI_findstring(&rr->views, STEREO_RIGHT_NAME, offsetof(RenderView, name)) == NULL)) {
         BKE_reportf(reports,

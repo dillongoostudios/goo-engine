@@ -107,7 +107,7 @@ int bone_looper(Object *ob, Bone *bone, void *data, int (*bone_func)(Object *, B
 {
   /* We want to apply the function bone_func to every bone
    * in an armature -- feed bone_looper the first bone and
-   * a pointer to the bone_func and watch it go!. The int count
+   * a pointer to the bone_func and watch it go! The int count
    * can be useful for counting bones with a certain property
    * (e.g. skinnable)
    */
@@ -391,7 +391,7 @@ void armature_tag_unselect(bArmature *arm)
 
 void ED_armature_ebone_transform_mirror_update(bArmature *arm, EditBone *ebo, bool check_select)
 {
-  /* TODO When this function is called by property updates,
+  /* TODO: When this function is called by property updates,
    * canceling the value change will not restore mirrored bone correctly. */
 
   /* Currently check_select==true when this function is called from a transform operator,
@@ -414,9 +414,8 @@ void ED_armature_ebone_transform_mirror_update(bArmature *arm, EditBone *ebo, bo
         eboflip->tail[2] = ebo->tail[2];
         eboflip->rad_tail = ebo->rad_tail;
         eboflip->curve_out_x = -ebo->curve_out_x;
-        eboflip->curve_out_y = ebo->curve_out_y;
-        eboflip->scale_out_x = ebo->scale_out_x;
-        eboflip->scale_out_y = ebo->scale_out_y;
+        eboflip->curve_out_z = ebo->curve_out_z;
+        copy_v3_v3(eboflip->scale_out, ebo->scale_out);
         eboflip->ease2 = ebo->ease2;
         eboflip->roll2 = -ebo->roll2;
 
@@ -438,9 +437,8 @@ void ED_armature_ebone_transform_mirror_update(bArmature *arm, EditBone *ebo, bo
         eboflip->rad_head = ebo->rad_head;
 
         eboflip->curve_in_x = -ebo->curve_in_x;
-        eboflip->curve_in_y = ebo->curve_in_y;
-        eboflip->scale_in_x = ebo->scale_in_x;
-        eboflip->scale_in_y = ebo->scale_in_y;
+        eboflip->curve_in_z = ebo->curve_in_z;
+        copy_v3_v3(eboflip->scale_in, ebo->scale_in);
         eboflip->ease1 = ebo->ease1;
         eboflip->roll1 = -ebo->roll1;
 
@@ -542,18 +540,21 @@ static EditBone *make_boneList_recursive(ListBase *edbo,
     eBone->roll1 = curBone->roll1;
     eBone->roll2 = curBone->roll2;
     eBone->curve_in_x = curBone->curve_in_x;
-    eBone->curve_in_y = curBone->curve_in_y;
+    eBone->curve_in_z = curBone->curve_in_z;
     eBone->curve_out_x = curBone->curve_out_x;
-    eBone->curve_out_y = curBone->curve_out_y;
+    eBone->curve_out_z = curBone->curve_out_z;
     eBone->ease1 = curBone->ease1;
     eBone->ease2 = curBone->ease2;
-    eBone->scale_in_x = curBone->scale_in_x;
-    eBone->scale_in_y = curBone->scale_in_y;
-    eBone->scale_out_x = curBone->scale_out_x;
-    eBone->scale_out_y = curBone->scale_out_y;
+
+    copy_v3_v3(eBone->scale_in, curBone->scale_in);
+    copy_v3_v3(eBone->scale_out, curBone->scale_out);
 
     eBone->bbone_prev_type = curBone->bbone_prev_type;
     eBone->bbone_next_type = curBone->bbone_next_type;
+
+    eBone->bbone_flag = curBone->bbone_flag;
+    eBone->bbone_prev_flag = curBone->bbone_prev_flag;
+    eBone->bbone_next_flag = curBone->bbone_next_flag;
 
     if (curBone->prop) {
       eBone->prop = IDP_CopyProperty(curBone->prop);
@@ -757,18 +758,20 @@ void ED_armature_from_edit(Main *bmain, bArmature *arm)
     newBone->roll1 = eBone->roll1;
     newBone->roll2 = eBone->roll2;
     newBone->curve_in_x = eBone->curve_in_x;
-    newBone->curve_in_y = eBone->curve_in_y;
+    newBone->curve_in_z = eBone->curve_in_z;
     newBone->curve_out_x = eBone->curve_out_x;
-    newBone->curve_out_y = eBone->curve_out_y;
+    newBone->curve_out_z = eBone->curve_out_z;
     newBone->ease1 = eBone->ease1;
     newBone->ease2 = eBone->ease2;
-    newBone->scale_in_x = eBone->scale_in_x;
-    newBone->scale_in_y = eBone->scale_in_y;
-    newBone->scale_out_x = eBone->scale_out_x;
-    newBone->scale_out_y = eBone->scale_out_y;
+    copy_v3_v3(newBone->scale_in, eBone->scale_in);
+    copy_v3_v3(newBone->scale_out, eBone->scale_out);
 
     newBone->bbone_prev_type = eBone->bbone_prev_type;
     newBone->bbone_next_type = eBone->bbone_next_type;
+
+    newBone->bbone_flag = eBone->bbone_flag;
+    newBone->bbone_prev_flag = eBone->bbone_prev_flag;
+    newBone->bbone_next_flag = eBone->bbone_next_flag;
 
     if (eBone->prop) {
       newBone->prop = IDP_CopyProperty(eBone->prop);
@@ -844,7 +847,7 @@ void ED_armature_to_edit(bArmature *arm)
 }
 
 /* *************************************************************** */
-/* Used by Undo for Armature EditMode*/
+/* Used by Undo for Armature EditMode. */
 
 /* free's bones and their properties */
 

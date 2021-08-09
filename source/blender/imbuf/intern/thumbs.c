@@ -88,7 +88,7 @@ static bool get_thumb_dir(char *dir, ThumbSize size)
   const char *subdir;
 #ifdef WIN32
   wchar_t dir_16[MAX_PATH];
-  /* yes, applications shouldn't store data there, but so does GIMP :)*/
+  /* Yes, applications shouldn't store data there, but so does GIMP :). */
   SHGetSpecialFolderPathW(0, dir_16, CSIDL_PROFILE, 0);
   conv_utf_16_to_8(dir_16, dir, FILE_MAX);
   s += strlen(dir);
@@ -112,13 +112,13 @@ static bool get_thumb_dir(char *dir, ThumbSize size)
 #endif
   switch (size) {
     case THB_NORMAL:
-      subdir = "/" THUMBNAILS "/normal/";
+      subdir = SEP_STR THUMBNAILS SEP_STR "normal" SEP_STR;
       break;
     case THB_LARGE:
-      subdir = "/" THUMBNAILS "/large/";
+      subdir = SEP_STR THUMBNAILS SEP_STR "large" SEP_STR;
       break;
     case THB_FAIL:
-      subdir = "/" THUMBNAILS "/fail/blender/";
+      subdir = SEP_STR THUMBNAILS SEP_STR "fail" SEP_STR "blender" SEP_STR;
       break;
     default:
       return 0; /* unknown size */
@@ -144,8 +144,8 @@ static bool get_thumb_dir(char *dir, ThumbSize size)
  * \{ */
 
 typedef enum {
-  UNSAFE_ALL = 0x1,        /* Escape all unsafe characters   */
-  UNSAFE_ALLOW_PLUS = 0x2, /* Allows '+'  */
+  UNSAFE_ALL = 0x1,        /* Escape all unsafe characters. */
+  UNSAFE_ALLOW_PLUS = 0x2, /* Allows '+' */
   UNSAFE_PATH = 0x8,       /* Allows '/', '&', '=', ':', '@', '+', '$' and ',' */
   UNSAFE_HOST = 0x10,      /* Allows '/' and ':' and '@' */
   UNSAFE_SLASHES = 0x20,   /* Allows all characters except for '/' and '%' */
@@ -172,7 +172,7 @@ static const unsigned char acceptable[96] = {
 
 static const char hex[17] = "0123456789abcdef";
 
-/* Note: This escape function works on file: URIs, but if you want to
+/* NOTE: This escape function works on file: URIs, but if you want to
  * escape something else, please read RFC-2396 */
 static void escape_uri_string(const char *string,
                               char *escaped_string,

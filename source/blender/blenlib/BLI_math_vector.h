@@ -146,7 +146,7 @@ MINLINE void mul_v3_v3(float r[3], const float a[3]);
 MINLINE void mul_v3_v3v3(float r[3], const float a[3], const float b[3]);
 MINLINE void mul_v4_fl(float r[4], float f);
 MINLINE void mul_v4_v4(float r[4], const float a[4]);
-MINLINE void mul_v4_v4fl(float r[3], const float a[4], float f);
+MINLINE void mul_v4_v4fl(float r[4], const float a[4], float f);
 MINLINE void mul_v2_v2_cw(float r[2], const float mat[2], const float vec[2]);
 MINLINE void mul_v2_v2_ccw(float r[2], const float mat[2], const float vec[2]);
 MINLINE float mul_project_m4_v3_zfac(const float mat[4][4],
@@ -163,6 +163,7 @@ MINLINE void madd_v3_v3fl(float r[3], const float a[3], float f);
 MINLINE void madd_v3_v3v3(float r[3], const float a[3], const float b[3]);
 MINLINE void madd_v2_v2v2fl(float r[2], const float a[2], const float b[2], float f);
 MINLINE void madd_v3_v3v3fl(float r[3], const float a[3], const float b[3], float f);
+MINLINE void madd_v3_v3v3db_db(double r[3], const double a[3], const double b[3], double f);
 MINLINE void madd_v3_v3v3v3(float r[3], const float a[3], const float b[3], const float c[3]);
 MINLINE void madd_v4_v4fl(float r[4], const float a[4], float f);
 MINLINE void madd_v4_v4v4(float r[4], const float a[4], const float b[4]);
@@ -177,7 +178,7 @@ MINLINE void negate_v2_v2(float r[2], const float a[2]);
 MINLINE void negate_v3(float r[3]);
 MINLINE void negate_v3_v3(float r[3], const float a[3]);
 MINLINE void negate_v4(float r[4]);
-MINLINE void negate_v4_v4(float r[4], const float a[3]);
+MINLINE void negate_v4_v4(float r[4], const float a[4]);
 
 MINLINE void negate_v3_short(short r[3]);
 MINLINE void negate_v3_db(double r[3]);
@@ -323,11 +324,15 @@ void flip_v2_v2v2(float v[2], const float v1[2], const float v2[2]);
 
 /********************************* Comparison ********************************/
 
-MINLINE bool is_zero_v2(const float a[3]) ATTR_WARN_UNUSED_RESULT;
+MINLINE bool is_zero_v2(const float a[2]) ATTR_WARN_UNUSED_RESULT;
 MINLINE bool is_zero_v3(const float a[3]) ATTR_WARN_UNUSED_RESULT;
 MINLINE bool is_zero_v4(const float a[4]) ATTR_WARN_UNUSED_RESULT;
 
-bool is_finite_v2(const float a[3]) ATTR_WARN_UNUSED_RESULT;
+MINLINE bool is_zero_v2_db(const double a[2]) ATTR_WARN_UNUSED_RESULT;
+MINLINE bool is_zero_v3_db(const double a[3]) ATTR_WARN_UNUSED_RESULT;
+MINLINE bool is_zero_v4_db(const double a[4]) ATTR_WARN_UNUSED_RESULT;
+
+bool is_finite_v2(const float a[2]) ATTR_WARN_UNUSED_RESULT;
 bool is_finite_v3(const float a[3]) ATTR_WARN_UNUSED_RESULT;
 bool is_finite_v4(const float a[4]) ATTR_WARN_UNUSED_RESULT;
 
@@ -377,10 +382,11 @@ MINLINE float line_point_side_v2(const float l1[2],
                                  const float pt[2]) ATTR_WARN_UNUSED_RESULT;
 
 /********************************** Angles ***********************************/
-/* - angle with 2 arguments is angle between vector                          */
-/* - angle with 3 arguments is angle between 3 points at the middle point    */
-/* - angle_normalized_* is faster equivalent if vectors are normalized       */
 
+/* - angle with 2 arguments is angle between vector.
+ * - angle with 3 arguments is angle between 3 points at the middle point.
+ * - angle_normalized_* is faster equivalent if vectors are normalized.
+ */
 float angle_v2v2(const float a[2], const float b[2]) ATTR_WARN_UNUSED_RESULT;
 float angle_signed_v2v2(const float v1[2], const float v2[2]) ATTR_WARN_UNUSED_RESULT;
 float angle_v2v2v2(const float a[2], const float b[2], const float c[2]) ATTR_WARN_UNUSED_RESULT;

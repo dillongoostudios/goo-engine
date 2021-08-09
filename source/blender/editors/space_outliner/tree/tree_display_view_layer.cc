@@ -70,17 +70,42 @@ TreeDisplayViewLayer::TreeDisplayViewLayer(SpaceOutliner &space_outliner)
 ListBase TreeDisplayViewLayer::buildTree(const TreeSourceData &source_data)
 {
   ListBase tree = {nullptr};
-
-  view_layer_ = source_data.view_layer;
+  Scene *scene = source_data.scene;
   show_objects_ = !(space_outliner_.filter & SO_FILTER_NO_OBJECT);
 
+  for (auto *view_layer : ListBaseWrapper<ViewLayer>(scene->view_layers)) {
+    view_layer_ = view_layer;
+
+    if (space_outliner_.filter & SO_FILTER_NO_VIEW_LAYERS) {
+      if (view_layer != source_data.view_layer) {
+        continue;
+      }
+
+      add_view_layer(*scene, tree, (TreeElement *)nullptr);
+    }
+    else {
+      TreeElement &te_view_layer = *outliner_add_element(
+          &space_outliner_, &tree, scene, nullptr, TSE_R_LAYER, 0);
+      TREESTORE(&te_view_layer)->flag &= ~TSE_CLOSED;
+      te_view_layer.name = view_layer->name;
+      te_view_layer.directdata = view_layer;
+
+      add_view_layer(*scene, te_view_layer.subtree, &te_view_layer);
+    }
+  }
+
+  return tree;
+}
+
+void TreeDisplayViewLayer::add_view_layer(Scene &scene, ListBase &tree, TreeElement *parent)
+{
   const bool show_children = (space_outliner_.filter & SO_FILTER_NO_CHILDREN) == 0;
 
   if (space_outliner_.filter & SO_FILTER_NO_COLLECTION) {
     /* Show objects in the view layer. */
     for (Base *base : List<Base>(view_layer_->object_bases)) {
       TreeElement *te_object = outliner_add_element(
-          &space_outliner_, &tree, base->object, nullptr, TSE_SOME_ID, 0);
+          &space_outliner_, &tree, base->object, parent, TSE_SOME_ID, 0);
       te_object->directdata = base;
     }
 
@@ -91,30 +116,23 @@ ListBase TreeDisplayViewLayer::buildTree(const TreeSourceData &source_data)
   else {
     /* Show collections in the view layer. */
     TreeElement &ten = *outliner_add_element(
-        &space_outliner_, &tree, source_data.scene, nullptr, TSE_VIEW_COLLECTION_BASE, 0);
+        &space_outliner_, &tree, &scene, parent, TSE_VIEW_COLLECTION_BASE, 0);
     ten.name = IFACE_("Scene Collection");
     TREESTORE(&ten)->flag &= ~TSE_CLOSED;
 
-    add_view_layer(ten.subtree, ten);
+    /* First layer collection is for master collection, don't show it. */
+    LayerCollection *lc = static_cast<LayerCollection *>(view_layer_->layer_collections.first);
+    if (lc == nullptr) {
+      return;
+    }
+
+    add_layer_collections_recursive(ten.subtree, lc->layer_collections, ten);
+    if (show_objects_) {
+      add_layer_collection_objects(ten.subtree, *lc, ten);
+    }
     if (show_children) {
       add_layer_collection_objects_children(ten);
     }
-  }
-
-  return tree;
-}
-
-void TreeDisplayViewLayer::add_view_layer(ListBase &tree, TreeElement &parent)
-{
-  /* First layer collection is for master collection, don't show it. */
-  LayerCollection *lc = static_cast<LayerCollection *>(view_layer_->layer_collections.first);
-  if (lc == nullptr) {
-    return;
-  }
-
-  add_layer_collections_recursive(tree, lc->layer_collections, parent);
-  if (show_objects_) {
-    add_layer_collection_objects(tree, *lc, parent);
   }
 }
 
@@ -149,8 +167,9 @@ void TreeDisplayViewLayer::add_layer_collections_recursive(ListBase &tree,
       add_layer_collection_objects(ten->subtree, *lc, *ten);
     }
 
-    const bool lib_overrides_visible = !SUPPORT_FILTER_OUTLINER(&space_outliner_) ||
-                                       ((space_outliner_.filter & SO_FILTER_NO_LIB_OVERRIDE) == 0);
+    const bool lib_overrides_visible = !exclude && (!SUPPORT_FILTER_OUTLINER(&space_outliner_) ||
+                                                    ((space_outliner_.filter &
+                                                      SO_FILTER_NO_LIB_OVERRIDE) == 0));
 
     if (lib_overrides_visible && ID_IS_OVERRIDE_LIBRARY_REAL(&lc->collection->id)) {
       outliner_add_element(

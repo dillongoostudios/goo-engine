@@ -75,7 +75,7 @@ class GHOST_System : public GHOST_ISystem {
    * Based on ANSI clock() routine.
    * \return The number of milliseconds.
    */
-  virtual GHOST_TUns64 getMilliSeconds() const;
+  virtual uint64_t getMilliSeconds() const;
 
   /**
    * Installs a timer.
@@ -89,8 +89,8 @@ class GHOST_System : public GHOST_ISystem {
    * \param userData: Placeholder for user data.
    * \return A timer task (0 if timer task installation failed).
    */
-  GHOST_ITimerTask *installTimer(GHOST_TUns64 delay,
-                                 GHOST_TUns64 interval,
+  GHOST_ITimerTask *installTimer(uint64_t delay,
+                                 uint64_t interval,
                                  GHOST_TimerProcPtr timerProc,
                                  GHOST_TUserDataPtr userData = NULL);
 
@@ -113,8 +113,8 @@ class GHOST_System : public GHOST_ISystem {
   GHOST_TSuccess disposeWindow(GHOST_IWindow *window);
 
   /**
-   * Create a new offscreen context.
-   * Never explicitly delete the context, use disposeContext() instead.
+   * Create a new off-screen context.
+   * Never explicitly delete the context, use #disposeContext() instead.
    * \return The new context (or 0 if creation failed).
    */
   virtual GHOST_IContext *createOffscreenContext(GHOST_GLSettings glSettings) = 0;
@@ -210,8 +210,8 @@ class GHOST_System : public GHOST_ISystem {
   /**
    * Inherited from GHOST_ISystem but left pure virtual
    * <pre>
-   * GHOST_TSuccess getCursorPosition(GHOST_TInt32& x, GHOST_TInt32& y) const = 0;
-   * GHOST_TSuccess setCursorPosition(GHOST_TInt32 x, GHOST_TInt32 y)
+   * GHOST_TSuccess getCursorPosition(int32_t& x, int32_t& y) const = 0;
+   * GHOST_TSuccess setCursorPosition(int32_t x, int32_t y)
    * </pre>
    */
 
@@ -239,7 +239,7 @@ class GHOST_System : public GHOST_ISystem {
    * Set which tablet API to use. Only affects Windows, other platforms have a single API.
    * \param api: Enum indicating which API to use.
    */
-  void setTabletAPI(GHOST_TTabletAPI api);
+  virtual void setTabletAPI(GHOST_TTabletAPI api);
   GHOST_TTabletAPI getTabletAPI(void);
 
 #ifdef WITH_INPUT_NDOF
@@ -308,14 +308,14 @@ class GHOST_System : public GHOST_ISystem {
    * \return Returns the clipboard data
    *
    */
-  virtual GHOST_TUns8 *getClipboard(bool selection) const = 0;
+  virtual char *getClipboard(bool selection) const = 0;
 
   /**
    * Put data to the Clipboard
    * \param buffer: The buffer to copy to the clipboard.
    * \param selection: The clipboard to copy too only used on X11.
    */
-  virtual void putClipboard(GHOST_TInt8 *buffer, bool selection) const = 0;
+  virtual void putClipboard(const char *buffer, bool selection) const = 0;
 
   /**
    * Show a system message box
@@ -328,8 +328,8 @@ class GHOST_System : public GHOST_ISystem {
    */
   virtual GHOST_TSuccess showMessageBox(const char * /*title*/,
                                         const char * /*message*/,
-                                        const char * /*help_label */,
-                                        const char * /*continue_label */,
+                                        const char * /*help_label*/,
+                                        const char * /*continue_label*/,
                                         const char * /*link*/,
                                         GHOST_DialogOptions /*dialog_options*/) const
   {

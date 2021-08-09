@@ -148,7 +148,7 @@ static void make_edges_mdata_extend(
   int totedge = *r_totedge;
   int totedge_new;
   EdgeHash *eh;
-  unsigned int eh_reserve;
+  uint eh_reserve;
   const MPoly *mp;
   int i;
 
@@ -174,7 +174,7 @@ static void make_edges_mdata_extend(
   if (totedge_new) {
     EdgeHashIterator *ehi;
     MEdge *medge;
-    unsigned int e_index = totedge;
+    uint e_index = totedge;
 
     *r_alledge = medge = (*r_alledge ?
                               MEM_reallocN(*r_alledge, sizeof(MEdge) * (totedge + totedge_new)) :
@@ -212,55 +212,19 @@ static void make_edges_mdata_extend(
 }
 
 /* Initialize mverts, medges and, faces for converting nurbs to mesh and derived mesh */
-/* return non-zero on error */
-int BKE_mesh_nurbs_to_mdata(Object *ob,
-                            MVert **r_allvert,
-                            int *r_totvert,
-                            MEdge **r_alledge,
-                            int *r_totedge,
-                            MLoop **r_allloop,
-                            MPoly **r_allpoly,
-                            int *r_totloop,
-                            int *r_totpoly)
-{
-  ListBase disp = {NULL, NULL};
-
-  if (ob->runtime.curve_cache) {
-    disp = ob->runtime.curve_cache->disp;
-  }
-
-  return BKE_mesh_nurbs_displist_to_mdata(ob,
-                                          &disp,
-                                          r_allvert,
-                                          r_totvert,
-                                          r_alledge,
-                                          r_totedge,
-                                          r_allloop,
-                                          r_allpoly,
-                                          NULL,
-                                          r_totloop,
-                                          r_totpoly);
-}
-
-/* BMESH: this doesn't calculate all edges from polygons,
- * only free standing edges are calculated */
-
-/* Initialize mverts, medges and, faces for converting nurbs to mesh and derived mesh */
 /* use specified dispbase */
-int BKE_mesh_nurbs_displist_to_mdata(Object *ob,
-                                     const ListBase *dispbase,
-                                     MVert **r_allvert,
-                                     int *r_totvert,
-                                     MEdge **r_alledge,
-                                     int *r_totedge,
-                                     MLoop **r_allloop,
-                                     MPoly **r_allpoly,
-                                     MLoopUV **r_alluv,
-                                     int *r_totloop,
-                                     int *r_totpoly)
+static int mesh_nurbs_displist_to_mdata(const Curve *cu,
+                                        const ListBase *dispbase,
+                                        MVert **r_allvert,
+                                        int *r_totvert,
+                                        MEdge **r_alledge,
+                                        int *r_totedge,
+                                        MLoop **r_allloop,
+                                        MPoly **r_allpoly,
+                                        MLoopUV **r_alluv,
+                                        int *r_totloop,
+                                        int *r_totpoly)
 {
-  Curve *cu = ob->data;
-  DispList *dl;
   MVert *mvert;
   MPoly *mpoly;
   MLoop *mloop;
@@ -273,11 +237,10 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob,
       /* 2d polys are filled with DL_INDEX3 displists */
       (CU_DO_2DFILL(cu) == false) ||
       /* surf polys are never filled */
-      (ob->type == OB_SURF));
+      BKE_curve_type_get(cu) == OB_SURF);
 
   /* count */
-  dl = dispbase->first;
-  while (dl) {
+  LISTBASE_FOREACH (const DispList *, dl, dispbase) {
     if (dl->type == DL_SEGM) {
       totvert += dl->parts * dl->nr;
       totedge += dl->parts * (dl->nr - 1);
@@ -305,7 +268,6 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob,
       totpoly += tot;
       totloop += tot * 3;
     }
-    dl = dl->next;
   }
 
   if (totvert == 0) {
@@ -327,8 +289,7 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob,
   /* verts and faces */
   vertcount = 0;
 
-  dl = dispbase->first;
-  while (dl) {
+  LISTBASE_FOREACH (const DispList *, dl, dispbase) {
     const bool is_smooth = (dl->rt & CU_SMOOTH) != 0;
 
     if (dl->type == DL_SEGM) {
@@ -507,8 +468,6 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob,
         }
       }
     }
-
-    dl = dl->next;
   }
 
   if (totpoly) {
@@ -523,7 +482,7 @@ int BKE_mesh_nurbs_displist_to_mdata(Object *ob,
   return 0;
 }
 
-Mesh *BKE_mesh_new_nomain_from_curve_displist(Object *ob, ListBase *dispbase)
+Mesh *BKE_mesh_new_nomain_from_curve_displist(const Object *ob, const ListBase *dispbase)
 {
   Mesh *mesh;
   MVert *allvert;
@@ -533,17 +492,17 @@ Mesh *BKE_mesh_new_nomain_from_curve_displist(Object *ob, ListBase *dispbase)
   MLoopUV *alluv = NULL;
   int totvert, totedge, totloop, totpoly;
 
-  if (BKE_mesh_nurbs_displist_to_mdata(ob,
-                                       dispbase,
-                                       &allvert,
-                                       &totvert,
-                                       &alledge,
-                                       &totedge,
-                                       &allloop,
-                                       &allpoly,
-                                       &alluv,
-                                       &totloop,
-                                       &totpoly) != 0) {
+  if (mesh_nurbs_displist_to_mdata(ob->data,
+                                   dispbase,
+                                   &allvert,
+                                   &totvert,
+                                   &alledge,
+                                   &totedge,
+                                   &allloop,
+                                   &allpoly,
+                                   &alluv,
+                                   &totloop,
+                                   &totpoly) != 0) {
     /* Error initializing mdata. This often happens when curve is empty */
     return BKE_mesh_new_nomain(0, 0, 0, 0, 0);
   }
@@ -551,10 +510,18 @@ Mesh *BKE_mesh_new_nomain_from_curve_displist(Object *ob, ListBase *dispbase)
   mesh = BKE_mesh_new_nomain(totvert, totedge, 0, totloop, totpoly);
   mesh->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
 
-  memcpy(mesh->mvert, allvert, totvert * sizeof(MVert));
-  memcpy(mesh->medge, alledge, totedge * sizeof(MEdge));
-  memcpy(mesh->mloop, allloop, totloop * sizeof(MLoop));
-  memcpy(mesh->mpoly, allpoly, totpoly * sizeof(MPoly));
+  if (totvert != 0) {
+    memcpy(mesh->mvert, allvert, totvert * sizeof(MVert));
+  }
+  if (totedge != 0) {
+    memcpy(mesh->medge, alledge, totedge * sizeof(MEdge));
+  }
+  if (totloop != 0) {
+    memcpy(mesh->mloop, allloop, totloop * sizeof(MLoop));
+  }
+  if (totpoly != 0) {
+    memcpy(mesh->mpoly, allpoly, totpoly * sizeof(MPoly));
+  }
 
   if (alluv) {
     const char *uvname = "UVMap";
@@ -569,7 +536,7 @@ Mesh *BKE_mesh_new_nomain_from_curve_displist(Object *ob, ListBase *dispbase)
   return mesh;
 }
 
-Mesh *BKE_mesh_new_nomain_from_curve(Object *ob)
+Mesh *BKE_mesh_new_nomain_from_curve(const Object *ob)
 {
   ListBase disp = {NULL, NULL};
 
@@ -587,7 +554,6 @@ void BKE_mesh_from_nurbs_displist(
   Object *ob1;
   Mesh *me_eval = (Mesh *)ob->runtime.data_eval;
   Mesh *me;
-  Curve *cu;
   MVert *allvert = NULL;
   MEdge *alledge = NULL;
   MLoop *allloop = NULL;
@@ -595,20 +561,20 @@ void BKE_mesh_from_nurbs_displist(
   MPoly *allpoly = NULL;
   int totvert, totedge, totloop, totpoly;
 
-  cu = ob->data;
+  Curve *cu = ob->data;
 
   if (me_eval == NULL) {
-    if (BKE_mesh_nurbs_displist_to_mdata(ob,
-                                         dispbase,
-                                         &allvert,
-                                         &totvert,
-                                         &alledge,
-                                         &totedge,
-                                         &allloop,
-                                         &allpoly,
-                                         &alluv,
-                                         &totloop,
-                                         &totpoly) != 0) {
+    if (mesh_nurbs_displist_to_mdata(cu,
+                                     dispbase,
+                                     &allvert,
+                                     &totvert,
+                                     &alledge,
+                                     &totedge,
+                                     &allloop,
+                                     &allpoly,
+                                     &alluv,
+                                     &totloop,
+                                     &totpoly) != 0) {
       /* Error initializing */
       return;
     }
@@ -700,18 +666,6 @@ void BKE_mesh_from_nurbs_displist(
   }
 }
 
-void BKE_mesh_from_nurbs(Main *bmain, Object *ob)
-{
-  Curve *cu = (Curve *)ob->data;
-  ListBase disp = {NULL, NULL};
-
-  if (ob->runtime.curve_cache) {
-    disp = ob->runtime.curve_cache->disp;
-  }
-
-  BKE_mesh_from_nurbs_displist(bmain, ob, &disp, cu->id.name, false);
-}
-
 typedef struct EdgeLink {
   struct EdgeLink *next, *prev;
   void *edge;
@@ -719,17 +673,17 @@ typedef struct EdgeLink {
 
 typedef struct VertLink {
   Link *next, *prev;
-  unsigned int index;
+  uint index;
 } VertLink;
 
-static void prependPolyLineVert(ListBase *lb, unsigned int index)
+static void prependPolyLineVert(ListBase *lb, uint index)
 {
   VertLink *vl = MEM_callocN(sizeof(VertLink), "VertLink");
   vl->index = index;
   BLI_addhead(lb, vl);
 }
 
-static void appendPolyLineVert(ListBase *lb, unsigned int index)
+static void appendPolyLineVert(ListBase *lb, uint index)
 {
   VertLink *vl = MEM_callocN(sizeof(VertLink), "VertLink");
   vl->index = index;
@@ -784,8 +738,8 @@ void BKE_mesh_to_curve_nurblist(const Mesh *me, ListBase *nurblist, const int ed
       bool closed = false;
       int totpoly = 0;
       MEdge *med_current = ((EdgeLink *)edges.last)->edge;
-      unsigned int startVert = med_current->v1;
-      unsigned int endVert = med_current->v2;
+      uint startVert = med_current->v1;
+      uint endVert = med_current->v2;
       bool ok = true;
 
       appendPolyLineVert(&polyline, startVert);
@@ -1027,11 +981,15 @@ static Object *object_for_curve_to_mesh_create(Object *object)
    *
    * Note that there are extra fields in there like bevel and path, but those are not needed during
    * conversion, so they are not copied to save unnecessary allocations. */
-  if (object->runtime.curve_cache != NULL) {
+  if (temp_object->runtime.curve_cache == NULL) {
     temp_object->runtime.curve_cache = MEM_callocN(sizeof(CurveCache),
                                                    "CurveCache for curve types");
+  }
+
+  if (object->runtime.curve_cache != NULL) {
     BKE_displist_copy(&temp_object->runtime.curve_cache->disp, &object->runtime.curve_cache->disp);
   }
+
   /* Constructive modifiers will use mesh to store result. */
   if (object->runtime.data_eval != NULL) {
     BKE_id_copy_ex(
@@ -1057,16 +1015,24 @@ static Object *object_for_curve_to_mesh_create(Object *object)
   return temp_object;
 }
 
+/**
+ * Populate `object->runtime.curve_cache` which is then used to create the mesh.
+ */
 static void curve_to_mesh_eval_ensure(Object *object)
 {
-  if (object->runtime.curve_cache == NULL) {
-    object->runtime.curve_cache = MEM_callocN(sizeof(CurveCache), "CurveCache for Curve");
-  }
   Curve *curve = (Curve *)object->data;
   Curve remapped_curve = *curve;
   Object remapped_object = *object;
-  remapped_object.runtime.bb = NULL;
+  BKE_object_runtime_reset(&remapped_object);
+
   remapped_object.data = &remapped_curve;
+
+  if (object->runtime.curve_cache == NULL) {
+    object->runtime.curve_cache = MEM_callocN(sizeof(CurveCache), "CurveCache for Curve");
+  }
+
+  /* Temporarily share the curve-cache with the temporary object, owned by `object`. */
+  remapped_object.runtime.curve_cache = object->runtime.curve_cache;
 
   /* Clear all modifiers for the bevel object.
    *
@@ -1078,8 +1044,8 @@ static void curve_to_mesh_eval_ensure(Object *object)
   Object bevel_object = {{NULL}};
   if (remapped_curve.bevobj != NULL) {
     bevel_object = *remapped_curve.bevobj;
-    bevel_object.runtime.bb = NULL;
     BLI_listbase_clear(&bevel_object.modifiers);
+    BKE_object_runtime_reset(&bevel_object);
     remapped_curve.bevobj = &bevel_object;
   }
 
@@ -1087,8 +1053,8 @@ static void curve_to_mesh_eval_ensure(Object *object)
   Object taper_object = {{NULL}};
   if (remapped_curve.taperobj != NULL) {
     taper_object = *remapped_curve.taperobj;
-    taper_object.runtime.bb = NULL;
     BLI_listbase_clear(&taper_object.modifiers);
+    BKE_object_runtime_reset(&taper_object);
     remapped_curve.taperobj = &taper_object;
   }
 
@@ -1101,21 +1067,21 @@ static void curve_to_mesh_eval_ensure(Object *object)
    * Brecht says hold off with that. */
   Mesh *mesh_eval = NULL;
   BKE_displist_make_curveTypes_forRender(
-      NULL, NULL, &remapped_object, &remapped_object.runtime.curve_cache->disp, &mesh_eval, false);
+      NULL, NULL, &remapped_object, &remapped_object.runtime.curve_cache->disp, &mesh_eval);
 
-  /* Note: this is to be consistent with `BKE_displist_make_curveTypes()`, however that is not a
+  /* NOTE: this is to be consistent with `BKE_displist_make_curveTypes()`, however that is not a
    * real issue currently, code here is broken in more than one way, fix(es) will be done
    * separately. */
   if (mesh_eval != NULL) {
     BKE_object_eval_assign_data(&remapped_object, &mesh_eval->id, true);
   }
 
-  MEM_SAFE_FREE(remapped_object.runtime.bb);
-  MEM_SAFE_FREE(taper_object.runtime.bb);
-  MEM_SAFE_FREE(bevel_object.runtime.bb);
+  /* Owned by `object` & needed by the caller to create the mesh. */
+  remapped_object.runtime.curve_cache = NULL;
 
-  BKE_object_free_curve_cache(&bevel_object);
-  BKE_object_free_curve_cache(&taper_object);
+  BKE_object_runtime_free_data(&remapped_object);
+  BKE_object_runtime_free_data(&taper_object);
+  BKE_object_runtime_free_data(&taper_object);
 }
 
 static Mesh *mesh_new_from_curve_type_object(Object *object)
@@ -1138,8 +1104,8 @@ static Mesh *mesh_new_from_curve_type_object(Object *object)
   BKE_mesh_from_nurbs_displist(
       NULL, temp_object, &temp_object->runtime.curve_cache->disp, curve->id.name + 2, true);
 
-  /* BKE_mesh_from_nurbs changes the type to a mesh, check it worked. If it didn't the curve did
-   * not have any segments or otherwise would have generated an empty mesh. */
+  /* BKE_mesh_from_nurbs_displist changes the type to a mesh, check it worked. If it didn't
+   * the curve did not have any segments or otherwise would have generated an empty mesh. */
   if (temp_object->type != OB_MESH) {
     BKE_id_free(NULL, temp_object->data);
     BKE_id_free(NULL, temp_object);
@@ -1313,7 +1279,7 @@ static int foreach_libblock_make_usercounts_callback(LibraryIDLinkCallbackData *
     id_us_plus(*id_p);
   }
   else if (cb_flag & IDWALK_CB_USER_ONE) {
-    /* Note: in that context, that one should not be needed (since there should be at least already
+    /* NOTE: in that context, that one should not be needed (since there should be at least already
      * one USER_ONE user of that ID), but better be consistent. */
     id_us_ensure_real(*id_p);
   }
@@ -1555,7 +1521,7 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
    * check whether it is still true with Mesh */
   Mesh tmp = *mesh_dst;
   int totvert, totedge /*, totface */ /* UNUSED */, totloop, totpoly;
-  int did_shapekeys = 0;
+  bool did_shapekeys = false;
   eCDAllocType alloctype = CD_DUPLICATE;
 
   if (take_ownership /* && dm->type == DM_TYPE_CDDM && dm->needsFree */) {
@@ -1610,7 +1576,7 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
     }
 
     shapekey_layers_to_keyblocks(mesh_src, mesh_dst, uid);
-    did_shapekeys = 1;
+    did_shapekeys = true;
   }
 
   /* copy texture space */
@@ -1639,17 +1605,22 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
                          totedge);
   }
   if (!CustomData_has_layer(&tmp.pdata, CD_MPOLY)) {
-    /* TODO(Sybren): assignment to tmp.mxxx is probably not necessary due to the
-     * BKE_mesh_update_customdata_pointers() call below. */
-    tmp.mloop = (alloctype == CD_ASSIGN) ? mesh_src->mloop : MEM_dupallocN(mesh_src->mloop);
-    tmp.mpoly = (alloctype == CD_ASSIGN) ? mesh_src->mpoly : MEM_dupallocN(mesh_src->mpoly);
-
-    CustomData_add_layer(&tmp.ldata, CD_MLOOP, CD_ASSIGN, tmp.mloop, tmp.totloop);
-    CustomData_add_layer(&tmp.pdata, CD_MPOLY, CD_ASSIGN, tmp.mpoly, tmp.totpoly);
+    CustomData_add_layer(&tmp.ldata,
+                         CD_MLOOP,
+                         CD_ASSIGN,
+                         (alloctype == CD_ASSIGN) ? mesh_src->mloop :
+                                                    MEM_dupallocN(mesh_src->mloop),
+                         tmp.totloop);
+    CustomData_add_layer(&tmp.pdata,
+                         CD_MPOLY,
+                         CD_ASSIGN,
+                         (alloctype == CD_ASSIGN) ? mesh_src->mpoly :
+                                                    MEM_dupallocN(mesh_src->mpoly),
+                         tmp.totpoly);
   }
 
   /* object had got displacement layer, should copy this layer to save sculpted data */
-  /* NOTE: maybe some other layers should be copied? nazgul */
+  /* NOTE(nazgul): maybe some other layers should be copied? */
   if (CustomData_has_layer(&mesh_dst->ldata, CD_MDISPS)) {
     if (totloop == mesh_dst->totloop) {
       MDisps *mdisps = CustomData_get_layer(&mesh_dst->ldata, CD_MDISPS);
@@ -1663,9 +1634,6 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
 
   /* yes, must be before _and_ after tessellate */
   BKE_mesh_update_customdata_pointers(&tmp, false);
-
-  /* since 2.65 caller must do! */
-  // BKE_mesh_tessface_calc(&tmp);
 
   CustomData_free(&mesh_dst->vdata, mesh_dst->totvert);
   CustomData_free(&mesh_dst->edata, mesh_dst->totedge);
@@ -1690,7 +1658,7 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src,
   tmp.texflag &= ~ME_AUTOSPACE_EVALUATED;
 
   /* Clear any run-time data.
-   * Even though this mesh wont typically have run-time data, the Python API can for e.g.
+   * Even though this mesh won't typically have run-time data, the Python API can for e.g.
    * create loop-triangle cache here, which is confusing when left in the mesh, see: T81136. */
   BKE_mesh_runtime_clear_geometry(&tmp);
 

@@ -34,9 +34,9 @@ struct ListBase;
 
 struct ARegion;
 struct ARegionType;
+struct FModifier;
 struct Main;
 struct NlaStrip;
-struct FModifier;
 struct PanelType;
 struct ReportList;
 struct ScrArea;
@@ -177,9 +177,9 @@ typedef struct bAnimListElem {
    * action's ID. But if this is a f-curve which is a driver, then the owner
    * is set to, for example, object.
    *
-   * Note, that this is different from id above. The id above will be set to
-   * an object if the f-curve is coming from action associated with that
-   * object. */
+   * NOTE: this is different from id above. The id above will be set to
+   * an object if the f-curve is coming from action associated with that object.
+   */
   struct ID *fcurve_owner_id;
 
   /**
@@ -290,7 +290,7 @@ typedef enum eAnimFilter_Flags {
    * (i.e. scene visibility criteria).
    *
    * XXX: it's hard to think of any examples where this *ISN'T* the case...
-   * perhaps becomes implicit?.
+   * perhaps becomes implicit?
    */
   ANIMFILTER_DATA_VISIBLE = (1 << 0),
   /** channel is visible within the channel-list hierarchy

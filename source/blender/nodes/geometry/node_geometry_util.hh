@@ -62,4 +62,34 @@ Mesh *create_cylinder_or_cone_mesh(const float radius_top,
 
 Mesh *create_cube_mesh(const float size);
 
+/**
+ * Copies the point domain attributes from `in_component` that are in the mask to `out_component`.
+ */
+void copy_point_attributes_based_on_mask(const GeometryComponent &in_component,
+                                         GeometryComponent &result_component,
+                                         Span<bool> masks,
+                                         const bool invert);
+
+struct CurveToPointsResults {
+  int result_size;
+  MutableSpan<float3> positions;
+  MutableSpan<float> radii;
+  MutableSpan<float> tilts;
+
+  Map<std::string, GMutableSpan> point_attributes;
+
+  MutableSpan<float3> tangents;
+  MutableSpan<float3> normals;
+  MutableSpan<float3> rotations;
+};
+/**
+ * Create references for all result point cloud attributes to simplify accessing them later on.
+ */
+CurveToPointsResults curve_to_points_create_result_attributes(PointCloudComponent &points,
+                                                              const CurveEval &curve);
+
+void curve_create_default_rotation_attribute(Span<float3> tangents,
+                                             Span<float3> normals,
+                                             MutableSpan<float3> rotations);
+
 }  // namespace blender::nodes

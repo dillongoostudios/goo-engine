@@ -22,12 +22,14 @@
  */
 
 #include "abc_customdata.h"
+#include "abc_axis_conversion.h"
 
 #include <Alembic/AbcGeom/All.h>
 #include <algorithm>
 #include <unordered_map>
 
 #include "DNA_customdata_types.h"
+#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
 #include "BLI_math_base.h"
@@ -42,6 +44,7 @@
  * in the write code for the conventions. */
 
 using Alembic::AbcGeom::kFacevaryingScope;
+using Alembic::AbcGeom::kVaryingScope;
 using Alembic::AbcGeom::kVertexScope;
 
 using Alembic::Abc::C4fArraySample;
@@ -50,7 +53,12 @@ using Alembic::Abc::V2fArraySample;
 
 using Alembic::AbcGeom::OC4fGeomParam;
 using Alembic::AbcGeom::OV2fGeomParam;
+using Alembic::AbcGeom::OV3fGeomParam;
 namespace blender::io::alembic {
+
+/* ORCO, Generated Coordinates, and Reference Points ("Pref") are all terms for the same thing.
+ * Other applications (Maya, Houdini) write these to a property called "Pref". */
+static const std::string propNameOriginalCoordinates("Pref");
 
 static void get_uvs(const CDStreamConfig &config,
                     std::vector<Imath::V2f> &uvs,
@@ -222,6 +230,32 @@ static void write_mcol(const OCompoundProperty &prop,
   param.set(sample);
 }
 
+void write_generated_coordinates(const OCompoundProperty &prop, CDStreamConfig &config)
+{
+  const void *customdata = CustomData_get_layer(&config.mesh->vdata, CD_ORCO);
+  if (customdata == nullptr) {
+    /* Data not available, so don't even bother creating an Alembic property for it. */
+    return;
+  }
+  const float(*orcodata)[3] = static_cast<const float(*)[3]>(customdata);
+
+  /* Convert 3D vertices from float[3] z=up to V3f y=up. */
+  std::vector<Imath::V3f> coords(config.totvert);
+  float orco_yup[3];
+  for (int vertex_idx = 0; vertex_idx < config.totvert; vertex_idx++) {
+    copy_yup_from_zup(orco_yup, orcodata[vertex_idx]);
+    coords[vertex_idx].setValue(orco_yup[0], orco_yup[1], orco_yup[2]);
+  }
+
+  if (!config.abc_ocro.valid()) {
+    /* Create the Alembic property and keep a reference so future frames can reuse it. */
+    config.abc_ocro = OV3fGeomParam(prop, propNameOriginalCoordinates, false, kVertexScope, 1);
+  }
+
+  OV3fGeomParam::Sample sample(coords, kVertexScope);
+  config.abc_ocro.set(sample);
+}
+
 void write_custom_data(const OCompoundProperty &prop,
                        CDStreamConfig &config,
                        CustomData *data,
@@ -259,28 +293,35 @@ void write_custom_data(const OCompoundProperty &prop,
 using Alembic::Abc::C3fArraySamplePtr;
 using Alembic::Abc::C4fArraySamplePtr;
 using Alembic::Abc::PropertyHeader;
+using Alembic::Abc::UInt32ArraySamplePtr;
 
 using Alembic::AbcGeom::IC3fGeomParam;
 using Alembic::AbcGeom::IC4fGeomParam;
 using Alembic::AbcGeom::IV2fGeomParam;
+using Alembic::AbcGeom::IV3fGeomParam;
 
 static void read_uvs(const CDStreamConfig &config,
                      void *data,
+                     const AbcUvScope uv_scope,
                      const Alembic::AbcGeom::V2fArraySamplePtr &uvs,
-                     const Alembic::AbcGeom::UInt32ArraySamplePtr &indices)
+                     const UInt32ArraySamplePtr &indices)
 {
   MPoly *mpolys = config.mpoly;
+  MLoop *mloops = config.mloop;
   MLoopUV *mloopuvs = static_cast<MLoopUV *>(data);
 
   unsigned int uv_index, loop_index, rev_loop_index;
+
+  BLI_assert(uv_scope != ABC_UV_SCOPE_NONE);
+  const bool do_uvs_per_loop = (uv_scope == ABC_UV_SCOPE_LOOP);
 
   for (int i = 0; i < config.totpoly; i++) {
     MPoly &poly = mpolys[i];
     unsigned int rev_loop_offset = poly.loopstart + poly.totloop - 1;
 
     for (int f = 0; f < poly.totloop; f++) {
-      loop_index = poly.loopstart + f;
       rev_loop_index = rev_loop_offset - f;
+      loop_index = do_uvs_per_loop ? poly.loopstart + f : mloops[rev_loop_index].v;
       uv_index = (*indices)[loop_index];
       const Imath::V2f &uv = (*uvs)[uv_index];
 
@@ -439,13 +480,55 @@ static void read_custom_data_uvs(const ICompoundProperty &prop,
   IV2fGeomParam::Sample sample;
   uv_param.getIndexed(sample, iss);
 
-  if (uv_param.getScope() != kFacevaryingScope) {
+  UInt32ArraySamplePtr uvs_indices = sample.getIndices();
+
+  const AbcUvScope uv_scope = get_uv_scope(uv_param.getScope(), config, uvs_indices);
+
+  if (uv_scope == ABC_UV_SCOPE_NONE) {
     return;
   }
 
   void *cd_data = config.add_customdata_cb(config.mesh, prop_header.getName().c_str(), CD_MLOOPUV);
 
-  read_uvs(config, cd_data, sample.getVals(), sample.getIndices());
+  read_uvs(config, cd_data, uv_scope, sample.getVals(), uvs_indices);
+}
+
+void read_generated_coordinates(const ICompoundProperty &prop,
+                                const CDStreamConfig &config,
+                                const Alembic::Abc::ISampleSelector &iss)
+{
+  if (!prop.valid() || prop.getPropertyHeader(propNameOriginalCoordinates) == nullptr) {
+    /* The ORCO property isn't there, so don't bother trying to process it. */
+    return;
+  }
+
+  IV3fGeomParam param(prop, propNameOriginalCoordinates);
+  if (!param.valid() || param.isIndexed()) {
+    /* Invalid or indexed coordinates aren't supported. */
+    return;
+  }
+  if (param.getScope() != kVertexScope) {
+    /* These are original vertex coordinates, so must be vertex-scoped. */
+    return;
+  }
+
+  IV3fGeomParam::Sample sample = param.getExpandedValue(iss);
+  Alembic::AbcGeom::V3fArraySamplePtr abc_ocro = sample.getVals();
+  const size_t totvert = abc_ocro.get()->size();
+
+  void *cd_data;
+  if (CustomData_has_layer(&config.mesh->vdata, CD_ORCO)) {
+    cd_data = CustomData_get_layer(&config.mesh->vdata, CD_ORCO);
+  }
+  else {
+    cd_data = CustomData_add_layer(&config.mesh->vdata, CD_ORCO, CD_CALLOC, nullptr, totvert);
+  }
+
+  float(*orcodata)[3] = static_cast<float(*)[3]>(cd_data);
+  for (int vertex_idx = 0; vertex_idx < totvert; ++vertex_idx) {
+    const Imath::V3f &abc_coords = (*abc_ocro)[vertex_idx];
+    copy_zup_from_yup(orcodata[vertex_idx], abc_coords.getValue());
+  }
 }
 
 void read_custom_data(const std::string &iobject_full_name,
@@ -485,6 +568,30 @@ void read_custom_data(const std::string &iobject_full_name,
       continue;
     }
   }
+}
+
+/* UVs can be defined per-loop (one value per vertex per face), or per-vertex (one value per
+ * vertex). The first case is the most common, as this is the standard way of storing this data
+ * given that some vertices might be on UV seams and have multiple possible UV coordinates; the
+ * second case can happen when the mesh is split according to the UV islands, in which case storing
+ * a single UV value per vertex allows to deduplicate data and thus to reduce the file size since
+ * vertices are guaranteed to only have a single UV coordinate. */
+AbcUvScope get_uv_scope(const Alembic::AbcGeom::GeometryScope scope,
+                        const CDStreamConfig &config,
+                        const Alembic::AbcGeom::UInt32ArraySamplePtr &indices)
+{
+  if (scope == kFacevaryingScope && indices->size() == config.totloop) {
+    return ABC_UV_SCOPE_LOOP;
+  }
+
+  /* kVaryingScope is sometimes used for vertex scopes as the values vary across the vertices. To
+   * be sure, one has to check the size of the data against the number of vertices, as it could
+   * also be a varying attribute across the faces (i.e. one value per face). */
+  if ((scope == kVaryingScope || scope == kVertexScope) && indices->size() == config.totvert) {
+    return ABC_UV_SCOPE_VERTEX;
+  }
+
+  return ABC_UV_SCOPE_NONE;
 }
 
 }  // namespace blender::io::alembic

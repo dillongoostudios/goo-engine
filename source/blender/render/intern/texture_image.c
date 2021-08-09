@@ -634,11 +634,11 @@ static void boxsample(ImBuf *ibuf,
    * If variable 'imaprepeat' has been set, the
    * clipped-away parts are sampled as well.
    */
-  /* note: actually minx etc isn't in the proper range...
-   *       this due to filter size and offset vectors for bump */
-  /* note: talpha must be initialized */
-  /* note: even when 'imaprepeat' is set, this can only repeat once in any direction.
-   * the point which min/max is derived from is assumed to be wrapped */
+  /* NOTE: actually minx etc isn't in the proper range...
+   *       this due to filter size and offset vectors for bump. */
+  /* NOTE: talpha must be initialized. */
+  /* NOTE: even when 'imaprepeat' is set, this can only repeat once in any direction.
+   * the point which min/max is derived from is assumed to be wrapped. */
   TexResult texr;
   rctf *rf, stack[8];
   float opp, tot, alphaclip = 1.0;
@@ -930,10 +930,10 @@ static void feline_eval(TexResult *texr, ImBuf *ibuf, float fx, float fy, afdata
 #else
     const float wt = EWA_WTS[(int)(n * n * D)];
 #endif
-    /*const int out =*/ibuf_get_color_clip_bilerp(
+    /* `const int out =` */ ibuf_get_color_clip_bilerp(
         tc, ibuf, ibuf->x * u, ibuf->y * v, AFD->intpol, AFD->extflag);
-    /* TXF alpha: clip |= out;
-     * TXF alpha: cw += out ? 0.0f : wt; */
+    /* TXF alpha: `clip |= out;`
+     * TXF alpha: `cw += out ? 0.0f : wt;` */
     texr->tr += tc[0] * wt;
     texr->tg += tc[1] * wt;
     texr->tb += tc[2] * wt;
@@ -945,8 +945,8 @@ static void feline_eval(TexResult *texr, ImBuf *ibuf, float fx, float fy, afdata
   texr->tr *= d;
   texr->tg *= d;
   texr->tb *= d;
-  /* clipping can be ignored if alpha used, texr->ta already includes filtered edge */
-  texr->ta = texr->talpha ? texr->ta * d : 1.0f;  // TXF alpha: (clip ? cw*d : 1.0f);
+  /* Clipping can be ignored if alpha used, `texr->ta` already includes filtered edge */
+  texr->ta = texr->talpha ? texr->ta * d : 1.0f; /* TXF alpha: `(clip ? cw*d : 1.0f);` */
 }
 #undef EWA_MAXIDX
 
@@ -957,7 +957,7 @@ static void alpha_clip_aniso(
   rctf rf;
 
   /* TXF alpha: we're doing the same alpha-clip here as box-sample, but I'm doubting
-   * if this is actually correct for the all the filtering algorithms .. */
+   * if this is actually correct for the all the filtering algorithms. */
 
   if (!(extflag == TXC_REPT || extflag == TXC_EXTD)) {
     rf.xmin = minx * (ibuf->x);
@@ -1744,7 +1744,7 @@ int imagewraposa(Tex *tex,
     }
   }
 
-  /* choice:  */
+  /* Choice: */
   if (tex->imaflag & TEX_MIPMAP) {
     ImBuf *previbuf, *curibuf;
     float bumpscale;

@@ -39,15 +39,14 @@
 #include "BKE_mesh_wrapper.h"
 #include "BKE_object.h"
 
-BMEditMesh *BKE_editmesh_create(BMesh *bm, const bool do_tessellate)
+/**
+ * \note The caller is responsible for ensuring triangulation data,
+ * typically by calling #BKE_editmesh_looptri_calc.
+ */
+BMEditMesh *BKE_editmesh_create(BMesh *bm)
 {
   BMEditMesh *em = MEM_callocN(sizeof(BMEditMesh), __func__);
-
   em->bm = bm;
-  if (do_tessellate) {
-    BKE_editmesh_looptri_calc(em);
-  }
-
   return em;
 }
 
@@ -96,7 +95,8 @@ BMEditMesh *BKE_editmesh_from_object(Object *ob)
   return ((Mesh *)ob->data)->edit_mesh;
 }
 
-static void editmesh_tessface_calc_intern(BMEditMesh *em)
+static void editmesh_tessface_calc_intern(BMEditMesh *em,
+                                          const struct BMeshCalcTessellation_Params *params)
 {
   /* allocating space before calculating the tessellation */
 
@@ -127,14 +127,16 @@ static void editmesh_tessface_calc_intern(BMEditMesh *em)
   }
 
   em->looptris = looptris;
+  em->tottri = looptris_tot;
 
   /* after allocating the em->looptris, we're ready to tessellate */
-  BM_mesh_calc_tessellation(em->bm, em->looptris, &em->tottri);
+  BM_mesh_calc_tessellation_ex(em->bm, em->looptris, params);
 }
 
-void BKE_editmesh_looptri_calc(BMEditMesh *em)
+void BKE_editmesh_looptri_calc_ex(BMEditMesh *em,
+                                  const struct BMeshCalcTessellation_Params *params)
 {
-  editmesh_tessface_calc_intern(em);
+  editmesh_tessface_calc_intern(em, params);
 
   /* commented because editbmesh_build_data() ensures we get tessfaces */
 #if 0
@@ -148,7 +150,65 @@ void BKE_editmesh_looptri_calc(BMEditMesh *em)
 #endif
 }
 
-void BKE_editmesh_free_derivedmesh(BMEditMesh *em)
+void BKE_editmesh_looptri_calc(BMEditMesh *em)
+{
+  BKE_editmesh_looptri_calc_ex(em,
+                               &(const struct BMeshCalcTessellation_Params){
+                                   .face_normals = false,
+                               });
+}
+
+/**
+ * Performing the face normal calculation at the same time as tessellation
+ * gives a reasonable performance boost (approx ~20% faster).
+ */
+void BKE_editmesh_looptri_and_normals_calc(BMEditMesh *em)
+{
+  BKE_editmesh_looptri_calc_ex(em,
+                               &(const struct BMeshCalcTessellation_Params){
+                                   .face_normals = true,
+                               });
+  BM_mesh_normals_update_ex(em->bm,
+                            &(const struct BMeshNormalsUpdate_Params){
+                                .face_normals = false,
+                            });
+}
+
+void BKE_editmesh_looptri_calc_with_partial_ex(BMEditMesh *em,
+                                               struct BMPartialUpdate *bmpinfo,
+                                               const struct BMeshCalcTessellation_Params *params)
+{
+  BLI_assert(em->tottri == poly_to_tri_count(em->bm->totface, em->bm->totloop));
+  BLI_assert(em->looptris != NULL);
+
+  BM_mesh_calc_tessellation_with_partial_ex(em->bm, em->looptris, bmpinfo, params);
+}
+
+void BKE_editmesh_looptri_calc_with_partial(BMEditMesh *em, struct BMPartialUpdate *bmpinfo)
+{
+  BKE_editmesh_looptri_calc_with_partial_ex(em,
+                                            bmpinfo,
+                                            &(const struct BMeshCalcTessellation_Params){
+                                                .face_normals = false,
+                                            });
+}
+
+void BKE_editmesh_looptri_and_normals_calc_with_partial(BMEditMesh *em,
+                                                        struct BMPartialUpdate *bmpinfo)
+{
+  BKE_editmesh_looptri_calc_with_partial_ex(em,
+                                            bmpinfo,
+                                            &(const struct BMeshCalcTessellation_Params){
+                                                .face_normals = true,
+                                            });
+  BM_mesh_normals_update_with_partial_ex(em->bm,
+                                         bmpinfo,
+                                         &(const struct BMeshNormalsUpdate_Params){
+                                             .face_normals = false,
+                                         });
+}
+
+void BKE_editmesh_free_derived_caches(BMEditMesh *em)
 {
   if (em->mesh_eval_cage) {
     BKE_id_free(NULL, em->mesh_eval_cage);
@@ -161,10 +221,10 @@ void BKE_editmesh_free_derivedmesh(BMEditMesh *em)
   MEM_SAFE_FREE(em->bb_cage);
 }
 
-/*does not free the BMEditMesh struct itself*/
-void BKE_editmesh_free(BMEditMesh *em)
+/* Does not free the #BMEditMesh struct itself. */
+void BKE_editmesh_free_data(BMEditMesh *em)
 {
-  BKE_editmesh_free_derivedmesh(em);
+  BKE_editmesh_free_derived_caches(em);
 
   if (em->looptris) {
     MEM_freeN(em->looptris);
@@ -246,7 +306,7 @@ const float (*BKE_editmesh_vert_coords_when_deformed(struct Depsgraph *depsgraph
   }
   else if ((em->mesh_eval_final != NULL) &&
            (em->mesh_eval_final->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH)) {
-    /* If this is an edit-mesh type, leave NULL as we can use the vertex coords. . */
+    /* If this is an edit-mesh type, leave NULL as we can use the vertex coords. */
   }
   else {
     /* Constructive modifiers have been used, we need to allocate coordinates. */
@@ -269,7 +329,7 @@ void BKE_editmesh_lnorspace_update(BMEditMesh *em, Mesh *me)
    * otherwise there is no way to edit them.
    * Similar code to #MESH_OT_customdata_custom_splitnormals_add operator,
    * we want to keep same shading in case we were using auto-smooth so far.
-   * Note: there is a problem here, which is that if someone starts a normal editing operation on
+   * NOTE: there is a problem here, which is that if someone starts a normal editing operation on
    * previously auto-smooth-ed mesh, and cancel that operation, generated CLNORS data remain,
    * with related sharp edges (and hence auto-smooth is 'lost').
    * Not sure how critical this is, and how to fix that issue? */

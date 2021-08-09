@@ -46,5 +46,5 @@ void postSelectConstraint(TransInfo *t);
 void setNearestAxis(TransInfo *t);
 int constraintModeToIndex(const TransInfo *t);
 char constraintModeToChar(const TransInfo *t);
-bool isLockConstraint(TransInfo *t);
-int getConstraintSpaceDimension(TransInfo *t);
+bool isLockConstraint(const TransInfo *t);
+int getConstraintSpaceDimension(const TransInfo *t);

@@ -24,13 +24,13 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_endian_defines.h"
 #include "BLI_endian_switch.h"
 #include "BLI_fileops.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "BKE_customdata_file.h"
-#include "BKE_global.h"
 
 /************************* File Format Definitions ***************************/
 
@@ -167,7 +167,7 @@ static bool cdf_read_header(CDataFile *cdf)
   offset += header->structbytes;
   header->structbytes = sizeof(CDataFileHeader);
 
-  if (fseek(f, offset, SEEK_SET) != 0) {
+  if (BLI_fseek(f, offset, SEEK_SET) != 0) {
     return false;
   }
 
@@ -201,7 +201,7 @@ static bool cdf_read_header(CDataFile *cdf)
     mesh->structbytes = sizeof(CDataFileMeshHeader);
   }
 
-  if (fseek(f, offset, SEEK_SET) != 0) {
+  if (BLI_fseek(f, offset, SEEK_SET) != 0) {
     return false;
   }
 
@@ -233,7 +233,7 @@ static bool cdf_read_header(CDataFile *cdf)
     offset += layer->structbytes;
     layer->structbytes = sizeof(CDataFileLayer);
 
-    if (fseek(f, offset, SEEK_SET) != 0) {
+    if (BLI_fseek(f, offset, SEEK_SET) != 0) {
       return false;
     }
   }
@@ -321,7 +321,7 @@ bool cdf_read_layer(CDataFile *cdf, CDataFileLayer *blay)
     offset += cdf->layer[a].datasize;
   }
 
-  return (fseek(cdf->readf, offset, SEEK_SET) == 0);
+  return (BLI_fseek(cdf->readf, offset, SEEK_SET) == 0);
 }
 
 bool cdf_read_data(CDataFile *cdf, unsigned int size, void *data)
@@ -361,9 +361,9 @@ bool cdf_write_open(CDataFile *cdf, const char *filename)
 
   cdf->writef = f;
 
-  /* fill header */
+  /* Fill header. */
   header = &cdf->header;
-  /* strcpy(, "BCDF"); // terminator out of range */
+  /* Copy "BCDF" (string terminator out of range). */
   header->ID[0] = 'B';
   header->ID[1] = 'C';
   header->ID[2] = 'D';

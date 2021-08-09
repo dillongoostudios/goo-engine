@@ -43,7 +43,7 @@
 #include "GPU_vertex_buffer.h"
 
 #include "ED_anim_api.h"
-#include "ED_keyframes_draw.h"
+#include "ED_keyframes_keylist.h"
 
 #include "CLG_log.h"
 
@@ -355,7 +355,7 @@ static void motionpath_free_free_tree_data(ListBase *targets)
 
 /* Perform baking of the given object's and/or its bones' transforms to motion paths
  * - scene: current scene
- * - ob: object whose flagged motionpaths should get calculated
+ * - ob: object whose flagged motion-paths should get calculated
  * - recalc: whether we need to
  */
 /* TODO: include reports pointer? */

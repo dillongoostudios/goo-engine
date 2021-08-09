@@ -954,7 +954,7 @@ def pymodule2sphinx(basepath, module_name, module, title, module_all_extra):
             # constant, not much fun we can do here except to list it.
             # TODO, figure out some way to document these!
             fw(".. data:: %s\n\n" % attribute)
-            write_indented_lines("   ", fw, "constant value %s" % repr(value), False)
+            write_indented_lines("   ", fw, "Constant value %s" % repr(value), False)
             fw("\n")
         else:
             BPY_LOGGER.debug("\tnot documenting %s.%s of %r type" % (module_name, attribute, value_type.__name__))
@@ -1036,7 +1036,6 @@ def pymodule2sphinx(basepath, module_name, module, title, module_all_extra):
 context_type_map = {
     # context_member: (RNA type, is_collection)
     "active_annotation_layer": ("GPencilLayer", False),
-    "active_base": ("ObjectBase", False),
     "active_bone": ("EditBone", False),
     "active_gpencil_frame": ("GreasePencilLayer", True),
     "active_gpencil_layer": ("GPencilLayer", True),
@@ -1048,6 +1047,7 @@ context_type_map = {
     "annotation_data": ("GreasePencil", False),
     "annotation_data_owner": ("ID", False),
     "armature": ("Armature", False),
+    "asset_library": ("AssetLibraryReference", False),
     "bone": ("Bone", False),
     "brush": ("Brush", False),
     "camera": ("Camera", False),
@@ -1114,6 +1114,7 @@ context_type_map = {
     "texture_slot": ("MaterialTextureSlot", False),
     "texture_user": ("ID", False),
     "texture_user_property": ("Property", False),
+    "ui_list": ("UIList", False),
     "vertex_paint_object": ("Object", False),
     "view_layer": ("ViewLayer", False),
     "visible_bones": ("EditBone", True),
@@ -1247,7 +1248,7 @@ def pyrna_enum2sphinx(prop, use_empty_descriptions=False):
             "%s.\n" % (
                 identifier,
                 # Account for multi-line enum descriptions, allowing this to be a block of text.
-                indent(", ".join(escape_rst(val) for val in (name, description) if val) or "Undocumented", "  "),
+                indent(" -- ".join(escape_rst(val) for val in (name, description) if val) or "Undocumented", "  "),
             )
             for identifier, name, description in prop.enum_items
         ])
@@ -1556,8 +1557,8 @@ def pyrna2sphinx(basepath):
             fw(".. hlist::\n")
             fw("   :columns: 2\n\n")
 
-            # context does its own thing
-            # "active_base": ("ObjectBase", False),
+            # Context does its own thing.
+            # "active_object": ("Object", False),
             for ref_attr, (ref_type, ref_is_seq) in sorted(context_type_map.items()):
                 if ref_type == struct_id:
                     fw("   * :mod:`bpy.context.%s`\n" % ref_attr)

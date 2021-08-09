@@ -244,10 +244,13 @@ MINLINE int min_axis_v3(const float vec[3])
 }
 
 /**
- * Simple method to find how many tri's we need when we already know the corner+poly count.
+ * Simple function to either:
+ * - Calculate how many triangles needed from the total number of polygons + loops.
+ * - Calculate the first triangle index from the polygon index & that polygons loop-start.
  *
- * \param poly_count: The number of ngon's/tris (1-2 sided faces will give incorrect results)
- * \param corner_count: also known as loops in BMesh/DNA
+ * \param poly_count: The number of polygons or polygon-index
+ * (3+ sided faces, 1-2 sided give incorrect results).
+ * \param corner_count: The number of corners (also called loop-index).
  */
 MINLINE int poly_to_tri_count(const int poly_count, const int corner_count)
 {
@@ -269,7 +272,7 @@ MINLINE float shell_angle_to_dist(const float angle)
   return (UNLIKELY(angle < SMALL_NUMBER)) ? 1.0f : fabsf(1.0f / cosf(angle));
 }
 /**
- * equivalent to ``shell_angle_to_dist(angle_normalized_v3v3(a, b))``
+ * Equivalent to `shell_angle_to_dist(angle_normalized_v3v3(a, b))`.
  */
 MINLINE float shell_v3v3_normalized_to_dist(const float a[3], const float b[3])
 {
@@ -279,7 +282,7 @@ MINLINE float shell_v3v3_normalized_to_dist(const float a[3], const float b[3])
   return (UNLIKELY(angle_cos < SMALL_NUMBER)) ? 1.0f : (1.0f / angle_cos);
 }
 /**
- * equivalent to ``shell_angle_to_dist(angle_normalized_v2v2(a, b))``
+ * Equivalent to `shell_angle_to_dist(angle_normalized_v2v2(a, b))`.
  */
 MINLINE float shell_v2v2_normalized_to_dist(const float a[2], const float b[2])
 {
@@ -290,7 +293,7 @@ MINLINE float shell_v2v2_normalized_to_dist(const float a[2], const float b[2])
 }
 
 /**
- * equivalent to ``shell_angle_to_dist(angle_normalized_v3v3(a, b) / 2)``
+ * Equivalent to `shell_angle_to_dist(angle_normalized_v3v3(a, b) / 2)`.
  */
 MINLINE float shell_v3v3_mid_normalized_to_dist(const float a[3], const float b[3])
 {
@@ -304,7 +307,7 @@ MINLINE float shell_v3v3_mid_normalized_to_dist(const float a[3], const float b[
 }
 
 /**
- * equivalent to ``shell_angle_to_dist(angle_normalized_v2v2(a, b) / 2)``
+ * Equivalent to `shell_angle_to_dist(angle_normalized_v2v2(a, b) / 2)`.
  */
 MINLINE float shell_v2v2_mid_normalized_to_dist(const float a[2], const float b[2])
 {

@@ -15,6 +15,7 @@
  */
 
 #include "BLI_math_rotation.h"
+#include "BLI_task.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -50,143 +51,6 @@ static void geo_node_align_rotation_to_vector_layout(uiLayout *layout,
 
 namespace blender::nodes {
 
-static void align_rotations_auto_pivot(const Float3ReadAttribute &vectors,
-                                       const FloatReadAttribute &factors,
-                                       const float3 local_main_axis,
-                                       MutableSpan<float3> rotations)
-{
-  for (const int i : IndexRange(vectors.size())) {
-    const float3 vector = vectors[i];
-    if (is_zero_v3(vector)) {
-      continue;
-    }
-
-    float old_rotation[3][3];
-    eul_to_mat3(old_rotation, rotations[i]);
-    float3 old_axis;
-    mul_v3_m3v3(old_axis, old_rotation, local_main_axis);
-
-    const float3 new_axis = vector.normalized();
-    float3 rotation_axis = float3::cross_high_precision(old_axis, new_axis);
-    if (is_zero_v3(rotation_axis)) {
-      /* The vectors are linearly dependent, so we fall back to another axis. */
-      rotation_axis = float3::cross_high_precision(old_axis, float3(1, 0, 0));
-      if (is_zero_v3(rotation_axis)) {
-        /* This is now guaranteed to not be zero. */
-        rotation_axis = float3::cross_high_precision(old_axis, float3(0, 1, 0));
-      }
-    }
-
-    const float full_angle = angle_normalized_v3v3(old_axis, new_axis);
-    const float angle = factors[i] * full_angle;
-
-    float rotation[3][3];
-    axis_angle_to_mat3(rotation, rotation_axis, angle);
-
-    float new_rotation_matrix[3][3];
-    mul_m3_m3m3(new_rotation_matrix, rotation, old_rotation);
-
-    float3 new_rotation;
-    mat3_to_eul(new_rotation, new_rotation_matrix);
-
-    rotations[i] = new_rotation;
-  }
-}
-
-static void align_rotations_fixed_pivot(const Float3ReadAttribute &vectors,
-                                        const FloatReadAttribute &factors,
-                                        const float3 local_main_axis,
-                                        const float3 local_pivot_axis,
-                                        MutableSpan<float3> rotations)
-{
-  if (local_main_axis == local_pivot_axis) {
-    /* Can't compute any meaningful rotation angle in this case. */
-    return;
-  }
-
-  for (const int i : IndexRange(vectors.size())) {
-    const float3 vector = vectors[i];
-    if (is_zero_v3(vector)) {
-      continue;
-    }
-
-    float old_rotation[3][3];
-    eul_to_mat3(old_rotation, rotations[i]);
-    float3 old_axis;
-    mul_v3_m3v3(old_axis, old_rotation, local_main_axis);
-    float3 pivot_axis;
-    mul_v3_m3v3(pivot_axis, old_rotation, local_pivot_axis);
-
-    float full_angle = angle_signed_on_axis_v3v3_v3(vector, old_axis, pivot_axis);
-    if (full_angle > M_PI) {
-      /* Make sure the point is rotated as little as possible. */
-      full_angle -= 2.0f * M_PI;
-    }
-    const float angle = factors[i] * full_angle;
-
-    float rotation[3][3];
-    axis_angle_to_mat3(rotation, pivot_axis, angle);
-
-    float new_rotation_matrix[3][3];
-    mul_m3_m3m3(new_rotation_matrix, rotation, old_rotation);
-
-    float3 new_rotation;
-    mat3_to_eul(new_rotation, new_rotation_matrix);
-
-    rotations[i] = new_rotation;
-  }
-}
-
-static void align_rotations_on_component(GeometryComponent &component,
-                                         const GeoNodeExecParams &params)
-{
-  const bNode &node = params.node();
-  const NodeGeometryAlignRotationToVector &storage = *(const NodeGeometryAlignRotationToVector *)
-                                                          node.storage;
-
-  OutputAttributePtr rotation_attribute = component.attribute_try_get_for_output(
-      "rotation", ATTR_DOMAIN_POINT, CD_PROP_FLOAT3);
-  if (!rotation_attribute) {
-    return;
-  }
-  MutableSpan<float3> rotations = rotation_attribute->get_span<float3>();
-
-  FloatReadAttribute factors = params.get_input_attribute<float>(
-      "Factor", component, ATTR_DOMAIN_POINT, 1.0f);
-  Float3ReadAttribute vectors = params.get_input_attribute<float3>(
-      "Vector", component, ATTR_DOMAIN_POINT, {0, 0, 1});
-
-  float3 local_main_axis{0, 0, 0};
-  local_main_axis[storage.axis] = 1;
-  if (storage.pivot_axis == GEO_NODE_ALIGN_ROTATION_TO_VECTOR_PIVOT_AXIS_AUTO) {
-    align_rotations_auto_pivot(vectors, factors, local_main_axis, rotations);
-  }
-  else {
-    float3 local_pivot_axis{0, 0, 0};
-    local_pivot_axis[storage.pivot_axis - 1] = 1;
-    align_rotations_fixed_pivot(vectors, factors, local_main_axis, local_pivot_axis, rotations);
-  }
-
-  rotation_attribute.apply_span_and_save();
-}
-
-static void geo_node_align_rotation_to_vector_exec(GeoNodeExecParams params)
-{
-  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
-
-  geometry_set = geometry_set_realize_instances(geometry_set);
-
-  if (geometry_set.has<MeshComponent>()) {
-    align_rotations_on_component(geometry_set.get_component_for_write<MeshComponent>(), params);
-  }
-  if (geometry_set.has<PointCloudComponent>()) {
-    align_rotations_on_component(geometry_set.get_component_for_write<PointCloudComponent>(),
-                                 params);
-  }
-
-  params.set_output("Geometry", geometry_set);
-}
-
 static void geo_node_align_rotation_to_vector_init(bNodeTree *UNUSED(ntree), bNode *node)
 {
   NodeGeometryAlignRotationToVector *node_storage = (NodeGeometryAlignRotationToVector *)
@@ -207,6 +71,150 @@ static void geo_node_align_rotation_to_vector_update(bNodeTree *UNUSED(ntree), b
       *node, "Factor", (GeometryNodeAttributeInputMode)node_storage->input_type_factor);
   update_attribute_input_socket_availabilities(
       *node, "Vector", (GeometryNodeAttributeInputMode)node_storage->input_type_vector);
+}
+
+static void align_rotations_auto_pivot(const VArray<float3> &vectors,
+                                       const VArray<float> &factors,
+                                       const float3 local_main_axis,
+                                       const MutableSpan<float3> rotations)
+{
+  threading::parallel_for(IndexRange(vectors.size()), 128, [&](IndexRange range) {
+    for (const int i : range) {
+      const float3 vector = vectors[i];
+      if (is_zero_v3(vector)) {
+        continue;
+      }
+
+      float old_rotation[3][3];
+      eul_to_mat3(old_rotation, rotations[i]);
+      float3 old_axis;
+      mul_v3_m3v3(old_axis, old_rotation, local_main_axis);
+
+      const float3 new_axis = vector.normalized();
+      float3 rotation_axis = float3::cross_high_precision(old_axis, new_axis);
+      if (is_zero_v3(rotation_axis)) {
+        /* The vectors are linearly dependent, so we fall back to another axis. */
+        rotation_axis = float3::cross_high_precision(old_axis, float3(1, 0, 0));
+        if (is_zero_v3(rotation_axis)) {
+          /* This is now guaranteed to not be zero. */
+          rotation_axis = float3::cross_high_precision(old_axis, float3(0, 1, 0));
+        }
+      }
+
+      const float full_angle = angle_normalized_v3v3(old_axis, new_axis);
+      const float angle = factors[i] * full_angle;
+
+      float rotation[3][3];
+      axis_angle_to_mat3(rotation, rotation_axis, angle);
+
+      float new_rotation_matrix[3][3];
+      mul_m3_m3m3(new_rotation_matrix, rotation, old_rotation);
+
+      float3 new_rotation;
+      mat3_to_eul(new_rotation, new_rotation_matrix);
+
+      rotations[i] = new_rotation;
+    }
+  });
+}
+
+static void align_rotations_fixed_pivot(const VArray<float3> &vectors,
+                                        const VArray<float> &factors,
+                                        const float3 local_main_axis,
+                                        const float3 local_pivot_axis,
+                                        const MutableSpan<float3> rotations)
+{
+  if (local_main_axis == local_pivot_axis) {
+    /* Can't compute any meaningful rotation angle in this case. */
+    return;
+  }
+
+  threading::parallel_for(IndexRange(vectors.size()), 128, [&](IndexRange range) {
+    for (const int i : range) {
+      const float3 vector = vectors[i];
+      if (is_zero_v3(vector)) {
+        continue;
+      }
+
+      float old_rotation[3][3];
+      eul_to_mat3(old_rotation, rotations[i]);
+      float3 old_axis;
+      mul_v3_m3v3(old_axis, old_rotation, local_main_axis);
+      float3 pivot_axis;
+      mul_v3_m3v3(pivot_axis, old_rotation, local_pivot_axis);
+
+      float full_angle = angle_signed_on_axis_v3v3_v3(vector, old_axis, pivot_axis);
+      if (full_angle > M_PI) {
+        /* Make sure the point is rotated as little as possible. */
+        full_angle -= 2.0f * M_PI;
+      }
+      const float angle = factors[i] * full_angle;
+
+      float rotation[3][3];
+      axis_angle_to_mat3(rotation, pivot_axis, angle);
+
+      float new_rotation_matrix[3][3];
+      mul_m3_m3m3(new_rotation_matrix, rotation, old_rotation);
+
+      float3 new_rotation;
+      mat3_to_eul(new_rotation, new_rotation_matrix);
+
+      rotations[i] = new_rotation;
+    }
+  });
+}
+
+static void align_rotations_on_component(GeometryComponent &component,
+                                         const GeoNodeExecParams &params)
+{
+  const bNode &node = params.node();
+  const NodeGeometryAlignRotationToVector &storage = *(const NodeGeometryAlignRotationToVector *)
+                                                          node.storage;
+
+  OutputAttribute_Typed<float3> rotations = component.attribute_try_get_for_output<float3>(
+      "rotation", ATTR_DOMAIN_POINT, {0, 0, 0});
+  if (!rotations) {
+    return;
+  }
+
+  GVArray_Typed<float> factors = params.get_input_attribute<float>(
+      "Factor", component, ATTR_DOMAIN_POINT, 1.0f);
+  GVArray_Typed<float3> vectors = params.get_input_attribute<float3>(
+      "Vector", component, ATTR_DOMAIN_POINT, {0, 0, 1});
+
+  float3 local_main_axis{0, 0, 0};
+  local_main_axis[storage.axis] = 1;
+  if (storage.pivot_axis == GEO_NODE_ALIGN_ROTATION_TO_VECTOR_PIVOT_AXIS_AUTO) {
+    align_rotations_auto_pivot(vectors, factors, local_main_axis, rotations.as_span());
+  }
+  else {
+    float3 local_pivot_axis{0, 0, 0};
+    local_pivot_axis[storage.pivot_axis - 1] = 1;
+    align_rotations_fixed_pivot(
+        vectors, factors, local_main_axis, local_pivot_axis, rotations.as_span());
+  }
+
+  rotations.save();
+}
+
+static void geo_node_align_rotation_to_vector_exec(GeoNodeExecParams params)
+{
+  GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
+
+  geometry_set = geometry_set_realize_instances(geometry_set);
+
+  if (geometry_set.has<MeshComponent>()) {
+    align_rotations_on_component(geometry_set.get_component_for_write<MeshComponent>(), params);
+  }
+  if (geometry_set.has<PointCloudComponent>()) {
+    align_rotations_on_component(geometry_set.get_component_for_write<PointCloudComponent>(),
+                                 params);
+  }
+  if (geometry_set.has<CurveComponent>()) {
+    align_rotations_on_component(geometry_set.get_component_for_write<CurveComponent>(), params);
+  }
+
+  params.set_output("Geometry", geometry_set);
 }
 
 }  // namespace blender::nodes

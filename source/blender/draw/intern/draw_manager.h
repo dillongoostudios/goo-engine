@@ -110,8 +110,8 @@ typedef struct DRWCullingState {
 
 /* Minimum max UBO size is 64KiB. We take the largest
  * UBO struct and alloc the max number.
- * ((1 << 16) / sizeof(DRWObjectMatrix)) = 512
- * Keep in sync with common_view_lib.glsl */
+ * `((1 << 16) / sizeof(DRWObjectMatrix)) = 512`
+ * Keep in sync with `common_view_lib.glsl`. */
 #define DRW_RESOURCE_CHUNK_LEN 512
 
 /**
@@ -172,9 +172,9 @@ typedef struct DRWObjectInfos {
   float orcotexfac[2][4];
   float ob_color[4];
   float ob_index;
-  float pad; /* UNUSED*/
+  float pad; /*UNUSED*/
   float ob_random;
-  float ob_flag; /* sign is negative scaling,  */
+  float ob_flag; /* Sign is negative scaling. */
   uint ob_hash;
   char _pad2[12];
 } DRWObjectInfos;
@@ -189,6 +189,10 @@ typedef enum {
   DRW_CMD_DRAW_INSTANCE = 2,
   DRW_CMD_DRAW_INSTANCE_RANGE = 3,
   DRW_CMD_DRAW_PROCEDURAL = 4,
+
+  /* Compute Commands. */
+  DRW_CMD_COMPUTE = 8,
+
   /* Other Commands */
   DRW_CMD_CLEAR = 12,
   DRW_CMD_DRWSTATE = 13,
@@ -226,6 +230,12 @@ typedef struct DRWCommandDrawInstanceRange {
   uint inst_count;
 } DRWCommandDrawInstanceRange;
 
+typedef struct DRWCommandCompute {
+  int groups_x_len;
+  int groups_y_len;
+  int groups_z_len;
+} DRWCommandCompute;
+
 typedef struct DRWCommandDrawProcedural {
   GPUBatch *batch;
   DRWResourceHandle handle;
@@ -262,6 +272,7 @@ typedef union DRWCommand {
   DRWCommandDrawInstance instance;
   DRWCommandDrawInstanceRange instance_range;
   DRWCommandDrawProcedural procedural;
+  DRWCommandCompute compute;
   DRWCommandSetMutableState state;
   DRWCommandSetStencil stencil;
   DRWCommandSetSelectID select_id;
@@ -276,6 +287,7 @@ struct DRWCallBuffer {
 };
 
 /** Used by #DRWUniform.type */
+/* TODO(jbakker): rename to DRW_RESOURCE/DRWResourceType. */
 typedef enum {
   DRW_UNIFORM_INT = 0,
   DRW_UNIFORM_INT_COPY,
@@ -288,6 +300,7 @@ typedef enum {
   DRW_UNIFORM_BLOCK,
   DRW_UNIFORM_BLOCK_REF,
   DRW_UNIFORM_TFEEDBACK_TARGET,
+  DRW_UNIFORM_VERTEX_BUFFER_AS_STORAGE,
   /** Per drawcall uniforms/UBO */
   DRW_UNIFORM_BLOCK_OBMATS,
   DRW_UNIFORM_BLOCK_OBINFOS,
@@ -456,7 +469,7 @@ typedef struct DRWCommandSmallChunk {
   uint32_t command_len;
   uint32_t command_used;
   /* 4bits for each command. */
-  /* TODO reduce size of command_type. */
+  /* TODO: reduce size of command_type. */
   uint64_t command_type[6];
   DRWCommand commands[6];
 } DRWCommandSmallChunk;
@@ -487,7 +500,7 @@ typedef struct DRWDebugSphere {
 #define STENCIL_UNDEFINED 256
 #define DRW_DRAWLIST_LEN 256
 typedef struct DRWManager {
-  /* TODO clean up this struct a bit */
+  /* TODO: clean up this struct a bit. */
   /* Cache generation */
   ViewportMemoryPool *vmempool;
   DRWInstanceDataList *idatalist;

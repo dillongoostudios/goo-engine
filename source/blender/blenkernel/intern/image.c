@@ -68,6 +68,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_mempool.h"
 #include "BLI_system.h"
+#include "BLI_task.h"
 #include "BLI_threads.h"
 #include "BLI_timecode.h" /* For stamp time-code format. */
 #include "BLI_utildefines.h"
@@ -639,7 +640,7 @@ void BKE_image_merge(Main *bmain, Image *dest, Image *source)
   }
 }
 
-/* note, we could be clever and scale all imbuf's but since some are mipmaps its not so simple */
+/* NOTE: We could be clever and scale all imbuf's but since some are mipmaps its not so simple. */
 bool BKE_image_scale(Image *image, int width, int height)
 {
   ImBuf *ibuf;
@@ -882,6 +883,39 @@ Image *BKE_image_load_exists(Main *bmain, const char *filepath)
   return BKE_image_load_exists_ex(bmain, filepath, NULL);
 }
 
+typedef struct ImageFillData {
+  short gen_type;
+  uint width;
+  uint height;
+  unsigned char *rect;
+  float *rect_float;
+  float fill_color[4];
+} ImageFillData;
+
+static void image_buf_fill_isolated(void *usersata_v)
+{
+  ImageFillData *usersata = usersata_v;
+
+  const short gen_type = usersata->gen_type;
+  const uint width = usersata->width;
+  const uint height = usersata->height;
+
+  unsigned char *rect = usersata->rect;
+  float *rect_float = usersata->rect_float;
+
+  switch (gen_type) {
+    case IMA_GENTYPE_GRID:
+      BKE_image_buf_fill_checker(rect, rect_float, width, height);
+      break;
+    case IMA_GENTYPE_GRID_COLOR:
+      BKE_image_buf_fill_checker_color(rect, rect_float, width, height);
+      break;
+    default:
+      BKE_image_buf_fill_color(rect, rect_float, width, height, usersata->fill_color);
+      break;
+  }
+}
+
 static ImBuf *add_ibuf_size(unsigned int width,
                             unsigned int height,
                             const char *name,
@@ -944,17 +978,16 @@ static ImBuf *add_ibuf_size(unsigned int width,
 
   STRNCPY(ibuf->name, name);
 
-  switch (gen_type) {
-    case IMA_GENTYPE_GRID:
-      BKE_image_buf_fill_checker(rect, rect_float, width, height);
-      break;
-    case IMA_GENTYPE_GRID_COLOR:
-      BKE_image_buf_fill_checker_color(rect, rect_float, width, height);
-      break;
-    default:
-      BKE_image_buf_fill_color(rect, rect_float, width, height, fill_color);
-      break;
-  }
+  ImageFillData data;
+
+  data.gen_type = gen_type;
+  data.width = width;
+  data.height = height;
+  data.rect = rect;
+  data.rect_float = rect_float;
+  copy_v4_v4(data.fill_color, fill_color);
+
+  BLI_task_isolate(image_buf_fill_isolated, &data);
 
   return ibuf;
 }
@@ -1023,9 +1056,11 @@ Image *BKE_image_add_generated(Main *bmain,
   return ima;
 }
 
-/* Create an image image from ibuf. The refcount of ibuf is increased,
+/**
+ * Create an image from ibuf. The refcount of ibuf is increased,
  * caller should take care to drop its reference by calling
- * IMB_freeImBuf if needed. */
+ * #IMB_freeImBuf if needed.
+ */
 Image *BKE_image_add_from_imbuf(Main *bmain, ImBuf *ibuf, const char *name)
 {
   /* on save, type is changed to FILE in editsima.c */
@@ -1743,7 +1778,7 @@ static bool do_add_image_extension(char *string,
         }
       }
       else {
-        BLI_assert(!"Unsupported jp2 codec was specified in im_format->jp2_codec");
+        BLI_assert_msg(0, "Unsupported jp2 codec was specified in im_format->jp2_codec");
       }
     }
     else {
@@ -1914,7 +1949,7 @@ void BKE_imbuf_to_image_format(struct ImageFormatData *im_format, const ImBuf *i
       im_format->jp2_codec = R_IMF_JP2_CODEC_J2K;
     }
     else {
-      BLI_assert(!"Unsupported jp2 codec was specified in file type");
+      BLI_assert_msg(0, "Unsupported jp2 codec was specified in file type");
     }
   }
 #endif
@@ -2288,7 +2323,7 @@ void BKE_image_stamp_buf(Scene *scene,
     stampdata_from_template(&stamp_data, scene, stamp_data_template, do_prefix);
   }
 
-  /* TODO, do_versions */
+  /* TODO: do_versions. */
   if (scene->r.stamp_font_id < 8) {
     scene->r.stamp_font_id = 12;
   }
@@ -2832,7 +2867,7 @@ bool BKE_imbuf_alpha_test(ImBuf *ibuf)
   return false;
 }
 
-/* note: imf->planes is ignored here, its assumed the image channels
+/* NOTE: imf->planes is ignored here, its assumed the image channels
  * are already set */
 void BKE_imbuf_write_prepare(ImBuf *ibuf, const ImageFormatData *imf)
 {
@@ -2982,7 +3017,7 @@ void BKE_imbuf_write_prepare(ImBuf *ibuf, const ImageFormatData *imf)
       ibuf->foptions.flag |= JP2_J2K;
     }
     else {
-      BLI_assert(!"Unsupported jp2 codec was specified in im_format->jp2_codec");
+      BLI_assert_msg(0, "Unsupported jp2 codec was specified in im_format->jp2_codec");
     }
   }
 #endif
@@ -3175,7 +3210,7 @@ Image *BKE_image_ensure_viewer(Main *bmain, int type, const char *name)
     ima = image_alloc(bmain, name, IMA_SRC_VIEWER, type);
   }
 
-  /* happens on reload, imagewindow cannot be image user when hidden*/
+  /* Happens on reload, imagewindow cannot be image user when hidden. */
   if (ima->id.us == 0) {
     id_us_ensure_real(&ima->id);
   }
@@ -4316,7 +4351,7 @@ static ImBuf *load_movie_single(Image *ima, ImageUser *iuser, int frame, const i
 
     BKE_image_user_file_path(&iuser_t, ima, str);
 
-    /* FIXME: make several stream accessible in image editor, too*/
+    /* FIXME: make several stream accessible in image editor, too. */
     ia->anim = openanim(str, flags, 0, ima->colorspace_settings.name);
 
     /* let's initialize this user */
@@ -4505,7 +4540,7 @@ static ImBuf *load_image_single(Image *ima,
 }
 
 /* warning, 'iuser' can be NULL
- * note: Image->views was already populated (in image_update_views_format)
+ * NOTE: Image->views was already populated (in image_update_views_format)
  */
 static ImBuf *image_load_image_file(Image *ima, ImageUser *iuser, int cfra)
 {
@@ -5155,7 +5190,7 @@ bool BKE_image_has_ibuf(Image *ima, ImageUser *iuser)
   return ibuf != NULL;
 }
 
-/* ******** Pool for image buffers ********  */
+/* ******** Pool for image buffers ******** */
 
 typedef struct ImagePoolItem {
   struct ImagePoolItem *next, *prev;
@@ -5326,7 +5361,7 @@ int BKE_image_user_frame_get(const ImageUser *iuser, int cfra, bool *r_is_in_ran
     }
   }
 
-  /* important to apply after else we cant loop on frames 100 - 110 for eg. */
+  /* important to apply after else we can't loop on frames 100 - 110 for eg. */
   framenr += iuser->offset;
 
   return framenr;
@@ -5356,7 +5391,7 @@ void BKE_image_user_frame_calc(Image *ima, ImageUser *iuser, int cfra)
     }
 
     if (ima && ima->gpuframenr != iuser->framenr) {
-      /* Note: a single texture and refresh doesn't really work when
+      /* NOTE: a single texture and refresh doesn't really work when
        * multiple image users may use different frames, this is to
        * be improved with perhaps a GPU texture cache. */
       ima->gpuflag |= IMA_GPU_REFRESH;

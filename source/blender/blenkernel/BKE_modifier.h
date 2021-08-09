@@ -258,10 +258,6 @@ typedef struct ModifierTypeInfo {
                             const struct ModifierEvalContext *ctx,
                             struct GeometrySet *geometry_set);
 
-  struct Volume *(*modifyVolume)(struct ModifierData *md,
-                                 const struct ModifierEvalContext *ctx,
-                                 struct Volume *volume);
-
   /********************* Optional functions *********************/
 
   /**
@@ -328,7 +324,7 @@ typedef struct ModifierTypeInfo {
 
   /**
    * True when a deform modifier uses normals, the requiredDataMask
-   * cant be used here because that refers to a normal layer whereas
+   * can't be used here because that refers to a normal layer whereas
    * in this case we need to know if the deform modifier uses normals.
    *
    * this is needed because applying 2 deform modifiers will give the

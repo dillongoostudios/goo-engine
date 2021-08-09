@@ -149,7 +149,7 @@ enum {
                        G_DEBUG_DEPSGRAPH_TIME | G_DEBUG_DEPSGRAPH_UUID),
   G_DEBUG_SIMDATA = (1 << 15),               /* sim debug data display */
   G_DEBUG_GPU = (1 << 16),                   /* gpu debug */
-  G_DEBUG_IO = (1 << 17),                    /* IO Debugging (for Collada, ...)*/
+  G_DEBUG_IO = (1 << 17),                    /* IO Debugging (for Collada, ...). */
   G_DEBUG_GPU_FORCE_WORKAROUNDS = (1 << 18), /* force gpu workarounds bypassing detections. */
   G_DEBUG_XR = (1 << 19),                    /* XR/OpenXR messages */
   G_DEBUG_XR_TIME = (1 << 20),               /* XR/OpenXR timing messages */
@@ -198,20 +198,6 @@ enum {
  * This means we can change the values without worrying about do-versions.
  */
 #define G_FILE_FLAG_ALL_RUNTIME (G_FILE_NO_UI | G_FILE_RECOVER_READ | G_FILE_RECOVER_WRITE)
-
-/** ENDIAN_ORDER: indicates what endianness the platform where the file was written had. */
-#if !defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
-#  error Either __BIG_ENDIAN__ or __LITTLE_ENDIAN__ must be defined.
-#endif
-
-#define L_ENDIAN 1
-#define B_ENDIAN 0
-
-#ifdef __BIG_ENDIAN__
-#  define ENDIAN_ORDER B_ENDIAN
-#else
-#  define ENDIAN_ORDER L_ENDIAN
-#endif
 
 /** #Global.moving, signals drawing in (3d) window to denote transform */
 enum {

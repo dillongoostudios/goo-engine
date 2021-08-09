@@ -182,7 +182,7 @@ static bool particle_skip(ParticleInstanceModifierData *pimd, ParticleSystem *ps
 
   totpart = psys->totpart + psys->totchild;
 
-  /* TODO make randomization optional? */
+  /* TODO: make randomization optional? */
   randp = (int)(psys_frand(psys, 3578 + p) * totpart) % totpart;
 
   minp = (int)(totpart * pimd->particle_offset) % (totpart + 1);
@@ -383,7 +383,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
         vert_part_value[vindex] = p_random;
       }
 
-      /*change orientation based on object trackflag*/
+      /* Change orientation based on object trackflag. */
       copy_v3_v3(temp_co, mv->co);
       mv->co[axis] = temp_co[track];
       mv->co[(axis + 1) % 3] = temp_co[(track + 1) % 3];
@@ -442,7 +442,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
             mul_qt_qtqt(frame, frame, rot);
           }
 
-          /* note: direction is same as normal vector currently,
+          /* NOTE: direction is same as normal vector currently,
            * but best to keep this separate so the frame can be
            * rotated later if necessary
            */
@@ -490,7 +490,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
       mul_m4_v3(spacemat, mv->co);
     }
 
-    /* create edges and adjust edge vertex indices*/
+    /* Create edges and adjust edge vertex indices. */
     CustomData_copy_data(&mesh->edata, &result->edata, 0, p_skip * totedge, totedge);
     MEdge *me = &result->medge[p_skip * totedge];
     for (k = 0; k < totedge; k++, me++) {
@@ -679,7 +679,6 @@ ModifierTypeInfo modifierType_ParticleInstance = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

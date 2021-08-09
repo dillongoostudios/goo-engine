@@ -35,6 +35,7 @@ extern GpencilModifierTypeInfo modifierType_Gpencil_Array;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Build;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Opacity;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Lattice;
+extern GpencilModifierTypeInfo modifierType_Gpencil_Length;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Mirror;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Smooth;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Hook;
@@ -43,6 +44,7 @@ extern GpencilModifierTypeInfo modifierType_Gpencil_Armature;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Time;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Multiply;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Texture;
+extern GpencilModifierTypeInfo modifierType_Gpencil_Weight;
 extern GpencilModifierTypeInfo modifierType_Gpencil_Lineart;
 
 /* MOD_gpencil_util.c */

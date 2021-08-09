@@ -257,8 +257,9 @@ class IMAGE_MT_image_flip(Menu):
 
     def draw(self, _context):
         layout = self.layout
-        layout.operator("image.flip", text="Horizontally").use_flip_horizontal = True
-        layout.operator("image.flip", text="Vertically").use_flip_vertical = True
+        layout.operator("image.flip", text="Horizontally").use_flip_x = True
+        layout.operator("image.flip", text="Vertically").use_flip_y = True
+
 
 class IMAGE_MT_image_invert(Menu):
     bl_label = "Invert"
@@ -909,6 +910,12 @@ class IMAGE_PT_active_mask_spline(MASK_PT_spline, Panel):
 
 
 class IMAGE_PT_active_mask_point(MASK_PT_point, Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Mask"
+
+
+class IMAGE_PT_mask_display(MASK_PT_display, Panel):
     bl_space_type = 'IMAGE_EDITOR'
     bl_region_type = 'UI'
     bl_category = "Mask"
@@ -1616,6 +1623,7 @@ classes = (
     IMAGE_PT_active_tool,
     IMAGE_PT_mask,
     IMAGE_PT_mask_layers,
+    IMAGE_PT_mask_display,
     IMAGE_PT_active_mask_spline,
     IMAGE_PT_active_mask_point,
     IMAGE_PT_snapping,

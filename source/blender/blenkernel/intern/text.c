@@ -176,7 +176,7 @@ static void text_blend_write(BlendWriter *writer, ID *id, const void *id_address
   }
   Text *text = (Text *)id;
 
-  /* Note: we are clearing local temp data here, *not* the flag in the actual 'real' ID. */
+  /* NOTE: we are clearing local temp data here, *not* the flag in the actual 'real' ID. */
   if ((text->flags & TXT_ISMEM) && (text->flags & TXT_ISEXT)) {
     text->flags &= ~TXT_ISEXT;
   }
@@ -781,12 +781,12 @@ static void txt_curs_sel(Text *text, TextLine ***linep, int **charp)
   *charp = &text->selc;
 }
 
-bool txt_cursor_is_line_start(Text *text)
+bool txt_cursor_is_line_start(const Text *text)
 {
   return (text->selc == 0);
 }
 
-bool txt_cursor_is_line_end(Text *text)
+bool txt_cursor_is_line_end(const Text *text)
 {
   return (text->selc == text->sell->len);
 }
@@ -1239,7 +1239,7 @@ void txt_order_cursors(Text *text, const bool reverse)
   }
 }
 
-bool txt_has_sel(Text *text)
+bool txt_has_sel(const Text *text)
 {
   return ((text->curl != text->sell) || (text->curc != text->selc));
 }
@@ -2397,7 +2397,7 @@ int text_check_bracket(const char ch)
   return 0;
 }
 
-/* TODO, have a function for operators -
+/* TODO: have a function for operators -
  * http://docs.python.org/py3k/reference/lexical_analysis.html#operators */
 bool text_check_delim(const char ch)
 {

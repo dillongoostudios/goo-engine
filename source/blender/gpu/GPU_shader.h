@@ -27,6 +27,7 @@
 extern "C" {
 #endif
 
+struct GPUIndexBuf;
 struct GPUVertBuf;
 
 /** Opaque type hiding #blender::gpu::Shader */
@@ -45,6 +46,10 @@ GPUShader *GPU_shader_create(const char *vertcode,
                              const char *libcode,
                              const char *defines,
                              const char *shname);
+GPUShader *GPU_shader_create_compute(const char *computecode,
+                                     const char *libcode,
+                                     const char *defines,
+                                     const char *shname);
 GPUShader *GPU_shader_create_from_python(const char *vertcode,
                                          const char *fragcode,
                                          const char *geomcode,
@@ -53,6 +58,7 @@ GPUShader *GPU_shader_create_from_python(const char *vertcode,
 GPUShader *GPU_shader_create_ex(const char *vertcode,
                                 const char *fragcode,
                                 const char *geomcode,
+                                const char *computecode,
                                 const char *libcode,
                                 const char *defines,
                                 const eGPUShaderTFBType tf_type,
@@ -126,6 +132,7 @@ int GPU_shader_get_uniform(GPUShader *shader, const char *name);
 int GPU_shader_get_builtin_uniform(GPUShader *shader, int builtin);
 int GPU_shader_get_builtin_block(GPUShader *shader, int builtin);
 int GPU_shader_get_uniform_block(GPUShader *shader, const char *name);
+int GPU_shader_get_ssbo(GPUShader *shader, const char *name);
 
 int GPU_shader_get_uniform_block_binding(GPUShader *shader, const char *name);
 int GPU_shader_get_texture_binding(GPUShader *shader, const char *name);
@@ -359,7 +366,6 @@ typedef enum eGPUBuiltinShader {
   GPU_SHADER_INSTANCE_VARIYING_COLOR_VARIYING_SIZE, /* Uniformly scaled */
   /* grease pencil drawing */
   GPU_SHADER_GPENCIL_STROKE,
-  GPU_SHADER_GPENCIL_FILL,
   /* specialized for widget drawing */
   GPU_SHADER_2D_AREA_EDGES,
   GPU_SHADER_2D_WIDGET_BASE,

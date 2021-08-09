@@ -31,6 +31,7 @@ struct ID;
 struct Main;
 struct Scene;
 struct ScrArea;
+struct SpaceNode;
 struct Tex;
 struct View2D;
 struct bContext;
@@ -49,6 +50,11 @@ typedef enum {
 } NodeBorder;
 
 #define NODE_GRID_STEPS 5
+#define NODE_EDGE_PAN_INSIDE_PAD 2
+#define NODE_EDGE_PAN_OUTSIDE_PAD 0 /* Disable clamping for node panning, use whole screen. */
+#define NODE_EDGE_PAN_SPEED_RAMP 1
+#define NODE_EDGE_PAN_MAX_SPEED 40 /* In UI units per second, slower than default. */
+#define NODE_EDGE_PAN_DELAY 1.0f
 
 /* space_node.c */
 
@@ -105,10 +111,11 @@ bool ED_node_is_geometry(struct SpaceNode *snode);
 void ED_node_shader_default(const struct bContext *C, struct ID *id);
 void ED_node_composit_default(const struct bContext *C, struct Scene *scene);
 void ED_node_texture_default(const struct bContext *C, struct Tex *tex);
-bool ED_node_select_check(ListBase *lb);
+bool ED_node_select_check(const ListBase *lb);
 void ED_node_select_all(ListBase *lb, int action);
 void ED_node_post_apply_transform(struct bContext *C, struct bNodeTree *ntree);
 void ED_node_set_active(struct Main *bmain,
+                        struct SpaceNode *snode,
                         struct bNodeTree *ntree,
                         struct bNode *node,
                         bool *r_active_texture_changed);

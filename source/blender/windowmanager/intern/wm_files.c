@@ -52,11 +52,14 @@
 #include "BLI_blenlib.h"
 #include "BLI_fileops_types.h"
 #include "BLI_linklist.h"
+#include "BLI_math.h"
 #include "BLI_system.h"
 #include "BLI_threads.h"
 #include "BLI_timer.h"
 #include "BLI_utildefines.h"
 #include BLI_SYSTEM_PID_H
+
+#include "PIL_time.h"
 
 #include "BLT_translation.h"
 
@@ -733,6 +736,97 @@ static void wm_file_read_post(bContext *C,
 /** \name Read Main Blend-File API
  * \{ */
 
+static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
+{
+  double duration_whole_minutes, duration_whole_seconds;
+  double duration_libraries_minutes, duration_libraries_seconds;
+  double duration_lib_override_minutes, duration_lib_override_seconds;
+  double duration_lib_override_resync_minutes, duration_lib_override_resync_seconds;
+  double duration_lib_override_recursive_resync_minutes,
+      duration_lib_override_recursive_resync_seconds;
+
+  BLI_math_time_seconds_decompose(bf_reports->duration.whole,
+                                  NULL,
+                                  NULL,
+                                  &duration_whole_minutes,
+                                  &duration_whole_seconds,
+                                  NULL);
+  BLI_math_time_seconds_decompose(bf_reports->duration.libraries,
+                                  NULL,
+                                  NULL,
+                                  &duration_libraries_minutes,
+                                  &duration_libraries_seconds,
+                                  NULL);
+  BLI_math_time_seconds_decompose(bf_reports->duration.lib_overrides,
+                                  NULL,
+                                  NULL,
+                                  &duration_lib_override_minutes,
+                                  &duration_lib_override_seconds,
+                                  NULL);
+  BLI_math_time_seconds_decompose(bf_reports->duration.lib_overrides_resync,
+                                  NULL,
+                                  NULL,
+                                  &duration_lib_override_resync_minutes,
+                                  &duration_lib_override_resync_seconds,
+                                  NULL);
+  BLI_math_time_seconds_decompose(bf_reports->duration.lib_overrides_recursive_resync,
+                                  NULL,
+                                  NULL,
+                                  &duration_lib_override_recursive_resync_minutes,
+                                  &duration_lib_override_recursive_resync_seconds,
+                                  NULL);
+
+  CLOG_INFO(
+      &LOG, 0, "Blender file read in %.0fm%.2fs", duration_whole_minutes, duration_whole_seconds);
+  CLOG_INFO(&LOG,
+            0,
+            " * Loading libraries: %.0fm%.2fs",
+            duration_libraries_minutes,
+            duration_libraries_seconds);
+  CLOG_INFO(&LOG,
+            0,
+            " * Applying overrides: %.0fm%.2fs",
+            duration_lib_override_minutes,
+            duration_lib_override_seconds);
+  CLOG_INFO(&LOG,
+            0,
+            " * Resyncing overrides: %.0fm%.2fs (%d root overrides), including recursive "
+            "resyncs: %.0fm%.2fs)",
+            duration_lib_override_resync_minutes,
+            duration_lib_override_resync_seconds,
+            bf_reports->count.resynced_lib_overrides,
+            duration_lib_override_recursive_resync_minutes,
+            duration_lib_override_recursive_resync_seconds);
+  if (bf_reports->resynced_lib_overrides_libraries_count != 0) {
+    for (LinkNode *node_lib = bf_reports->resynced_lib_overrides_libraries; node_lib != NULL;
+         node_lib = node_lib->next) {
+      Library *library = node_lib->link;
+      BKE_reportf(
+          bf_reports->reports, RPT_INFO, "Library %s needs overrides resync.", library->filepath);
+    }
+  }
+  if (bf_reports->count.missing_libraries != 0 || bf_reports->count.missing_linked_id != 0) {
+    BKE_reportf(bf_reports->reports,
+                RPT_WARNING,
+                "%d libraries and %d linked data-blocks are missing, please check the "
+                "Info and Outliner editors for details",
+                bf_reports->count.missing_libraries,
+                bf_reports->count.missing_linked_id);
+  }
+  if (bf_reports->resynced_lib_overrides_libraries_count != 0) {
+    BKE_reportf(bf_reports->reports,
+                RPT_WARNING,
+                "%d libraries have overrides needing resync (auto resynced in %.0fm%.2fs),  "
+                "please check the Info editor for details",
+                bf_reports->resynced_lib_overrides_libraries_count,
+                duration_lib_override_recursive_resync_minutes,
+                duration_lib_override_recursive_resync_seconds);
+  }
+
+  BLI_linklist_free(bf_reports->resynced_lib_overrides_libraries, NULL);
+  bf_reports->resynced_lib_overrides_libraries = NULL;
+}
+
 bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 {
   /* assume automated tasks with background, don't write recent file list */
@@ -750,7 +844,7 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 
   /* first try to append data from exotic file formats... */
   /* it throws error box when file doesn't exist and returns -1 */
-  /* note; it should set some error message somewhere... (ton) */
+  /* NOTE(ton): it should set some error message somewhere. */
   const int retval = wm_read_exotic(filepath);
 
   /* we didn't succeed, now try to read Blender file */
@@ -763,7 +857,9 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
         .skip_flags = BLO_READ_SKIP_USERDEF,
     };
 
-    struct BlendFileData *bfd = BKE_blendfile_read(filepath, &params, reports);
+    BlendFileReadReport bf_reports = {.reports = reports,
+                                      .duration.whole = PIL_check_seconds_timer()};
+    struct BlendFileData *bfd = BKE_blendfile_read(filepath, &params, &bf_reports);
     if (bfd != NULL) {
       wm_file_read_pre(C, use_data, use_userdef);
 
@@ -773,10 +869,10 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
       wm_window_match_init(C, &wmbase);
 
       /* This flag is initialized by the operator but overwritten on read.
-       * need to re-enable it here else drivers + registered scripts wont work. */
+       * need to re-enable it here else drivers and registered scripts won't work. */
       const int G_f_orig = G.f;
 
-      BKE_blendfile_read_setup(C, bfd, &params, reports);
+      BKE_blendfile_read_setup(C, bfd, &params, &bf_reports);
 
       if (G.f != G_f_orig) {
         const int flags_keep = G_FLAG_ALL_RUNTIME;
@@ -807,6 +903,9 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
 
       wm_file_read_post(C, false, false, use_data, use_userdef, false);
 
+      bf_reports.duration.whole = PIL_check_seconds_timer() - bf_reports.duration.whole;
+      file_read_reports_finalize(&bf_reports);
+
       success = true;
     }
   }
@@ -830,7 +929,7 @@ bool WM_file_read(bContext *C, const char *filepath, ReportList *reports)
   }
   else {
     BKE_reportf(reports, RPT_ERROR, "Unknown error loading '%s'", filepath);
-    BLI_assert(!"invalid 'retval'");
+    BLI_assert_msg(0, "invalid 'retval'");
   }
 
   if (success == false) {
@@ -888,7 +987,7 @@ const char *WM_init_state_app_template_get(void)
  * or called for 'New File' both startup.blend and userpref.blend are checked.
  *
  * \param use_factory_settings:
- * Ignore on-disk startup file, use bundled ``datatoc_startup_blend`` instead.
+ * Ignore on-disk startup file, use bundled `datatoc_startup_blend` instead.
  * Used for "Restore Factory Settings".
  *
  * \param use_userdef: Load factory settings as well as startup file.
@@ -911,7 +1010,10 @@ void wm_homefile_read(bContext *C,
                       const char *app_template_override,
                       bool *r_is_factory_startup)
 {
-  Main *bmain = G_MAIN; /* Context does not always have valid main pointer here... */
+#if 0 /* UNUSED, keep as this may be needed later & the comment below isn't self evident. */
+  /* Context does not always have valid main pointer here. */
+  Main *bmain = G_MAIN;
+#endif
   ListBase wmbase;
   bool success = false;
 
@@ -1083,11 +1185,12 @@ void wm_homefile_read(bContext *C,
           .is_startup = true,
           .skip_flags = skip_flags | BLO_READ_SKIP_USERDEF,
       };
+      BlendFileReadReport bf_reports = {.reports = reports};
+      struct BlendFileData *bfd = BKE_blendfile_read(filepath_startup, &params, &bf_reports);
 
-      struct BlendFileData *bfd = BKE_blendfile_read(filepath_startup, &params, NULL);
       if (bfd != NULL) {
         BKE_blendfile_read_setup_ex(
-            C, bfd, &params, NULL, update_defaults && use_data, app_template);
+            C, bfd, &params, &bf_reports, update_defaults && use_data, app_template);
         success = true;
       }
     }
@@ -1117,7 +1220,7 @@ void wm_homefile_read(bContext *C,
     struct BlendFileData *bfd = BKE_blendfile_read_from_memory(
         datatoc_startup_blend, datatoc_startup_blend_size, &params, NULL);
     if (bfd != NULL) {
-      BKE_blendfile_read_setup_ex(C, bfd, &params, NULL, true, NULL);
+      BKE_blendfile_read_setup_ex(C, bfd, &params, &(BlendFileReadReport){NULL}, true, NULL);
       success = true;
     }
 
@@ -1170,7 +1273,7 @@ void wm_homefile_read(bContext *C,
     BLI_strncpy(U.app_template, app_template_override, sizeof(U.app_template));
   }
 
-  bmain = CTX_data_main(C);
+  Main *bmain = CTX_data_main(C);
 
   if (use_userdef) {
     /* check userdef before open window, keymaps etc */
@@ -1503,7 +1606,7 @@ static bool wm_file_write(bContext *C,
     return ok;
   }
 
-  /* note: used to replace the file extension (to ensure '.blend'),
+  /* NOTE: used to replace the file extension (to ensure '.blend'),
    * no need to now because the operator ensures,
    * its handy for scripts to save to a predefined name without blender editing it */
 
@@ -1542,13 +1645,13 @@ static bool wm_file_write(bContext *C,
 
   ED_editors_flush_edits(bmain);
 
-  /* first time saving */
-  /* XXX temp solution to solve bug, real fix coming (ton) */
+  /* First time saving. */
+  /* XXX(ton): temp solution to solve bug, real fix coming. */
   if ((BKE_main_blendfile_path(bmain)[0] == '\0') && (use_save_as_copy == false)) {
     BLI_strncpy(bmain->name, filepath, sizeof(bmain->name));
   }
 
-  /* XXX temp solution to solve bug, real fix coming (ton) */
+  /* XXX(ton): temp solution to solve bug, real fix coming. */
   bmain->recovered = 0;
 
   if (BLO_write_file(CTX_data_main(C),
@@ -1580,7 +1683,7 @@ static bool wm_file_write(bContext *C,
 
     BKE_callback_exec_null(bmain, BKE_CB_EVT_SAVE_POST);
 
-    /* run this function after because the file cant be written before the blend is */
+    /* run this function after because the file can't be written before the blend is */
     if (ibuf_thumb) {
       IMB_thumb_delete(filepath, THB_FAIL); /* without this a failed thumb overrides */
       ibuf_thumb = IMB_thumb_create(filepath, THB_LARGE, THB_SOURCE_BLEND, ibuf_thumb);
@@ -1775,7 +1878,7 @@ void wm_open_init_use_scripts(wmOperator *op, bool use_prefs)
   if (!RNA_property_is_set(op->ptr, prop)) {
     /* use G_FLAG_SCRIPT_AUTOEXEC rather than the userpref because this means if
      * the flag has been disabled from the command line, then opening
-     * from the menu wont enable this setting. */
+     * from the menu won't enable this setting. */
     bool value = use_prefs ? ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) :
                              ((G.f & G_FLAG_SCRIPT_AUTOEXEC) != 0);
 
@@ -1833,7 +1936,7 @@ static int wm_homefile_write_exec(bContext *C, wmOperator *op)
                      &(const struct BlendFileWriteParams){
                          /* Make all paths absolute when saving the startup file.
                           * On load the `G.relbase_valid` will be false so the paths
-                          * wont have a base for resolving the relative paths. */
+                          * won't have a base for resolving the relative paths. */
                          .remap_mode = BLO_WRITE_PATH_REMAP_ABSOLUTE,
                          /* Don't apply any path changes to the current blend file. */
                          .use_save_as_copy = true,
@@ -2157,21 +2260,9 @@ static void wm_homefile_read_after_dialog_callback(bContext *C, void *user_data)
       C, "WM_OT_read_homefile", WM_OP_EXEC_DEFAULT, (IDProperty *)user_data);
 }
 
-static void wm_free_operator_properties_callback(void *user_data)
-{
-  IDProperty *properties = (IDProperty *)user_data;
-  IDP_FreeProperty(properties);
-}
-
 static int wm_homefile_read_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
-  if (U.uiflag & USER_SAVE_PROMPT &&
-      wm_file_or_image_is_modified(CTX_data_main(C), CTX_wm_manager(C))) {
-    wmGenericCallback *callback = MEM_callocN(sizeof(*callback), __func__);
-    callback->exec = wm_homefile_read_after_dialog_callback;
-    callback->user_data = IDP_CopyProperty(op->properties);
-    callback->free_user_data = wm_free_operator_properties_callback;
-    wm_close_file_dialog(C, callback);
+  if (wm_operator_close_file_dialog_if_needed(C, op, wm_homefile_read_after_dialog_callback)) {
     return OPERATOR_INTERFACE;
   }
   return wm_homefile_read_exec(C, op);
@@ -2331,13 +2422,7 @@ static int wm_open_mainfile__discard_changes(bContext *C, wmOperator *op)
     set_next_operator_state(op, OPEN_MAINFILE_STATE_OPEN);
   }
 
-  if (U.uiflag & USER_SAVE_PROMPT &&
-      wm_file_or_image_is_modified(CTX_data_main(C), CTX_wm_manager(C))) {
-    wmGenericCallback *callback = MEM_callocN(sizeof(*callback), __func__);
-    callback->exec = wm_open_mainfile_after_dialog_callback;
-    callback->user_data = IDP_CopyProperty(op->properties);
-    callback->free_user_data = wm_free_operator_properties_callback;
-    wm_close_file_dialog(C, callback);
+  if (wm_operator_close_file_dialog_if_needed(C, op, wm_open_mainfile_after_dialog_callback)) {
     return OPERATOR_INTERFACE;
   }
   return wm_open_mainfile_dispatch(C, op);
@@ -2500,12 +2585,11 @@ static void wm_open_mainfile_ui(bContext *UNUSED(C), wmOperator *op)
 {
   struct FileRuntime *file_info = (struct FileRuntime *)&op->customdata;
   uiLayout *layout = op->layout;
-  uiLayout *col = op->layout;
   const char *autoexec_text;
 
   uiItemR(layout, op->ptr, "load_ui", 0, NULL, ICON_NONE);
 
-  col = uiLayoutColumn(layout, false);
+  uiLayout *col = uiLayoutColumn(layout, false);
   if (file_info->is_untrusted) {
     autoexec_text = IFACE_("Trusted Source [Untrusted Path]");
     uiLayoutSetActive(col, false);
@@ -2637,12 +2721,25 @@ static int wm_recover_last_session_exec(bContext *C, wmOperator *op)
   return OPERATOR_CANCELLED;
 }
 
-static int wm_recover_last_session_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+static void wm_recover_last_session_after_dialog_callback(bContext *C, void *user_data)
+{
+  WM_operator_name_call_with_properties(
+      C, "WM_OT_recover_last_session", WM_OP_EXEC_DEFAULT, (IDProperty *)user_data);
+}
+
+static int wm_recover_last_session_invoke(bContext *C,
+                                          wmOperator *op,
+                                          const wmEvent *UNUSED(event))
 {
   /* Keep the current setting instead of using the preferences since a file selector
    * doesn't give us the option to change the setting. */
   wm_open_init_use_scripts(op, false);
-  return WM_operator_confirm(C, op, event);
+
+  if (wm_operator_close_file_dialog_if_needed(
+          C, op, wm_recover_last_session_after_dialog_callback)) {
+    return OPERATOR_INTERFACE;
+  }
+  return wm_recover_last_session_exec(C, op);
 }
 
 void WM_OT_recover_last_session(wmOperatorType *ot)
@@ -3270,7 +3367,10 @@ static void wm_block_file_close_save(bContext *C, void *arg_block, void *arg_dat
   bool file_has_been_saved_before = BKE_main_blendfile_path(bmain)[0] != '\0';
 
   if (file_has_been_saved_before) {
-    WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_EXEC_DEFAULT, NULL);
+    if (WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_EXEC_DEFAULT, NULL) &
+        OPERATOR_CANCELLED) {
+      execute_callback = false;
+    }
   }
   else {
     WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_INVOKE_DEFAULT, NULL);
@@ -3454,6 +3554,33 @@ void wm_close_file_dialog(bContext *C, wmGenericCallback *post_action)
   else {
     WM_generic_callback_free(post_action);
   }
+}
+
+static void wm_free_operator_properties_callback(void *user_data)
+{
+  IDProperty *properties = (IDProperty *)user_data;
+  IDP_FreeProperty(properties);
+}
+
+/**
+ * \return True if the dialog was created, the calling operator should return #OPERATOR_INTERFACE
+ *         then.
+ */
+bool wm_operator_close_file_dialog_if_needed(bContext *C,
+                                             wmOperator *op,
+                                             wmGenericCallbackFn post_action_fn)
+{
+  if (U.uiflag & USER_SAVE_PROMPT &&
+      wm_file_or_image_is_modified(CTX_data_main(C), CTX_wm_manager(C))) {
+    wmGenericCallback *callback = MEM_callocN(sizeof(*callback), __func__);
+    callback->exec = post_action_fn;
+    callback->user_data = IDP_CopyProperty(op->properties);
+    callback->free_user_data = wm_free_operator_properties_callback;
+    wm_close_file_dialog(C, callback);
+    return true;
+  }
+
+  return false;
 }
 
 /** \} */

@@ -19,16 +19,16 @@ from __future__ import annotations
 
 
 def _is_using_buggy_driver():
-    import bgl
+    import gpu
     # We need to be conservative here because in multi-GPU systems display card
     # might be quite old, but others one might be just good.
     #
     # So We shouldn't disable possible good dedicated cards just because display
     # card seems weak. And instead we only blacklist configurations which are
     # proven to cause problems.
-    if bgl.glGetString(bgl.GL_VENDOR) == "ATI Technologies Inc.":
+    if gpu.platform.vendor_get() == "ATI Technologies Inc.":
         import re
-        version = bgl.glGetString(bgl.GL_VERSION)
+        version = gpu.platform.version_get()
         if version.endswith("Compatibility Profile Context"):
             # Old HD 4xxx and 5xxx series drivers did not have driver version
             # in the version string, but those cards do not quite work and
@@ -132,7 +132,7 @@ def init():
         _workaround_buggy_drivers()
 
     path = os.path.dirname(__file__)
-    user_path = os.path.dirname(os.path.abspath(bpy.utils.user_resource('CONFIG', '')))
+    user_path = os.path.dirname(os.path.abspath(bpy.utils.user_resource('CONFIG', path='')))
 
     _cycles.init(path, user_path, bpy.app.background)
     _parse_command_line()
@@ -235,9 +235,12 @@ def system_info():
 
 
 def list_render_passes(scene, srl):
-    # Builtin Blender passes.
+    crl = srl.cycles
+
+    # Combined pass.
     yield ("Combined", "RGBA", 'COLOR')
 
+    # Data passes.
     if srl.use_pass_z:                     yield ("Depth",         "Z",    'VALUE')
     if srl.use_pass_mist:                  yield ("Mist",          "Z",    'VALUE')
     if srl.use_pass_normal:                yield ("Normal",        "XYZ",  'VECTOR')
@@ -245,8 +248,8 @@ def list_render_passes(scene, srl):
     if srl.use_pass_uv:                    yield ("UV",            "UVA",  'VECTOR')
     if srl.use_pass_object_index:          yield ("IndexOB",       "X",    'VALUE')
     if srl.use_pass_material_index:        yield ("IndexMA",       "X",    'VALUE')
-    if srl.use_pass_shadow:                yield ("Shadow",        "RGB",  'COLOR')
-    if srl.use_pass_ambient_occlusion:     yield ("AO",            "RGB",  'COLOR')
+
+    # Light passes.
     if srl.use_pass_diffuse_direct:        yield ("DiffDir",       "RGB",  'COLOR')
     if srl.use_pass_diffuse_indirect:      yield ("DiffInd",       "RGB",  'COLOR')
     if srl.use_pass_diffuse_color:         yield ("DiffCol",       "RGB",  'COLOR')
@@ -256,19 +259,16 @@ def list_render_passes(scene, srl):
     if srl.use_pass_transmission_direct:   yield ("TransDir",      "RGB",  'COLOR')
     if srl.use_pass_transmission_indirect: yield ("TransInd",      "RGB",  'COLOR')
     if srl.use_pass_transmission_color:    yield ("TransCol",      "RGB",  'COLOR')
+    if crl.use_pass_volume_direct:         yield ("VolumeDir",     "RGB",  'COLOR')
+    if crl.use_pass_volume_indirect:       yield ("VolumeInd",     "RGB",  'COLOR')
     if srl.use_pass_emit:                  yield ("Emit",          "RGB",  'COLOR')
     if srl.use_pass_environment:           yield ("Env",           "RGB",  'COLOR')
+    if srl.use_pass_shadow:                yield ("Shadow",        "RGB",  'COLOR')
+    if srl.use_pass_ambient_occlusion:     yield ("AO",            "RGB",  'COLOR')
 
-    # Cycles specific passes.
-    crl = srl.cycles
+    # Debug passes.
     if crl.pass_debug_render_time:             yield ("Debug Render Time",             "X",   'VALUE')
-    if crl.pass_debug_bvh_traversed_nodes:     yield ("Debug BVH Traversed Nodes",     "X",   'VALUE')
-    if crl.pass_debug_bvh_traversed_instances: yield ("Debug BVH Traversed Instances", "X",   'VALUE')
-    if crl.pass_debug_bvh_intersections:       yield ("Debug BVH Intersections",       "X",   'VALUE')
-    if crl.pass_debug_ray_bounces:             yield ("Debug Ray Bounces",             "X",   'VALUE')
     if crl.pass_debug_sample_count:            yield ("Debug Sample Count",            "X",   'VALUE')
-    if crl.use_pass_volume_direct:             yield ("VolumeDir",                     "RGB", 'COLOR')
-    if crl.use_pass_volume_indirect:           yield ("VolumeInd",                     "RGB", 'COLOR')
 
     # Cryptomatte passes.
     crypto_depth = (srl.pass_cryptomatte_depth + 1) // 2

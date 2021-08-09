@@ -330,6 +330,17 @@ float ED_view3d_calc_zfac(const RegionView3D *rv3d, const float co[3], bool *r_f
   return zfac;
 }
 
+/**
+ * Calculate a depth value from `co` (result should only be used for comparison).
+ */
+float ED_view3d_calc_depth_for_comparison(const RegionView3D *rv3d, const float co[3])
+{
+  if (rv3d->is_persp) {
+    return ED_view3d_calc_zfac(rv3d, co, NULL);
+  }
+  return -dot_v3v3(rv3d->viewinv[2], co);
+}
+
 static void view3d_win_to_ray_segment(struct Depsgraph *depsgraph,
                                       const ARegion *region,
                                       const View3D *v3d,
@@ -550,7 +561,7 @@ void ED_view3d_win_to_3d(const View3D *v3d,
     copy_v3_v3(ray_origin, rv3d->viewinv[3]);
     ED_view3d_win_to_vector(region, mval, ray_direction);
 
-    /* Note: we could use #isect_line_plane_v3()
+    /* NOTE: we could use #isect_line_plane_v3()
      * however we want the intersection to be in front of the view no matter what,
      * so apply the unsigned factor instead. */
     plane_from_point_normal_v3(plane, depth_pt, rv3d->viewinv[2]);
@@ -788,7 +799,7 @@ bool ED_view3d_win_to_segment_clipped(struct Depsgraph *depsgraph,
 /** \name Utility functions for projection
  * \{ */
 
-void ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, Object *ob, float r_pmat[4][4])
+void ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, const Object *ob, float r_pmat[4][4])
 {
   float vmat[4][4];
 
@@ -809,23 +820,30 @@ void ED_view3d_ob_project_mat_get_from_obmat(const RegionView3D *rv3d,
 /**
  * Convert between region relative coordinates (x,y) and depth component z and
  * a point in world space. */
-void ED_view3d_project(const struct ARegion *region, const float world[3], float r_region_co[3])
+void ED_view3d_project_v3(const struct ARegion *region, const float world[3], float r_region_co[3])
 {
   /* Viewport is set up to make coordinates relative to the region, not window. */
   RegionView3D *rv3d = region->regiondata;
   const int viewport[4] = {0, 0, region->winx, region->winy};
-
-  GPU_matrix_project(world, rv3d->viewmat, rv3d->winmat, viewport, r_region_co);
+  GPU_matrix_project_3fv(world, rv3d->viewmat, rv3d->winmat, viewport, r_region_co);
 }
 
-bool ED_view3d_unproject(
+void ED_view3d_project_v2(const struct ARegion *region, const float world[3], float r_region_co[2])
+{
+  /* Viewport is set up to make coordinates relative to the region, not window. */
+  RegionView3D *rv3d = region->regiondata;
+  const int viewport[4] = {0, 0, region->winx, region->winy};
+  GPU_matrix_project_2fv(world, rv3d->viewmat, rv3d->winmat, viewport, r_region_co);
+}
+
+bool ED_view3d_unproject_v3(
     const struct ARegion *region, float regionx, float regiony, float regionz, float world[3])
 {
   RegionView3D *rv3d = region->regiondata;
   const int viewport[4] = {0, 0, region->winx, region->winy};
   const float region_co[3] = {regionx, regiony, regionz};
 
-  return GPU_matrix_unproject(region_co, rv3d->viewmat, rv3d->winmat, viewport, world);
+  return GPU_matrix_unproject_3fv(region_co, rv3d->viewmat, rv3d->winmat, viewport, world);
 }
 
 /** \} */

@@ -19,7 +19,7 @@
 #pragma once
 
 #include "BLI_listbase.h"
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_texture_types.h"
 #include "MEM_guardedalloc.h"
 
@@ -31,9 +31,9 @@ namespace blender::compositor {
 /**
  * Base class for all renderlayeroperations
  *
- * \todo: rename to operation.
+ * \todo Rename to operation.
  */
-class TextureBaseOperation : public NodeOperation {
+class TextureBaseOperation : public MultiThreadedOperation {
  private:
   Tex *m_texture;
   const RenderData *m_rd;
@@ -44,7 +44,7 @@ class TextureBaseOperation : public NodeOperation {
 
  protected:
   /**
-   * Determine the output resolution. The resolution is retrieved from the Renderer
+   * Determine the output resolution.
    */
   void determineResolution(unsigned int resolution[2],
                            unsigned int preferredResolution[2]) override;
@@ -71,6 +71,10 @@ class TextureBaseOperation : public NodeOperation {
   {
     this->m_sceneColorManage = sceneColorManage;
   }
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 class TextureOperation : public TextureBaseOperation {
@@ -81,6 +85,10 @@ class TextureAlphaOperation : public TextureBaseOperation {
  public:
   TextureAlphaOperation();
   void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

@@ -18,7 +18,9 @@
  * \ingroup wm
  */
 
+#include "BKE_callbacks.h"
 #include "BKE_context.h"
+#include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_scene.h"
 
@@ -49,11 +51,24 @@ static CLG_LogRef LOG = {"wm.xr"};
 
 /* -------------------------------------------------------------------- */
 
+static void wm_xr_session_create_cb(void)
+{
+  Main *bmain = G_MAIN;
+  wmWindowManager *wm = bmain->wm.first;
+  wmXrData *xr_data = &wm->xr;
+
+  /* Get action set data from Python. */
+  BKE_callback_exec_null(bmain, BKE_CB_EVT_XR_SESSION_START_PRE);
+
+  wm_xr_session_actions_init(xr_data);
+}
+
 static void wm_xr_session_exit_cb(void *customdata)
 {
   wmXrData *xr_data = customdata;
 
   xr_data->runtime->session_state.is_started = false;
+
   if (xr_data->runtime->exit_fn) {
     xr_data->runtime->exit_fn(xr_data);
   }
@@ -65,6 +80,10 @@ static void wm_xr_session_exit_cb(void *customdata)
 static void wm_xr_session_begin_info_create(wmXrData *xr_data,
                                             GHOST_XrSessionBeginInfo *r_begin_info)
 {
+  /* Callback for when the session is created. This is needed to create and bind OpenXR actions
+   * after the session is created but before it is started. */
+  r_begin_info->create_fn = wm_xr_session_create_cb;
+
   /* WM-XR exit function, does some own stuff and calls callback passed to wm_xr_session_toggle(),
    * to allow external code to execute its own session-exit logic. */
   r_begin_info->exit_fn = wm_xr_session_exit_cb;
@@ -206,7 +225,7 @@ typedef enum wmXrSessionStateEvent {
   SESSION_STATE_EVENT_NONE = 0,
   SESSION_STATE_EVENT_START,
   SESSION_STATE_EVENT_RESET_TO_BASE_POSE,
-  SESSION_STATE_EVENT_POSITON_TRACKING_TOGGLE,
+  SESSION_STATE_EVENT_POSITION_TRACKING_TOGGLE,
 } wmXrSessionStateEvent;
 
 static bool wm_xr_session_draw_data_needs_reset_to_base_pose(const wmXrSessionState *state,
@@ -234,7 +253,7 @@ static wmXrSessionStateEvent wm_xr_session_state_to_event(const wmXrSessionState
                                            XR_SESSION_USE_POSITION_TRACKING) !=
                                           (settings->flag & XR_SESSION_USE_POSITION_TRACKING));
   if (position_tracking_toggled) {
-    return SESSION_STATE_EVENT_POSITON_TRACKING_TOGGLE;
+    return SESSION_STATE_EVENT_POSITION_TRACKING_TOGGLE;
   }
 
   return SESSION_STATE_EVENT_NONE;
@@ -269,7 +288,7 @@ void wm_xr_session_draw_data_update(const wmXrSessionState *state,
         copy_v3_fl(draw_data->eye_position_ofs, 0.0f);
       }
       break;
-    case SESSION_STATE_EVENT_POSITON_TRACKING_TOGGLE:
+    case SESSION_STATE_EVENT_POSITION_TRACKING_TOGGLE:
       if (use_position_tracking) {
         /* Keep the current position, and let the user move from there. */
         copy_v3_v3(draw_data->eye_position_ofs, state->prev_eye_position_ofs);
@@ -289,6 +308,7 @@ void wm_xr_session_draw_data_update(const wmXrSessionState *state,
 /**
  * Update information that is only stored for external state queries. E.g. for Python API to
  * request the current (as in, last known) viewer pose.
+ * Controller data and action sets will be updated separately via wm_xr_session_actions_update().
  */
 void wm_xr_session_state_update(const XrSessionSettings *settings,
                                 const wmXrDrawData *draw_data,
@@ -297,6 +317,7 @@ void wm_xr_session_state_update(const XrSessionSettings *settings,
 {
   GHOST_XrPose viewer_pose;
   const bool use_position_tracking = settings->flag & XR_SESSION_USE_POSITION_TRACKING;
+  const bool use_absolute_tracking = settings->flag & XR_SESSION_USE_ABSOLUTE_TRACKING;
 
   mul_qt_qtqt(viewer_pose.orientation_quat,
               draw_data->base_pose.orientation_quat,
@@ -304,13 +325,15 @@ void wm_xr_session_state_update(const XrSessionSettings *settings,
   copy_v3_v3(viewer_pose.position, draw_data->base_pose.position);
   /* The local pose and the eye pose (which is copied from an earlier local pose) both are view
    * space, so Y-up. In this case we need them in regular Z-up. */
-  viewer_pose.position[0] -= draw_data->eye_position_ofs[0];
-  viewer_pose.position[1] += draw_data->eye_position_ofs[2];
-  viewer_pose.position[2] -= draw_data->eye_position_ofs[1];
   if (use_position_tracking) {
     viewer_pose.position[0] += draw_view->local_pose.position[0];
     viewer_pose.position[1] -= draw_view->local_pose.position[2];
     viewer_pose.position[2] += draw_view->local_pose.position[1];
+  }
+  if (!use_absolute_tracking) {
+    viewer_pose.position[0] -= draw_data->eye_position_ofs[0];
+    viewer_pose.position[1] += draw_data->eye_position_ofs[2];
+    viewer_pose.position[2] -= draw_data->eye_position_ofs[1];
   }
 
   copy_v3_v3(state->viewer_pose.position, viewer_pose.position);
@@ -322,6 +345,8 @@ void wm_xr_session_state_update(const XrSessionSettings *settings,
                                         DEFAULT_SENSOR_WIDTH);
 
   copy_v3_v3(state->prev_eye_position_ofs, draw_data->eye_position_ofs);
+  memcpy(&state->prev_base_pose, &draw_data->base_pose, sizeof(state->prev_base_pose));
+  memcpy(&state->prev_local_pose, &draw_view->local_pose, sizeof(state->prev_local_pose));
   state->prev_settings_flag = settings->flag;
   state->prev_base_pose_type = settings->base_pose_type;
   state->prev_base_pose_object = settings->base_pose_object;
@@ -373,6 +398,137 @@ bool WM_xr_session_state_viewer_pose_matrix_info_get(const wmXrData *xr,
   return true;
 }
 
+bool WM_xr_session_state_controller_pose_location_get(const wmXrData *xr,
+                                                      unsigned int subaction_idx,
+                                                      float r_location[3])
+{
+  if (!WM_xr_session_is_ready(xr) || !xr->runtime->session_state.is_view_data_set ||
+      subaction_idx >= ARRAY_SIZE(xr->runtime->session_state.controllers)) {
+    zero_v3(r_location);
+    return false;
+  }
+
+  copy_v3_v3(r_location, xr->runtime->session_state.controllers[subaction_idx].pose.position);
+  return true;
+}
+
+bool WM_xr_session_state_controller_pose_rotation_get(const wmXrData *xr,
+                                                      unsigned int subaction_idx,
+                                                      float r_rotation[4])
+{
+  if (!WM_xr_session_is_ready(xr) || !xr->runtime->session_state.is_view_data_set ||
+      subaction_idx >= ARRAY_SIZE(xr->runtime->session_state.controllers)) {
+    unit_qt(r_rotation);
+    return false;
+  }
+
+  copy_v4_v4(r_rotation,
+             xr->runtime->session_state.controllers[subaction_idx].pose.orientation_quat);
+  return true;
+}
+
+/* -------------------------------------------------------------------- */
+/** \name XR-Session Actions
+ *
+ * XR action processing and event dispatching.
+ *
+ * \{ */
+
+void wm_xr_session_actions_init(wmXrData *xr)
+{
+  if (!xr->runtime) {
+    return;
+  }
+
+  GHOST_XrAttachActionSets(xr->runtime->context);
+}
+
+static void wm_xr_session_controller_mats_update(const XrSessionSettings *settings,
+                                                 const wmXrAction *controller_pose_action,
+                                                 wmXrSessionState *state)
+{
+  const unsigned int count = (unsigned int)min_ii(
+      (int)controller_pose_action->count_subaction_paths, (int)ARRAY_SIZE(state->controllers));
+
+  float view_ofs[3];
+  float base_inv[4][4];
+  float tmp[4][4];
+
+  if ((settings->flag & XR_SESSION_USE_POSITION_TRACKING) == 0) {
+    copy_v3_v3(view_ofs, state->prev_local_pose.position);
+  }
+  else {
+    zero_v3(view_ofs);
+  }
+  if ((settings->flag & XR_SESSION_USE_ABSOLUTE_TRACKING) == 0) {
+    add_v3_v3(view_ofs, state->prev_eye_position_ofs);
+  }
+
+  wm_xr_pose_to_viewmat(&state->prev_base_pose, base_inv);
+  invert_m4(base_inv);
+
+  for (unsigned int i = 0; i < count; ++i) {
+    wmXrControllerData *controller = &state->controllers[i];
+
+    /* Calculate controller matrix in world space. */
+    wm_xr_controller_pose_to_mat(&((GHOST_XrPose *)controller_pose_action->states)[i], tmp);
+
+    /* Apply eye position and base pose offsets. */
+    sub_v3_v3(tmp[3], view_ofs);
+    mul_m4_m4m4(controller->mat, base_inv, tmp);
+
+    /* Save final pose. */
+    mat4_to_loc_quat(
+        controller->pose.position, controller->pose.orientation_quat, controller->mat);
+  }
+}
+
+void wm_xr_session_actions_update(wmXrData *xr)
+{
+  if (!xr->runtime) {
+    return;
+  }
+
+  GHOST_XrContextHandle xr_context = xr->runtime->context;
+  wmXrSessionState *state = &xr->runtime->session_state;
+  wmXrActionSet *active_action_set = state->active_action_set;
+
+  int ret = GHOST_XrSyncActions(xr_context, active_action_set ? active_action_set->name : NULL);
+  if (!ret) {
+    return;
+  }
+
+  /* Only update controller mats for active action set. */
+  if (active_action_set) {
+    if (active_action_set->controller_pose_action) {
+      wm_xr_session_controller_mats_update(
+          &xr->session_settings, active_action_set->controller_pose_action, state);
+    }
+  }
+}
+
+void wm_xr_session_controller_data_populate(const wmXrAction *controller_pose_action, wmXrData *xr)
+{
+  wmXrSessionState *state = &xr->runtime->session_state;
+
+  const unsigned int count = (unsigned int)min_ii(
+      (int)ARRAY_SIZE(state->controllers), (int)controller_pose_action->count_subaction_paths);
+
+  for (unsigned int i = 0; i < count; ++i) {
+    wmXrControllerData *c = &state->controllers[i];
+    strcpy(c->subaction_path, controller_pose_action->subaction_paths[i]);
+    memset(&c->pose, 0, sizeof(c->pose));
+    zero_m4(c->mat);
+  }
+}
+
+void wm_xr_session_controller_data_clear(wmXrSessionState *state)
+{
+  memset(state->controllers, 0, sizeof(state->controllers));
+}
+
+/** \} */ /* XR-Session Actions */
+
 /* -------------------------------------------------------------------- */
 /** \name XR-Session Surface
  *
@@ -390,7 +546,6 @@ bool WM_xr_session_state_viewer_pose_matrix_info_get(const wmXrData *xr,
  */
 static void wm_xr_session_surface_draw(bContext *C)
 {
-  wmXrSurfaceData *surface_data = g_xr_surface->customdata;
   wmWindowManager *wm = CTX_wm_manager(C);
   Main *bmain = CTX_data_main(C);
   wmXrDrawData draw_data;
@@ -406,38 +561,50 @@ static void wm_xr_session_surface_draw(bContext *C)
 
   GHOST_XrSessionDrawViews(wm->xr.runtime->context, &draw_data);
 
-  GPU_offscreen_unbind(surface_data->offscreen, false);
+  GPU_framebuffer_restore();
 }
 
 bool wm_xr_session_surface_offscreen_ensure(wmXrSurfaceData *surface_data,
                                             const GHOST_XrDrawViewInfo *draw_view)
 {
-  const bool size_changed = surface_data->offscreen &&
-                            (GPU_offscreen_width(surface_data->offscreen) != draw_view->width) &&
-                            (GPU_offscreen_height(surface_data->offscreen) != draw_view->height);
+  wmXrViewportPair *vp = NULL;
+  if (draw_view->view_idx >= BLI_listbase_count(&surface_data->viewports)) {
+    vp = MEM_callocN(sizeof(*vp), __func__);
+    BLI_addtail(&surface_data->viewports, vp);
+  }
+  else {
+    vp = BLI_findlink(&surface_data->viewports, draw_view->view_idx);
+  }
+  BLI_assert(vp);
+
+  GPUOffScreen *offscreen = vp->offscreen;
+  GPUViewport *viewport = vp->viewport;
+  const bool size_changed = offscreen && (GPU_offscreen_width(offscreen) != draw_view->width) &&
+                            (GPU_offscreen_height(offscreen) != draw_view->height);
   char err_out[256] = "unknown";
   bool failure = false;
 
-  if (surface_data->offscreen) {
-    BLI_assert(surface_data->viewport);
+  if (offscreen) {
+    BLI_assert(viewport);
 
     if (!size_changed) {
       return true;
     }
-    GPU_viewport_free(surface_data->viewport);
-    GPU_offscreen_free(surface_data->offscreen);
+    GPU_viewport_free(viewport);
+    GPU_offscreen_free(offscreen);
   }
 
-  if (!(surface_data->offscreen = GPU_offscreen_create(
-            draw_view->width, draw_view->height, true, false, err_out))) {
-    failure = true;
+  offscreen = vp->offscreen = GPU_offscreen_create(
+      draw_view->width, draw_view->height, true, false, err_out);
+  if (offscreen) {
+    viewport = vp->viewport = GPU_viewport_create();
+    if (!viewport) {
+      GPU_offscreen_free(offscreen);
+      offscreen = vp->offscreen = NULL;
+      failure = true;
+    }
   }
-
-  if (failure) {
-    /* Pass. */
-  }
-  else if (!(surface_data->viewport = GPU_viewport_create())) {
-    GPU_offscreen_free(surface_data->offscreen);
+  else {
     failure = true;
   }
 
@@ -452,12 +619,17 @@ bool wm_xr_session_surface_offscreen_ensure(wmXrSurfaceData *surface_data,
 static void wm_xr_session_surface_free_data(wmSurface *surface)
 {
   wmXrSurfaceData *data = surface->customdata;
+  ListBase *lb = &data->viewports;
+  wmXrViewportPair *vp;
 
-  if (data->viewport) {
-    GPU_viewport_free(data->viewport);
-  }
-  if (data->offscreen) {
-    GPU_offscreen_free(data->offscreen);
+  while ((vp = BLI_pophead(lb))) {
+    if (vp->viewport) {
+      GPU_viewport_free(vp->viewport);
+    }
+    if (vp->offscreen) {
+      GPU_offscreen_free(vp->offscreen);
+    }
+    BLI_freelinkN(lb, vp);
   }
 
   MEM_freeN(surface->customdata);

@@ -17,6 +17,7 @@ extern "C" {
 
 #define DO_CPP_TESTS 1
 #define DO_C_TESTS 1
+#define DO_TEXT_TESTS 0
 #define DO_RANDOM_TESTS 0
 
 #include "BLI_array.hh"
@@ -240,7 +241,7 @@ template<typename T> std::ostream &operator<<(std::ostream &os, const CDT_result
   for (int i : r.edge.index_range()) {
     os << "e" << i << " = (" << r.edge[i].first << ", " << r.edge[i].second << ")\n";
     os << "  orig: ";
-    for (int j : r.edge_orig[i].size()) {
+    for (int j : r.edge_orig[i].index_range()) {
       os << r.edge_orig[i][j] << " ";
     }
     os << "\n";
@@ -267,7 +268,7 @@ template<typename T>
 void graph_draw(const std::string &label,
                 const Array<vec2<T>> &verts,
                 const Array<std::pair<int, int>> &edges,
-                const Array<Vector<int>> &UNUSED(faces))
+                const Array<Vector<int>> &faces)
 {
   /* Would like to use BKE_tempdir_base() here, but that brings in dependence on kernel library.
    * This is just for developer debugging anyway, and should never be called in production Blender.
@@ -281,7 +282,7 @@ void graph_draw(const std::string &label,
   constexpr int max_draw_height = 1000;
   constexpr int thin_line = 1;
   constexpr int vert_radius = 3;
-  constexpr bool draw_vert_labels = true;
+  constexpr bool draw_vert_labels = false;
   constexpr bool draw_edge_labels = false;
 
   if (verts.size() == 0) {
@@ -339,31 +340,40 @@ void graph_draw(const std::string &label,
        "xml:space=\"preserve\"\n"
     << "width=\"" << view_width << "\" height=\"" << view_height << "\">n";
 
+  for (const Vector<int> &fverts : faces) {
+    f << "<polygon fill=\"azure\" stroke=\"none\"\n  points=\"";
+    for (int vi : fverts) {
+      const vec2<T> &co = verts[vi];
+      f << SX(co[0]) << "," << SY(co[1]) << " ";
+    }
+    f << "\"\n  />\n";
+  }
+
   for (const std::pair<int, int> &e : edges) {
     const vec2<T> &uco = verts[e.first];
     const vec2<T> &vco = verts[e.second];
     int strokew = thin_line;
-    f << "<line fill=\"none\" stroke=\"black\" stroke-width=\"" << strokew << "\" x1=\""
+    f << R"(<line fill="none" stroke="black" stroke-width=")" << strokew << "\" x1=\""
       << SX(uco[0]) << "\" y1=\"" << SY(uco[1]) << "\" x2=\"" << SX(vco[0]) << "\" y2=\""
       << SY(vco[1]) << "\">\n";
     f << "  <title>[" << e.first << "][" << e.second << "]</title>\n";
     f << "</line>\n";
     if (draw_edge_labels) {
       f << "<text x=\"" << SX(0.5 * (uco[0] + vco[0])) << "\" y=\"" << SY(0.5 * (uco[1] + vco[1]))
-        << "\" font-size=\"small\">";
+        << R"(" font-size="small">)";
       f << "[" << e.first << "][" << e.second << "]</text>\n";
     }
   }
 
   int i = 0;
   for (const vec2<T> &vco : verts) {
-    f << "<circle fill=\"black\" cx=\"" << SX(vco[0]) << "\" cy=\"" << SY(vco[1]) << "\" r=\""
+    f << R"(<circle fill="black" cx=")" << SX(vco[0]) << "\" cy=\"" << SY(vco[1]) << "\" r=\""
       << vert_radius << "\">\n";
     f << "  <title>[" << i << "]" << vco << "</title>\n";
     f << "</circle>\n";
     if (draw_vert_labels) {
       f << "<text x=\"" << SX(vco[0]) + vert_radius << "\" y=\"" << SY(vco[1]) - vert_radius
-        << "\" font-size=\"small\">[" << i << "]</text>\n";
+        << R"(" font-size="small">[)" << i << "]</text>\n";
     }
     ++i;
   }
@@ -642,6 +652,110 @@ template<typename T> void lineinsquare_test()
   if (DO_DRAW) {
     graph_draw<T>("LineInSquare - constraints", out2.vert, out2.edge, out2.face);
   }
+  CDT_result<T> out3 = delaunay_2d_calc(in, CDT_INSIDE_WITH_HOLES);
+  EXPECT_EQ(out3.vert.size(), 6);
+  EXPECT_EQ(out3.face.size(), 6);
+  if (DO_DRAW) {
+    graph_draw<T>("LineInSquare - inside with holes", out3.vert, out3.edge, out3.face);
+  }
+  CDT_result<T> out4 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
+  EXPECT_EQ(out4.vert.size(), 6);
+  EXPECT_EQ(out4.face.size(), 2);
+  if (DO_DRAW) {
+    graph_draw<T>("LineInSquare - valid bmesh with holes", out4.vert, out4.edge, out4.face);
+  }
+}
+
+template<typename T> void lineholeinsquare_test()
+{
+  const char *spec = R"(10 1 2
+  -0.5 -0.5
+  0.5 -0.5
+  -0.5 0.5
+  0.5 0.5
+  -0.25 0.0
+  0.25 0.0
+  -0.4 -0.4
+  0.4 -0.4
+  0.4 -0.3
+  -0.4 -0.3
+  4 5
+  0 1 3 2
+  6 7 8 9
+  )";
+
+  CDT_input<T> in = fill_input_from_string<T>(spec);
+  CDT_result<T> out = delaunay_2d_calc(in, CDT_FULL);
+  EXPECT_EQ(out.vert.size(), 10);
+  EXPECT_EQ(out.face.size(), 14);
+  if (DO_DRAW) {
+    graph_draw<T>("LineHoleInSquare - full", out.vert, out.edge, out.face);
+  }
+  CDT_result<T> out2 = delaunay_2d_calc(in, CDT_CONSTRAINTS);
+  EXPECT_EQ(out2.vert.size(), 10);
+  EXPECT_EQ(out2.face.size(), 2);
+  if (DO_DRAW) {
+    graph_draw<T>("LineHoleInSquare - constraints", out2.vert, out2.edge, out2.face);
+  }
+  CDT_result<T> out3 = delaunay_2d_calc(in, CDT_INSIDE_WITH_HOLES);
+  EXPECT_EQ(out3.vert.size(), 10);
+  EXPECT_EQ(out3.face.size(), 12);
+  if (DO_DRAW) {
+    graph_draw<T>("LineHoleInSquare - inside with holes", out3.vert, out3.edge, out3.face);
+  }
+  CDT_result<T> out4 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
+  EXPECT_EQ(out4.vert.size(), 10);
+  EXPECT_EQ(out4.face.size(), 2);
+  if (DO_DRAW) {
+    graph_draw<T>("LineHoleInSquare - valid bmesh with holes", out4.vert, out4.edge, out4.face);
+  }
+}
+
+template<typename T> void nestedholes_test()
+{
+  const char *spec = R"(12 0 3
+  -0.5 -0.5
+  0.5 -0.5
+  -0.5 0.5
+  0.5 0.5
+  -0.4 -0.4
+  0.4 -0.4
+  0.4 0.4
+  -0.4 0.4
+  -0.2 -0.2
+  0.2 -0.2
+  0.2 0.2
+  -0.2 0.2
+  0 1 3 2
+  4 7 6 5
+  8 9 10 11
+  )";
+
+  CDT_input<T> in = fill_input_from_string<T>(spec);
+  CDT_result<T> out = delaunay_2d_calc(in, CDT_FULL);
+  EXPECT_EQ(out.vert.size(), 12);
+  EXPECT_EQ(out.face.size(), 18);
+  if (DO_DRAW) {
+    graph_draw<T>("NestedHoles - full", out.vert, out.edge, out.face);
+  }
+  CDT_result<T> out2 = delaunay_2d_calc(in, CDT_CONSTRAINTS);
+  EXPECT_EQ(out2.vert.size(), 12);
+  EXPECT_EQ(out2.face.size(), 3);
+  if (DO_DRAW) {
+    graph_draw<T>("NestedHoles - constraints", out2.vert, out2.edge, out2.face);
+  }
+  CDT_result<T> out3 = delaunay_2d_calc(in, CDT_INSIDE_WITH_HOLES);
+  EXPECT_EQ(out3.vert.size(), 12);
+  EXPECT_EQ(out3.face.size(), 10);
+  if (DO_DRAW) {
+    graph_draw<T>("NestedHoles - inside with holes", out3.vert, out3.edge, out3.face);
+  }
+  CDT_result<T> out4 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
+  EXPECT_EQ(out4.vert.size(), 12);
+  EXPECT_EQ(out4.face.size(), 3);
+  if (DO_DRAW) {
+    graph_draw<T>("NestedHoles - valid bmesh with holes", out4.vert, out4.edge, out4.face);
+  }
 }
 
 template<typename T> void crosssegs_test()
@@ -680,6 +794,55 @@ template<typename T> void crosssegs_test()
   }
   if (DO_DRAW) {
     graph_draw<T>("CrossSegs", out.vert, out.edge, out.face);
+  }
+}
+
+template<typename T> void cutacrosstri_test()
+{
+  /* Right triangle with horizontal segment exactly crossing in the middle. */
+  const char *spec = R"(5 1 1
+  0.0 0.0
+  1.0 0.0
+  0.0 1.0
+  0.0 0.5
+  0.5 0.5
+  3 4
+  0 1 2
+  )";
+
+  CDT_input<T> in = fill_input_from_string<T>(spec);
+  CDT_result<T> out = delaunay_2d_calc(in, CDT_FULL);
+  EXPECT_EQ(out.vert.size(), 5);
+  EXPECT_EQ(out.edge.size(), 7);
+  EXPECT_EQ(out.face.size(), 3);
+  int v0_out = get_orig_index(out.vert_orig, 0);
+  int v1_out = get_orig_index(out.vert_orig, 1);
+  int v2_out = get_orig_index(out.vert_orig, 2);
+  int v3_out = get_orig_index(out.vert_orig, 3);
+  int v4_out = get_orig_index(out.vert_orig, 4);
+  EXPECT_TRUE(v0_out != -1 && v1_out != -1 && v2_out != -1 && v3_out != -1 && v4_out != -1);
+  if (out.face.size() == 3) {
+    int e0_out = get_orig_index(out.edge_orig, 0);
+    EXPECT_NE(e0_out, -1);
+    int fe0_out = get_output_edge_index(out, v0_out, v1_out);
+    EXPECT_NE(fe0_out, -1);
+    int fe1a_out = get_output_edge_index(out, v1_out, v4_out);
+    EXPECT_NE(fe1a_out, -1);
+    int fe1b_out = get_output_edge_index(out, v4_out, v2_out);
+    EXPECT_NE(fe1b_out, -1);
+    if (fe1a_out != 0 && fe1b_out != 0) {
+      EXPECT_EQ(e0_out, get_orig_index(out.edge_orig, 0));
+      EXPECT_TRUE(out.edge_orig[fe1a_out].size() == 1 && out.edge_orig[fe1a_out][0] == 11);
+      EXPECT_TRUE(out.edge_orig[fe1b_out].size() == 1 && out.edge_orig[fe1b_out][0] == 11);
+    }
+    int e_diag = get_output_edge_index(out, v0_out, v4_out);
+    EXPECT_NE(e_diag, -1);
+    if (e_diag != -1) {
+      EXPECT_EQ(out.edge_orig[e_diag].size(), 0);
+    }
+  }
+  if (DO_DRAW) {
+    graph_draw<T>("CutAcrossTri", out.vert, out.edge, out.face);
   }
 }
 
@@ -1025,16 +1188,28 @@ template<typename T> void overlapfaces_test()
     graph_draw<T>("OverlapFaces - inside", out2.vert, out2.edge, out2.face);
   }
 
-  CDT_result<T> out3 = delaunay_2d_calc(in, CDT_CONSTRAINTS);
-  EXPECT_EQ(out3.face.size(), 4);
+  CDT_result<T> out3 = delaunay_2d_calc(in, CDT_INSIDE_WITH_HOLES);
+  EXPECT_EQ(out3.face.size(), 14);
   if (DO_DRAW) {
-    graph_draw<T>("OverlapFaces - constraints", out3.vert, out3.edge, out3.face);
+    graph_draw<T>("OverlapFaces - inside with holes", out3.vert, out3.edge, out3.face);
   }
 
-  CDT_result<T> out4 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH);
-  EXPECT_EQ(out4.face.size(), 5);
+  CDT_result<T> out4 = delaunay_2d_calc(in, CDT_CONSTRAINTS);
+  EXPECT_EQ(out4.face.size(), 4);
   if (DO_DRAW) {
-    graph_draw<T>("OverlapFaces - valid bmesh", out4.vert, out4.edge, out4.face);
+    graph_draw<T>("OverlapFaces - constraints", out4.vert, out4.edge, out4.face);
+  }
+
+  CDT_result<T> out5 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH);
+  EXPECT_EQ(out5.face.size(), 5);
+  if (DO_DRAW) {
+    graph_draw<T>("OverlapFaces - valid bmesh", out5.vert, out5.edge, out5.face);
+  }
+
+  CDT_result<T> out6 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
+  EXPECT_EQ(out6.face.size(), 3);
+  if (DO_DRAW) {
+    graph_draw<T>("OverlapFaces - valid bmesh with holes", out6.vert, out6.edge, out6.face);
   }
 }
 
@@ -1246,6 +1421,34 @@ template<typename T> void repeattri_test()
   }
 }
 
+template<typename T> void square_o_test()
+{
+  const char *spec = R"(8 0 2
+  0.0 0.0
+  1.0 0.0
+  1.0 1.0
+  0.0 1.0
+  0.2 0.2
+  0.2 0.8
+  0.8 0.8
+  0.8 0.2
+  0 1 2 3
+  4 5 6 7
+  )";
+  CDT_input<T> in = fill_input_from_string<T>(spec);
+  CDT_result<T> out1 = delaunay_2d_calc(in, CDT_INSIDE_WITH_HOLES);
+  EXPECT_EQ(out1.face.size(), 8);
+  if (DO_DRAW) {
+    graph_draw<T>("Square O - inside with holes", out1.vert, out1.edge, out1.face);
+  }
+
+  CDT_result<T> out2 = delaunay_2d_calc(in, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES);
+  EXPECT_EQ(out2.face.size(), 2);
+  if (DO_DRAW) {
+    graph_draw<T>("Square O - valid bmesh with holes", out2.vert, out2.edge, out2.face);
+  }
+}
+
 TEST(delaunay_d, Empty)
 {
   empty_test<double>();
@@ -1301,9 +1504,24 @@ TEST(delaunay_d, LineInSquare)
   lineinsquare_test<double>();
 }
 
+TEST(delaunay_d, LineHoleInSquare)
+{
+  lineholeinsquare_test<double>();
+}
+
+TEST(delaunay_d, NestedHoles)
+{
+  nestedholes_test<double>();
+}
+
 TEST(delaunay_d, CrossSegs)
 {
   crosssegs_test<double>();
+}
+
+TEST(delaunay_d, CutAcrossTri)
+{
+  cutacrosstri_test<double>();
 }
 
 TEST(delaunay_d, DiamondCross)
@@ -1371,6 +1589,11 @@ TEST(delaunay_d, RepeatTri)
   repeattri_test<double>();
 }
 
+TEST(delaunay_d, SquareO)
+{
+  square_o_test<double>();
+}
+
 #  ifdef WITH_GMP
 TEST(delaunay_m, Empty)
 {
@@ -1426,9 +1649,24 @@ TEST(delaunay_m, LineInSquare)
   lineinsquare_test<mpq_class>();
 }
 
+TEST(delaunay_m, LineHoleInSquare)
+{
+  lineholeinsquare_test<mpq_class>();
+}
+
+TEST(delaunay_m, NestedHoles)
+{
+  nestedholes_test<mpq_class>();
+}
+
 TEST(delaunay_m, CrossSegs)
 {
   crosssegs_test<mpq_class>();
+}
+
+TEST(delaunay_m, CutAcrossTri)
+{
+  cutacrosstri_test<mpq_class>();
 }
 
 TEST(delaunay_m, DiamondCross)
@@ -1496,7 +1734,6 @@ TEST(delaunay_m, RepeatTri)
   repeattri_test<mpq_class>();
 }
 #  endif
-
 #endif
 
 #if DO_C_TESTS
@@ -1519,9 +1756,295 @@ TEST(delaunay_d, CintTwoFace)
   input.faces_len_table = faces_len;
   input.faces_start_table = faces_start;
   input.epsilon = 1e-5f;
+  input.need_ids = false;
   ::CDT_result *output = BLI_delaunay_2d_cdt_calc(&input, CDT_FULL);
   BLI_delaunay_2d_cdt_free(output);
 }
+
+TEST(delaunay_d, CintTwoFaceNoIds)
+{
+  float vert_coords[][2] = {
+      {0.0, 0.0}, {1.0, 0.0}, {0.5, 1.0}, {1.1, 1.0}, {1.1, 0.0}, {1.6, 1.0}};
+  int faces[] = {0, 1, 2, 3, 4, 5};
+  int faces_len[] = {3, 3};
+  int faces_start[] = {0, 3};
+
+  ::CDT_input input;
+  input.verts_len = 6;
+  input.edges_len = 0;
+  input.faces_len = 2;
+  input.vert_coords = vert_coords;
+  input.edges = nullptr;
+  input.faces = faces;
+  input.faces_len_table = faces_len;
+  input.faces_start_table = faces_start;
+  input.epsilon = 1e-5f;
+  input.need_ids = true;
+  ::CDT_result *output = BLI_delaunay_2d_cdt_calc(&input, CDT_FULL);
+  BLI_delaunay_2d_cdt_free(output);
+}
+
+#endif
+
+#if DO_TEXT_TESTS
+template<typename T>
+void text_test(
+    int num_arc_points, int num_lets_per_line, int num_lines, CDT_output_type otype, bool need_ids)
+{
+  constexpr bool print_timing = true;
+  /*
+   * Make something like a letter B:
+   *
+   *    4------------3
+   *    |              )
+   *    |  12--11       )
+   *    |  |     ) a3    ) a1
+   *    |  9---10       )
+   *    |              )
+   *    |            2
+   *    |              )
+   *    |  8----7       )
+   *    |  |     ) a2    ) a0
+   *    |  5----6       )
+   *    |              )
+   *    0------------1
+   *
+   * Where the numbers are the first 13 vertices, and the rest of
+   * the vertices are in arcs a0, a1, a2, a3, each of which have
+   * num_arc_points per arc in them.
+   */
+
+  const char *b_before_arcs = R"(13 0 3
+  0.0 0.0
+  1.0 0.0
+  1.0 1.5
+  1.0 3.0
+  0.0 3.0
+  0.2 0.2
+  0.6 0.2
+  0.6 1.4
+  0.2 1.4
+  0.2 1.6
+  0.6 1.6
+  0.6 2.8
+  0.2 2.8
+  3 4 0 1 2
+  6 5 8 7
+  10 9 12 11
+  )";
+
+  CDT_input<T> b_before_arcs_in = fill_input_from_string<T>(b_before_arcs);
+  constexpr int narcs = 4;
+  int b_npts = b_before_arcs_in.vert.size() + narcs * num_arc_points;
+  constexpr int b_nfaces = 3;
+  Array<vec2<T>> b_vert(b_npts);
+  Array<Vector<int>> b_face(b_nfaces);
+  std::copy(b_before_arcs_in.vert.begin(), b_before_arcs_in.vert.end(), b_vert.begin());
+  std::copy(b_before_arcs_in.face.begin(), b_before_arcs_in.face.end(), b_face.begin());
+  if (num_arc_points > 0) {
+    b_face[0].pop_last();  // We'll add center point back between arcs for outer face.
+    for (int arc = 0; arc < narcs; ++arc) {
+      int arc_origin_vert;
+      int arc_terminal_vert;
+      bool ccw;
+      switch (arc) {
+        case 0:
+          arc_origin_vert = 1;
+          arc_terminal_vert = 2;
+          ccw = true;
+          break;
+        case 1:
+          arc_origin_vert = 2;
+          arc_terminal_vert = 3;
+          ccw = true;
+          break;
+        case 2:
+          arc_origin_vert = 7;
+          arc_terminal_vert = 6;
+          ccw = false;
+          break;
+        case 3:
+          arc_origin_vert = 11;
+          arc_terminal_vert = 10;
+          ccw = false;
+          break;
+        default:
+          BLI_assert(false);
+      }
+      vec2<T> start_co = b_vert[arc_origin_vert];
+      vec2<T> end_co = b_vert[arc_terminal_vert];
+      vec2<T> center_co = 0.5 * (start_co + end_co);
+      BLI_assert(start_co[0] == end_co[0]);
+      double radius = abs(math_to_double<T>(end_co[1] - center_co[1]));
+      double angle_delta = M_PI / (num_arc_points + 1);
+      int start_vert = b_before_arcs_in.vert.size() + arc * num_arc_points;
+      Vector<int> &face = b_face[(arc <= 1) ? 0 : arc - 1];
+      for (int i = 0; i < num_arc_points; ++i) {
+        vec2<T> delta;
+        float ang = ccw ? (-M_PI_2 + (i + 1) * angle_delta) : (M_PI_2 - (i + 1) * angle_delta);
+        delta[0] = T(radius * cos(ang));
+        delta[1] = T(radius * sin(ang));
+        b_vert[start_vert + i] = center_co + delta;
+        face.append(start_vert + i);
+      }
+      if (arc == 0) {
+        face.append(arc_terminal_vert);
+      }
+    }
+  }
+
+  CDT_input<T> in;
+  int tot_instances = num_lets_per_line * num_lines;
+  if (tot_instances == 1) {
+    in.vert = b_vert;
+    in.face = b_face;
+  }
+  else {
+    in.vert = Array<vec2<T>>(tot_instances * b_vert.size());
+    in.face = Array<Vector<int>>(tot_instances * b_face.size());
+    T cur_x = T(0);
+    T cur_y = T(0);
+    T delta_x = T(2);
+    T delta_y = T(3.25);
+    int instance = 0;
+    for (int line = 0; line < num_lines; ++line) {
+      for (int let = 0; let < num_lets_per_line; ++let) {
+        vec2<T> co_offset(cur_x, cur_y);
+        int in_v_offset = instance * b_vert.size();
+        for (int v = 0; v < b_vert.size(); ++v) {
+          in.vert[in_v_offset + v] = b_vert[v] + co_offset;
+        }
+        int in_f_offset = instance * b_face.size();
+        for (int f : b_face.index_range()) {
+          for (int fv : b_face[f]) {
+            in.face[in_f_offset + f].append(in_v_offset + fv);
+          }
+        }
+        cur_x += delta_x;
+        ++instance;
+      }
+      cur_y += delta_y;
+      cur_x = T(0);
+    }
+  }
+  in.epsilon = b_before_arcs_in.epsilon;
+  in.need_ids = need_ids;
+  double tstart = PIL_check_seconds_timer();
+  CDT_result<T> out = delaunay_2d_calc(in, otype);
+  double tend = PIL_check_seconds_timer();
+  if (print_timing) {
+    std::cout << "time = " << tend - tstart << "\n";
+  }
+  if (!need_ids) {
+    EXPECT_EQ(out.vert_orig.size(), 0);
+    EXPECT_EQ(out.edge_orig.size(), 0);
+    EXPECT_EQ(out.face_orig.size(), 0);
+  }
+  if (DO_DRAW) {
+    std::string label = "Text arcpts=" + std::to_string(num_arc_points);
+    if (num_lets_per_line > 1) {
+      label += " linelen=" + std::to_string(num_lets_per_line);
+    }
+    if (num_lines > 1) {
+      label += " lines=" + std::to_string(num_lines);
+    }
+    if (!need_ids) {
+      label += " no_ids";
+    }
+    if (otype != CDT_INSIDE_WITH_HOLES) {
+      label += " otype=" + std::to_string(otype);
+    }
+    graph_draw<T>(label, out.vert, out.edge, out.face);
+  }
+}
+
+TEST(delaunay_d, TextB10)
+{
+  text_test<double>(10, 1, 1, CDT_INSIDE_WITH_HOLES, true);
+}
+
+TEST(delaunay_d, TextB10_noids)
+{
+  text_test<double>(10, 1, 1, CDT_INSIDE_WITH_HOLES, false);
+}
+
+TEST(delaunay_d, TextB10_inside)
+{
+  text_test<double>(10, 1, 1, CDT_INSIDE, true);
+}
+
+TEST(delaunay_d, TextB10_inside_noids)
+{
+  text_test<double>(10, 1, 1, CDT_INSIDE, false);
+}
+
+TEST(delaunay_d, TextB10_constraints)
+{
+  text_test<double>(10, 1, 1, CDT_CONSTRAINTS, true);
+}
+
+TEST(delaunay_d, TextB10_constraints_noids)
+{
+  text_test<double>(10, 1, 1, CDT_CONSTRAINTS, false);
+}
+
+TEST(delaunay_d, TextB10_constraints_valid_bmesh)
+{
+  text_test<double>(10, 1, 1, CDT_CONSTRAINTS_VALID_BMESH, true);
+}
+
+TEST(delaunay_d, TextB10_constraints_valid_bmesh_noids)
+{
+  text_test<double>(10, 1, 1, CDT_CONSTRAINTS_VALID_BMESH, false);
+}
+
+TEST(delaunay_d, TextB10_constraints_valid_bmesh_with_holes)
+{
+  text_test<double>(10, 1, 1, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES, true);
+}
+
+TEST(delaunay_d, TextB10_constraints_valid_bmesh_with_holes_noids)
+{
+  text_test<double>(10, 1, 1, CDT_CONSTRAINTS_VALID_BMESH_WITH_HOLES, false);
+}
+
+TEST(delaunay_d, TextB200)
+{
+  text_test<double>(200, 1, 1, CDT_INSIDE_WITH_HOLES, true);
+}
+
+TEST(delaunay_d, TextB10_10_10)
+{
+  text_test<double>(10, 10, 10, CDT_INSIDE_WITH_HOLES, true);
+}
+
+TEST(delaunay_d, TextB10_10_10_noids)
+{
+  text_test<double>(10, 10, 10, CDT_INSIDE_WITH_HOLES, false);
+}
+
+#  ifdef WITH_GMP
+TEST(delaunay_m, TextB10)
+{
+  text_test<mpq_class>(10, 1, 1, CDT_INSIDE_WITH_HOLES, true);
+}
+
+TEST(delaunay_m, TextB200)
+{
+  text_test<mpq_class>(200, 1, 1, CDT_INSIDE_WITH_HOLES, true);
+}
+
+TEST(delaunay_m, TextB10_10_10)
+{
+  text_test<mpq_class>(10, 10, 10, CDT_INSIDE_WITH_HOLES, true);
+}
+
+TEST(delaunay_m, TextB10_10_10_noids)
+{
+  text_test<mpq_class>(10, 10, 10, CDT_INSIDE_WITH_HOLES, false);
+}
+#  endif
+
 #endif
 
 #if DO_RANDOM_TESTS

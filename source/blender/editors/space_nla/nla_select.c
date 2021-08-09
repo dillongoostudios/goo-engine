@@ -453,7 +453,7 @@ static void nlaedit_select_leftright(bContext *C,
   Scene *scene = ac->scene;
   float xmin, xmax;
 
-  /* if currently in tweakmode, exit tweakmode first */
+  /* if currently in tweak-mode, exit tweak-mode first */
   if (scene->flag & SCE_NLA_EDIT_ON) {
     WM_operator_name_call(C, "NLA_OT_tweakmode_exit", WM_OP_EXEC_DEFAULT, NULL);
   }
@@ -577,7 +577,7 @@ void NLA_OT_select_leftright(wmOperatorType *ot)
   ot->idname = "NLA_OT_select_leftright";
   ot->description = "Select strips to the left or the right of the current frame";
 
-  /* api callbacks  */
+  /* api callbacks */
   ot->invoke = nlaedit_select_leftright_invoke;
   ot->exec = nlaedit_select_leftright_exec;
   ot->poll = ED_operator_nla_active;
@@ -612,7 +612,7 @@ static int mouse_nla_strips(bContext *C,
 
   nlaedit_strip_at_region_position(ac, mval[0], mval[1], &ale, &strip);
 
-  /* if currently in tweakmode, exit tweakmode before changing selection states
+  /* if currently in tweak-mode, exit tweak-mode before changing selection states
    * now that we've found our target...
    */
   if (scene->flag & SCE_NLA_EDIT_ON) {

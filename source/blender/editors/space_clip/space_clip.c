@@ -1112,7 +1112,7 @@ static void dopesheet_region_draw(const bContext *C, ARegion *region)
   UI_view2d_view_ortho(v2d);
 
   /* time grid */
-  UI_view2d_draw_lines_x__discrete_frames_or_seconds(v2d, scene, sc->flag & SC_SHOW_SECONDS);
+  UI_view2d_draw_lines_x__discrete_frames_or_seconds(v2d, scene, sc->flag & SC_SHOW_SECONDS, true);
 
   /* data... */
   clip_draw_dopesheet_main(sc, region, scene);
@@ -1214,7 +1214,7 @@ static void clip_header_region_listener(const wmRegionListenerParams *params)
       switch (wmn->data) {
         /* for proportional editmode only */
         case ND_TOOLSETTINGS:
-          /* TODO - should do this when in mask mode only but no data available */
+          /* TODO: should do this when in mask mode only but no data available. */
           // if (sc->mode == SC_MODE_MASKEDIT)
           {
             ED_region_tag_redraw(region);

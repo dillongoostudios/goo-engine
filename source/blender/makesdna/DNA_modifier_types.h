@@ -217,7 +217,7 @@ typedef struct LatticeModifierData {
   char _pad[2];
 } LatticeModifierData;
 
-/*Lattice modifier flags */
+/* Lattice modifier flags. */
 enum {
   MOD_LATTICE_INVERT_VGROUP = (1 << 0),
 };
@@ -299,13 +299,13 @@ enum {
 typedef struct ArrayModifierData {
   ModifierData modifier;
 
-  /* the object with which to cap the start of the array  */
+  /* the object with which to cap the start of the array. */
   struct Object *start_cap;
-  /* the object with which to cap the end of the array  */
+  /* the object with which to cap the end of the array. */
   struct Object *end_cap;
-  /* the curve object to use for MOD_ARR_FITCURVE */
+  /* the curve object to use for MOD_ARR_FITCURVE. */
   struct Object *curve_ob;
-  /* the object to use for object offset */
+  /* the object to use for object offset. */
   struct Object *offset_ob;
   /* a constant duplicate offset;
    * 1 means the duplicates are 1 unit apart
@@ -952,7 +952,7 @@ typedef struct MeshDeformModifierData {
   MDefCell *dyngrid;
   /** Dynamic binding vertex influences. */
   MDefInfluence *dyninfluences;
-  /** Is this vertex bound or not?. */
+  /** Is this vertex bound or not? */
   int *dynverts;
   /** Size of the dynamic bind grid. */
   int dyngridsize;
@@ -1469,7 +1469,7 @@ typedef struct WeightVGEditModifierData {
   float default_weight;
 
   /* Mapping stuff. */
-  /** The custom mapping curve!. */
+  /** The custom mapping curve. */
   struct CurveMapping *cmap_curve;
 
   /* The add/remove vertices weight thresholds. */
@@ -1543,7 +1543,7 @@ typedef struct WeightVGMixModifierData {
   struct Object *mask_tex_map_obj;
   /** Name of the map bone. */
   char mask_tex_map_bone[64];
-  /** How to map the texture!. */
+  /** How to map the texture. */
   int mask_tex_mapping;
   /** Name of the UV map. MAX_CUSTOMDATA_LAYER_NAME. */
   char mask_tex_uvlayer_name[64];
@@ -1601,7 +1601,7 @@ typedef struct WeightVGProximityModifierData {
   char defgrp_name[64];
 
   /* Mapping stuff. */
-  /** The custom mapping curve!. */
+  /** The custom mapping curve. */
   struct CurveMapping *cmap_curve;
 
   /* Proximity modes. */
@@ -1626,7 +1626,7 @@ typedef struct WeightVGProximityModifierData {
   struct Object *mask_tex_map_obj;
   /** Name of the map bone. */
   char mask_tex_map_bone[64];
-  /** How to map the texture!. */
+  /** How to map the texture. */
   int mask_tex_mapping;
   /** Name of the UV Map. MAX_CUSTOMDATA_LAYER_NAME. */
   char mask_tex_uvlayer_name[64];
@@ -1840,7 +1840,7 @@ typedef struct CorrectiveSmoothModifierData {
    * use for MOD_CORRECTIVESMOOTH_RESTSOURCE_BIND */
   float (*bind_coords)[3];
 
-  /* note: -1 is used to bind */
+  /* NOTE: -1 is used to bind. */
   unsigned int bind_coords_num;
 
   float lambda, scale;
@@ -2023,6 +2023,7 @@ typedef struct WeldModifierData {
 /* WeldModifierData->flag */
 enum {
   MOD_WELD_INVERT_VGROUP = (1 << 0),
+  MOD_WELD_LOOSE_EDGES = (1 << 1),
 };
 
 /* #WeldModifierData.mode */
@@ -2180,7 +2181,7 @@ typedef struct SDefBind {
 typedef struct SDefVert {
   SDefBind *binds;
   unsigned int numbinds;
-  char _pad[4];
+  unsigned int vertex_idx;
 } SDefVert;
 
 typedef struct SurfaceDeformModifierData {
@@ -2192,11 +2193,10 @@ typedef struct SurfaceDeformModifierData {
   /** Vertex bind data. */
   SDefVert *verts;
   float falloff;
-  unsigned int numverts, numpoly;
+  unsigned int num_mesh_verts, num_bind_verts, numpoly;
   int flags;
   float mat[4][4];
   float strength;
-  char _pad[4];
   char defgrp_name[64];
 } SurfaceDeformModifierData;
 
@@ -2204,10 +2204,9 @@ typedef struct SurfaceDeformModifierData {
 enum {
   /* This indicates "do bind on next modifier evaluation" as well as "is bound". */
   MOD_SDEF_BIND = (1 << 0),
-  MOD_SDEF_INVERT_VGROUP = (1 << 1)
-
-  /* MOD_SDEF_USES_LOOPTRI = (1 << 1), */ /* UNUSED */
-  /* MOD_SDEF_HAS_CONCAVE = (1 << 2), */  /* UNUSED */
+  MOD_SDEF_INVERT_VGROUP = (1 << 1),
+  /* Only store bind data for nonzero vgroup weights at the time of bind. */
+  MOD_SDEF_SPARSE_BIND = (1 << 2),
 };
 
 /* Surface Deform vertex bind modes */
@@ -2256,6 +2255,10 @@ typedef struct NodesModifierData {
   ModifierData modifier;
   struct bNodeTree *node_group;
   struct NodesModifierSettings settings;
+
+  /* Contains logged information from the last evaluation. This can be used to help the user to
+   * debug a node tree. */
+  void *runtime_eval_log;
 } NodesModifierData;
 
 typedef struct MeshToVolumeModifierData {

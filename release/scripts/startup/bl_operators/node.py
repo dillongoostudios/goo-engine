@@ -120,7 +120,7 @@ class NodeAddOperator:
     def poll(cls, context):
         space = context.space_data
         # needs active node editor and a tree to add nodes to
-        return ((space.type == 'NODE_EDITOR') and
+        return (space and (space.type == 'NODE_EDITOR') and
                 space.edit_tree and not space.edit_tree.library)
 
     # Default execute simply adds a node
@@ -265,7 +265,7 @@ class NODE_OT_collapse_hide_unused_toggle(Operator):
     def poll(cls, context):
         space = context.space_data
         # needs active node editor and a tree
-        return ((space.type == 'NODE_EDITOR') and
+        return (space and (space.type == 'NODE_EDITOR') and
                 (space.edit_tree and not space.edit_tree.library))
 
     def execute(self, context):
@@ -296,7 +296,7 @@ class NODE_OT_tree_path_parent(Operator):
     def poll(cls, context):
         space = context.space_data
         # needs active node editor and a tree
-        return (space.type == 'NODE_EDITOR' and len(space.path) > 1)
+        return (space and (space.type == 'NODE_EDITOR') and len(space.path) > 1)
 
     def execute(self, context):
         space = context.space_data
@@ -304,62 +304,6 @@ class NODE_OT_tree_path_parent(Operator):
         space.path.pop()
 
         return {'FINISHED'}
-
-
-class NODE_OT_active_preview_toggle(Operator):
-    '''Toggle active preview state of node'''
-    bl_idname = "node.active_preview_toggle"
-    bl_label = "Toggle Active Preview"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    @classmethod
-    def poll(cls, context):
-        space = context.space_data
-        if space.type != 'NODE_EDITOR':
-            return False
-        if space.edit_tree is None:
-            return False
-        if space.edit_tree.nodes.active is None:
-            return False
-        return True
-
-    def execute(self, context):
-        node_editor = context.space_data
-        ntree = node_editor.edit_tree
-        active_node = ntree.nodes.active
-
-        if active_node.active_preview:
-            self.disable_preview(context, ntree, active_node)
-        else:
-            self.enable_preview(context, node_editor, ntree, active_node)
-
-        return {'FINISHED'}
-
-    def enable_preview(self, context, node_editor, ntree, active_node):
-        spreadsheets = self.find_unpinned_spreadsheets(context)
-
-        for spreadsheet in spreadsheets:
-            spreadsheet.set_geometry_node_context(node_editor, active_node)
-
-        for node in ntree.nodes:
-            node.active_preview = False
-        active_node.active_preview = True
-
-    def disable_preview(self, context, ntree, active_node):
-        spreadsheets = self.find_unpinned_spreadsheets(context)
-        for spreadsheet in spreadsheets:
-            spreadsheet.context_path.clear()
-
-        active_node.active_preview = False
-
-    def find_unpinned_spreadsheets(self, context):
-        spreadsheets = []
-        for window in context.window_manager.windows:
-            for area in window.screen.areas:
-                space = area.spaces.active
-                if space.type == 'SPREADSHEET' and not space.is_pinned:
-                    spreadsheets.append(space)
-        return spreadsheets
 
 
 classes = (
@@ -370,5 +314,4 @@ classes = (
     NODE_OT_add_search,
     NODE_OT_collapse_hide_unused_toggle,
     NODE_OT_tree_path_parent,
-    NODE_OT_active_preview_toggle,
 )

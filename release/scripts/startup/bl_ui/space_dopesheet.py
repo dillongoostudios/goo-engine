@@ -594,9 +594,9 @@ class DOPESHEET_MT_delete(Menu):
 class DOPESHEET_MT_context_menu(Menu):
     bl_label = "Dope Sheet Context Menu"
 
-    def draw(self, _context):
+    def draw(self, context):
         layout = self.layout
-        st = _context.space_data
+        st = context.space_data
 
         layout.operator_context = 'INVOKE_DEFAULT'
 
@@ -609,9 +609,9 @@ class DOPESHEET_MT_context_menu(Menu):
         layout.operator_menu_enum("action.keyframe_type", "type", text="Keyframe Type")
 
         if st.mode != 'GPENCIL':
-           layout.operator_menu_enum("action.handle_type", "type", text="Handle Type")
-           layout.operator_menu_enum("action.interpolation_type", "type", text="Interpolation Mode")
-           layout.operator_menu_enum("action.easing_type", "type", text="Easing Mode")
+            layout.operator_menu_enum("action.handle_type", "type", text="Handle Type")
+            layout.operator_menu_enum("action.interpolation_type", "type", text="Interpolation Mode")
+            layout.operator_menu_enum("action.easing_type", "type", text="Easing Mode")
 
         layout.separator()
 
@@ -625,8 +625,8 @@ class DOPESHEET_MT_context_menu(Menu):
         layout.operator("action.delete")
 
         if st.mode == 'GPENCIL':
-           layout.operator("gpencil.interpolate_reverse")
-           layout.operator("gpencil.frame_clean_duplicate", text="Delete Duplicate Frames")
+            layout.operator("gpencil.interpolate_reverse")
+            layout.operator("gpencil.frame_clean_duplicate", text="Delete Duplicate Frames")
 
         layout.separator()
 

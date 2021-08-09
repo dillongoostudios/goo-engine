@@ -1126,7 +1126,7 @@ static void uv_select_edgeloop_single_side_tag(const Scene *scene,
     while (l_step != NULL) {
 
       if (!uvedit_face_visible_test(scene, l_step->f) ||
-          /* Check the boundary is still a  boundary. */
+          /* Check the boundary is still a boundary. */
           (uvedit_loop_find_other_radial_loop_with_visible_face(
                scene, l_step, cd_loop_uv_offset) != NULL)) {
         break;
@@ -1296,7 +1296,7 @@ static int uv_select_edgering(
         l_step = uvedit_loop_find_other_radial_loop_with_visible_face(
             scene, l_step_opposite, cd_loop_uv_offset);
         if (l_step == NULL) {
-          /* Ensure we touch the opposite edge if we cant walk over it. */
+          /* Ensure we touch the opposite edge if we can't walk over it. */
           l_step = l_step_opposite;
         }
       }
@@ -1351,7 +1351,7 @@ static void uv_select_linked_multi(Scene *scene,
 
     BM_mesh_elem_table_ensure(em->bm, BM_FACE); /* we can use this too */
 
-    /* Note, we had 'use winding' so we don't consider overlapping islands as connected, see T44320
+    /* NOTE: we had 'use winding' so we don't consider overlapping islands as connected, see T44320
      * this made *every* projection split the island into front/back islands.
      * Keep 'use_winding' to false, see: T50970.
      *
@@ -1381,7 +1381,7 @@ static void uv_select_linked_multi(Scene *scene,
             BM_ITER_ELEM (l, &liter, efa, BM_LOOPS_OF_FACE) {
               if (uvedit_uv_select_test(scene, l, cd_loop_uv_offset)) {
                 bool add_to_stack = true;
-                if (uv_sync_select && !select_faces) {
+                if (uv_sync_select) {
                   /* Special case, vertex/edge & sync select being enabled.
                    *
                    * Without this, a second linked select will 'grow' each time as each new
@@ -1392,6 +1392,7 @@ static void uv_select_linked_multi(Scene *scene,
                    * - The only other fully selected face is connected or,
                    * - There are no connected fully selected faces UV-connected to this loop.
                    */
+                  BLI_assert(!select_faces);
                   if (uvedit_face_select_test(scene, l->f, cd_loop_uv_offset)) {
                     /* pass */
                   }

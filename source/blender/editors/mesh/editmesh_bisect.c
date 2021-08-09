@@ -67,7 +67,7 @@ typedef struct {
 
   /* Aligned with objects array. */
   struct {
-    BMBackup mesh;
+    BMBackup mesh_backup;
     bool is_valid;
     bool is_dirty;
   } * backup;
@@ -160,7 +160,7 @@ static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
       if (em->bm->totedgesel != 0) {
         opdata->backup[ob_index].is_valid = true;
-        opdata->backup[ob_index].mesh = EDBM_redo_state_store(em);
+        opdata->backup[ob_index].mesh_backup = EDBM_redo_state_store(em);
       }
     }
 
@@ -184,7 +184,7 @@ static void edbm_bisect_exit(bContext *C, BisectData *opdata)
 
   for (int ob_index = 0; ob_index < opdata->backup_len; ob_index++) {
     if (opdata->backup[ob_index].is_valid) {
-      EDBM_redo_state_free(&opdata->backup[ob_index].mesh, NULL, false);
+      EDBM_redo_state_free(&opdata->backup[ob_index].mesh_backup);
     }
   }
   MEM_freeN(opdata->backup);
@@ -280,7 +280,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
 
   /* -------------------------------------------------------------------- */
   /* Modal support */
-  /* Note: keep this isolated, exec can work without this */
+  /* NOTE: keep this isolated, exec can work without this. */
   if (opdata != NULL) {
     mesh_bisect_interactive_calc(C, op, plane_co, plane_no);
     /* Write back to the props. */
@@ -301,7 +301,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
 
     if (opdata != NULL) {
       if (opdata->backup[ob_index].is_dirty) {
-        EDBM_redo_state_restore(opdata->backup[ob_index].mesh, em, false);
+        EDBM_redo_state_restore(&opdata->backup[ob_index].mesh_backup, em, false);
         opdata->backup[ob_index].is_dirty = false;
       }
     }
@@ -347,7 +347,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
       BMOperator bmop_attr;
 
       /* The fill normal sign is ignored as the face-winding is defined by surrounding faces.
-       * The normal is passed so triangle fill wont have to calculate it. */
+       * The normal is passed so triangle fill won't have to calculate it. */
       normalize_v3_v3(normal_fill, plane_no_local);
 
       /* Fill */
@@ -383,7 +383,12 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
         bm, bmop.slots_out, "geom_cut.out", BM_VERT | BM_EDGE, BM_ELEM_SELECT, true);
 
     if (EDBM_op_finish(em, &bmop, op, true)) {
-      EDBM_update_generic(obedit->data, true, true);
+      EDBM_update(obedit->data,
+                  &(const struct EDBMUpdate_Params){
+                      .calc_looptri = true,
+                      .calc_normals = false,
+                      .is_destructive = true,
+                  });
       EDBM_selectmode_flush(em);
       ret = OPERATOR_FINISHED;
     }

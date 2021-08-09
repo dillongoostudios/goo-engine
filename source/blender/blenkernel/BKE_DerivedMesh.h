@@ -55,7 +55,7 @@
  */
 
 /*
- * Note: This structure is read-only, for all practical purposes.
+ * NOTE: This structure is read-only, for all practical purposes.
  *       At some point in the future, we may want to consider
  *       creating a replacement structure that implements a proper
  *       abstract mesh kernel interface.  Or, we can leave this
@@ -89,7 +89,7 @@ struct Object;
 struct Scene;
 
 /*
- * Note: all mface interfaces now officially operate on tessellated data.
+ * NOTE: all mface interfaces now officially operate on tessellated data.
  *       Also, the mface origindex layer indexes mpolys, not mfaces.
  */
 
@@ -158,7 +158,7 @@ struct DerivedMesh {
   int (*getNumPolys)(DerivedMesh *dm);
 
   /** Copy a single vert/edge/tessellated face from the derived mesh into
-   * ``*r_{vert/edge/face}``. note that the current implementation
+   * `*r_{vert/edge/face}`. note that the current implementation
    * of this function can be quite slow, iterating over all
    * elements (editmesh)
    */
@@ -329,7 +329,7 @@ void DM_copy_vert_data(struct DerivedMesh *source,
                        int dest_index,
                        int count);
 
-/*sets up mpolys for a DM based on face iterators in source*/
+/* Sets up mpolys for a DM based on face iterators in source. */
 void DM_DupPolys(DerivedMesh *source, DerivedMesh *target);
 
 void DM_ensure_normals(DerivedMesh *dm);
@@ -345,7 +345,7 @@ void DM_interp_vert_data(struct DerivedMesh *source,
 
 void mesh_get_mapped_verts_coords(struct Mesh *me_eval, float (*r_cos)[3], const int totcos);
 
-/* same as above but wont use render settings */
+/* same as above but won't use render settings */
 struct Mesh *editbmesh_get_eval_cage(struct Depsgraph *depsgraph,
                                      struct Scene *scene,
                                      struct Object *,

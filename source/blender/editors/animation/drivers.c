@@ -80,7 +80,7 @@ FCurve *verify_driver_fcurve(ID *id,
   /* init animdata if none available yet */
   adt = BKE_animdata_from_id(id);
   if (adt == NULL && creation_mode != DRIVER_FCURVE_LOOKUP_ONLY) {
-    adt = BKE_animdata_add_id(id);
+    adt = BKE_animdata_ensure_id(id);
   }
   if (adt == NULL) {
     /* if still none (as not allowed to add, or ID doesn't have animdata for some reason) */
@@ -568,7 +568,7 @@ bool ANIM_remove_driver(ReportList *UNUSED(reports),
       FCurve *fcu_iter = adt->drivers.first;
 
       while ((fcu = BKE_fcurve_iter_step(fcu_iter, rna_path)) != NULL) {
-        /* store the next fcurve for looping  */
+        /* Store the next fcurve for looping. */
         fcu_iter = fcu->next;
 
         /* remove F-Curve from driver stack, then free it */
@@ -581,7 +581,7 @@ bool ANIM_remove_driver(ReportList *UNUSED(reports),
     }
     else {
       /* find the matching driver and remove it only
-       * Note: here is one of the places where we don't want new F-Curve + Driver added!
+       * NOTE: here is one of the places where we don't want new F-Curve + Driver added!
        *      so 'add' var must be 0
        */
       fcu = verify_driver_fcurve(id, rna_path, array_index, DRIVER_FCURVE_LOOKUP_ONLY);
@@ -1253,7 +1253,7 @@ static int copy_driver_button_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* since we're just copying, we don't really need to do anything else...*/
+  /* Since we're just copying, we don't really need to do anything else. */
   return (changed) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
@@ -1303,7 +1303,7 @@ static int paste_driver_button_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* since we're just copying, we don't really need to do anything else...*/
+  /* Since we're just copying, we don't really need to do anything else. */
   return (changed) ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 

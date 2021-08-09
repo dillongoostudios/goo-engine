@@ -1464,7 +1464,7 @@ static void do_render_full_pipeline(Render *re)
     /* in this case external render overrides all */
   }
   else if (RE_seq_render_active(re->scene, &re->r)) {
-    /* note: do_render_sequencer() frees rect32 when sequencer returns float images */
+    /* NOTE: do_render_sequencer() frees rect32 when sequencer returns float images. */
     if (!re->test_break(re->tbh)) {
       do_render_sequencer(re);
       render_seq = true;
@@ -1828,7 +1828,7 @@ void RE_SetReports(Render *re, ReportList *reports)
 static void render_update_depsgraph(Render *re)
 {
   Scene *scene = re->scene;
-  DEG_evaluate_on_framechange(re->pipeline_depsgraph, CFRA);
+  DEG_evaluate_on_framechange(re->pipeline_depsgraph, BKE_scene_frame_get(scene));
   BKE_scene_update_sound(re->pipeline_depsgraph, re->main);
 }
 
@@ -2215,34 +2215,41 @@ static int do_write_image_or_movie(Render *re,
   RenderResult rres;
   double render_time;
   bool ok = true;
+  RenderEngineType *re_type = RE_engines_find(re->r.engine);
 
-  RE_AcquireResultImageViews(re, &rres);
+  /* Only disable file writing if postprocessing is also disabled. */
+  const bool do_write_file = !(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
+                             (re_type->flag & RE_USE_POSTPROCESS);
 
-  /* write movie or image */
-  if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
-    RE_WriteRenderViewsMovie(
-        re->reports, &rres, scene, &re->r, mh, re->movie_ctx_arr, totvideos, false);
-  }
-  else {
-    if (name_override) {
-      BLI_strncpy(name, name_override, sizeof(name));
+  if (do_write_file) {
+    RE_AcquireResultImageViews(re, &rres);
+
+    /* write movie or image */
+    if (BKE_imtype_is_movie(scene->r.im_format.imtype)) {
+      RE_WriteRenderViewsMovie(
+          re->reports, &rres, scene, &re->r, mh, re->movie_ctx_arr, totvideos, false);
     }
     else {
-      BKE_image_path_from_imformat(name,
-                                   scene->r.pic,
-                                   BKE_main_blendfile_path(bmain),
-                                   scene->r.cfra,
-                                   &scene->r.im_format,
-                                   (scene->r.scemode & R_EXTENSION) != 0,
-                                   true,
-                                   NULL);
+      if (name_override) {
+        BLI_strncpy(name, name_override, sizeof(name));
+      }
+      else {
+        BKE_image_path_from_imformat(name,
+                                     scene->r.pic,
+                                     BKE_main_blendfile_path(bmain),
+                                     scene->r.cfra,
+                                     &scene->r.im_format,
+                                     (scene->r.scemode & R_EXTENSION) != 0,
+                                     true,
+                                     NULL);
+      }
+
+      /* write images as individual images or stereo */
+      ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, true, name);
     }
 
-    /* write images as individual images or stereo */
-    ok = RE_WriteRenderViewsImage(re->reports, &rres, scene, true, name);
+    RE_ReleaseResultImageViews(re, &rres);
   }
-
-  RE_ReleaseResultImageViews(re, &rres);
 
   render_time = re->i.lastframetime;
   re->i.lastframetime = PIL_check_seconds_timer() - re->i.starttime;
@@ -2257,8 +2264,10 @@ static int do_write_image_or_movie(Render *re,
    * Not sure it's actually even used anyway, we could as well pass NULL? */
   render_callback_exec_null(re, G_MAIN, BKE_CB_EVT_RENDER_STATS);
 
-  BLI_timecode_string_from_time_simple(name, sizeof(name), re->i.lastframetime - render_time);
-  printf(" (Saving: %s)\n", name);
+  if (do_write_file) {
+    BLI_timecode_string_from_time_simple(name, sizeof(name), re->i.lastframetime - render_time);
+    printf(" (Saving: %s)\n", name);
+  }
 
   fputc('\n', stdout);
   fflush(stdout);
@@ -2330,9 +2339,15 @@ void RE_RenderAnim(Render *re,
     return;
   }
 
+  RenderEngineType *re_type = RE_engines_find(re->r.engine);
+
+  /* Only disable file writing if postprocessing is also disabled. */
+  const bool do_write_file = !(re_type->flag & RE_USE_NO_IMAGE_SAVE) ||
+                             (re_type->flag & RE_USE_POSTPROCESS);
+
   render_init_depsgraph(re);
 
-  if (is_movie) {
+  if (is_movie && do_write_file) {
     size_t width, height;
     int i;
     bool is_error = false;
@@ -2395,7 +2410,7 @@ void RE_RenderAnim(Render *re,
        *                                                              -sergey-
        */
       {
-        float ctime = BKE_scene_frame_get(scene);
+        float ctime = BKE_scene_ctime_get(scene);
         AnimData *adt = BKE_animdata_from_id(&scene->id);
         const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
             re->pipeline_depsgraph, ctime);
@@ -2404,7 +2419,7 @@ void RE_RenderAnim(Render *re,
 
       render_update_depsgraph(re);
 
-      /* only border now, todo: camera lens. (ton) */
+      /* Only border now, TODO(ton): camera lens. */
       render_init_from_main(re, &rd, bmain, scene, single_layer, camera_override, 1, 0);
 
       if (nfra != scene->r.cfra) {
@@ -2415,7 +2430,7 @@ void RE_RenderAnim(Render *re,
       nfra += tfra;
 
       /* Touch/NoOverwrite options are only valid for image's */
-      if (is_movie == false) {
+      if (is_movie == false && do_write_file) {
         if (rd.mode & (R_NO_OVERWRITE | R_TOUCH)) {
           BKE_image_path_from_imformat(name,
                                        rd.pic,
@@ -2508,7 +2523,7 @@ void RE_RenderAnim(Render *re,
 
       if (G.is_break == true) {
         /* remove touched file */
-        if (is_movie == false) {
+        if (is_movie == false && do_write_file) {
           if ((rd.mode & R_TOUCH)) {
             if (!is_multiview_name) {
               if ((BLI_file_size(name) == 0)) {
@@ -2548,7 +2563,7 @@ void RE_RenderAnim(Render *re,
   }
 
   /* end movie */
-  if (is_movie) {
+  if (is_movie && do_write_file) {
     re_movie_free_all(re, mh, totvideos);
   }
 
@@ -2597,7 +2612,7 @@ void RE_PreviewRender(Render *re, Main *bmain, Scene *sce)
   }
 }
 
-/* note; repeated win/disprect calc... solve that nicer, also in compo */
+/* NOTE: repeated win/disprect calc... solve that nicer, also in compo. */
 
 /* only the temp file! */
 bool RE_ReadRenderResult(Scene *scene, Scene *scenode)
@@ -2791,7 +2806,6 @@ RenderPass *RE_pass_find_by_type(volatile RenderLayer *rl, int passtype, const c
   CHECK_PASS(INDEXOB);
   CHECK_PASS(INDEXMA);
   CHECK_PASS(MIST);
-  CHECK_PASS(RAYHITS);
   CHECK_PASS(DIFFUSE_DIRECT);
   CHECK_PASS(DIFFUSE_INDIRECT);
   CHECK_PASS(DIFFUSE_COLOR);
@@ -2825,7 +2839,7 @@ RenderPass *RE_create_gp_pass(RenderResult *rr, const char *layername, const cha
     rl->recty = rr->recty;
   }
 
-  /* clear previous pass if exist or the new image will be over previous one*/
+  /* Clear previous pass if exist or the new image will be over previous one. */
   RenderPass *rp = RE_pass_find_by_name(rl, RE_PASSNAME_COMBINED, viewname);
   if (rp) {
     if (rp->rect) {

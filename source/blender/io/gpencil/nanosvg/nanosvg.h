@@ -1289,7 +1289,7 @@ static const char *nsvg__parseNumber(const char *s, char *it, const int size)
   return s;
 }
 
-static const char *nsvg__getNextPathItem(const char *s, char *it)
+static const char *nsvg__getNextPathItem(const char *s, char *it, char cmd, int nargs)
 {
   it[0] = '\0';
   // Skip white spaces and commas
@@ -1297,6 +1297,15 @@ static const char *nsvg__getNextPathItem(const char *s, char *it)
     s++;
   if (!*s)
     return s;
+
+  /* Blender: Special case for arc command's 4th and 5th arguments. */
+  if (ELEM(cmd, 'a', 'A') && ELEM(nargs, 3, 4)) {
+    it[0] = s[0];
+    it[1] = '\0';
+    s++;
+    return s;
+  }
+
   if (*s == '-' || *s == '+' || *s == '.' || nsvg__isdigit(*s)) {
     s = nsvg__parseNumber(s, it, 64);
   }
@@ -1576,8 +1585,8 @@ static int nsvg__isCoordinate(const char *s)
   // optional sign
   if (*s == '-' || *s == '+')
     s++;
-  // must have at least one digit
-  return nsvg__isdigit(*s);
+  // must have at least one digit, or start by a dot
+  return (nsvg__isdigit(*s) || *s == '.');
 }
 
 static NSVGcoordinate nsvg__parseCoordinateRaw(const char *str)
@@ -2353,7 +2362,12 @@ static void nsvg__pathArcTo(NSVGparser *p, float *cpx, float *cpy, float *args, 
   // The loop assumes an iteration per end point (including start and end), this +1.
   ndivs = (int)(fabsf(da) / (NSVG_PI * 0.5f) + 1.0f);
   hda = (da / (float)ndivs) / 2.0f;
-  kappa = fabsf(4.0f / 3.0f * (1.0f - cosf(hda)) / sinf(hda));
+  // Fix for ticket #179: division by 0: avoid cotangens around 0 (infinite)
+  if ((hda < 1e-3f) && (hda > -1e-3f))
+    hda *= 0.5f;
+  else
+    hda = (1.0f - cosf(hda)) / sinf(hda);
+  kappa = fabsf(4.0f / 3.0f * hda);
   if (da < 0.0f)
     kappa = -kappa;
 
@@ -2413,7 +2427,7 @@ static void nsvg__parsePath(NSVGparser *p, const char **attr)
     nargs = 0;
 
     while (*s) {
-      s = nsvg__getNextPathItem(s, item);
+      s = nsvg__getNextPathItem(s, item, cmd, nargs);
       if (!*item)
         break;
       if (cmd != '\0' && nsvg__isCoordinate(item)) {
@@ -2740,7 +2754,7 @@ static void nsvg__parsePoly(NSVGparser *p, const char **attr, int closeFlag)
         s = attr[i + 1];
         nargs = 0;
         while (*s) {
-          s = nsvg__getNextPathItem(s, item);
+          s = nsvg__getNextPathItem(s, item, '\0', nargs);
           args[nargs++] = (float)nsvg__atof(item);
           if (nargs >= 2) {
             if (npts == 0)

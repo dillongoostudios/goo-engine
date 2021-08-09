@@ -90,13 +90,11 @@ struct RangeTask {
 
   void operator()(const tbb::blocked_range<int> &r) const
   {
-    tbb::this_task_arena::isolate([this, r] {
-      TaskParallelTLS tls;
-      tls.userdata_chunk = userdata_chunk;
-      for (int i = r.begin(); i != r.end(); ++i) {
-        func(userdata, i, &tls);
-      }
-    });
+    TaskParallelTLS tls;
+    tls.userdata_chunk = userdata_chunk;
+    for (int i = r.begin(); i != r.end(); ++i) {
+      func(userdata, i, &tls);
+    }
   }
 
   void join(const RangeTask &other)
@@ -158,7 +156,7 @@ int BLI_task_parallel_thread_id(const TaskParallelTLS *UNUSED(tls))
   if (thread_id == -1) {
     thread_id = atomic_fetch_and_add_int32(&tbb_thread_id_counter, 1);
     if (thread_id >= BLENDER_MAX_THREADS) {
-      BLI_assert(!"Maximum number of threads exceeded for sculpting");
+      BLI_assert_msg(0, "Maximum number of threads exceeded for sculpting");
       thread_id = thread_id % BLENDER_MAX_THREADS;
     }
   }

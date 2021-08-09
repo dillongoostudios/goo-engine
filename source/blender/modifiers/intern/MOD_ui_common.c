@@ -9,7 +9,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software  Foundation,
+ * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
@@ -163,7 +163,7 @@ void modifier_vgroup_ui(uiLayout *layout,
  * Check whether Modifier is a simulation or not. Used for switching to the
  * physics/particles context tab.
  */
-static int modifier_is_simulation(ModifierData *md)
+static int modifier_is_simulation(const ModifierData *md)
 {
   /* Physic Tab */
   if (ELEM(md->type,
@@ -346,7 +346,7 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
   else if (ELEM(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
     /* Some modifiers can work with pre-tessellated curves only. */
     if (ELEM(md->type, eModifierType_Hook, eModifierType_Softbody, eModifierType_MeshDeform)) {
-      /* Add button (appearing to be ON) and add tip why this cant be changed. */
+      /* Add button (appearing to be ON) and add tip why this can't be changed. */
       sub = uiLayoutRow(row, true);
       uiBlock *block = uiLayoutGetBlock(sub);
       static int apply_on_spline_always_on_hack = eModifierMode_ApplyOnSpline;
