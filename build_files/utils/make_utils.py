@@ -69,11 +69,11 @@ def git_branch_release_version(branch, tag):
             release_version = release_version.group(1)
     # return release_version
     # TODO Update with custom version update to 3.0
-    return "2.93"
+    return "3.0"
 
 
 def svn_libraries_base_url(release_version):
-    if release_version:
+    if release_version and False:
         svn_branch = "tags/blender-" + release_version + "-release"
     else:
         svn_branch = "trunk"
