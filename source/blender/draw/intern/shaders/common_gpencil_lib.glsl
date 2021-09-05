@@ -76,6 +76,12 @@ float gpencil_stroke_thickness_modulate(float thickness, vec4 ndc_pos, vec4 view
     /* World space point size. */
     thickness *= gpThicknessWorldScale * ProjectionMatrix[1][1] * viewport_size.y;
   }
+
+  if (gpThicknessFixedWorldScale) {
+    /* 0.1 factor is evil, but makes thickness align better with pre-existing world scale. */
+    thickness *= ndc_pos.w * 0.1;
+  }
+
   return thickness;
 }
 
