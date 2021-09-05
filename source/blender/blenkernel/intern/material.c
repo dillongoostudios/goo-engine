@@ -1781,6 +1781,7 @@ static void material_default_surface_init(Material *ma)
   };
 
   copy_v4_v4_int(ma->light_group_bits, default_light_groups);
+  copy_v4_v4_int(ma->light_group_shadow_bits, default_light_groups);
 }
 
 static void material_default_volume_init(Material *ma)

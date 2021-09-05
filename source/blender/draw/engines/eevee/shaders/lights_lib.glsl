@@ -100,6 +100,7 @@ uniform usampler2DArray shadowCubeIDTexture;
 uniform usampler2DArray shadowCascadeIDTexture;
 
 uniform ivec4 lightGroups;
+uniform ivec4 lightGroupShadows;
 
 /** \} */
 
@@ -321,16 +322,22 @@ float light_attenuation(LightData ld, vec4 l_vector, ivec4 light_groups)
   return vis;
 }
 
-float light_shadowing(LightData ld, vec3 P, float vis)
+float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows)
 {
 #if !defined(VOLUMETRICS) || defined(VOLUME_SHADOW)
-  if (ld.l_shadowid >= 0.0 && vis > 0.001) {
-    if (ld.l_type == SUN) {
-      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, true);
-    }
-    else {
-      vis *= sample_cube_shadow(int(ld.l_shadowid), P, true);
-    }
+  if (ld.l_shadowid >= 0.0 && vis > 0.001 && !(
+        (ld.light_group_bits.x & light_group_shadows.x) == 0
+     && (ld.light_group_bits.y & light_group_shadows.y) == 0
+     && (ld.light_group_bits.z & light_group_shadows.z) == 0
+     && (ld.light_group_bits.w & light_group_shadows.w) == 0) 
+  ) 
+    {
+      if (ld.l_type == SUN) {
+        vis *= sample_cascade_shadow(int(ld.l_shadowid), P, true);
+      }
+      else {
+        vis *= sample_cube_shadow(int(ld.l_shadowid), P, true);
+      }
   }
 #endif
   return vis;
@@ -375,10 +382,10 @@ float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_
 }
 #endif /* VOLUMETRICS */
 
-float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups)
+float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups, ivec4 light_group_shadows)
 {
   float l_atten = light_attenuation(ld, l_vector, light_groups);
-  return light_shadowing(ld, P, l_atten);
+  return light_shadowing(ld, P, l_atten, light_group_shadows);
 }
 
 float light_diffuse(LightData ld, vec3 N, vec3 V, vec4 l_vector)

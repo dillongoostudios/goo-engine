@@ -43,14 +43,21 @@ def set_bit(vec, bit):
 
 def map_bits(data, mapping):
     data.light_group_bits = (0, 0, 0, 0)
+    is_mat = isinstance(data, Material)
+    if is_mat:
+        data.light_group_shadow_bits = data.light_group_bits
 
     for grp in data.light_groups.groups:
         index = mapping.get(grp.name)
         if index is not None:
             set_bit(data.light_group_bits, index)
+            if is_mat and grp.use_shadow:
+                set_bit(data.light_group_shadow_bits, index)
 
     if data.light_groups.use_default:
         set_bit(data.light_group_bits, MAX_LIGHT_GROUP_BIT)
+        if is_mat and data.light_groups.use_default_shadow:
+            set_bit(data.light_group_shadow_bits, MAX_LIGHT_GROUP_BIT)
 
 
 def sync_light_groups():
@@ -122,13 +129,15 @@ def set_name(self, value):
 
 class LightGroup(PropertyGroup):
     name: StringProperty()
-    viz_name: StringProperty(get=get_name, set=set_name)
+    viz_name: StringProperty(name="Name", get=get_name, set=set_name)
+    use_shadow: BoolProperty(name="Use Shadows", description="Enable shadow casting from this light group", default=True, options=set())
 
 
 class LightGroups(PropertyGroup):
     groups: CollectionProperty(type=LightGroup)
-    group_index: IntProperty(update=update_handler)
-    use_default: BoolProperty(default=True, description="Use builtin default light group", update=update_handler)
+    group_index: IntProperty(name="Active Light Group", update=update_handler)
+    use_default: BoolProperty(name="Use default Light Group", default=True, description="Use builtin default light group", update=update_handler)
+    use_default_shadow: BoolProperty(name="Use default Light Group shadows", default=True, description="Use default light group shadows", update=update_handler)
 
 
 def get_name_set():
@@ -167,6 +176,8 @@ class MAT_UL_LightGroupList(UIList):
                   flt_flag: int = 0):
         row = layout.row(align=True)
         row.prop(item, "viz_name", emboss=False, text="")
+        if isinstance(data.id_data, Material):
+            row.prop(item, "use_shadow", text="", icon="INDIRECT_ONLY_ON" if item.use_shadow else "INDIRECT_ONLY_OFF", emboss=False)
 
     def filter_items(self, context: 'Context', data: 'AnyType', property: str):
         keys = getattr(data, property)
@@ -225,6 +236,9 @@ class ALightGroupPanel(Panel):
         # Below Operators
         row = layout.row()
         row.prop(groups, 'use_default', text="Use Default Group")
+        row = row.row()
+        row.enabled = groups.use_default
+        row.prop(groups, 'use_default_shadow', text="Use Default Group Shadows")
 
 
 class OBJ_PT_MLightGroupPanel(ALightGroupPanel):

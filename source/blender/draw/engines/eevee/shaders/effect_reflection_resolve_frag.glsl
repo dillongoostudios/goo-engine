@@ -219,6 +219,7 @@ void main()
   in_Glossy_0.roughness = roughness;
 
   in_common.light_groups = ivec4(0,0,0,1);
+  in_common.light_group_shadows = ivec4(0,0,0,1);
 
   // TODO LightGroup ID buffer write to eval_common here!
 

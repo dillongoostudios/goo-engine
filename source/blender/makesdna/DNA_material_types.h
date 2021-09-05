@@ -211,6 +211,7 @@ typedef struct Material {
 
   /* Light groups */
   int light_group_bits[4];
+  int light_group_shadow_bits[4];
   char use_custom_holdout;
   char _pad4[7];
 
