@@ -376,7 +376,7 @@ class DATA_PT_gpencil_strokes(DataButtonsPanel, Panel):
         col = layout.column(align=True)
         col.prop(gpd, "stroke_thickness_space")
         sub = col.column()
-        sub.active = gpd.stroke_thickness_space == 'WORLDSPACE'
+        sub.active = gpd.stroke_thickness_space in {'WORLDSPACE', 'WORLDSPACE_NO_PERSPECTIVE'}
         sub.prop(gpd, "pixel_factor", text="Thickness Scale")
 
         col.prop(gpd, "edit_curve_resolution")

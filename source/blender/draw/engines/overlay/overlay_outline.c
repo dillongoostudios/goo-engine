@@ -192,6 +192,7 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
   bGPdata *gpd = (bGPdata *)iter->ob->data;
 
   const bool is_screenspace = (gpd->flag & GP_DATA_STROKE_KEEPTHICKNESS) != 0;
+  const bool is_fixed_view_scale = (gpd->flag & GP_DATA_STROKE_VIEW_INDEPENDENT_THICKNESS) != 0;
   const bool is_stroke_order_3d = (gpd->draw_mode == GP_DRAWMODE_3D);
 
   float object_scale = mat4_to_scale(iter->ob->obmat);
@@ -206,6 +207,7 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
   DRW_shgroup_uniform_float_copy(grp, "thicknessScale", object_scale);
   DRW_shgroup_uniform_float_copy(grp, "thicknessOffset", (float)gpl->line_change);
   DRW_shgroup_uniform_float_copy(grp, "thicknessWorldScale", thickness_scale);
+  DRW_shgroup_uniform_bool_copy(grp, "thicknessViewIndependent", is_fixed_view_scale);
   DRW_shgroup_uniform_vec4_copy(grp, "gpDepthPlane", iter->plane);
 }
 

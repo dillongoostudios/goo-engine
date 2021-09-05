@@ -206,6 +206,7 @@ uniform vec2 sizeViewportInv;
 
 /* Per Object */
 uniform bool strokeOrder3d;
+uniform bool thicknessViewIndependent;
 uniform int gpMaterialOffset;
 uniform float thicknessScale;
 uniform float thicknessWorldScale;
@@ -340,6 +341,11 @@ float stroke_thickness_modulate(float thickness)
   else {
     /* World space point size. */
     thickness *= thicknessWorldScale * ProjectionMatrix[1][1] * sizeViewport.y;
+  }
+
+  if (thicknessViewIndependent) {
+    /* 0.1 factor is evil, but makes thickness align better with pre-existing world scale. */
+    thickness *= gl_Position.w * 0.1;
   }
   return thickness;
 }

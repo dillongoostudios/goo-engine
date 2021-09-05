@@ -270,6 +270,7 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
 
   const bool is_in_front = (ob->dtx & OB_DRAW_IN_FRONT);
   const bool is_screenspace = (gpd->flag & GP_DATA_STROKE_KEEPTHICKNESS) != 0;
+  const bool is_fixed_view_scale = (gpd->flag & GP_DATA_STROKE_VIEW_INDEPENDENT_THICKNESS) != 0;
   const bool override_vertcol = (pd->v3d_color_type != -1);
   const bool is_vert_col_mode = (pd->v3d_color_type == V3D_SHADING_VERTEX_COLOR) ||
                                 GPENCIL_VERTEX_MODE(gpd) || pd->is_render;
@@ -401,6 +402,7 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
     DRW_shgroup_uniform_vec2_copy(grp, "sizeViewportInv", DRW_viewport_invert_size_get());
     DRW_shgroup_uniform_vec2_copy(grp, "sizeViewport", DRW_viewport_size_get());
     DRW_shgroup_uniform_float_copy(grp, "thicknessOffset", (float)gpl->line_change);
+    DRW_shgroup_uniform_bool_copy(grp, "thicknessViewIndependent", is_fixed_view_scale);
     DRW_shgroup_uniform_float_copy(grp, "thicknessWorldScale", thickness_scale);
     DRW_shgroup_uniform_float_copy(grp, "vertexColorOpacity", vert_col_opacity);
 
