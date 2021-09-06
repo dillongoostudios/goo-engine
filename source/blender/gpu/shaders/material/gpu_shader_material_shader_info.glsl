@@ -4,7 +4,8 @@
 
 float calc_self_shadows_only(LightData ld, vec3 P, vec4 l_vector) 
 {
-  float vis = light_attenuation(ld, l_vector, lightGroups);
+  // float vis = light_attenuation(ld, l_vector, lightGroups);
+  float vis = 1.0;
   if (ld.l_shadowid >= 0.0 && vis > 0.001) {
     if (ld.l_type == SUN) {
       vis *= sample_cascade_shadow(int(ld.l_shadowid), P, false);
@@ -35,14 +36,22 @@ void node_shader_info(vec3 position, vec3 normal,
           (ld.light_group_bits.x & lightGroups.x) == 0
           && (ld.light_group_bits.y & lightGroups.y) == 0
           && (ld.light_group_bits.z & lightGroups.z) == 0
-          && (ld.light_group_bits.w & lightGroups.w) == 0) 
+          && (ld.light_group_bits.w & lightGroups.w) == 0)
           {
             continue;
         }
-        // shadows *= light.data.l_color * (light.data.l_diff * light.vis * light.contact_shadow);
-        shadow_accum += (1 - light.vis);
-        self_shadow_accum += (1 - calc_self_shadows_only(light.data, position, light.L));
-        light_accum++;
+
+        if (!(
+          (ld.light_group_bits.x & lightGroupShadows.x) == 0
+          && (ld.light_group_bits.y & lightGroupShadows.y) == 0
+          && (ld.light_group_bits.z & lightGroupShadows.z) == 0
+          && (ld.light_group_bits.w & lightGroupShadows.w) == 0))
+          {
+            // shadows *= light.data.l_color * (light.data.l_diff * light.vis * light.contact_shadow);
+            shadow_accum += (1 - light.vis);
+            self_shadow_accum += (1 - calc_self_shadows_only(light.data, position, light.L));
+            light_accum++;
+          }
 
         float radiance = light_diffuse(light.data, n_n, cl_common.V, light.L);
         half_light += vec4(light.data.l_color * light.data.l_diff * radiance, 0.0);
@@ -50,5 +59,5 @@ void node_shader_info(vec3 position, vec3 normal,
 
     shadows = (1 - (shadow_accum / max(light_accum, 1)));
     self_shadows = (1 - (self_shadow_accum / max(light_accum, 1)));
-    ambient = vec4(probe_evaluate_world_diff(normal), 1.0);
+    ambient = vec4(probe_evaluate_world_diff(n_n), 1.0);
 }

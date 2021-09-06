@@ -56,7 +56,7 @@ def map_bits(data, mapping):
 
     if data.light_groups.use_default:
         set_bit(data.light_group_bits, MAX_LIGHT_GROUP_BIT)
-        if is_mat and data.light_groups.ignore_default_shadow:
+        if is_mat and not data.light_groups.ignore_default_shadow:
             set_bit(data.light_group_shadow_bits, MAX_LIGHT_GROUP_BIT)
 
 
@@ -236,9 +236,10 @@ class ALightGroupPanel(Panel):
         # Below Operators
         row = layout.row()
         row.prop(groups, 'use_default', text="Use Default Group")
-        row = row.row()
-        row.enabled = groups.use_default
-        row.prop(groups, 'ignore_default_shadow', text="Ignore Default Group Shadows")
+        if self.bl_context != "data":
+            row = row.row()
+            row.enabled = groups.use_default
+            row.prop(groups, 'ignore_default_shadow', text="Ignore Default Shadows")
 
 
 class OBJ_PT_MLightGroupPanel(ALightGroupPanel):
