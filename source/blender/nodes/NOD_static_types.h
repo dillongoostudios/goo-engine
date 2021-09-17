@@ -134,6 +134,9 @@ DefNode(ShaderNode,     SH_NODE_VECTOR_DISPLACEMENT,def_sh_vector_displacement,"
 DefNode(ShaderNode,     SH_NODE_TEX_IES,            def_sh_tex_ies,         "TEX_IES",            TexIES,           "IES Texture",       ""       )
 DefNode(ShaderNode,     SH_NODE_TEX_WHITE_NOISE,    def_sh_tex_white_noise, "TEX_WHITE_NOISE",    TexWhiteNoise,    "White Noise",       ""       )
 DefNode(ShaderNode,     SH_NODE_OUTPUT_AOV,         def_sh_output_aov,      "OUTPUT_AOV",         OutputAOV,        "AOV Output",        ""       )
+DefNode(ShaderNode,     SH_NODE_SDF_PRIMITIVE,      def_sh_sdf_primitive,   "SDF_PRIMITIVE",      SdfPrimitive,     "Sdf Primitive",     ""       )
+DefNode(ShaderNode,     SH_NODE_SDF_OP,             def_sh_sdf_op,          "SDF_OP",             SdfOp,            "Sdf Operator",      ""       )
+DefNode(ShaderNode,     SH_NODE_SDF_VECTOR_OP,      def_sh_sdf_vector_op,   "SDF_VECTOR_OP",      SdfVectorOp,      "Sdf Vector Operator",""      )
 
 DefNode(CompositorNode, CMP_NODE_VIEWER,         def_cmp_viewer,         "VIEWER",         Viewer,           "Viewer",            ""              )
 DefNode(CompositorNode, CMP_NODE_RGB,            0,                      "RGB",            RGB,              "RGB",               ""              )

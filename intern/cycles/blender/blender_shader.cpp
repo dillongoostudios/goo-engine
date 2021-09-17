@@ -843,6 +843,29 @@ static ShaderNode *add_node(Scene *scene,
     get_tex_mapping(brick, b_texture_mapping);
     node = brick;
   }
+  else if (b_node.is_a(&RNA_ShaderNodeSdfPrimitive)) {
+    BL::ShaderNodeSdfPrimitive b_sdf_primitive_node(b_node);
+    SdfPrimitiveNode *sdf_primitive = graph->create_node<SdfPrimitiveNode>();
+    sdf_primitive->set_mode((NodeSdfMode)b_sdf_primitive_node.mode());
+    sdf_primitive->set_invert(b_sdf_primitive_node.invert());
+    BL::TexMapping b_texture_mapping(b_sdf_primitive_node.texture_mapping());
+    get_tex_mapping(sdf_primitive, b_texture_mapping);
+    node = sdf_primitive;
+  }
+  else if (b_node.is_a(&RNA_ShaderNodeSdfOp)) {
+    BL::ShaderNodeSdfOp b_sdf_op(b_node);
+    SdfOpNode *sdf_op = graph->create_node<SdfOpNode>();
+    sdf_op->set_operation((NodeSdfOperation)b_sdf_op.operation());
+    sdf_op->set_invert(b_sdf_op.invert());
+    node = sdf_op;
+  }
+  else if (b_node.is_a(&RNA_ShaderNodeSdfVectorOp)) {
+    BL::ShaderNodeSdfVectorOp b_sdf_vector_op(b_node);
+    SdfVectorOpNode *sdf_vector_op = graph->create_node<SdfVectorOpNode>();
+    sdf_vector_op->set_operation((NodeSdfVectorOperation)b_sdf_vector_op.operation());
+    sdf_vector_op->set_axis((NodeSdfVectorAxis)b_sdf_vector_op.axis());
+    node = sdf_vector_op;
+  }
   else if (b_node.is_a(&RNA_ShaderNodeTexNoise)) {
     BL::ShaderNodeTexNoise b_noise_node(b_node);
     NoiseTextureNode *noise = graph->create_node<NoiseTextureNode>();

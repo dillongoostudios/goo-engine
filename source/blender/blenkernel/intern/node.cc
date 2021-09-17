@@ -4889,6 +4889,9 @@ static void registerShaderNodes()
   register_node_type_sh_tex_pointdensity();
   register_node_type_sh_tex_ies();
   register_node_type_sh_tex_white_noise();
+  register_node_type_sh_sdf_primitive();
+  register_node_type_sh_sdf_op();
+  register_node_type_sh_sdf_vector_op();
 }
 
 static void registerTextureNodes()

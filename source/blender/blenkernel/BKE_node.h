@@ -1073,6 +1073,9 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree,
 #define SH_NODE_VECTOR_ROTATE 708
 #define SH_NODE_SHADER_INFO 709
 #define SH_NODE_SCREENSPACE_INFO 710
+#define SH_NODE_SDF_PRIMITIVE 711
+#define SH_NODE_SDF_OP 712
+#define SH_NODE_SDF_VECTOR_OP 713
 
 /* custom defines options for Material node */
 // #define SH_NODE_MAT_DIFF 1

@@ -206,6 +206,9 @@ extern const EnumPropertyItem rna_enum_node_float_compare_items[];
 extern const EnumPropertyItem rna_enum_node_filter_items[];
 extern const EnumPropertyItem rna_enum_node_map_range_items[];
 extern const EnumPropertyItem rna_enum_node_clamp_items[];
+extern const EnumPropertyItem rna_enum_node_sdf_primitive_items[];
+extern const EnumPropertyItem rna_enum_node_sdf_op_items[];
+extern const EnumPropertyItem rna_enum_node_sdf_vector_op_items[];
 
 extern const EnumPropertyItem rna_enum_ramp_blend_items[];
 

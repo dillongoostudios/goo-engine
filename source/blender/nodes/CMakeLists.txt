@@ -242,6 +242,9 @@ set(SRC
   shader/nodes/node_shader_rgb.c
   shader/nodes/node_shader_screenspace_info.c
   shader/nodes/node_shader_script.c
+  shader/nodes/node_shader_sdf_op.cc
+  shader/nodes/node_shader_sdf_primitive.cc
+  shader/nodes/node_shader_sdf_vector_op.cc
   shader/nodes/node_shader_sepcombHSV.c
   shader/nodes/node_shader_sepcombRGB.cc
   shader/nodes/node_shader_sepcombXYZ.cc

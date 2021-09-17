@@ -836,6 +836,12 @@ static void node_shader_buts_tex_sky(uiLayout *layout, bContext *UNUSED(C), Poin
   }
 }
 
+static void node_shader_buts_sdf_primitive(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+    uiItemR(layout, ptr, "mode", 0, "", ICON_NONE);
+    uiItemR(layout, ptr, "invert", 0, NULL, ICON_NONE);
+}
+
 static void node_shader_buts_tex_gradient(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "gradient_type", DEFAULT_FLAGS, "", ICON_NONE);
@@ -1226,6 +1232,9 @@ static void node_shader_set_butfunc(bNodeType *ntype)
     case SH_NODE_TEX_ENVIRONMENT:
       ntype->draw_buttons = node_shader_buts_tex_environment;
       ntype->draw_buttons_ex = node_shader_buts_tex_environment_ex;
+      break;
+    case SH_NODE_SDF_PRIMITIVE:
+      ntype->draw_buttons = node_shader_buts_sdf_primitive;
       break;
     case SH_NODE_TEX_GRADIENT:
       ntype->draw_buttons = node_shader_buts_tex_gradient;
