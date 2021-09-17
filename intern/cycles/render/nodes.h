@@ -297,6 +297,68 @@ class VoronoiTextureNode : public TextureNode {
   NODE_SOCKET_API(float3, vector)
 };
 
+class SdfPrimitiveNode : public TextureNode {
+ public:
+  SHADER_NODE_CLASS(SdfPrimitiveNode)
+
+  virtual int get_group()
+  {
+    return NODE_GROUP_LEVEL_2;
+  }
+  NODE_SOCKET_API(float3, vector)
+  NODE_SOCKET_API(float, size)
+  NODE_SOCKET_API(float, radius)
+  NODE_SOCKET_API(float, value1)
+  NODE_SOCKET_API(float, value2)
+  NODE_SOCKET_API(float, value3)
+  NODE_SOCKET_API(float, value4)
+  NODE_SOCKET_API(float3, point1)
+  NODE_SOCKET_API(float3, point2)
+  NODE_SOCKET_API(float3, point3)
+  NODE_SOCKET_API(float3, point4)
+  NODE_SOCKET_API(float, angle)
+  NODE_SOCKET_API(float, roundness)
+  NODE_SOCKET_API(float, linewidth)
+  NODE_SOCKET_API(NodeSdfMode, mode)
+  NODE_SOCKET_API(bool, invert)
+};
+
+class SdfOpNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(SdfOpNode)
+  virtual int get_group()
+  {
+    return NODE_GROUP_LEVEL_2;
+  }
+  NODE_SOCKET_API(float, distance1)
+  NODE_SOCKET_API(float, distance2)
+  NODE_SOCKET_API(float, value1)
+  NODE_SOCKET_API(float, value2)
+  NODE_SOCKET_API(int, count)
+  NODE_SOCKET_API(NodeSdfOperation, operation)
+  NODE_SOCKET_API(bool, invert)
+};
+
+class SdfVectorOpNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(SdfVectorOpNode)
+  virtual int get_group()
+  {
+    return NODE_GROUP_LEVEL_2;
+  }
+  NODE_SOCKET_API(float3, vector1)
+  NODE_SOCKET_API(float3, vector2)
+  NODE_SOCKET_API(float3, vector3)
+  NODE_SOCKET_API(float, scale)
+  NODE_SOCKET_API(float, value1)
+  NODE_SOCKET_API(float, value2)
+  NODE_SOCKET_API(float, angle)
+  NODE_SOCKET_API(int, count1)
+  NODE_SOCKET_API(int, count2)
+  NODE_SOCKET_API(NodeSdfVectorOperation, operation)
+  NODE_SOCKET_API(NodeSdfVectorAxis, axis)
+};
+
 class MusgraveTextureNode : public TextureNode {
  public:
   SHADER_NODE_CLASS(MusgraveTextureNode)

@@ -94,6 +94,10 @@ extern char datatoc_gpu_shader_material_refraction_glsl[];
 extern char datatoc_gpu_shader_material_rgb_curves_glsl[];
 extern char datatoc_gpu_shader_material_rgb_to_bw_glsl[];
 extern char datatoc_gpu_shader_material_screenspace_info_glsl[];
+extern char datatoc_gpu_shader_material_sdf_util_glsl[];
+extern char datatoc_gpu_shader_material_sdf_op_glsl[];
+extern char datatoc_gpu_shader_material_sdf_primitive_glsl[];
+extern char datatoc_gpu_shader_material_sdf_vector_op_glsl[];
 extern char datatoc_gpu_shader_material_separate_hsv_glsl[];
 extern char datatoc_gpu_shader_material_separate_rgb_glsl[];
 extern char datatoc_gpu_shader_material_separate_xyz_glsl[];
@@ -404,6 +408,33 @@ static GPUMaterialLibrary gpu_shader_material_screenspace_info_library = {
 };
 
 
+static GPUMaterialLibrary gpu_shader_material_sdf_util_library = {
+    .code = datatoc_gpu_shader_material_sdf_util_glsl,
+    .dependencies = {NULL},
+};
+
+static GPUMaterialLibrary gpu_shader_material_sdf_primitive_library = {
+    .code = datatoc_gpu_shader_material_sdf_primitive_glsl,
+    .dependencies = {&gpu_shader_material_sdf_util_library,
+                     &gpu_shader_material_math_util_library,
+                     NULL},
+};
+
+static GPUMaterialLibrary gpu_shader_material_sdf_op_library = {
+    .code = datatoc_gpu_shader_material_sdf_op_glsl,
+    .dependencies = {&gpu_shader_material_sdf_util_library,
+                     &gpu_shader_material_math_util_library,
+                     NULL},
+};
+
+static GPUMaterialLibrary gpu_shader_material_sdf_vector_op_library = {
+    .code = datatoc_gpu_shader_material_sdf_vector_op_glsl,
+    .dependencies = {&gpu_shader_material_sdf_util_library,
+                     &gpu_shader_material_hash_library,
+                     &gpu_shader_material_math_util_library,
+                     NULL},
+};
+
 static GPUMaterialLibrary gpu_shader_material_separate_hsv_library = {
     .code = datatoc_gpu_shader_material_separate_hsv_glsl,
     .dependencies = {&gpu_shader_material_color_util_library, NULL},
@@ -596,6 +627,7 @@ static GPUMaterialLibrary gpu_shader_material_world_normals_library = {
 static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_math_util_library,
     &gpu_shader_material_color_util_library,
+    &gpu_shader_material_sdf_util_library,
     &gpu_shader_material_hash_library,
     &gpu_shader_material_noise_library,
     &gpu_shader_material_fractal_noise_library,
@@ -648,6 +680,9 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_rgb_curves_library,
     &gpu_shader_material_rgb_to_bw_library,
     &gpu_shader_material_screenspace_info_library,
+    &gpu_shader_material_sdf_primitive_library,
+    &gpu_shader_material_sdf_op_library,
+    &gpu_shader_material_sdf_vector_op_library,
     &gpu_shader_material_separate_hsv_library,
     &gpu_shader_material_separate_rgb_library,
     &gpu_shader_material_separate_xyz_library,

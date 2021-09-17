@@ -1,4 +1,4 @@
-# Copyright 2011-2020 Blender Foundation
+# Copyright 2011-2021 Blender Foundation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -77,6 +77,9 @@ set(SRC_OSL
   node_refraction_bsdf.osl
   node_rgb_curves.osl
   node_rgb_ramp.osl
+  node_sdf_primitive.osl
+  node_sdf_op.osl
+  node_sdf_vector_op.osl
   node_separate_rgb.osl
   node_separate_hsv.osl
   node_separate_xyz.osl
@@ -120,6 +123,7 @@ set(SRC_OSL_HEADERS
   node_math.h
   node_noise.h
   node_ramp_util.h
+  node_sdf_util.h
   stdcycles.h
   ${SRC_OSL_HEADER_DIST}
 )

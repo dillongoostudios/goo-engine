@@ -204,6 +204,13 @@ static GPUNodeLink *gpu_uniformbuffer_link(GPUMaterial *mat,
   if ((socket->flag & SOCK_HIDE_VALUE) == 0) {
     GPUNodeLink *link;
     switch (socket->type) {
+      /* For now INT is supported as float. */
+      case SOCK_INT: {
+        bNodeSocketValueInt *socket_data = socket->default_value;
+        float value = (float)socket_data->value;
+        link = GPU_uniform(&value);
+        break;
+      }
       case SOCK_FLOAT: {
         bNodeSocketValueFloat *socket_data = socket->default_value;
         link = GPU_uniform(&socket_data->value);
@@ -718,7 +725,7 @@ bool GPU_stack_link(GPUMaterial *material,
     else {
       if (totin == 0) {
         link = va_arg(params, GPUNodeLink *);
-        if (link->socket) {
+       if (link->socket) {
           gpu_node_input_socket(NULL, NULL, node, link->socket, -1);
         }
         else {

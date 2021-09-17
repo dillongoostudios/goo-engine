@@ -255,6 +255,11 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexIES"),
         NodeItem("ShaderNodeTexWhiteNoise"),
     ]),
+    ShaderNodeCategory("SH_NEW_SDF", "SDF", items=[
+        NodeItem("ShaderNodeSdfPrimitive"),
+        NodeItem("ShaderNodeSdfOp"),
+        NodeItem("ShaderNodeSdfVectorOp"),
+    ]),
     ShaderNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
         NodeItem("ShaderNodeMixRGB"),
         NodeItem("ShaderNodeRGBCurve"),

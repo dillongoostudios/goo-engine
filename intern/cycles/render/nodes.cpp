@@ -1740,6 +1740,354 @@ void BrickTextureNode::compile(OSLCompiler &compiler)
   compiler.add(this, "node_brick_texture");
 }
 
+/* Sdf Texture */
+
+NODE_DEFINE(SdfPrimitiveNode)
+{
+  NodeType *type = NodeType::add("sdf_primitive", create, NodeType::SHADER);
+
+  TEXTURE_MAPPING_DEFINE(SdfPrimitiveNode);
+
+  static NodeEnum mode_enum;
+  mode_enum.insert("circle_2d", NODE_SDF_2D_CIRCLE);
+  mode_enum.insert("box_2d", NODE_SDF_2D_RECTANGLE);
+  mode_enum.insert("rhombus_2d", NODE_SDF_2D_RHOMBUS);
+  mode_enum.insert("triangle_2d", NODE_SDF_2D_TRIANGLE);
+  mode_enum.insert("line_2d", NODE_SDF_2D_LINE);
+  mode_enum.insert("star_2d", NODE_SDF_2D_STAR);
+  mode_enum.insert("hexagon_2d", NODE_SDF_2D_HEXAGON);
+  mode_enum.insert("pie_2d", NODE_SDF_2D_PIE);
+  mode_enum.insert("arc_2d", NODE_SDF_2D_ARC);
+  mode_enum.insert("bezier_2d", NODE_SDF_2D_BEZIER);
+  mode_enum.insert("uneven_capsule_2d", NODE_SDF_2D_UNEVEN_CAPSULE);
+  mode_enum.insert("point_triangle_2d", NODE_SDF_2D_POINT_TRIANGLE);
+  mode_enum.insert("trapezoid_2d", NODE_SDF_2D_TRAPEZOID);
+  mode_enum.insert("vesica_2d", NODE_SDF_2D_VESICA);
+  mode_enum.insert("cross_2d", NODE_SDF_2D_CROSS);
+  mode_enum.insert("roundx_2d", NODE_SDF_2D_ROUNDX);
+  mode_enum.insert("horsehoe_2d", NODE_SDF_2D_HORSESHOE);
+  mode_enum.insert("parabola_2d", NODE_SDF_2D_PARABOLA);
+  mode_enum.insert("ellipse_2d", NODE_SDF_2D_ELLIPSE);
+  mode_enum.insert("isosceles_2d", NODE_SDF_2D_ISOSCELES);
+  mode_enum.insert("round_joint_2d", NODE_SDF_2D_ROUND_JOINT);
+  /* 3d */
+  mode_enum.insert("sphere", NODE_SDF_3D_SPHERE);
+  mode_enum.insert("hex_prism", NODE_SDF_3D_HEX_PRISM);
+  mode_enum.insert("box", NODE_SDF_3D_BOX);
+  mode_enum.insert("torus", NODE_SDF_3D_TORUS);
+  mode_enum.insert("cone", NODE_SDF_3D_CONE);
+  mode_enum.insert("cylinder", NODE_SDF_3D_CYLINDER);
+  mode_enum.insert("capsule", NODE_SDF_3D_CAPSULE);
+  mode_enum.insert("octahedron", NODE_SDF_3D_OCTAHEDRON);
+  mode_enum.insert("octahedron", NODE_SDF_3D_OCTAHEDRON);
+  SOCKET_ENUM(mode, "Mode", mode_enum, NODE_SDF_2D_CIRCLE);
+
+  SOCKET_BOOLEAN(invert, "Invert", false);
+
+  SOCKET_IN_POINT(vector, "Vector", zero_float3(), SocketType::LINK_TEXTURE_GENERATED);
+  SOCKET_IN_FLOAT(size, "Size", 1.0f);
+  SOCKET_IN_FLOAT(radius, "Radius", 0.5f);
+  SOCKET_IN_FLOAT(value1, "Value1", 1.0f);
+  SOCKET_IN_FLOAT(value2, "Value2", 1.0f);
+  SOCKET_IN_FLOAT(value3, "Value3", 0.5f);
+  SOCKET_IN_FLOAT(value4, "Value4", 0.0f);
+  SOCKET_IN_POINT(point1, "Point1", make_float3(0.5f));
+  SOCKET_IN_POINT(point2, "Point2", make_float3(0.5f));
+  SOCKET_IN_POINT(point3, "Point3", make_float3(0.5f));
+  SOCKET_IN_POINT(point4, "Point4", make_float3(0.5f));
+  SOCKET_IN_FLOAT(angle, "Angle", 0.0f);
+  SOCKET_IN_FLOAT(roundness, "Roundness", 0.0f);
+  SOCKET_IN_FLOAT(linewidth, "Linewidth", 0.0f);
+
+  SOCKET_OUT_FLOAT(distance, "Distance");
+
+  return type;
+}
+
+SdfPrimitiveNode::SdfPrimitiveNode() : TextureNode(get_node_type())
+{
+}
+
+void SdfPrimitiveNode::compile(SVMCompiler &compiler)
+{
+  ShaderInput *vector_in = input("Vector");
+  ShaderInput *size_in = input("Size");
+  ShaderInput *radius_in = input("Radius");
+  ShaderInput *value1_in = input("Value1");
+  ShaderInput *value2_in = input("Value2");
+  ShaderInput *value3_in = input("Value3");
+  ShaderInput *value4_in = input("Value4");
+  ShaderInput *point1_in = input("Point1");
+  ShaderInput *point2_in = input("Point2");
+  ShaderInput *point3_in = input("Point3");
+  ShaderInput *point4_in = input("Point4");
+  ShaderInput *angle_in = input("Angle");
+  ShaderInput *roundness_in = input("Roundness");
+  ShaderInput *linewidth_in = input("Linewidth");
+
+  ShaderOutput *distance_out = output("Distance");
+
+  int vector_in_stack_offset = tex_mapping.compile_begin(compiler, vector_in);
+  int size_in_stack_offset = compiler.stack_assign(size_in);
+  int radius_in_stack_offset = compiler.stack_assign(radius_in);
+  int value1_in_stack_offset = compiler.stack_assign(value1_in);
+  int value2_in_stack_offset = compiler.stack_assign(value2_in);
+  int value3_in_stack_offset = compiler.stack_assign(value3_in);
+  int value4_in_stack_offset = compiler.stack_assign(value4_in);
+  int point1_in_stack_offset = compiler.stack_assign(point1_in);
+  int point2_in_stack_offset = compiler.stack_assign(point2_in);
+  int point3_in_stack_offset = compiler.stack_assign(point3_in);
+  int point4_in_stack_offset = compiler.stack_assign(point4_in);
+  int angle_in_stack_offset = compiler.stack_assign(angle_in);
+  int roundness_in_stack_offset = compiler.stack_assign(roundness_in);
+  int linewidth_in_stack_offset = compiler.stack_assign(linewidth_in);
+
+  int distance_out_stack_offset = compiler.stack_assign_if_linked(distance_out);
+
+  compiler.add_node(
+      NODE_SDF_PRIMITIVE,
+      compiler.encode_uchar4(
+          size_in_stack_offset, radius_in_stack_offset, roundness_in_stack_offset),
+      compiler.encode_uchar4(value1_in_stack_offset,
+                             value2_in_stack_offset,
+                             value3_in_stack_offset,
+                             value4_in_stack_offset),
+      compiler.encode_uchar4(mode, invert, angle_in_stack_offset, linewidth_in_stack_offset));
+  compiler.add_node(vector_in_stack_offset, distance_out_stack_offset);
+  compiler.add_node(point1_in_stack_offset,
+                    point2_in_stack_offset,
+                    point3_in_stack_offset,
+                    point4_in_stack_offset);
+  compiler.add_node(__float_as_int(size), __float_as_int(radius));
+  compiler.add_node(__float_as_int(value1),
+                    __float_as_int(value2),
+                    __float_as_int(value3),
+                    __float_as_int(value4));
+  compiler.add_node(__float_as_int(angle), __float_as_int(roundness), __float_as_int(linewidth));
+
+  tex_mapping.compile_end(compiler, vector_in, vector_in_stack_offset);
+}
+
+void SdfPrimitiveNode::compile(OSLCompiler &compiler)
+{
+  tex_mapping.compile(compiler);
+  compiler.parameter(this, "mode");
+  compiler.parameter(this, "invert");
+  compiler.add(this, "node_sdf_primtive");
+}
+
+/* Sdf Operators */
+
+NODE_DEFINE(SdfOpNode)
+{
+  NodeType *type = NodeType::add("sdf_op", create, NodeType::SHADER);
+
+  static NodeEnum type_enum;
+  type_enum.insert("dilate", NODE_SDF_OP_DILATE);
+  type_enum.insert("onion", NODE_SDF_OP_ONION);
+  type_enum.insert("blend", NODE_SDF_OP_BLEND);
+  type_enum.insert("annular", NODE_SDF_OP_ANNULAR);
+  type_enum.insert("flatten", NODE_SDF_OP_FLATTEN);
+  type_enum.insert("invert", NODE_SDF_OP_INVERT);
+  type_enum.insert("pipe", NODE_SDF_OP_PIPE);
+  type_enum.insert("engrave", NODE_SDF_OP_ENGRAVE);
+  type_enum.insert("groove", NODE_SDF_OP_GROOVE);
+  type_enum.insert("tongue", NODE_SDF_OP_TONGUE);
+
+  type_enum.insert("union", NODE_SDF_OP_UNION);
+  type_enum.insert("intersect", NODE_SDF_OP_INTERSECT);
+  type_enum.insert("diff", NODE_SDF_OP_DIFF);
+  type_enum.insert("union_smooth", NODE_SDF_OP_UNION_SMOOTH);
+  type_enum.insert("intersect_smooth", NODE_SDF_OP_INTERSECT_SMOOTH);
+  type_enum.insert("diff_smooth", NODE_SDF_OP_DIFF_SMOOTH);
+  type_enum.insert("union_chamfer", NODE_SDF_OP_UNION_CHAMFER);
+  type_enum.insert("intersect_chamfer", NODE_SDF_OP_INTERSECT_CHAMFER);
+  type_enum.insert("diff_chamfer", NODE_SDF_OP_DIFF_CHAMFER);
+  type_enum.insert("union_round", NODE_SDF_OP_UNION_ROUND);
+  type_enum.insert("intersect_round", NODE_SDF_OP_INTERSECT_ROUND);
+  type_enum.insert("diff_round", NODE_SDF_OP_DIFF_ROUND);
+  type_enum.insert("union_columns", NODE_SDF_OP_UNION_COLUMNS);
+  type_enum.insert("intersect_columns", NODE_SDF_OP_INTERSECT_COLUMNS);
+  type_enum.insert("diff_columns", NODE_SDF_OP_DIFF_COLUMNS);
+  type_enum.insert("union_stairs", NODE_SDF_OP_UNION_STAIRS);
+  type_enum.insert("intersect_stairs", NODE_SDF_OP_INTERSECT_STAIRS);
+  type_enum.insert("diff_stairs", NODE_SDF_OP_DIFF_STAIRS);
+
+  type_enum.insert("mask", NODE_SDF_OP_MASK);
+  type_enum.insert("divide", NODE_SDF_OP_DIVIDE);
+  type_enum.insert("exclusion", NODE_SDF_OP_EXCLUSION);
+  type_enum.insert("pulse", NODE_SDF_OP_PULSE);
+
+  SOCKET_ENUM(operation, "Operation", type_enum, NODE_SDF_OP_UNION);
+
+  SOCKET_BOOLEAN(invert, "Invert", false);
+
+  SOCKET_IN_FLOAT(distance1, "Distance1", 0.5f);
+  SOCKET_IN_FLOAT(distance2, "Distance2", 0.5f);
+  SOCKET_IN_FLOAT(value1, "Value1", 0.0f);
+  SOCKET_IN_FLOAT(value2, "Value2", 0.0f);
+  SOCKET_IN_INT(count, "Count", 1);
+
+  SOCKET_OUT_FLOAT(value, "Distance");
+
+  return type;
+}
+
+SdfOpNode::SdfOpNode() : ShaderNode(get_node_type())
+{
+}
+
+void SdfOpNode::compile(SVMCompiler &compiler)
+{
+  ShaderInput *value1_in = input("Distance1");
+  ShaderInput *value2_in = input("Distance2");
+  ShaderInput *value3_in = input("Value1");
+  ShaderInput *value4_in = input("Value2");
+  ShaderInput *count_in = input("Count");
+  ShaderOutput *value_out = output("Distance");
+
+  int value1_in_stack_offset = compiler.stack_assign(value1_in);
+  int value2_in_stack_offset = compiler.stack_assign(value2_in);
+  int value3_in_stack_offset = compiler.stack_assign(value3_in);
+  int value4_in_stack_offset = compiler.stack_assign(value4_in);
+  int count_stack_offset = compiler.stack_assign(count_in);
+  int value_out_stack_offset = compiler.stack_assign(value_out);
+
+  compiler.add_node(NODE_SDF_OP,
+                    operation,
+                    compiler.encode_uchar4(value1_in_stack_offset,
+                                           value2_in_stack_offset,
+                                           value3_in_stack_offset,
+                                           value4_in_stack_offset),
+                    value_out_stack_offset);
+  compiler.add_node(count_stack_offset, count, invert);
+  compiler.add_node(__float_as_int(distance1),
+                    __float_as_int(distance2),
+                    __float_as_int(value1),
+                    __float_as_int(value2));
+}
+
+void SdfOpNode::compile(OSLCompiler &compiler)
+{
+  compiler.parameter(this, "operation");
+  compiler.parameter(this, "invert");
+  compiler.add(this, "node_sdf_op");
+}
+
+/* Sdf Operators */
+
+NODE_DEFINE(SdfVectorOpNode)
+{
+  NodeType *type = NodeType::add("sdf_vector_op", create, NodeType::SHADER);
+
+  static NodeEnum type_enum;
+  type_enum.insert("extrude", NODE_SDF_VEC_OP_EXTRUDE);
+  type_enum.insert("repeat_inf", NODE_SDF_VEC_OP_REPEAT_INF);
+  type_enum.insert("repeat_finite", NODE_SDF_VEC_OP_REPEAT_FINITE);
+  type_enum.insert("twist", NODE_SDF_VEC_OP_TWIST);
+  type_enum.insert("bend", NODE_SDF_VEC_OP_BEND);
+  type_enum.insert("swizzle", NODE_SDF_VEC_OP_SWIZZLE);
+  type_enum.insert("rotate", NODE_SDF_VEC_OP_ROTATE);
+  type_enum.insert("reflect", NODE_SDF_VEC_OP_REFLECT);
+  type_enum.insert("mirror", NODE_SDF_VEC_OP_MIRROR);
+  type_enum.insert("polar", NODE_SDF_VEC_OP_POLAR);
+  type_enum.insert("map_uv", NODE_SDF_VEC_OP_MAP_UV);
+  type_enum.insert("map_11", NODE_SDF_VEC_OP_MAP_11);
+  type_enum.insert("rotate_uv", NODE_SDF_VEC_OP_ROTATE_UV);
+  type_enum.insert("rnd_uv", NODE_SDF_VEC_OP_RND_UV);
+  type_enum.insert("octant", NODE_SDF_VEC_OP_OCTANT);
+  type_enum.insert("tileset", NODE_SDF_VEC_OP_TILESET);
+  type_enum.insert("spin", NODE_SDF_VEC_OP_SPIN);
+  type_enum.insert("grid", NODE_SDF_VEC_OP_GRID);
+  type_enum.insert("rnd_uv_flip", NODE_SDF_VEC_OP_RND_UV_FLIP);
+  type_enum.insert("scale_uv", NODE_SDF_VEC_OP_SCALE_UV);
+  type_enum.insert("swirl", NODE_SDF_VEC_OP_SWIRL);
+  type_enum.insert("radial_shear", NODE_SDF_VEC_OP_RADIAL_SHEAR);
+  type_enum.insert("pinch_inflate", NODE_SDF_VEC_OP_PINCH_INFLATE);
+  SOCKET_ENUM(operation, "Operation", type_enum, NODE_SDF_OP_UNION);
+
+  static NodeEnum axis_enum;
+  type_enum.insert("axis_xyz", NODE_SDF_AXIS_XYZ);
+  type_enum.insert("axis_xzy", NODE_SDF_AXIS_XZY);
+  type_enum.insert("axis_yxz", NODE_SDF_AXIS_YXZ);
+  type_enum.insert("axis_yzx", NODE_SDF_AXIS_YZX);
+  type_enum.insert("axis_zxy", NODE_SDF_AXIS_ZXY);
+  type_enum.insert("axis_zyx", NODE_SDF_AXIS_ZYX);
+  SOCKET_ENUM(axis, "Axis", axis_enum, NODE_SDF_AXIS_XYZ);
+
+  SOCKET_IN_VECTOR(vector1, "Vector1", make_float3(0.0f));
+  SOCKET_IN_VECTOR(vector2, "Vector2", make_float3(0.0f));
+  SOCKET_IN_VECTOR(vector3, "Vector3", make_float3(0.0f));
+  SOCKET_IN_FLOAT(scale, "Scale", 1.0f);
+  SOCKET_IN_FLOAT(value1, "Value1", 0.0f);
+  SOCKET_IN_FLOAT(value2, "Value2", 0.0f);
+  SOCKET_IN_FLOAT(angle, "Angle", 0.0f);
+  SOCKET_IN_INT(count1, "Count1", 1);
+  SOCKET_IN_INT(count2, "Count2", 1);
+
+  SOCKET_OUT_VECTOR(vector, "Vector");
+  SOCKET_OUT_VECTOR(position, "Position");
+  SOCKET_OUT_FLOAT(value, "Value");
+
+  return type;
+}
+
+SdfVectorOpNode::SdfVectorOpNode() : ShaderNode(get_node_type())
+{
+}
+
+void SdfVectorOpNode::compile(SVMCompiler &compiler)
+{
+  ShaderInput *vector1_in = input("Vector1");
+  ShaderInput *vector2_in = input("Vector2");
+  ShaderInput *vector3_in = input("Vector3");
+  ShaderInput *scale_in = input("Scale");
+  ShaderInput *value1_in = input("Value1");
+  ShaderInput *value2_in = input("Value2");
+  ShaderInput *angle_in = input("Angle");
+  ShaderInput *count1_in = input("Count1");
+  ShaderInput *count2_in = input("Count2");
+
+  ShaderOutput *vector_out = output("Vector");
+  ShaderOutput *position_out = output("Position");
+  ShaderOutput *value_out = output("Value");
+
+  int vector1_in_stack_offset = compiler.stack_assign(vector1_in);
+  int vector2_in_stack_offset = compiler.stack_assign(vector2_in);
+  int vector3_in_stack_offset = compiler.stack_assign(vector3_in);
+  int scale_in_stack_offset = compiler.stack_assign(scale_in);
+  int value1_in_stack_offset = compiler.stack_assign(value1_in);
+  int value2_in_stack_offset = compiler.stack_assign(value2_in);
+  int angle_in_stack_offset = compiler.stack_assign(angle_in);
+  int count1_in_stack_offset = compiler.stack_assign(count1_in);
+  int count2_in_stack_offset = compiler.stack_assign(count2_in);
+  int vector_out_stack_offset = compiler.stack_assign_if_linked(vector_out);
+  int position_out_stack_offset = compiler.stack_assign_if_linked(position_out);
+  int value_out_stack_offset = compiler.stack_assign_if_linked(value_out);
+
+  compiler.add_node(NODE_SDF_VECTOR_OP,
+                    operation,
+                    axis,
+                    compiler.encode_uchar4(scale_in_stack_offset,
+                                           value1_in_stack_offset,
+                                           value2_in_stack_offset,
+                                           angle_in_stack_offset));
+  compiler.add_node(vector1_in_stack_offset, vector2_in_stack_offset, vector3_in_stack_offset);
+  compiler.add_node(vector_out_stack_offset, position_out_stack_offset, value_out_stack_offset);
+  compiler.add_node(__float_as_int(scale),
+                    __float_as_int(value1),
+                    __float_as_int(value2),
+                    __float_as_int(angle));
+  compiler.add_node(count1_in_stack_offset, count2_in_stack_offset, count1, count2);
+}
+
+void SdfVectorOpNode::compile(OSLCompiler &compiler)
+{
+  compiler.parameter(this, "operation");
+  compiler.parameter(this, "axis");
+  compiler.add(this, "node_sdf_vector_op");
+}
+
 /* Point Density Texture */
 
 NODE_DEFINE(PointDensityTextureNode)
