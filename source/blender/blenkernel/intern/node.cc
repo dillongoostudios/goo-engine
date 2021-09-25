@@ -4846,6 +4846,7 @@ static void registerShaderNodes()
   register_node_type_sh_vertex_color();
 
   register_node_type_sh_background();
+  register_node_type_sh_set_depth();
   register_node_type_sh_bsdf_anisotropic();
   register_node_type_sh_bsdf_diffuse();
   register_node_type_sh_bsdf_principled();

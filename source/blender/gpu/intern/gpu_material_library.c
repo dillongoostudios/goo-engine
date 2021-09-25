@@ -102,6 +102,7 @@ extern char datatoc_gpu_shader_material_separate_hsv_glsl[];
 extern char datatoc_gpu_shader_material_separate_rgb_glsl[];
 extern char datatoc_gpu_shader_material_separate_xyz_glsl[];
 extern char datatoc_gpu_shader_material_set_glsl[];
+extern char datatoc_gpu_shader_material_set_depth_glsl[];
 extern char datatoc_gpu_shader_material_shader_info_glsl[];
 extern char datatoc_gpu_shader_material_shader_to_rgba_glsl[];
 extern char datatoc_gpu_shader_material_squeeze_glsl[];
@@ -455,6 +456,11 @@ static GPUMaterialLibrary gpu_shader_material_set_library = {
     .dependencies = {NULL},
 };
 
+static GPUMaterialLibrary gpu_shader_material_set_depth_library = {
+    .code = datatoc_gpu_shader_material_set_depth_glsl,
+    .dependencies = {NULL},
+};
+
 static GPUMaterialLibrary gpu_shader_material_shader_info_library = {
     .code = datatoc_gpu_shader_material_shader_info_glsl,
     .dependencies = {NULL},
@@ -687,6 +693,7 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_separate_rgb_library,
     &gpu_shader_material_separate_xyz_library,
     &gpu_shader_material_set_library,
+    &gpu_shader_material_set_depth_library,
     &gpu_shader_material_shader_info_library,
     &gpu_shader_material_shader_to_rgba_library,
     &gpu_shader_material_squeeze_library,
