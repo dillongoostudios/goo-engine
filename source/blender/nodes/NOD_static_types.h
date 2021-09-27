@@ -138,6 +138,7 @@ DefNode(ShaderNode,     SH_NODE_OUTPUT_AOV,         def_sh_output_aov,      "OUT
 DefNode(ShaderNode,     SH_NODE_SDF_PRIMITIVE,      def_sh_sdf_primitive,   "SDF_PRIMITIVE",      SdfPrimitive,     "Sdf Primitive",     ""       )
 DefNode(ShaderNode,     SH_NODE_SDF_OP,             def_sh_sdf_op,          "SDF_OP",             SdfOp,            "Sdf Operator",      ""       )
 DefNode(ShaderNode,     SH_NODE_SDF_VECTOR_OP,      def_sh_sdf_vector_op,   "SDF_VECTOR_OP",      SdfVectorOp,      "Sdf Vector Operator",""      )
+DefNode(ShaderNode,     SH_NODE_SDF_NOISE,          0,            "SDF_NOISE",          SdfNoise,         "Sdf Noise",          ""      )
 
 DefNode(CompositorNode, CMP_NODE_VIEWER,         def_cmp_viewer,         "VIEWER",         Viewer,           "Viewer",            ""              )
 DefNode(CompositorNode, CMP_NODE_RGB,            0,                      "RGB",            RGB,              "RGB",               ""              )

@@ -1076,7 +1076,7 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree,
 #define SH_NODE_SDF_PRIMITIVE 711
 #define SH_NODE_SDF_OP 712
 #define SH_NODE_SDF_VECTOR_OP 713
-// #define SH_NODE_SDF_NOISE 714
+#define SH_NODE_SDF_NOISE 714
 #define SH_NODE_SET_DEPTH 715
 
 /* custom defines options for Material node */

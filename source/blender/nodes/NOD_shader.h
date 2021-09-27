@@ -73,6 +73,7 @@ void register_node_type_sh_tex_pointdensity(void);
 void register_node_type_sh_sdf_op(void);
 void register_node_type_sh_sdf_primitive(void);
 void register_node_type_sh_sdf_vector_op(void);
+void register_node_type_sh_sdf_noise(void);
 
 void register_node_type_sh_attribute(void);
 void register_node_type_sh_bevel(void);
