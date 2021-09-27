@@ -2048,6 +2048,11 @@ static void rotlike_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
         BLI_assert(false);
     }
 
+    /* Invert final rotation matrix. */
+    if (data->flag & ROTLIKE_INVERT_ALL) {
+      invert_m3(newrot);
+    }
+
     loc_rot_size_to_mat4(cob->matrix, loc, newrot, size);
   }
 }

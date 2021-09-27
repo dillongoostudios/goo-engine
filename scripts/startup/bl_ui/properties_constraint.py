@@ -397,6 +397,8 @@ class ConstraintButtonsPanel:
         sub.prop(con, "invert_y", text="Y", toggle=True)
         sub.prop(con, "invert_z", text="Z", toggle=True)
         row.label(icon='BLANK1')
+    
+        layout.prop(con, "invert_all", text="Invert Rotation")
 
         layout.prop(con, "mix_mode", text="Mix", text_ctxt=i18n_contexts.constraint)
 

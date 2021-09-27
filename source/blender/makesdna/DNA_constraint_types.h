@@ -741,6 +741,7 @@ typedef enum eCopyRotation_Flags {
 #ifdef DNA_DEPRECATED_ALLOW
   ROTLIKE_OFFSET = (1 << 7),
 #endif
+  ROTLIKE_INVERT_ALL = (1 << 8),
 } eCopyRotation_Flags;
 
 /** #bRotateLikeConstraint.mix_mode */
