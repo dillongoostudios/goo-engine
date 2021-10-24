@@ -245,17 +245,38 @@ class ALightGroupPanel(Panel):
 class OBJ_PT_MLightGroupPanel(ALightGroupPanel):
     bl_context = 'material'
 
+    def get_groups(self, ctx):
+        mat = ctx.material
+        ob = ctx.object
+
+        if ob:
+            data = ob.active_material
+        elif mat:
+            data = mat
+        return data.light_groups
+
     @classmethod
     def poll(cls, ctx):
-        return hasattr(ctx.object, "active_material") and ctx.object.active_material is not None
-
+        return ctx.material
 
 class OBJ_PT_LLightGroupPanel(ALightGroupPanel):
     bl_context = 'data'
 
+    def get_groups(self, ctx):
+        ob = ctx.object
+        light = ctx.light
+        space = ctx.space_data
+
+        if ob:
+            data = ob.data
+        elif light:
+            data = space.pin_id
+
+        return data.light_groups
+
     @classmethod
     def poll(cls, ctx):
-        return ctx.object and ctx.object.type == "LIGHT"
+        return ctx.light
 
 
 class LightGroupOp(Operator):
