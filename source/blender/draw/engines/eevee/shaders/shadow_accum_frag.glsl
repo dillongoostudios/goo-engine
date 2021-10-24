@@ -43,7 +43,7 @@ void main()
 
     float l_vis = light_shadowing(ld, P, 1.0, ivec4(-1));
 
-    l_vis *= light_contact_shadows(ld, P, vP, vNg, rand.x, 1.0);
+    l_vis *= light_contact_shadows(ld, P, vP, vNg, rand.x, 1.0, ivec4(-1));
 
     accum_light += l_vis;
   }

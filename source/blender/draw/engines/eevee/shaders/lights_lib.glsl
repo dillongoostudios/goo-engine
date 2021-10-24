@@ -344,9 +344,14 @@ float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows
 }
 
 #ifndef VOLUMETRICS
-float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_x, float vis)
+float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_x, float vis, ivec4 light_group_shadows)
 {
-  if (ld.l_shadowid >= 0.0 && vis > 0.001) {
+  if (ld.l_shadowid >= 0.0 && light.vis > 0.001 && !(
+  (ld.light_group_bits.x & light_group_shadows.x) == 0
+  && (ld.light_group_bits.y & light_group_shadows.y) == 0
+  && (ld.light_group_bits.z & light_group_shadows.z) == 0
+  && (ld.light_group_bits.w & light_group_shadows.w) == 0)
+  ) {
     ShadowData sd = shadows_data[int(ld.l_shadowid)];
     /* Only compute if not already in shadow. */
     if (sd.sh_contact_dist > 0.0) {

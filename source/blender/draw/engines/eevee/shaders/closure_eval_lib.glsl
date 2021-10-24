@@ -268,7 +268,7 @@ ClosureLightData closure_light_eval_init(ClosureEvalCommon cl_common, int light_
 
   light.vis = light_visibility(light.data, cl_common.P, light.L, cl_common.light_groups, cl_common.light_group_shadows);
   light.contact_shadow = light_contact_shadows(
-      light.data, cl_common.P, cl_common.vP, cl_common.vNg, cl_common.rand.x, light.vis);
+      light.data, cl_common.P, cl_common.vP, cl_common.vNg, cl_common.rand.x, light.vis, cl_common.light_group_shadows);
 
   return light;
 }
