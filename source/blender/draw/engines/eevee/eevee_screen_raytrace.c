@@ -131,7 +131,11 @@ int EEVEE_screen_raytrace_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   effects->ssgi_hit_output = NULL;
   effects->ssgi_filter_input = NULL; /* TODO REMOVE */
 
-  return 0;
+  /* Enable Screenspace Info without Scene SSR enabled. */
+  common_data->ssr_firefly_fac = FLT_MAX;
+  common_data->ssr_diffuse_clamp = FLT_MAX;
+
+  return EFFECT_RADIANCE_BUFFER;
 }
 
 void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
@@ -280,8 +284,7 @@ void EEVEE_refraction_compute(EEVEE_ViewLayerData *UNUSED(sldata), EEVEE_Data *v
   EEVEE_TextureList *txl = vedata->txl;
   EEVEE_StorageList *stl = vedata->stl;
   EEVEE_EffectsInfo *effects = stl->effects;
-
-  if ((effects->enabled_effects & EFFECT_REFRACT) != 0) {
+  if ((effects->enabled_effects & EFFECT_REFRACT || effects->enabled_effects & EFFECT_RADIANCE_BUFFER) != 0) {
     EEVEE_effects_downsample_radiance_buffer(vedata, txl->color);
 
     /* Restore */

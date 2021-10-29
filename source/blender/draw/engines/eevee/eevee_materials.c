@@ -534,7 +534,7 @@ static EeveeMaterialCache material_opaque(EEVEE_Data *vedata,
   const bool do_cull = !is_hair && (ma->blend_flag & MA_BL_CULL_BACKFACE) != 0;
   const bool use_gpumat = (ma->use_nodes && ma->nodetree);
   const bool use_ssrefract = use_gpumat && ((ma->blend_flag & MA_BL_SS_REFRACTION) != 0) &&
-                             ((effects->enabled_effects & EFFECT_REFRACT) != 0);
+                             ((effects->enabled_effects & EFFECT_REFRACT || effects->enabled_effects & EFFECT_RADIANCE_BUFFER) != 0);
   const bool use_depth_shader = use_gpumat && ELEM(ma->blend_method, MA_BM_CLIP, MA_BM_HASHED);
 
   /* HACK: Assume the struct will never be smaller than our variations.
