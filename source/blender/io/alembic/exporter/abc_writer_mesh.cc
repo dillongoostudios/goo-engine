@@ -25,6 +25,7 @@
 #include "BLI_assert.h"
 #include "BLI_math_vector.h"
 
+#include "BKE_attribute.h"
 #include "BKE_customdata.h"
 #include "BKE_lib_id.h"
 #include "BKE_material.h"
@@ -108,9 +109,6 @@ void ABCGenericMeshWriter::create_alembic_objects(const HierarchyContext *contex
     OBoolProperty type(typeContainer, "meshtype");
     type.set(subsurf_modifier_ == nullptr);
   }
-
-  Scene *scene_eval = DEG_get_evaluated_scene(args_.depsgraph);
-  liquid_sim_modifier_ = get_liquid_sim_modifier(scene_eval, context->object);
 }
 
 Alembic::Abc::OObject ABCGenericMeshWriter::get_alembic_object() const
@@ -144,25 +142,10 @@ bool ABCGenericMeshWriter::export_as_subdivision_surface(Object *ob_eval) const
   return false;
 }
 
-ModifierData *ABCGenericMeshWriter::get_liquid_sim_modifier(Scene *scene, Object *ob)
-{
-  ModifierData *md = BKE_modifiers_findby_type(ob, eModifierType_Fluidsim);
-
-  if (md && (BKE_modifier_is_enabled(scene, md, eModifierMode_Render))) {
-    FluidsimModifierData *fsmd = reinterpret_cast<FluidsimModifierData *>(md);
-
-    if (fsmd->fss && fsmd->fss->type == OB_FLUIDSIM_DOMAIN) {
-      return md;
-    }
-  }
-
-  return nullptr;
-}
-
 bool ABCGenericMeshWriter::is_supported(const HierarchyContext *context) const
 {
   if (args_.export_params->visible_objects_only) {
-    return context->is_object_visible(DAG_EVAL_RENDER);
+    return context->is_object_visible(args_.export_params->evaluation_mode);
   }
   return true;
 }
@@ -200,6 +183,7 @@ void ABCGenericMeshWriter::do_write(HierarchyContext &context)
   }
 
   m_custom_data_config.pack_uvs = args_.export_params->packuv;
+  m_custom_data_config.mesh = mesh;
   m_custom_data_config.mpoly = mesh->mpoly;
   m_custom_data_config.mloop = mesh->mloop;
   m_custom_data_config.totpoly = mesh->totpoly;
@@ -250,7 +234,7 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
 
   UVSample uvs_and_indices;
 
-  if (!frame_has_been_written_ && args_.export_params->uvs) {
+  if (args_.export_params->uvs) {
     const char *name = get_uv_sample(uvs_and_indices, m_custom_data_config, &mesh->ldata);
 
     if (!uvs_and_indices.indices.empty() && !uvs_and_indices.uvs.empty()) {
@@ -279,8 +263,11 @@ void ABCGenericMeshWriter::write_mesh(HierarchyContext &context, Mesh *mesh)
     mesh_sample.setNormals(normals_sample);
   }
 
-  if (liquid_sim_modifier_ != nullptr) {
-    get_velocities(mesh, velocities);
+  if (args_.export_params->orcos) {
+    write_generated_coordinates(abc_poly_mesh_schema_.getArbGeomParams(), m_custom_data_config);
+  }
+
+  if (get_velocities(mesh, velocities)) {
     mesh_sample.setVelocities(V3fArraySample(velocities));
   }
 
@@ -312,7 +299,7 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, struct Mesh *me
       V3fArraySample(points), Int32ArraySample(poly_verts), Int32ArraySample(loop_counts));
 
   UVSample sample;
-  if (!frame_has_been_written_ && args_.export_params->uvs) {
+  if (args_.export_params->uvs) {
     const char *name = get_uv_sample(sample, m_custom_data_config, &mesh->ldata);
 
     if (!sample.indices.empty() && !sample.uvs.empty()) {
@@ -327,6 +314,10 @@ void ABCGenericMeshWriter::write_subd(HierarchyContext &context, struct Mesh *me
 
     write_custom_data(
         abc_subdiv_schema_.getArbGeomParams(), m_custom_data_config, &mesh->ldata, CD_MLOOPUV);
+  }
+
+  if (args_.export_params->orcos) {
+    write_generated_coordinates(abc_poly_mesh_schema_.getArbGeomParams(), m_custom_data_config);
   }
 
   if (!crease_indices.empty()) {
@@ -359,11 +350,6 @@ void ABCGenericMeshWriter::write_face_sets(Object *object, struct Mesh *mesh, Sc
 
 void ABCGenericMeshWriter::write_arb_geo_params(struct Mesh *me)
 {
-  if (liquid_sim_modifier_ != nullptr) {
-    /* We don't need anything more for liquid meshes. */
-    return;
-  }
-
   if (frame_has_been_written_ || !args_.export_params->vcolors) {
     return;
   }
@@ -378,27 +364,28 @@ void ABCGenericMeshWriter::write_arb_geo_params(struct Mesh *me)
   write_custom_data(arb_geom_params, m_custom_data_config, &me->ldata, CD_MLOOPCOL);
 }
 
-void ABCGenericMeshWriter::get_velocities(struct Mesh *mesh, std::vector<Imath::V3f> &vels)
+bool ABCGenericMeshWriter::get_velocities(struct Mesh *mesh, std::vector<Imath::V3f> &vels)
 {
+  /* Export velocity attribute output by fluid sim, sequence cache modifier
+   * and geometry nodes. */
+  CustomDataLayer *velocity_layer = BKE_id_attribute_find(
+      &mesh->id, "velocity", CD_PROP_FLOAT3, ATTR_DOMAIN_POINT);
+
+  if (velocity_layer == nullptr) {
+    return false;
+  }
+
   const int totverts = mesh->totvert;
+  const float(*mesh_velocities)[3] = reinterpret_cast<float(*)[3]>(velocity_layer->data);
 
   vels.clear();
   vels.resize(totverts);
 
-  FluidsimModifierData *fmd = reinterpret_cast<FluidsimModifierData *>(liquid_sim_modifier_);
-  FluidsimSettings *fss = fmd->fss;
-
-  if (fss->meshVelocities) {
-    float *mesh_vels = reinterpret_cast<float *>(fss->meshVelocities);
-
-    for (int i = 0; i < totverts; i++) {
-      copy_yup_from_zup(vels[i].getValue(), mesh_vels);
-      mesh_vels += 3;
-    }
+  for (int i = 0; i < totverts; i++) {
+    copy_yup_from_zup(vels[i].getValue(), mesh_velocities[i]);
   }
-  else {
-    std::fill(vels.begin(), vels.end(), Imath::V3f(0.0f));
-  }
+
+  return true;
 }
 
 void ABCGenericMeshWriter::get_geo_groups(Object *object,
@@ -529,7 +516,7 @@ static void get_loop_normals(struct Mesh *mesh,
 
   BKE_mesh_calc_normals_split(mesh);
   const float(*lnors)[3] = static_cast<float(*)[3]>(CustomData_get_layer(&mesh->ldata, CD_NORMAL));
-  BLI_assert(lnors != nullptr || !"BKE_mesh_calc_normals_split() should have computed CD_NORMAL");
+  BLI_assert_msg(lnors != nullptr, "BKE_mesh_calc_normals_split() should have computed CD_NORMAL");
 
   normals.resize(mesh->totloop);
 

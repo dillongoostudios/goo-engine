@@ -167,7 +167,7 @@ void invert_qt_qt_normalized(float q1[4], const float q2[4])
   invert_qt_normalized(q1);
 }
 
-/* simple mult */
+/* Simple multiply. */
 void mul_qt_fl(float q[4], const float f)
 {
   q[0] *= f;
@@ -373,7 +373,7 @@ void mat3_normalized_to_quat(float q[4], const float mat[3][3])
       q[2] = (mat[2][1] + mat[1][2]) * s;
     }
 
-    /* Make sure w is nonnegative for a canonical result. */
+    /* Make sure W is non-negative for a canonical result. */
     if (q[0] < 0) {
       negate_v4(q);
     }
@@ -511,7 +511,7 @@ void rotation_between_vecs_to_mat3(float m[3][3], const float v1[3], const float
   }
 }
 
-/* note: expects vectors to be normalized */
+/* NOTE: expects vectors to be normalized. */
 void rotation_between_vecs_to_quat(float q[4], const float v1[3], const float v2[3])
 {
   float axis[3];
@@ -1924,6 +1924,31 @@ void eulO_to_gimbal_axis(float gmat[3][3], const float eul[3], const short order
   gmat[R->axis[2]][R->axis[2]] = 1;
 }
 
+void add_eul_euleul(float r_eul[3], float a[3], float b[3], const short order)
+{
+  float quat[4], quat_b[4];
+
+  eulO_to_quat(quat, a, order);
+  eulO_to_quat(quat_b, b, order);
+
+  mul_qt_qtqt(quat, quat_b, quat);
+
+  quat_to_eulO(r_eul, order, quat);
+}
+
+void sub_eul_euleul(float r_eul[3], float a[3], float b[3], const short order)
+{
+  float quat[4], quat_b[4];
+
+  eulO_to_quat(quat, a, order);
+  eulO_to_quat(quat_b, b, order);
+
+  invert_qt_normalized(quat_b);
+  mul_qt_qtqt(quat, quat_b, quat);
+
+  quat_to_eulO(r_eul, order, quat);
+}
+
 /******************************* Dual Quaternions ****************************/
 
 /**
@@ -1974,7 +1999,7 @@ void mat4_to_dquat(DualQuat *dq, const float basemat[4][4], const float mat[4][4
 
   if (!is_orthonormal_m3(mat3) || (determinant_m4(mat) < 0.0f) ||
       len_squared_v3(dscale) > square_f(1e-4f)) {
-    /* extract R and S  */
+    /* Extract R and S. */
     float tmp[4][4];
 
     /* extra orthogonalize, to avoid flipping with stretched bones */

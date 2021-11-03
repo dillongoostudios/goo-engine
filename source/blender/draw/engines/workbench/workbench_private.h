@@ -381,13 +381,13 @@ typedef struct WORKBENCH_ObjectData {
 } WORKBENCH_ObjectData;
 
 typedef struct WORKBENCH_ViewLayerData {
-  /** Depth of field sample location array.*/
+  /** Depth of field sample location array. */
   struct GPUUniformBuf *dof_sample_ubo;
-  /** All constant data used for a render loop.*/
+  /** All constant data used for a render loop. */
   struct GPUUniformBuf *world_ubo;
-  /** Cavity sample location array.*/
+  /** Cavity sample location array. */
   struct GPUUniformBuf *cavity_sample_ubo;
-  /** Blue noise texture used to randomize the sampling of some effects.*/
+  /** Blue noise texture used to randomize the sampling of some effects. */
   struct GPUTexture *cavity_jitter_tx;
   /** Materials UBO's allocated in a memblock for easy bookkeeping. */
   struct BLI_memblock *material_ubo;
@@ -399,7 +399,7 @@ typedef struct WORKBENCH_ViewLayerData {
 /* inline helper functions */
 BLI_INLINE bool workbench_is_specular_highlight_enabled(WORKBENCH_PrivateData *wpd)
 {
-  if ((wpd->shading.flag & V3D_SHADING_SPECULAR_HIGHLIGHT)) {
+  if (wpd->shading.flag & V3D_SHADING_SPECULAR_HIGHLIGHT) {
     if (STUDIOLIGHT_ENABLED(wpd) || MATCAP_ENABLED(wpd)) {
       return (wpd->studio_light->flag & STUDIOLIGHT_SPECULAR_HIGHLIGHT_PASS) != 0;
     }

@@ -135,7 +135,7 @@ typedef struct bAnimVizSettings {
 
 /* bAnimVizSettings->recalc */
 typedef enum eAnimViz_RecalcFlags {
-  /* motionpaths need recalculating */
+  /* Motion-paths need recalculating. */
   ANIMVIZ_RECALC_PATHS = (1 << 0),
 } eAnimViz_RecalcFlags;
 
@@ -265,9 +265,10 @@ typedef struct bPoseChannel {
    * since the alternative is highly complicated - campbell
    */
   struct bPoseChannel *custom_tx;
-  float custom_scale;
-
-  char _pad1[4];
+  float custom_scale; /* Deprecated */
+  float custom_scale_xyz[3];
+  float custom_translation[3];
+  float custom_rotation_euler[3];
 
   /** Transforms - written in by actions or transform. */
   float loc[3];
@@ -327,11 +328,12 @@ typedef struct bPoseChannel {
    * and are applied on top of the copies in pchan->bone
    */
   float roll1, roll2;
-  float curve_in_x, curve_in_y;
-  float curve_out_x, curve_out_y;
+  float curve_in_x, curve_in_z;
+  float curve_out_x, curve_out_z;
   float ease1, ease2;
-  float scale_in_x, scale_in_y;
-  float scale_out_x, scale_out_y;
+  float scale_in_x DNA_DEPRECATED, scale_in_z DNA_DEPRECATED;
+  float scale_out_x DNA_DEPRECATED, scale_out_z DNA_DEPRECATED;
+  float scale_in[3], scale_out[3];
 
   /** B-Bone custom handles; set on read file or rebuild pose based on pchan->bone data. */
   struct bPoseChannel *bbone_prev;
@@ -417,9 +419,9 @@ typedef enum ePchan_DrawFlag {
   PCHAN_DRAW_NO_CUSTOM_BONE_SIZE = (1 << 0),
 } ePchan_DrawFlag;
 
-#define PCHAN_CUSTOM_DRAW_SIZE(pchan) \
-  (pchan)->custom_scale *( \
-      ((pchan)->drawflag & PCHAN_DRAW_NO_CUSTOM_BONE_SIZE) ? 1.0f : (pchan)->bone->length)
+/* NOTE: It doesn't take custom_scale_xyz into account. */
+#define PCHAN_CUSTOM_BONE_LENGTH(pchan) \
+  (((pchan)->drawflag & PCHAN_DRAW_NO_CUSTOM_BONE_SIZE) ? 1.0f : (pchan)->bone->length)
 
 #ifdef DNA_DEPRECATED_ALLOW
 /* PoseChannel->bboneflag */
@@ -600,7 +602,7 @@ typedef struct bActionGroup {
   struct bActionGroup *next, *prev;
 
   /**
-   * Note: this must not be touched by standard listbase functions
+   * NOTE: this must not be touched by standard listbase functions
    * which would clear links to other channels.
    */
   ListBase channels;
@@ -828,7 +830,7 @@ typedef struct SpaceAction {
   /** The currently active context (when not showing action). */
   bDopeSheet ads;
 
-  /** For Time-Slide transform mode drawing - current frame?. */
+  /** For Time-Slide transform mode drawing - current frame? */
   float timeslide;
 
   short flag;
@@ -836,7 +838,7 @@ typedef struct SpaceAction {
   char mode;
   /* Storage for sub-space types. */
   char mode_prev;
-  /** Automatic keyframe snapping mode  . */
+  /** Automatic keyframe snapping mode. */
   char autosnap;
   /** (eTimeline_Cache_Flag). */
   char cache_display;
@@ -854,12 +856,12 @@ typedef enum eSAction_Flag {
   /* draw time in seconds instead of time in frames */
   SACTION_DRAWTIME = (1 << 2),
   /* don't filter action channels according to visibility */
-  // SACTION_NOHIDE = (1 << 3), /* XXX deprecated... old animation systems. */
+  // SACTION_NOHIDE = (1 << 3), /* Deprecated, old animation systems. */
   /* don't kill overlapping keyframes after transform */
   SACTION_NOTRANSKEYCULL = (1 << 4),
   /* don't include keyframes that are out of view */
-  // SACTION_HORIZOPTIMISEON = (1 << 5), // XXX deprecated... old irrelevant trick
-  /* show pose-markers (local to action) in Action Editor mode  */
+  // SACTION_HORIZOPTIMISEON = (1 << 5), /* Deprecated, old irrelevant trick. */
+  /* show pose-markers (local to action) in Action Editor mode. */
   SACTION_POSEMARKERS_SHOW = (1 << 6),
   /* don't draw action channels using group colors (where applicable) */
   /* SACTION_NODRAWGCOLORS = (1 << 7), DEPRECATED */

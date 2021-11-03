@@ -69,7 +69,6 @@ static const EnumPropertyItem space_items[] = {
 #  include "BKE_constraint.h"
 #  include "BKE_context.h"
 #  include "BKE_customdata.h"
-#  include "BKE_font.h"
 #  include "BKE_global.h"
 #  include "BKE_layer.h"
 #  include "BKE_main.h"
@@ -78,6 +77,7 @@ static const EnumPropertyItem space_items[] = {
 #  include "BKE_modifier.h"
 #  include "BKE_object.h"
 #  include "BKE_report.h"
+#  include "BKE_vfont.h"
 
 #  include "ED_object.h"
 #  include "ED_screen.h"
@@ -296,12 +296,15 @@ static bool rna_Object_visible_in_viewport_get(Object *ob, View3D *v3d)
 static void rna_Object_mat_convert_space(Object *ob,
                                          ReportList *reports,
                                          bPoseChannel *pchan,
-                                         float *mat,
-                                         float *mat_ret,
+                                         float mat[16],
+                                         float mat_ret[16],
                                          int from,
                                          int to)
 {
   copy_m4_m4((float(*)[4])mat_ret, (float(*)[4])mat);
+
+  BLI_assert(!ELEM(from, CONSTRAINT_SPACE_OWNLOCAL));
+  BLI_assert(!ELEM(to, CONSTRAINT_SPACE_OWNLOCAL));
 
   /* Error in case of invalid from/to values when pchan is NULL */
   if (pchan == NULL) {
@@ -362,7 +365,7 @@ static void rna_Object_calc_matrix_camera(Object *ob,
   BKE_camera_params_init(&params);
   BKE_camera_params_from_object(&params, ob_eval);
 
-  /* compute matrix, viewplane, .. */
+  /* Compute matrix, view-plane, etc. */
   BKE_camera_params_compute_viewplane(&params, width, height, scalex, scaley);
   BKE_camera_params_compute_matrix(&params);
 
@@ -508,7 +511,7 @@ static void rna_Mesh_assign_verts_to_group(
     create_dverts(&me->id);
   }
 
-  /* loop list adding verts to group  */
+  /* Loop list adding verts to group. */
   for (i = 0; i < totindex; i++) {
     if (i < 0 || i >= me->totvert) {
       BKE_report(reports, RPT_ERROR, "Bad vertex index in list");
@@ -575,8 +578,10 @@ static void rna_Object_ray_cast(Object *ob,
   /* Test BoundBox first (efficiency) */
   BoundBox *bb = BKE_object_boundbox_get(ob);
   float distmin;
-  normalize_v3(
-      direction); /* Needed for valid distance check from isect_ray_aabb_v3_simple() call. */
+
+  /* Needed for valid distance check from #isect_ray_aabb_v3_simple() call. */
+  normalize_v3(direction);
+
   if (!bb ||
       (isect_ray_aabb_v3_simple(origin, direction, bb->vec[0], bb->vec[6], &distmin, NULL) &&
        distmin <= distance)) {

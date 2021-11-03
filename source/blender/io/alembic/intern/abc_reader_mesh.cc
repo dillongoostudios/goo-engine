@@ -27,6 +27,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_customdata_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -36,6 +37,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_geom.h"
 
+#include "BKE_attribute.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
@@ -43,8 +45,10 @@
 #include "BKE_object.h"
 
 using Alembic::Abc::Int32ArraySamplePtr;
+using Alembic::Abc::IV3fArrayProperty;
 using Alembic::Abc::P3fArraySamplePtr;
 using Alembic::Abc::PropertyHeader;
+using Alembic::Abc::V3fArraySamplePtr;
 
 using Alembic::AbcGeom::IC3fGeomParam;
 using Alembic::AbcGeom::IC4fGeomParam;
@@ -121,6 +125,7 @@ struct AbcMeshData {
   P3fArraySamplePtr positions;
   P3fArraySamplePtr ceil_positions;
 
+  AbcUvScope uv_scope;
   V2fArraySamplePtr uvs;
   UInt32ArraySamplePtr uvs_indices;
 };
@@ -192,8 +197,9 @@ static void read_mpolys(CDStreamConfig &config, const AbcMeshData &mesh_data)
 
   const UInt32ArraySamplePtr &uvs_indices = mesh_data.uvs_indices;
 
-  const bool do_uvs = (mloopuvs && uvs && uvs_indices) &&
-                      (uvs_indices->size() == face_indices->size());
+  const bool do_uvs = (mloopuvs && uvs && uvs_indices);
+  const bool do_uvs_per_loop = do_uvs && mesh_data.uv_scope == ABC_UV_SCOPE_LOOP;
+  BLI_assert(!do_uvs || mesh_data.uv_scope != ABC_UV_SCOPE_NONE);
   unsigned int loop_index = 0;
   unsigned int rev_loop_index = 0;
   unsigned int uv_index = 0;
@@ -227,8 +233,7 @@ static void read_mpolys(CDStreamConfig &config, const AbcMeshData &mesh_data)
 
       if (do_uvs) {
         MLoopUV &loopuv = mloopuvs[rev_loop_index];
-
-        uv_index = (*uvs_indices)[loop_index];
+        uv_index = (*uvs_indices)[do_uvs_per_loop ? loop_index : loop.v];
 
         /* Some Alembic files are broken (or at least export UVs in a way we don't expect). */
         if (uv_index >= uvs_size) {
@@ -357,22 +362,29 @@ BLI_INLINE void read_uvs_params(CDStreamConfig &config,
   IV2fGeomParam::Sample uvsamp;
   uv.getIndexed(uvsamp, selector);
 
-  abc_data.uvs = uvsamp.getVals();
-  abc_data.uvs_indices = uvsamp.getIndices();
+  UInt32ArraySamplePtr uvs_indices = uvsamp.getIndices();
 
-  if (abc_data.uvs_indices->size() == config.totloop) {
-    std::string name = Alembic::Abc::GetSourceName(uv.getMetaData());
+  const AbcUvScope uv_scope = get_uv_scope(uv.getScope(), config, uvs_indices);
 
-    /* According to the convention, primary UVs should have had their name
-     * set using Alembic::Abc::SetSourceName, but you can't expect everyone
-     * to follow it! :) */
-    if (name.empty()) {
-      name = uv.getName();
-    }
-
-    void *cd_ptr = config.add_customdata_cb(config.mesh, name.c_str(), CD_MLOOPUV);
-    config.mloopuv = static_cast<MLoopUV *>(cd_ptr);
+  if (uv_scope == ABC_UV_SCOPE_NONE) {
+    return;
   }
+
+  abc_data.uv_scope = uv_scope;
+  abc_data.uvs = uvsamp.getVals();
+  abc_data.uvs_indices = uvs_indices;
+
+  std::string name = Alembic::Abc::GetSourceName(uv.getMetaData());
+
+  /* According to the convention, primary UVs should have had their name
+   * set using Alembic::Abc::SetSourceName, but you can't expect everyone
+   * to follow it! :) */
+  if (name.empty()) {
+    name = uv.getName();
+  }
+
+  void *cd_ptr = config.add_customdata_cb(config.mesh, name.c_str(), CD_MLOOPUV);
+  config.mloopuv = static_cast<MLoopUV *>(cd_ptr);
 }
 
 static void *add_customdata_cb(Mesh *mesh, const char *name, int data_type)
@@ -412,6 +424,59 @@ static void get_weight_and_index(CDStreamConfig &config,
   config.ceil_index = i1;
 }
 
+static V3fArraySamplePtr get_velocity_prop(const ICompoundProperty &schema,
+                                           const ISampleSelector &selector,
+                                           const std::string &name)
+{
+  for (size_t i = 0; i < schema.getNumProperties(); i++) {
+    const PropertyHeader &header = schema.getPropertyHeader(i);
+
+    if (header.isCompound()) {
+      const ICompoundProperty &prop = ICompoundProperty(schema, header.getName());
+
+      if (has_property(prop, name)) {
+        /* Header cannot be null here, as its presence is checked via has_property, so it is safe
+         * to dereference. */
+        const PropertyHeader *header = prop.getPropertyHeader(name);
+        if (!IV3fArrayProperty::matches(*header)) {
+          continue;
+        }
+
+        const IV3fArrayProperty &velocity_prop = IV3fArrayProperty(prop, name, 0);
+        if (velocity_prop) {
+          return velocity_prop.getValue(selector);
+        }
+      }
+    }
+    else if (header.isArray()) {
+      if (header.getName() == name && IV3fArrayProperty::matches(header)) {
+        const IV3fArrayProperty &velocity_prop = IV3fArrayProperty(schema, name, 0);
+        return velocity_prop.getValue(selector);
+      }
+    }
+  }
+
+  return V3fArraySamplePtr();
+}
+
+static void read_velocity(const V3fArraySamplePtr &velocities,
+                          const CDStreamConfig &config,
+                          const float velocity_scale)
+{
+  CustomDataLayer *velocity_layer = BKE_id_attribute_new(
+      &config.mesh->id, "velocity", CD_PROP_FLOAT3, ATTR_DOMAIN_POINT, nullptr);
+  float(*velocity)[3] = (float(*)[3])velocity_layer->data;
+
+  const int num_velocity_vectors = static_cast<int>(velocities->size());
+  BLI_assert(num_velocity_vectors == config.mesh->totvert);
+
+  for (int i = 0; i < num_velocity_vectors; i++) {
+    const Imath::V3f &vel_in = (*velocities)[i];
+    copy_zup_from_yup(velocity[i], vel_in.getValue());
+    mul_v3_fl(velocity[i], velocity_scale);
+  }
+}
+
 static void read_mesh_sample(const std::string &iobject_full_name,
                              ImportSettings *settings,
                              const IPolyMeshSchema &schema,
@@ -439,6 +504,7 @@ static void read_mesh_sample(const std::string &iobject_full_name,
 
   if ((settings->read_flag & MOD_MESHSEQ_READ_VERT) != 0) {
     read_mverts(config, abc_mesh_data);
+    read_generated_coordinates(schema.getArbGeomParams(), config, selector);
   }
 
   if ((settings->read_flag & MOD_MESHSEQ_READ_POLY) != 0) {
@@ -448,6 +514,13 @@ static void read_mesh_sample(const std::string &iobject_full_name,
 
   if ((settings->read_flag & (MOD_MESHSEQ_READ_UV | MOD_MESHSEQ_READ_COLOR)) != 0) {
     read_custom_data(iobject_full_name, schema.getArbGeomParams(), config, selector);
+  }
+
+  if (!settings->velocity_name.empty() && settings->velocity_scale != 0.0f) {
+    V3fArraySamplePtr velocities = get_velocity_prop(schema, selector, settings->velocity_name);
+    if (velocities) {
+      read_velocity(velocities, config, settings->velocity_scale);
+    }
   }
 }
 
@@ -461,6 +534,7 @@ CDStreamConfig get_config(Mesh *mesh, const bool use_vertex_interpolation)
   config.mvert = mesh->mvert;
   config.mloop = mesh->mloop;
   config.mpoly = mesh->mpoly;
+  config.totvert = mesh->totvert;
   config.totloop = mesh->totloop;
   config.totpoly = mesh->totpoly;
   config.loopdata = &mesh->ldata;
@@ -553,12 +627,12 @@ void AbcMeshReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
   m_object = BKE_object_add_only_object(bmain, OB_MESH, m_object_name.c_str());
   m_object->data = mesh;
 
-  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, MOD_MESHSEQ_READ_ALL, nullptr);
+  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, MOD_MESHSEQ_READ_ALL, "", 0.0f, nullptr);
   if (read_mesh != mesh) {
-    /* XXX fixme after 2.80; mesh->flag isn't copied by BKE_mesh_nomain_to_mesh() */
+    /* XXX FIXME: after 2.80; mesh->flag isn't copied by #BKE_mesh_nomain_to_mesh(). */
     /* read_mesh can be freed by BKE_mesh_nomain_to_mesh(), so get the flag before that happens. */
     short autosmooth = (read_mesh->flag & ME_AUTOSMOOTH);
-    BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_MESH, true);
+    BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_EVERYTHING, true);
     mesh->flag |= autosmooth;
   }
 
@@ -568,7 +642,7 @@ void AbcMeshReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
 
   readFaceSetsSample(bmain, mesh, sample_sel);
 
-  if (has_animations(m_schema, m_settings)) {
+  if (m_settings->always_add_cache_reader || has_animations(m_schema, m_settings)) {
     addCacheModifier();
   }
 }
@@ -620,7 +694,9 @@ bool AbcMeshReader::topology_changed(Mesh *existing_mesh, const ISampleSelector 
 
 Mesh *AbcMeshReader::read_mesh(Mesh *existing_mesh,
                                const ISampleSelector &sample_sel,
-                               int read_flag,
+                               const int read_flag,
+                               const char *velocity_name,
+                               const float velocity_scale,
                                const char **err_str)
 {
   IPolyMeshSchema::Sample sample;
@@ -663,6 +739,8 @@ Mesh *AbcMeshReader::read_mesh(Mesh *existing_mesh,
   /* Only read point data when streaming meshes, unless we need to create new ones. */
   ImportSettings settings;
   settings.read_flag |= read_flag;
+  settings.velocity_name = velocity_name;
+  settings.velocity_scale = velocity_scale;
 
   if (topology_changed(existing_mesh, sample_sel)) {
     new_mesh = BKE_mesh_new_nomain_from_template(
@@ -819,6 +897,13 @@ static void read_subd_sample(const std::string &iobject_full_name,
   if ((settings->read_flag & (MOD_MESHSEQ_READ_UV | MOD_MESHSEQ_READ_COLOR)) != 0) {
     read_custom_data(iobject_full_name, schema.getArbGeomParams(), config, selector);
   }
+
+  if (!settings->velocity_name.empty() && settings->velocity_scale != 0.0f) {
+    V3fArraySamplePtr velocities = get_velocity_prop(schema, selector, settings->velocity_name);
+    if (velocities) {
+      read_velocity(velocities, config, settings->velocity_scale);
+    }
+  }
 }
 
 /* ************************************************************************** */
@@ -866,9 +951,9 @@ void AbcSubDReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
   m_object = BKE_object_add_only_object(bmain, OB_MESH, m_object_name.c_str());
   m_object->data = mesh;
 
-  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, MOD_MESHSEQ_READ_ALL, nullptr);
+  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, MOD_MESHSEQ_READ_ALL, "", 0.0f, nullptr);
   if (read_mesh != mesh) {
-    BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_MESH, true);
+    BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_EVERYTHING, true);
   }
 
   ISubDSchema::Sample sample;
@@ -918,14 +1003,16 @@ void AbcSubDReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
     BKE_mesh_validate(mesh, false, false);
   }
 
-  if (has_animations(m_schema, m_settings)) {
+  if (m_settings->always_add_cache_reader || has_animations(m_schema, m_settings)) {
     addCacheModifier();
   }
 }
 
 Mesh *AbcSubDReader::read_mesh(Mesh *existing_mesh,
                                const ISampleSelector &sample_sel,
-                               int read_flag,
+                               const int read_flag,
+                               const char *velocity_name,
+                               const float velocity_scale,
                                const char **err_str)
 {
   ISubDSchema::Sample sample;
@@ -952,6 +1039,8 @@ Mesh *AbcSubDReader::read_mesh(Mesh *existing_mesh,
 
   ImportSettings settings;
   settings.read_flag |= read_flag;
+  settings.velocity_name = velocity_name;
+  settings.velocity_scale = velocity_scale;
 
   if (existing_mesh->totvert != positions->size()) {
     new_mesh = BKE_mesh_new_nomain_from_template(

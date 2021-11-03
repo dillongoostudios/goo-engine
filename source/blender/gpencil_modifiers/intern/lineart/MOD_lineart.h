@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include "BLI_linklist.h"
 #include "BLI_listbase.h"
 #include "BLI_math.h" /* Needed here for inline functions. */
 #include "BLI_threads.h"
@@ -51,8 +52,9 @@ typedef struct LineartTriangle {
   /* first culled in line list to use adjacent triangle info, then go through triangle list. */
   double gn[3];
 
-  /* Material flag is removed to save space. */
-  unsigned char transparency_mask;
+  unsigned char material_mask_bits;
+  unsigned char intersection_mask;
+  unsigned char mat_occlusion;
   unsigned char flags; /* #eLineartTriangleFlags */
 
   /**
@@ -93,21 +95,16 @@ typedef struct LineartElementLinkNode {
   float crease_threshold;
 } LineartElementLinkNode;
 
-typedef struct LineartLineSegment {
-  struct LineartLineSegment *next, *prev;
+typedef struct LineartEdgeSegment {
+  struct LineartEdgeSegment *next, *prev;
   /** at==0: left  at==1: right  (this is in 2D projected space) */
   double at;
   /** Occlusion level after "at" point */
   unsigned char occlusion;
 
-  /**
-   * For determining lines behind a glass window material.
-   * the size of this variable should also be dynamically decided, 1 byte to 8 byte,
-   * allows 8 to 64 materials for "transparent mask". 1 byte (8 materials) should be
-   * enough for most cases.
-   */
-  unsigned char transparency_mask;
-} LineartLineSegment;
+  /* Used to filter line art occlusion edges */
+  unsigned char material_mask_bits;
+} LineartEdgeSegment;
 
 typedef struct LineartVert {
   double gloc[3];
@@ -152,10 +149,11 @@ typedef struct LineartEdge {
 
   /** Also for line type determination on chaining. */
   unsigned char flags;
+  unsigned char intersection_mask;
 
   /**
    * Still need this entry because culled lines will not add to object
-   * #LineartElementLinkNode node (known as `reln` internally).
+   * #LineartElementLinkNode node (known as `eln` internally).
    *
    * TODO: If really need more savings, we can allocate this in a "extended" way too, but we need
    * another bit in flags to be able to show the difference.
@@ -163,8 +161,8 @@ typedef struct LineartEdge {
   struct Object *object_ref;
 } LineartEdge;
 
-typedef struct LineartLineChain {
-  struct LineartLineChain *next, *prev;
+typedef struct LineartEdgeChain {
+  struct LineartEdgeChain *next, *prev;
   ListBase chain;
 
   /** Calculated before draw command. */
@@ -176,34 +174,47 @@ typedef struct LineartLineChain {
 
   /** Chain now only contains one type of segments */
   int type;
-  unsigned char transparency_mask;
+  unsigned char material_mask_bits;
+  unsigned char intersection_mask;
 
   struct Object *object_ref;
-} LineartLineChain;
+} LineartEdgeChain;
 
-typedef struct LineartLineChainItem {
-  struct LineartLineChainItem *next, *prev;
-  /** Need z value for fading */
-  float pos[3];
-  /** For restoring position to 3d space */
+typedef struct LineartEdgeChainItem {
+  struct LineartEdgeChainItem *next, *prev;
+  /** Need z value for fading, w value for image frame clipping. */
+  float pos[4];
+  /** For restoring position to 3d space. */
   float gpos[3];
   float normal[3];
-  char line_type;
+  unsigned char line_type;
   char occlusion;
-  unsigned char transparency_mask;
+  unsigned char material_mask_bits;
+  unsigned char intersection_mask;
   size_t index;
-} LineartLineChainItem;
+} LineartEdgeChainItem;
 
 typedef struct LineartChainRegisterEntry {
   struct LineartChainRegisterEntry *next, *prev;
-  LineartLineChain *rlc;
-  LineartLineChainItem *rlci;
+  LineartEdgeChain *ec;
+  LineartEdgeChainItem *eci;
   char picked;
 
   /* left/right mark.
    * Because we revert list in chaining so we need the flag. */
   char is_left;
 } LineartChainRegisterEntry;
+
+enum eLineArtTileRecursiveLimit {
+  /* If tile gets this small, it's already much smaller than a pixel. No need to continue
+   * splitting. */
+  LRT_TILE_RECURSIVE_PERSPECTIVE = 16,
+  /* This is a tried-and-true safe value for high poly models that also needed ortho rendering. */
+  LRT_TILE_RECURSIVE_ORTHO = 10,
+};
+
+#define LRT_TILE_SPLITTING_TRIANGLE_LIMIT 100
+#define LRT_TILE_EDGE_COUNT_INITIAL 32
 
 typedef struct LineartRenderBuffer {
   struct LineartRenderBuffer *prev, *next;
@@ -215,9 +226,17 @@ typedef struct LineartRenderBuffer {
   int tile_count_x, tile_count_y;
   double width_per_tile, height_per_tile;
   double view_projection[4][4];
+  double view[4][4];
+
+  float overscan;
 
   struct LineartBoundingArea *initial_bounding_areas;
   unsigned int bounding_area_count;
+
+  /* When splitting bounding areas, if there's an ortho camera placed at a straight angle, there
+   * will be a lot of triangles aligned in line which can not be separated by continue subdividing
+   * the tile. So we set a strict limit when using ortho camera. See eLineArtTileRecursiveLimit. */
+  int tile_recursive_level;
 
   ListBase vertex_buffer_pointers;
   ListBase line_buffer_pointers;
@@ -232,36 +251,24 @@ typedef struct LineartRenderBuffer {
   ListBase wasted_cuts;
   SpinLock lock_cuts;
 
+  /* This is just a pointer to LineartCache::chain_data_pool, which acts as a cache for line
+   * chains. */
+  LineartStaticMemPool *chain_data_pool;
+
   /*  Render status */
   double view_vector[3];
 
   int triangle_size;
 
-  unsigned int contour_count;
-  unsigned int contour_processed;
-  LineartEdge *contour_managed;
-  /** A single linked list (cast to #LinkNode). */
-  LineartEdge *contours;
-
-  unsigned int intersection_count;
-  unsigned int intersection_processed;
-  LineartEdge *intersection_managed;
-  LineartEdge *intersection_lines;
-
-  unsigned int crease_count;
-  unsigned int crease_processed;
-  LineartEdge *crease_managed;
-  LineartEdge *crease_lines;
-
-  unsigned int material_line_count;
-  unsigned int material_processed;
-  LineartEdge *material_managed;
-  LineartEdge *material_lines;
-
-  unsigned int edge_mark_count;
-  unsigned int edge_mark_processed;
-  LineartEdge *edge_mark_managed;
-  LineartEdge *edge_marks;
+  /* Although using ListBase here, LineartEdge is single linked list.
+   * list.last is used to store worker progress along the list.
+   * See lineart_main_occlusion_begin() for more info. */
+  ListBase contour;
+  ListBase intersection;
+  ListBase crease;
+  ListBase material;
+  ListBase edge_mark;
+  ListBase floating;
 
   ListBase chains;
 
@@ -282,21 +289,37 @@ typedef struct LineartRenderBuffer {
   bool use_material;
   bool use_edge_marks;
   bool use_intersections;
+  bool use_loose;
   bool fuzzy_intersections;
   bool fuzzy_everything;
   bool allow_boundaries;
   bool allow_overlapping_edges;
+  bool allow_duplicated_types;
   bool remove_doubles;
+  bool use_loose_as_contour;
+  bool use_loose_edge_chain;
+  bool use_geometry_space_chain;
+  bool use_image_boundary_trimming;
+
+  bool filter_face_mark;
+  bool filter_face_mark_invert;
+  bool filter_face_mark_boundaries;
+
+  bool force_crease;
+  bool sharp_as_crease;
 
   /* Keep an copy of these data so when line art is running it's self-contained. */
   bool cam_is_persp;
   float cam_obmat[4][4];
   double camera_pos[3];
+  double active_camera_pos[3]; /* Stroke offset calculation may use active or selected camera. */
   double near_clip, far_clip;
   float shift_x, shift_y;
   float crease_threshold;
   float chaining_image_threshold;
   float angle_splitting_threshold;
+
+  float chain_smooth_tolerance;
 
   /* FIXME(Yiming): Temporary solution for speeding up calculation by not including lines that
    * are not in the selected source. This will not be needed after we have a proper scene-wise
@@ -308,10 +331,22 @@ typedef struct LineartRenderBuffer {
 
 } LineartRenderBuffer;
 
+typedef struct LineartCache {
+  /** Separate memory pool for chain data, this goes to the cache, so when we free the main pool,
+   * chains will still be available. */
+  LineartStaticMemPool chain_data_pool;
+
+  /** A copy of rb->chains so we have that data available after rb has been destroyed. */
+  ListBase chains;
+
+  /** Cache only contains edge types specified in this variable. */
+  char rb_edge_types;
+} LineartCache;
+
 #define DBL_TRIANGLE_LIM 1e-8
 #define DBL_EDGE_LIM 1e-9
 
-#define LRT_MEMORY_POOL_64MB (1 << 26)
+#define LRT_MEMORY_POOL_1MB (1 << 20)
 
 typedef enum eLineartTriangleFlags {
   LRT_CULL_DONT_CARE = 0,
@@ -322,9 +357,11 @@ typedef enum eLineartTriangleFlags {
   LRT_TRIANGLE_NO_INTERSECTION = (1 << 4),
 } eLineartTriangleFlags;
 
-/** Controls how many edges a worker thread is processing at one request.
+/**
+ * Controls how many edges a worker thread is processing at one request.
  * There's no significant performance impact on choosing different values.
- * Don't make it too small so that the worker thread won't request too many times. */
+ * Don't make it too small so that the worker thread won't request too many times.
+ */
 #define LRT_THREAD_EDGE_COUNT 1000
 
 typedef struct LineartRenderTaskInfo {
@@ -332,22 +369,50 @@ typedef struct LineartRenderTaskInfo {
 
   int thread_id;
 
-  LineartEdge *contour;
-  LineartEdge *contour_end;
-
-  LineartEdge *intersection;
-  LineartEdge *intersection_end;
-
-  LineartEdge *crease;
-  LineartEdge *crease_end;
-
-  LineartEdge *material;
-  LineartEdge *material_end;
-
-  LineartEdge *edge_mark;
-  LineartEdge *edge_mark_end;
+  /* These lists only denote the part of the main edge list that the thread should iterate over.
+   * Be careful to not iterate outside of these bounds as it is not thread safe to do so. */
+  ListBase contour;
+  ListBase intersection;
+  ListBase crease;
+  ListBase material;
+  ListBase edge_mark;
+  ListBase floating;
 
 } LineartRenderTaskInfo;
+
+typedef struct LineartObjectInfo {
+  struct LineartObjectInfo *next;
+  struct Object *original_ob;
+  struct Mesh *original_me;
+  double model_view_proj[4][4];
+  double model_view[4][4];
+  double normal[4][4];
+  LineartElementLinkNode *v_eln;
+  int usage;
+  uint8_t override_intersection_mask;
+  int global_i_offset;
+
+  bool free_use_mesh;
+
+  /* Threads will add lines inside here, when all threads are done, we combine those into the
+   * ones in LineartRenderBuffer. */
+  ListBase contour;
+  ListBase intersection;
+  ListBase crease;
+  ListBase material;
+  ListBase edge_mark;
+  ListBase floating;
+
+} LineartObjectInfo;
+
+typedef struct LineartObjectLoadTaskInfo {
+  struct LineartRenderBuffer *rb;
+  struct Depsgraph *dg;
+  /* LinkNode styled list */
+  LineartObjectInfo *pending;
+  /* Used to spread the load across several threads. This can not overflow. */
+  long unsigned int total_faces;
+} LineartObjectLoadTaskInfo;
 
 /**
  * Bounding area diagram:
@@ -385,10 +450,14 @@ typedef struct LineartBoundingArea {
   ListBase up;
   ListBase bp;
 
-  short triangle_count;
+  int16_t triangle_count;
+  int16_t max_triangle_count;
+  int16_t line_count;
+  int16_t max_line_count;
 
-  ListBase linked_triangles;
-  ListBase linked_lines;
+  /* Use array for speeding up multiple accesses. */
+  struct LineartTriangle **linked_triangles;
+  struct LineartEdge **linked_lines;
 
   /** Reserved for image space reduction && multi-thread chaining. */
   ListBase linked_chains;
@@ -413,7 +482,8 @@ typedef struct LineartBoundingArea {
 BLI_INLINE int lineart_LineIntersectTest2d(
     const double *a1, const double *a2, const double *b1, const double *b2, double *aRatio)
 {
-#define USE_VECTOR_LINE_INTERSECTION
+/* Legacy intersection math aligns better with occlusion function quirks. */
+/* #define USE_VECTOR_LINE_INTERSECTION */
 #ifdef USE_VECTOR_LINE_INTERSECTION
 
   /* from isect_line_line_v2_point() */
@@ -489,7 +559,7 @@ BLI_INLINE int lineart_LineIntersectTest2d(
       k1 = (a2[1] - a1[1]) / x_diff;
       k2 = (b2[1] - b1[1]) / x_diff2;
 
-      if ((k1 == k2))
+      if (k1 == k2)
         return 0;
 
       x = (a1[1] - b1[1] - k1 * a1[0] + k2 * b1[0]) / (k2 - k1);
@@ -515,9 +585,9 @@ BLI_INLINE int lineart_LineIntersectTest2d(
 }
 
 struct Depsgraph;
-struct Scene;
-struct LineartRenderBuffer;
 struct LineartGpencilModifierData;
+struct LineartRenderBuffer;
+struct Scene;
 
 void MOD_lineart_destroy_render_data(struct LineartGpencilModifierData *lmd);
 
@@ -525,13 +595,20 @@ void MOD_lineart_chain_feature_lines(LineartRenderBuffer *rb);
 void MOD_lineart_chain_split_for_fixed_occlusion(LineartRenderBuffer *rb);
 void MOD_lineart_chain_connect(LineartRenderBuffer *rb);
 void MOD_lineart_chain_discard_short(LineartRenderBuffer *rb, const float threshold);
+void MOD_lineart_chain_clip_at_border(LineartRenderBuffer *rb);
 void MOD_lineart_chain_split_angle(LineartRenderBuffer *rb, float angle_threshold_rad);
+void MOD_lineart_smooth_chains(LineartRenderBuffer *rb, float tolerance);
+void MOD_lineart_chain_offset_towards_camera(LineartRenderBuffer *rb,
+                                             float dist,
+                                             bool use_custom_camera);
 
-int MOD_lineart_chain_count(const LineartLineChain *rlc);
-void MOD_lineart_chain_clear_picked_flag(struct LineartRenderBuffer *rb);
+int MOD_lineart_chain_count(const LineartEdgeChain *ec);
+void MOD_lineart_chain_clear_picked_flag(LineartCache *lc);
 
 bool MOD_lineart_compute_feature_lines(struct Depsgraph *depsgraph,
-                                       struct LineartGpencilModifierData *lmd);
+                                       struct LineartGpencilModifierData *lmd,
+                                       struct LineartCache **cached_result,
+                                       bool enable_stroke_offset);
 
 struct Scene;
 
@@ -541,10 +618,10 @@ LineartBoundingArea *MOD_lineart_get_parent_bounding_area(LineartRenderBuffer *r
 
 LineartBoundingArea *MOD_lineart_get_bounding_area(LineartRenderBuffer *rb, double x, double y);
 
-struct bGPDlayer;
 struct bGPDframe;
+struct bGPDlayer;
 
-void MOD_lineart_gpencil_generate(LineartRenderBuffer *rb,
+void MOD_lineart_gpencil_generate(LineartCache *cache,
                                   struct Depsgraph *depsgraph,
                                   struct Object *ob,
                                   struct bGPDlayer *gpl,
@@ -555,14 +632,15 @@ void MOD_lineart_gpencil_generate(LineartRenderBuffer *rb,
                                   int level_end,
                                   int mat_nr,
                                   short edge_types,
-                                  unsigned char transparency_flags,
-                                  unsigned char transparency_mask,
+                                  unsigned char mask_switches,
+                                  unsigned char material_mask_bits,
+                                  unsigned char intersection_mask,
                                   short thickness,
                                   float opacity,
                                   const char *source_vgname,
                                   const char *vgname,
                                   int modifier_flags);
 
-float MOD_lineart_chain_compute_length(LineartLineChain *rlc);
+float MOD_lineart_chain_compute_length(LineartEdgeChain *ec);
 
 void ED_operatortypes_lineart(void);

@@ -112,9 +112,11 @@ BLI_INLINE int hair_grid_interp_weights(
   uvw[1] = (vec[1] - gmin[1]) * scale - (float)j;
   uvw[2] = (vec[2] - gmin[2]) * scale - (float)k;
 
-  //  BLI_assert(0.0f <= uvw[0] && uvw[0] <= 1.0001f);
-  //  BLI_assert(0.0f <= uvw[1] && uvw[1] <= 1.0001f);
-  //  BLI_assert(0.0f <= uvw[2] && uvw[2] <= 1.0001f);
+#if 0
+  BLI_assert(0.0f <= uvw[0] && uvw[0] <= 1.0001f);
+  BLI_assert(0.0f <= uvw[1] && uvw[1] <= 1.0001f);
+  BLI_assert(0.0f <= uvw[2] && uvw[2] <= 1.0001f);
+#endif
 
   return offset;
 }
@@ -200,7 +202,7 @@ BLI_INLINE void hair_grid_interpolate(const HairGridVert *grid,
   }
 
   if (velocity_gradient) {
-    /* XXX TODO */
+    /* XXX TODO: */
     zero_m3(velocity_gradient);
   }
 }
@@ -350,7 +352,7 @@ BLI_INLINE int hair_grid_weights(
   weights[6] = dist_tent_v3f3(uvw, (float)i, (float)(j + 1), (float)(k + 1));
   weights[7] = dist_tent_v3f3(uvw, (float)(i + 1), (float)(j + 1), (float)(k + 1));
 
-  //  BLI_assert(fabsf(weights_sum(weights) - 1.0f) < 0.0001f);
+  // BLI_assert(fabsf(weights_sum(weights) - 1.0f) < 0.0001f);
 
   return offset;
 }
@@ -488,9 +490,10 @@ BLI_INLINE void hair_volume_add_segment_2D(HairGrid *grid,
           BKE_sim_debug_data_add_dot(x2w, 0.1, 0.1, 0.7, "grid", 649, debug_i, j, k);
           BKE_sim_debug_data_add_line(wloc, x2w, 0.3, 0.8, 0.3, "grid", 253, debug_i, j, k);
           BKE_sim_debug_data_add_line(wloc, x3w, 0.8, 0.3, 0.3, "grid", 254, debug_i, j, k);
-          // BKE_sim_debug_data_add_circle(
-          //     x2w, len_v3v3(wloc, x2w), 0.2, 0.7, 0.2,
-          //     "grid", 255, i, j, k);
+#    if 0
+          BKE_sim_debug_data_add_circle(
+              x2w, len_v3v3(wloc, x2w), 0.2, 0.7, 0.2, "grid", 255, i, j, k);
+#    endif
         }
       }
 #  endif
@@ -530,7 +533,7 @@ void SIM_hair_volume_add_segment(HairGrid *grid,
   const int stride2 = strides[axis2];
 
   /* increment of secondary directions per step in the primary direction
-   * note: we always go in the positive direction along axis0, so the sign can be inverted
+   * NOTE: we always go in the positive direction along axis0, so the sign can be inverted
    */
   const float inc1 = dir2[axis1] / dir2[axis0];
   const float inc2 = dir2[axis2] / dir2[axis0];
@@ -722,7 +725,7 @@ bool SIM_hair_volume_solve_divergence(HairGrid *grid,
   const float flowfac = grid->cellsize;
   const float inv_flowfac = 1.0f / grid->cellsize;
 
-  /*const int num_cells = hair_grid_size(grid->res);*/
+  // const int num_cells = hair_grid_size(grid->res);
   const int res[3] = {grid->res[0], grid->res[1], grid->res[2]};
   const int resA[3] = {grid->res[0] + 2, grid->res[1] + 2, grid->res[2] + 2};
 
@@ -800,7 +803,7 @@ bool SIM_hair_volume_solve_divergence(HairGrid *grid,
             vert->density, target_density, target_strength);
 
         /* B vector contains the finite difference approximation of the velocity divergence.
-         * Note: according to the discretized Navier-Stokes equation the rhs vector
+         * NOTE: according to the discretized Navier-Stokes equation the rhs vector
          * and resulting pressure gradient should be multiplied by the (inverse) density;
          * however, this is already included in the weighting of hair velocities on the grid!
          */
@@ -891,7 +894,7 @@ bool SIM_hair_volume_solve_divergence(HairGrid *grid,
             neighbor_hi_index[neighbors_hi++] = u + strideA2;
           }
 
-          /*int liquid_neighbors = neighbors_lo + neighbors_hi;*/
+          // int liquid_neighbors = neighbors_lo + neighbors_hi;
           non_solid_neighbors = 6;
 
           for (n = 0; n < neighbors_lo; n++) {
@@ -1003,9 +1006,10 @@ bool SIM_hair_volume_solve_divergence(HairGrid *grid,
             if (!is_margin) {
               float dvel[3];
               sub_v3_v3v3(dvel, vert->velocity_smooth, vert->velocity);
-              // BKE_sim_debug_data_add_vector(
-              //     grid->debug_data, wloc, dvel, 1, 1, 1,
-              //     "grid", 5566, i, j, k);
+#  if 0
+              BKE_sim_debug_data_add_vector(
+                  grid->debug_data, wloc, dvel, 1, 1, 1, "grid", 5566, i, j, k);
+#  endif
             }
 
             if (!is_margin) {
@@ -1015,11 +1019,12 @@ bool SIM_hair_volume_solve_divergence(HairGrid *grid,
               float col[3];
 
               interp_v3_v3v3(col, col0, colp, d);
-              // if (d > 0.05f) {
-              // BKE_sim_debug_data_add_dot(
-              //     grid->debug_data, wloc, col[0], col[1], col[2],
-              //     "grid", 5544, i, j, k);
-              // }
+#  if 0
+              if (d > 0.05f) {
+                BKE_sim_debug_data_add_dot(
+                    grid->debug_data, wloc, col[0], col[1], col[2], "grid", 5544, i, j, k);
+              }
+#  endif
             }
           }
         }

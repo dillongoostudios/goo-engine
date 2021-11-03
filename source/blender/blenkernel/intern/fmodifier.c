@@ -580,7 +580,7 @@ int BKE_fcm_envelope_find_index(FCM_EnvelopeData array[],
   if (loopbreaker == (maxloop - 1)) {
     CLOG_ERROR(&LOG, "binary search was taking too long");
 
-    // include debug info
+    /* Include debug info. */
     CLOG_ERROR(&LOG,
                "\tround = %d: start = %d, end = %d, arraylen = %d",
                loopbreaker,
@@ -604,7 +604,7 @@ int BKE_fcm_envelope_find_index(FCM_EnvelopeData array[],
  * NOTE: this needs to be at the start of the stack to be of use,
  * as it needs to know the extents of the keyframes/sample-data.
  *
- * Possible TODO - store length of cycle information that can be initialized from the extents of
+ * Possible TODO: store length of cycle information that can be initialized from the extents of
  * the keyframes/sample-data, and adjusted as appropriate.
  */
 
@@ -688,7 +688,7 @@ static float fcm_cycles_time(
       ofs = lastkey[0];
     }
   }
-  if ((ELEM(0, side, mode))) {
+  if (ELEM(0, side, mode)) {
     return evaltime;
   }
 
@@ -875,7 +875,7 @@ static void fcm_python_new_data(void *mdata)
 {
   FMod_Python *data = (FMod_Python *)mdata;
 
-  /* everything should be set correctly by calloc, except for the prop->type constant.*/
+  /* Everything should be set correctly by calloc, except for the prop->type constant. */
   data->prop = MEM_callocN(sizeof(IDProperty), "PyFModifierProps");
   data->prop->type = IDP_GROUP;
 }
@@ -1419,17 +1419,19 @@ static float eval_fmodifier_influence(FModifier *fcm, float evaltime)
 
   /* restricted range or full range? */
   if (fcm->flag & FMODIFIER_FLAG_RANGERESTRICT) {
-    if ((evaltime <= fcm->sfra) || (evaltime >= fcm->efra)) {
+    if ((evaltime < fcm->sfra) || (evaltime > fcm->efra)) {
       /* out of range */
       return 0.0f;
     }
-    if ((evaltime > fcm->sfra) && (evaltime < fcm->sfra + fcm->blendin)) {
+    if ((fcm->blendin != 0.0f) && (evaltime >= fcm->sfra) &&
+        (evaltime <= fcm->sfra + fcm->blendin)) {
       /* blend in range */
       float a = fcm->sfra;
       float b = fcm->sfra + fcm->blendin;
       return influence * (evaltime - a) / (b - a);
     }
-    if ((evaltime < fcm->efra) && (evaltime > fcm->efra - fcm->blendout)) {
+    if ((fcm->blendout != 0.0f) && (evaltime <= fcm->efra) &&
+        (evaltime >= fcm->efra - fcm->blendout)) {
       /* blend out range */
       float a = fcm->efra;
       float b = fcm->efra - fcm->blendout;

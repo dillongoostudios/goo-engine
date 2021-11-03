@@ -20,7 +20,9 @@
 
 #pragma once
 
+#include "DNA_defs.h"
 #include "DNA_listBase.h"
+#include "DNA_uuid_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -36,6 +38,15 @@ typedef struct AssetTag {
   char name[64]; /* MAX_NAME */
 } AssetTag;
 
+#
+#
+typedef struct AssetFilterSettings {
+  /** Tags to match against. These are newly allocated, and compared against the
+   * #AssetMetaData.tags. */
+  ListBase tags;     /* AssetTag */
+  uint64_t id_types; /* rna_enum_id_type_filter_items */
+} AssetFilterSettings;
+
 /**
  * \brief The meta-data of an asset.
  * By creating and giving this for a data-block (#ID.asset_data), the data-block becomes an asset.
@@ -45,11 +56,31 @@ typedef struct AssetTag {
  *       more than that from the file. So pointers to other IDs or ID data are strictly forbidden.
  */
 typedef struct AssetMetaData {
+  /** Runtime type, to reference event callbacks. Only valid for local assets. */
+  struct AssetTypeInfo *local_type_info;
+
   /** Custom asset meta-data. Cannot store pointers to IDs (#STRUCT_NO_DATABLOCK_IDPROPERTIES)! */
   struct IDProperty *properties;
 
+  /**
+   * Asset Catalog identifier. Should not contain spaces.
+   * Mapped to a path in the asset catalog hierarchy by an #AssetCatalogService.
+   * Use #BKE_asset_metadata_catalog_id_set() to ensure a valid ID is set.
+   */
+  struct bUUID catalog_id;
+  /**
+   * Short name of the asset's catalog. This is for debugging purposes only, to allow (partial)
+   * reconstruction of asset catalogs in the unfortunate case that the mapping from catalog UUID to
+   * catalog path is lost. The catalog's simple name is copied to #catalog_simple_name whenever
+   * #catalog_id is updated. */
+  char catalog_simple_name[64]; /* MAX_NAME */
+
+  /** Optional name of the author for display in the UI. Dynamic length. */
+  char *author;
+
   /** Optional description of this asset for display in the UI. Dynamic length. */
   char *description;
+
   /** User defined tags for this asset. The asset manager uses these for filtering, but how they
    * function exactly (e.g. how they are registered to provide a list of searchable available tags)
    * is up to the asset-engine. */
@@ -61,6 +92,51 @@ typedef struct AssetMetaData {
 
   char _pad[4];
 } AssetMetaData;
+
+typedef enum eAssetLibraryType {
+  /* For the future. Display assets bundled with Blender by default. */
+  // ASSET_LIBRARY_BUNDLED = 0,
+  /** Display assets from the current session (current "Main"). */
+  ASSET_LIBRARY_LOCAL = 1,
+  /* For the future. Display assets for the current project. */
+  // ASSET_LIBRARY_PROJECT = 2,
+
+  /** Display assets from custom asset libraries, as defined in the preferences
+   * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library_ref.idname
+   * then.
+   * In RNA, we add the index of the custom library to this to identify it by index. So keep
+   * this last! */
+  ASSET_LIBRARY_CUSTOM = 100,
+} eAssetLibraryType;
+
+/**
+ * Information to identify a asset library. May be either one of the predefined types (current
+ * 'Main', builtin library, project library), or a custom type as defined in the Preferences.
+ *
+ * If the type is set to #ASSET_LIBRARY_CUSTOM, `custom_library_index` must be set to identify the
+ * custom library. Otherwise it is not used.
+ */
+typedef struct AssetLibraryReference {
+  short type; /* eAssetLibraryType */
+  char _pad1[2];
+  /**
+   * If showing a custom asset library (#ASSET_LIBRARY_CUSTOM), this is the index of the
+   * #bUserAssetLibrary within #UserDef.asset_libraries.
+   * Should be ignored otherwise (but better set to -1 then, for sanity and debugging).
+   */
+  int custom_library_index;
+} AssetLibraryReference;
+
+/**
+ * Not part of the core design, we should try to get rid of it. Only needed to wrap FileDirEntry
+ * into a type with PropertyGroup as base, so we can have an RNA collection of #AssetHandle's to
+ * pass to the UI.
+ */
+#
+#
+typedef struct AssetHandle {
+  const struct FileDirEntry *file_data;
+} AssetHandle;
 
 #ifdef __cplusplus
 }

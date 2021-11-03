@@ -119,16 +119,10 @@ static char *rna_ViewLayer_path(PointerRNA *ptr)
   return BLI_sprintfN("view_layers[\"%s\"]", name_esc);
 }
 
-static IDProperty *rna_ViewLayer_idprops(PointerRNA *ptr, bool create)
+static IDProperty **rna_ViewLayer_idprops(PointerRNA *ptr)
 {
   ViewLayer *view_layer = (ViewLayer *)ptr->data;
-
-  if (create && !view_layer->id_properties) {
-    IDPropertyTemplate val = {0};
-    view_layer->id_properties = IDP_New(IDP_GROUP, &val, "ViewLayer ID properties");
-  }
-
-  return view_layer->id_properties;
+  return &view_layer->id_properties;
 }
 
 static bool rna_LayerCollection_visible_get(LayerCollection *layer_collection, bContext *C)
@@ -140,7 +134,7 @@ static bool rna_LayerCollection_visible_get(LayerCollection *layer_collection, b
   }
 
   if (v3d->local_collections_uuid & layer_collection->local_collections_bits) {
-    return (layer_collection->runtime_flag & LAYER_COLLECTION_RESTRICT_VIEWPORT) == 0;
+    return (layer_collection->runtime_flag & LAYER_COLLECTION_HIDE_VIEWPORT) == 0;
   }
 
   return false;
@@ -604,7 +598,7 @@ void RNA_def_view_layer(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Dependency Graph", "Dependencies in the scene data");
   RNA_def_property_pointer_funcs(prop, "rna_ViewLayer_depsgraph_get", NULL, NULL, NULL);
 
-  /* Nested Data  */
+  /* Nested Data. */
   /* *** Non-Animated *** */
   RNA_define_animate_sdna(false);
   rna_def_layer_collection(brna);

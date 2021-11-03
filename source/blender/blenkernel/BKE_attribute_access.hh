@@ -20,16 +20,139 @@
 
 #include "FN_cpp_type.hh"
 #include "FN_generic_span.hh"
+#include "FN_generic_virtual_array.hh"
 
+#include "BKE_anonymous_attribute.hh"
 #include "BKE_attribute.h"
 
 #include "BLI_color.hh"
 #include "BLI_float2.hh"
 #include "BLI_float3.hh"
+#include "BLI_function_ref.hh"
+
+namespace blender::bke {
+
+/**
+ * Identifies an attribute that is either named or anonymous.
+ * It does not own the identifier, so it is just a reference.
+ */
+class AttributeIDRef {
+ private:
+  StringRef name_;
+  const AnonymousAttributeID *anonymous_id_ = nullptr;
+
+ public:
+  AttributeIDRef();
+  AttributeIDRef(StringRef name);
+  AttributeIDRef(StringRefNull name);
+  AttributeIDRef(const char *name);
+  AttributeIDRef(const std::string &name);
+  AttributeIDRef(const AnonymousAttributeID *anonymous_id);
+
+  operator bool() const;
+  uint64_t hash() const;
+  bool is_named() const;
+  bool is_anonymous() const;
+  StringRef name() const;
+  const AnonymousAttributeID &anonymous_id() const;
+  bool should_be_kept() const;
+
+  friend bool operator==(const AttributeIDRef &a, const AttributeIDRef &b);
+  friend std::ostream &operator<<(std::ostream &stream, const AttributeIDRef &attribute_id);
+};
+
+}  // namespace blender::bke
+
+/**
+ * Contains information about an attribute in a geometry component.
+ * More information can be added in the future. E.g. whether the attribute is builtin and how it is
+ * stored (uv map, vertex group, ...).
+ */
+struct AttributeMetaData {
+  AttributeDomain domain;
+  CustomDataType data_type;
+
+  constexpr friend bool operator==(AttributeMetaData a, AttributeMetaData b)
+  {
+    return (a.domain == b.domain) && (a.data_type == b.data_type);
+  }
+};
+
+struct AttributeKind {
+  AttributeDomain domain;
+  CustomDataType data_type;
+};
+
+/**
+ * Base class for the attribute initializer types described below.
+ */
+struct AttributeInit {
+  enum class Type {
+    Default,
+    VArray,
+    MoveArray,
+  };
+  Type type;
+  AttributeInit(const Type type) : type(type)
+  {
+  }
+};
+
+/**
+ * Create an attribute using the default value for the data type.
+ * The default values may depend on the attribute provider implementation.
+ */
+struct AttributeInitDefault : public AttributeInit {
+  AttributeInitDefault() : AttributeInit(Type::Default)
+  {
+  }
+};
+
+/**
+ * Create an attribute by copying data from an existing virtual array. The virtual array
+ * must have the same type as the newly created attribute.
+ *
+ * Note that this can be used to fill the new attribute with the default
+ */
+struct AttributeInitVArray : public AttributeInit {
+  const blender::fn::GVArray *varray;
+
+  AttributeInitVArray(const blender::fn::GVArray *varray)
+      : AttributeInit(Type::VArray), varray(varray)
+  {
+  }
+};
+
+/**
+ * Create an attribute with a by passing ownership of a pre-allocated contiguous array of data.
+ * Sometimes data is created before a geometry component is available. In that case, it's
+ * preferable to move data directly to the created attribute to avoid a new allocation and a copy.
+ *
+ * Note that this will only have a benefit for attributes that are stored directly as contiguous
+ * arrays, so not for some built-in attributes.
+ *
+ * The array must be allocated with MEM_*, since `attribute_try_create` will free the array if it
+ * can't be used directly, and that is generally how Blender expects custom data to be allocated.
+ */
+struct AttributeInitMove : public AttributeInit {
+  void *data = nullptr;
+
+  AttributeInitMove(void *data) : AttributeInit(Type::MoveArray), data(data)
+  {
+  }
+};
+
+/* Returns false when the iteration should be stopped. */
+using AttributeForeachCallback = blender::FunctionRef<bool(
+    const blender::bke::AttributeIDRef &attribute_id, const AttributeMetaData &meta_data)>;
 
 namespace blender::bke {
 
 using fn::CPPType;
+using fn::GVArray;
+using fn::GVArrayPtr;
+using fn::GVMutableArray;
+using fn::GVMutableArrayPtr;
 
 const CPPType *custom_data_type_to_cpp_type(const CustomDataType type);
 CustomDataType cpp_type_to_custom_data_type(const CPPType &type);
@@ -37,282 +160,378 @@ CustomDataType attribute_data_type_highest_complexity(Span<CustomDataType> data_
 AttributeDomain attribute_domain_highest_priority(Span<AttributeDomain> domains);
 
 /**
- * This class offers an indirection for reading an attribute.
- * This is useful for the following reasons:
- * - Blender does not store all attributes the same way.
- *   The simplest case are custom data layers with primitive types.
- *   A bit more complex are mesh attributes like the position of vertices,
- *   which are embedded into the MVert struct.
- *   Even more complex to access are vertex weights.
- * - Sometimes attributes are stored on one domain, but we want to access
- *   the attribute on a different domain. Therefore, we have to interpolate
- *   between the domains.
+ * Used when looking up a "plain attribute" based on a name for reading from it.
  */
-class ReadAttribute {
- protected:
-  const AttributeDomain domain_;
-  const CPPType &cpp_type_;
-  const CustomDataType custom_data_type_;
-  const int64_t size_;
+struct ReadAttributeLookup {
+  /* The virtual array that is used to read from this attribute. */
+  GVArrayPtr varray;
+  /* Domain the attribute lives on in the geometry. */
+  AttributeDomain domain;
 
-  /* Protects the span below, so that no two threads initialize it at the same time. */
-  mutable std::mutex span_mutex_;
-  /* When it is not null, it points to the attribute array or a temporary array that contains all
-   * the attribute values. */
-  mutable void *array_buffer_ = nullptr;
-  /* Is true when the buffer above is owned by the attribute accessor. */
-  mutable bool array_is_temporary_ = false;
-
- public:
-  ReadAttribute(AttributeDomain domain, const CPPType &cpp_type, const int64_t size)
-      : domain_(domain),
-        cpp_type_(cpp_type),
-        custom_data_type_(cpp_type_to_custom_data_type(cpp_type)),
-        size_(size)
+  /* Convenience function to check if the attribute has been found. */
+  operator bool() const
   {
+    return this->varray.get() != nullptr;
   }
-
-  virtual ~ReadAttribute();
-
-  AttributeDomain domain() const
-  {
-    return domain_;
-  }
-
-  const CPPType &cpp_type() const
-  {
-    return cpp_type_;
-  }
-
-  CustomDataType custom_data_type() const
-  {
-    return custom_data_type_;
-  }
-
-  int64_t size() const
-  {
-    return size_;
-  }
-
-  void get(const int64_t index, void *r_value) const
-  {
-    BLI_assert(index < size_);
-    this->get_internal(index, r_value);
-  }
-
-  /* Get a span that contains all attribute values. */
-  fn::GSpan get_span() const;
-
-  template<typename T> Span<T> get_span() const
-  {
-    return this->get_span().typed<T>();
-  }
-
- protected:
-  /* r_value is expected to be uninitialized. */
-  virtual void get_internal(const int64_t index, void *r_value) const = 0;
-
-  virtual void initialize_span() const;
 };
 
 /**
- * This exists for similar reasons as the ReadAttribute class, except that
- * it does not deal with interpolation between domains.
+ * Used when looking up a "plain attribute" based on a name for reading from it and writing to it.
  */
-class WriteAttribute {
- protected:
-  const AttributeDomain domain_;
-  const CPPType &cpp_type_;
-  const CustomDataType custom_data_type_;
-  const int64_t size_;
+struct WriteAttributeLookup {
+  /* The virtual array that is used to read from and write to the attribute. */
+  GVMutableArrayPtr varray;
+  /* Domain the attributes lives on in the geometry. */
+  AttributeDomain domain;
+  /* Call this after changing the attribute to invalidate caches that depend on this attribute. */
+  std::function<void()> tag_modified_fn;
 
-  /* When not null, this points either to the attribute array or to a temporary array. */
-  void *array_buffer_ = nullptr;
-  /* True, when the buffer points to a temporary array. */
-  bool array_is_temporary_ = false;
-  /* This helps to protect against forgetting to apply changes done to the array. */
-  bool array_should_be_applied_ = false;
+  /* Convenience function to check if the attribute has been found. */
+  operator bool() const
+  {
+    return this->varray.get() != nullptr;
+  }
+};
+
+/**
+ * An output attribute allows writing to an attribute (and optionally reading as well). It adds
+ * some convenience features on top of `GVMutableArray` that are very commonly used.
+ *
+ * Supported convenience features:
+ * - Implicit type conversion when writing to builtin attributes.
+ * - Supports simple access to a span containing the attribute values (that avoids the use of
+ *   VMutableArray_Span in many cases).
+ * - An output attribute can live side by side with an existing attribute with a different domain
+ *   or data type. The old attribute will only be overwritten when the #save function is called.
+ */
+class OutputAttribute {
+ public:
+  using SaveFn = std::function<void(OutputAttribute &)>;
+
+ private:
+  GVMutableArrayPtr varray_;
+  AttributeDomain domain_ = ATTR_DOMAIN_AUTO;
+  SaveFn save_;
+  std::unique_ptr<fn::GVMutableArray_GSpan> optional_span_varray_;
+  bool ignore_old_values_ = false;
+  bool save_has_been_called_ = false;
 
  public:
-  WriteAttribute(AttributeDomain domain, const CPPType &cpp_type, const int64_t size)
-      : domain_(domain),
-        cpp_type_(cpp_type),
-        custom_data_type_(cpp_type_to_custom_data_type(cpp_type)),
-        size_(size)
+  OutputAttribute();
+  OutputAttribute(OutputAttribute &&other);
+  OutputAttribute(GVMutableArrayPtr varray,
+                  AttributeDomain domain,
+                  SaveFn save,
+                  const bool ignore_old_values);
+
+  ~OutputAttribute();
+
+  operator bool() const;
+
+  GVMutableArray &operator*();
+  GVMutableArray *operator->();
+  GVMutableArray &varray();
+  AttributeDomain domain() const;
+  const CPPType &cpp_type() const;
+  CustomDataType custom_data_type() const;
+
+  fn::GMutableSpan as_span();
+  template<typename T> MutableSpan<T> as_span();
+
+  void save();
+};
+
+/**
+ * Same as OutputAttribute, but should be used when the data type is known at compile time.
+ */
+template<typename T> class OutputAttribute_Typed {
+ private:
+  OutputAttribute attribute_;
+  std::unique_ptr<fn::GVMutableArray_Typed<T>> optional_varray_;
+  VMutableArray<T> *varray_ = nullptr;
+
+ public:
+  OutputAttribute_Typed();
+  OutputAttribute_Typed(OutputAttribute attribute) : attribute_(std::move(attribute))
   {
+    if (attribute_) {
+      optional_varray_ = std::make_unique<fn::GVMutableArray_Typed<T>>(attribute_.varray());
+      varray_ = &**optional_varray_;
+    }
   }
 
-  virtual ~WriteAttribute();
+  OutputAttribute_Typed(OutputAttribute_Typed &&other);
+  ~OutputAttribute_Typed();
+
+  OutputAttribute_Typed &operator=(OutputAttribute_Typed &&other)
+  {
+    if (this == &other) {
+      return *this;
+    }
+    this->~OutputAttribute_Typed();
+    new (this) OutputAttribute_Typed(std::move(other));
+    return *this;
+  }
+
+  operator bool() const
+  {
+    return varray_ != nullptr;
+  }
+
+  VMutableArray<T> &operator*()
+  {
+    return *varray_;
+  }
+
+  VMutableArray<T> *operator->()
+  {
+    return varray_;
+  }
+
+  VMutableArray<T> &varray()
+  {
+    return *varray_;
+  }
 
   AttributeDomain domain() const
   {
-    return domain_;
+    return attribute_.domain();
   }
 
   const CPPType &cpp_type() const
   {
-    return cpp_type_;
+    return CPPType::get<T>();
   }
 
   CustomDataType custom_data_type() const
   {
-    return custom_data_type_;
+    return cpp_type_to_custom_data_type(this->cpp_type());
   }
 
-  int64_t size() const
+  MutableSpan<T> as_span()
   {
-    return size_;
+    return attribute_.as_span<T>();
   }
 
-  void get(const int64_t index, void *r_value) const
+  void save()
   {
-    BLI_assert(index < size_);
-    this->get_internal(index, r_value);
+    attribute_.save();
   }
-
-  void set(const int64_t index, const void *value)
-  {
-    BLI_assert(index < size_);
-    this->set_internal(index, value);
-  }
-
-  /* Get a span that new attribute values can be written into. When all values have been changed,
-   * #apply_span has to be called. */
-  fn::GMutableSpan get_span();
-  /* The span returned by this method might not contain the current attribute values. */
-  fn::GMutableSpan get_span_for_write_only();
-  /* Write the changes to the span into the actual attribute, if they aren't already. */
-  void apply_span();
-
-  template<typename T> MutableSpan<T> get_span()
-  {
-    return this->get_span().typed<T>();
-  }
-
-  template<typename T> MutableSpan<T> get_span_for_write_only()
-  {
-    return this->get_span_for_write_only().typed<T>();
-  }
-
- protected:
-  virtual void get_internal(const int64_t index, void *r_value) const = 0;
-  virtual void set_internal(const int64_t index, const void *value) = 0;
-
-  virtual void initialize_span(const bool write_only);
-  virtual void apply_span_if_necessary();
 };
 
-using ReadAttributePtr = std::unique_ptr<ReadAttribute>;
-using WriteAttributePtr = std::unique_ptr<WriteAttribute>;
+/* These are not defined in the class directly, because when defining them there, the external
+ * template instantiation does not work, resulting in longer compile times. */
+template<typename T> inline OutputAttribute_Typed<T>::OutputAttribute_Typed() = default;
+template<typename T>
+inline OutputAttribute_Typed<T>::OutputAttribute_Typed(OutputAttribute_Typed &&other) = default;
+template<typename T> inline OutputAttribute_Typed<T>::~OutputAttribute_Typed() = default;
 
-/* This provides type safe access to an attribute.
- * The underlying ReadAttribute is owned optionally. */
-template<typename T> class TypedReadAttribute {
- private:
-  std::unique_ptr<const ReadAttribute> owned_attribute_;
-  const ReadAttribute *attribute_;
+/**
+ * A basic container around DNA CustomData so that its users
+ * don't have to implement special copy and move constructors.
+ */
+class CustomDataAttributes {
+  /**
+   * #CustomData needs a size to be freed, and unfortunately it isn't stored in the struct
+   * itself, so keep track of the size here so this class can implement its own destructor.
+   * If the implementation of the attribute storage changes, this could be removed.
+   */
+  int size_;
 
  public:
-  TypedReadAttribute(ReadAttributePtr attribute) : TypedReadAttribute(*attribute)
+  CustomData data;
+
+  CustomDataAttributes();
+  ~CustomDataAttributes();
+  CustomDataAttributes(const CustomDataAttributes &other);
+  CustomDataAttributes(CustomDataAttributes &&other);
+  CustomDataAttributes &operator=(const CustomDataAttributes &other);
+
+  void reallocate(const int size);
+
+  std::optional<blender::fn::GSpan> get_for_read(const AttributeIDRef &attribute_id) const;
+
+  blender::fn::GVArrayPtr get_for_read(const AttributeIDRef &attribute_id,
+                                       const CustomDataType data_type,
+                                       const void *default_value) const;
+
+  template<typename T>
+  blender::fn::GVArray_Typed<T> get_for_read(const AttributeIDRef &attribute_id,
+                                             const T &default_value) const
   {
-    owned_attribute_ = std::move(attribute);
-    BLI_assert(owned_attribute_);
+    const blender::fn::CPPType &cpp_type = blender::fn::CPPType::get<T>();
+    const CustomDataType type = blender::bke::cpp_type_to_custom_data_type(cpp_type);
+    GVArrayPtr varray = this->get_for_read(attribute_id, type, &default_value);
+    return blender::fn::GVArray_Typed<T>(std::move(varray));
   }
 
-  TypedReadAttribute(const ReadAttribute &attribute) : attribute_(&attribute)
-  {
-    BLI_assert(attribute_->cpp_type().is<T>());
-  }
+  std::optional<blender::fn::GMutableSpan> get_for_write(const AttributeIDRef &attribute_id);
+  bool create(const AttributeIDRef &attribute_id, const CustomDataType data_type);
+  bool create_by_move(const AttributeIDRef &attribute_id,
+                      const CustomDataType data_type,
+                      void *buffer);
+  bool remove(const AttributeIDRef &attribute_id);
 
-  int64_t size() const
-  {
-    return attribute_->size();
-  }
+  /**
+   * Change the order of the attributes to match the order of IDs in the argument.
+   */
+  void reorder(Span<AttributeIDRef> new_order);
 
-  T operator[](const int64_t index) const
-  {
-    BLI_assert(index < attribute_->size());
-    T value;
-    value.~T();
-    attribute_->get(index, &value);
-    return value;
-  }
-
-  /* Get a span to that contains all attribute values for faster and more convenient access. */
-  Span<T> get_span() const
-  {
-    return attribute_->get_span().template typed<T>();
-  }
+  bool foreach_attribute(const AttributeForeachCallback callback,
+                         const AttributeDomain domain) const;
 };
 
-/* This provides type safe access to an attribute.
- * The underlying WriteAttribute is owned optionally. */
-template<typename T> class TypedWriteAttribute {
- private:
-  std::unique_ptr<WriteAttribute> owned_attribute_;
-  WriteAttribute *attribute_;
+/* -------------------------------------------------------------------- */
+/** \name #AttributeIDRef Inline Methods
+ * \{ */
 
- public:
-  TypedWriteAttribute(WriteAttributePtr attribute) : TypedWriteAttribute(*attribute)
-  {
-    owned_attribute_ = std::move(attribute);
-    BLI_assert(owned_attribute_);
-  }
+inline AttributeIDRef::AttributeIDRef() = default;
 
-  TypedWriteAttribute(WriteAttribute &attribute) : attribute_(&attribute)
-  {
-    BLI_assert(attribute_->cpp_type().is<T>());
-  }
+inline AttributeIDRef::AttributeIDRef(StringRef name) : name_(name)
+{
+}
 
-  int64_t size() const
-  {
-    return attribute_->size();
-  }
+inline AttributeIDRef::AttributeIDRef(StringRefNull name) : name_(name)
+{
+}
 
-  T operator[](const int64_t index) const
-  {
-    BLI_assert(index < attribute_->size());
-    T value;
-    value.~T();
-    attribute_->get(index, &value);
-    return value;
-  }
+inline AttributeIDRef::AttributeIDRef(const char *name) : name_(name)
+{
+}
 
-  void set(const int64_t index, const T &value)
-  {
-    attribute_->set(index, &value);
-  }
+inline AttributeIDRef::AttributeIDRef(const std::string &name) : name_(name)
+{
+}
 
-  /* Get a span that new values can be written into. Once all values have been updated #apply_span
-   * has to be called. */
-  MutableSpan<T> get_span()
-  {
-    return attribute_->get_span().typed<T>();
-  }
-  /* The span returned by this method might not contain the current attribute values. */
-  MutableSpan<T> get_span_for_write_only()
-  {
-    return attribute_->get_span_for_write_only().typed<T>();
-  }
+/* The anonymous id is only borrowed, the caller has to keep a reference to it. */
+inline AttributeIDRef::AttributeIDRef(const AnonymousAttributeID *anonymous_id)
+    : anonymous_id_(anonymous_id)
+{
+}
 
-  /* Write back all changes to the actual attribute, if necessary. */
-  void apply_span()
-  {
-    attribute_->apply_span();
-  }
-};
+inline bool operator==(const AttributeIDRef &a, const AttributeIDRef &b)
+{
+  return a.anonymous_id_ == b.anonymous_id_ && a.name_ == b.name_;
+}
 
-using BooleanReadAttribute = TypedReadAttribute<bool>;
-using FloatReadAttribute = TypedReadAttribute<float>;
-using Float2ReadAttribute = TypedReadAttribute<float2>;
-using Float3ReadAttribute = TypedReadAttribute<float3>;
-using Int32ReadAttribute = TypedReadAttribute<int>;
-using Color4fReadAttribute = TypedReadAttribute<Color4f>;
-using BooleanWriteAttribute = TypedWriteAttribute<bool>;
-using FloatWriteAttribute = TypedWriteAttribute<float>;
-using Float2WriteAttribute = TypedWriteAttribute<float2>;
-using Float3WriteAttribute = TypedWriteAttribute<float3>;
-using Int32WriteAttribute = TypedWriteAttribute<int>;
-using Color4fWriteAttribute = TypedWriteAttribute<Color4f>;
+inline AttributeIDRef::operator bool() const
+{
+  return this->is_named() || this->is_anonymous();
+}
+
+inline uint64_t AttributeIDRef::hash() const
+{
+  return get_default_hash_2(name_, anonymous_id_);
+}
+
+inline bool AttributeIDRef::is_named() const
+{
+  return !name_.is_empty();
+}
+
+inline bool AttributeIDRef::is_anonymous() const
+{
+  return anonymous_id_ != nullptr;
+}
+
+inline StringRef AttributeIDRef::name() const
+{
+  BLI_assert(this->is_named());
+  return name_;
+}
+
+inline const AnonymousAttributeID &AttributeIDRef::anonymous_id() const
+{
+  BLI_assert(this->is_anonymous());
+  return *anonymous_id_;
+}
+
+/**
+ * \return True if the attribute should not be removed automatically as an optimization during
+ * processing or copying. Anonymous attributes can be removed when they no longer have any
+ * references.
+ */
+inline bool AttributeIDRef::should_be_kept() const
+{
+  return this->is_named() || BKE_anonymous_attribute_id_has_strong_references(anonymous_id_);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #OutputAttribute Inline Methods
+ * \{ */
+
+inline OutputAttribute::OutputAttribute() = default;
+inline OutputAttribute::OutputAttribute(OutputAttribute &&other) = default;
+
+inline OutputAttribute::OutputAttribute(GVMutableArrayPtr varray,
+                                        AttributeDomain domain,
+                                        SaveFn save,
+                                        const bool ignore_old_values)
+    : varray_(std::move(varray)),
+      domain_(domain),
+      save_(std::move(save)),
+      ignore_old_values_(ignore_old_values)
+{
+}
+
+inline OutputAttribute::operator bool() const
+{
+  return varray_.get() != nullptr;
+}
+
+inline GVMutableArray &OutputAttribute::operator*()
+{
+  return *varray_;
+}
+
+inline GVMutableArray *OutputAttribute::operator->()
+{
+  return varray_.get();
+}
+
+inline GVMutableArray &OutputAttribute::varray()
+{
+  return *varray_;
+}
+
+inline AttributeDomain OutputAttribute::domain() const
+{
+  return domain_;
+}
+
+inline const CPPType &OutputAttribute::cpp_type() const
+{
+  return varray_->type();
+}
+
+inline CustomDataType OutputAttribute::custom_data_type() const
+{
+  return cpp_type_to_custom_data_type(this->cpp_type());
+}
+
+template<typename T> inline MutableSpan<T> OutputAttribute::as_span()
+{
+  return this->as_span().typed<T>();
+}
+
+/** \} */
 
 }  // namespace blender::bke
+
+/* -------------------------------------------------------------------- */
+/** \name External Template Instantiations
+ *
+ * Defined in `intern/extern_implementations.cc`.
+ * \{ */
+
+namespace blender::bke {
+extern template class OutputAttribute_Typed<float>;
+extern template class OutputAttribute_Typed<int>;
+extern template class OutputAttribute_Typed<float3>;
+extern template class OutputAttribute_Typed<bool>;
+extern template class OutputAttribute_Typed<ColorGeometry4f>;
+}  // namespace blender::bke
+
+/** \} */

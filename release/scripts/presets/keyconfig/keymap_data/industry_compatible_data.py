@@ -139,12 +139,12 @@ def _template_items_basic_tools(*, connected=False):
     ]
 
 def _template_items_tool_select(params, operator, *, extend):
-        return [
-            (operator, {"type": 'LEFTMOUSE', "value": 'PRESS'},
-             {"properties": [("deselect_all", True)]}),
-            (operator, {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
-             {"properties": [(extend, True)]}),
-        ]
+    return [
+        (operator, {"type": 'LEFTMOUSE', "value": 'PRESS'},
+         {"properties": [("deselect_all", True)]}),
+        (operator, {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
+         {"properties": [(extend, True)]}),
+    ]
 
 
 def _template_items_tool_select_actions(operator, *, type, value):
@@ -255,6 +255,9 @@ def km_screen(params):
         ("file.execute", {"type": 'RET', "value": 'PRESS'}, None),
         ("file.execute", {"type": 'NUMPAD_ENTER', "value": 'PRESS'}, None),
         ("file.cancel", {"type": 'ESC', "value": 'PRESS'}, None),
+        # Asset Catalog undo is only available in the asset browser, and should take priority over `ed.undo`.
+        ("asset.catalog_undo", {"type": 'Z', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
+        ("asset.catalog_redo", {"type": 'Z', "value": 'PRESS', "ctrl": True, "shift": True, "repeat": True}, None),
         # Undo
         ("ed.undo", {"type": 'Z', "value": 'PRESS', "ctrl": True, "repeat": True}, None),
         ("ed.redo", {"type": 'Z', "value": 'PRESS', "shift": True, "ctrl": True, "repeat": True}, None),
@@ -465,6 +468,7 @@ def km_property_editor(params):
         # Constraint panels
         ("constraint.delete", {"type": 'BACK_SPACE', "value": 'PRESS'}, {"properties": [("report", True)]}),
         ("constraint.delete", {"type": 'DEL', "value": 'PRESS'}, {"properties": [("report", True)]}),
+        ("constraint.copy", {"type": 'D', "value": 'PRESS', "ctrl": True}, None),
     ])
 
     return keymap
@@ -871,7 +875,7 @@ def km_graph_editor_generic(params):
 
     items.extend([
         op_panel("TOPBAR_PT_name", {"type": 'RET', "value": 'PRESS'}, [("keep_open", False)]),
-        ("anim.channels_find", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
+        ("anim.channels_select_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("graph.hide", {"type": 'H', "value": 'PRESS', "ctrl": True},
          {"properties": [("unselected", False)]}),
         ("graph.hide", {"type": 'H', "value": 'PRESS', "shift": True},
@@ -1223,7 +1227,9 @@ def km_file_browser(params):
         ("file.previous", {"type": 'LEFT_ARROW', "value": 'PRESS', "ctrl": True}, None),
         ("file.next", {"type": 'RIGHT_ARROW', "value": 'PRESS', "alt": True}, None),
         ("file.next", {"type": 'RIGHT_ARROW', "value": 'PRESS', "ctrl": True}, None),
+        # The two refresh operators have polls excluding each other (so only one is available depending on context).
         ("file.refresh", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
+        ("file.asset_library_refresh", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
         ("file.previous", {"type": 'BACK_SPACE', "value": 'PRESS'}, None),
         ("file.next", {"type": 'BACK_SPACE', "value": 'PRESS', "shift": True}, None),
         ("wm.context_toggle", {"type": 'H', "value": 'PRESS'},
@@ -1248,6 +1254,10 @@ def km_file_browser(params):
          {"properties": [("increment", -10)]}),
         ("file.filenum", {"type": 'NUMPAD_MINUS', "value": 'PRESS', "ctrl": True, "repeat": True},
          {"properties": [("increment", -100)]}),
+
+        # Select file under cursor before spawning the context menu.
+        ("file.select", {"type": 'RIGHTMOUSE', "value": 'PRESS'},
+         {"properties": [("open", False), ("only_activate_if_selected", True), ("pass_through", True)]}),
         *_template_items_context_menu("FILEBROWSER_MT_context_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}),
     ])
 
@@ -1263,9 +1273,10 @@ def km_file_browser_main(params):
     )
 
     items.extend([
-        ("file.execute", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'},
-         {"properties": [("need_active", True)]}),
+        ("file.mouse_execute", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
+        # The two refresh operators have polls excluding each other (so only one is available depending on context).
         ("file.refresh", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
+        ("file.asset_library_refresh", {"type": 'R', "value": 'PRESS', "ctrl": True}, None),
         ("file.select", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
         ("file.select", {"type": 'LEFTMOUSE', "value": 'CLICK'},
          {"properties": [("open", False), ("deselect_all", True)]}),
@@ -1311,6 +1322,7 @@ def km_file_browser_main(params):
         ("file.highlight", {"type": 'MOUSEMOVE', "value": 'ANY', "any": True}, None),
         ("file.sort_column_ui_context", {"type": 'LEFTMOUSE', "value": 'PRESS', "any": True}, None),
         ("file.view_selected", {"type": 'F', "value": 'PRESS'}, None),
+        *_template_items_context_menu("ASSETBROWSER_MT_context_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}),
     ])
 
     return keymap
@@ -1431,7 +1443,7 @@ def km_dopesheet(params):
         ("action.view_selected", {"type": 'F', "value": 'PRESS'}, None),
         ("action.view_frame", {"type": 'NUMPAD_0', "value": 'PRESS'}, None),
         ("anim.channels_editable_toggle", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
-        ("anim.channels_find", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
+        ("anim.channels_select_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("transform.transform", {"type": 'W', "value": 'PRESS'},
          {"properties": [("mode", 'TIME_TRANSLATE')]}),
         ("transform.transform", {"type": 'EVT_TWEAK_L', "value": 'ANY'},
@@ -1469,7 +1481,7 @@ def km_nla_generic(params):
         *_template_items_animation(),
         ("nla.tweakmode_enter", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK'}, None),
         ("nla.tweakmode_exit", {"type": 'ESC', "value": 'PRESS'}, None),
-        ("anim.channels_find", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
+        ("anim.channels_select_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
     ])
 
     return keymap
@@ -1809,8 +1821,7 @@ def km_sequencer(params):
              for i in range(10)
              )
         ),
-        ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS'},
-         {"properties": [("deselect_all", True)]}),
+        ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS'}, None),
         ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
          {"properties": [("extend", True)]}),
         ("sequencer.select", {"type": 'LEFTMOUSE', "value": 'PRESS', "alt": True},
@@ -2144,6 +2155,21 @@ def km_clip_dopesheet_editor(_params):
 
     return keymap
 
+def km_spreadsheet_generic(_params):
+    items = []
+    keymap = (
+        "Spreadsheet Generic",
+        {"space_type": 'SPREADSHEET', "region_type": 'WINDOW'},
+        {"items": items},
+    )
+
+    items.extend([
+        *_template_space_region_type_toggle(
+            channels_key={"type": 'T', "value": 'PRESS'},
+        ),
+    ])
+
+    return keymap
 
 # ------------------------------------------------------------------------------
 # Animation
@@ -2212,7 +2238,7 @@ def km_animation_channels(params):
         ("anim.channel_select_keys", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK', "shift": True},
          {"properties": [("extend", True)]}),
         # Find (setting the name filter).
-        ("anim.channels_find", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
+        ("anim.channels_select_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         # Selection.
         ("anim.channels_select_all", {"type": 'A', "value": 'PRESS', "ctrl": True}, {"properties": [("action", 'SELECT')]}),
         ("anim.channels_select_all", {"type": 'A', "value": 'PRESS', "ctrl": True, "shift": True}, {"properties": [("action", 'DESELECT')]}),
@@ -3847,7 +3873,8 @@ def km_knife_tool_modal_map(_params):
         ("CONFIRM", {"type": 'NUMPAD_ENTER', "value": 'PRESS', "any": True}, None),
         ("ADD_CUT_CLOSED", {"type": 'LEFTMOUSE', "value": 'DOUBLE_CLICK', "any": True}, None),
         ("ADD_CUT", {"type": 'LEFTMOUSE', "value": 'ANY', "any": True}, None),
-        ("NEW_CUT", {"type": 'E', "value": 'PRESS'}, None),
+        ("UNDO", {"type": 'Z', "value": 'PRESS', "ctrl": True}, None),
+        ("NEW_CUT", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
         ("SNAP_MIDPOINTS_ON", {"type": 'LEFT_CTRL', "value": 'PRESS'}, None),
         ("SNAP_MIDPOINTS_OFF", {"type": 'LEFT_CTRL', "value": 'RELEASE'}, None),
         ("SNAP_MIDPOINTS_ON", {"type": 'RIGHT_CTRL', "value": 'PRESS'}, None),
@@ -3856,11 +3883,16 @@ def km_knife_tool_modal_map(_params):
         ("IGNORE_SNAP_OFF", {"type": 'LEFT_SHIFT', "value": 'RELEASE', "any": True}, None),
         ("IGNORE_SNAP_ON", {"type": 'RIGHT_SHIFT', "value": 'PRESS', "any": True}, None),
         ("IGNORE_SNAP_OFF", {"type": 'RIGHT_SHIFT', "value": 'RELEASE', "any": True}, None),
-        ("ANGLE_SNAP_TOGGLE", {"type": 'C', "value": 'PRESS'}, None),
-        ("CUT_THROUGH_TOGGLE", {"type": 'X', "value": 'PRESS'}, None),
+        ("X_AXIS", {"type": 'X', "value": 'PRESS'}, None),
+        ("Y_AXIS", {"type": 'Y', "value": 'PRESS'}, None),
+        ("Z_AXIS", {"type": 'Z', "value": 'PRESS'}, None),
+        ("ANGLE_SNAP_TOGGLE", {"type": 'A', "value": 'PRESS'}, None),
+        ("CYCLE_ANGLE_SNAP_EDGE", {"type": 'R', "value": 'PRESS'}, None),
+        ("CUT_THROUGH_TOGGLE", {"type": 'C', "value": 'PRESS'}, None),
         ("PANNING", {"type": 'MIDDLEMOUSE', "value": 'PRESS', "alt": True}, None),
         ("PANNING", {"type": 'RIGHTMOUSE', "value": 'PRESS', "alt": True}, None),
-        ("CONFIRM", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
+        ("SHOW_DISTANCE_ANGLE_TOGGLE", {"type": 'D', "value": 'PRESS'}, None),
+        ("DEPTH_TEST_TOGGLE", {"type": 'V', "value": 'PRESS'}, None),
     ])
 
     return keymap
@@ -4171,20 +4203,29 @@ def keymap_transform_tool_mmb(keymap):
             km_items_new = []
             for kmi in km_items:
                 ty = kmi[1]["type"]
-                if ty == 'LEFTMOUSE':
-                    kmi = (kmi[0], kmi[1].copy(), kmi[2])
-                    kmi[1]["type"] = 'MIDDLEMOUSE'
-                    km_items_new.append(kmi)
-                elif ty == 'EVT_TWEAK_L':
-                    kmi = (kmi[0], kmi[1].copy(), kmi[2])
-                    if kmi[1]["value"] == 'ANY':
+                if km_name.endswith(" (fallback)"):
+                    if ty == 'RIGHTMOUSE':
+                        kmi = (kmi[0], kmi[1].copy(), kmi[2])
+                        kmi[1]["type"] = 'LEFTMOUSE'
+                        km_items_new.append(kmi)
+                    elif ty == 'EVT_TWEAK_R':
+                        kmi = (kmi[0], kmi[1].copy(), kmi[2])
+                        kmi[1]["type"] = 'EVT_TWEAK_L'
+                        km_items_new.append(kmi)
+                else:
+                    if ty == 'LEFTMOUSE':
+                        kmi = (kmi[0], kmi[1].copy(), kmi[2])
                         kmi[1]["type"] = 'MIDDLEMOUSE'
-                        kmi[1]["value"] = 'PRESS'
-                    else:
-                        # Directional tweaking can't be replaced by middle-mouse.
-                        kmi[1]["type"] = 'EVT_TWEAK_M'
-
-                    km_items_new.append(kmi)
+                        km_items_new.append(kmi)
+                    elif ty == 'EVT_TWEAK_L':
+                        kmi = (kmi[0], kmi[1].copy(), kmi[2])
+                        if kmi[1]["value"] == 'ANY':
+                            kmi[1]["type"] = 'MIDDLEMOUSE'
+                            kmi[1]["value"] = 'PRESS'
+                        else:
+                            # Directional tweaking can't be replaced by middle-mouse.
+                            kmi[1]["type"] = 'EVT_TWEAK_M'
+                        km_items_new.append(kmi)
             km_items.extend(km_items_new)
 
 
@@ -4195,9 +4236,17 @@ def generate_keymaps(params=None):
 
     # Combine the key-map to support manipulating it, so we don't need to manually
     # define key-map here just to manipulate them.
-    blender_default = execfile(
+    blender_default_mod = execfile(
         os.path.join(os.path.dirname(__file__), "blender_default.py"),
-    ).generate_keymaps()
+    )
+
+    blender_default = blender_default_mod.generate_keymaps(
+        # Use the default key-map with only minor changes to default arguments.
+        blender_default_mod.Params(
+            # Needed so the fallback key-map items are populated.
+            use_fallback_tool=True,
+        ),
+    )
 
     keymap_existing_names = {km[0] for km in keymap}
     keymap.extend([km for km in blender_default if km[0] not in keymap_existing_names])

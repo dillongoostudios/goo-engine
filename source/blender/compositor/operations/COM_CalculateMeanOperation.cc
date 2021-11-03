@@ -17,8 +17,8 @@
  */
 
 #include "COM_CalculateMeanOperation.h"
-#include "BLI_math.h"
-#include "BLI_utildefines.h"
+
+#include "COM_ExecutionSystem.h"
 
 #include "IMB_colormanagement.h"
 
@@ -26,74 +26,73 @@ namespace blender::compositor {
 
 CalculateMeanOperation::CalculateMeanOperation()
 {
-  this->addInputSocket(DataType::Color, ResizeMode::None);
-  this->addOutputSocket(DataType::Value);
-  this->m_imageReader = nullptr;
-  this->m_iscalculated = false;
-  this->m_setting = 1;
-  this->flags.complex = true;
+  this->add_input_socket(DataType::Color, ResizeMode::Align);
+  this->add_output_socket(DataType::Value);
+  image_reader_ = nullptr;
+  iscalculated_ = false;
+  setting_ = 1;
+  flags_.complex = true;
 }
-void CalculateMeanOperation::initExecution()
+void CalculateMeanOperation::init_execution()
 {
-  this->m_imageReader = this->getInputSocketReader(0);
-  this->m_iscalculated = false;
-  NodeOperation::initMutex();
-}
-
-void CalculateMeanOperation::executePixel(float output[4], int /*x*/, int /*y*/, void * /*data*/)
-{
-  output[0] = this->m_result;
+  image_reader_ = this->get_input_socket_reader(0);
+  iscalculated_ = false;
+  NodeOperation::init_mutex();
 }
 
-void CalculateMeanOperation::deinitExecution()
+void CalculateMeanOperation::execute_pixel(float output[4], int /*x*/, int /*y*/, void * /*data*/)
 {
-  this->m_imageReader = nullptr;
-  NodeOperation::deinitMutex();
+  output[0] = result_;
 }
 
-bool CalculateMeanOperation::determineDependingAreaOfInterest(rcti * /*input*/,
-                                                              ReadBufferOperation *readOperation,
-                                                              rcti *output)
+void CalculateMeanOperation::deinit_execution()
 {
-  rcti imageInput;
-  if (this->m_iscalculated) {
+  image_reader_ = nullptr;
+  NodeOperation::deinit_mutex();
+}
+
+bool CalculateMeanOperation::determine_depending_area_of_interest(
+    rcti * /*input*/, ReadBufferOperation *read_operation, rcti *output)
+{
+  rcti image_input;
+  if (iscalculated_) {
     return false;
   }
-  NodeOperation *operation = getInputOperation(0);
-  imageInput.xmax = operation->getWidth();
-  imageInput.xmin = 0;
-  imageInput.ymax = operation->getHeight();
-  imageInput.ymin = 0;
-  if (operation->determineDependingAreaOfInterest(&imageInput, readOperation, output)) {
+  NodeOperation *operation = get_input_operation(0);
+  image_input.xmax = operation->get_width();
+  image_input.xmin = 0;
+  image_input.ymax = operation->get_height();
+  image_input.ymin = 0;
+  if (operation->determine_depending_area_of_interest(&image_input, read_operation, output)) {
     return true;
   }
   return false;
 }
 
-void *CalculateMeanOperation::initializeTileData(rcti *rect)
+void *CalculateMeanOperation::initialize_tile_data(rcti *rect)
 {
-  lockMutex();
-  if (!this->m_iscalculated) {
-    MemoryBuffer *tile = (MemoryBuffer *)this->m_imageReader->initializeTileData(rect);
-    calculateMean(tile);
-    this->m_iscalculated = true;
+  lock_mutex();
+  if (!iscalculated_) {
+    MemoryBuffer *tile = (MemoryBuffer *)image_reader_->initialize_tile_data(rect);
+    calculate_mean(tile);
+    iscalculated_ = true;
   }
-  unlockMutex();
+  unlock_mutex();
   return nullptr;
 }
 
-void CalculateMeanOperation::calculateMean(MemoryBuffer *tile)
+void CalculateMeanOperation::calculate_mean(MemoryBuffer *tile)
 {
-  this->m_result = 0.0f;
-  float *buffer = tile->getBuffer();
-  int size = tile->getWidth() * tile->getHeight();
+  result_ = 0.0f;
+  float *buffer = tile->get_buffer();
+  int size = tile->get_width() * tile->get_height();
   int pixels = 0;
   float sum = 0.0f;
   for (int i = 0, offset = 0; i < size; i++, offset += 4) {
     if (buffer[offset + 3] > 0) {
       pixels++;
 
-      switch (this->m_setting) {
+      switch (setting_) {
         case 1: {
           sum += IMB_colormanagement_get_luminance(&buffer[offset]);
           break;
@@ -125,7 +124,92 @@ void CalculateMeanOperation::calculateMean(MemoryBuffer *tile)
       }
     }
   }
-  this->m_result = sum / pixels;
+  result_ = sum / pixels;
+}
+
+void CalculateMeanOperation::set_setting(int setting)
+{
+  setting_ = setting;
+  switch (setting) {
+    case 1: {
+      setting_func_ = IMB_colormanagement_get_luminance;
+      break;
+    }
+    case 2: {
+      setting_func_ = [](const float *elem) { return elem[0]; };
+      break;
+    }
+    case 3: {
+      setting_func_ = [](const float *elem) { return elem[1]; };
+      break;
+    }
+    case 4: {
+      setting_func_ = [](const float *elem) { return elem[2]; };
+      break;
+    }
+    case 5: {
+      setting_func_ = [](const float *elem) {
+        float yuv[3];
+        rgb_to_yuv(elem[0], elem[1], elem[2], &yuv[0], &yuv[1], &yuv[2], BLI_YUV_ITU_BT709);
+        return yuv[0];
+      };
+      break;
+    }
+  }
+}
+
+void CalculateMeanOperation::get_area_of_interest(int input_idx,
+                                                  const rcti &UNUSED(output_area),
+                                                  rcti &r_input_area)
+{
+  BLI_assert(input_idx == 0);
+  r_input_area = get_input_operation(input_idx)->get_canvas();
+}
+
+void CalculateMeanOperation::update_memory_buffer_started(MemoryBuffer *UNUSED(output),
+                                                          const rcti &UNUSED(area),
+                                                          Span<MemoryBuffer *> inputs)
+{
+  if (!iscalculated_) {
+    MemoryBuffer *input = inputs[0];
+    result_ = calc_mean(input);
+    iscalculated_ = true;
+  }
+}
+
+void CalculateMeanOperation::update_memory_buffer_partial(MemoryBuffer *output,
+                                                          const rcti &area,
+                                                          Span<MemoryBuffer *> UNUSED(inputs))
+{
+  output->fill(area, &result_);
+}
+
+float CalculateMeanOperation::calc_mean(const MemoryBuffer *input)
+{
+  PixelsSum total = {0};
+  exec_system_->execute_work<PixelsSum>(
+      input->get_rect(),
+      [=](const rcti &split) { return calc_area_sum(input, split); },
+      total,
+      [](PixelsSum &join, const PixelsSum &chunk) {
+        join.sum += chunk.sum;
+        join.num_pixels += chunk.num_pixels;
+      });
+  return total.num_pixels == 0 ? 0.0f : total.sum / total.num_pixels;
+}
+
+using PixelsSum = CalculateMeanOperation::PixelsSum;
+PixelsSum CalculateMeanOperation::calc_area_sum(const MemoryBuffer *input, const rcti &area)
+{
+  PixelsSum result = {0};
+  for (const float *elem : input->get_buffer_area(area)) {
+    if (elem[3] <= 0.0f) {
+      continue;
+    }
+    result.sum += setting_func_(elem);
+    result.num_pixels++;
+  }
+  return result;
 }
 
 }  // namespace blender::compositor

@@ -16,15 +16,14 @@
  * Copyright 2011, Blender Foundation.
  */
 
-#include <cstdio>
-#include <list>
+#include "COM_WorkScheduler.h"
 
 #include "COM_CPUDevice.h"
+#include "COM_CompositorContext.h"
+#include "COM_ExecutionGroup.h"
 #include "COM_OpenCLDevice.h"
 #include "COM_OpenCLKernels.cl.h"
-#include "COM_WorkScheduler.h"
 #include "COM_WriteBufferOperation.h"
-#include "COM_compositor.h"
 
 #include "clew.h"
 
@@ -33,7 +32,6 @@
 #include "BLI_task.h"
 #include "BLI_threads.h"
 #include "BLI_vector.hh"
-#include "PIL_time.h"
 
 #include "BKE_global.h"
 
@@ -98,16 +96,18 @@ static struct {
     bool active = false;
     bool initialized = false;
   } opencl;
+
+  int num_cpu_threads;
 } g_work_scheduler;
 
 /* -------------------------------------------------------------------- */
 /** \name OpenCL Scheduling
  * \{ */
 
-static void CL_CALLBACK clContextError(const char *errinfo,
-                                       const void * /*private_info*/,
-                                       size_t /*cb*/,
-                                       void * /*user_data*/)
+static void CL_CALLBACK cl_context_error(const char *errinfo,
+                                         const void * /*private_info*/,
+                                         size_t /*cb*/,
+                                         void * /*user_data*/)
 {
   printf("OPENCL error: %s\n", errinfo);
 }
@@ -124,9 +124,9 @@ static void *thread_execute_gpu(void *data)
   return nullptr;
 }
 
-static void opencl_start(CompositorContext &context)
+static void opencl_start(const CompositorContext &context)
 {
-  if (context.getHasActiveOpenCLDevices()) {
+  if (context.get_has_active_opencl_devices()) {
     g_work_scheduler.opencl.queue = BLI_thread_queue_init();
     BLI_threadpool_init(&g_work_scheduler.opencl.threads,
                         thread_execute_gpu,
@@ -143,7 +143,8 @@ static void opencl_start(CompositorContext &context)
 
 static bool opencl_schedule(WorkPackage *package)
 {
-  if (package->execution_group->get_flags().open_cl && g_work_scheduler.opencl.active) {
+  if (package->type == eWorkPackageType::Tile && package->execution_group->get_flags().open_cl &&
+      g_work_scheduler.opencl.active) {
     BLI_thread_queue_push(g_work_scheduler.opencl.queue, package);
     return true;
   }
@@ -185,35 +186,35 @@ static void opencl_initialize(const bool use_opencl)
     }
 
     if (clCreateContextFromType) {
-      cl_uint numberOfPlatforms = 0;
+      cl_uint number_of_platforms = 0;
       cl_int error;
-      error = clGetPlatformIDs(0, nullptr, &numberOfPlatforms);
+      error = clGetPlatformIDs(0, nullptr, &number_of_platforms);
       if (error == -1001) {
       } /* GPU not supported */
       else if (error != CL_SUCCESS) {
         printf("CLERROR[%d]: %s\n", error, clewErrorString(error));
       }
       if (G.f & G_DEBUG) {
-        printf("%u number of platforms\n", numberOfPlatforms);
+        printf("%u number of platforms\n", number_of_platforms);
       }
       cl_platform_id *platforms = (cl_platform_id *)MEM_mallocN(
-          sizeof(cl_platform_id) * numberOfPlatforms, __func__);
-      error = clGetPlatformIDs(numberOfPlatforms, platforms, nullptr);
-      unsigned int indexPlatform;
-      for (indexPlatform = 0; indexPlatform < numberOfPlatforms; indexPlatform++) {
-        cl_platform_id platform = platforms[indexPlatform];
-        cl_uint numberOfDevices = 0;
-        clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, nullptr, &numberOfDevices);
-        if (numberOfDevices <= 0) {
+          sizeof(cl_platform_id) * number_of_platforms, __func__);
+      error = clGetPlatformIDs(number_of_platforms, platforms, nullptr);
+      unsigned int index_platform;
+      for (index_platform = 0; index_platform < number_of_platforms; index_platform++) {
+        cl_platform_id platform = platforms[index_platform];
+        cl_uint number_of_devices = 0;
+        clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 0, nullptr, &number_of_devices);
+        if (number_of_devices <= 0) {
           continue;
         }
 
         cl_device_id *cldevices = (cl_device_id *)MEM_mallocN(
-            sizeof(cl_device_id) * numberOfDevices, __func__);
-        clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, numberOfDevices, cldevices, nullptr);
+            sizeof(cl_device_id) * number_of_devices, __func__);
+        clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, number_of_devices, cldevices, nullptr);
 
         g_work_scheduler.opencl.context = clCreateContext(
-            nullptr, numberOfDevices, cldevices, clContextError, nullptr, &error);
+            nullptr, number_of_devices, cldevices, cl_context_error, nullptr, &error);
         if (error != CL_SUCCESS) {
           printf("CLERROR[%d]: %s\n", error, clewErrorString(error));
         }
@@ -221,7 +222,7 @@ static void opencl_initialize(const bool use_opencl)
         g_work_scheduler.opencl.program = clCreateProgramWithSource(
             g_work_scheduler.opencl.context, 1, cl_str, nullptr, &error);
         error = clBuildProgram(g_work_scheduler.opencl.program,
-                               numberOfDevices,
+                               number_of_devices,
                                cldevices,
                                nullptr,
                                nullptr,
@@ -254,19 +255,19 @@ static void opencl_initialize(const bool use_opencl)
           MEM_freeN(build_log);
         }
         else {
-          unsigned int indexDevices;
-          for (indexDevices = 0; indexDevices < numberOfDevices; indexDevices++) {
-            cl_device_id device = cldevices[indexDevices];
+          unsigned int index_devices;
+          for (index_devices = 0; index_devices < number_of_devices; index_devices++) {
+            cl_device_id device = cldevices[index_devices];
             cl_int vendorID = 0;
             cl_int error2 = clGetDeviceInfo(
                 device, CL_DEVICE_VENDOR_ID, sizeof(cl_int), &vendorID, nullptr);
             if (error2 != CL_SUCCESS) {
               printf("CLERROR[%d]: %s\n", error2, clewErrorString(error2));
             }
-            g_work_scheduler.opencl.devices.append(OpenCLDevice(g_work_scheduler.opencl.context,
-                                                                device,
-                                                                g_work_scheduler.opencl.program,
-                                                                vendorID));
+            g_work_scheduler.opencl.devices.append_as(g_work_scheduler.opencl.context,
+                                                      device,
+                                                      g_work_scheduler.opencl.program,
+                                                      vendorID);
           }
         }
         MEM_freeN(cldevices);
@@ -295,7 +296,7 @@ static void opencl_deinitialize()
   g_work_scheduler.opencl.initialized = false;
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Single threaded Scheduling
@@ -307,7 +308,7 @@ static void threading_model_single_thread_execute(WorkPackage *package)
   device.execute(package);
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Queue Scheduling
@@ -368,7 +369,7 @@ static void threading_model_queue_initialize(const int num_cpu_threads)
   /* Initialize CPU threads. */
   if (!g_work_scheduler.queue.initialized) {
     for (int index = 0; index < num_cpu_threads; index++) {
-      g_work_scheduler.queue.devices.append(CPUDevice(index));
+      g_work_scheduler.queue.devices.append_as(index);
     }
     BLI_thread_local_create(g_thread_device);
     g_work_scheduler.queue.initialized = true;
@@ -385,7 +386,7 @@ static void threading_model_queue_deinitialize()
   }
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Task Scheduling
@@ -423,7 +424,7 @@ static void threading_model_task_stop()
   BLI_thread_local_delete(g_thread_device);
 }
 
-/* \} */
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Public API
@@ -455,7 +456,7 @@ void WorkScheduler::schedule(WorkPackage *package)
   }
 }
 
-void WorkScheduler::start(CompositorContext &context)
+void WorkScheduler::start(const CompositorContext &context)
 {
   if (COM_is_opencl_enabled()) {
     opencl_start(context);
@@ -532,11 +533,12 @@ void WorkScheduler::initialize(bool use_opencl, int num_cpu_threads)
     opencl_initialize(use_opencl);
   }
 
+  g_work_scheduler.num_cpu_threads = num_cpu_threads;
   switch (COM_threading_model()) {
     case ThreadingModel::SingleThreaded:
+      g_work_scheduler.num_cpu_threads = 1;
       /* Nothing to do. */
       break;
-
     case ThreadingModel::Queue:
       threading_model_queue_initialize(num_cpu_threads);
       break;
@@ -568,6 +570,11 @@ void WorkScheduler::deinitialize()
   }
 }
 
+int WorkScheduler::get_num_cpu_threads()
+{
+  return g_work_scheduler.num_cpu_threads;
+}
+
 int WorkScheduler::current_thread_id()
 {
   if (COM_threading_model() == ThreadingModel::SingleThreaded) {
@@ -578,6 +585,6 @@ int WorkScheduler::current_thread_id()
   return device->thread_id();
 }
 
-/* \} */
+/** \} */
 
 }  // namespace blender::compositor

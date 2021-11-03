@@ -43,6 +43,10 @@
 
 #include "draw_instance_data.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct DupliObject;
 struct Object;
 
@@ -94,6 +98,17 @@ struct Object;
 
 /* ------------ Data Structure --------------- */
 /**
+ * Data structure to for registered draw engines that can store draw manager
+ * specific data.
+ */
+typedef struct DRWRegisteredDrawEngine {
+  void /*DRWRegisteredDrawEngine*/ *next, *prev;
+  DrawEngineType *draw_engine;
+  /** Index of the type in the lists. Index is used for dupli data. */
+  int index;
+} DRWRegisteredDrawEngine;
+
+/**
  * Data structure containing all drawcalls organized by passes and materials.
  * DRWPass > DRWShadingGroup > DRWCall > DRWCallState
  *                           > DRWUniform
@@ -110,8 +125,8 @@ typedef struct DRWCullingState {
 
 /* Minimum max UBO size is 64KiB. We take the largest
  * UBO struct and alloc the max number.
- * ((1 << 16) / sizeof(DRWObjectMatrix)) = 512
- * Keep in sync with common_view_lib.glsl */
+ * `((1 << 16) / sizeof(DRWObjectMatrix)) = 512`
+ * Keep in sync with `common_view_lib.glsl`. */
 #define DRW_RESOURCE_CHUNK_LEN 512
 
 /**
@@ -172,9 +187,9 @@ typedef struct DRWObjectInfos {
   float orcotexfac[2][4];
   float ob_color[4];
   float ob_index;
-  float pad; /* UNUSED*/
+  float pad; /*UNUSED*/
   float ob_random;
-  float ob_flag; /* sign is negative scaling,  */
+  float ob_flag; /* Sign is negative scaling. */
   uint ob_hash;
   char _pad2[12];
 } DRWObjectInfos;
@@ -189,6 +204,10 @@ typedef enum {
   DRW_CMD_DRAW_INSTANCE = 2,
   DRW_CMD_DRAW_INSTANCE_RANGE = 3,
   DRW_CMD_DRAW_PROCEDURAL = 4,
+
+  /* Compute Commands. */
+  DRW_CMD_COMPUTE = 8,
+
   /* Other Commands */
   DRW_CMD_CLEAR = 12,
   DRW_CMD_DRWSTATE = 13,
@@ -226,6 +245,12 @@ typedef struct DRWCommandDrawInstanceRange {
   uint inst_count;
 } DRWCommandDrawInstanceRange;
 
+typedef struct DRWCommandCompute {
+  int groups_x_len;
+  int groups_y_len;
+  int groups_z_len;
+} DRWCommandCompute;
+
 typedef struct DRWCommandDrawProcedural {
   GPUBatch *batch;
   DRWResourceHandle handle;
@@ -262,6 +287,7 @@ typedef union DRWCommand {
   DRWCommandDrawInstance instance;
   DRWCommandDrawInstanceRange instance_range;
   DRWCommandDrawProcedural procedural;
+  DRWCommandCompute compute;
   DRWCommandSetMutableState state;
   DRWCommandSetStencil stencil;
   DRWCommandSetSelectID select_id;
@@ -276,6 +302,7 @@ struct DRWCallBuffer {
 };
 
 /** Used by #DRWUniform.type */
+/* TODO(jbakker): rename to DRW_RESOURCE/DRWResourceType. */
 typedef enum {
   DRW_UNIFORM_INT = 0,
   DRW_UNIFORM_INT_COPY,
@@ -288,6 +315,7 @@ typedef enum {
   DRW_UNIFORM_BLOCK,
   DRW_UNIFORM_BLOCK_REF,
   DRW_UNIFORM_TFEEDBACK_TARGET,
+  DRW_UNIFORM_VERTEX_BUFFER_AS_STORAGE,
   /** Per drawcall uniforms/UBO */
   DRW_UNIFORM_BLOCK_OBMATS,
   DRW_UNIFORM_BLOCK_OBINFOS,
@@ -456,7 +484,7 @@ typedef struct DRWCommandSmallChunk {
   uint32_t command_len;
   uint32_t command_used;
   /* 4bits for each command. */
-  /* TODO reduce size of command_type. */
+  /* TODO: reduce size of command_type. */
   uint64_t command_type[6];
   DRWCommand commands[6];
 } DRWCommandSmallChunk;
@@ -480,17 +508,53 @@ typedef struct DRWDebugSphere {
   float color[4];
 } DRWDebugSphere;
 
+/* ------------- Memory Pools ------------ */
+
+/* Contains memory pools information */
+typedef struct DRWData {
+  /** Instance data. */
+  DRWInstanceDataList *idatalist;
+  /** Memory-pools for draw-calls. */
+  struct BLI_memblock *commands;
+  struct BLI_memblock *commands_small;
+  struct BLI_memblock *callbuffers;
+  struct BLI_memblock *obmats;
+  struct BLI_memblock *obinfos;
+  struct BLI_memblock *cullstates;
+  struct BLI_memblock *shgroups;
+  struct BLI_memblock *uniforms;
+  struct BLI_memblock *views;
+  struct BLI_memblock *passes;
+  struct BLI_memblock *images;
+  struct GPUUniformBuf **matrices_ubo;
+  struct GPUUniformBuf **obinfos_ubo;
+  struct GHash *obattrs_ubo_pool;
+  uint ubo_len;
+  /** Texture pool to reuse temp texture across engines. */
+  /* TODO(fclem) the pool could be shared even between viewports. */
+  struct DRWTexturePool *texture_pool;
+  /** Per stereo view data. Contains engine data and default framebuffers. */
+  struct DRWViewData *view_data[2];
+} DRWData;
+
 /* ------------- DRAW MANAGER ------------ */
+
+typedef struct DupliKey {
+  struct Object *ob;
+  struct ID *ob_data;
+} DupliKey;
 
 #define DST_MAX_SLOTS 64  /* Cannot be changed without modifying RST.bound_tex_slots */
 #define MAX_CLIP_PLANES 6 /* GL_MAX_CLIP_PLANES is at least 6 */
 #define STENCIL_UNDEFINED 256
 #define DRW_DRAWLIST_LEN 256
 typedef struct DRWManager {
-  /* TODO clean up this struct a bit */
+  /* TODO: clean up this struct a bit. */
   /* Cache generation */
-  ViewportMemoryPool *vmempool;
-  DRWInstanceDataList *idatalist;
+  /* TODO(fclem) Rename to data. */
+  DRWData *vmempool;
+  /** Active view data structure for one of the 2 stereo view. Not related to DRWView. */
+  struct DRWViewData *view_data_active;
   /* State of the object being evaluated if already allocated. */
   DRWResourceHandle ob_handle;
   /** True if current DST.ob_state has its matching DRWObjectInfos init. */
@@ -500,15 +564,19 @@ typedef struct DRWManager {
   /** Handle of next DRWPass to be allocated. */
   DRWResourceHandle pass_handle;
 
-  /** Dupli state. NULL if not dupli. */
+  /** Dupli object that corresponds to the current object. */
   struct DupliObject *dupli_source;
+  /** Object that created the dupli-list the current object is part of. */
   struct Object *dupli_parent;
+  /** Object referenced by the current dupli object. */
   struct Object *dupli_origin;
-  /** Ghash containing original objects. */
+  /** Object-data referenced by the current dupli object. */
+  struct ID *dupli_origin_data;
+  /** Ghash: #DupliKey -> void pointer for each enabled engine. */
   struct GHash *dupli_ghash;
   /** TODO(fclem): try to remove usage of this. */
   DRWInstanceData *object_instance_data[MAX_INSTANCE_DATA_SIZE];
-  /* Array of dupli_data (one for each enabled engine) to handle duplis. */
+  /* Dupli data for the current dupli for each enabled engine. */
   void **dupli_datas;
 
   /* Rendering state */
@@ -529,10 +597,10 @@ typedef struct DRWManager {
 
   struct {
     uint is_select : 1;
+    uint is_material_select : 1;
     uint is_depth : 1;
     uint is_image_render : 1;
     uint is_scene_render : 1;
-    uint do_color_management : 1;
     uint draw_background : 1;
     uint draw_text : 1;
   } options;
@@ -542,10 +610,6 @@ typedef struct DRWManager {
 
   /* Convenience pointer to text_store owned by the viewport */
   struct DRWTextStore **text_store_p;
-
-  ListBase enabled_engines; /* RenderEngineType */
-  void **vedata_array;      /* ViewportEngineData */
-  int enabled_engine_count; /* Length of enabled_engines list. */
 
   bool buffer_finish_called; /* Avoid bad usage of DRW_render_instance_buffer_finish */
 
@@ -603,7 +667,7 @@ void drw_batch_cache_validate(Object *ob);
 void drw_batch_cache_generate_requested(struct Object *ob);
 void drw_batch_cache_generate_requested_delayed(Object *ob);
 
-void drw_resource_buffer_finish(ViewportMemoryPool *vmempool);
+void drw_resource_buffer_finish(DRWData *vmempool);
 
 /* Procedural Drawing */
 GPUBatch *drw_cache_procedural_points_get(void);
@@ -616,3 +680,14 @@ void drw_uniform_attrs_pool_update(struct GHash *table,
                                    struct Object *ob,
                                    struct Object *dupli_parent,
                                    struct DupliObject *dupli_source);
+
+double *drw_engine_data_cache_time_get(GPUViewport *viewport);
+void *drw_engine_data_engine_data_create(GPUViewport *viewport, void *engine_type);
+void *drw_engine_data_engine_data_get(GPUViewport *viewport, void *engine_handle);
+bool drw_engine_data_engines_data_validate(GPUViewport *viewport, void **engine_handle_array);
+void drw_engine_data_cache_release(GPUViewport *viewport);
+void drw_engine_data_free(GPUViewport *viewport);
+
+#ifdef __cplusplus
+}
+#endif

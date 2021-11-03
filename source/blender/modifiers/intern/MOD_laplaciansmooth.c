@@ -57,18 +57,18 @@
 struct BLaplacianSystem {
   float *eweights;      /* Length weights per Edge */
   float (*fweights)[3]; /* Cotangent weights per face */
-  float *ring_areas;    /* Total area per ring*/
-  float *vlengths;      /* Total sum of lengths(edges) per vertice*/
-  float *vweights;      /* Total sum of weights per vertice*/
-  int numEdges;         /* Number of edges*/
-  int numLoops;         /* Number of edges*/
-  int numPolys;         /* Number of faces*/
-  int numVerts;         /* Number of verts*/
-  short *numNeFa;       /* Number of neighbors faces around vertice*/
-  short *numNeEd;       /* Number of neighbors Edges around vertice*/
-  short *zerola;        /* Is zero area or length*/
+  float *ring_areas;    /* Total area per ring. */
+  float *vlengths;      /* Total sum of lengths(edges) per vertex. */
+  float *vweights;      /* Total sum of weights per vertex. */
+  int numEdges;         /* Number of edges. */
+  int numLoops;         /* Number of edges. */
+  int numPolys;         /* Number of faces. */
+  int numVerts;         /* Number of verts. */
+  short *numNeFa;       /* Number of neighbors faces around vertice. */
+  short *numNeEd;       /* Number of neighbors Edges around vertice. */
+  bool *zerola;         /* Is zero area or length. */
 
-  /* Pointers to data*/
+  /* Pointers to data. */
   float (*vertexCos)[3];
   const MPoly *mpoly;
   const MLoop *mloop;
@@ -130,7 +130,7 @@ static void memset_laplacian_system(LaplacianSystem *sys, int val)
   memset(sys->ring_areas, val, sizeof(float) * sys->numVerts);
   memset(sys->vlengths, val, sizeof(float) * sys->numVerts);
   memset(sys->vweights, val, sizeof(float) * sys->numVerts);
-  memset(sys->zerola, val, sizeof(short) * sys->numVerts);
+  memset(sys->zerola, val, sizeof(bool) * sys->numVerts);
 }
 
 static LaplacianSystem *init_laplacian_system(int a_numEdges,
@@ -152,7 +152,7 @@ static LaplacianSystem *init_laplacian_system(int a_numEdges,
   sys->ring_areas = MEM_calloc_arrayN(sys->numVerts, sizeof(float), __func__);
   sys->vlengths = MEM_calloc_arrayN(sys->numVerts, sizeof(float), __func__);
   sys->vweights = MEM_calloc_arrayN(sys->numVerts, sizeof(float), __func__);
-  sys->zerola = MEM_calloc_arrayN(sys->numVerts, sizeof(short), __func__);
+  sys->zerola = MEM_calloc_arrayN(sys->numVerts, sizeof(bool), __func__);
 
   return sys;
 }
@@ -225,8 +225,8 @@ static void init_laplacian_matrix(LaplacianSystem *sys)
     sys->numNeEd[idv2] = sys->numNeEd[idv2] + 1;
     w1 = len_v3v3(v1, v2);
     if (w1 < sys->min_area) {
-      sys->zerola[idv1] = 1;
-      sys->zerola[idv2] = 1;
+      sys->zerola[idv1] = true;
+      sys->zerola[idv2] = true;
     }
     else {
       w1 = 1.0f / w1;
@@ -253,7 +253,7 @@ static void init_laplacian_matrix(LaplacianSystem *sys)
       areaf = area_tri_v3(v_prev, v_curr, v_next);
 
       if (areaf < sys->min_area) {
-        sys->zerola[l_curr->v] = 1;
+        sys->zerola[l_curr->v] = true;
       }
 
       sys->ring_areas[l_prev->v] += areaf;
@@ -299,8 +299,8 @@ static void fill_laplacian_matrix(LaplacianSystem *sys)
     for (; l_next != l_term; l_prev = l_curr, l_curr = l_next, l_next++) {
       const uint l_curr_index = l_curr - sys->mloop;
 
-      /* Is ring if number of faces == number of edges around vertice*/
-      if (sys->numNeEd[l_curr->v] == sys->numNeFa[l_curr->v] && sys->zerola[l_curr->v] == 0) {
+      /* Is ring if number of faces == number of edges around vertice. */
+      if (sys->numNeEd[l_curr->v] == sys->numNeFa[l_curr->v] && sys->zerola[l_curr->v] == false) {
         EIG_linear_solver_matrix_add(sys->context,
                                      l_curr->v,
                                      l_next->v,
@@ -310,7 +310,7 @@ static void fill_laplacian_matrix(LaplacianSystem *sys)
                                      l_prev->v,
                                      sys->fweights[l_curr_index][1] * sys->vweights[l_curr->v]);
       }
-      if (sys->numNeEd[l_next->v] == sys->numNeFa[l_next->v] && sys->zerola[l_next->v] == 0) {
+      if (sys->numNeEd[l_next->v] == sys->numNeFa[l_next->v] && sys->zerola[l_next->v] == false) {
         EIG_linear_solver_matrix_add(sys->context,
                                      l_next->v,
                                      l_curr->v,
@@ -320,7 +320,7 @@ static void fill_laplacian_matrix(LaplacianSystem *sys)
                                      l_prev->v,
                                      sys->fweights[l_curr_index][0] * sys->vweights[l_next->v]);
       }
-      if (sys->numNeEd[l_prev->v] == sys->numNeFa[l_prev->v] && sys->zerola[l_prev->v] == 0) {
+      if (sys->numNeEd[l_prev->v] == sys->numNeFa[l_prev->v] && sys->zerola[l_prev->v] == false) {
         EIG_linear_solver_matrix_add(sys->context,
                                      l_prev->v,
                                      l_curr->v,
@@ -338,7 +338,7 @@ static void fill_laplacian_matrix(LaplacianSystem *sys)
     idv2 = sys->medges[i].v2;
     /* Is boundary */
     if (sys->numNeEd[idv1] != sys->numNeFa[idv1] && sys->numNeEd[idv2] != sys->numNeFa[idv2] &&
-        sys->zerola[idv1] == 0 && sys->zerola[idv2] == 0) {
+        sys->zerola[idv1] == false && sys->zerola[idv2] == false) {
       EIG_linear_solver_matrix_add(
           sys->context, idv1, idv2, sys->eweights[i] * sys->vlengths[idv1]);
       EIG_linear_solver_matrix_add(
@@ -358,7 +358,7 @@ static void validate_solution(LaplacianSystem *sys, short flag, float lambda, fl
         sys->vert_centroid, sys->vertexCos, sys->mpoly, sys->numPolys, sys->mloop);
   }
   for (i = 0; i < sys->numVerts; i++) {
-    if (sys->zerola[i] == 0) {
+    if (sys->zerola[i] == false) {
       lam = sys->numNeEd[i] == sys->numNeFa[i] ? (lambda >= 0.0f ? 1.0f : -1.0f) :
                                                  (lambda_border >= 0.0f ? 1.0f : -1.0f);
       if (flag & MOD_LAPLACIANSMOOTH_X) {
@@ -442,7 +442,7 @@ static void laplaciansmoothModifier_do(
           wpaint = 1.0f;
         }
 
-        if (sys->zerola[i] == 0) {
+        if (sys->zerola[i] == false) {
           if (smd->flag & MOD_LAPLACIANSMOOTH_NORMALIZED) {
             w = sys->vweights[i];
             sys->vweights[i] = (w == 0.0f) ? 0.0f : -fabsf(smd->lambda) * wpaint / w;
@@ -635,7 +635,6 @@ ModifierTypeInfo modifierType_LaplacianSmooth = {
     /* modifyMesh */ NULL,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ init_data,
     /* requiredDataMask */ required_data_mask,

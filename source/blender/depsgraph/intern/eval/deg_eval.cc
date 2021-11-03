@@ -41,10 +41,15 @@
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
 
+#ifdef WITH_PYTHON
+#  include "BPY_extern.h"
+#endif
+
 #include "atomic_ops.h"
 
 #include "intern/depsgraph.h"
 #include "intern/depsgraph_relation.h"
+#include "intern/depsgraph_tag.h"
 #include "intern/eval/deg_eval_copy_on_write.h"
 #include "intern/eval/deg_eval_flush.h"
 #include "intern/eval/deg_eval_stats.h"
@@ -102,7 +107,7 @@ void evaluate_node(const DepsgraphEvalState *state, OperationNode *operation_nod
   ::Depsgraph *depsgraph = reinterpret_cast<::Depsgraph *>(state->graph);
 
   /* Sanity checks. */
-  BLI_assert(!operation_node->is_noop() && "NOOP nodes should not actually be scheduled");
+  BLI_assert_msg(!operation_node->is_noop(), "NOOP nodes should not actually be scheduled");
   /* Perform operation. */
   if (state->do_stats) {
     const double start_time = PIL_check_seconds_timer();
@@ -222,7 +227,7 @@ bool need_evaluate_operation_at_stage(DepsgraphEvalState *state,
     case EvaluationStage::SINGLE_THREADED_WORKAROUND:
       return true;
   }
-  BLI_assert(!"Unhandled evaluation stage, should never happen.");
+  BLI_assert_msg(0, "Unhandled evaluation stage, should never happen.");
   return false;
 }
 
@@ -372,6 +377,11 @@ void deg_evaluate_on_refresh(Depsgraph *graph)
 
   graph->debug.begin_graph_evaluation();
 
+#ifdef WITH_PYTHON
+  /* Release the GIL so that Python drivers can be evaluated. See T91046. */
+  BPy_BEGIN_ALLOW_THREADS;
+#endif
+
   graph->is_evaluating = true;
   depsgraph_ensure_view_layer(graph);
   /* Set up evaluation state. */
@@ -411,6 +421,10 @@ void deg_evaluate_on_refresh(Depsgraph *graph)
   /* Clear any uncleared tags - just in case. */
   deg_graph_clear_tags(graph);
   graph->is_evaluating = false;
+
+#ifdef WITH_PYTHON
+  BPy_END_ALLOW_THREADS;
+#endif
 
   graph->debug.end_graph_evaluation();
 }

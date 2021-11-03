@@ -41,25 +41,28 @@ typedef struct TransDataGenericSlideVert {
 
 /* transform_mode.c */
 int transform_mode_really_used(struct bContext *C, int mode);
-bool transdata_check_local_center(TransInfo *t, short around);
+bool transdata_check_local_center(const TransInfo *t, short around);
 bool transform_mode_is_changeable(const int mode);
 void protectedTransBits(short protectflag, float vec[3]);
 void protectedSizeBits(short protectflag, float size[3]);
-void constraintTransLim(TransInfo *t, TransData *td);
-void constraintSizeLim(TransInfo *t, TransData *td);
-void headerRotation(TransInfo *t, char *str, float final);
-void ElementRotation_ex(TransInfo *t,
-                        TransDataContainer *tc,
+void constraintTransLim(const TransInfo *t, TransData *td);
+void constraintSizeLim(const TransInfo *t, TransData *td);
+void headerRotation(TransInfo *t, char *str, int str_size, float final);
+void ElementRotation_ex(const TransInfo *t,
+                        const TransDataContainer *tc,
                         TransData *td,
                         const float mat[3][3],
                         const float *center);
-void ElementRotation(
-    TransInfo *t, TransDataContainer *tc, TransData *td, float mat[3][3], const short around);
-void headerResize(TransInfo *t, const float vec[3], char *str);
-void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, float mat[3][3]);
-short getAnimEdit_SnapMode(TransInfo *t);
-void doAnimEdit_SnapFrame(
-    TransInfo *t, TransData *td, TransData2D *td2d, struct AnimData *adt, short autosnap);
+void ElementRotation(const TransInfo *t,
+                     const TransDataContainer *tc,
+                     TransData *td,
+                     const float mat[3][3],
+                     const short around);
+void headerResize(TransInfo *t, const float vec[3], char *str, int str_size);
+void ElementResize(const TransInfo *t,
+                   const TransDataContainer *tc,
+                   TransData *td,
+                   const float mat[3][3]);
 void transform_mode_init(TransInfo *t, struct wmOperator *op, const int mode);
 void transform_mode_default_modal_orientation_set(TransInfo *t, int type);
 
@@ -118,7 +121,7 @@ void initMirror(TransInfo *t);
 void initPushPull(TransInfo *t);
 
 /* transform_mode_resize.c */
-void initResize(TransInfo *t);
+void initResize(TransInfo *t, float mouse_dir_constraint[3]);
 
 /* transform_mode_rotate.c */
 void initRotation(TransInfo *t);

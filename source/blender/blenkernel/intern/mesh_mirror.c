@@ -70,9 +70,9 @@ Mesh *BKE_mesh_mirror_bisect_on_mirror_plane_for_modifier(MirrorModifierData *mm
   /* Define bisecting plane (aka mirror plane). */
   float plane[4];
   if (!do_bisect_flip_axis) {
-    /* That reversed condition is a tad weird, but for some reason that's how you keep
-     * the part of the mesh which is on the non-mirrored side when flip option is disabled,
-     * think that that is the expected behavior. */
+    /* That reversed condition is a little weird, but for some reason that's how you keep
+     * the part of the mesh which is on the non-mirrored side when flip option is disabled.
+     * I think this is the expected behavior. */
     negate_v3(plane_no);
   }
   plane_from_point_normal_v3(plane, plane_co, plane_no);
@@ -393,15 +393,14 @@ Mesh *BKE_mesh_mirror_apply_mirror_on_axis_for_modifier(MirrorModifierData *mmd,
 
     /* calculate custom normals into loop_normals, then mirror first half into second half */
 
-    BKE_mesh_calc_normals_poly(result->mvert,
-                               NULL,
-                               result->totvert,
-                               result->mloop,
-                               result->mpoly,
-                               totloop,
-                               totpoly,
-                               poly_normals,
-                               false);
+    BKE_mesh_calc_normals_poly_and_vertex(result->mvert,
+                                          result->totvert,
+                                          result->mloop,
+                                          totloop,
+                                          result->mpoly,
+                                          totpoly,
+                                          poly_normals,
+                                          NULL);
 
     BKE_mesh_normals_loop_split(result->mvert,
                                 result->totvert,

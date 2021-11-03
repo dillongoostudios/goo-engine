@@ -265,6 +265,7 @@ void WM_gizmogroup_ensure_init(const bContext *C, wmGizmoGroup *gzgroup)
 {
   /* prepare for first draw */
   if (UNLIKELY((gzgroup->init_flag & WM_GIZMOGROUP_INIT_SETUP) == 0)) {
+
     gzgroup->type->setup(C, gzgroup);
 
     /* Not ideal, initialize keymap here, needed for RNA runtime generated gizmos. */
@@ -548,8 +549,8 @@ static int gizmo_tweak_modal(bContext *C, wmOperator *op, const wmEvent *event)
 
     if (event->type == EVT_MODAL_MAP) {
       event_modal_val = evil_event->val;
-      evil_event->type = evil_event->prevtype;
-      evil_event->val = evil_event->prevval;
+      evil_event->type = evil_event->prev_type;
+      evil_event->val = evil_event->prev_val;
     }
 
     int modal_retval = modal_fn(C, gz, event, mtweak->flag);
@@ -981,10 +982,10 @@ void WM_gizmomaptype_group_unlink(bContext *C,
     WM_gizmomaptype_group_free(gzgt_ref);
   }
 
-  /* TODO(campbell): Gizmos may share keymaps, for now don't
+  /* TODO(campbell): Gizmos may share key-maps, for now don't
    * remove however we could flag them as temporary/owned by the gizmo. */
 #if 0
-  /* Note, we may want to keep this keymap for editing */
+  /* NOTE: we may want to keep this key-map for editing. */
   WM_keymap_remove(gzgt->keyconf, gzgt->keymap);
 #endif
 

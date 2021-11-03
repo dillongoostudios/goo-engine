@@ -54,7 +54,7 @@ void ED_transverts_update_obedit(TransVertStore *tvs, Object *obedit)
   const int mode = tvs->mode;
   BLI_assert(ED_transverts_check_obedit(obedit) == true);
 
-  DEG_id_tag_update(obedit->data, 0);
+  DEG_id_tag_update(obedit->data, ID_RECALC_GEOMETRY);
 
   if (obedit->type == OB_MESH) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
@@ -182,8 +182,8 @@ static void set_mapped_co(void *vuserdata,
   if (BM_elem_index_get(eve) != TM_INDEX_SKIP) {
     tv = &tv[BM_elem_index_get(eve)];
 
-    /* be clever, get the closest vertex to the original,
-     * behaves most logically when the mirror modifier is used for eg T33051*/
+    /* Be clever, get the closest vertex to the original,
+     * behaves most logically when the mirror modifier is used for eg T33051. */
     if ((tv->flag & TX_VERT_USE_MAPLOC) == 0) {
       /* first time */
       copy_v3_v3(tv->maploc, co);

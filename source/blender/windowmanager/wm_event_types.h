@@ -34,6 +34,7 @@ enum {
   EVT_DATA_TIMER = 2,
   EVT_DATA_DRAGDROP = 3,
   EVT_DATA_NDOF_MOTION = 4,
+  EVT_DATA_XR = 5,
 };
 
 /* tablet active, matches GHOST_TTabletMode */
@@ -341,6 +342,9 @@ enum {
 
   /* could become gizmo callback */
   EVT_GIZMO_UPDATE = 0x5025, /* 20517 */
+
+  /* XR events: 0x503x */
+  EVT_XR_ACTION = 0x5030, /* 20528 */
   /* ********** End of Blender internal events. ********** */
 };
 
@@ -351,9 +355,9 @@ enum {
 
 /* for event checks */
 /* only used for KM_TEXTINPUT, so assume that we want all user-inputtable ascii codes included */
-/* UNUSED - see wm_eventmatch - BUG T30479. */
-/* #define ISTEXTINPUT(event_type)  ((event_type) >= ' ' && (event_type) <= 255) */
-/* note, an alternative could be to check 'event->utf8_buf' */
+/* Unused, see #wm_eventmatch, see: T30479. */
+// #define ISTEXTINPUT(event_type)  ((event_type) >= ' ' && (event_type) <= 255)
+/* NOTE: an alternative could be to check `event->utf8_buf`. */
 
 /* test whether the event is a key on the keyboard */
 #define ISKEYBOARD(event_type) \
@@ -395,7 +399,7 @@ enum {
   ((ISKEYBOARD(event_type) || ISMOUSE(event_type) || ISNDOF(event_type)) && \
    (ISKEYMODIFIER(event_type) == false))
 
-/* internal helpers*/
+/* Internal helpers. */
 #define _VA_IS_EVENT_MOD2(v, a) (CHECK_TYPE_INLINE(v, wmEvent *), ((v)->a))
 #define _VA_IS_EVENT_MOD3(v, a, b) (_VA_IS_EVENT_MOD2(v, a) || ((v)->b))
 #define _VA_IS_EVENT_MOD4(v, a, b, c) (_VA_IS_EVENT_MOD3(v, a, b) || ((v)->c))
@@ -439,7 +443,7 @@ bool WM_event_type_mask_test(const int event_type, const enum eEventType_Mask ma
 /* Gestures */
 /* NOTE: these values are saved in keymap files, do not change them but just add new ones */
 enum {
-  /* value of tweaks and line gestures, note, KM_ANY (-1) works for this case too */
+  /* Value of tweaks and line gestures. #KM_ANY (-1) works for this case too. */
   EVT_GESTURE_N = 1,
   EVT_GESTURE_NE = 2,
   EVT_GESTURE_E = 3,

@@ -76,7 +76,7 @@ typedef struct StitchPreviewer {
   float *preview_polys;
   /* uvs per polygon. */
   uint *uvs_per_polygon;
-  /*number of preview polygons */
+  /* Number of preview polygons. */
   uint num_polys;
   /* preview data. These will be either the previewed vertices or edges
    * depending on stitch mode settings */
@@ -265,26 +265,11 @@ static StitchPreviewer *stitch_preview_init(void)
 static void stitch_preview_delete(StitchPreviewer *stitch_preview)
 {
   if (stitch_preview) {
-    if (stitch_preview->preview_polys) {
-      MEM_freeN(stitch_preview->preview_polys);
-      stitch_preview->preview_polys = NULL;
-    }
-    if (stitch_preview->uvs_per_polygon) {
-      MEM_freeN(stitch_preview->uvs_per_polygon);
-      stitch_preview->uvs_per_polygon = NULL;
-    }
-    if (stitch_preview->preview_stitchable) {
-      MEM_freeN(stitch_preview->preview_stitchable);
-      stitch_preview->preview_stitchable = NULL;
-    }
-    if (stitch_preview->preview_unstitchable) {
-      MEM_freeN(stitch_preview->preview_unstitchable);
-      stitch_preview->preview_unstitchable = NULL;
-    }
-    if (stitch_preview->static_tris) {
-      MEM_freeN(stitch_preview->static_tris);
-      stitch_preview->static_tris = NULL;
-    }
+    MEM_SAFE_FREE(stitch_preview->preview_polys);
+    MEM_SAFE_FREE(stitch_preview->uvs_per_polygon);
+    MEM_SAFE_FREE(stitch_preview->preview_stitchable);
+    MEM_SAFE_FREE(stitch_preview->preview_unstitchable);
+    MEM_SAFE_FREE(stitch_preview->static_tris);
     MEM_freeN(stitch_preview);
   }
 }
@@ -1069,8 +1054,7 @@ static int stitch_process_data(StitchStateContainer *ssc,
     }
   }
 
-  /* remember stitchable candidates as places the 'I' button  */
-  /* will stop at.                                            */
+  /* Remember stitchable candidates as places the 'I' button will stop at. */
   for (int island_idx = 0; island_idx < state->element_map->totalIslands; island_idx++) {
     state->island_is_stitchable[island_idx] = island_stitch_data[island_idx].stitchableCandidate ?
                                                   true :
@@ -1747,7 +1731,8 @@ static void stitch_draw_vbo(GPUVertBuf *vbo, GPUPrimType prim_type, const float 
   GPU_batch_discard(batch);
 }
 
-/* TODO make things pretier : store batches inside StitchPreviewer instead of the bare verts pos */
+/* TODO: make things pretier : store batches inside StitchPreviewer instead of the bare verts pos
+ */
 static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(region), void *arg)
 {
 
@@ -1769,7 +1754,7 @@ static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(region), void
 
     GPU_blend(GPU_BLEND_ALPHA);
 
-    /* Static Tris */
+    /* Static Triangles. */
     if (stitch_preview->static_tris) {
       UI_GetThemeColor4fv(TH_STITCH_PREVIEW_ACTIVE, col);
       vbo = GPU_vertbuf_create_with_format(&format);
@@ -1818,7 +1803,7 @@ static void stitch_draw(const bContext *UNUSED(C), ARegion *UNUSED(region), void
 
         /* Closing line */
         GPU_vertbuf_attr_set(vbo_line, pos_id, line_idx++, &stitch_preview->preview_polys[index]);
-        /* j = uvs_per_polygon[i] - 1*/
+        /* `j = uvs_per_polygon[i] - 1` */
         GPU_vertbuf_attr_set(
             vbo_line, pos_id, line_idx++, &stitch_preview->preview_polys[index + j * 2]);
 
@@ -1928,6 +1913,11 @@ static StitchState *stitch_init(bContext *C,
   state->obedit = obedit;
   state->em = em;
 
+  /* Workaround for sync-select & face-select mode which implies all selected faces are detached,
+   * for stitch this isn't useful behavior, see T86924. */
+  const int selectmode_orig = scene->toolsettings->selectmode;
+  scene->toolsettings->selectmode = SCE_SELECT_VERTEX;
+
   /* in uv synch selection, all uv's are visible */
   if (ts->uv_flag & UV_SYNC_SELECTION) {
     state->element_map = BM_uv_element_map_create(state->em->bm, scene, false, false, true, true);
@@ -1935,6 +1925,9 @@ static StitchState *stitch_init(bContext *C,
   else {
     state->element_map = BM_uv_element_map_create(state->em->bm, scene, true, false, true, true);
   }
+
+  scene->toolsettings->selectmode = selectmode_orig;
+
   if (!state->element_map) {
     state_delete(state);
     return NULL;
@@ -1980,7 +1973,7 @@ static StitchState *stitch_init(bContext *C,
         counter++;
         state->uvs[counter] = element;
       }
-      /* pointer arithmetic to the rescue, as always :)*/
+      /* Pointer arithmetic to the rescue, as always :). */
       map[element - state->element_map->buf] = counter;
     }
   }
@@ -1989,7 +1982,7 @@ static StitchState *stitch_init(bContext *C,
   /* Now, on to generate our uv connectivity data */
   BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
     if (!(ts->uv_flag & UV_SYNC_SELECTION) &&
-        ((BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) || !BM_elem_flag_test(efa, BM_ELEM_SELECT))) {
+        (BM_elem_flag_test(efa, BM_ELEM_HIDDEN) || !BM_elem_flag_test(efa, BM_ELEM_SELECT))) {
       continue;
     }
 
@@ -2007,8 +2000,8 @@ static StitchState *stitch_init(bContext *C,
       all_edges[counter].first = NULL;
       all_edges[counter].flag = 0;
       all_edges[counter].element = element;
-      /* using an order policy, sort uvs according to address space. This avoids
-       * Having two different UvEdges with the same uvs on different positions  */
+      /* Using an order policy, sort UV's according to address space.
+       * This avoids having two different UvEdges with the same UV's on different positions. */
       if (offset1 < offset2) {
         all_edges[counter].uv1 = offset1;
         all_edges[counter].uv2 = offset2;
@@ -2172,8 +2165,8 @@ static StitchState *stitch_init(bContext *C,
                                            "uv_stitch_selection_stack");
 
       BM_ITER_MESH (efa, &iter, em->bm, BM_FACES_OF_MESH) {
-        if (!(ts->uv_flag & UV_SYNC_SELECTION) && ((BM_elem_flag_test(efa, BM_ELEM_HIDDEN)) ||
-                                                   !BM_elem_flag_test(efa, BM_ELEM_SELECT))) {
+        if (!(ts->uv_flag & UV_SYNC_SELECTION) &&
+            (BM_elem_flag_test(efa, BM_ELEM_HIDDEN) || !BM_elem_flag_test(efa, BM_ELEM_SELECT))) {
           continue;
         }
 
@@ -2381,9 +2374,9 @@ static int stitch_init_all(bContext *C, wmOperator *op)
   StitchState *state = ssc->states[ssc->active_object_index];
   ssc->static_island %= state->element_map->totalIslands;
 
-  /* If the initial active object doesn't have any stitchable islands */
-  /* then no active island will be seen in the UI. Make sure we're on */
-  /* a stitchable object and island.                                  */
+  /* If the initial active object doesn't have any stitchable islands
+   * then no active island will be seen in the UI.
+   * Make sure we're on a stitchable object and island. */
   if (!state->island_is_stitchable[ssc->static_island]) {
     goto_next_island(ssc);
     state = ssc->states[ssc->active_object_index];

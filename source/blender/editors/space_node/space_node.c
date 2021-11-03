@@ -201,27 +201,6 @@ void ED_node_tree_path_get(SpaceNode *snode, char *value)
   }
 }
 
-void ED_node_tree_path_get_fixedbuf(SpaceNode *snode, char *value, int max_length)
-{
-  int size;
-
-  value[0] = '\0';
-  int i = 0;
-  LISTBASE_FOREACH_INDEX (bNodeTreePath *, path, &snode->treepath, i) {
-    if (i == 0) {
-      size = BLI_strncpy_rlen(value, path->display_name, max_length);
-    }
-    else {
-      size = BLI_snprintf_rlen(value, max_length, "/%s", path->display_name);
-    }
-    max_length -= size;
-    if (max_length <= 0) {
-      break;
-    }
-    value += size;
-  }
-}
-
 void ED_node_set_active_viewer_key(SpaceNode *snode)
 {
   bNodeTreePath *path = snode->treepath.last;
@@ -256,6 +235,8 @@ static SpaceLink *node_create(const ScrArea *UNUSED(area), const Scene *UNUSED(s
   snode->spacetype = SPACE_NODE;
 
   snode->flag = SNODE_SHOW_GPENCIL | SNODE_USE_ALPHA;
+  snode->overlay.flag |= SN_OVERLAY_SHOW_OVERLAYS;
+  snode->overlay.flag |= SN_OVERLAY_SHOW_WIRE_COLORS;
 
   /* backdrop */
   snode->zoom = 1.0f;
@@ -345,7 +326,7 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
   ScrArea *area = params->area;
   wmNotifier *wmn = params->notifier;
 
-  /* note, ED_area_tag_refresh will re-execute compositor */
+  /* NOTE: #ED_area_tag_refresh will re-execute compositor. */
   SpaceNode *snode = area->spacedata.first;
   /* shaderfrom is only used for new shading nodes, otherwise all shaders are from objects */
   short shader_type = snode->shaderfrom;
@@ -563,7 +544,7 @@ static SpaceLink *node_duplicate(SpaceLink *sl)
     BLI_listbase_clear(&snoden->runtime->linkdrag);
   }
 
-  /* Note: no need to set node tree user counts,
+  /* NOTE: no need to set node tree user counts,
    * the editor only keeps at least 1 (id_us_ensure_real),
    * which is already done by the original SpaceNode.
    */
@@ -619,8 +600,8 @@ static void node_cursor(wmWindow *win, ScrArea *area, ARegion *region)
 
   /* convert mouse coordinates to v2d space */
   UI_view2d_region_to_view(&region->v2d,
-                           win->eventstate->x - region->winrct.xmin,
-                           win->eventstate->y - region->winrct.ymin,
+                           win->eventstate->xy[0] - region->winrct.xmin,
+                           win->eventstate->xy[1] - region->winrct.ymin,
                            &snode->runtime->cursor[0],
                            &snode->runtime->cursor[1]);
 
@@ -651,6 +632,10 @@ static void node_main_region_init(wmWindowManager *wm, ARegion *region)
   lb = WM_dropboxmap_find("Node Editor", SPACE_NODE, RGN_TYPE_WINDOW);
 
   WM_event_add_dropbox_handler(&region->handlers, lb);
+
+  /* The backdrop image gizmo needs to change together with the view. So always refresh gizmos on
+   * region size changes. */
+  WM_gizmomap_tag_refresh(region->gizmo_map);
 }
 
 static void node_main_region_draw(const bContext *C, ARegion *region)
@@ -660,42 +645,29 @@ static void node_main_region_draw(const bContext *C, ARegion *region)
 
 /* ************* dropboxes ************* */
 
-static bool node_group_drop_poll(bContext *UNUSED(C),
-                                 wmDrag *drag,
-                                 const wmEvent *UNUSED(event),
-                                 const char **UNUSED(r_tooltip))
+static bool node_group_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   return WM_drag_is_ID_type(drag, ID_NT);
 }
 
-static bool node_object_drop_poll(bContext *UNUSED(C),
-                                  wmDrag *drag,
-                                  const wmEvent *UNUSED(event),
-                                  const char **UNUSED(r_tooltip))
+static bool node_object_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   return WM_drag_is_ID_type(drag, ID_OB);
 }
 
 static bool node_collection_drop_poll(bContext *UNUSED(C),
                                       wmDrag *drag,
-                                      const wmEvent *UNUSED(event),
-                                      const char **UNUSED(r_tooltip))
+                                      const wmEvent *UNUSED(event))
 {
   return WM_drag_is_ID_type(drag, ID_GR);
 }
 
-static bool node_texture_drop_poll(bContext *UNUSED(C),
-                                   wmDrag *drag,
-                                   const wmEvent *UNUSED(event),
-                                   const char **UNUSED(r_tooltip))
+static bool node_texture_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   return WM_drag_is_ID_type(drag, ID_TE);
 }
 
-static bool node_ima_drop_poll(bContext *UNUSED(C),
-                               wmDrag *drag,
-                               const wmEvent *UNUSED(event),
-                               const char **UNUSED(r_tooltip))
+static bool node_ima_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   if (drag->type == WM_DRAG_PATH) {
     /* rule might not work? */
@@ -704,10 +676,7 @@ static bool node_ima_drop_poll(bContext *UNUSED(C),
   return WM_drag_is_ID_type(drag, ID_IM);
 }
 
-static bool node_mask_drop_poll(bContext *UNUSED(C),
-                                wmDrag *drag,
-                                const wmEvent *UNUSED(event),
-                                const char **UNUSED(r_tooltip))
+static bool node_mask_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNUSED(event))
 {
   return WM_drag_is_ID_type(drag, ID_MSK);
 }
@@ -749,32 +718,38 @@ static void node_dropboxes(void)
                  "NODE_OT_add_object",
                  node_object_drop_poll,
                  node_id_drop_copy,
-                 WM_drag_free_imported_drag_ID);
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
   WM_dropbox_add(lb,
                  "NODE_OT_add_collection",
                  node_collection_drop_poll,
                  node_id_drop_copy,
-                 WM_drag_free_imported_drag_ID);
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
   WM_dropbox_add(lb,
                  "NODE_OT_add_texture",
                  node_texture_drop_poll,
                  node_id_drop_copy,
-                 WM_drag_free_imported_drag_ID);
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
   WM_dropbox_add(lb,
                  "NODE_OT_add_group",
                  node_group_drop_poll,
                  node_group_drop_copy,
-                 WM_drag_free_imported_drag_ID);
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
   WM_dropbox_add(lb,
                  "NODE_OT_add_file",
                  node_ima_drop_poll,
                  node_id_path_drop_copy,
-                 WM_drag_free_imported_drag_ID);
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
   WM_dropbox_add(lb,
                  "NODE_OT_add_mask",
                  node_mask_drop_poll,
                  node_id_drop_copy,
-                 WM_drag_free_imported_drag_ID);
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
 }
 
 /* ************* end drop *********** */
@@ -1093,8 +1068,6 @@ void ED_spacetype_node(void)
   art->init = node_buttons_region_init;
   art->draw = node_buttons_region_draw;
   BLI_addhead(&st->regiontypes, art);
-
-  node_buttons_register(art);
 
   /* regions: toolbar */
   art = MEM_callocN(sizeof(ARegionType), "spacetype view3d tools region");

@@ -313,7 +313,7 @@ static void random_header_draw(const bContext *UNUSED(C), Panel *panel)
 
   PointerRNA *ptr = gpencil_modifier_panel_get_property_pointers(panel, NULL);
 
-  uiItemR(layout, ptr, "random", 0, IFACE_("Randomize"), ICON_NONE);
+  uiItemR(layout, ptr, "use_random", 0, IFACE_("Randomize"), ICON_NONE);
 }
 
 static void random_panel_draw(const bContext *UNUSED(C), Panel *panel)
@@ -324,7 +324,7 @@ static void random_panel_draw(const bContext *UNUSED(C), Panel *panel)
 
   uiLayoutSetPropSep(layout, true);
 
-  uiLayoutSetActive(layout, RNA_boolean_get(ptr, "random"));
+  uiLayoutSetActive(layout, RNA_boolean_get(ptr, "use_random"));
 
   uiItemR(layout, ptr, "step", 0, NULL, ICON_NONE);
 }

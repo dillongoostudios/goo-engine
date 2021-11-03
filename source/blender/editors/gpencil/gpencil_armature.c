@@ -80,7 +80,7 @@ static int gpencil_bone_looper(Object *ob,
 {
   /* We want to apply the function bone_func to every bone
    * in an armature -- feed bone_looper the first bone and
-   * a pointer to the bone_func and watch it go!. The int count
+   * a pointer to the bone_func and watch it go! The int count
    * can be useful for counting bones with a certain property
    * (e.g. skinnable)
    */
@@ -384,7 +384,7 @@ static void gpencil_add_verts_to_dgroups(
 
           /* loop groups and assign weight */
           for (j = 0; j < numbones; j++) {
-            int def_nr = BLI_findindex(&ob->defbase, dgrouplist[j]);
+            int def_nr = BLI_findindex(&gpd->vertex_group_names, dgrouplist[j]);
             if (def_nr < 0) {
               continue;
             }
@@ -425,7 +425,7 @@ static void gpencil_add_verts_to_dgroups(
         }
       }
 
-      /* if not multiedit, exit loop*/
+      /* If not multi-edit, exit loop. */
       if (!is_multiedit) {
         break;
       }
@@ -454,7 +454,7 @@ static void gpencil_object_vgroup_calc_from_armature(const bContext *C,
   bArmature *arm = ob_arm->data;
 
   /* always create groups */
-  const int defbase_tot = BLI_listbase_count(&ob->defbase);
+  const int defbase_tot = BKE_object_defgroup_count(ob);
   int defbase_add;
   /* Traverse the bone list, trying to create empty vertex
    * groups corresponding to the bone.
@@ -462,8 +462,8 @@ static void gpencil_object_vgroup_calc_from_armature(const bContext *C,
   defbase_add = gpencil_bone_looper(ob, arm->bonebase.first, NULL, vgroup_add_unique_bone_cb);
 
   if (defbase_add) {
-    /* its possible there are DWeight's outside the range of the current
-     * objects deform groups, in this case the new groups wont be empty */
+    /* It's possible there are DWeights outside the range of the current
+     * object's deform groups. In this case the new groups won't be empty */
     ED_vgroup_data_clamp_range(ob->data, defbase_tot);
   }
 

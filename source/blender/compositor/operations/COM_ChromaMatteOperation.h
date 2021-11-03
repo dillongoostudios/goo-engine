@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "COM_MixOperation.h"
+#include "COM_MultiThreadedOperation.h"
 
 namespace blender::compositor {
 
@@ -26,11 +26,11 @@ namespace blender::compositor {
  * this program converts an input color to an output value.
  * it assumes we are in sRGB color space.
  */
-class ChromaMatteOperation : public NodeOperation {
+class ChromaMatteOperation : public MultiThreadedOperation {
  private:
-  NodeChroma *m_settings;
-  SocketReader *m_inputImageProgram;
-  SocketReader *m_inputKeyProgram;
+  NodeChroma *settings_;
+  SocketReader *input_image_program_;
+  SocketReader *input_key_program_;
 
  public:
   /**
@@ -41,15 +41,19 @@ class ChromaMatteOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
-  void initExecution() override;
-  void deinitExecution() override;
+  void init_execution() override;
+  void deinit_execution() override;
 
-  void setSettings(NodeChroma *nodeChroma)
+  void set_settings(NodeChroma *node_chroma)
   {
-    this->m_settings = nodeChroma;
+    settings_ = node_chroma;
   }
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

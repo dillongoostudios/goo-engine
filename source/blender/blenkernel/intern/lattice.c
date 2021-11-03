@@ -87,6 +87,8 @@ static void lattice_copy_data(Main *bmain, ID *id_dst, const ID *id_src, const i
     lattice_dst->key->from = &lattice_dst->id;
   }
 
+  BKE_defgroup_copy_list(&lattice_dst->vertex_group_names, &lattice_src->vertex_group_names);
+
   if (lattice_src->dvert) {
     int tot = lattice_src->pntsu * lattice_src->pntsv * lattice_src->pntsw;
     lattice_dst->dvert = MEM_mallocN(sizeof(MDeformVert) * tot, "Lattice MDeformVert");
@@ -102,6 +104,8 @@ static void lattice_free_data(ID *id)
   Lattice *lattice = (Lattice *)id;
 
   BKE_lattice_batch_cache_free(lattice);
+
+  BLI_freelistN(&lattice->vertex_group_names);
 
   MEM_SAFE_FREE(lattice->def);
   if (lattice->dvert) {
@@ -127,31 +131,31 @@ static void lattice_free_data(ID *id)
 static void lattice_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   Lattice *lattice = (Lattice *)id;
-  BKE_LIB_FOREACHID_PROCESS(data, lattice->key, IDWALK_CB_USER);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lattice->key, IDWALK_CB_USER);
 }
 
 static void lattice_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Lattice *lt = (Lattice *)id;
-  if (lt->id.us > 0 || BLO_write_is_undo(writer)) {
-    /* Clean up, important in undo case to reduce false detection of changed datablocks. */
-    lt->editlatt = NULL;
-    lt->batch_cache = NULL;
 
-    /* write LibData */
-    BLO_write_id_struct(writer, Lattice, id_address, &lt->id);
-    BKE_id_blend_write(writer, &lt->id);
+  /* Clean up, important in undo case to reduce false detection of changed datablocks. */
+  lt->editlatt = NULL;
+  lt->batch_cache = NULL;
 
-    /* write animdata */
-    if (lt->adt) {
-      BKE_animdata_blend_write(writer, lt->adt);
-    }
+  /* write LibData */
+  BLO_write_id_struct(writer, Lattice, id_address, &lt->id);
+  BKE_id_blend_write(writer, &lt->id);
 
-    /* direct data */
-    BLO_write_struct_array(writer, BPoint, lt->pntsu * lt->pntsv * lt->pntsw, lt->def);
-
-    BKE_defvert_blend_write(writer, lt->pntsu * lt->pntsv * lt->pntsw, lt->dvert);
+  /* write animdata */
+  if (lt->adt) {
+    BKE_animdata_blend_write(writer, lt->adt);
   }
+
+  /* direct data */
+  BLO_write_struct_array(writer, BPoint, lt->pntsu * lt->pntsv * lt->pntsw, lt->def);
+
+  BKE_defbase_blend_write(writer, &lt->vertex_group_names);
+  BKE_defvert_blend_write(writer, lt->pntsu * lt->pntsv * lt->pntsw, lt->dvert);
 }
 
 static void lattice_blend_read_data(BlendDataReader *reader, ID *id)
@@ -161,6 +165,7 @@ static void lattice_blend_read_data(BlendDataReader *reader, ID *id)
 
   BLO_read_data_address(reader, &lt->dvert);
   BKE_defvert_blend_read(reader, lt->pntsu * lt->pntsv * lt->pntsw, lt->dvert);
+  BLO_read_list(reader, &lt->vertex_group_names);
 
   lt->editlatt = NULL;
   lt->batch_cache = NULL;
@@ -191,7 +196,7 @@ IDTypeInfo IDType_ID_LT = {
     .name = "Lattice",
     .name_plural = "lattices",
     .translation_context = BLT_I18NCONTEXT_ID_LATTICE,
-    .flags = 0,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
 
     .init_data = lattice_init_data,
     .copy_data = lattice_copy_data,

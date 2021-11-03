@@ -106,7 +106,7 @@ static PyObject *py_imbuf_resize(Py_ImBuf *self, PyObject *args, PyObject *kw)
   struct PyC_StringEnum method = {method_items, FAST};
 
   static const char *_keywords[] = {"size", "method", NULL};
-  static _PyArg_Parser _parser = {"(ii)|O&:resize", _keywords, 0};
+  static _PyArg_Parser _parser = {"(ii)|$O&:resize", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(
           args, kw, &_parser, &size[0], &size[1], PyC_ParseStringEnum, &method)) {
     return NULL;
@@ -178,7 +178,7 @@ static PyObject *py_imbuf_copy(Py_ImBuf *self)
   if (UNLIKELY(ibuf_copy == NULL)) {
     PyErr_SetString(PyExc_MemoryError,
                     "ImBuf.copy(): "
-                    "failed to allocate memory memory");
+                    "failed to allocate memory");
     return NULL;
   }
   return Py_ImBuf_CreatePyObject(ibuf_copy);
@@ -242,7 +242,7 @@ static int py_imbuf_ppm_set(Py_ImBuf *self, PyObject *value, void *UNUSED(closur
   PY_IMBUF_CHECK_INT(self);
   double ppm[2];
 
-  if (PyC_AsArray(ppm, value, 2, &PyFloat_Type, true, "ppm") == -1) {
+  if (PyC_AsArray(ppm, sizeof(*ppm), value, 2, &PyFloat_Type, "ppm") == -1) {
     return -1;
   }
 
@@ -443,7 +443,7 @@ static PyObject *M_imbuf_new(PyObject *UNUSED(self), PyObject *args, PyObject *k
     return NULL;
   }
 
-  /* TODO, make options */
+  /* TODO: make options. */
   const uchar planes = 4;
   const uint flags = IB_rect;
 
@@ -495,22 +495,23 @@ static PyObject *M_imbuf_load(PyObject *UNUSED(self), PyObject *args, PyObject *
   return Py_ImBuf_CreatePyObject(ibuf);
 }
 
-PyDoc_STRVAR(M_imbuf_write_doc,
-             ".. function:: write(image, filepath)\n"
-             "\n"
-             "   Write an image.\n"
-             "\n"
-             "   :arg image: the image to write.\n"
-             "   :type image: :class:`ImBuf`\n"
-             "   :arg filepath: the filepath of the image.\n"
-             "   :type filepath: string\n");
+PyDoc_STRVAR(
+    M_imbuf_write_doc,
+    ".. function:: write(image, filepath=image.filepath)\n"
+    "\n"
+    "   Write an image.\n"
+    "\n"
+    "   :arg image: the image to write.\n"
+    "   :type image: :class:`ImBuf`\n"
+    "   :arg filepath: Optional filepath of the image (fallback to the images file path).\n"
+    "   :type filepath: string\n");
 static PyObject *M_imbuf_write(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
   Py_ImBuf *py_imb;
   const char *filepath = NULL;
 
   static const char *_keywords[] = {"image", "filepath", NULL};
-  static _PyArg_Parser _parser = {"O!|s:write", _keywords, 0};
+  static _PyArg_Parser _parser = {"O!|$s:write", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, &Py_ImBuf_Type, &py_imb, &filepath)) {
     return NULL;
   }

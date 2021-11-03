@@ -31,6 +31,13 @@ extern "C" {
 
 struct GSet;
 
+/* CacheFile::type */
+typedef enum {
+  CACHEFILE_TYPE_ALEMBIC = 1,
+  CACHEFILE_TYPE_USD = 2,
+  CACHE_FILE_TYPE_INVALID = 0,
+} eCacheFileType;
+
 /* CacheFile::flag */
 enum {
   CACHEFILE_DS_EXPAND = (1 << 0),
@@ -44,13 +51,13 @@ enum {
 };
 #endif
 
-/* Representation of an object's path inside the Alembic file.
+/* Representation of an object's path inside the archive.
  * Note that this is not a file path. */
-typedef struct AlembicObjectPath {
-  struct AlembicObjectPath *next, *prev;
+typedef struct CacheObjectPath {
+  struct CacheObjectPath *next, *prev;
 
   char path[4096];
-} AlembicObjectPath;
+} CacheObjectPath;
 
 /* CacheFile::velocity_unit
  * Determines what temporal unit is used to interpret velocity vectors for motion blur effects. */
@@ -63,7 +70,7 @@ typedef struct CacheFile {
   ID id;
   struct AnimData *adt;
 
-  /** Paths of the objects inside of the Alembic archive referenced by this CacheFile. */
+  /** Paths of the objects inside of the archive referenced by this CacheFile. */
   ListBase object_paths;
 
   /** 1024 = FILE_MAX. */
@@ -80,18 +87,36 @@ typedef struct CacheFile {
   /** The frame offset to subtract. */
   float frame_offset;
 
+  char _pad[4];
+
   /** Animation flag. */
   short flag;
-  short draw_flag; /* UNUSED */
 
-  char _pad[3];
+  /* eCacheFileType enum. */
+  char type;
+
+  /** Do not load data from the cache file and display objects in the scene as boxes, Cycles will
+   * load objects directly from the CacheFile. Other render engines which can load Alembic data
+   * directly can take care of rendering it themselves.
+   */
+  char use_render_procedural;
+
+  char _pad1[3];
+
+  /** Enable data prefetching when using the Cycles Procedural. */
+  char use_prefetch;
+
+  /** Size in megabytes for the prefetch cache used by the Cycles Procedural. */
+  int prefetch_cache_size;
+
+  char _pad2[7];
 
   char velocity_unit;
-  /* Name of the velocity property in the Alembic file. */
+  /* Name of the velocity property in the archive. */
   char velocity_name[64];
 
   /* Runtime */
-  struct AbcArchiveHandle *handle;
+  struct CacheArchiveHandle *handle;
   char handle_filepath[1024];
   struct GSet *handle_readers;
 } CacheFile;

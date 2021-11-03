@@ -4,6 +4,7 @@
 
 #include "FN_multi_function.hh"
 #include "FN_multi_function_builder.hh"
+#include "FN_multi_function_test_common.hh"
 
 namespace blender::fn::tests {
 namespace {
@@ -59,33 +60,6 @@ TEST(multi_function, AddFunction)
   EXPECT_EQ(output[2], 36);
 }
 
-class AddPrefixFunction : public MultiFunction {
- public:
-  AddPrefixFunction()
-  {
-    static MFSignature signature = create_signature();
-    this->set_signature(&signature);
-  }
-
-  static MFSignature create_signature()
-  {
-    MFSignatureBuilder signature{"Add Prefix"};
-    signature.single_input<std::string>("Prefix");
-    signature.single_mutable<std::string>("Strings");
-    return signature.build();
-  }
-
-  void call(IndexMask mask, MFParams params, MFContext UNUSED(context)) const override
-  {
-    const VArray<std::string> &prefixes = params.readonly_single_input<std::string>(0, "Prefix");
-    MutableSpan<std::string> strings = params.single_mutable<std::string>(1, "Strings");
-
-    for (int64_t i : mask) {
-      strings[i] = prefixes[i] + strings[i];
-    }
-  }
-};
-
 TEST(multi_function, AddPrefixFunction)
 {
   AddPrefixFunction fn;
@@ -113,43 +87,13 @@ TEST(multi_function, AddPrefixFunction)
   EXPECT_EQ(strings[3], "ABAnother much longer string to trigger an allocation");
 }
 
-class CreateRangeFunction : public MultiFunction {
- public:
-  CreateRangeFunction()
-  {
-    static MFSignature signature = create_signature();
-    this->set_signature(&signature);
-  }
-
-  static MFSignature create_signature()
-  {
-    MFSignatureBuilder signature{"Create Range"};
-    signature.single_input<uint>("Size");
-    signature.vector_output<uint>("Range");
-    return signature.build();
-  }
-
-  void call(IndexMask mask, MFParams params, MFContext UNUSED(context)) const override
-  {
-    const VArray<uint> &sizes = params.readonly_single_input<uint>(0, "Size");
-    GVectorArray &ranges = params.vector_output(1, "Range");
-
-    for (int64_t i : mask) {
-      uint size = sizes[i];
-      for (uint j : IndexRange(size)) {
-        ranges.append(i, &j);
-      }
-    }
-  }
-};
-
 TEST(multi_function, CreateRangeFunction)
 {
   CreateRangeFunction fn;
 
-  GVectorArray ranges(CPPType::get<uint>(), 5);
-  GVectorArray_TypedMutableRef<uint> ranges_ref{ranges};
-  Array<uint> sizes = {3, 0, 6, 1, 4};
+  GVectorArray ranges(CPPType::get<int>(), 5);
+  GVectorArray_TypedMutableRef<int> ranges_ref{ranges};
+  Array<int> sizes = {3, 0, 6, 1, 4};
 
   MFParamsBuilder params(fn, ranges.size());
   params.add_readonly_single_input(sizes.as_span());
@@ -171,34 +115,6 @@ TEST(multi_function, CreateRangeFunction)
   EXPECT_EQ(ranges_ref[2][0], 0);
   EXPECT_EQ(ranges_ref[2][1], 1);
 }
-
-class GenericAppendFunction : public MultiFunction {
- private:
-  MFSignature signature_;
-
- public:
-  GenericAppendFunction(const CPPType &type)
-  {
-    MFSignatureBuilder signature{"Append"};
-    signature.vector_mutable("Vector", type);
-    signature.single_input("Value", type);
-    signature_ = signature.build();
-    this->set_signature(&signature_);
-  }
-
-  void call(IndexMask mask, MFParams params, MFContext UNUSED(context)) const override
-  {
-    GVectorArray &vectors = params.vector_mutable(0, "Vector");
-    const GVArray &values = params.readonly_single_input(1, "Value");
-
-    for (int64_t i : mask) {
-      BUFFER_FOR_CPP_TYPE_VALUE(values.type(), buffer);
-      values.get(i, buffer);
-      vectors.append(i, buffer);
-      values.type().destruct(buffer);
-    }
-  }
-};
 
 TEST(multi_function, GenericAppendFunction)
 {
@@ -347,7 +263,7 @@ TEST(multi_function, CustomMF_Constant)
 TEST(multi_function, CustomMF_GenericConstant)
 {
   int value = 42;
-  CustomMF_GenericConstant fn{CPPType::get<int32_t>(), (const void *)&value};
+  CustomMF_GenericConstant fn{CPPType::get<int32_t>(), (const void *)&value, false};
   EXPECT_EQ(fn.param_name(0), "42");
 
   Array<int> outputs(4, 0);
@@ -410,6 +326,33 @@ TEST(multi_function, CustomMF_Convert)
   EXPECT_EQ(outputs[0], 5);
   EXPECT_EQ(outputs[1], 0);
   EXPECT_EQ(outputs[2], 9);
+}
+
+TEST(multi_function, IgnoredOutputs)
+{
+  OptionalOutputsFunction fn;
+  {
+    MFParamsBuilder params(fn, 10);
+    params.add_ignored_single_output("Out 1");
+    params.add_ignored_single_output("Out 2");
+    MFContextBuilder context;
+    fn.call(IndexRange(10), params, context);
+  }
+  {
+    Array<int> results_1(10);
+    Array<std::string> results_2(10, NoInitialization());
+
+    MFParamsBuilder params(fn, 10);
+    params.add_uninitialized_single_output(results_1.as_mutable_span(), "Out 1");
+    params.add_uninitialized_single_output(results_2.as_mutable_span(), "Out 2");
+    MFContextBuilder context;
+    fn.call(IndexRange(10), params, context);
+
+    EXPECT_EQ(results_1[0], 5);
+    EXPECT_EQ(results_1[3], 5);
+    EXPECT_EQ(results_1[9], 5);
+    EXPECT_EQ(results_2[0], "hello, this is a long string");
+  }
 }
 
 }  // namespace

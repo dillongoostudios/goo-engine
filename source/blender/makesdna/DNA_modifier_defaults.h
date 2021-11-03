@@ -419,10 +419,6 @@
     .velocity_scale = 1.0f, \
     .reader = NULL, \
     .reader_object_path = "", \
-    .vertex_velocities = NULL, \
-    .num_vertices = 0, \
-    .velocity_delta = 0.0f, \
-    .last_lookup_time = 0.0f, \
   }
 
 #define _DNA_DEFAULT_MirrorModifierData \
@@ -647,7 +643,8 @@
     .target = NULL, \
     .verts = NULL, \
     .falloff = 4.0f, \
-    .numverts = 0, \
+    .num_mesh_verts = 0, \
+    .num_bind_verts = 0, \
     .numpoly = 0, \
     .flags = 0, \
     .mat = _DNA_DEFAULT_UNIT_M4, \

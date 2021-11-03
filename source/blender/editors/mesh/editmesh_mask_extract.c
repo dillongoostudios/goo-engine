@@ -126,7 +126,7 @@ static int geometry_extract_apply(bContext *C,
                          .calc_face_normal = true,
                      }));
 
-  BMEditMesh *em = BKE_editmesh_create(bm, false);
+  BMEditMesh *em = BKE_editmesh_create(bm);
 
   /* Generate the tags for deleting geometry in the extracted object. */
   tag_fn(bm, params);
@@ -206,7 +206,7 @@ static int geometry_extract_apply(bContext *C,
                                         }),
                                         mesh);
 
-  BKE_editmesh_free(em);
+  BKE_editmesh_free_data(em);
   MEM_freeN(em);
 
   if (new_mesh->totvert == 0) {
@@ -229,7 +229,7 @@ static int geometry_extract_apply(bContext *C,
   /* Remove the mask from the new object so it can be sculpted directly after extracting. */
   CustomData_free_layers(&new_ob_mesh->vdata, CD_PAINT_MASK, new_ob_mesh->totvert);
 
-  BKE_mesh_copy_settings(new_ob_mesh, mesh);
+  BKE_mesh_copy_parameters_for_eval(new_ob_mesh, mesh);
 
   if (params->apply_shrinkwrap) {
     BKE_shrinkwrap_mesh_nearest_surface_deform(C, new_ob, ob);
@@ -389,13 +389,14 @@ static int face_set_extract_modal(bContext *C, wmOperator *op, const wmEvent *ev
          * the PBVH and update the active Face Set ID. */
         bScreen *screen = CTX_wm_screen(C);
         ARegion *region = BKE_screen_find_main_region_at_xy(
-            screen, SPACE_VIEW3D, event->x, event->y);
+            screen, SPACE_VIEW3D, event->xy[0], event->xy[1]);
 
         if (!region) {
           return OPERATOR_CANCELLED;
         }
 
-        const float mval[2] = {event->x - region->winrct.xmin, event->y - region->winrct.ymin};
+        const float mval[2] = {event->xy[0] - region->winrct.xmin,
+                               event->xy[1] - region->winrct.ymin};
 
         Object *ob = CTX_data_active_object(C);
         const int face_set_id = ED_sculpt_face_sets_active_update_and_get(C, ob, mval);
@@ -567,7 +568,7 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
 
     BKE_mesh_nomain_to_mesh(new_ob_mesh, new_ob->data, new_ob, &CD_MASK_MESH, true);
     BKE_mesh_calc_normals(new_ob->data);
-    BKE_mesh_copy_settings(new_ob->data, mesh);
+    BKE_mesh_copy_parameters_for_eval(new_ob->data, mesh);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, new_ob);
     BKE_mesh_batch_cache_dirty_tag(new_ob->data, BKE_MESH_BATCH_DIRTY_ALL);
     DEG_relations_tag_update(bmain);

@@ -25,7 +25,8 @@ set(INC_SYS
 set(LIBRARIES
   cycles_device
   cycles_kernel
-  cycles_render
+  cycles_scene
+  cycles_session
   cycles_bvh
   cycles_subd
   cycles_graph
@@ -64,12 +65,24 @@ if(WITH_CYCLES_STANDALONE)
     cycles_standalone.cpp
     cycles_xml.cpp
     cycles_xml.h
+    oiio_output_driver.cpp
+    oiio_output_driver.h
   )
   add_executable(cycles ${SRC} ${INC} ${INC_SYS})
   unset(SRC)
 
   target_link_libraries(cycles ${LIBRARIES})
   cycles_target_link_libraries(cycles)
+
+  if(APPLE)
+    if(WITH_OPENCOLORIO)
+      set_property(TARGET cycles APPEND_STRING PROPERTY LINK_FLAGS " -framework IOKit -framework Carbon")
+    endif()
+    if(WITH_OPENIMAGEDENOISE AND "${CMAKE_OSX_ARCHITECTURES}" STREQUAL "arm64")
+      # OpenImageDenoise uses BNNS from the Accelerate framework.
+      set_property(TARGET cycles APPEND_STRING PROPERTY LINK_FLAGS " -framework Accelerate")
+    endif()
+  endif()
 
   if(UNIX AND NOT APPLE)
     set_target_properties(cycles PROPERTIES INSTALL_RPATH $ORIGIN/lib)
@@ -78,24 +91,6 @@ if(WITH_CYCLES_STANDALONE)
   if(CYCLES_STANDALONE_REPOSITORY)
     cycles_install_libraries(cycles)
   endif()
-endif()
-
-#####################################################################
-# Cycles network server executable
-#####################################################################
-
-if(WITH_CYCLES_NETWORK)
-  set(SRC
-    cycles_server.cpp
-  )
-  add_executable(cycles_server ${SRC})
-  target_link_libraries(cycles_server ${LIBRARIES})
-  cycles_target_link_libraries(cycles_server)
-
-  if(UNIX AND NOT APPLE)
-    set_target_properties(cycles_server PROPERTIES INSTALL_RPATH $ORIGIN/lib)
-  endif()
-  unset(SRC)
 endif()
 
 #####################################################################

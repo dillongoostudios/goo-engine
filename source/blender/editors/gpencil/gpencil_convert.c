@@ -168,7 +168,7 @@ static void gpencil_strokepoint_convertcoords(bContext *C,
   ARegion *region = CTX_wm_region(C);
   /* TODO(sergey): This function might be called from a loop, but no tagging is happening in it,
    * so it's not that expensive to ensure evaluated depsgraph here. However, ideally all the
-   * parameters are to wrapped into a context style struct and queried from Context once.*/
+   * parameters are to wrapped into a context style struct and queried from Context once. */
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Object *obact = CTX_data_active_object(C);
   bGPDspoint mypt, *pt;
@@ -219,7 +219,7 @@ typedef struct tGpTimingData {
   int frame_range; /* Number of frames evaluated for path animation */
   int start_frame, end_frame;
   bool realtime; /* Will overwrite end_frame in case of Original or CustomGap timing... */
-  float gap_duration, gap_randomness; /* To be used with CustomGap mode*/
+  float gap_duration, gap_randomness; /* To be used with CustomGap mode. */
   int seed;
 
   /* Data set from points, used to compute final timing FCurve */
@@ -230,7 +230,7 @@ typedef struct tGpTimingData {
   float tot_dist;
 
   /* Times */
-  float *times; /* Note: Gap times will be negative! */
+  float *times; /* NOTE: Gap times will be negative! */
   float tot_time, gap_tot_time;
   double inittime;
 
@@ -389,9 +389,6 @@ static void gpencil_stroke_path_animation_preprocess_gaps(tGpTimingData *gtd,
 
   *r_tot_gaps_time = (float)(*nbr_gaps) * gtd->gap_duration;
   gtd->tot_time += *r_tot_gaps_time;
-  if (G.debug & G_DEBUG) {
-    printf("%f, %f, %f, %d\n", gtd->tot_time, delta_time, *r_tot_gaps_time, *nbr_gaps);
-  }
   if (gtd->gap_randomness > 0.0f) {
     BLI_rng_srandom(rng, gtd->seed);
   }
@@ -463,9 +460,6 @@ static void gpencil_stroke_path_animation_add_keyframes(ReportList *reports,
                                NULL,
                                INSERTKEY_FAST);
         last_valid_time = cfra;
-      }
-      else if (G.debug & G_DEBUG) {
-        printf("\t Skipping start point %d, too close from end point %d\n", i, end_stroke_idx);
       }
     }
     else if (i == end_stroke_idx) {
@@ -546,13 +540,6 @@ static void gpencil_stroke_path_animation(bContext *C,
   act = ED_id_action_ensure(bmain, (ID *)cu);
   fcu = ED_action_fcurve_ensure(bmain, act, NULL, &ptr, "eval_time", 0);
 
-  if (G.debug & G_DEBUG) {
-    printf("%s: tot len: %f\t\ttot time: %f\n", __func__, gtd->tot_dist, gtd->tot_time);
-    for (int i = 0; i < gtd->num_points; i++) {
-      printf("\tpoint %d:\t\tlen: %f\t\ttime: %f\n", i, gtd->dists[i], gtd->times[i]);
-    }
-  }
-
   if (gtd->mode == GP_STROKECONVERT_TIMING_LINEAR) {
     float cfra;
 
@@ -610,10 +597,6 @@ static void gpencil_stroke_path_animation(bContext *C,
       time_range = (float)(gtd->end_frame - gtd->start_frame);
     }
 
-    if (G.debug & G_DEBUG) {
-      printf("GP Stroke Path Conversion: Starting keying!\n");
-    }
-
     gpencil_stroke_path_animation_add_keyframes(
         reports, ptr, prop, depsgraph, fcu, cu, gtd, rng, time_range, nbr_gaps, tot_gaps_time);
 
@@ -622,14 +605,6 @@ static void gpencil_stroke_path_animation(bContext *C,
 
   /* As we used INSERTKEY_FAST mode, we need to recompute all curve's handles now */
   calchandles_fcurve(fcu);
-
-  if (G.debug & G_DEBUG) {
-    printf("%s: \ntot len: %f\t\ttot time: %f\n", __func__, gtd->tot_dist, gtd->tot_time);
-    for (int i = 0; i < gtd->num_points; i++) {
-      printf("\tpoint %d:\t\tlen: %f\t\ttime: %f\n", i, gtd->dists[i], gtd->times[i]);
-    }
-    printf("\n\n");
-  }
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
 
@@ -1409,7 +1384,7 @@ static void gpencil_layer_to_curve(bContext *C,
                                  gtd);
         break;
       default:
-        BLI_assert(!"invalid mode");
+        BLI_assert_msg(0, "invalid mode");
         break;
     }
     prev_gps = gps;
@@ -1588,14 +1563,8 @@ static int gpencil_convert_layer_exec(bContext *C, wmOperator *op)
       C, op->reports, gpd, gpl, mode, norm_weights, rad_fac, link_strokes, &gtd);
 
   /* free temp memory */
-  if (gtd.dists) {
-    MEM_freeN(gtd.dists);
-    gtd.dists = NULL;
-  }
-  if (gtd.times) {
-    MEM_freeN(gtd.times);
-    gtd.times = NULL;
-  }
+  MEM_SAFE_FREE(gtd.dists);
+  MEM_SAFE_FREE(gtd.times);
 
   /* notifiers */
   DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
@@ -1806,7 +1775,7 @@ void GPENCIL_OT_convert(wmOperatorType *ot)
               0,
               100);
 
-  /* Note: Internal use, this one will always be hidden by UI code... */
+  /* NOTE: Internal use, this one will always be hidden by UI code... */
   prop = RNA_def_boolean(
       ot->srna,
       "use_timing_data",
@@ -1857,7 +1826,7 @@ static int image_to_gpencil_exec(bContext *C, wmOperator *op)
 
   /* Add layer and frame. */
   bGPdata *gpd = (bGPdata *)ob->data;
-  bGPDlayer *gpl = BKE_gpencil_layer_addnew(gpd, "Image Layer", true);
+  bGPDlayer *gpl = BKE_gpencil_layer_addnew(gpd, "Image Layer", true, false);
   bGPDframe *gpf = BKE_gpencil_frame_addnew(gpl, CFRA);
   done = BKE_gpencil_from_image(sima, gpd, gpf, size, is_mask);
 

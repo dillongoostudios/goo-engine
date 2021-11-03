@@ -354,10 +354,9 @@ static void gizmo_get_axis_color(const int axis_idx,
       if (is_plane) {
         idot_axis = 1.0f - idot_axis;
       }
-      alpha_fac = ((idot_axis > idot_max) ?
-                       1.0f :
-                       (idot_axis < idot_min) ? 0.0f :
-                                                ((idot_axis - idot_min) / (idot_max - idot_min)));
+      alpha_fac = ((idot_axis > idot_max) ? 1.0f :
+                   (idot_axis < idot_min) ? 0.0f :
+                                            ((idot_axis - idot_min) / (idot_max - idot_min)));
     }
     else {
       alpha_fac = 1.0f;
@@ -521,7 +520,7 @@ static void protectflag_to_drawflags_pchan(RegionView3D *rv3d,
   }
 }
 
-/* for editmode*/
+/* For editmode. */
 static void protectflag_to_drawflags_ebone(RegionView3D *rv3d, const EditBone *ebo)
 {
   if (ebo->flag & BONE_EDITMODE_LOCKED) {
@@ -647,10 +646,8 @@ int ED_transform_calc_gizmo_stats(const bContext *C,
   Depsgraph *depsgraph = CTX_data_expect_evaluated_depsgraph(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = area->spacedata.first;
-  Object *obedit = CTX_data_edit_object(C);
   RegionView3D *rv3d = region->regiondata;
   Base *base;
-  Object *ob = OBACT(view_layer);
   bGPdata *gpd = CTX_data_gpencil_data(C);
   const bool is_gp_edit = GPENCIL_ANY_MODE(gpd);
   const bool is_curve_edit = GPENCIL_CURVE_EDIT_SESSIONS_ON(gpd);
@@ -660,6 +657,17 @@ int ED_transform_calc_gizmo_stats(const bContext *C,
   const short orient_index = params->orientation_index ?
                                  (params->orientation_index - 1) :
                                  BKE_scene_orientation_get_index(scene, SCE_ORIENT_DEFAULT);
+
+  Object *ob = OBACT(view_layer);
+  Object *obedit = OBEDIT_FROM_OBACT(ob);
+  if (ob && ob->mode & OB_MODE_WEIGHT_PAINT) {
+    Object *obpose = BKE_object_pose_armature_get(ob);
+    if (obpose != NULL) {
+      ob = obpose;
+    }
+  }
+
+  tbounds->use_matrix_space = false;
 
   /* transform widget matrix */
   unit_m4(rv3d->twmat);
@@ -675,7 +683,7 @@ int ED_transform_calc_gizmo_stats(const bContext *C,
   if (ob) {
     float mat[3][3];
     ED_transform_calc_orientation_from_type_ex(
-        C, mat, scene, rv3d, ob, obedit, orient_index, pivot_point);
+        scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, mat);
     copy_m4_m3(rv3d->twmat, mat);
   }
 
@@ -683,13 +691,16 @@ int ED_transform_calc_gizmo_stats(const bContext *C,
   reset_tw_center(tbounds);
 
   copy_m3_m4(tbounds->axis, rv3d->twmat);
-  if (params->use_local_axis && (ob && ob->mode & OB_MODE_EDIT)) {
+  if (params->use_local_axis && (ob && ob->mode & (OB_MODE_EDIT | OB_MODE_POSE))) {
     float diff_mat[3][3];
     copy_m3_m4(diff_mat, ob->obmat);
     normalize_m3(diff_mat);
     invert_m3(diff_mat);
     mul_m3_m3m3(tbounds->axis, tbounds->axis, diff_mat);
     normalize_m3(tbounds->axis);
+
+    tbounds->use_matrix_space = true;
+    copy_m4_m4(tbounds->matrix_space, ob->obmat);
   }
 
   if (is_gp_edit) {
@@ -964,8 +975,10 @@ int ED_transform_calc_gizmo_stats(const bContext *C,
 
       if (totsel_iter) {
         float mat_local[4][4];
-        if (use_mat_local) {
-          mul_m4_m4m4(mat_local, ob->imat, ob_iter->obmat);
+        if (params->use_local_axis) {
+          if (use_mat_local) {
+            mul_m4_m4m4(mat_local, ob->imat, ob_iter->obmat);
+          }
         }
 
         /* use channels to get stats */
@@ -1671,13 +1684,6 @@ static void WIDGETGROUP_gizmo_refresh(const bContext *C, wmGizmoGroup *gzgroup)
   RegionView3D *rv3d = region->regiondata;
   struct TransformBounds tbounds;
 
-  if (scene->toolsettings->workspace_tool_type == SCE_WORKSPACE_TOOL_FALLBACK) {
-    gzgroup->use_fallback_keymap = true;
-  }
-  else {
-    gzgroup->use_fallback_keymap = false;
-  }
-
   if (ggd->use_twtype_refresh) {
     ggd->twtype = v3d->gizmo_show_object & ggd->twtype_init;
     if (ggd->twtype != ggd->twtype_prev) {
@@ -1975,8 +1981,8 @@ void VIEW3D_GGT_xform_gizmo(wmGizmoGroupType *gzgt)
   gzgt->name = "3D View: Transform Gizmo";
   gzgt->idname = "VIEW3D_GGT_xform_gizmo";
 
-  gzgt->flag = WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
-               WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
+  gzgt->flag = WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE |
+               WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP | WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
 
   gzgt->gzmap_params.spaceid = SPACE_VIEW3D;
   gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
@@ -2106,13 +2112,6 @@ static void WIDGETGROUP_xform_cage_refresh(const bContext *C, wmGizmoGroup *gzgr
 
   struct TransformBounds tbounds;
 
-  if (scene->toolsettings->workspace_tool_type == SCE_WORKSPACE_TOOL_FALLBACK) {
-    gzgroup->use_fallback_keymap = true;
-  }
-  else {
-    gzgroup->use_fallback_keymap = false;
-  }
-
   const int orient_index = BKE_scene_orientation_get_index_from_flag(scene, SCE_ORIENT_SCALE);
 
   if ((ED_transform_calc_gizmo_stats(C,
@@ -2125,10 +2124,8 @@ static void WIDGETGROUP_xform_cage_refresh(const bContext *C, wmGizmoGroup *gzgr
     WM_gizmo_set_flag(gz, WM_GIZMO_HIDDEN, true);
   }
   else {
-    ViewLayer *view_layer = CTX_data_view_layer(C);
-    Object *ob = OBACT(view_layer);
-    if (ob && ob->mode & OB_MODE_EDIT) {
-      copy_m4_m4(gz->matrix_space, ob->obmat);
+    if (tbounds.use_matrix_space) {
+      copy_m4_m4(gz->matrix_space, tbounds.matrix_space);
     }
     else {
       unit_m4(gz->matrix_space);
@@ -2217,8 +2214,8 @@ void VIEW3D_GGT_xform_cage(wmGizmoGroupType *gzgt)
   gzgt->name = "Transform Cage";
   gzgt->idname = "VIEW3D_GGT_xform_cage";
 
-  gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
-                WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
+  gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE |
+                WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP | WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
 
   gzgt->gzmap_params.spaceid = SPACE_VIEW3D;
   gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;
@@ -2316,13 +2313,6 @@ static void WIDGETGROUP_xform_shear_refresh(const bContext *C, wmGizmoGroup *gzg
 
   struct XFormShearWidgetGroup *xgzgroup = gzgroup->customdata;
   struct TransformBounds tbounds;
-
-  if (scene->toolsettings->workspace_tool_type == SCE_WORKSPACE_TOOL_FALLBACK) {
-    gzgroup->use_fallback_keymap = true;
-  }
-  else {
-    gzgroup->use_fallback_keymap = false;
-  }
 
   /* Needed to test view orientation changes. */
   copy_m3_m4(xgzgroup->prev.viewinv_m3, rv3d->viewinv);
@@ -2460,8 +2450,8 @@ void VIEW3D_GGT_xform_shear(wmGizmoGroupType *gzgt)
   gzgt->name = "Transform Shear";
   gzgt->idname = "VIEW3D_GGT_xform_shear";
 
-  gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP |
-                WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
+  gzgt->flag |= WM_GIZMOGROUPTYPE_3D | WM_GIZMOGROUPTYPE_DRAW_MODAL_EXCLUDE |
+                WM_GIZMOGROUPTYPE_TOOL_FALLBACK_KEYMAP | WM_GIZMOGROUPTYPE_DELAY_REFRESH_FOR_TWEAK;
 
   gzgt->gzmap_params.spaceid = SPACE_VIEW3D;
   gzgt->gzmap_params.regionid = RGN_TYPE_WINDOW;

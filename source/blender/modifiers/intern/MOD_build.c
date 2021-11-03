@@ -61,7 +61,9 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(bmd, DNA_struct_default_get(BuildModifierData), modifier);
 }
 
-static bool dependsOnTime(ModifierData *UNUSED(md))
+static bool dependsOnTime(struct Scene *UNUSED(scene),
+                          ModifierData *UNUSED(md),
+                          const int UNUSED(dag_eval_mode))
 {
   return true;
 }
@@ -101,7 +103,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, struct
   range_vn_i(faceMap, numPoly_src, 0);
 
   struct Scene *scene = DEG_get_input_scene(ctx->depsgraph);
-  frac = (BKE_scene_frame_get(scene) - bmd->start) / bmd->length;
+  frac = (BKE_scene_ctime_get(scene) - bmd->start) / bmd->length;
   CLAMP(frac, 0.0f, 1.0f);
   if (bmd->flag & MOD_BUILD_FLAG_REVERSE) {
     frac = 1.0f - frac;
@@ -279,7 +281,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, struct
   MEM_freeN(faceMap);
 
   if (mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) {
-    result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+    BKE_mesh_normals_tag_dirty(result);
   }
 
   /* TODO(sybren): also copy flags & tags? */
@@ -347,7 +349,6 @@ ModifierTypeInfo modifierType_Build = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ NULL,

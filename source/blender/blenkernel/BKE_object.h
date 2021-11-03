@@ -70,10 +70,6 @@ void BKE_object_free_curve_cache(struct Object *ob);
 void BKE_object_free_derived_caches(struct Object *ob);
 void BKE_object_free_caches(struct Object *object);
 
-void BKE_object_preview_geometry_set_add(struct Object *ob,
-                                         const uint64_t key,
-                                         struct GeometrySet *geometry_set);
-
 void BKE_object_modifier_hook_reset(struct Object *ob, struct HookModifierData *hmd);
 void BKE_object_modifier_gpencil_hook_reset(struct Object *ob,
                                             struct HookGpencilModifierData *hmd);
@@ -243,7 +239,7 @@ void BKE_object_dimensions_set(struct Object *ob, const float value[3], int axis
 
 void BKE_object_empty_draw_type_set(struct Object *ob, const int value);
 void BKE_object_boundbox_flag(struct Object *ob, int flag, const bool set);
-void BKE_object_boundbox_calc_from_mesh(struct Object *ob, struct Mesh *me_eval);
+void BKE_object_boundbox_calc_from_mesh(struct Object *ob, const struct Mesh *me_eval);
 void BKE_object_minmax(struct Object *ob, float r_min[3], float r_max[3], const bool use_hidden);
 bool BKE_object_minmax_dupli(struct Depsgraph *depsgraph,
                              struct Scene *scene,
@@ -337,9 +333,9 @@ bool BKE_object_obdata_texspace_get(struct Object *ob,
                                     float **r_loc,
                                     float **r_size);
 
-struct Mesh *BKE_object_get_evaluated_mesh(struct Object *object);
-struct Mesh *BKE_object_get_pre_modified_mesh(struct Object *object);
-struct Mesh *BKE_object_get_original_mesh(struct Object *object);
+struct Mesh *BKE_object_get_evaluated_mesh(const struct Object *object);
+struct Mesh *BKE_object_get_pre_modified_mesh(const struct Object *object);
+struct Mesh *BKE_object_get_original_mesh(const struct Object *object);
 
 /* Lattice accessors.
  * These functions return either the regular lattice, or the edit-mode lattice,
@@ -374,26 +370,27 @@ struct MovieClip *BKE_object_movieclip_get(struct Scene *scene,
 
 void BKE_object_runtime_reset(struct Object *object);
 void BKE_object_runtime_reset_on_copy(struct Object *object, const int flag);
+void BKE_object_runtime_free_data(struct Object *object);
 
 void BKE_object_batch_cache_dirty_tag(struct Object *ob);
+void BKE_object_data_batch_cache_dirty_tag(struct ID *object_data);
 
 /* this function returns a superset of the scenes selection based on relationships */
 
 typedef enum eObRelationTypes {
-  OB_REL_NONE = 0,                      /* just the selection as is */
-  OB_REL_PARENT = (1 << 0),             /* immediate parent */
-  OB_REL_PARENT_RECURSIVE = (1 << 1),   /* parents up to root of selection tree*/
-  OB_REL_CHILDREN = (1 << 2),           /* immediate children */
-  OB_REL_CHILDREN_RECURSIVE = (1 << 3), /* All children */
-  OB_REL_MOD_ARMATURE = (1 << 4),       /* Armatures related to the selected objects */
-  /* OB_REL_SCENE_CAMERA = (1 << 5), */ /* you might want the scene camera too even if unselected?
-                                         */
+  OB_REL_NONE = 0,                      /* Just the selection as is. */
+  OB_REL_PARENT = (1 << 0),             /* Immediate parent. */
+  OB_REL_PARENT_RECURSIVE = (1 << 1),   /* Parents up to root of selection tree. */
+  OB_REL_CHILDREN = (1 << 2),           /* Immediate children. */
+  OB_REL_CHILDREN_RECURSIVE = (1 << 3), /* All children. */
+  OB_REL_MOD_ARMATURE = (1 << 4),       /* Armatures related to the selected objects. */
+  // OB_REL_SCENE_CAMERA = (1 << 5), /* You might want the scene camera too even if unselected? */
 } eObRelationTypes;
 
 typedef enum eObjectSet {
-  OB_SET_SELECTED, /* Selected Objects */
-  OB_SET_VISIBLE,  /* Visible Objects  */
-  OB_SET_ALL,      /* All Objects      */
+  OB_SET_SELECTED, /* Selected Objects. */
+  OB_SET_VISIBLE,  /* Visible Objects. */
+  OB_SET_ALL,      /* All Objects. */
 } eObjectSet;
 
 struct LinkNode *BKE_object_relational_superset(struct ViewLayer *view_layer,
@@ -404,7 +401,10 @@ void BKE_object_groups_clear(struct Main *bmain, struct Scene *scene, struct Obj
 
 struct KDTree_3d *BKE_object_as_kdtree(struct Object *ob, int *r_tot);
 
-bool BKE_object_modifier_use_time(struct Object *ob, struct ModifierData *md);
+bool BKE_object_modifier_use_time(struct Scene *scene,
+                                  struct Object *ob,
+                                  struct ModifierData *md,
+                                  int dag_eval_mode);
 
 bool BKE_object_modifier_update_subframe(struct Depsgraph *depsgraph,
                                          struct Scene *scene,
@@ -458,8 +458,12 @@ void BKE_object_modifiers_lib_link_common(void *userData,
                                           struct ID **idpoin,
                                           int cb_flag);
 
+void BKE_object_replace_data_on_shallow_copy(struct Object *ob, struct ID *new_data);
+
 struct PartEff;
 struct PartEff *BKE_object_do_version_give_parteff_245(struct Object *ob);
+
+bool BKE_object_supports_material_slots(struct Object *ob);
 
 #ifdef __cplusplus
 }

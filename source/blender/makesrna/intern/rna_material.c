@@ -173,12 +173,6 @@ static void rna_Material_active_paint_texture_index_update(Main *bmain,
         continue;
       }
 
-      Object *obedit = NULL;
-      {
-        ViewLayer *view_layer = WM_window_get_active_view_layer(win);
-        obedit = OBEDIT_FROM_VIEW_LAYER(view_layer);
-      }
-
       ScrArea *area;
       for (area = screen->areabase.first; area; area = area->next) {
         SpaceLink *sl;
@@ -186,7 +180,7 @@ static void rna_Material_active_paint_texture_index_update(Main *bmain,
           if (sl->spacetype == SPACE_IMAGE) {
             SpaceImage *sima = (SpaceImage *)sl;
             if (!sima->pin) {
-              ED_space_image_set(bmain, sima, obedit, image, true);
+              ED_space_image_set(bmain, sima, image, true);
             }
           }
         }
@@ -610,8 +604,10 @@ static void rna_def_material_greasepencil(BlenderRNA *brna)
   RNA_def_property_float_default(prop, 0.0f);
   RNA_def_property_range(prop, -DEG2RADF(90.0f), DEG2RADF(90.0f));
   RNA_def_property_ui_range(prop, -DEG2RADF(90.0f), DEG2RADF(90.0f), 10, 3);
-  RNA_def_property_ui_text(
-      prop, "Rotation", "Additional rotation applied to dots and square strokes");
+  RNA_def_property_ui_text(prop,
+                           "Rotation",
+                           "Additional rotation applied to dots and square texture of strokes. "
+                           "Only applies in texture shading mode");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialGpencil_update");
 
   /* pass index for future compositing and editing tools */
@@ -688,18 +684,27 @@ static void rna_def_material_lineart(BlenderRNA *brna)
   RNA_def_struct_sdna(srna, "MaterialLineArt");
   RNA_def_struct_ui_text(srna, "Material Line Art", "");
 
-  prop = RNA_def_property(srna, "use_transparency", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "use_material_mask", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_default(prop, 0);
-  RNA_def_property_boolean_sdna(prop, NULL, "flags", LRT_MATERIAL_TRANSPARENCY_ENABLED);
+  RNA_def_property_boolean_sdna(prop, NULL, "flags", LRT_MATERIAL_MASK_ENABLED);
   RNA_def_property_ui_text(
-      prop, "Use Transparency", "Use transparency mask from this material in line art");
+      prop, "Use Material Mask", "Use material masks to filter out occluded strokes");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialLineArt_update");
 
-  prop = RNA_def_property(srna, "use_transparency_mask", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "use_material_mask_bits", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_default(prop, 0);
-  RNA_def_property_boolean_sdna(prop, NULL, "transparency_mask", 1);
+  RNA_def_property_boolean_sdna(prop, NULL, "material_mask_bits", 1);
   RNA_def_property_array(prop, 8);
   RNA_def_property_ui_text(prop, "Mask", "");
+  RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialLineArt_update");
+
+  prop = RNA_def_property(srna, "mat_occlusion", PROP_INT, PROP_NONE);
+  RNA_def_property_int_default(prop, 1);
+  RNA_def_property_ui_range(prop, 0.0f, 5.0f, 1.0f, 1);
+  RNA_def_property_ui_text(
+      prop,
+      "Effectiveness",
+      "Faces with this material will behave as if it has set number of layers in occlusion");
   RNA_def_property_update(prop, NC_GPENCIL | ND_SHADING, "rna_MaterialLineArt_update");
 }
 
@@ -863,8 +868,7 @@ void RNA_def_material(BlenderRNA *brna)
   prop = RNA_def_property(srna, "node_tree", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, NULL, "nodetree");
   RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
-  /* XXX: remove once overrides in material node trees are supported. */
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_IGNORE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Node Tree", "Node tree for node based materials");
 
   prop = RNA_def_property(srna, "use_nodes", PROP_BOOLEAN, PROP_NONE);

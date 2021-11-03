@@ -48,6 +48,7 @@
 #include "ED_anim_api.h"
 #include "ED_keyframes_draw.h"
 #include "ED_keyframes_edit.h"
+#include "ED_keyframes_keylist.h"
 
 #include "RNA_access.h"
 
@@ -89,7 +90,7 @@ void ANIM_draw_cfra(const bContext *C, View2D *v2d, short flag)
 
 /* *************************************************** */
 /* PREVIEW RANGE 'CURTAINS' */
-/* Note: 'Preview Range' tools are defined in anim_ops.c */
+/* NOTE: 'Preview Range' tools are defined in `anim_ops.c`. */
 
 /* Draw preview range 'curtains' for highlighting where the animation data is */
 void ANIM_draw_previewrange(const bContext *C, View2D *v2d, int end_frame_width)
@@ -168,7 +169,7 @@ void ANIM_draw_framerange(Scene *scene, View2D *v2d)
 }
 
 /* *************************************************** */
-/* NLA-MAPPING UTILITIES (required for drawing and also editing keyframes)  */
+/* NLA-MAPPING UTILITIES (required for drawing and also editing keyframes). */
 
 /**
  * Obtain the AnimData block providing NLA-mapping for the given channel (if applicable).
@@ -413,7 +414,7 @@ static float normalization_factor_get(Scene *scene, FCurve *fcu, short flag, flo
             else {
               /* Calculate min/max using full fcurve evaluation.
                * [slower than bezier forward differencing but evaluates Back/Elastic interpolation
-               * as well].*/
+               * as well]. */
               float step_size = (bezt->vec[1][0] - prev_bezt->vec[1][0]) / resol;
               for (int j = 0; j <= resol; j++) {
                 float eval_time = prev_bezt->vec[1][0] + step_size * j;
@@ -493,16 +494,13 @@ static bool find_prev_next_keyframes(struct bContext *C, int *r_nextfra, int *r_
   Object *ob = CTX_data_active_object(C);
   Mask *mask = CTX_data_edit_mask(C);
   bDopeSheet ads = {NULL};
-  DLRBT_Tree keys;
-  ActKeyColumn *aknext, *akprev;
+  struct AnimKeylist *keylist = ED_keylist_create();
+  const ActKeyColumn *aknext, *akprev;
   float cfranext, cfraprev;
   bool donenext = false, doneprev = false;
   int nextcount = 0, prevcount = 0;
 
   cfranext = cfraprev = (float)(CFRA);
-
-  /* init binarytree-list for getting keyframes */
-  BLI_dlrbTree_init(&keys);
 
   /* seed up dummy dopesheet context with flags to perform necessary filtering */
   if ((scene->flag & SCE_KEYS_NO_SELONLY) == 0) {
@@ -511,22 +509,24 @@ static bool find_prev_next_keyframes(struct bContext *C, int *r_nextfra, int *r_
   }
 
   /* populate tree with keyframe nodes */
-  scene_to_keylist(&ads, scene, &keys, 0);
-  gpencil_to_keylist(&ads, scene->gpd, &keys, false);
+  scene_to_keylist(&ads, scene, keylist, 0);
+  gpencil_to_keylist(&ads, scene->gpd, keylist, false);
 
   if (ob) {
-    ob_to_keylist(&ads, ob, &keys, 0);
-    gpencil_to_keylist(&ads, ob->data, &keys, false);
+    ob_to_keylist(&ads, ob, keylist, 0);
+    gpencil_to_keylist(&ads, ob->data, keylist, false);
   }
 
   if (mask) {
     MaskLayer *masklay = BKE_mask_layer_active(mask);
-    mask_to_keylist(&ads, masklay, &keys);
+    mask_to_keylist(&ads, masklay, keylist);
   }
+  ED_keylist_prepare_for_direct_access(keylist);
 
+  /* TODO(jbakker): Keylists are ordered, no need to do any searching at all. */
   /* find matching keyframe in the right direction */
   do {
-    aknext = (ActKeyColumn *)BLI_dlrbTree_search_next(&keys, compare_ak_cfraPtr, &cfranext);
+    aknext = ED_keylist_find_next(keylist, cfranext);
 
     if (aknext) {
       if (CFRA == (int)aknext->cfra) {
@@ -544,7 +544,7 @@ static bool find_prev_next_keyframes(struct bContext *C, int *r_nextfra, int *r_
   } while ((aknext != NULL) && (donenext == false));
 
   do {
-    akprev = (ActKeyColumn *)BLI_dlrbTree_search_prev(&keys, compare_ak_cfraPtr, &cfraprev);
+    akprev = ED_keylist_find_prev(keylist, cfraprev);
 
     if (akprev) {
       if (CFRA == (int)akprev->cfra) {
@@ -561,7 +561,7 @@ static bool find_prev_next_keyframes(struct bContext *C, int *r_nextfra, int *r_
   } while ((akprev != NULL) && (doneprev == false));
 
   /* free temp stuff */
-  BLI_dlrbTree_free(&keys);
+  ED_keylist_free(keylist);
 
   /* any success? */
   if (doneprev || donenext) {

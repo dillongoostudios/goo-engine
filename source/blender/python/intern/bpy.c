@@ -56,6 +56,7 @@
 
 /* external util modules */
 #include "../generic/idprop_py_api.h"
+#include "../generic/idprop_py_ui_api.h"
 #include "bpy_msgbus.h"
 
 #ifdef WITH_FREESTYLE
@@ -118,7 +119,7 @@ static PyObject *bpy_blend_paths(PyObject *UNUSED(self), PyObject *args, PyObjec
   bool local = false;
 
   static const char *_keywords[] = {"absolute", "packed", "local", NULL};
-  static _PyArg_Parser _parser = {"|O&O&O&:blend_paths", _keywords, 0};
+  static _PyArg_Parser _parser = {"|$O&O&O&:blend_paths", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -164,8 +165,8 @@ static PyObject *bpy_user_resource(PyObject *UNUSED(self), PyObject *args, PyObj
 
   const char *path;
 
-  static const char *_keywords[] = {"type", "subdir", NULL};
-  static _PyArg_Parser _parser = {"O&|s:user_resource", _keywords, 0};
+  static const char *_keywords[] = {"type", "path", NULL};
+  static _PyArg_Parser _parser = {"O&|$s:user_resource", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, PyC_ParseStringEnum, &type, &subdir)) {
     return NULL;
   }
@@ -201,7 +202,7 @@ static PyObject *bpy_system_resource(PyObject *UNUSED(self), PyObject *args, PyO
   const char *path;
 
   static const char *_keywords[] = {"type", "path", NULL};
-  static _PyArg_Parser _parser = {"O&|s:system_resource", _keywords, 0};
+  static _PyArg_Parser _parser = {"O&|$s:system_resource", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, PyC_ParseStringEnum, &type, &subdir)) {
     return NULL;
   }
@@ -239,7 +240,7 @@ static PyObject *bpy_resource_path(PyObject *UNUSED(self), PyObject *args, PyObj
   const char *path;
 
   static const char *_keywords[] = {"type", "major", "minor", NULL};
-  static _PyArg_Parser _parser = {"O&|ii:resource_path", _keywords, 0};
+  static _PyArg_Parser _parser = {"O&|$ii:resource_path", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(
           args, kw, &_parser, PyC_ParseStringEnum, &type, &major, &minor)) {
     return NULL;
@@ -403,10 +404,11 @@ void BPy_init_modules(struct bContext *C)
     Py_DECREF(py_modpath);
   }
   else {
-    printf("bpy: couldn't find 'scripts/modules', blender probably wont start.\n");
+    printf("bpy: couldn't find 'scripts/modules', blender probably won't start.\n");
   }
   /* stand alone utility modules not related to blender directly */
   IDProp_Init_Types(); /* not actually a submodule, just types */
+  IDPropertyUIData_Init_Types();
 #ifdef WITH_FREESTYLE
   Freestyle_Init();
 #endif
@@ -416,9 +418,6 @@ void BPy_init_modules(struct bContext *C)
   /* add the module so we can import it */
   PyDict_SetItemString(PyImport_GetModuleDict(), "_bpy", mod);
   Py_DECREF(mod);
-
-  /* run first, initializes rna types */
-  BPY_rna_init();
 
   /* needs to be first so bpy_types can run */
   PyModule_AddObject(mod, "types", BPY_rna_types());

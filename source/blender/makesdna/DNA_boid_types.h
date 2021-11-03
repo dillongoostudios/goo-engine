@@ -43,7 +43,7 @@ typedef enum eBoidRuleType {
   eBoidRuleType_Flock = 5,
   /** follow a boid or assigned object */
   eBoidRuleType_FollowLeader = 6,
-  /** maintain speed, flight level or wander*/
+  /** Maintain speed, flight level or wander. */
   eBoidRuleType_AverageSpeed = 7,
   /** go to closest enemy and attack when in range */
   eBoidRuleType_Fight = 8,
@@ -97,7 +97,8 @@ typedef struct BoidRuleFollowLeader {
 } BoidRuleFollowLeader;
 typedef struct BoidRuleAverageSpeed {
   BoidRule rule;
-  float wander, level, speed, rt;
+  float wander, level, speed;
+  char _pad0[4];
 } BoidRuleAverageSpeed;
 typedef struct BoidRuleFight {
   BoidRule rule;
@@ -178,7 +179,7 @@ typedef struct BoidState {
 //} BoidSignal;
 // typedef struct BoidSignalDefine {
 //  struct BoidSignalDefine *next, *prev;
-//  int id, rt;
+//  int id, _pad[4];
 //  char name[32];
 //} BoidSignalDefine;
 

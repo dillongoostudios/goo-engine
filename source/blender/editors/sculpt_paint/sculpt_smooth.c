@@ -88,7 +88,7 @@ void SCULPT_neighbor_coords_average_interior(SculptSession *ss, float result[3],
   SCULPT_VERTEX_NEIGHBORS_ITER_END(ni);
 
   /* Do not modify corner vertices. */
-  if (neighbor_count <= 2) {
+  if (neighbor_count <= 2 && is_boundary) {
     copy_v3_v3(result, SCULPT_vertex_co_get(ss, index));
     return;
   }
@@ -367,7 +367,7 @@ void SCULPT_smooth(Sculpt *sd,
   last = max_iterations * (bstrength - count * fract);
 
   if (type == PBVH_FACES && !ss->pmap) {
-    BLI_assert(!"sculpt smooth: pmap missing");
+    BLI_assert_msg(0, "sculpt smooth: pmap missing");
     return;
   }
 
@@ -395,7 +395,12 @@ void SCULPT_smooth(Sculpt *sd,
 void SCULPT_do_smooth_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 {
   SculptSession *ss = ob->sculpt;
-  if (ss->cache->bstrength <= 0.0f) {
+
+  /* NOTE: The enhance brush needs to initialize its state on the first brush step. The stroke
+   * strength can become 0 during the stroke, but it can not change sign (the sign is determined
+   * in the beginning of the stroke. So here it is important to not switch to enhance brush in the
+   * middle of the stroke. */
+  if (ss->cache->bstrength < 0.0f) {
     /* Invert mode, intensify details. */
     SCULPT_enhance_details_brush(sd, ob, nodes, totnode);
   }

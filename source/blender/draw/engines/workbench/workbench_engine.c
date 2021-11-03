@@ -128,7 +128,7 @@ static void workbench_cache_sculpt_populate(WORKBENCH_PrivateData *wpd,
 BLI_INLINE void workbench_object_drawcall(DRWShadingGroup *grp, struct GPUBatch *geom, Object *ob)
 {
   if (ob->type == OB_POINTCLOUD) {
-    /* Draw range to avoid drawcall batching messing up the instance attrib. */
+    /* Draw range to avoid drawcall batching messing up the instance attribute. */
     DRW_shgroup_call_instance_range(grp, ob, geom, 0, 0);
   }
   else {
@@ -238,7 +238,7 @@ static void workbench_cache_hair_populate(WORKBENCH_PrivateData *wpd,
                              workbench_image_hair_setup(wpd, ob, matnr, ima, NULL, state) :
                              workbench_material_hair_setup(wpd, ob, matnr, color_type);
 
-  DRW_shgroup_hair_create_sub(ob, psys, md, grp);
+  DRW_shgroup_hair_create_sub(ob, psys, md, grp, NULL);
 }
 
 /**
@@ -460,7 +460,7 @@ void workbench_cache_finish(void *ved)
 
   workbench_update_material_ubos(wpd);
 
-  /* TODO don't free reuse next redraw. */
+  /* TODO: don't free reuse next redraw. */
   for (int i = 0; i < 2; i++) {
     for (int j = 0; j < 2; j++) {
       for (int k = 0; k < WORKBENCH_DATATYPE_MAX; k++) {
@@ -647,6 +647,8 @@ RenderEngineType DRW_engine_viewport_workbench_type = {
     RE_INTERNAL | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
     NULL,
     &DRW_render_to_image,
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,

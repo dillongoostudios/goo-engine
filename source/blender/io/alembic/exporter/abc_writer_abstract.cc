@@ -118,7 +118,7 @@ void ABCAbstractWriter::update_bounding_box(Object *object)
 
   if (!bb) {
     if (object->type != OB_CAMERA) {
-      CLOG_WARN(&LOG, "Bounding box is null!\n");
+      CLOG_WARN(&LOG, "Bounding box is null!");
     }
     bounding_box_.min.x = bounding_box_.min.y = bounding_box_.min.z = 0;
     bounding_box_.max.x = bounding_box_.max.y = bounding_box_.max.z = 0;
@@ -137,7 +137,7 @@ void ABCAbstractWriter::update_bounding_box(Object *object)
 
 void ABCAbstractWriter::write_visibility(const HierarchyContext &context)
 {
-  const bool is_visible = context.is_object_visible(DAG_EVAL_RENDER);
+  const bool is_visible = context.is_object_visible(args_.export_params->evaluation_mode);
   Alembic::Abc::OObject abc_object = get_alembic_object();
 
   if (!abc_visibility_.valid()) {

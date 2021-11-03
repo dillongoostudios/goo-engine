@@ -163,7 +163,7 @@ static void precalculate_effector(struct Depsgraph *depsgraph, EffectorCache *ef
     if (cu->flag & CU_PATH) {
       if (eff->ob->runtime.curve_cache == NULL ||
           eff->ob->runtime.curve_cache->anim_path_accum_length == NULL) {
-        BKE_displist_make_curveTypes(depsgraph, eff->scene, eff->ob, false, false);
+        BKE_displist_make_curveTypes(depsgraph, eff->scene, eff->ob, false);
       }
 
       if (eff->ob->runtime.curve_cache->anim_path_accum_length) {
@@ -481,7 +481,9 @@ static void eff_tri_ray_hit(void *UNUSED(userData),
   hit->index = 1;
 }
 
-// get visibility of a wind ray
+/**
+ * Get visibility of a wind ray.
+ */
 static float eff_calc_visibility(ListBase *colliders,
                                  EffectorCache *eff,
                                  EffectorData *efd,
@@ -547,7 +549,7 @@ static float eff_calc_visibility(ListBase *colliders,
   return visibility;
 }
 
-// noise function for wind e.g.
+/* Noise function for wind e.g. */
 static float wind_func(struct RNG *rng, float strength)
 {
   int random = (BLI_rng_get_int(rng) + 1) % 128; /* max 2357 */
@@ -716,7 +718,7 @@ int get_effector_data(EffectorCache *eff,
   }
   else if (eff->pd && eff->pd->shape == PFIELD_SHAPE_POINTS) {
     /* TODO: hair and points object support */
-    Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
+    const Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
     if (me_eval != NULL) {
       copy_v3_v3(efd->loc, me_eval->mvert[*efd->index].co);
       normal_short_to_float_v3(efd->nor, me_eval->mvert[*efd->index].no);
@@ -773,7 +775,7 @@ int get_effector_data(EffectorCache *eff,
     /* use center of object for distance calculus */
     const Object *ob = eff->ob;
 
-    /* use z-axis as normal*/
+    /* Use z-axis as normal. */
     normalize_v3_v3(efd->nor, ob->obmat[2]);
 
     if (eff->pd && ELEM(eff->pd->shape, PFIELD_SHAPE_PLANE, PFIELD_SHAPE_LINE)) {
@@ -830,7 +832,7 @@ static void get_effector_tot(
 
   if (eff->pd->shape == PFIELD_SHAPE_POINTS) {
     /* TODO: hair and points object support */
-    Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
+    const Mesh *me_eval = BKE_object_get_evaluated_mesh(eff->ob);
     *tot = me_eval != NULL ? me_eval->totvert : 1;
 
     if (*tot && eff->pd->forcefield == PFIELD_HARMONIC && point->index >= 0) {
@@ -861,7 +863,7 @@ static void get_effector_tot(
       int totpart = eff->psys->totpart;
       int amount = eff->psys->part->effector_amount;
 
-      *step = (totpart > amount) ? totpart / amount : 1;
+      *step = (totpart > amount) ? (int)ceil((float)totpart / (float)amount) : 1;
     }
   }
   else {

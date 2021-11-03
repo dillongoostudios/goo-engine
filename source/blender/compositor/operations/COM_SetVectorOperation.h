@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_ConstantOperation.h"
 
 namespace blender::compositor {
 
@@ -26,12 +26,14 @@ namespace blender::compositor {
  * this program converts an input color to an output value.
  * it assumes we are in sRGB color space.
  */
-class SetVectorOperation : public NodeOperation {
+class SetVectorOperation : public ConstantOperation {
  private:
-  float m_x;
-  float m_y;
-  float m_z;
-  float m_w;
+  struct {
+    float x;
+    float y;
+    float z;
+    float w;
+  } vector_;
 
  public:
   /**
@@ -39,48 +41,52 @@ class SetVectorOperation : public NodeOperation {
    */
   SetVectorOperation();
 
+  const float *get_constant_elem() override
+  {
+    return reinterpret_cast<float *>(&vector_);
+  }
+
   float getX()
   {
-    return this->m_x;
+    return vector_.x;
   }
   void setX(float value)
   {
-    this->m_x = value;
+    vector_.x = value;
   }
   float getY()
   {
-    return this->m_y;
+    return vector_.y;
   }
   void setY(float value)
   {
-    this->m_y = value;
+    vector_.y = value;
   }
   float getZ()
   {
-    return this->m_z;
+    return vector_.z;
   }
   void setZ(float value)
   {
-    this->m_z = value;
+    vector_.z = value;
   }
   float getW()
   {
-    return this->m_w;
+    return vector_.w;
   }
   void setW(float value)
   {
-    this->m_w = value;
+    vector_.w = value;
   }
 
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
-  void determineResolution(unsigned int resolution[2],
-                           unsigned int preferredResolution[2]) override;
+  void determine_canvas(const rcti &preferred_area, rcti &r_area) override;
 
-  void setVector(const float vector[3])
+  void set_vector(const float vector[3])
   {
     setX(vector[0]);
     setY(vector[1]);

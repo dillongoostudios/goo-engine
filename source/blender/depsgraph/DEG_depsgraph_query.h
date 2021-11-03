@@ -95,7 +95,7 @@ struct ViewLayer *DEG_get_evaluated_view_layer(const struct Depsgraph *graph);
 /* Get evaluated version of object for given original one. */
 struct Object *DEG_get_evaluated_object(const struct Depsgraph *depsgraph, struct Object *object);
 
-/* Get evaluated version of given ID datablock. */
+/* Get evaluated version of given ID data-block. */
 struct ID *DEG_get_evaluated_id(const struct Depsgraph *depsgraph, struct ID *id);
 
 /* Get evaluated version of data pointed to by RNA pointer */
@@ -106,7 +106,7 @@ void DEG_get_evaluated_rna_pointer(const struct Depsgraph *depsgraph,
 /* Get original version of object for given evaluated one. */
 struct Object *DEG_get_original_object(struct Object *object);
 
-/* Get original version of given evaluated ID datablock. */
+/* Get original version of given evaluated ID data-block. */
 struct ID *DEG_get_original_id(struct ID *id);
 
 /* Check whether given ID is an original,
@@ -122,7 +122,7 @@ bool DEG_is_original_object(const struct Object *object);
 bool DEG_is_evaluated_id(const struct ID *id);
 bool DEG_is_evaluated_object(const struct Object *object);
 
-/* Check whether depsgraph os fully evaluated. This includes the following checks:
+/* Check whether depsgraph is fully evaluated. This includes the following checks:
  * - Relations are up-to-date.
  * - Nothing is tagged for update. */
 bool DEG_is_fully_evaluated(const struct Depsgraph *depsgraph);
@@ -145,15 +145,7 @@ typedef struct DEGObjectIterData {
 
   eEvaluationMode eval_mode;
 
-  /* **** Iteration over geometry components **** */
-
-  /* The object whose components we currently iterate over.
-   * This might point to #temp_dupli_object. */
-  struct Object *geometry_component_owner;
-  /* Some identifier that is used to determine which geometry component should be returned next. */
-  int geometry_component_id;
-  /* Temporary storage for an object that is created from a component. */
-  struct Object temp_geometry_component_object;
+  struct Object *next_object;
 
   /* **** Iteration over dupli-list. *** */
 
@@ -180,7 +172,7 @@ void DEG_iterator_objects_next(struct BLI_Iterator *iter);
 void DEG_iterator_objects_end(struct BLI_Iterator *iter);
 
 /**
- * Note: Be careful with DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY objects.
+ * NOTE: Be careful with DEG_ITER_OBJECT_FLAG_LINKED_INDIRECTLY objects.
  * Although they are available they have no overrides (collection_properties)
  * and will crash if you try to access it.
  */

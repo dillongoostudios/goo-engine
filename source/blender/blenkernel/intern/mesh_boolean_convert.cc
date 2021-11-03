@@ -38,6 +38,7 @@
 #include "BLI_mesh_boolean.hh"
 #include "BLI_mesh_intersect.hh"
 #include "BLI_span.hh"
+#include "BLI_task.hh"
 
 namespace blender::meshintersect {
 
@@ -96,6 +97,8 @@ class MeshesToIMeshInfo {
   /* Transformation matrix to transform a coordinate in the corresponding
    * Mesh to the local space of the first Mesh. */
   Array<float4x4> to_target_transform;
+  /* For each input mesh, whether or not their transform is negative. */
+  Array<bool> has_negative_transform;
   /* For each input mesh, how to remap the material slot numbers to
    * the material slots in the first mesh. */
   Span<Array<short>> material_remaps;
@@ -276,6 +279,7 @@ static IMesh meshes_to_imesh(Span<const Mesh *> meshes,
   r_info->mesh_edge_offset = Array<int>(nmeshes);
   r_info->mesh_poly_offset = Array<int>(nmeshes);
   r_info->to_target_transform = Array<float4x4>(nmeshes);
+  r_info->has_negative_transform = Array<bool>(nmeshes);
   r_info->material_remaps = material_remaps;
   int v = 0;
   int e = 0;
@@ -304,39 +308,68 @@ static IMesh meshes_to_imesh(Span<const Mesh *> meshes,
     r_info->mesh_edge_offset[mi] = e;
     r_info->mesh_poly_offset[mi] = f;
     /* Get matrix that transforms a coordinate in objects[mi]'s local space
-     * to the target space space.*/
+     * to the target space space. */
     const float4x4 objn_mat = (obmats[mi] == nullptr) ? float4x4::identity() :
                                                         clean_obmat(*obmats[mi]);
     r_info->to_target_transform[mi] = inv_target_mat * objn_mat;
+    r_info->has_negative_transform[mi] = objn_mat.is_negative();
 
-    /* Skip the matrix multiplication for each point when there is no transform for a mesh,
-     * for example when the first mesh is already in the target space. (Note the logic directly
-     * above, which uses an identity matrix with a null input transform). */
+    /* All meshes 1 and up will be transformed into the local space of operand 0.
+     * Historical behavior of the modifier has been to flip the faces of any meshes
+     * that would have a negative transform if you do that. */
+    bool need_face_flip = r_info->has_negative_transform[mi] != r_info->has_negative_transform[0];
+
+    Vector<Vert *> verts(me->totvert);
+    Span<MVert> mverts = Span(me->mvert, me->totvert);
+
+    /* Allocate verts
+     * Skip the matrix multiplication for each point when there is no transform for a mesh,
+     * for example when the first mesh is already in the target space. (Note the logic
+     * directly above, which uses an identity matrix with a null input transform). */
     if (obmats[mi] == nullptr) {
-      for (const MVert &vert : Span(me->mvert, me->totvert)) {
-        const float3 co = float3(vert.co);
-        r_info->mesh_to_imesh_vert[v] = arena.add_or_find_vert(mpq3(co.x, co.y, co.z), v);
-        ++v;
-      }
+      threading::parallel_for(mverts.index_range(), 2048, [&](IndexRange range) {
+        float3 co;
+        for (int i : range) {
+          co = float3(mverts[i].co);
+          mpq3 mco = mpq3(co.x, co.y, co.z);
+          double3 dco(mco[0].get_d(), mco[1].get_d(), mco[2].get_d());
+          verts[i] = new Vert(mco, dco, NO_INDEX, i);
+        }
+      });
     }
     else {
-      for (const MVert &vert : Span(me->mvert, me->totvert)) {
-        const float3 co = r_info->to_target_transform[mi] * float3(vert.co);
-        r_info->mesh_to_imesh_vert[v] = arena.add_or_find_vert(mpq3(co.x, co.y, co.z), v);
-        ++v;
-      }
+      threading::parallel_for(mverts.index_range(), 2048, [&](IndexRange range) {
+        float3 co;
+        for (int i : range) {
+          co = r_info->to_target_transform[mi] * float3(mverts[i].co);
+          mpq3 mco = mpq3(co.x, co.y, co.z);
+          double3 dco(mco[0].get_d(), mco[1].get_d(), mco[2].get_d());
+          verts[i] = new Vert(mco, dco, NO_INDEX, i);
+        }
+      });
+    }
+    for (int i : mverts.index_range()) {
+      r_info->mesh_to_imesh_vert[v] = arena.add_or_find_vert(verts[i]);
+      ++v;
     }
 
     for (const MPoly &poly : Span(me->mpoly, me->totpoly)) {
       int flen = poly.totloop;
-      face_vert.clear();
-      face_edge_orig.clear();
+      face_vert.resize(flen);
+      face_edge_orig.resize(flen);
       const MLoop *l = &me->mloop[poly.loopstart];
       for (int i = 0; i < flen; ++i) {
         int mverti = r_info->mesh_vert_offset[mi] + l->v;
         const Vert *fv = r_info->mesh_to_imesh_vert[mverti];
-        face_vert.append(fv);
-        face_edge_orig.append(e + l->e);
+        if (need_face_flip) {
+          face_vert[flen - i - 1] = fv;
+          int iedge = i < flen - 1 ? flen - i - 2 : flen - 1;
+          face_edge_orig[iedge] = e + l->e;
+        }
+        else {
+          face_vert[i] = fv;
+          face_edge_orig[i] = e + l->e;
+        }
         ++l;
       }
       r_info->mesh_to_imesh_face[f] = arena.add_face(face_vert, f, face_edge_orig);
@@ -611,7 +644,7 @@ static void copy_or_interp_loop_attributes(Mesh *dest_mesh,
             source_cd, target_cd, source_layer_i, target_layer_i, orig_loop_index, loop_index, 1);
       }
       else {
-        /* Note: although CustomData_bmesh_interp_n function has bmesh in its name, nothing about
+        /* NOTE: although CustomData_bmesh_interp_n function has bmesh in its name, nothing about
          * it is BMesh-specific. We can't use CustomData_interp because it assumes that
          * all source layers exist in the dest.
          * A non bmesh version could have the benefit of not copying data into src_blocks_ofs -
@@ -776,7 +809,7 @@ static Mesh *imesh_to_mesh(IMesh *im, MeshesToIMeshInfo &mim)
 
 /**
  * Do a mesh boolean operation directly on meshes (without going back and forth to BMesh).
- * \param meshes: An array of of Mesh pointers.
+ * \param meshes: An array of Mesh pointers.
  * \param obmats: An array of pointers to the obmat matrices that transform local
  * coordinates to global ones. It is allowed for the pointers to be null, meaning the
  * transformation is the identity.

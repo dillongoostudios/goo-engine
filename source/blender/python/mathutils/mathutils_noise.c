@@ -93,7 +93,7 @@
 #define MIXBITS(u, v) (((u)&UMASK) | ((v)&LMASK))
 #define TWIST(u, v) ((MIXBITS(u, v) >> 1) ^ ((v)&1UL ? MATRIX_A : 0UL))
 
-static ulong state[N]; /* the array for the state vector  */
+static ulong state[N]; /* The array for the state vector. */
 static int left = 1;
 static int initf = 0;
 static ulong *next;
@@ -106,10 +106,10 @@ static void init_genrand(ulong s)
   state[0] = s & 0xffffffffUL;
   for (j = 1; j < N; j++) {
     state[j] = (1812433253UL * (state[j - 1] ^ (state[j - 1] >> 30)) + j);
-    /* See Knuth TAOCP Vol2. 3rd Ed. P.106 for multiplier. */
-    /* In the previous versions, MSBs of the seed affect   */
-    /* only MSBs of the array state[].                        */
-    /* 2002/01/09 modified by Makoto Matsumoto             */
+    /* See Knuth TAOCP Vol2. 3rd Ed. P.106 for multiplier.
+     * In the previous versions, MSBs of the seed affect
+     * only MSBs of the array state[].
+     * 2002/01/09 modified by Makoto Matsumoto. */
     state[j] &= 0xffffffffUL; /* for >32 bit machines */
   }
   left = 1;
@@ -131,8 +131,7 @@ static void next_state(void)
   ulong *p = state;
   int j;
 
-  /* if init_genrand() has not been called, */
-  /* a default initial seed is used         */
+  /* If init_genrand() has not been called, a default initial seed is used. */
   if (initf == 0) {
     init_genrand(5489UL);
   }
@@ -230,7 +229,7 @@ static PyC_FlagSet bpy_noise_metrics[] = {
     {0, NULL},
 };
 
-/* Fills an array of length size with random numbers in the range (-1, 1)*/
+/* Fills an array of length size with random numbers in the range (-1, 1). */
 static void rand_vn(float *array_tar, const int size)
 {
   float *array_pt = array_tar + (size - 1);
@@ -563,7 +562,7 @@ PyDoc_STRVAR(M_Noise_turbulence_vector_doc,
              "   :type octaves: int\n"
              "   :arg hard: Specifies whether returned turbulence is hard (sharp transitions) or "
              "soft (smooth transitions).\n"
-             "   :type hard: :boolean\n" BPY_NOISE_BASIS_ENUM_DOC
+             "   :type hard: boolean\n" BPY_NOISE_BASIS_ENUM_DOC
              "   :arg amplitude_scale: The amplitude scaling factor.\n"
              "   :type amplitude_scale: float\n"
              "   :arg frequency_scale: The frequency scaling factor\n"

@@ -79,6 +79,7 @@ set(SRC
   intern/MOD_mirror.c
   intern/MOD_multires.c
   intern/MOD_nodes.cc
+  intern/MOD_nodes_evaluator.cc
   intern/MOD_none.c
   intern/MOD_normal_edit.c
   intern/MOD_ocean.c
@@ -118,6 +119,7 @@ set(SRC
   MOD_modifiertypes.h
   MOD_nodes.h
   intern/MOD_meshcache_util.h
+  intern/MOD_nodes_evaluator.hh
   intern/MOD_solidify_util.h
   intern/MOD_ui_common.h
   intern/MOD_util.h
@@ -136,6 +138,16 @@ if(WITH_ALEMBIC)
   )
   list(APPEND LIB
     bf_alembic
+  )
+endif()
+
+if(WITH_USD)
+  add_definitions(-DWITH_USD)
+  list(APPEND INC
+    ../io/usd
+  )
+  list(APPEND LIB
+    bf_usd
   )
 endif()
 
@@ -191,6 +203,22 @@ if(WITH_GMP)
   )
 endif()
 
+if(WITH_TBB)
+  add_definitions(-DWITH_TBB)
+  if(WIN32)
+    # TBB includes Windows.h which will define min/max macros
+    # that will collide with the stl versions.
+    add_definitions(-DNOMINMAX)
+  endif()
+  list(APPEND INC_SYS
+    ${TBB_INCLUDE_DIRS}
+  )
+
+  list(APPEND LIB
+    ${TBB_LIBRARIES}
+  )
+endif()
+
 if(WITH_OPENVDB)
   list(APPEND INC
     ../../../intern/openvdb
@@ -206,7 +234,7 @@ if(WITH_OPENVDB)
 endif()
 
 if(WITH_EXPERIMENTAL_FEATURES)
-  add_definitions(-DWITH_GEOMETRY_NODES)
+  add_definitions(-DWITH_SIMULATION_DATABLOCK)
   add_definitions(-DWITH_POINT_CLOUD)
   add_definitions(-DWITH_HAIR_NODES)
 endif()

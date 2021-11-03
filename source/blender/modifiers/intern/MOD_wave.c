@@ -70,7 +70,9 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(wmd, DNA_struct_default_get(WaveModifierData), modifier);
 }
 
-static bool dependsOnTime(ModifierData *UNUSED(md))
+static bool dependsOnTime(struct Scene *UNUSED(scene),
+                          ModifierData *UNUSED(md),
+                          const int UNUSED(dag_eval_mode))
 {
   return true;
 }
@@ -271,7 +273,7 @@ static void waveModifier_do(WaveModifierData *md,
         amplit = amplit * wmd->narrow;
         amplit = (float)(1.0f / expf(amplit * amplit) - minfac);
 
-        /*apply texture*/
+        /* Apply texture. */
         if (tex_co) {
           Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
           TexResult texres;
@@ -280,7 +282,7 @@ static void waveModifier_do(WaveModifierData *md,
           amplit *= texres.tin;
         }
 
-        /*apply weight & falloff */
+        /* Apply weight & falloff. */
         amplit *= def_weight * falloff_fac;
 
         if (mvert) {
@@ -492,7 +494,6 @@ ModifierTypeInfo modifierType_Wave = {
     /* modifyMesh */ NULL,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

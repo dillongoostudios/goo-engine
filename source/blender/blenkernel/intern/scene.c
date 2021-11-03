@@ -63,6 +63,8 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
+#include "BLO_readfile.h"
+
 #include "BLT_translation.h"
 
 #include "BKE_action.h"
@@ -109,13 +111,11 @@
 
 #include "RE_engine.h"
 
+#include "RNA_access.h"
+
 #include "SEQ_edit.h"
 #include "SEQ_iterator.h"
-#include "SEQ_modifier.h"
-#include "SEQ_proxy.h"
-#include "SEQ_relations.h"
 #include "SEQ_sequencer.h"
-#include "SEQ_sound.h"
 
 #include "BLO_read_write.h"
 
@@ -192,7 +192,7 @@ static void scene_init_data(ID *id)
 
   BLI_strncpy(scene->r.pic, U.renderdir, sizeof(scene->r.pic));
 
-  /* Note; in header_info.c the scene copy happens...,
+  /* NOTE: in header_info.c the scene copy happens...,
    * if you add more to renderdata it has to be checked there. */
 
   /* multiview - stereo */
@@ -228,6 +228,8 @@ static void scene_init_data(ID *id)
 
   /* Curve Profile */
   scene->toolsettings->custom_bevel_profile_preset = BKE_curveprofile_add(PROF_PRESET_LINE);
+
+  /* Sequencer */
   scene->toolsettings->sequencer_tool_settings = SEQ_tool_settings_init();
 
   for (size_t i = 0; i < ARRAY_SIZE(scene->orientation_slots); i++) {
@@ -237,7 +239,7 @@ static void scene_init_data(ID *id)
   /* Master Collection */
   scene->master_collection = BKE_collection_master_add();
 
-  BKE_view_layer_add(scene, "View Layer", NULL, VIEWLAYER_ADD_NEW);
+  BKE_view_layer_add(scene, "ViewLayer", NULL, VIEWLAYER_ADD_NEW);
 }
 
 static void scene_copy_markers(Scene *scene_dst, const Scene *scene_src, const int flag)
@@ -443,7 +445,8 @@ static void scene_free_data(ID *id)
    * for objects directly in the master collection? then other
    * collections in the scene need to do it too? */
   if (scene->master_collection) {
-    BKE_collection_free(scene->master_collection);
+    BKE_collection_free_data(scene->master_collection);
+    BKE_libblock_free_data_py(&scene->master_collection->id);
     MEM_freeN(scene->master_collection);
     scene->master_collection = NULL;
   }
@@ -527,7 +530,7 @@ static void scene_foreach_toolsettings_id_pointer_process(
           (ID **)&(__id), __action, __reader, (ID **)&(__id_old), __cb_flag); \
     } \
     else { \
-      BKE_LIB_FOREACHID_PROCESS(__data, __id, __cb_flag); \
+      BKE_LIB_FOREACHID_PROCESS_IDSUPER(__data, __id, __cb_flag); \
     } \
   } \
   (void)0
@@ -692,45 +695,61 @@ static void scene_foreach_layer_collection(LibraryForeachIDData *data, ListBase 
                          (lc->collection->id.flag & LIB_EMBEDDED_DATA) != 0) ?
                             IDWALK_CB_EMBEDDED :
                             IDWALK_CB_NOP;
-    BKE_LIB_FOREACHID_PROCESS(data, lc->collection, cb_flag);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lc->collection, cb_flag);
     scene_foreach_layer_collection(data, &lc->layer_collections);
   }
+}
+
+static bool seq_foreach_member_id_cb(Sequence *seq, void *user_data)
+{
+  LibraryForeachIDData *data = (LibraryForeachIDData *)user_data;
+
+#define FOREACHID_PROCESS_IDSUPER(_data, _id_super, _cb_flag) \
+  { \
+    CHECK_TYPE(&((_id_super)->id), ID *); \
+    if (!BKE_lib_query_foreachid_process((_data), (ID **)&(_id_super), (_cb_flag))) { \
+      return false; \
+    } \
+  } \
+  ((void)0)
+
+  FOREACHID_PROCESS_IDSUPER(data, seq->scene, IDWALK_CB_NEVER_SELF);
+  FOREACHID_PROCESS_IDSUPER(data, seq->scene_camera, IDWALK_CB_NOP);
+  FOREACHID_PROCESS_IDSUPER(data, seq->clip, IDWALK_CB_USER);
+  FOREACHID_PROCESS_IDSUPER(data, seq->mask, IDWALK_CB_USER);
+  FOREACHID_PROCESS_IDSUPER(data, seq->sound, IDWALK_CB_USER);
+  IDP_foreach_property(
+      seq->prop, IDP_TYPE_FILTER_ID, BKE_lib_query_idpropertiesForeachIDLink_callback, data);
+  LISTBASE_FOREACH (SequenceModifierData *, smd, &seq->modifiers) {
+    FOREACHID_PROCESS_IDSUPER(data, smd->mask_id, IDWALK_CB_USER);
+  }
+
+  if (seq->type == SEQ_TYPE_TEXT && seq->effectdata) {
+    TextVars *text_data = seq->effectdata;
+    FOREACHID_PROCESS_IDSUPER(data, text_data->text_font, IDWALK_CB_USER);
+  }
+
+#undef FOREACHID_PROCESS_IDSUPER
+
+  return true;
 }
 
 static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   Scene *scene = (Scene *)id;
 
-  BKE_LIB_FOREACHID_PROCESS(data, scene->camera, IDWALK_CB_NOP);
-  BKE_LIB_FOREACHID_PROCESS(data, scene->world, IDWALK_CB_USER);
-  BKE_LIB_FOREACHID_PROCESS(data, scene->set, IDWALK_CB_NEVER_SELF);
-  BKE_LIB_FOREACHID_PROCESS(data, scene->clip, IDWALK_CB_USER);
-  BKE_LIB_FOREACHID_PROCESS(data, scene->gpd, IDWALK_CB_USER);
-  BKE_LIB_FOREACHID_PROCESS(data, scene->r.bake.cage_object, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->camera, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->world, IDWALK_CB_USER);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->set, IDWALK_CB_NEVER_SELF);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->clip, IDWALK_CB_USER);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->gpd, IDWALK_CB_USER);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scene->r.bake.cage_object, IDWALK_CB_NOP);
   if (scene->nodetree) {
     /* nodetree **are owned by IDs**, treat them as mere sub-data and not real ID! */
     BKE_library_foreach_ID_embedded(data, (ID **)&scene->nodetree);
   }
   if (scene->ed) {
-    Sequence *seq;
-    SEQ_ALL_BEGIN (scene->ed, seq) {
-      BKE_LIB_FOREACHID_PROCESS(data, seq->scene, IDWALK_CB_NEVER_SELF);
-      BKE_LIB_FOREACHID_PROCESS(data, seq->scene_camera, IDWALK_CB_NOP);
-      BKE_LIB_FOREACHID_PROCESS(data, seq->clip, IDWALK_CB_USER);
-      BKE_LIB_FOREACHID_PROCESS(data, seq->mask, IDWALK_CB_USER);
-      BKE_LIB_FOREACHID_PROCESS(data, seq->sound, IDWALK_CB_USER);
-      IDP_foreach_property(
-          seq->prop, IDP_TYPE_FILTER_ID, BKE_lib_query_idpropertiesForeachIDLink_callback, data);
-      LISTBASE_FOREACH (SequenceModifierData *, smd, &seq->modifiers) {
-        BKE_LIB_FOREACHID_PROCESS(data, smd->mask_id, IDWALK_CB_USER);
-      }
-
-      if (seq->type == SEQ_TYPE_TEXT && seq->effectdata) {
-        TextVars *text_data = seq->effectdata;
-        BKE_LIB_FOREACHID_PROCESS(data, text_data->text_font, IDWALK_CB_USER);
-      }
-    }
-    SEQ_ALL_END;
+    SEQ_for_each_callback(&scene->ed->seqbase, seq_foreach_member_id_cb, data);
   }
 
   /* This pointer can be NULL during old files reading, better be safe than sorry. */
@@ -739,10 +758,10 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
   }
 
   LISTBASE_FOREACH (ViewLayer *, view_layer, &scene->view_layers) {
-    BKE_LIB_FOREACHID_PROCESS(data, view_layer->mat_override, IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, view_layer->mat_override, IDWALK_CB_USER);
 
     LISTBASE_FOREACH (Base *, base, &view_layer->object_bases) {
-      BKE_LIB_FOREACHID_PROCESS(
+      BKE_LIB_FOREACHID_PROCESS_IDSUPER(
           data, base->object, IDWALK_CB_NOP | IDWALK_CB_OVERRIDE_LIBRARY_NOT_OVERRIDABLE);
     }
 
@@ -750,23 +769,23 @@ static void scene_foreach_id(ID *id, LibraryForeachIDData *data)
 
     LISTBASE_FOREACH (FreestyleModuleConfig *, fmc, &view_layer->freestyle_config.modules) {
       if (fmc->script) {
-        BKE_LIB_FOREACHID_PROCESS(data, fmc->script, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, fmc->script, IDWALK_CB_NOP);
       }
     }
 
     LISTBASE_FOREACH (FreestyleLineSet *, fls, &view_layer->freestyle_config.linesets) {
       if (fls->group) {
-        BKE_LIB_FOREACHID_PROCESS(data, fls->group, IDWALK_CB_USER);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, fls->group, IDWALK_CB_USER);
       }
 
       if (fls->linestyle) {
-        BKE_LIB_FOREACHID_PROCESS(data, fls->linestyle, IDWALK_CB_USER);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, fls->linestyle, IDWALK_CB_USER);
       }
     }
   }
 
   LISTBASE_FOREACH (TimeMarker *, marker, &scene->markers) {
-    BKE_LIB_FOREACHID_PROCESS(data, marker->camera, IDWALK_CB_NOP);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, marker->camera, IDWALK_CB_NOP);
     IDP_foreach_property(
         marker->prop, IDP_TYPE_FILTER_ID, BKE_lib_query_idpropertiesForeachIDLink_callback, data);
   }
@@ -878,87 +897,9 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 
   Editing *ed = sce->ed;
   if (ed) {
-    Sequence *seq;
-
     BLO_write_struct(writer, Editing, ed);
 
-    /* reset write flags too */
-
-    SEQ_ALL_BEGIN (ed, seq) {
-      if (seq->strip) {
-        seq->strip->done = false;
-      }
-      BLO_write_struct(writer, Sequence, seq);
-    }
-    SEQ_ALL_END;
-
-    SEQ_ALL_BEGIN (ed, seq) {
-      if (seq->strip && seq->strip->done == 0) {
-        /* write strip with 'done' at 0 because readfile */
-
-        if (seq->effectdata) {
-          switch (seq->type) {
-            case SEQ_TYPE_COLOR:
-              BLO_write_struct(writer, SolidColorVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_SPEED:
-              BLO_write_struct(writer, SpeedControlVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_WIPE:
-              BLO_write_struct(writer, WipeVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_GLOW:
-              BLO_write_struct(writer, GlowVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_TRANSFORM:
-              BLO_write_struct(writer, TransformVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_GAUSSIAN_BLUR:
-              BLO_write_struct(writer, GaussianBlurVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_TEXT:
-              BLO_write_struct(writer, TextVars, seq->effectdata);
-              break;
-            case SEQ_TYPE_COLORMIX:
-              BLO_write_struct(writer, ColorMixVars, seq->effectdata);
-              break;
-          }
-        }
-
-        BLO_write_struct(writer, Stereo3dFormat, seq->stereo3d_format);
-
-        Strip *strip = seq->strip;
-        BLO_write_struct(writer, Strip, strip);
-        if (strip->crop) {
-          BLO_write_struct(writer, StripCrop, strip->crop);
-        }
-        if (strip->transform) {
-          BLO_write_struct(writer, StripTransform, strip->transform);
-        }
-        if (strip->proxy) {
-          BLO_write_struct(writer, StripProxy, strip->proxy);
-        }
-        if (seq->type == SEQ_TYPE_IMAGE) {
-          BLO_write_struct_array(writer,
-                                 StripElem,
-                                 MEM_allocN_len(strip->stripdata) / sizeof(struct StripElem),
-                                 strip->stripdata);
-        }
-        else if (ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_SOUND_RAM, SEQ_TYPE_SOUND_HD)) {
-          BLO_write_struct(writer, StripElem, strip->stripdata);
-        }
-
-        strip->done = true;
-      }
-
-      if (seq->prop) {
-        IDP_BlendWrite(writer, seq->prop);
-      }
-
-      SEQ_modifier_blend_write(writer, &seq->modifiers);
-    }
-    SEQ_ALL_END;
-
+    SEQ_blend_write(writer, &ed->seqbase);
     /* new; meta stack too, even when its nasty restore code */
     LISTBASE_FOREACH (MetaStack *, ms, &ed->metastack) {
       BLO_write_struct(writer, MetaStack, ms);
@@ -1042,7 +983,7 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
 
 static void direct_link_paint_helper(BlendDataReader *reader, const Scene *scene, Paint **paint)
 {
-  /* TODO. is this needed */
+  /* TODO: is this needed. */
   BLO_read_data_address(reader, paint);
 
   if (*paint) {
@@ -1054,8 +995,13 @@ static void link_recurs_seq(BlendDataReader *reader, ListBase *lb)
 {
   BLO_read_list(reader, lb);
 
-  LISTBASE_FOREACH (Sequence *, seq, lb) {
-    if (seq->seqbase.first) {
+  LISTBASE_FOREACH_MUTABLE (Sequence *, seq, lb) {
+    /* Sanity check. */
+    if (!SEQ_valid_strip_channel(seq)) {
+      BLI_freelinkN(lb, seq);
+      BLO_read_data_reports(reader)->count.vse_strips_skipped++;
+    }
+    else if (seq->seqbase.first) {
       link_recurs_seq(reader, &seq->seqbase);
     }
   }
@@ -1145,75 +1091,13 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
     BLO_read_data_address(reader, &ed->act_seq);
     ed->cache = NULL;
     ed->prefetch_job = NULL;
+    ed->runtime.sequence_lookup = NULL;
 
     /* recursive link sequences, lb will be correctly initialized */
     link_recurs_seq(reader, &ed->seqbase);
 
-    Sequence *seq;
-    SEQ_ALL_BEGIN (ed, seq) {
-      /* Do as early as possible, so that other parts of reading can rely on valid session UUID. */
-      SEQ_relations_session_uuid_generate(seq);
-
-      BLO_read_data_address(reader, &seq->seq1);
-      BLO_read_data_address(reader, &seq->seq2);
-      BLO_read_data_address(reader, &seq->seq3);
-
-      /* a patch: after introduction of effects with 3 input strips */
-      if (seq->seq3 == NULL) {
-        seq->seq3 = seq->seq2;
-      }
-
-      BLO_read_data_address(reader, &seq->effectdata);
-      BLO_read_data_address(reader, &seq->stereo3d_format);
-
-      if (seq->type & SEQ_TYPE_EFFECT) {
-        seq->flag |= SEQ_EFFECT_NOT_LOADED;
-      }
-
-      if (seq->type == SEQ_TYPE_SPEED) {
-        SpeedControlVars *s = seq->effectdata;
-        s->frameMap = NULL;
-      }
-
-      if (seq->type == SEQ_TYPE_TEXT) {
-        TextVars *t = seq->effectdata;
-        t->text_blf_id = SEQ_FONT_NOT_LOADED;
-      }
-
-      BLO_read_data_address(reader, &seq->prop);
-      IDP_BlendDataRead(reader, &seq->prop);
-
-      BLO_read_data_address(reader, &seq->strip);
-      if (seq->strip && seq->strip->done == 0) {
-        seq->strip->done = true;
-
-        if (ELEM(seq->type,
-                 SEQ_TYPE_IMAGE,
-                 SEQ_TYPE_MOVIE,
-                 SEQ_TYPE_SOUND_RAM,
-                 SEQ_TYPE_SOUND_HD)) {
-          BLO_read_data_address(reader, &seq->strip->stripdata);
-        }
-        else {
-          seq->strip->stripdata = NULL;
-        }
-        BLO_read_data_address(reader, &seq->strip->crop);
-        BLO_read_data_address(reader, &seq->strip->transform);
-        BLO_read_data_address(reader, &seq->strip->proxy);
-        if (seq->strip->proxy) {
-          seq->strip->proxy->anim = NULL;
-        }
-        else if (seq->flag & SEQ_USE_PROXY) {
-          SEQ_proxy_set(seq, true);
-        }
-
-        /* need to load color balance to it could be converted to modifier */
-        BLO_read_data_address(reader, &seq->strip->color_balance);
-      }
-
-      SEQ_modifier_blend_read_data(reader, &seq->modifiers);
-    }
-    SEQ_ALL_END;
+    /* Read in sequence member data. */
+    SEQ_blend_read(reader, &ed->seqbase);
 
     /* link metastack, slight abuse of structs here,
      * have to restore pointer to internal part in struct */
@@ -1460,50 +1344,9 @@ static void scene_blend_read_lib(BlendLibReader *reader, ID *id)
     }
   }
 
-  Sequence *seq;
-  SEQ_ALL_BEGIN (sce->ed, seq) {
-    IDP_BlendReadLib(reader, seq->prop);
-
-    if (seq->ipo) {
-      BLO_read_id_address(
-          reader, sce->id.lib, &seq->ipo); /* XXX deprecated - old animation system */
-    }
-    seq->scene_sound = NULL;
-    if (seq->scene) {
-      BLO_read_id_address(reader, sce->id.lib, &seq->scene);
-      seq->scene_sound = NULL;
-    }
-    if (seq->clip) {
-      BLO_read_id_address(reader, sce->id.lib, &seq->clip);
-    }
-    if (seq->mask) {
-      BLO_read_id_address(reader, sce->id.lib, &seq->mask);
-    }
-    if (seq->scene_camera) {
-      BLO_read_id_address(reader, sce->id.lib, &seq->scene_camera);
-    }
-    if (seq->sound) {
-      seq->scene_sound = NULL;
-      if (seq->type == SEQ_TYPE_SOUND_HD) {
-        seq->type = SEQ_TYPE_SOUND_RAM;
-      }
-      else {
-        BLO_read_id_address(reader, sce->id.lib, &seq->sound);
-      }
-      if (seq->sound) {
-        id_us_plus_no_lib((ID *)seq->sound);
-        seq->scene_sound = NULL;
-      }
-    }
-    if (seq->type == SEQ_TYPE_TEXT) {
-      TextVars *t = seq->effectdata;
-      BLO_read_id_address(reader, sce->id.lib, &t->text_font);
-    }
-    BLI_listbase_clear(&seq->anims);
-
-    SEQ_modifier_blend_read_lib(reader, sce, &seq->modifiers);
+  if (sce->ed) {
+    SEQ_blend_read_lib(reader, sce, &sce->ed->seqbase);
   }
-  SEQ_ALL_END;
 
   LISTBASE_FOREACH (TimeMarker *, marker, &sce->markers) {
     IDP_BlendReadLib(reader, marker->prop);
@@ -1618,33 +1461,7 @@ static void scene_blend_read_expand(BlendExpander *expander, ID *id)
   }
 
   if (sce->ed) {
-    Sequence *seq;
-
-    SEQ_ALL_BEGIN (sce->ed, seq) {
-      IDP_BlendReadExpand(expander, seq->prop);
-
-      if (seq->scene) {
-        BLO_expand(expander, seq->scene);
-      }
-      if (seq->scene_camera) {
-        BLO_expand(expander, seq->scene_camera);
-      }
-      if (seq->clip) {
-        BLO_expand(expander, seq->clip);
-      }
-      if (seq->mask) {
-        BLO_expand(expander, seq->mask);
-      }
-      if (seq->sound) {
-        BLO_expand(expander, seq->sound);
-      }
-
-      if (seq->type == SEQ_TYPE_TEXT && seq->effectdata) {
-        TextVars *data = seq->effectdata;
-        BLO_expand(expander, data->text_font);
-      }
-    }
-    SEQ_ALL_END;
+    SEQ_blend_read_expand(expander, &sce->ed->seqbase);
   }
 
   if (sce->rigidbody_world) {
@@ -1895,14 +1712,14 @@ void BKE_scene_copy_data_eevee(Scene *sce_dst, const Scene *sce_src)
   sce_dst->eevee = sce_src->eevee;
   sce_dst->eevee.light_cache_data = NULL;
   sce_dst->eevee.light_cache_info[0] = '\0';
-  /* TODO Copy the cache. */
+  /* TODO: Copy the cache. */
 }
 
 Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
 {
   Scene *sce_copy;
 
-  /* TODO this should/could most likely be replaced by call to more generic code at some point...
+  /* TODO: this should/could most likely be replaced by call to more generic code at some point...
    * But for now, let's keep it well isolated here. */
   if (type == SCE_COPY_EMPTY) {
     ListBase rv;
@@ -1983,10 +1800,13 @@ Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
   if (type == SCE_COPY_FULL) {
     /* Scene duplication is always root of duplication currently. */
     const bool is_subprocess = false;
+    const bool is_root_id = true;
+    const int copy_flags = LIB_ID_COPY_DEFAULT;
 
     if (!is_subprocess) {
-      BKE_main_id_tag_all(bmain, LIB_TAG_NEW, false);
-      BKE_main_id_clear_newpoins(bmain);
+      BKE_main_id_newptr_and_tag_clear(bmain);
+    }
+    if (is_root_id) {
       /* In case root duplicated ID is linked, assume we want to get a local copy of it and
        * duplicate all expected linked data. */
       if (ID_IS_LINKED(sce)) {
@@ -1997,23 +1817,42 @@ Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
     /* Copy Freestyle LineStyle datablocks. */
     LISTBASE_FOREACH (ViewLayer *, view_layer_dst, &sce_copy->view_layers) {
       LISTBASE_FOREACH (FreestyleLineSet *, lineset, &view_layer_dst->freestyle_config.linesets) {
-        BKE_id_copy_for_duplicate(bmain, (ID *)lineset->linestyle, duplicate_flags);
+        BKE_id_copy_for_duplicate(bmain, (ID *)lineset->linestyle, duplicate_flags, copy_flags);
       }
     }
 
     /* Full copy of world (included animations) */
-    BKE_id_copy_for_duplicate(bmain, (ID *)sce->world, duplicate_flags);
+    BKE_id_copy_for_duplicate(bmain, (ID *)sce->world, duplicate_flags, copy_flags);
 
     /* Full copy of GreasePencil. */
-    BKE_id_copy_for_duplicate(bmain, (ID *)sce->gpd, duplicate_flags);
+    BKE_id_copy_for_duplicate(bmain, (ID *)sce->gpd, duplicate_flags, copy_flags);
 
     /* Deep-duplicate collections and objects (using preferences' settings for which sub-data to
      * duplicate along the object itself). */
     BKE_collection_duplicate(
         bmain, NULL, sce_copy->master_collection, duplicate_flags, LIB_ID_DUPLICATE_IS_SUBPROCESS);
 
+    /* Rigid body world collections may not be instantiated as scene's collections, ensure they
+     * also get properly duplicated. */
+    if (sce_copy->rigidbody_world != NULL) {
+      if (sce_copy->rigidbody_world->group != NULL) {
+        BKE_collection_duplicate(bmain,
+                                 NULL,
+                                 sce_copy->rigidbody_world->group,
+                                 duplicate_flags,
+                                 LIB_ID_DUPLICATE_IS_SUBPROCESS);
+      }
+      if (sce_copy->rigidbody_world->constraints != NULL) {
+        BKE_collection_duplicate(bmain,
+                                 NULL,
+                                 sce_copy->rigidbody_world->constraints,
+                                 duplicate_flags,
+                                 LIB_ID_DUPLICATE_IS_SUBPROCESS);
+      }
+    }
+
     if (!is_subprocess) {
-      /* This code will follow into all ID links using an ID tagged with LIB_TAG_NEW.*/
+      /* This code will follow into all ID links using an ID tagged with LIB_TAG_NEW. */
       BKE_libblock_relink_to_newid(&sce_copy->id);
 
 #ifndef NDEBUG
@@ -2027,8 +1866,7 @@ Scene *BKE_scene_duplicate(Main *bmain, Scene *sce, eSceneCopyMethod type)
 #endif
 
       /* Cleanup. */
-      BKE_main_id_tag_all(bmain, LIB_TAG_NEW, false);
-      BKE_main_id_clear_newpoins(bmain);
+      BKE_main_id_newptr_and_tag_clear(bmain);
 
       BKE_main_collection_sync(bmain);
     }
@@ -2103,7 +1941,7 @@ Object *BKE_scene_object_find_by_name(const Scene *scene, const char *name)
 
 /**
  * Sets the active scene, mainly used when running in background mode
- * (``--scene`` command line argument).
+ * (`--scene` command line argument).
  * This is also called to set the scene directly, bypassing windowing code.
  * Otherwise #WM_window_set_active_scene is used when changing scenes by the user.
  */
@@ -2177,7 +2015,7 @@ int BKE_scene_base_iter_next(
           /* exception: empty scene layer */
           while ((*scene)->set) {
             (*scene) = (*scene)->set;
-            ViewLayer *view_layer_set = BKE_view_layer_default_render((*scene));
+            ViewLayer *view_layer_set = BKE_view_layer_default_render(*scene);
             if (view_layer_set->object_bases.first) {
               *base = view_layer_set->object_bases.first;
               *ob = (*base)->object;
@@ -2198,7 +2036,7 @@ int BKE_scene_base_iter_next(
               /* (*scene) is finished, now do the set */
               while ((*scene)->set) {
                 (*scene) = (*scene)->set;
-                ViewLayer *view_layer_set = BKE_view_layer_default_render((*scene));
+                ViewLayer *view_layer_set = BKE_view_layer_default_render(*scene);
                 if (view_layer_set->object_bases.first) {
                   *base = view_layer_set->object_bases.first;
                   *ob = (*base)->object;
@@ -2297,22 +2135,19 @@ Object *BKE_scene_camera_switch_find(Scene *scene)
     return NULL;
   }
 
-  const int cfra = ((scene->r.images == scene->r.framapto) ?
-                        scene->r.cfra :
-                        (int)(scene->r.cfra *
-                              ((float)scene->r.framapto / (float)scene->r.images)));
+  const int ctime = (int)BKE_scene_ctime_get(scene);
   int frame = -(MAXFRAME + 1);
   int min_frame = MAXFRAME + 1;
   Object *camera = NULL;
   Object *first_camera = NULL;
 
   LISTBASE_FOREACH (TimeMarker *, m, &scene->markers) {
-    if (m->camera && (m->camera->restrictflag & OB_RESTRICT_RENDER) == 0) {
-      if ((m->frame <= cfra) && (m->frame > frame)) {
+    if (m->camera && (m->camera->visibility_flag & OB_HIDE_RENDER) == 0) {
+      if ((m->frame <= ctime) && (m->frame > frame)) {
         camera = m->camera;
         frame = m->frame;
 
-        if (frame == cfra) {
+        if (frame == ctime) {
           break;
         }
       }
@@ -2394,13 +2229,13 @@ const char *BKE_scene_find_last_marker_name(const Scene *scene, int frame)
   return best_marker ? best_marker->name : NULL;
 }
 
-int BKE_scene_frame_snap_by_seconds(Scene *scene, double interval_in_seconds, int cfra)
+int BKE_scene_frame_snap_by_seconds(Scene *scene, double interval_in_seconds, int frame)
 {
   const int fps = round_db_to_int(FPS * interval_in_seconds);
-  const int second_prev = cfra - mod_i(cfra, fps);
+  const int second_prev = frame - mod_i(frame, fps);
   const int second_next = second_prev + fps;
-  const int delta_prev = cfra - second_prev;
-  const int delta_next = second_next - cfra;
+  const int delta_prev = frame - second_prev;
+  const int delta_next = second_next - frame;
   return (delta_prev < delta_next) ? second_prev : second_next;
 }
 
@@ -2442,16 +2277,17 @@ bool BKE_scene_validate_setscene(Main *bmain, Scene *sce)
   return true;
 }
 
-/**
- * This function is needed to cope with fractional frames, needed for motion blur & physics.
- */
-float BKE_scene_frame_get(const Scene *scene)
+/* Return fractional frame number taking into account subframes and time
+ * remapping. This the time value used by animation, modifiers and physics
+ * evaluation. */
+float BKE_scene_ctime_get(const Scene *scene)
 {
   return BKE_scene_frame_to_ctime(scene, scene->r.cfra);
 }
 
-/* This function is used to obtain arbitrary fractional frames */
-float BKE_scene_frame_to_ctime(const Scene *scene, const float frame)
+/* Convert integer frame number to fractional frame number taking into account
+ * subframes and time remapping. */
+float BKE_scene_frame_to_ctime(const Scene *scene, const int frame)
 {
   float ctime = frame;
   ctime += scene->r.subframe;
@@ -2459,13 +2295,18 @@ float BKE_scene_frame_to_ctime(const Scene *scene, const float frame)
 
   return ctime;
 }
-/**
- * Sets the frame int/float components.
- */
-void BKE_scene_frame_set(struct Scene *scene, double cfra)
+
+/* Get current fractional frame based on frame and subframe. */
+float BKE_scene_frame_get(const Scene *scene)
+{
+  return scene->r.cfra + scene->r.subframe;
+}
+
+/* Set current frame and subframe based on a fractional frame. */
+void BKE_scene_frame_set(Scene *scene, float frame)
 {
   double intpart;
-  scene->r.subframe = modf(cfra, &intpart);
+  scene->r.subframe = modf((double)frame, &intpart);
   scene->r.cfra = (int)intpart;
 }
 
@@ -2651,7 +2492,7 @@ static void scene_graph_update_tagged(Depsgraph *depsgraph, Main *bmain, bool on
     // DEG_debug_graph_relations_validate(depsgraph, bmain, scene);
     /* Flush editing data if needed. */
     prepare_mesh_for_viewport_render(bmain, view_layer);
-    /* Update all objects: drivers, matrices, displists, etc. flags set
+    /* Update all objects: drivers, matrices, #DispList, etc. flags set
      * by depsgraph or manual, no layer check here, gets correct flushed. */
     DEG_evaluate_on_refresh(depsgraph);
     /* Update sound system. */
@@ -2727,15 +2568,15 @@ void BKE_scene_graph_update_for_newframe_ex(Depsgraph *depsgraph, const bool cle
     BKE_image_editors_update_frame(bmain, scene->r.cfra);
     BKE_sound_set_cfra(scene->r.cfra);
     DEG_graph_relations_update(depsgraph);
-    /* Update all objects: drivers, matrices, displists, etc. flags set
+    /* Update all objects: drivers, matrices, #DispList, etc. flags set
      * by depgraph or manual, no layer check here, gets correct flushed.
      *
      * NOTE: Only update for new frame on first iteration. Second iteration is for ensuring user
      * edits from callback are properly taken into account. Doing a time update on those would
      * lose any possible unkeyed changes made by the handler. */
     if (pass == 0) {
-      const float ctime = BKE_scene_frame_get(scene);
-      DEG_evaluate_on_framechange(depsgraph, ctime);
+      const float frame = BKE_scene_frame_get(scene);
+      DEG_evaluate_on_framechange(depsgraph, frame);
     }
     else {
       DEG_evaluate_on_refresh(depsgraph);
@@ -2894,7 +2735,7 @@ Base *_setlooper_base_step(Scene **sce_iter, ViewLayer *view_layer, Base *base)
   next_set:
     /* Reached the end, get the next base in the set. */
     while ((*sce_iter = (*sce_iter)->set)) {
-      ViewLayer *view_layer_set = BKE_view_layer_default_render((*sce_iter));
+      ViewLayer *view_layer_set = BKE_view_layer_default_render(*sce_iter);
       base = (Base *)view_layer_set->object_bases.first;
 
       if (base) {
@@ -2931,6 +2772,28 @@ bool BKE_scene_uses_blender_workbench(const Scene *scene)
 bool BKE_scene_uses_cycles(const Scene *scene)
 {
   return STREQ(scene->r.engine, RE_engine_id_CYCLES);
+}
+
+/* This enumeration has to match the one defined in the Cycles addon. */
+typedef enum eCyclesFeatureSet {
+  CYCLES_FEATURES_SUPPORTED = 0,
+  CYCLES_FEATURES_EXPERIMENTAL = 1,
+} eCyclesFeatureSet;
+
+/* We cannot use const as RNA_id_pointer_create is not using a const ID. */
+bool BKE_scene_uses_cycles_experimental_features(Scene *scene)
+{
+  BLI_assert(BKE_scene_uses_cycles(scene));
+  PointerRNA scene_ptr;
+  RNA_id_pointer_create(&scene->id, &scene_ptr);
+  PointerRNA cycles_ptr = RNA_pointer_get(&scene_ptr, "cycles");
+
+  if (RNA_pointer_is_null(&cycles_ptr)) {
+    /* The pointer only exists if Cycles is enabled. */
+    return false;
+  }
+
+  return RNA_enum_get(&cycles_ptr, "feature_set") == CYCLES_FEATURES_EXPERIMENTAL;
 }
 
 void BKE_scene_base_flag_to_objects(ViewLayer *view_layer)
@@ -3114,7 +2977,7 @@ bool BKE_scene_multiview_is_render_view_active(const RenderData *rd, const Scene
     return false;
   }
 
-  if ((srv->viewflag & SCE_VIEW_DISABLE)) {
+  if (srv->viewflag & SCE_VIEW_DISABLE) {
     return false;
   }
 
@@ -3237,9 +3100,9 @@ void BKE_scene_multiview_filepath_get(SceneRenderView *srv, const char *filepath
 }
 
 /**
- * When multiview is not used the filepath is as usual (e.g., ``Image.jpg``).
+ * When multiview is not used the filepath is as usual (e.g., `Image.jpg`).
  * When multiview is on, even if only one view is enabled the view is incorporated
- * into the file name (e.g., ``Image_L.jpg``). That allows for the user to re-render
+ * into the file name (e.g., `Image_L.jpg`). That allows for the user to re-render
  * individual views.
  */
 void BKE_scene_multiview_view_filepath_get(const RenderData *rd,
@@ -3380,7 +3243,7 @@ static bool depsgraph_key_compare(const void *key_a_v, const void *key_b_v)
 {
   const DepsgraphKey *key_a = key_a_v;
   const DepsgraphKey *key_b = key_b_v;
-  /* TODO(sergey): Compare rest of  */
+  /* TODO(sergey): Compare rest of. */
   return !(key_a->view_layer == key_b->view_layer);
 }
 
@@ -3526,7 +3389,7 @@ static char *scene_undo_depsgraph_gen_key(Scene *scene, ViewLayer *view_layer, c
   }
 
   size_t key_full_offset = BLI_strncpy_rlen(key_full, scene->id.name, MAX_ID_NAME);
-  if (scene->id.lib != NULL) {
+  if (ID_IS_LINKED(scene)) {
     key_full_offset += BLI_strncpy_rlen(
         key_full + key_full_offset, scene->id.lib->filepath, FILE_MAX);
   }
@@ -3760,71 +3623,3 @@ void BKE_scene_cursor_from_mat4(View3DCursor *cursor, const float mat[4][4], boo
 }
 
 /** \} */
-
-/* Dependency graph evaluation. */
-
-static void scene_sequencer_disable_sound_strips(Scene *scene)
-{
-  if (scene->sound_scene == NULL) {
-    return;
-  }
-  Sequence *seq;
-  SEQ_ALL_BEGIN (scene->ed, seq) {
-    if (seq->scene_sound != NULL) {
-      BKE_sound_remove_scene_sound(scene, seq->scene_sound);
-      seq->scene_sound = NULL;
-    }
-  }
-  SEQ_ALL_END;
-}
-
-void BKE_scene_eval_sequencer_sequences(Depsgraph *depsgraph, Scene *scene)
-{
-  DEG_debug_print_eval(depsgraph, __func__, scene->id.name, scene);
-  if (scene->ed == NULL) {
-    return;
-  }
-  BKE_sound_ensure_scene(scene);
-  Sequence *seq;
-  SEQ_ALL_BEGIN (scene->ed, seq) {
-    if (seq->scene_sound == NULL) {
-      if (seq->sound != NULL) {
-        if (seq->scene_sound == NULL) {
-          seq->scene_sound = BKE_sound_add_scene_sound_defaults(scene, seq);
-        }
-      }
-      else if (seq->type == SEQ_TYPE_SCENE) {
-        if (seq->scene != NULL) {
-          BKE_sound_ensure_scene(seq->scene);
-          seq->scene_sound = BKE_sound_scene_add_scene_sound_defaults(scene, seq);
-        }
-      }
-    }
-    if (seq->scene_sound != NULL) {
-      /* Make sure changing volume via sequence's properties panel works correct.
-       *
-       * Ideally, the entire BKE_scene_update_sound() will happen from a dependency graph, so
-       * then it is no longer needed to do such manual forced updates. */
-      if (seq->type == SEQ_TYPE_SCENE && seq->scene != NULL) {
-        BKE_sound_set_scene_volume(seq->scene, seq->scene->audio.volume);
-        if ((seq->flag & SEQ_SCENE_STRIPS) == 0) {
-          scene_sequencer_disable_sound_strips(seq->scene);
-        }
-      }
-      if (seq->sound != NULL) {
-        if (scene->id.recalc & ID_RECALC_AUDIO || seq->sound->id.recalc & ID_RECALC_AUDIO) {
-          BKE_sound_update_scene_sound(seq->scene_sound, seq->sound);
-        }
-      }
-      BKE_sound_set_scene_sound_volume(
-          seq->scene_sound, seq->volume, (seq->flag & SEQ_AUDIO_VOLUME_ANIMATED) != 0);
-      BKE_sound_set_scene_sound_pitch(
-          seq->scene_sound, seq->pitch, (seq->flag & SEQ_AUDIO_PITCH_ANIMATED) != 0);
-      BKE_sound_set_scene_sound_pan(
-          seq->scene_sound, seq->pan, (seq->flag & SEQ_AUDIO_PAN_ANIMATED) != 0);
-    }
-  }
-  SEQ_ALL_END;
-  SEQ_edit_update_muting(scene->ed);
-  SEQ_sound_update_bounds_all(scene);
-}

@@ -149,7 +149,7 @@ static void join_mesh_single(Depsgraph *depsgraph,
       mul_m4_m4m4(cmat, imat, ob_src->obmat);
 
       /* transform vertex coordinates into new space */
-      for (a = 0, mvert = *mvert_pp; a < me->totvert; a++, mvert++) {
+      for (a = 0; a < me->totvert; a++, mvert++) {
         mul_m4_v3(cmat, mvert->co);
       }
 
@@ -390,7 +390,7 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
   CTX_DATA_END;
 
   /* Apply parent transform if the active object's parent was joined to it.
-   * Note: This doesn't apply recursive parenting. */
+   * NOTE: This doesn't apply recursive parenting. */
   if (join_parent) {
     ob->parent = NULL;
     BKE_object_apply_mat4_ex(ob, ob->obmat, ob->parent, ob->parentinv, false);
@@ -423,6 +423,11 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
 
   /* remove tessface to ensure we don't hold references to invalid faces */
   BKE_mesh_tessface_clear(me);
+
+  /* Clear any run-time data.
+   * Even though this mesh wont typically have run-time data, the Python API can for e.g.
+   * create loop-triangle cache here, which is confusing when left in the mesh, see: T90798. */
+  BKE_mesh_runtime_clear_geometry(me);
 
   /* new material indices and material array */
   if (totmat) {
@@ -475,16 +480,17 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
       me = ob_iter->data;
 
       /* Join this object's vertex groups to the base one's */
-      for (dg = ob_iter->defbase.first; dg; dg = dg->next) {
+      for (dg = me->vertex_group_names.first; dg; dg = dg->next) {
         /* See if this group exists in the object (if it doesn't, add it to the end) */
         if (!BKE_object_defgroup_find_name(ob, dg->name)) {
           odg = MEM_mallocN(sizeof(bDeformGroup), "join deformGroup");
           memcpy(odg, dg, sizeof(bDeformGroup));
-          BLI_addtail(&ob->defbase, odg);
+          BLI_addtail(&mesh_active->vertex_group_names, odg);
         }
       }
-      if (ob->defbase.first && ob->actdef == 0) {
-        ob->actdef = 1;
+      if (!BLI_listbase_is_empty(&mesh_active->vertex_group_names) &&
+          me->vertex_group_active_index == 0) {
+        me->vertex_group_active_index = 1;
       }
 
       /* Join this object's face maps to the base one's. */
@@ -1060,7 +1066,7 @@ static float *editmesh_get_mirror_uv(
     cent_vec[1] = face_cent[1];
   }
 
-  /* TODO - Optimize */
+  /* TODO: Optimize. */
   {
     BMIter iter;
     BMFace *efa;
@@ -1473,19 +1479,21 @@ bool ED_mesh_pick_vert(
 
 MDeformVert *ED_mesh_active_dvert_get_em(Object *ob, BMVert **r_eve)
 {
-  if (ob->mode & OB_MODE_EDIT && ob->type == OB_MESH && ob->defbase.first) {
+  if (ob->mode & OB_MODE_EDIT && ob->type == OB_MESH) {
     Mesh *me = ob->data;
-    BMesh *bm = me->edit_mesh->bm;
-    const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
+    if (!BLI_listbase_is_empty(&me->vertex_group_names)) {
+      BMesh *bm = me->edit_mesh->bm;
+      const int cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
 
-    if (cd_dvert_offset != -1) {
-      BMVert *eve = BM_mesh_active_vert_get(bm);
+      if (cd_dvert_offset != -1) {
+        BMVert *eve = BM_mesh_active_vert_get(bm);
 
-      if (eve) {
-        if (r_eve) {
-          *r_eve = eve;
+        if (eve) {
+          if (r_eve) {
+            *r_eve = eve;
+          }
+          return BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset);
         }
-        return BM_ELEM_CD_GET_VOID_P(eve, cd_dvert_offset);
       }
     }
   }

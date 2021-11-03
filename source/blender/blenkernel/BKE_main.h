@@ -48,6 +48,7 @@ struct BLI_mempool;
 struct BlendThumbnail;
 struct GHash;
 struct GSet;
+struct IDNameLib_Map;
 struct ImBuf;
 struct Library;
 struct MainLock;
@@ -89,18 +90,18 @@ typedef struct MainIDRelationsEntry {
 } MainIDRelationsEntry;
 
 /* MainIDRelationsEntry.tags */
-typedef enum MainIDRelationsEntryTags {
+typedef enum eMainIDRelationsEntryTags {
   /* Generic tag marking the entry as to be processed. */
   MAINIDRELATIONS_ENTRY_TAGS_DOIT = 1 << 0,
   /* Generic tag marking the entry as processed. */
   MAINIDRELATIONS_ENTRY_TAGS_PROCESSED = 1 << 1,
-} MainIDRelationsEntryTags;
+} eMainIDRelationsEntryTags;
 
 typedef struct MainIDRelations {
   /* Mapping from an ID pointer to all of its parents (IDs using it) and children (IDs it uses).
    * Values are `MainIDRelationsEntry` pointers. */
   struct GHash *relations_from_pointers;
-  /* Note: we could add more mappings when needed (e.g. from session uuid?). */
+  /* NOTE: we could add more mappings when needed (e.g. from session uuid?). */
 
   short flag;
 
@@ -191,11 +192,16 @@ typedef struct Main {
    */
   struct MainIDRelations *relations;
 
+  /* IDMap of IDs. Currently used when reading (expanding) libraries. */
+  struct IDNameLib_Map *id_map;
+
   struct MainLock *lock;
 } Main;
 
 struct Main *BKE_main_new(void);
 void BKE_main_free(struct Main *mainvar);
+
+bool BKE_main_is_empty(struct Main *bmain);
 
 void BKE_main_lock(struct Main *bmain);
 void BKE_main_unlock(struct Main *bmain);
@@ -203,18 +209,44 @@ void BKE_main_unlock(struct Main *bmain);
 void BKE_main_relations_create(struct Main *bmain, const short flag);
 void BKE_main_relations_free(struct Main *bmain);
 void BKE_main_relations_tag_set(struct Main *bmain,
-                                const MainIDRelationsEntryTags tag,
+                                const eMainIDRelationsEntryTags tag,
                                 const bool value);
 
 struct GSet *BKE_main_gset_create(struct Main *bmain, struct GSet *gset);
+
+/*
+ * Temporary runtime API to allow re-using local (already appended) IDs instead of appending a new
+ * copy again.
+ */
+
+struct GHash *BKE_main_library_weak_reference_create(struct Main *bmain) ATTR_NONNULL();
+void BKE_main_library_weak_reference_destroy(struct GHash *library_weak_reference_mapping)
+    ATTR_NONNULL();
+struct ID *BKE_main_library_weak_reference_search_item(
+    struct GHash *library_weak_reference_mapping,
+    const char *library_filepath,
+    const char *library_id_name) ATTR_NONNULL();
+void BKE_main_library_weak_reference_add_item(struct GHash *library_weak_reference_mapping,
+                                              const char *library_filepath,
+                                              const char *library_id_name,
+                                              struct ID *new_id) ATTR_NONNULL();
+void BKE_main_library_weak_reference_update_item(struct GHash *library_weak_reference_mapping,
+                                                 const char *library_filepath,
+                                                 const char *library_id_name,
+                                                 struct ID *old_id,
+                                                 struct ID *new_id) ATTR_NONNULL();
+void BKE_main_library_weak_reference_remove_item(struct GHash *library_weak_reference_mapping,
+                                                 const char *library_filepath,
+                                                 const char *library_id_name,
+                                                 struct ID *old_id) ATTR_NONNULL();
 
 /* *** Generic utils to loop over whole Main database. *** */
 
 #define FOREACH_MAIN_LISTBASE_ID_BEGIN(_lb, _id) \
   { \
-    ID *_id_next = (_lb)->first; \
+    ID *_id_next = (ID *)(_lb)->first; \
     for ((_id) = _id_next; (_id) != NULL; (_id) = _id_next) { \
-      _id_next = (_id)->next;
+      _id_next = (ID *)(_id)->next;
 
 #define FOREACH_MAIN_LISTBASE_ID_END \
   } \

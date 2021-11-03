@@ -130,12 +130,12 @@ static void blender_version_init(void)
     version_cycle = " DillongooStudios Custom";
   }
   else {
-    BLI_assert(!"Invalid Blender version cycle");
+    BLI_assert_msg(0, "Invalid Blender version cycle");
   }
 
   BLI_snprintf(blender_version_string,
                ARRAY_SIZE(blender_version_string),
-               "%d.%02d.%d%s",
+               "%d.%01d.%d%s",
                BLENDER_VERSION / 100,
                BLENDER_VERSION % 100,
                BLENDER_VERSION_PATCH,
@@ -365,7 +365,9 @@ void BKE_blender_userdef_app_template_data_swap(UserDef *userdef_a, UserDef *use
   DATA_SWAP(app_flag);
 
   /* We could add others. */
-  FLAG_SWAP(uiflag, int, USER_SAVE_PROMPT);
+  FLAG_SWAP(uiflag, int, USER_SAVE_PROMPT | USER_SPLASH_DISABLE | USER_SHOW_GIZMO_NAVIGATE);
+
+  DATA_SWAP(ui_scale);
 
 #undef SWAP_TYPELESS
 #undef DATA_SWAP

@@ -17,55 +17,70 @@
  */
 
 #include "COM_MapUVOperation.h"
-#include "BLI_math.h"
 
 namespace blender::compositor {
 
 MapUVOperation::MapUVOperation()
 {
-  this->addInputSocket(DataType::Color, ResizeMode::None);
-  this->addInputSocket(DataType::Vector);
-  this->addOutputSocket(DataType::Color);
-  this->m_alpha = 0.0f;
-  this->flags.complex = true;
-  setResolutionInputSocketIndex(1);
+  this->add_input_socket(DataType::Color, ResizeMode::Align);
+  this->add_input_socket(DataType::Vector);
+  this->add_output_socket(DataType::Color);
+  alpha_ = 0.0f;
+  flags_.complex = true;
+  set_canvas_input_index(UV_INPUT_INDEX);
 
-  this->m_inputUVProgram = nullptr;
-  this->m_inputColorProgram = nullptr;
+  inputUVProgram_ = nullptr;
+  input_color_program_ = nullptr;
 }
 
-void MapUVOperation::initExecution()
+void MapUVOperation::init_data()
 {
-  this->m_inputColorProgram = this->getInputSocketReader(0);
-  this->m_inputUVProgram = this->getInputSocketReader(1);
+  NodeOperation *image_input = get_input_operation(IMAGE_INPUT_INDEX);
+  image_width_ = image_input->get_width();
+  image_height_ = image_input->get_height();
+
+  NodeOperation *uv_input = get_input_operation(UV_INPUT_INDEX);
+  uv_width_ = uv_input->get_width();
+  uv_height_ = uv_input->get_height();
 }
 
-void MapUVOperation::executePixelSampled(float output[4],
-                                         float x,
-                                         float y,
-                                         PixelSampler /*sampler*/)
+void MapUVOperation::init_execution()
+{
+  input_color_program_ = this->get_input_socket_reader(0);
+  inputUVProgram_ = this->get_input_socket_reader(1);
+  if (execution_model_ == eExecutionModel::Tiled) {
+    uv_input_read_fn_ = [=](float x, float y, float *out) {
+      inputUVProgram_->read_sampled(out, x, y, PixelSampler::Bilinear);
+    };
+  }
+}
+
+void MapUVOperation::execute_pixel_sampled(float output[4],
+                                           float x,
+                                           float y,
+                                           PixelSampler /*sampler*/)
 {
   float xy[2] = {x, y};
   float uv[2], deriv[2][2], alpha;
 
-  pixelTransform(xy, uv, deriv, alpha);
+  pixel_transform(xy, uv, deriv, alpha);
   if (alpha == 0.0f) {
     zero_v4(output);
     return;
   }
 
   /* EWA filtering */
-  this->m_inputColorProgram->readFiltered(output, uv[0], uv[1], deriv[0], deriv[1]);
+  input_color_program_->read_filtered(output, uv[0], uv[1], deriv[0], deriv[1]);
 
   /* UV to alpha threshold */
-  const float threshold = this->m_alpha * 0.05f;
+  const float threshold = alpha_ * 0.05f;
   /* XXX alpha threshold is used to fade out pixels on boundaries with invalid derivatives.
    * this calculation is not very well defined, should be looked into if it becomes a problem ...
    */
   float du = len_v2(deriv[0]);
   float dv = len_v2(deriv[1]);
-  float factor = 1.0f - threshold * (du / m_inputColorProgram->getWidth() +
-                                     dv / m_inputColorProgram->getHeight());
+  float factor = 1.0f - threshold * (du / input_color_program_->get_width() +
+                                     dv / input_color_program_->get_height());
   if (factor < 0.0f) {
     alpha = 0.0f;
   }
@@ -81,9 +96,7 @@ void MapUVOperation::executePixelSampled(float output[4],
 
 bool MapUVOperation::read_uv(float x, float y, float &r_u, float &r_v, float &r_alpha)
 {
-  float width = m_inputUVProgram->getWidth();
-  float height = m_inputUVProgram->getHeight();
-  if (x < 0.0f || x >= width || y < 0.0f || y >= height) {
+  if (x < 0.0f || x >= uv_width_ || y < 0.0f || y >= uv_height_) {
     r_u = 0.0f;
     r_v = 0.0f;
     r_alpha = 0.0f;
@@ -91,17 +104,17 @@ bool MapUVOperation::read_uv(float x, float y, float &r_u, float &r_v, float &r_
   }
 
   float vector[3];
-  m_inputUVProgram->readSampled(vector, x, y, PixelSampler::Bilinear);
-  r_u = vector[0] * m_inputColorProgram->getWidth();
-  r_v = vector[1] * m_inputColorProgram->getHeight();
+  uv_input_read_fn_(x, y, vector);
+  r_u = vector[0] * image_width_;
+  r_v = vector[1] * image_height_;
   r_alpha = vector[2];
   return true;
 }
 
-void MapUVOperation::pixelTransform(const float xy[2],
-                                    float r_uv[2],
-                                    float r_deriv[2][2],
-                                    float &r_alpha)
+void MapUVOperation::pixel_transform(const float xy[2],
+                                     float r_uv[2],
+                                     float r_deriv[2][2],
+                                     float &r_alpha)
 {
   float uv[2], alpha; /* temporary variables for derivative estimation */
   int num;
@@ -149,41 +162,109 @@ void MapUVOperation::pixelTransform(const float xy[2],
   }
 }
 
-void MapUVOperation::deinitExecution()
+void MapUVOperation::deinit_execution()
 {
-  this->m_inputUVProgram = nullptr;
-  this->m_inputColorProgram = nullptr;
+  inputUVProgram_ = nullptr;
+  input_color_program_ = nullptr;
 }
 
-bool MapUVOperation::determineDependingAreaOfInterest(rcti *input,
-                                                      ReadBufferOperation *readOperation,
-                                                      rcti *output)
+bool MapUVOperation::determine_depending_area_of_interest(rcti *input,
+                                                          ReadBufferOperation *read_operation,
+                                                          rcti *output)
 {
-  rcti colorInput;
-  rcti uvInput;
+  rcti color_input;
+  rcti uv_input;
   NodeOperation *operation = nullptr;
 
   /* the uv buffer only needs a 3x3 buffer. The image needs whole buffer */
 
-  operation = getInputOperation(0);
-  colorInput.xmax = operation->getWidth();
-  colorInput.xmin = 0;
-  colorInput.ymax = operation->getHeight();
-  colorInput.ymin = 0;
-  if (operation->determineDependingAreaOfInterest(&colorInput, readOperation, output)) {
+  operation = get_input_operation(0);
+  color_input.xmax = operation->get_width();
+  color_input.xmin = 0;
+  color_input.ymax = operation->get_height();
+  color_input.ymin = 0;
+  if (operation->determine_depending_area_of_interest(&color_input, read_operation, output)) {
     return true;
   }
 
-  operation = getInputOperation(1);
-  uvInput.xmax = input->xmax + 1;
-  uvInput.xmin = input->xmin - 1;
-  uvInput.ymax = input->ymax + 1;
-  uvInput.ymin = input->ymin - 1;
-  if (operation->determineDependingAreaOfInterest(&uvInput, readOperation, output)) {
+  operation = get_input_operation(1);
+  uv_input.xmax = input->xmax + 1;
+  uv_input.xmin = input->xmin - 1;
+  uv_input.ymax = input->ymax + 1;
+  uv_input.ymin = input->ymin - 1;
+  if (operation->determine_depending_area_of_interest(&uv_input, read_operation, output)) {
     return true;
   }
 
   return false;
+}
+
+void MapUVOperation::get_area_of_interest(const int input_idx,
+                                          const rcti &output_area,
+                                          rcti &r_input_area)
+{
+  switch (input_idx) {
+    case IMAGE_INPUT_INDEX: {
+      r_input_area = get_input_operation(IMAGE_INPUT_INDEX)->get_canvas();
+      break;
+    }
+    case UV_INPUT_INDEX: {
+      r_input_area = output_area;
+      expand_area_for_sampler(r_input_area, PixelSampler::Bilinear);
+      break;
+    }
+  }
+}
+
+void MapUVOperation::update_memory_buffer_started(MemoryBuffer *UNUSED(output),
+                                                  const rcti &UNUSED(area),
+                                                  Span<MemoryBuffer *> inputs)
+{
+  const MemoryBuffer *uv_input = inputs[UV_INPUT_INDEX];
+  uv_input_read_fn_ = [=](float x, float y, float *out) {
+    uv_input->read_elem_bilinear(x, y, out);
+  };
+}
+
+void MapUVOperation::update_memory_buffer_partial(MemoryBuffer *output,
+                                                  const rcti &area,
+                                                  Span<MemoryBuffer *> inputs)
+{
+  const MemoryBuffer *input_image = inputs[IMAGE_INPUT_INDEX];
+  for (BuffersIterator<float> it = output->iterate_with({}, area); !it.is_end(); ++it) {
+    float xy[2] = {(float)it.x, (float)it.y};
+    float uv[2];
+    float deriv[2][2];
+    float alpha;
+    pixel_transform(xy, uv, deriv, alpha);
+    if (alpha == 0.0f) {
+      zero_v4(it.out);
+      continue;
+    }
+
+    /* EWA filtering. */
+    input_image->read_elem_filtered(uv[0], uv[1], deriv[0], deriv[1], it.out);
+
+    /* UV to alpha threshold. */
+    const float threshold = alpha_ * 0.05f;
+    /* XXX alpha threshold is used to fade out pixels on boundaries with invalid derivatives.
+     * this calculation is not very well defined, should be looked into if it becomes a problem ...
+     */
+    const float du = len_v2(deriv[0]);
+    const float dv = len_v2(deriv[1]);
+    const float factor = 1.0f - threshold * (du / image_width_ + dv / image_height_);
+    if (factor < 0.0f) {
+      alpha = 0.0f;
+    }
+    else {
+      alpha *= factor;
+    }
+
+    /* "premul" */
+    if (alpha < 1.0f) {
+      mul_v4_fl(it.out, alpha);
+    }
+  }
 }
 
 }  // namespace blender::compositor

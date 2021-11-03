@@ -55,6 +55,7 @@ struct Scene;
 struct Simulation;
 struct Speaker;
 struct Tex;
+struct VFont;
 struct World;
 struct bAction;
 struct bArmature;
@@ -100,6 +101,8 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
 
   virtual void begin_build();
   virtual void end_build();
+
+  int foreach_id_cow_detect_need_for_update_callback(ID *id_cow_self, ID *id_pointer);
 
   IDNode *add_id_node(ID *id);
   IDNode *find_id_node(ID *id);
@@ -223,7 +226,6 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_texture(Tex *tex);
   virtual void build_image(Image *image);
   virtual void build_world(World *world);
-  virtual void build_gpencil(bGPdata *gpd);
   virtual void build_cachefile(CacheFile *cache_file);
   virtual void build_mask(Mask *mask);
   virtual void build_movieclip(MovieClip *clip);
@@ -234,6 +236,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
   virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
+  virtual void build_vfont(VFont *vfont);
 
   /* Per-ID information about what was already in the dependency graph.
    * Allows to re-use certain values, to speed up following evaluation. */
@@ -276,6 +279,9 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
                               bool is_reference,
                               void *user_data);
 
+  void tag_previously_tagged_nodes();
+  void update_invalid_cow_pointers();
+
   /* State which demotes currently built entities. */
   Scene *scene_;
   ViewLayer *view_layer_;
@@ -284,7 +290,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
    * setting the current state. */
   Collection *collection_;
   /* Accumulated flag over the hierarchy of currently building collections.
-   * Denotes whether all the hierarchy from parent of collection_ to the
+   * Denotes whether all the hierarchy from parent of `collection_` to the
    * very root is visible (aka not restricted.). */
   bool is_parent_collection_visible_;
 

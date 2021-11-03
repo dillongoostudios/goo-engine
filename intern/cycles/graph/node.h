@@ -16,11 +16,13 @@
 
 #pragma once
 
+#include <type_traits>
+
 #include "graph/node_type.h"
 
-#include "util/util_array.h"
-#include "util/util_map.h"
-#include "util/util_param.h"
+#include "util/array.h"
+#include "util/map.h"
+#include "util/param.h"
 
 CCL_NAMESPACE_BEGIN
 
@@ -34,7 +36,10 @@ struct Transform;
 #define NODE_SOCKET_API_BASE_METHODS(type_, name, string_name) \
   const SocketType *get_##name##_socket() const \
   { \
-    static const SocketType *socket = type->find_input(ustring(string_name)); \
+    /* Explicitly cast to base class to use `Node::type` even if the derived class defines \
+     * `type`. */ \
+    const Node *self_node = this; \
+    static const SocketType *socket = self_node->type->find_input(ustring(string_name)); \
     return socket; \
   } \
   bool name##_is_modified() const \
@@ -111,6 +116,15 @@ struct Node {
   void set(const SocketType &input, const Transform &value);
   void set(const SocketType &input, Node *value);
 
+  /* Implicitly cast enums and enum classes to integer, which matches an internal way of how
+   * enumerator values are stored and accessed in a generic API. */
+  template<class ValueType, typename std::enable_if_t<std::is_enum_v<ValueType>> * = nullptr>
+  void set(const SocketType &input, const ValueType &value)
+  {
+    static_assert(sizeof(ValueType) <= sizeof(int), "Enumerator type should fit int");
+    set(input, static_cast<int>(value));
+  }
+
   /* set array values. the memory from the input array will taken over
    * by the node and the input array will be empty after return */
   void set(const SocketType &input, array<bool> &value);
@@ -164,7 +178,7 @@ struct Node {
 
   bool socket_is_modified(const SocketType &input) const;
 
-  bool is_modified();
+  bool is_modified() const;
 
   void tag_modified();
   void clear_modified();
@@ -177,8 +191,32 @@ struct Node {
   const NodeOwner *get_owner() const;
   void set_owner(const NodeOwner *owner_);
 
+  int reference_count() const
+  {
+    return ref_count;
+  }
+
+  void reference()
+  {
+    ref_count += 1;
+  }
+
+  void dereference()
+  {
+    ref_count -= 1;
+  }
+
+  /* Set the reference count to zero. This should only be called when we know for sure that the
+   * Node is not used by anyone else. For now, this is only the case when "deleting" shaders, as
+   * they are never actually deleted. */
+  void clear_reference_count()
+  {
+    ref_count = 0;
+  }
+
  protected:
   const NodeOwner *owner;
+  int ref_count{0};
 
   template<typename T> static T &get_socket_value(const Node *node, const SocketType &socket)
   {
@@ -189,7 +227,19 @@ struct Node {
 
   template<typename T> void set_if_different(const SocketType &input, T value);
 
+  /* Explicit overload for Node sockets so we can handle reference counting. The old Node is
+   * dereferenced, and the new one is referenced. */
+  void set_if_different(const SocketType &input, Node *value);
+
   template<typename T> void set_if_different(const SocketType &input, array<T> &value);
+
+  /* Explicit overload for Node sockets so we can handle reference counting. The old Nodes are
+   * dereferenced, and the new ones are referenced. */
+  void set_if_different(const SocketType &input, array<Node *> &value);
+
+  /* Call this function in derived classes' destructors to ensure that used Nodes are dereferenced
+   * properly. */
+  void dereference_all_used_nodes();
 };
 
 CCL_NAMESPACE_END

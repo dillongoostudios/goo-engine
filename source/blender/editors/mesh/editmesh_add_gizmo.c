@@ -220,8 +220,8 @@ static void gizmo_mesh_placement_modal_from_setup(const bContext *C, wmGizmoGrou
       float location[3];
       calc_initial_placement_point_from_view((bContext *)C,
                                              (float[2]){
-                                                 win->eventstate->x - region->winrct.xmin,
-                                                 win->eventstate->y - region->winrct.ymin,
+                                                 win->eventstate->xy[0] - region->winrct.xmin,
+                                                 win->eventstate->xy[1] - region->winrct.ymin,
                                              },
                                              location,
                                              mat3);
@@ -357,7 +357,12 @@ static int add_primitive_cube_gizmo_exec(bContext *C, wmOperator *op)
   }
 
   EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
-  EDBM_update_generic(obedit->data, true, true);
+  EDBM_update(obedit->data,
+              &(const struct EDBMUpdate_Params){
+                  .calc_looptri = true,
+                  .calc_normals = false,
+                  .is_destructive = true,
+              });
 
   return OPERATOR_FINISHED;
 }

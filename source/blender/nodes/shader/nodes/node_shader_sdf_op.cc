@@ -263,7 +263,7 @@ static void node_shader_buts_sdf_op(uiLayout *layout, bContext *UNUSED(C), Point
 void register_node_type_sh_sdf_op(void)
 {
   static bNodeType ntype;
-  sh_node_type_base(&ntype, SH_NODE_SDF_OP, "Sdf Operator", NODE_CLASS_CONVERTOR, 0);
+  sh_node_type_base(&ntype, SH_NODE_SDF_OP, "Sdf Operator", NODE_CLASS_CONVERTER, 0);
   node_type_socket_templates(&ntype, sh_node_sdf_op_in, sh_node_sdf_op_out);
   node_type_storage(&ntype, "NodeSdfOp", node_free_standard_storage, node_copy_standard_storage);
   node_type_gpu(&ntype, node_shader_gpu_sdf_op);

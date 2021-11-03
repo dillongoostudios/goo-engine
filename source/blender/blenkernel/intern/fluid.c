@@ -39,6 +39,7 @@
 #include "DNA_object_types.h"
 #include "DNA_rigidbody_types.h"
 
+#include "BKE_attribute.h"
 #include "BKE_effect.h"
 #include "BKE_fluid.h"
 #include "BKE_global.h"
@@ -529,8 +530,7 @@ static bool BKE_fluid_modifier_init(
     copy_v3_v3_int(fds->res_max, res);
 
     /* Set time, frame length = 0.1 is at 25fps. */
-    float fps = scene->r.frs_sec / scene->r.frs_sec_base;
-    fds->frame_length = DT_DEFAULT * (25.0f / fps) * fds->time_scale;
+    fds->frame_length = DT_DEFAULT * (25.0f / FPS) * fds->time_scale;
     /* Initially dt is equal to frame length (dt can change with adaptive-time stepping though). */
     fds->dt = fds->frame_length;
     fds->time_per_frame = 0;
@@ -557,7 +557,7 @@ static bool BKE_fluid_modifier_init(
   return false;
 }
 
-// forward declaration
+/* Forward declarations. */
 static void manta_smoke_calc_transparency(FluidDomainSettings *fds, ViewLayer *view_layer);
 static float calc_voxel_transp(
     float *result, const float *input, int res[3], int *pixel, float *t_ray, float correct);
@@ -623,7 +623,8 @@ static void clamp_bounds_in_domain(FluidDomainSettings *fds,
 static bool is_static_object(Object *ob)
 {
   /* Check if the object has modifiers that might make the object "dynamic". */
-  ModifierData *md = ob->modifiers.first;
+  VirtualModifierData virtualModifierData;
+  ModifierData *md = BKE_modifiers_get_virtual_modifierlist(ob, &virtualModifierData);
   for (; md; md = md->next) {
     if (ELEM(md->type,
              eModifierType_Cloth,
@@ -631,7 +632,8 @@ static bool is_static_object(Object *ob)
              eModifierType_Explode,
              eModifierType_Ocean,
              eModifierType_ShapeKey,
-             eModifierType_Softbody)) {
+             eModifierType_Softbody,
+             eModifierType_Nodes)) {
       return false;
     }
   }
@@ -1281,10 +1283,10 @@ static void compute_obstaclesemission(Scene *scene,
 #  endif
         /* Update frame time, this is considering current subframe fraction
          * BLI_mutex_lock() called in manta_step(), so safe to update subframe here
-         * TODO(sebbas): Using BKE_scene_frame_get(scene) instead of new DEG_get_ctime(depsgraph)
+         * TODO(sebbas): Using BKE_scene_ctime_get(scene) instead of new DEG_get_ctime(depsgraph)
          * as subframes don't work with the latter yet. */
         BKE_object_modifier_update_subframe(
-            depsgraph, scene, effecobj, true, 5, BKE_scene_frame_get(scene), eModifierType_Fluid);
+            depsgraph, scene, effecobj, true, 5, BKE_scene_ctime_get(scene), eModifierType_Fluid);
 
         if (subframes) {
           obstacles_from_mesh(effecobj, fds, fes, &bb_temp, subframe_dt);
@@ -1543,7 +1545,7 @@ static void emit_from_particles(Object *flow_ob,
                                 float dt)
 {
   if (ffs && ffs->psys && ffs->psys->part &&
-      ELEM(ffs->psys->part->type, PART_EMITTER, PART_FLUID))  // is particle system selected
+      ELEM(ffs->psys->part->type, PART_EMITTER, PART_FLUID)) /* Is particle system selected. */
   {
     ParticleSimulationData sim;
     ParticleSystem *psys = ffs->psys;
@@ -1578,7 +1580,7 @@ static void emit_from_particles(Object *flow_ob,
 
     /* initialize particle cache */
     if (psys->part->type == PART_HAIR) {
-      // TODO: PART_HAIR not supported whatsoever
+      /* TODO: PART_HAIR not supported whatsoever. */
       totchild = 0;
     }
     else {
@@ -1613,8 +1615,9 @@ static void emit_from_particles(Object *flow_ob,
         }
       }
 
-      state.time = BKE_scene_frame_get(
-          scene); /* DEG_get_ctime(depsgraph) does not give subframe time */
+      /* `DEG_get_ctime(depsgraph)` does not give sub-frame time. */
+      state.time = BKE_scene_ctime_get(scene);
+
       if (psys_get_particle_state(&sim, p, &state, 0) == 0) {
         continue;
       }
@@ -1671,9 +1674,9 @@ static void emit_from_particles(Object *flow_ob,
         if (ffs->flags & FLUID_FLOW_INITVELOCITY && (psys->part->phystype != PART_PHYS_NO)) {
           madd_v3_v3fl(&bb->velocity[index * 3], &particle_vel[p * 3], ffs->vel_multi);
         }
-      }  // particles loop
+      } /* particles loop */
     }
-    else if (valid_particles > 0) {  // FLUID_FLOW_USE_PART_SIZE
+    else if (valid_particles > 0) { /* #FLUID_FLOW_USE_PART_SIZE */
       int min[3], max[3], res[3];
 
       /* setup loop bounds */
@@ -2673,7 +2676,7 @@ static void update_flowsflags(FluidDomainSettings *fds, Object **flowobjs, int n
       }
       /* Activate color field if flows add smoke with varying colors. */
       if (ffs->density != 0.0 &&
-          (ffs->type == FLUID_FLOW_TYPE_SMOKE || ffs->type == FLUID_FLOW_TYPE_SMOKEFIRE)) {
+          ELEM(ffs->type, FLUID_FLOW_TYPE_SMOKE, FLUID_FLOW_TYPE_SMOKEFIRE)) {
         if (!(active_fields & FLUID_DOMAIN_ACTIVE_COLOR_SET)) {
           copy_v3_v3(fds->active_color, ffs->color);
           active_fields |= FLUID_DOMAIN_ACTIVE_COLOR_SET;
@@ -2817,10 +2820,10 @@ static void compute_flowsemission(Scene *scene,
 #  endif
         /* Update frame time, this is considering current subframe fraction
          * BLI_mutex_lock() called in manta_step(), so safe to update subframe here
-         * TODO(sebbas): Using BKE_scene_frame_get(scene) instead of new DEG_get_ctime(depsgraph)
+         * TODO(sebbas): Using BKE_scene_ctime_get(scene) instead of new DEG_get_ctime(depsgraph)
          * as subframes don't work with the latter yet. */
         BKE_object_modifier_update_subframe(
-            depsgraph, scene, flowobj, true, 5, BKE_scene_frame_get(scene), eModifierType_Fluid);
+            depsgraph, scene, flowobj, true, 5, BKE_scene_ctime_get(scene), eModifierType_Fluid);
 
         /* Emission from particles. */
         if (ffs->source == FLUID_FLOW_SOURCE_PARTICLES) {
@@ -3168,7 +3171,7 @@ static void update_effectors_task_cb(void *__restrict userdata,
       if ((data->fuel && MAX2(data->density[index], data->fuel[index]) < FLT_EPSILON) ||
           (data->density && data->density[index] < FLT_EPSILON) ||
           (data->phi_obs_in && data->phi_obs_in[index] < 0.0f) ||
-          data->flags[index] & 2)  // mantaflow convention: 2 == FlagObstacle
+          data->flags[index] & 2) /* Manta-flow convention: `2 == FlagObstacle`. */
       {
         continue;
       }
@@ -3253,7 +3256,10 @@ static void update_effectors(
   BKE_effectors_free(effectors);
 }
 
-static Mesh *create_liquid_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Object *ob)
+static Mesh *create_liquid_geometry(FluidDomainSettings *fds,
+                                    Scene *scene,
+                                    Mesh *orgmesh,
+                                    Object *ob)
 {
   Mesh *me;
   MVert *mverts;
@@ -3300,22 +3306,6 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obj
   /* Normals are per vertex, so these must match. */
   BLI_assert(num_verts == num_normals);
 
-  /* If needed, vertex velocities will be read too. */
-  bool use_speedvectors = fds->flags & FLUID_DOMAIN_USE_SPEED_VECTORS;
-  FluidDomainVertexVelocity *velarray = NULL;
-  float time_mult = 25.0f * DT_DEFAULT;
-
-  if (use_speedvectors) {
-    if (fds->mesh_velocities) {
-      MEM_freeN(fds->mesh_velocities);
-    }
-
-    fds->mesh_velocities = MEM_calloc_arrayN(
-        num_verts, sizeof(FluidDomainVertexVelocity), "fluid_mesh_vertvelocities");
-    fds->totvert = num_verts;
-    velarray = fds->mesh_velocities;
-  }
-
   me = BKE_mesh_new_nomain(num_verts, 0, 0, num_faces * 3, num_faces);
   if (!me) {
     return NULL;
@@ -3346,6 +3336,18 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obj
 
   /* Normals. */
   normals = MEM_callocN(sizeof(short[3]) * num_normals, "Fluidmesh_tmp_normals");
+
+  /* Velocities. */
+  /* If needed, vertex velocities will be read too. */
+  bool use_speedvectors = fds->flags & FLUID_DOMAIN_USE_SPEED_VECTORS;
+  float(*velarray)[3] = NULL;
+  float time_mult = fds->dx / (DT_DEFAULT * (25.0f / FPS));
+
+  if (use_speedvectors) {
+    CustomDataLayer *velocity_layer = BKE_id_attribute_new(
+        &me->id, "velocity", CD_PROP_FLOAT3, ATTR_DOMAIN_POINT, NULL);
+    velarray = velocity_layer->data;
+  }
 
   /* Loop for vertices and normals. */
   for (i = 0, no_s = normals; i < num_verts && i < num_normals; i++, mverts++, no_s += 3) {
@@ -3386,18 +3388,18 @@ static Mesh *create_liquid_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obj
 #  endif
 
     if (use_speedvectors) {
-      velarray[i].vel[0] = manta_liquid_get_vertvel_x_at(fds->fluid, i) * (fds->dx / time_mult);
-      velarray[i].vel[1] = manta_liquid_get_vertvel_y_at(fds->fluid, i) * (fds->dx / time_mult);
-      velarray[i].vel[2] = manta_liquid_get_vertvel_z_at(fds->fluid, i) * (fds->dx / time_mult);
+      velarray[i][0] = manta_liquid_get_vertvel_x_at(fds->fluid, i) * time_mult;
+      velarray[i][1] = manta_liquid_get_vertvel_y_at(fds->fluid, i) * time_mult;
+      velarray[i][2] = manta_liquid_get_vertvel_z_at(fds->fluid, i) * time_mult;
 #  ifdef DEBUG_PRINT
       /* Debugging: Print velocities of vertices. */
-      printf("velarray[%d].vel[0]: %f, velarray[%d].vel[1]: %f, velarray[%d].vel[2]: %f\n",
+      printf("velarray[%d][0]: %f, velarray[%d][1]: %f, velarray[%d][2]: %f\n",
              i,
-             velarray[i].vel[0],
+             velarray[i][0],
              i,
-             velarray[i].vel[1],
+             velarray[i][1],
              i,
-             velarray[i].vel[2]);
+             velarray[i][2]);
 #  endif
     }
   }
@@ -3571,7 +3573,7 @@ static Mesh *create_smoke_geometry(FluidDomainSettings *fds, Mesh *orgmesh, Obje
   }
 
   BKE_mesh_calc_edges(result, false, false);
-  result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+  BKE_mesh_normals_tag_dirty(result);
   return result;
 }
 
@@ -3667,8 +3669,7 @@ static void manta_guiding(
     Depsgraph *depsgraph, Scene *scene, Object *ob, FluidModifierData *fmd, int frame)
 {
   FluidDomainSettings *fds = fmd->domain;
-  float fps = scene->r.frs_sec / scene->r.frs_sec_base;
-  float dt = DT_DEFAULT * (25.0f / fps) * fds->time_scale;
+  float dt = DT_DEFAULT * (25.0f / FPS) * fds->time_scale;
 
   BLI_mutex_lock(&object_update_lock);
 
@@ -3839,8 +3840,7 @@ static void BKE_fluid_modifier_processDomain(FluidModifierData *fmd,
   copy_v3_v3_int(o_shift, fds->shift);
 
   /* Ensure that time parameters are initialized correctly before every step. */
-  float fps = scene->r.frs_sec / scene->r.frs_sec_base;
-  fds->frame_length = DT_DEFAULT * (25.0f / fps) * fds->time_scale;
+  fds->frame_length = DT_DEFAULT * (25.0f / FPS) * fds->time_scale;
   fds->dt = fds->frame_length;
   fds->time_per_frame = 0;
 
@@ -4150,7 +4150,7 @@ static void BKE_fluid_modifier_process(
 {
   const int scene_framenr = (int)DEG_get_ctime(depsgraph);
 
-  if ((fmd->type & MOD_FLUID_TYPE_FLOW)) {
+  if (fmd->type & MOD_FLUID_TYPE_FLOW) {
     BKE_fluid_modifier_processFlow(fmd, depsgraph, scene, ob, me, scene_framenr);
   }
   else if (fmd->type & MOD_FLUID_TYPE_EFFEC) {
@@ -4213,7 +4213,7 @@ struct Mesh *BKE_fluid_modifier_do(
     if (needs_viewport_update) {
       /* Return generated geometry depending on domain type. */
       if (fmd->domain->type == FLUID_DOMAIN_TYPE_LIQUID) {
-        result = create_liquid_geometry(fmd->domain, me, ob);
+        result = create_liquid_geometry(fmd->domain, scene, me, ob);
       }
       if (fmd->domain->type == FLUID_DOMAIN_TYPE_GAS) {
         result = create_smoke_geometry(fmd->domain, me, ob);
@@ -4232,7 +4232,7 @@ struct Mesh *BKE_fluid_modifier_do(
     result = BKE_mesh_copy_for_eval(me, false);
   }
   else {
-    BKE_mesh_copy_settings(result, me);
+    BKE_mesh_copy_parameters_for_eval(result, me);
   }
 
   /* Liquid simulation has a texture space that based on the bounds of the fluid mesh.
@@ -4250,7 +4250,7 @@ static float calc_voxel_transp(
 {
   const size_t index = manta_get_index(pixel[0], res[0], pixel[1], res[1], pixel[2]);
 
-  // T_ray *= T_vox
+  /* `T_ray *= T_vox`. */
   *t_ray *= expf(input[index] * correct);
 
   if (result[index] < 0.0f) {
@@ -4377,10 +4377,10 @@ static void manta_smoke_calc_transparency(FluidDomainSettings *fds, ViewLayer *v
   light[2] = (light[2] - fds->p0[2]) / fds->cell_size[2] - 0.5f - (float)fds->res_min[2];
 
   /* Calculate domain bounds in sim cell space. */
-  // 0,2,4 = 0.0f
-  bv[1] = (float)fds->res[0];  // x
-  bv[3] = (float)fds->res[1];  // y
-  bv[5] = (float)fds->res[2];  // z
+  /* 0,2,4 = 0.0f */
+  bv[1] = (float)fds->res[0]; /* X */
+  bv[3] = (float)fds->res[1]; /* Y */
+  bv[5] = (float)fds->res[2]; /* Z */
 
   for (int z = 0; z < fds->res[2]; z++) {
     size_t index = z * slabsize;
@@ -4392,7 +4392,7 @@ static void manta_smoke_calc_transparency(FluidDomainSettings *fds, ViewLayer *v
         int cell[3];
         float t_ray = 1.0;
 
-        /* Reset shadow value.*/
+        /* Reset shadow value. */
         shadow[index] = -1.0f;
 
         voxel_center[0] = (float)x;
@@ -4763,20 +4763,12 @@ static void BKE_fluid_modifier_freeDomain(FluidModifierData *fmd)
       BLI_rw_mutex_free(fmd->domain->fluid_mutex);
     }
 
-    if (fmd->domain->effector_weights) {
-      MEM_freeN(fmd->domain->effector_weights);
-    }
-    fmd->domain->effector_weights = NULL;
+    MEM_SAFE_FREE(fmd->domain->effector_weights);
 
     if (!(fmd->modifier.flag & eModifierFlag_SharedCaches)) {
       BKE_ptcache_free_list(&(fmd->domain->ptcaches[0]));
       fmd->domain->point_cache[0] = NULL;
     }
-
-    if (fmd->domain->mesh_velocities) {
-      MEM_freeN(fmd->domain->mesh_velocities);
-    }
-    fmd->domain->mesh_velocities = NULL;
 
     if (fmd->domain->coba) {
       MEM_freeN(fmd->domain->coba);
@@ -4795,10 +4787,7 @@ static void BKE_fluid_modifier_freeFlow(FluidModifierData *fmd)
     }
     fmd->flow->mesh = NULL;
 
-    if (fmd->flow->verts_old) {
-      MEM_freeN(fmd->flow->verts_old);
-    }
-    fmd->flow->verts_old = NULL;
+    MEM_SAFE_FREE(fmd->flow->verts_old);
     fmd->flow->numverts = 0;
     fmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
 
@@ -4815,10 +4804,7 @@ static void BKE_fluid_modifier_freeEffector(FluidModifierData *fmd)
     }
     fmd->effector->mesh = NULL;
 
-    if (fmd->effector->verts_old) {
-      MEM_freeN(fmd->effector->verts_old);
-    }
-    fmd->effector->verts_old = NULL;
+    MEM_SAFE_FREE(fmd->effector->verts_old);
     fmd->effector->numverts = 0;
     fmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
 
@@ -4854,18 +4840,12 @@ static void BKE_fluid_modifier_reset_ex(struct FluidModifierData *fmd, bool need
     fmd->domain->active_fields = 0;
   }
   else if (fmd->flow) {
-    if (fmd->flow->verts_old) {
-      MEM_freeN(fmd->flow->verts_old);
-    }
-    fmd->flow->verts_old = NULL;
+    MEM_SAFE_FREE(fmd->flow->verts_old);
     fmd->flow->numverts = 0;
     fmd->flow->flags &= ~FLUID_FLOW_NEEDS_UPDATE;
   }
   else if (fmd->effector) {
-    if (fmd->effector->verts_old) {
-      MEM_freeN(fmd->effector->verts_old);
-    }
-    fmd->effector->verts_old = NULL;
+    MEM_SAFE_FREE(fmd->effector->verts_old);
     fmd->effector->numverts = 0;
     fmd->effector->flags &= ~FLUID_EFFECTOR_NEEDS_UPDATE;
   }
@@ -5002,7 +4982,6 @@ void BKE_fluid_modifier_copy(const struct FluidModifierData *fmd,
     tfds->noise_pos_scale = fds->noise_pos_scale;
     tfds->noise_time_anim = fds->noise_time_anim;
     tfds->noise_scale = fds->noise_scale;
-    tfds->noise_type = fds->noise_type;
 
     /* liquid domain options */
     tfds->flip_ratio = fds->flip_ratio;
@@ -5020,22 +4999,18 @@ void BKE_fluid_modifier_copy(const struct FluidModifierData *fmd,
     /* viscosity options */
     tfds->viscosity_value = fds->viscosity_value;
 
-    /* diffusion options*/
+    /* Diffusion options. */
     tfds->surface_tension = fds->surface_tension;
     tfds->viscosity_base = fds->viscosity_base;
     tfds->viscosity_exponent = fds->viscosity_exponent;
 
     /* mesh options */
-    if (fds->mesh_velocities) {
-      tfds->mesh_velocities = MEM_dupallocN(fds->mesh_velocities);
-    }
     tfds->mesh_concave_upper = fds->mesh_concave_upper;
     tfds->mesh_concave_lower = fds->mesh_concave_lower;
     tfds->mesh_particle_radius = fds->mesh_particle_radius;
     tfds->mesh_smoothen_pos = fds->mesh_smoothen_pos;
     tfds->mesh_smoothen_neg = fds->mesh_smoothen_neg;
     tfds->mesh_scale = fds->mesh_scale;
-    tfds->totvert = fds->totvert;
     tfds->mesh_generator = fds->mesh_generator;
 
     /* secondary particle options */
@@ -5119,7 +5094,7 @@ void BKE_fluid_modifier_copy(const struct FluidModifierData *fmd,
 
     /* pointcache options */
     BKE_ptcache_free_list(&(tfds->ptcaches[0]));
-    if (flag & LIB_ID_CREATE_NO_MAIN) {
+    if (flag & LIB_ID_COPY_SET_COPIED_ON_WRITE) {
       /* Share the cache with the original object's modifier. */
       tfmd->modifier.flag |= eModifierFlag_SharedCaches;
       tfds->point_cache[0] = fds->point_cache[0];

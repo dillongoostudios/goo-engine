@@ -93,8 +93,8 @@ class GPENCIL_MT_layer_context_menu(Menu):
         gpd = ob.data
         gpl = gpd.layers.active
 
-        layout.operator("gpencil.layer_duplicate", text="Duplicate", icon='DUPLICATE').mode='ALL'
-        layout.operator("gpencil.layer_duplicate", text="Duplicate Empty Keyframes").mode='EMPTY'
+        layout.operator("gpencil.layer_duplicate", text="Duplicate", icon='DUPLICATE').mode = 'ALL'
+        layout.operator("gpencil.layer_duplicate", text="Duplicate Empty Keyframes").mode = 'EMPTY'
 
         layout.separator()
 
@@ -113,7 +113,8 @@ class GPENCIL_MT_layer_context_menu(Menu):
         layout.operator("gpencil.layer_merge", icon='SORT_ASC', text="Merge Down")
 
         layout.separator()
-        layout.menu("VIEW3D_MT_gpencil_copy_layer")
+        layout.operator("gpencil.layer_duplicate_object", text="Copy Layer to Selected").only_active = True
+        layout.operator("gpencil.layer_duplicate_object", text="Copy All Layers to Selected").only_active = False
 
 
 class DATA_PT_gpencil_layers(DataButtonsPanel, Panel):
@@ -340,6 +341,11 @@ class DATA_PT_gpencil_vertex_groups(ObjectButtonsPanel, Panel):
         col = row.column(align=True)
         col.operator("object.vertex_group_add", icon='ADD', text="")
         col.operator("object.vertex_group_remove", icon='REMOVE', text="").all = False
+
+        if group:
+            col.separator()
+            col.operator("object.vertex_group_move", icon='TRIA_UP', text="").direction = 'UP'
+            col.operator("object.vertex_group_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
 
         if ob.vertex_groups:
             row = layout.row()

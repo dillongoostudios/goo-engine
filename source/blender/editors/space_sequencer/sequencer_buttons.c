@@ -78,9 +78,10 @@ static void metadata_panel_context_draw(const bContext *C, Panel *panel)
   SpaceSeq *space_sequencer = CTX_wm_space_seq(C);
   /* NOTE: We can only reliably show metadata for the original (current)
    * frame when split view is used. */
-  const bool show_split = (scene->ed && (scene->ed->over_flag & SEQ_EDIT_OVERLAY_SHOW) &&
+  const bool show_split = (scene->ed &&
+                           (scene->ed->overlay_frame_flag & SEQ_EDIT_OVERLAY_FRAME_SHOW) &&
                            (space_sequencer->mainb == SEQ_DRAW_IMG_IMBUF));
-  if (show_split && space_sequencer->overlay_type == SEQ_DRAW_OVERLAY_REFERENCE) {
+  if (show_split && (space_sequencer->overlay_frame_type == SEQ_OVERLAY_FRAME_TYPE_REFERENCE)) {
     return;
   }
   /* NOTE: We disable multiview for drawing, since we don't know what is the
@@ -111,10 +112,10 @@ void sequencer_buttons_register(ARegionType *art)
   pt = MEM_callocN(sizeof(PanelType), "spacetype sequencer panel metadata");
   strcpy(pt->idname, "SEQUENCER_PT_metadata");
   strcpy(pt->label, N_("Metadata"));
+  strcpy(pt->category, "Metadata");
   strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
   pt->poll = metadata_panel_context_poll;
   pt->draw = metadata_panel_context_draw;
-  pt->flag |= PANEL_TYPE_DEFAULT_CLOSED;
   pt->order = 10;
   BLI_addtail(&art->paneltypes, pt);
 }

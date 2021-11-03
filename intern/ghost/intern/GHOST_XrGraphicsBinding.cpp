@@ -22,7 +22,15 @@
 #include <list>
 #include <sstream>
 
-#if defined(WITH_GHOST_X11)
+#if defined(WITH_GL_EGL)
+#  include "GHOST_ContextEGL.h"
+#  if defined(WITH_GHOST_X11)
+#    include "GHOST_SystemX11.h"
+#  endif
+#  if defined(WITH_GHOST_WAYLAND)
+#    include "GHOST_SystemWayland.h"
+#  endif
+#elif defined(WITH_GHOST_X11)
 #  include "GHOST_ContextGLX.h"
 #elif defined(WIN32)
 #  include "GHOST_ContextD3D.h"
@@ -30,6 +38,7 @@
 #  include "GHOST_SystemWin32.h"
 #endif
 #include "GHOST_C-api.h"
+#include "GHOST_XrException.h"
 #include "GHOST_Xr_intern.h"
 
 #include "GHOST_IXrGraphicsBinding.h"
@@ -66,7 +75,9 @@ class GHOST_XrGraphicsBindingOpenGL : public GHOST_IXrGraphicsBinding {
                                 XrSystemId system_id,
                                 std::string *r_requirement_info) const override
   {
-#if defined(WITH_GHOST_X11)
+#if defined(WITH_GL_EGL)
+    GHOST_ContextEGL &ctx_gl = static_cast<GHOST_ContextEGL &>(ghost_ctx);
+#elif defined(WITH_GHOST_X11)
     GHOST_ContextGLX &ctx_gl = static_cast<GHOST_ContextGLX &>(ghost_ctx);
 #else
     GHOST_ContextWGL &ctx_gl = static_cast<GHOST_ContextWGL &>(ghost_ctx);
@@ -106,6 +117,17 @@ class GHOST_XrGraphicsBindingOpenGL : public GHOST_IXrGraphicsBinding {
   void initFromGhostContext(GHOST_Context &ghost_ctx) override
   {
 #if defined(WITH_GHOST_X11)
+#  if defined(WITH_GL_EGL)
+    GHOST_ContextEGL &ctx_egl = static_cast<GHOST_ContextEGL &>(ghost_ctx);
+
+    if (dynamic_cast<const GHOST_SystemX11 *const>(ctx_egl.m_system)) {
+      oxr_binding.egl.type = XR_TYPE_GRAPHICS_BINDING_EGL_MNDX;
+      oxr_binding.egl.getProcAddress = eglGetProcAddress;
+      oxr_binding.egl.display = ctx_egl.getDisplay();
+      oxr_binding.egl.config = ctx_egl.getConfig();
+      oxr_binding.egl.context = ctx_egl.getContext();
+    }
+#  else
     GHOST_ContextGLX &ctx_glx = static_cast<GHOST_ContextGLX &>(ghost_ctx);
     XVisualInfo *visual_info = glXGetVisualFromFBConfig(ctx_glx.m_display, ctx_glx.m_fbconfig);
 
@@ -117,6 +139,7 @@ class GHOST_XrGraphicsBindingOpenGL : public GHOST_IXrGraphicsBinding {
     oxr_binding.glx.visualid = visual_info->visualid;
 
     XFree(visual_info);
+#  endif
 #elif defined(WIN32)
     GHOST_ContextWGL &ctx_wgl = static_cast<GHOST_ContextWGL &>(ghost_ctx);
 
@@ -125,21 +148,54 @@ class GHOST_XrGraphicsBindingOpenGL : public GHOST_IXrGraphicsBinding {
     oxr_binding.wgl.hGLRC = ctx_wgl.m_hGLRC;
 #endif
 
+#if defined(WITH_GHOST_WAYLAND)
+    GHOST_ContextEGL &ctx_wl_egl = static_cast<GHOST_ContextEGL &>(ghost_ctx);
+    if (dynamic_cast<const GHOST_SystemWayland *const>(ctx_wl_egl.m_system)) {
+      oxr_binding.wl.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_WAYLAND_KHR;
+      oxr_binding.wl.display = (struct wl_display *)ctx_wl_egl.m_nativeDisplay;
+    }
+#endif
+
     /* Generate a frame-buffer to use for blitting into the texture. */
     glGenFramebuffers(1, &m_fbo);
   }
 
   std::optional<int64_t> chooseSwapchainFormat(const std::vector<int64_t> &runtime_formats,
+                                               GHOST_TXrSwapchainFormat &r_format,
                                                bool &r_is_srgb_format) const override
   {
     std::vector<int64_t> gpu_binding_formats = {
+        GL_RGB10_A2,
+        GL_RGBA16,
+        GL_RGBA16F,
         GL_RGBA8,
         GL_SRGB8_ALPHA8,
     };
 
     std::optional result = choose_swapchain_format_from_candidates(gpu_binding_formats,
                                                                    runtime_formats);
-    r_is_srgb_format = result ? (*result == GL_SRGB8_ALPHA8) : false;
+    if (result) {
+      switch (*result) {
+        case GL_RGB10_A2:
+          r_format = GHOST_kXrSwapchainFormatRGB10_A2;
+          break;
+        case GL_RGBA16:
+          r_format = GHOST_kXrSwapchainFormatRGBA16;
+          break;
+        case GL_RGBA16F:
+          r_format = GHOST_kXrSwapchainFormatRGBA16F;
+          break;
+        case GL_RGBA8:
+        case GL_SRGB8_ALPHA8:
+          r_format = GHOST_kXrSwapchainFormatRGBA8;
+          break;
+      }
+      r_is_srgb_format = (*result == GL_SRGB8_ALPHA8);
+    }
+    else {
+      r_format = GHOST_kXrSwapchainFormatRGBA8;
+      r_is_srgb_format = false;
+    }
 
     return result;
   }
@@ -198,6 +254,33 @@ class GHOST_XrGraphicsBindingOpenGL : public GHOST_IXrGraphicsBinding {
 };
 
 #ifdef WIN32
+static void ghost_format_to_dx_format(GHOST_TXrSwapchainFormat ghost_format,
+                                      bool expects_srgb_buffer,
+                                      DXGI_FORMAT &r_dx_format)
+{
+  r_dx_format = DXGI_FORMAT_UNKNOWN;
+
+  switch (ghost_format) {
+    case GHOST_kXrSwapchainFormatRGBA8:
+      r_dx_format = expects_srgb_buffer ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB :
+                                          DXGI_FORMAT_R8G8B8A8_UNORM;
+      break;
+    case GHOST_kXrSwapchainFormatRGBA16:
+      r_dx_format = DXGI_FORMAT_R16G16B16A16_UNORM;
+      break;
+    case GHOST_kXrSwapchainFormatRGBA16F:
+      r_dx_format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+      break;
+    case GHOST_kXrSwapchainFormatRGB10_A2:
+      r_dx_format = DXGI_FORMAT_R10G10B10A2_UNORM;
+      break;
+  }
+
+  if (r_dx_format == DXGI_FORMAT_UNKNOWN) {
+    throw GHOST_XrException("No supported DirectX swapchain format found.");
+  }
+}
+
 class GHOST_XrGraphicsBindingD3D : public GHOST_IXrGraphicsBinding {
  public:
   GHOST_XrGraphicsBindingD3D(GHOST_Context &ghost_ctx)
@@ -254,16 +337,48 @@ class GHOST_XrGraphicsBindingD3D : public GHOST_IXrGraphicsBinding {
   }
 
   std::optional<int64_t> chooseSwapchainFormat(const std::vector<int64_t> &runtime_formats,
+                                               GHOST_TXrSwapchainFormat &r_format,
                                                bool &r_is_srgb_format) const override
   {
     std::vector<int64_t> gpu_binding_formats = {
-        DXGI_FORMAT_R8G8B8A8_UNORM,
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+#  if 0 /* RGB10A2 doesn't seem to work with Oculus head-sets, \
+         * so move it after RGB16AF for the time being. */
+        DXGI_FORMAT_R10G10B10A2_UNORM,
+#  endif
+      DXGI_FORMAT_R16G16B16A16_UNORM,
+      DXGI_FORMAT_R16G16B16A16_FLOAT,
+#  if 1
+      DXGI_FORMAT_R10G10B10A2_UNORM,
+#  endif
+      DXGI_FORMAT_R8G8B8A8_UNORM,
+      DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
     };
 
     std::optional result = choose_swapchain_format_from_candidates(gpu_binding_formats,
                                                                    runtime_formats);
-    r_is_srgb_format = result ? (*result == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB) : false;
+    if (result) {
+      switch (*result) {
+        case DXGI_FORMAT_R10G10B10A2_UNORM:
+          r_format = GHOST_kXrSwapchainFormatRGB10_A2;
+          break;
+        case DXGI_FORMAT_R16G16B16A16_UNORM:
+          r_format = GHOST_kXrSwapchainFormatRGBA16;
+          break;
+        case DXGI_FORMAT_R16G16B16A16_FLOAT:
+          r_format = GHOST_kXrSwapchainFormatRGBA16F;
+          break;
+        case DXGI_FORMAT_R8G8B8A8_UNORM:
+        case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+          r_format = GHOST_kXrSwapchainFormatRGBA8;
+          break;
+      }
+      r_is_srgb_format = (*result == DXGI_FORMAT_R8G8B8A8_UNORM_SRGB);
+    }
+    else {
+      r_format = GHOST_kXrSwapchainFormatRGBA8;
+      r_is_srgb_format = false;
+    }
+
     return result;
   }
 
@@ -304,14 +419,18 @@ class GHOST_XrGraphicsBindingD3D : public GHOST_IXrGraphicsBinding {
 
     m_ghost_ctx->m_device->CreateRenderTargetView(d3d_swapchain_image.texture, &rtv_desc, &rtv);
     if (!m_shared_resource) {
+      DXGI_FORMAT format;
+      ghost_format_to_dx_format(draw_info.swapchain_format, draw_info.expects_srgb_buffer, format);
       m_shared_resource = m_ghost_ctx->createSharedOpenGLResource(
-          draw_info.width, draw_info.height, rtv);
+          draw_info.width, draw_info.height, format, rtv);
     }
     m_ghost_ctx->blitFromOpenGLContext(m_shared_resource, draw_info.width, draw_info.height);
 #  else
     if (!m_shared_resource) {
-      m_shared_resource = m_ghost_d3d_ctx->createSharedOpenGLResource(draw_info.width,
-                                                                      draw_info.height);
+      DXGI_FORMAT format;
+      ghost_format_to_dx_format(draw_info.swapchain_format, draw_info.expects_srgb_buffer, format);
+      m_shared_resource = m_ghost_d3d_ctx->createSharedOpenGLResource(
+          draw_info.width, draw_info.height, format);
     }
     m_ghost_d3d_ctx->blitFromOpenGLContext(m_shared_resource, draw_info.width, draw_info.height);
 

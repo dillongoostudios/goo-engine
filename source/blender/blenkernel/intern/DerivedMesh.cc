@@ -42,6 +42,7 @@
 #include "BLI_linklist.h"
 #include "BLI_math.h"
 #include "BLI_task.h"
+#include "BLI_task.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
@@ -359,7 +360,7 @@ void DM_init(DerivedMesh *dm,
   dm->needsFree = 1;
   dm->dirty = (DMDirtyFlag)0;
 
-  /* Don't use CustomData_reset(...); because we don't want to touch custom-data. */
+  /* Don't use #CustomData_reset because we don't want to touch custom-data. */
   copy_vn_i(dm->vertData.typemap, CD_NUMTYPES, -1);
   copy_vn_i(dm->edgeData.typemap, CD_NUMTYPES, -1);
   copy_vn_i(dm->faceData.typemap, CD_NUMTYPES, -1);
@@ -815,20 +816,19 @@ static void mesh_calc_modifier_final_normals(const Mesh *mesh_input,
     if (!CustomData_has_layer(&mesh_final->pdata, CD_NORMAL)) {
       float(*polynors)[3] = (float(*)[3])CustomData_add_layer(
           &mesh_final->pdata, CD_NORMAL, CD_CALLOC, nullptr, mesh_final->totpoly);
-      BKE_mesh_calc_normals_poly(mesh_final->mvert,
-                                 nullptr,
-                                 mesh_final->totvert,
-                                 mesh_final->mloop,
-                                 mesh_final->mpoly,
-                                 mesh_final->totloop,
-                                 mesh_final->totpoly,
-                                 polynors,
-                                 false);
+      BKE_mesh_calc_normals_poly_and_vertex(mesh_final->mvert,
+                                            mesh_final->totvert,
+                                            mesh_final->mloop,
+                                            mesh_final->totloop,
+                                            mesh_final->mpoly,
+                                            mesh_final->totpoly,
+                                            polynors,
+                                            nullptr);
     }
   }
 
   if (do_loop_normals) {
-    /* Compute loop normals (note: will compute poly and vert normals as well, if needed!) */
+    /* Compute loop normals (NOTE: will compute poly and vert normals as well, if needed!). */
     BKE_mesh_calc_normals_split(mesh_final);
     BKE_mesh_tessface_clear(mesh_final);
   }
@@ -886,33 +886,6 @@ void BKE_mesh_wrapper_deferred_finalize(Mesh *me_eval,
 }
 
 /**
- * Some modifiers don't work on geometry sets directly, but expect a single mesh as input.
- * Therefore, we convert data from the geometry set into a single mesh, so that those
- * modifiers can work on it as well.
- */
-static Mesh *prepare_geometry_set_for_mesh_modifier(Mesh *mesh, GeometrySet &r_geometry_set)
-{
-  if (!r_geometry_set.has_instances() && !r_geometry_set.has_pointcloud()) {
-    return mesh;
-  }
-
-  {
-    /* Add the mesh to the geometry set. */
-    MeshComponent &mesh_component = r_geometry_set.get_component_for_write<MeshComponent>();
-    mesh_component.replace_mesh_but_keep_vertex_group_names(mesh, GeometryOwnershipType::Editable);
-  }
-  {
-    /* Combine mesh and all instances into a single mesh that can be passed to the modifier. */
-    GeometrySet new_geometry_set = blender::bke::geometry_set_realize_mesh_for_modifier(
-        r_geometry_set);
-    MeshComponent &mesh_component = new_geometry_set.get_component_for_write<MeshComponent>();
-    Mesh *new_mesh = mesh_component.release();
-    r_geometry_set = new_geometry_set;
-    return new_mesh;
-  }
-}
-
-/**
  * Modifies the given mesh and geometry set. The mesh is not passed as part of the mesh component
  * in the \a geometry_set input, it is only passed in \a input_mesh and returned in the return
  * value.
@@ -928,14 +901,7 @@ static Mesh *modifier_modify_mesh_and_geometry_set(ModifierData *md,
   Mesh *mesh_output = nullptr;
   const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
   if (mti->modifyGeometrySet == nullptr) {
-    Mesh *new_input_mesh = prepare_geometry_set_for_mesh_modifier(input_mesh, geometry_set);
-    mesh_output = BKE_modifier_modify_mesh(md, &mectx, new_input_mesh);
-
-    /* The caller is responsible for freeing `input_mesh` and `mesh_output`. The intermediate
-     * `new_input_mesh` has to be freed here. */
-    if (!ELEM(new_input_mesh, input_mesh, mesh_output)) {
-      BKE_id_free(nullptr, new_input_mesh);
-    }
+    mesh_output = BKE_modifier_modify_mesh(md, &mectx, input_mesh);
   }
   else {
     /* For performance reasons, this should be called by the modifier and/or nodes themselves at
@@ -947,8 +913,7 @@ static Mesh *modifier_modify_mesh_and_geometry_set(ModifierData *md,
     /* Replace only the mesh rather than the whole component, because the entire #MeshComponent
      * might have been replaced by data from a different object in the node tree, which means the
      * component contains vertex group name data for that object that should not be removed. */
-    mesh_component.replace_mesh_but_keep_vertex_group_names(input_mesh,
-                                                            GeometryOwnershipType::Editable);
+    mesh_component.replace(input_mesh, GeometryOwnershipType::Editable);
 
     /* Let the modifier change the geometry set. */
     mti->modifyGeometrySet(md, &mectx, &geometry_set);
@@ -956,13 +921,17 @@ static Mesh *modifier_modify_mesh_and_geometry_set(ModifierData *md,
     /* Release the mesh from the geometry set again. */
     if (geometry_set.has<MeshComponent>()) {
       MeshComponent &mesh_component = geometry_set.get_component_for_write<MeshComponent>();
+      if (mesh_component.get_for_read() != input_mesh) {
+        /* Make sure the mesh component actually owns the mesh before taking over ownership. */
+        mesh_component.ensure_owns_direct_data();
+      }
       mesh_output = mesh_component.release();
     }
 
-    /* Return an empty mesh instead of null.  */
+    /* Return an empty mesh instead of null. */
     if (mesh_output == nullptr) {
       mesh_output = BKE_mesh_new_nomain(0, 0, 0, 0, 0);
-      BKE_mesh_copy_settings(mesh_output, input_mesh);
+      BKE_mesh_copy_parameters_for_eval(mesh_output, input_mesh);
     }
   }
 
@@ -972,7 +941,7 @@ static Mesh *modifier_modify_mesh_and_geometry_set(ModifierData *md,
 static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
                                 Scene *scene,
                                 Object *ob,
-                                int useDeform,
+                                const bool use_deform,
                                 const bool need_mapping,
                                 const CustomData_MeshMasks *dataMask,
                                 const int index,
@@ -991,12 +960,6 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
   Mesh *mesh_deform = nullptr;
   /* This geometry set contains the non-mesh data that might be generated by modifiers. */
   GeometrySet geometry_set_final;
-
-  /* Add the initial mesh component, with a copy of the vertex group names from the object,
-   * since they need to be stored in the geometry set for evaluation. */
-  MeshComponent &initial_mesh_component =
-      geometry_set_final.get_component_for_write<MeshComponent>();
-  initial_mesh_component.copy_vertex_group_names_from_object(*ob);
 
   BLI_assert((mesh_input->id.tag & LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT) == 0);
 
@@ -1067,15 +1030,11 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
   BKE_modifiers_clear_errors(ob);
 
   /* Apply all leading deform modifiers. */
-  if (useDeform) {
+  if (use_deform) {
     for (; md; md = md->next, md_datamask = md_datamask->next) {
       const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
 
       if (!BKE_modifier_is_enabled(scene, md, required_mode)) {
-        continue;
-      }
-
-      if (useDeform < 0 && mti->dependsOnTime && mti->dependsOnTime(md)) {
         continue;
       }
 
@@ -1127,7 +1086,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       continue;
     }
 
-    if (mti->type == eModifierTypeType_OnlyDeform && !useDeform) {
+    if (mti->type == eModifierTypeType_OnlyDeform && !use_deform) {
       continue;
     }
 
@@ -1172,10 +1131,6 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       continue;
     }
 
-    if (useDeform < 0 && mti->dependsOnTime && mti->dependsOnTime(md)) {
-      continue;
-    }
-
     /* Add orco mesh as layer if needed by this modifier. */
     if (mesh_final && mesh_orco && mti->requiredDataMask) {
       CustomData_MeshMasks mask = {0};
@@ -1192,14 +1147,6 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       /* No existing verts to deform, need to build them. */
       if (!deformed_verts) {
         if (mesh_final) {
-          Mesh *mesh_final_new = prepare_geometry_set_for_mesh_modifier(mesh_final,
-                                                                        geometry_set_final);
-          if (mesh_final_new != mesh_final) {
-            BLI_assert(mesh_final != mesh_input);
-            BKE_id_free(nullptr, mesh_final);
-            mesh_final = mesh_final_new;
-          }
-
           /* Deforming a mesh, read the vertex locations
            * out of the mesh and deform them. Once done with this
            * run of deformers verts will be written back. */
@@ -1411,7 +1358,7 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
    * we need to apply these back onto the Mesh. If we have no
    * Mesh then we need to build one. */
   if (mesh_final == nullptr) {
-    /* Note: this check on cdmask is a bit dodgy, it handles the issue at stake here (see T68211),
+    /* NOTE: this check on cdmask is a bit dodgy, it handles the issue at stake here (see T68211),
      * but other cases might require similar handling?
      * Could be a good idea to define a proper CustomData_MeshMask for that then. */
     if (deformed_verts == nullptr && allow_shared_mesh &&
@@ -1463,10 +1410,14 @@ static void mesh_calc_modifiers(struct Depsgraph *depsgraph,
       BLI_assert(runtime->eval_mutex != nullptr);
       BLI_mutex_lock((ThreadMutex *)runtime->eval_mutex);
       if (runtime->mesh_eval == nullptr) {
-        mesh_final = BKE_mesh_copy_for_eval(mesh_input, true);
-        mesh_calc_modifier_final_normals(mesh_input, &final_datamask, sculpt_dyntopo, mesh_final);
-        mesh_calc_finalize(mesh_input, mesh_final);
-        runtime->mesh_eval = mesh_final;
+        /* Isolate since computing normals is multithreaded and we are holding a lock. */
+        blender::threading::isolate_task([&] {
+          mesh_final = BKE_mesh_copy_for_eval(mesh_input, true);
+          mesh_calc_modifier_final_normals(
+              mesh_input, &final_datamask, sculpt_dyntopo, mesh_final);
+          mesh_calc_finalize(mesh_input, mesh_final);
+          runtime->mesh_eval = mesh_final;
+        });
       }
       BLI_mutex_unlock((ThreadMutex *)runtime->eval_mutex);
     }
@@ -1546,15 +1497,14 @@ static void editbmesh_calc_modifier_final_normals(Mesh *mesh_final,
     if (!CustomData_has_layer(&mesh_final->pdata, CD_NORMAL)) {
       float(*polynors)[3] = (float(*)[3])CustomData_add_layer(
           &mesh_final->pdata, CD_NORMAL, CD_CALLOC, nullptr, mesh_final->totpoly);
-      BKE_mesh_calc_normals_poly(mesh_final->mvert,
-                                 nullptr,
-                                 mesh_final->totvert,
-                                 mesh_final->mloop,
-                                 mesh_final->mpoly,
-                                 mesh_final->totloop,
-                                 mesh_final->totpoly,
-                                 polynors,
-                                 false);
+      BKE_mesh_calc_normals_poly_and_vertex(mesh_final->mvert,
+                                            mesh_final->totvert,
+                                            mesh_final->mloop,
+                                            mesh_final->totloop,
+                                            mesh_final->mpoly,
+                                            mesh_final->totpoly,
+                                            polynors,
+                                            nullptr);
     }
   }
 
@@ -1567,7 +1517,7 @@ static void editbmesh_calc_modifier_final_normals(Mesh *mesh_final,
   /* BMESH_ONLY, ensure tessface's used for drawing,
    * but don't recalculate if the last modifier in the stack gives us tessfaces
    * check if the derived meshes are DM_TYPE_EDITBMESH before calling, this isn't essential
-   * but quiets annoying error messages since tessfaces wont be created. */
+   * but quiets annoying error messages since tessfaces won't be created. */
   if (final_datamask->fmask & CD_MASK_MFACE) {
     if (mesh_final->edit_mesh == nullptr) {
       BKE_mesh_tessface_ensure(mesh_final);
@@ -1604,12 +1554,6 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
   Mesh *mesh_cage = nullptr;
   /* This geometry set contains the non-mesh data that might be generated by modifiers. */
   GeometrySet geometry_set_final;
-
-  /* Add the initial mesh component, with a copy of the vertex group names from the object,
-   * since they need to be stored in the geometry set for evaluation. */
-  MeshComponent &initial_mesh_component =
-      geometry_set_final.get_component_for_write<MeshComponent>();
-  initial_mesh_component.copy_vertex_group_names_from_object(*ob);
 
   /* Deformed vertex locations array. Deform only modifier need this type of
    * float array rather than MVert*. Tracked along with mesh_final as an
@@ -1861,9 +1805,11 @@ static void editbmesh_calc_modifiers(struct Depsgraph *depsgraph,
     BKE_id_free(nullptr, mesh_orco);
   }
 
-  /* Ensure normals calculation below is correct. */
-  BLI_assert((mesh_input->flag & ME_AUTOSMOOTH) == (mesh_final->flag & ME_AUTOSMOOTH));
-  BLI_assert(mesh_input->smoothresh == mesh_final->smoothresh);
+  /* Ensure normals calculation below is correct (normal settings have transferred properly).
+   * However, nodes modifiers might create meshes from scratch or transfer meshes from other
+   * objects with different settings, and in general it doesn't make sense to guarantee that
+   * the settings are the same as the original mesh. If necessary, this could become a modifier
+   * type flag. */
   BLI_assert(mesh_input->smoothresh == mesh_cage->smoothresh);
 
   /* Compute normals. */
@@ -1930,7 +1876,7 @@ static void mesh_build_data(struct Depsgraph *depsgraph,
   mesh_calc_modifiers(depsgraph,
                       scene,
                       ob,
-                      1,
+                      true,
                       need_mapping,
                       dataMask,
                       -1,
@@ -1952,8 +1898,7 @@ static void mesh_build_data(struct Depsgraph *depsgraph,
 
   /* Add the final mesh as read-only non-owning component to the geometry set. */
   MeshComponent &mesh_component = geometry_set_eval->get_component_for_write<MeshComponent>();
-  mesh_component.replace_mesh_but_keep_vertex_group_names(mesh_eval,
-                                                          GeometryOwnershipType::ReadOnly);
+  mesh_component.replace(mesh_eval, GeometryOwnershipType::ReadOnly);
   ob->runtime.geometry_set_eval = geometry_set_eval;
 
   ob->runtime.mesh_deform_eval = mesh_deform_eval;
@@ -1991,7 +1936,7 @@ static void editbmesh_build_data(struct Depsgraph *depsgraph,
     BKE_sculpt_update_object_before_eval(obedit);
   }
 
-  BKE_editmesh_free_derivedmesh(em);
+  BKE_editmesh_free_derived_caches(em);
 
   Mesh *me_cage;
   Mesh *me_final;
@@ -2155,7 +2100,7 @@ Mesh *mesh_create_eval_final(Depsgraph *depsgraph,
   Mesh *final;
 
   mesh_calc_modifiers(
-      depsgraph, scene, ob, 1, false, dataMask, -1, false, false, nullptr, &final, nullptr);
+      depsgraph, scene, ob, true, false, dataMask, -1, false, false, nullptr, &final, nullptr);
 
   return final;
 }
@@ -2169,7 +2114,7 @@ Mesh *mesh_create_eval_final_index_render(Depsgraph *depsgraph,
   Mesh *final;
 
   mesh_calc_modifiers(
-      depsgraph, scene, ob, 1, false, dataMask, index, false, false, nullptr, &final, nullptr);
+      depsgraph, scene, ob, true, false, dataMask, index, false, false, nullptr, &final, nullptr);
 
   return final;
 }
@@ -2182,7 +2127,7 @@ Mesh *mesh_create_eval_no_deform(Depsgraph *depsgraph,
   Mesh *final;
 
   mesh_calc_modifiers(
-      depsgraph, scene, ob, 0, false, dataMask, -1, false, false, nullptr, &final, nullptr);
+      depsgraph, scene, ob, false, false, dataMask, -1, false, false, nullptr, &final, nullptr);
 
   return final;
 }
@@ -2195,7 +2140,7 @@ Mesh *mesh_create_eval_no_deform_render(Depsgraph *depsgraph,
   Mesh *final;
 
   mesh_calc_modifiers(
-      depsgraph, scene, ob, 0, false, dataMask, -1, false, false, nullptr, &final, nullptr);
+      depsgraph, scene, ob, false, false, dataMask, -1, false, false, nullptr, &final, nullptr);
 
   return final;
 }
@@ -2419,7 +2364,7 @@ static void dm_debug_info_layers(DynStr *dynstr,
 
   for (type = 0; type < CD_NUMTYPES; type++) {
     if (CustomData_has_layer(cd, type)) {
-      /* note: doesn't account for multiple layers */
+      /* NOTE: doesn't account for multiple layers. */
       const char *name = CustomData_layertype_name(type);
       const int size = CustomData_sizeof(type);
       const void *pt = getElemDataArray(dm, type);

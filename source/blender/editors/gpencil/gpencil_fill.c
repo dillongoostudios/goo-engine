@@ -125,7 +125,7 @@ typedef struct tGPDfill {
   struct bGPDframe *gpf;
   /** Temp mouse position stroke. */
   struct bGPDstroke *gps_mouse;
-  /** Pointer to report messages.  */
+  /** Pointer to report messages. */
   struct ReportList *reports;
   /** flags */
   short flag;
@@ -646,7 +646,8 @@ static bool gpencil_render_offscreen(tGPDfill *tgpf)
   tgpf->sizey = (int)tgpf->region->winy;
 
   char err_out[256] = "unknown";
-  GPUOffScreen *offscreen = GPU_offscreen_create(tgpf->sizex, tgpf->sizey, true, false, err_out);
+  GPUOffScreen *offscreen = GPU_offscreen_create(
+      tgpf->sizex, tgpf->sizey, true, GPU_RGBA8, err_out);
   if (offscreen == NULL) {
     printf("GPencil - Fill - Unable to create fill buffer\n");
     return false;
@@ -810,7 +811,7 @@ static bool is_leak_narrow(ImBuf *ibuf, const int maxpixel, int limit, int index
       }
     }
     else {
-      /* edge of image*/
+      /* Edge of image. */
       t_a = true;
     }
     /* pixels on bottom */
@@ -822,7 +823,7 @@ static bool is_leak_narrow(ImBuf *ibuf, const int maxpixel, int limit, int index
       }
     }
     else {
-      /* edge of image*/
+      /* Edge of image. */
       t_b = true;
     }
   }
@@ -846,7 +847,7 @@ static bool is_leak_narrow(ImBuf *ibuf, const int maxpixel, int limit, int index
       }
     }
     else {
-      t_a = true; /* edge of image*/
+      t_a = true; /* Edge of image. */
     }
     /* pixels to left */
     pt = index + extreme;
@@ -1247,6 +1248,7 @@ static bool dilate_shape(ImBuf *ibuf)
 static void gpencil_get_outline_points(tGPDfill *tgpf, const bool dilate)
 {
   ImBuf *ibuf;
+  Brush *brush = tgpf->brush;
   float rgba[4];
   void *lock;
   int v[2];
@@ -1279,7 +1281,9 @@ static void gpencil_get_outline_points(tGPDfill *tgpf, const bool dilate)
 
   /* Dilate. */
   if (dilate) {
-    dilate_shape(ibuf);
+    for (int i = 0; i < brush->gpencil_settings->dilate_pixels; i++) {
+      dilate_shape(ibuf);
+    }
   }
 
   for (int idx = imagesize - 1; idx != 0; idx--) {
@@ -1370,7 +1374,7 @@ static void gpencil_get_depth_array(tGPDfill *tgpf)
     /* need to restore the original projection settings before packing up */
     view3d_region_operator_needs_opengl(tgpf->win, tgpf->region);
     ED_view3d_depth_override(
-        tgpf->depsgraph, tgpf->region, tgpf->v3d, NULL, V3D_DEPTH_NO_GPENCIL, false);
+        tgpf->depsgraph, tgpf->region, tgpf->v3d, NULL, V3D_DEPTH_NO_GPENCIL, NULL);
 
     /* Since strokes are so fine, when using their depth we need a margin
      * otherwise they might get missed. */
@@ -1519,8 +1523,8 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
   pt = gps->points;
   point2D = (tGPspoint *)tgpf->sbuffer;
 
-  const int def_nr = tgpf->ob->actdef - 1;
-  const bool have_weight = (bool)BLI_findlink(&tgpf->ob->defbase, def_nr);
+  const int def_nr = tgpf->gpd->vertex_group_active_index - 1;
+  const bool have_weight = (bool)BLI_findlink(&tgpf->gpd->vertex_group_names, def_nr);
 
   if ((ts->gpencil_flags & GP_TOOL_FLAG_CREATE_WEIGHTS) && (have_weight)) {
     BKE_gpencil_dvert_ensure(gps);
@@ -1565,7 +1569,7 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
   float smoothfac = 1.0f;
   for (int r = 0; r < 1; r++) {
     for (int i = 0; i < gps->totpoints; i++) {
-      BKE_gpencil_stroke_smooth(gps, i, smoothfac - reduce);
+      BKE_gpencil_stroke_smooth_point(gps, i, smoothfac - reduce);
     }
     reduce += 0.25f; /* reduce the factor */
   }
@@ -1622,7 +1626,7 @@ static void gpencil_draw_boundary_lines(const bContext *UNUSED(C), tGPDfill *tgp
 static void gpencil_fill_draw_3d(const bContext *C, ARegion *UNUSED(region), void *arg)
 {
   tGPDfill *tgpf = (tGPDfill *)arg;
-  /* draw only in the region that originated operator. This is required for multiwindow */
+  /* Draw only in the region that originated operator. This is required for multi-window. */
   ARegion *region = CTX_wm_region(C);
   if (region != tgpf->region) {
     return;
@@ -1686,7 +1690,7 @@ static tGPDfill *gpencil_session_init_fill(bContext *C, wmOperator *op)
   tgpf->gpd = gpd;
   tgpf->gpl = BKE_gpencil_layer_active_get(gpd);
   if (tgpf->gpl == NULL) {
-    tgpf->gpl = BKE_gpencil_layer_addnew(tgpf->gpd, DATA_("GP_Layer"), true);
+    tgpf->gpl = BKE_gpencil_layer_addnew(tgpf->gpd, DATA_("GP_Layer"), true, false);
   }
 
   tgpf->lock_axis = ts->gp_sculpt.lock_axis;
@@ -1866,7 +1870,7 @@ static int gpencil_fill_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSE
   DEG_id_tag_update(&tgpf->gpd->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
   WM_event_add_notifier(C, NC_GPENCIL | NA_EDITED, NULL);
 
-  /* add a modal handler for this operator*/
+  /* Add a modal handler for this operator. */
   WM_event_add_modal_handler(C, op);
 
   return OPERATOR_RUNNING_MODAL;
@@ -2099,11 +2103,11 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
       /* first time the event is not enabled to show help lines. */
       if ((tgpf->oldkey != -1) || (!help_lines)) {
         ARegion *region = BKE_area_find_region_xy(
-            CTX_wm_area(C), RGN_TYPE_ANY, event->x, event->y);
+            CTX_wm_area(C), RGN_TYPE_ANY, event->xy[0], event->xy[1]);
         if (region) {
           bool in_bounds = false;
           /* Perform bounds check */
-          in_bounds = BLI_rcti_isect_pt(&region->winrct, event->x, event->y);
+          in_bounds = BLI_rcti_isect_pt_v(&region->winrct, event->xy);
 
           if ((in_bounds) && (region->regiontype == RGN_TYPE_WINDOW)) {
             tgpf->mouse[0] = event->mval[0];
@@ -2120,7 +2124,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
             gpencil_stroke_convertcoords_tpoint(
                 tgpf->scene, tgpf->region, tgpf->ob, &point2D, NULL, &pt->x);
 
-            /* Hash of selected frames.*/
+            /* Hash of selected frames. */
             GHash *frame_list = BLI_ghash_int_new_ex(__func__, 64);
 
             /* If not multiframe and there is no frame in CFRA for the active layer, create

@@ -23,10 +23,20 @@
 #pragma once
 
 #include "DNA_ID.h"
+#include "DNA_asset_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** #bToolRef_Runtime.flag */
+enum {
+  /**
+   * This tool should use the fallback key-map.
+   * Typically gizmos handle this but some tools (such as the knife tool) don't use a gizmo.
+   */
+  TOOLREF_FLAG_FALLBACK_KEYMAP = (1 << 0),
+};
 
 #
 #
@@ -46,6 +56,8 @@ typedef struct bToolRef_Runtime {
 
   /** Index when a tool is a member of a group. */
   int index;
+  /** Options: `TOOLREF_FLAG_*`. */
+  int flag;
 } bToolRef_Runtime;
 
 /* Stored per mode. */
@@ -135,6 +147,10 @@ typedef struct WorkSpace {
 
   /** Info text from modal operators (runtime). */
   char *status_text;
+
+  /** Workspace-wide active asset library, for asset UIs to use (e.g. asset view UI template). The
+   * Asset Browser has its own and doesn't use this. */
+  AssetLibraryReference asset_library_ref;
 } WorkSpace;
 
 /**
@@ -165,7 +181,7 @@ typedef struct WorkSpaceDataRelation {
 
   /** The data used to identify the relation
    * (e.g. to find screen-layout (= value) from/for a hook).
-   * Note: Now runtime only. */
+   * NOTE: Now runtime only. */
   void *parent;
   /** The value for this parent-data/workspace relation. */
   void *value;

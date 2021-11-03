@@ -29,20 +29,49 @@ struct bContextDataResult;
 
 /* internal exports only */
 
+typedef enum eScreenDir {
+  /** This can mean unset, unknown or invalid. */
+  SCREEN_DIR_NONE = -1,
+  /** West/Left. */
+  SCREEN_DIR_W = 0,
+  /** North/Up. */
+  SCREEN_DIR_N = 1,
+  /** East/Right. */
+  SCREEN_DIR_E = 2,
+  /** South/Down. */
+  SCREEN_DIR_S = 3,
+} eScreenDir;
+
+#define SCREEN_DIR_IS_VERTICAL(dir) (ELEM(dir, SCREEN_DIR_N, SCREEN_DIR_S))
+#define SCREEN_DIR_IS_HORIZONTAL(dir) (ELEM(dir, SCREEN_DIR_W, SCREEN_DIR_E))
+
+typedef enum eScreenAxis {
+  /** Horizontal. */
+  SCREEN_AXIS_H = 'h',
+  /** Vertical. */
+  SCREEN_AXIS_V = 'v',
+} eScreenAxis;
+
 #define AZONESPOTW UI_HEADER_OFFSET         /* width of corner #AZone - max */
 #define AZONESPOTH (0.6f * U.widget_unit)   /* height of corner #AZone */
 #define AZONEFADEIN (5.0f * U.widget_unit)  /* when #AZone is totally visible */
 #define AZONEFADEOUT (6.5f * U.widget_unit) /* when we start seeing the #AZone */
 
-#define AREAJOINTOLERANCE (1.0f * U.widget_unit) /* Edges must be close to allow joining. */
+/* Edges must be within these to allow joining. */
+#define AREAJOINTOLERANCEX (AREAMINX * U.dpi_fac)
+#define AREAJOINTOLERANCEY (HEADERY * U.dpi_fac)
 
 /* Expanded interaction influence of area borders. */
-#define BORDERPADDING (U.dpi_fac + U.pixelsize)
+#define BORDERPADDING ((2.0f * U.dpi_fac) + U.pixelsize)
 
 /* area.c */
 void ED_area_data_copy(ScrArea *area_dst, ScrArea *area_src, const bool do_free);
 void ED_area_data_swap(ScrArea *area_dst, ScrArea *area_src);
 void region_toggle_hidden(struct bContext *C, ARegion *region, const bool do_fade);
+
+/* screen_draw.c */
+void screen_draw_join_highlight(struct ScrArea *sa1, struct ScrArea *sa2);
+void screen_draw_split_preview(struct ScrArea *area, const eScreenAxis dir_axis, const float fac);
 
 /* screen_edit.c */
 bScreen *screen_add(struct Main *bmain, const char *name, const rcti *rect);
@@ -54,11 +83,18 @@ void screen_change_prepare(bScreen *screen_old,
                            struct Main *bmain,
                            struct bContext *C,
                            wmWindow *win);
-ScrArea *area_split(
-    const wmWindow *win, bScreen *screen, ScrArea *area, char dir, float fac, int merge);
+ScrArea *area_split(const wmWindow *win,
+                    bScreen *screen,
+                    ScrArea *area,
+                    const eScreenAxis dir_axis,
+                    const float fac,
+                    const bool merge);
 int screen_area_join(struct bContext *C, bScreen *screen, ScrArea *sa1, ScrArea *sa2);
-int area_getorientation(ScrArea *area, ScrArea *sb);
-
+eScreenDir area_getorientation(ScrArea *sa_a, ScrArea *sa_b);
+void area_getoffsets(
+    ScrArea *sa_a, ScrArea *sa_b, const eScreenDir dir, int *r_offset1, int *r_offset2);
+bool screen_area_close(struct bContext *C, bScreen *screen, ScrArea *area);
+void screen_area_spacelink_add(struct Scene *scene, ScrArea *area, eSpace_Type space_type);
 struct AZone *ED_area_actionzone_find_xy(ScrArea *area, const int xy[2]);
 
 /* screen_geometry.c */
@@ -80,7 +116,7 @@ ScrEdge *screen_geom_find_active_scredge(const wmWindow *win,
 void screen_geom_vertices_scale(const wmWindow *win, bScreen *screen);
 short screen_geom_find_area_split_point(const ScrArea *area,
                                         const rcti *window_rect,
-                                        char dir,
+                                        const eScreenAxis dir_axis,
                                         float fac);
 void screen_geom_select_connected_edge(const wmWindow *win, ScrEdge *edge);
 
@@ -93,6 +129,7 @@ extern const char *screen_context_dir[]; /* doc access */
 
 /* screendump.c */
 void SCREEN_OT_screenshot(struct wmOperatorType *ot);
+void SCREEN_OT_screenshot_area(struct wmOperatorType *ot);
 
 /* workspace_layout_edit.c */
 bool workspace_layout_set_poll(const struct WorkSpaceLayout *layout);

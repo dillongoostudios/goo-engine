@@ -20,6 +20,8 @@
 
 namespace blender::bke {
 
+GeometrySet object_get_evaluated_geometry_set(const Object &object);
+
 /**
  * Used to keep track of a group of instances using the same geometry data.
  */
@@ -39,29 +41,20 @@ struct GeometryInstanceGroup {
   Vector<float4x4> transforms;
 };
 
-void geometry_set_instances_attribute_foreach(const GeometrySet &geometry_set,
-                                              const AttributeForeachCallback callback,
-                                              const int limit);
-
 void geometry_set_gather_instances(const GeometrySet &geometry_set,
                                    Vector<GeometryInstanceGroup> &r_instance_groups);
 
-GeometrySet geometry_set_realize_mesh_for_modifier(const GeometrySet &geometry_set);
 GeometrySet geometry_set_realize_instances(const GeometrySet &geometry_set);
-
-struct AttributeKind {
-  CustomDataType data_type;
-  AttributeDomain domain;
-};
 
 /**
  * Add information about all the attributes on every component of the type. The resulting info
  * will contain the highest complexity data type and the highest priority domain among every
  * attribute with the given name on all of the input components.
  */
-void geometry_set_gather_instances_attribute_info(Span<GeometryInstanceGroup> set_groups,
-                                                  Span<GeometryComponentType> component_types,
-                                                  const Set<std::string> &ignored_attributes,
-                                                  Map<std::string, AttributeKind> &r_attributes);
+void geometry_set_gather_instances_attribute_info(
+    Span<GeometryInstanceGroup> set_groups,
+    Span<GeometryComponentType> component_types,
+    const Set<std::string> &ignored_attributes,
+    Map<AttributeIDRef, AttributeKind> &r_attributes);
 
 }  // namespace blender::bke

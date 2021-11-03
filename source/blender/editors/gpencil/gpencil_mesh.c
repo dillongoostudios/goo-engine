@@ -159,7 +159,7 @@ static bool gpencil_bake_ob_list(bContext *C, Depsgraph *depsgraph, Scene *scene
     if (ob == obact) {
       continue;
     }
-    /* Add selected meshes.*/
+    /* Add selected meshes. */
     if (ob->type == OB_MESH) {
       elem = MEM_callocN(sizeof(GpBakeOb), __func__);
       elem->ob = ob;
@@ -188,7 +188,6 @@ static int gpencil_bake_mesh_animation_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   Scene *scene = CTX_data_scene(C);
-  ARegion *region = CTX_wm_region(C);
   View3D *v3d = CTX_wm_view3d(C);
 
   ListBase ob_selected_list = {NULL, NULL};
@@ -262,7 +261,7 @@ static int gpencil_bake_mesh_animation_exec(bContext *C, wmOperator *op)
     gsc.ob = ob_gpencil;
 
     /* Init snap context for geometry projection. */
-    sctx = ED_transform_snap_object_context_create_view3d(scene, 0, region, CTX_wm_view3d(C));
+    sctx = ED_transform_snap_object_context_create(scene, 0);
 
     /* Tag all existing strokes to avoid reprojections. */
     LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
@@ -316,7 +315,8 @@ static int gpencil_bake_mesh_animation_exec(bContext *C, wmOperator *op)
                                ob_eval->obmat,
                                frame_offset,
                                use_seams,
-                               use_faces);
+                               use_faces,
+                               true);
 
       /* Reproject all un-tagged created strokes. */
       if (project_type != GP_REPROJECT_KEEP) {
@@ -344,7 +344,7 @@ static int gpencil_bake_mesh_animation_exec(bContext *C, wmOperator *op)
   /* Remove unused materials. */
   int actcol = ob_gpencil->actcol;
   for (int slot = 1; slot <= ob_gpencil->totcol; slot++) {
-    while (slot <= ob_gpencil->totcol && !BKE_object_material_slot_used(ob_gpencil->data, slot)) {
+    while (slot <= ob_gpencil->totcol && !BKE_object_material_slot_used(ob_gpencil, slot)) {
       ob_gpencil->actcol = slot;
       BKE_object_material_slot_remove(CTX_data_main(C), ob_gpencil);
 
@@ -402,25 +402,6 @@ static int gpencil_bake_mesh_animation_invoke(bContext *C,
 
 void GPENCIL_OT_bake_mesh_animation(wmOperatorType *ot)
 {
-  static const EnumPropertyItem reproject_type[] = {
-      {GP_REPROJECT_KEEP, "KEEP", 0, "No Reproject", ""},
-      {GP_REPROJECT_FRONT, "FRONT", 0, "Front", "Reproject the strokes using the X-Z plane"},
-      {GP_REPROJECT_SIDE, "SIDE", 0, "Side", "Reproject the strokes using the Y-Z plane"},
-      {GP_REPROJECT_TOP, "TOP", 0, "Top", "Reproject the strokes using the X-Y plane"},
-      {GP_REPROJECT_VIEW,
-       "VIEW",
-       0,
-       "View",
-       "Reproject the strokes to end up on the same plane, as if drawn from the current viewpoint "
-       "using 'Cursor' Stroke Placement"},
-      {GP_REPROJECT_CURSOR,
-       "CURSOR",
-       0,
-       "Cursor",
-       "Reproject the strokes using the orientation of 3D cursor"},
-      {0, NULL, 0, NULL, NULL},
-  };
-
   static const EnumPropertyItem target_object_modes[] = {
       {GP_TARGET_OB_NEW, "NEW", 0, "New Object", ""},
       {GP_TARGET_OB_SELECTED, "SELECTED", 0, "Selected Object", ""},
@@ -491,5 +472,10 @@ void GPENCIL_OT_bake_mesh_animation(wmOperatorType *ot)
   RNA_def_int(
       ot->srna, "frame_target", 1, 1, 100000, "Target Frame", "Destination frame", 1, 100000);
 
-  RNA_def_enum(ot->srna, "project_type", reproject_type, GP_REPROJECT_VIEW, "Projection Type", "");
+  RNA_def_enum(ot->srna,
+               "project_type",
+               rna_gpencil_reproject_type_items,
+               GP_REPROJECT_VIEW,
+               "Projection Type",
+               "");
 }

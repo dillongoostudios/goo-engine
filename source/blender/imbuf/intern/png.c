@@ -23,7 +23,7 @@
  * \todo Save floats as 16 bits per channel, currently readonly.
  */
 
-#include "png.h"
+#include <png.h>
 
 #include "BLI_fileops.h"
 #include "BLI_math.h"
@@ -153,7 +153,7 @@ bool imb_savepng(struct ImBuf *ibuf, const char *filepath, int flags)
     chanel_colormanage_cb = channel_colormanage_noop;
   }
   else {
-    /* standard linear-to-srgb conversion if float buffer wasn't managed */
+    /* Standard linear-to-SRGB conversion if float buffer wasn't managed. */
     chanel_colormanage_cb = linearrgb_to_srgb;
   }
 
@@ -749,8 +749,9 @@ ImBuf *imb_loadpng(const unsigned char *mem, size_t size, int flags, char colors
 
       /* set the individual row-pointers to point at the correct offsets */
       for (int i = 0; i < ibuf->y; i++) {
-        row_pointers[ibuf->y - 1 - i] = (png_bytep)(
-            (unsigned char *)pixels + (((size_t)i) * ibuf->x) * channels * sizeof(unsigned char));
+        row_pointers[ibuf->y - 1 - i] = (png_bytep)((unsigned char *)pixels +
+                                                    (((size_t)i) * ibuf->x) * channels *
+                                                        sizeof(unsigned char));
       }
 
       png_read_image(png_ptr, row_pointers);

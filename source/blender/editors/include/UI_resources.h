@@ -64,7 +64,7 @@ typedef enum ThemeColorID {
   TH_TAB_OUTLINE,
 
   TH_HEADER,
-  TH_HEADERDESEL,
+  TH_HEADER_ACTIVE,
   TH_HEADER_TEXT,
   TH_HEADER_TEXT_HI,
 
@@ -185,7 +185,7 @@ typedef enum ThemeColorID {
   TH_NODE_LAYOUT,
   TH_NODE_SHADER,
   TH_NODE_INTERFACE,
-  TH_NODE_CONVERTOR,
+  TH_NODE_CONVERTER,
   TH_NODE_GROUP,
   TH_NODE_FRAME,
   TH_NODE_MATTE,
@@ -451,7 +451,7 @@ int UI_ThemeMenuShadowWidth(void);
 /* only for buttons in theme editor! */
 const unsigned char *UI_ThemeGetColorPtr(struct bTheme *btheme, int spacetype, int colorid);
 
-void UI_make_axis_color(const unsigned char *src_col, unsigned char *dst_col, const char axis);
+void UI_make_axis_color(const unsigned char src_col[3], unsigned char dst_col[3], const char axis);
 
 #ifdef __cplusplus
 }

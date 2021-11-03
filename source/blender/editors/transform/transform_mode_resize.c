@@ -24,6 +24,7 @@
 #include <stdlib.h>
 
 #include "BLI_math.h"
+#include "BLI_task.h"
 
 #include "BKE_context.h"
 #include "BKE_unit.h"
@@ -37,6 +38,30 @@
 #include "transform_convert.h"
 #include "transform_mode.h"
 #include "transform_snap.h"
+
+/* -------------------------------------------------------------------- */
+/** \name Transform (Resize) Element
+ * \{ */
+
+struct ElemResizeData {
+  const TransInfo *t;
+  const TransDataContainer *tc;
+  float mat[3][3];
+};
+
+static void element_resize_fn(void *__restrict iter_data_v,
+                              const int iter,
+                              const TaskParallelTLS *__restrict UNUSED(tls))
+{
+  struct ElemResizeData *data = iter_data_v;
+  TransData *td = &data->tc->data[iter];
+  if (td->flag & TD_SKIP) {
+    return;
+  }
+  ElementResize(data->t, data->tc, td, data->mat);
+}
+
+/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Transform (Resize)
@@ -88,6 +113,7 @@ static void applyResize(TransInfo *t, const int UNUSED(mval[2]))
     float ratio = t->values[0];
 
     copy_v3_fl(t->values_final, ratio);
+    add_v3_v3(t->values_final, t->values_modal_offset);
 
     transform_snap_increment(t, t->values_final);
 
@@ -113,22 +139,36 @@ static void applyResize(TransInfo *t, const int UNUSED(mval[2]))
         pvec[j++] = t->values_final[i];
       }
     }
-    headerResize(t, pvec, str);
+    headerResize(t, pvec, str, sizeof(str));
   }
   else {
-    headerResize(t, t->values_final, str);
+    headerResize(t, t->values_final, str, sizeof(str));
   }
 
   copy_m3_m3(t->mat, mat); /* used in gizmo */
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    TransData *td = tc->data;
-    for (i = 0; i < tc->data_len; i++, td++) {
-      if (td->flag & TD_SKIP) {
-        continue;
-      }
 
-      ElementResize(t, tc, td, mat);
+    if (tc->data_len < TRANSDATA_THREAD_LIMIT) {
+      TransData *td = tc->data;
+      for (i = 0; i < tc->data_len; i++, td++) {
+        if (td->flag & TD_SKIP) {
+          continue;
+        }
+
+        ElementResize(t, tc, td, mat);
+      }
+    }
+    else {
+      struct ElemResizeData data = {
+          .t = t,
+          .tc = tc,
+      };
+      copy_m3_m3(data.mat, mat);
+
+      TaskParallelSettings settings;
+      BLI_parallel_range_settings_defaults(&settings);
+      BLI_task_parallel_range(0, tc->data_len, &data, element_resize_fn, &settings);
     }
   }
 
@@ -161,14 +201,45 @@ static void applyResize(TransInfo *t, const int UNUSED(mval[2]))
   ED_area_status_text(t->area, str);
 }
 
-void initResize(TransInfo *t)
+void initResize(TransInfo *t, float mouse_dir_constraint[3])
 {
   t->mode = TFM_RESIZE;
   t->transform = applyResize;
   t->tsnap.applySnap = ApplySnapResize;
   t->tsnap.distance = ResizeBetween;
 
-  initMouseInputMode(t, &t->mouse, INPUT_SPRING_FLIP);
+  if (is_zero_v3(mouse_dir_constraint)) {
+    initMouseInputMode(t, &t->mouse, INPUT_SPRING_FLIP);
+  }
+  else {
+    int mval_start[2], mval_end[2];
+    float mval_dir[3], t_mval[2];
+    float viewmat[3][3];
+
+    copy_m3_m4(viewmat, t->viewmat);
+    mul_v3_m3v3(mval_dir, viewmat, mouse_dir_constraint);
+    normalize_v2(mval_dir);
+    if (is_zero_v2(mval_dir)) {
+      /* The screen space direction is orthogonal to the view.
+       * Fall back to constraining on the Y axis. */
+      mval_dir[0] = 0;
+      mval_dir[1] = 1;
+    }
+
+    mval_start[0] = t->center2d[0];
+    mval_start[1] = t->center2d[1];
+
+    t_mval[0] = t->mval[0] - mval_start[0];
+    t_mval[1] = t->mval[1] - mval_start[1];
+    project_v2_v2v2(mval_dir, t_mval, mval_dir);
+
+    mval_end[0] = t->center2d[0] + mval_dir[0];
+    mval_end[1] = t->center2d[1] + mval_dir[1];
+
+    setCustomPoints(t, &t->mouse, mval_end, mval_start);
+
+    initMouseInputMode(t, &t->mouse, INPUT_CUSTOM_RATIO);
+  }
 
   t->flag |= T_NULL_ONE;
   t->num.val_flag[0] |= NUM_NULL_ONE;
@@ -176,7 +247,6 @@ void initResize(TransInfo *t)
   t->num.val_flag[2] |= NUM_NULL_ONE;
   t->num.flag |= NUM_AFFECT_ALL;
   if ((t->flag & T_EDIT) == 0) {
-    t->flag |= T_NO_ZERO;
 #ifdef USE_NUM_NO_ZERO
     t->num.val_flag[0] |= NUM_NO_ZERO;
     t->num.val_flag[1] |= NUM_NO_ZERO;

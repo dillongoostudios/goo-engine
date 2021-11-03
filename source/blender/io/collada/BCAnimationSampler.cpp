@@ -161,10 +161,12 @@ void BCAnimationSampler::update_animation_curves(BCAnimation &animation,
 BCSample &BCAnimationSampler::sample_object(Object *ob, int frame_index, bool for_opensim)
 {
   BCSample &ob_sample = sample_data.add(ob, frame_index);
-  // if (export_settings.get_apply_global_orientation()) {
-  //  const BCMatrix &global_transform = export_settings.get_global_transform();
-  //  ob_sample.get_matrix(global_transform);
-  //}
+#if 0
+  if (export_settings.get_apply_global_orientation()) {
+    const BCMatrix &global_transform = export_settings.get_global_transform();
+    ob_sample.get_matrix(global_transform);
+  }
+#endif
 
   if (ob->type == OB_ARMATURE) {
     bPoseChannel *pchan;
@@ -445,10 +447,9 @@ void BCAnimationSampler::initialize_curves(BCAnimationCurveMap &curves, Object *
     for (; fcu; fcu = fcu->next) {
       object_type = BC_ANIMATION_TYPE_OBJECT;
       if (ob->type == OB_ARMATURE) {
-        char *boneName = BLI_str_quoted_substrN(fcu->rna_path, "pose.bones[");
-        if (boneName) {
+        char boneName[MAXBONENAME];
+        if (BLI_str_quoted_substr(fcu->rna_path, "pose.bones[", boneName, sizeof(boneName))) {
           object_type = BC_ANIMATION_TYPE_BONE;
-          MEM_freeN(boneName);
         }
       }
 
@@ -488,7 +489,7 @@ void BCAnimationSampler::initialize_curves(BCAnimationCurveMap &curves, Object *
     }
   }
 
-  /* Add curves on Object->material actions*/
+  /* Add curves on Object->material actions. */
   object_type = BC_ANIMATION_TYPE_MATERIAL;
   for (int a = 0; a < ob->totcol; a++) {
     /* Export Material parameter animations. */
@@ -574,7 +575,7 @@ BCSample &BCSampleFrameContainer::add(Object *ob, int frame_index)
 /* Below are the getters which we need to export the data */
 /* ====================================================== */
 
-/* Return either the BCSampleFrame or NULL if frame does not exist*/
+/* Return either the BCSampleFrame or NULL if frame does not exist. */
 BCSampleFrame *BCSampleFrameContainer::get_frame(int frame_index)
 {
   BCSampleFrameMap::iterator it = sample_frames.find(frame_index);

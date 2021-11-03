@@ -191,8 +191,8 @@
 #  define BCHUNK_SIZE_MIN_DIV 8
 
 /* Disallow chunks bigger than the regular chunk size scaled by this value
- * note: must be at least 2!
- * however, this code runs wont run in tests unless its ~1.1 ugh.
+ * NOTE: must be at least 2!
+ * however, this code runs won't run in tests unless it's ~1.1 ugh.
  * so lower only to check splitting works.
  */
 #  define BCHUNK_SIZE_MAX_MUL 2
@@ -980,7 +980,7 @@ static const BChunkRef *table_lookup(const BArrayInfo *info,
                                      const size_t offset,
                                      const hash_key *UNUSED(table_hash_array))
 {
-  const size_t data_hash_len = BCHUNK_HASH_LEN * info->chunk_stride; /* TODO, cache */
+  const size_t data_hash_len = BCHUNK_HASH_LEN * info->chunk_stride; /* TODO: cache. */
 
   size_t size_left = data_len - offset;
   hash_key key = hash_data(&data[offset], MIN2(data_hash_len, size_left));
@@ -1155,7 +1155,7 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
       use_aligned = true;
     }
     else {
-      /* TODO, walk over chunks and check if some arbitrary amount align */
+      /* TODO: walk over chunks and check if some arbitrary amount align. */
     }
   }
 #endif /* USE_ALIGN_CHUNKS_TEST */
@@ -1403,16 +1403,16 @@ static BChunkList *bchunk_list_from_data_merge(const BArrayInfo *info,
  * Create a new array store, which can store any number of arrays
  * as long as their stride matches.
  *
- * \param stride: ``sizeof()`` each element,
+ * \param stride: `sizeof()` each element,
  *
- * \note while a stride of ``1`` will always work,
+ * \note while a stride of `1` will always work,
  * its less efficient since duplicate chunks of memory will be searched
  * at positions unaligned with the array data.
  *
  * \param chunk_count: Number of elements to split each chunk into.
  * - A small value increases the ability to de-duplicate chunks,
  *   but adds overhead by increasing the number of chunks to look up when searching for duplicates,
- *   as well as some overhead constructing the original array again, with more calls to ``memcpy``.
+ *   as well as some overhead constructing the original array again, with more calls to `memcpy`.
  * - Larger values reduce the *book keeping* overhead,
  *   but increase the chance a small,
  *   isolated change will cause a larger amount of data to be duplicated.
@@ -1436,8 +1436,8 @@ BArrayStore *BLI_array_store_create(uint stride, uint chunk_count)
   bs->info.accum_steps = BCHUNK_HASH_TABLE_ACCUMULATE_STEPS - 1;
   /* Triangle number, identifying now much read-ahead we need:
    * https://en.wikipedia.org/wiki/Triangular_number (+ 1) */
-  bs->info.accum_read_ahead_len = (uint)(
-      (((bs->info.accum_steps * (bs->info.accum_steps + 1))) / 2) + 1);
+  bs->info.accum_read_ahead_len =
+      (uint)((((bs->info.accum_steps * (bs->info.accum_steps + 1))) / 2) + 1);
   bs->info.accum_read_ahead_bytes = bs->info.accum_read_ahead_len * stride;
 #else
   bs->info.accum_read_ahead_bytes = BCHUNK_HASH_LEN * stride;
@@ -1787,7 +1787,7 @@ bool BLI_array_store_is_valid(BArrayStore *bs)
   }
 
   return ok;
-  /* TODO, dangling pointer checks */
+  /* TODO: dangling pointer checks. */
 }
 
 /** \} */

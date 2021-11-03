@@ -75,7 +75,7 @@ static bool WIDGETGROUP_camera_poll(const bContext *C, wmGizmoGroupType *UNUSED(
     if (ob->type == OB_CAMERA) {
       Camera *camera = ob->data;
       /* TODO: support overrides. */
-      if (camera->id.lib == NULL) {
+      if (!ID_IS_LINKED(camera)) {
         return true;
       }
     }
@@ -153,7 +153,7 @@ static void WIDGETGROUP_camera_refresh(const bContext *C, wmGizmoGroup *gzgroup)
     WM_gizmo_set_scale(cagzgroup->dop_dist, ca->drawsize);
     WM_gizmo_set_flag(cagzgroup->dop_dist, WM_GIZMO_HIDDEN, false);
 
-    /* Need to set property here for undo. TODO would prefer to do this in _init */
+    /* Need to set property here for undo. TODO: would prefer to do this in _init. */
     PointerRNA camera_dof_ptr;
     RNA_pointer_create(&ca->id, &RNA_CameraDOFSettings, &ca->dof, &camera_dof_ptr);
     WM_gizmo_target_property_def_rna(
@@ -163,7 +163,7 @@ static void WIDGETGROUP_camera_refresh(const bContext *C, wmGizmoGroup *gzgroup)
     WM_gizmo_set_flag(cagzgroup->dop_dist, WM_GIZMO_HIDDEN, true);
   }
 
-  /* TODO - make focal length/ortho ob_scale_inv widget optional */
+  /* TODO: make focal length/ortho ob_scale_inv widget optional. */
   const Scene *scene = CTX_data_scene(C);
   const float aspx = (float)scene->r.xsch * scene->r.xasp;
   const float aspy = (float)scene->r.ysch * scene->r.yasp;
@@ -408,7 +408,7 @@ static bool WIDGETGROUP_camera_view_poll(const bContext *C, wmGizmoGroupType *UN
   if (rv3d->persp == RV3D_CAMOB) {
     if (scene->r.mode & R_BORDER) {
       /* TODO: support overrides. */
-      if (scene->id.lib == NULL) {
+      if (!ID_IS_LINKED(scene)) {
         return true;
       }
     }

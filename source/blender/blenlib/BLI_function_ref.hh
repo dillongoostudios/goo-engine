@@ -95,7 +95,7 @@ template<typename Ret, typename... Params> class FunctionRef<Ret(Params...)> {
    * A pointer to the referenced callable object. This can be a C function, a lambda object or any
    * other callable.
    *
-   * The value does not need to be initialized because it is not used unless callback_ is set as
+   * The value does not need to be initialized because it is not used unless `callback_` is set as
    * well, in which case it will be initialized as well.
    *
    * Use `intptr_t` to avoid warnings when casting to function pointers.
@@ -109,6 +109,10 @@ template<typename Ret, typename... Params> class FunctionRef<Ret(Params...)> {
 
  public:
   FunctionRef() = default;
+
+  FunctionRef(std::nullptr_t)
+  {
+  }
 
   /**
    * A `FunctionRef` itself is a callable as well. However, we don't want that this

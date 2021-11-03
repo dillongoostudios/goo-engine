@@ -13,6 +13,14 @@ if errorlevel 1 goto EOF
 call "%BLENDER_DIR%\build_files\windows\parse_arguments.cmd" %*
 if errorlevel 1 goto EOF
 
+REM if it is one of the convenience targets and BLENDER_BIN is set
+REM skip compiler detection
+if "%ICONS%%ICONS_GEOM%%DOC_PY%" == "1" (
+	if EXIST "%BLENDER_BIN%" (
+		goto convenience_targets
+	)
+)
+
 call "%BLENDER_DIR%\build_files\windows\find_dependencies.cmd"
 if errorlevel 1 goto EOF
 
@@ -48,6 +56,11 @@ if "%BUILD_VS_YEAR%" == "" (
 	)
 )
 
+if "%SVN_FIX%" == "1" (
+	call "%BLENDER_DIR%\build_files\windows\svn_fix.cmd"
+	goto EOF
+)
+
 if "%BUILD_UPDATE%" == "1" (
 	call "%BLENDER_DIR%\build_files\windows\check_libraries.cmd"
 	if errorlevel 1 goto EOF
@@ -57,6 +70,23 @@ if "%BUILD_UPDATE%" == "1" (
 )
 
 call "%BLENDER_DIR%\build_files\windows\set_build_dir.cmd"
+
+:convenience_targets
+
+if "%ICONS%" == "1" (
+	call "%BLENDER_DIR%\build_files\windows\icons.cmd"
+	goto EOF
+)
+
+if "%ICONS_GEOM%" == "1" (
+	call "%BLENDER_DIR%\build_files\windows\icons_geom.cmd"
+	goto EOF
+)
+
+if "%DOC_PY%" == "1" (
+	call "%BLENDER_DIR%\build_files\windows\doc_py.cmd"
+	goto EOF
+)
 
 echo Building blender with VS%BUILD_VS_YEAR% for %BUILD_ARCH% in %BUILD_DIR%
 

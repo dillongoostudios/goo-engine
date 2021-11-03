@@ -255,7 +255,7 @@ static void eyedropper_gpencil_color_set(bContext *C, const wmEvent *event, Eyed
     copy_v3_v3(col_conv, eye->color);
   }
 
-  /* Add material or Palette color*/
+  /* Add material or Palette color. */
   if (eye->mode == 0) {
     eyedropper_add_material(C, col_conv, only_stroke, only_fill, both);
   }
@@ -292,7 +292,7 @@ static int eyedropper_gpencil_modal(bContext *C, wmOperator *op, const wmEvent *
           return OPERATOR_CANCELLED;
         }
         case EYE_MODAL_SAMPLE_CONFIRM: {
-          eyedropper_gpencil_color_sample(C, eye, event->x, event->y);
+          eyedropper_gpencil_color_sample(C, eye, event->xy[0], event->xy[1]);
 
           /* Create material. */
           eyedropper_gpencil_color_set(C, event, eye);
@@ -309,7 +309,7 @@ static int eyedropper_gpencil_modal(bContext *C, wmOperator *op, const wmEvent *
     }
     case MOUSEMOVE:
     case INBETWEEN_MOUSEMOVE: {
-      eyedropper_gpencil_color_sample(C, eye, event->x, event->y);
+      eyedropper_gpencil_color_sample(C, eye, event->xy[0], event->xy[1]);
       break;
     }
     default: {

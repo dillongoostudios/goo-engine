@@ -25,40 +25,45 @@
  * the code has been extended and modified to support more primitives and work
  * with CPU/CUDA/OpenCL. */
 
+#pragma once
+
 #ifdef __EMBREE__
-#  include "kernel/bvh/bvh_embree.h"
+#  include "kernel/bvh/embree.h"
 #endif
 
-CCL_NAMESPACE_BEGIN
+#include "kernel/bvh/types.h"
+#include "kernel/bvh/util.h"
 
-#include "kernel/bvh/bvh_types.h"
+#include "kernel/integrator/state_util.h"
+
+CCL_NAMESPACE_BEGIN
 
 #ifndef __KERNEL_OPTIX__
 
 /* Regular BVH traversal */
 
-#  include "kernel/bvh/bvh_nodes.h"
+#  include "kernel/bvh/nodes.h"
 
 #  define BVH_FUNCTION_NAME bvh_intersect
 #  define BVH_FUNCTION_FEATURES 0
-#  include "kernel/bvh/bvh_traversal.h"
+#  include "kernel/bvh/traversal.h"
 
 #  if defined(__HAIR__)
 #    define BVH_FUNCTION_NAME bvh_intersect_hair
 #    define BVH_FUNCTION_FEATURES BVH_HAIR
-#    include "kernel/bvh/bvh_traversal.h"
+#    include "kernel/bvh/traversal.h"
 #  endif
 
 #  if defined(__OBJECT_MOTION__)
 #    define BVH_FUNCTION_NAME bvh_intersect_motion
 #    define BVH_FUNCTION_FEATURES BVH_MOTION
-#    include "kernel/bvh/bvh_traversal.h"
+#    include "kernel/bvh/traversal.h"
 #  endif
 
 #  if defined(__HAIR__) && defined(__OBJECT_MOTION__)
 #    define BVH_FUNCTION_NAME bvh_intersect_hair_motion
 #    define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_MOTION
-#    include "kernel/bvh/bvh_traversal.h"
+#    include "kernel/bvh/traversal.h"
 #  endif
 
 /* Subsurface scattering BVH traversal */
@@ -66,12 +71,12 @@ CCL_NAMESPACE_BEGIN
 #  if defined(__BVH_LOCAL__)
 #    define BVH_FUNCTION_NAME bvh_intersect_local
 #    define BVH_FUNCTION_FEATURES BVH_HAIR
-#    include "kernel/bvh/bvh_local.h"
+#    include "kernel/bvh/local.h"
 
 #    if defined(__OBJECT_MOTION__)
 #      define BVH_FUNCTION_NAME bvh_intersect_local_motion
 #      define BVH_FUNCTION_FEATURES BVH_MOTION | BVH_HAIR
-#      include "kernel/bvh/bvh_local.h"
+#      include "kernel/bvh/local.h"
 #    endif
 #  endif /* __BVH_LOCAL__ */
 
@@ -80,12 +85,12 @@ CCL_NAMESPACE_BEGIN
 #  if defined(__VOLUME__)
 #    define BVH_FUNCTION_NAME bvh_intersect_volume
 #    define BVH_FUNCTION_FEATURES BVH_HAIR
-#    include "kernel/bvh/bvh_volume.h"
+#    include "kernel/bvh/volume.h"
 
 #    if defined(__OBJECT_MOTION__)
 #      define BVH_FUNCTION_NAME bvh_intersect_volume_motion
 #      define BVH_FUNCTION_FEATURES BVH_MOTION | BVH_HAIR
-#      include "kernel/bvh/bvh_volume.h"
+#      include "kernel/bvh/volume.h"
 #    endif
 #  endif /* __VOLUME__ */
 
@@ -94,38 +99,38 @@ CCL_NAMESPACE_BEGIN
 #  if defined(__SHADOW_RECORD_ALL__)
 #    define BVH_FUNCTION_NAME bvh_intersect_shadow_all
 #    define BVH_FUNCTION_FEATURES 0
-#    include "kernel/bvh/bvh_shadow_all.h"
+#    include "kernel/bvh/shadow_all.h"
 
 #    if defined(__HAIR__)
 #      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair
 #      define BVH_FUNCTION_FEATURES BVH_HAIR
-#      include "kernel/bvh/bvh_shadow_all.h"
+#      include "kernel/bvh/shadow_all.h"
 #    endif
 
 #    if defined(__OBJECT_MOTION__)
 #      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_motion
 #      define BVH_FUNCTION_FEATURES BVH_MOTION
-#      include "kernel/bvh/bvh_shadow_all.h"
+#      include "kernel/bvh/shadow_all.h"
 #    endif
 
 #    if defined(__HAIR__) && defined(__OBJECT_MOTION__)
 #      define BVH_FUNCTION_NAME bvh_intersect_shadow_all_hair_motion
 #      define BVH_FUNCTION_FEATURES BVH_HAIR | BVH_MOTION
-#      include "kernel/bvh/bvh_shadow_all.h"
+#      include "kernel/bvh/shadow_all.h"
 #    endif
 #  endif /* __SHADOW_RECORD_ALL__ */
 
-/* Record all intersections - Volume BVH traversal  */
+/* Record all intersections - Volume BVH traversal. */
 
 #  if defined(__VOLUME_RECORD_ALL__)
 #    define BVH_FUNCTION_NAME bvh_intersect_volume_all
 #    define BVH_FUNCTION_FEATURES BVH_HAIR
-#    include "kernel/bvh/bvh_volume_all.h"
+#    include "kernel/bvh/volume_all.h"
 
 #    if defined(__OBJECT_MOTION__)
 #      define BVH_FUNCTION_NAME bvh_intersect_volume_all_motion
 #      define BVH_FUNCTION_FEATURES BVH_MOTION | BVH_HAIR
-#      include "kernel/bvh/bvh_volume_all.h"
+#      include "kernel/bvh/volume_all.h"
 #    endif
 #  endif /* __VOLUME_RECORD_ALL__ */
 
@@ -136,7 +141,7 @@ CCL_NAMESPACE_BEGIN
 
 #endif /* __KERNEL_OPTIX__ */
 
-ccl_device_inline bool scene_intersect_valid(const Ray *ray)
+ccl_device_inline bool scene_intersect_valid(ccl_private const Ray *ray)
 {
   /* NOTE: Due to some vectorization code  non-finite origin point might
    * cause lots of false-positive intersections which will overflow traversal
@@ -151,13 +156,11 @@ ccl_device_inline bool scene_intersect_valid(const Ray *ray)
   return isfinite_safe(ray->P.x) && isfinite_safe(ray->D.x) && len_squared(ray->D) != 0.0f;
 }
 
-ccl_device_intersect bool scene_intersect(KernelGlobals *kg,
-                                          const Ray *ray,
+ccl_device_intersect bool scene_intersect(KernelGlobals kg,
+                                          ccl_private const Ray *ray,
                                           const uint visibility,
-                                          Intersection *isect)
+                                          ccl_private Intersection *isect)
 {
-  PROFILING_INIT(kg, PROFILING_INTERSECT);
-
 #ifdef __KERNEL_OPTIX__
   uint p0 = 0;
   uint p1 = 0;
@@ -166,15 +169,25 @@ ccl_device_intersect bool scene_intersect(KernelGlobals *kg,
   uint p4 = visibility;
   uint p5 = PRIMITIVE_NONE;
 
+  uint ray_mask = visibility & 0xFF;
+  uint ray_flags = OPTIX_RAY_FLAG_NONE;
+  if (0 == ray_mask && (visibility & ~0xFF) != 0) {
+    ray_mask = 0xFF;
+    ray_flags = OPTIX_RAY_FLAG_ENFORCE_ANYHIT;
+  }
+  else if (visibility & PATH_RAY_SHADOW_OPAQUE) {
+    ray_flags = OPTIX_RAY_FLAG_TERMINATE_ON_FIRST_HIT;
+  }
+
   optixTrace(scene_intersect_valid(ray) ? kernel_data.bvh.scene : 0,
              ray->P,
              ray->D,
              0.0f,
              ray->t,
              ray->time,
-             0xF,
-             OPTIX_RAY_FLAG_NONE,
-             0,  // SBT offset for PG_HITD
+             ray_mask,
+             ray_flags,
+             0, /* SBT offset for PG_HITD */
              0,
              0,
              p0,
@@ -237,26 +250,24 @@ ccl_device_intersect bool scene_intersect(KernelGlobals *kg,
 }
 
 #ifdef __BVH_LOCAL__
-ccl_device_intersect bool scene_intersect_local(KernelGlobals *kg,
-                                                const Ray *ray,
-                                                LocalIntersection *local_isect,
+ccl_device_intersect bool scene_intersect_local(KernelGlobals kg,
+                                                ccl_private const Ray *ray,
+                                                ccl_private LocalIntersection *local_isect,
                                                 int local_object,
-                                                uint *lcg_state,
+                                                ccl_private uint *lcg_state,
                                                 int max_hits)
 {
-  PROFILING_INIT(kg, PROFILING_INTERSECT_LOCAL);
-
 #  ifdef __KERNEL_OPTIX__
-  uint p0 = ((uint64_t)lcg_state) & 0xFFFFFFFF;
-  uint p1 = (((uint64_t)lcg_state) >> 32) & 0xFFFFFFFF;
-  uint p2 = ((uint64_t)local_isect) & 0xFFFFFFFF;
-  uint p3 = (((uint64_t)local_isect) >> 32) & 0xFFFFFFFF;
+  uint p0 = pointer_pack_to_uint_0(lcg_state);
+  uint p1 = pointer_pack_to_uint_1(lcg_state);
+  uint p2 = pointer_pack_to_uint_0(local_isect);
+  uint p3 = pointer_pack_to_uint_1(local_isect);
   uint p4 = local_object;
-  // Is set to zero on miss or if ray is aborted, so can be used as return value
+  /* Is set to zero on miss or if ray is aborted, so can be used as return value. */
   uint p5 = max_hits;
 
   if (local_isect) {
-    local_isect->num_hits = 0;  // Initialize hit count to zero
+    local_isect->num_hits = 0; /* Initialize hit count to zero. */
   }
   optixTrace(scene_intersect_valid(ray) ? kernel_data.bvh.scene : 0,
              ray->P,
@@ -264,11 +275,10 @@ ccl_device_intersect bool scene_intersect_local(KernelGlobals *kg,
              0.0f,
              ray->t,
              ray->time,
-             // Skip curves
-             0x3,
-             // Need to always call into __anyhit__kernel_optix_local_hit
+             0xFF,
+             /* Need to always call into __anyhit__kernel_optix_local_hit. */
              OPTIX_RAY_FLAG_ENFORCE_ANYHIT,
-             2,  // SBT offset for PG_HITL
+             2, /* SBT offset for PG_HITL */
              0,
              0,
              p0,
@@ -312,8 +322,8 @@ ccl_device_intersect bool scene_intersect_local(KernelGlobals *kg,
         float3 dir = ray->D;
         float3 idir = ray->D;
         Transform ob_itfm;
-        rtc_ray.tfar = bvh_instance_motion_push(
-            kg, local_object, ray, &P, &dir, &idir, ray->t, &ob_itfm);
+        rtc_ray.tfar = ray->t *
+                       bvh_instance_motion_push(kg, local_object, ray, &P, &dir, &idir, &ob_itfm);
         /* bvh_instance_motion_push() returns the inverse transform but
          * it's not needed here. */
         (void)ob_itfm;
@@ -352,65 +362,71 @@ ccl_device_intersect bool scene_intersect_local(KernelGlobals *kg,
 #endif
 
 #ifdef __SHADOW_RECORD_ALL__
-ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals *kg,
-                                                     const Ray *ray,
-                                                     Intersection *isect,
+ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals kg,
+                                                     IntegratorShadowState state,
+                                                     ccl_private const Ray *ray,
                                                      uint visibility,
                                                      uint max_hits,
-                                                     uint *num_hits)
+                                                     ccl_private uint *num_recorded_hits,
+                                                     ccl_private float *throughput)
 {
-  PROFILING_INIT(kg, PROFILING_INTERSECT_SHADOW_ALL);
-
 #  ifdef __KERNEL_OPTIX__
-  uint p0 = ((uint64_t)isect) & 0xFFFFFFFF;
-  uint p1 = (((uint64_t)isect) >> 32) & 0xFFFFFFFF;
+  uint p0 = state;
+  uint p1 = __float_as_uint(1.0f); /* Throughput. */
+  uint p2 = 0;                     /* Number of hits. */
   uint p3 = max_hits;
   uint p4 = visibility;
   uint p5 = false;
 
-  *num_hits = 0;  // Initialize hit count to zero
+  uint ray_mask = visibility & 0xFF;
+  if (0 == ray_mask && (visibility & ~0xFF) != 0) {
+    ray_mask = 0xFF;
+  }
+
   optixTrace(scene_intersect_valid(ray) ? kernel_data.bvh.scene : 0,
              ray->P,
              ray->D,
              0.0f,
              ray->t,
              ray->time,
-             0xF,
-             // Need to always call into __anyhit__kernel_optix_shadow_all_hit
+             ray_mask,
+             /* Need to always call into __anyhit__kernel_optix_shadow_all_hit. */
              OPTIX_RAY_FLAG_ENFORCE_ANYHIT,
-             1,  // SBT offset for PG_HITS
+             1, /* SBT offset for PG_HITS */
              0,
              0,
              p0,
              p1,
-             *num_hits,
+             p2,
              p3,
              p4,
              p5);
 
+  *num_recorded_hits = uint16_unpack_from_uint_0(p2);
+  *throughput = __uint_as_float(p1);
+
   return p5;
 #  else /* __KERNEL_OPTIX__ */
   if (!scene_intersect_valid(ray)) {
-    *num_hits = 0;
+    *num_recorded_hits = 0;
+    *throughput = 1.0f;
     return false;
   }
 
 #    ifdef __EMBREE__
   if (kernel_data.bvh.scene) {
     CCLIntersectContext ctx(kg, CCLIntersectContext::RAY_SHADOW_ALL);
-    ctx.isect_s = isect;
+    Intersection *isect_array = (Intersection *)state->shadow_isect;
+    ctx.isect_s = isect_array;
     ctx.max_hits = max_hits;
-    ctx.num_hits = 0;
     IntersectContext rtc_ctx(&ctx);
     RTCRay rtc_ray;
     kernel_embree_setup_ray(*ray, rtc_ray, visibility);
     rtcOccluded1(kernel_data.bvh.scene, &rtc_ctx.context, &rtc_ray);
 
-    if (ctx.num_hits > max_hits) {
-      return true;
-    }
-    *num_hits = ctx.num_hits;
-    return rtc_ray.tfar == -INFINITY;
+    *num_recorded_hits = ctx.num_recorded_hits;
+    *throughput = ctx.throughput;
+    return ctx.opaque_hit;
   }
 #    endif /* __EMBREE__ */
 
@@ -418,33 +434,35 @@ ccl_device_intersect bool scene_intersect_shadow_all(KernelGlobals *kg,
   if (kernel_data.bvh.have_motion) {
 #      ifdef __HAIR__
     if (kernel_data.bvh.have_curves) {
-      return bvh_intersect_shadow_all_hair_motion(kg, ray, isect, visibility, max_hits, num_hits);
+      return bvh_intersect_shadow_all_hair_motion(
+          kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
     }
 #      endif /* __HAIR__ */
 
-    return bvh_intersect_shadow_all_motion(kg, ray, isect, visibility, max_hits, num_hits);
+    return bvh_intersect_shadow_all_motion(
+        kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
   }
 #    endif   /* __OBJECT_MOTION__ */
 
 #    ifdef __HAIR__
   if (kernel_data.bvh.have_curves) {
-    return bvh_intersect_shadow_all_hair(kg, ray, isect, visibility, max_hits, num_hits);
+    return bvh_intersect_shadow_all_hair(
+        kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
   }
 #    endif /* __HAIR__ */
 
-  return bvh_intersect_shadow_all(kg, ray, isect, visibility, max_hits, num_hits);
+  return bvh_intersect_shadow_all(
+      kg, ray, state, visibility, max_hits, num_recorded_hits, throughput);
 #  endif   /* __KERNEL_OPTIX__ */
 }
 #endif /* __SHADOW_RECORD_ALL__ */
 
 #ifdef __VOLUME__
-ccl_device_intersect bool scene_intersect_volume(KernelGlobals *kg,
-                                                 const Ray *ray,
-                                                 Intersection *isect,
+ccl_device_intersect bool scene_intersect_volume(KernelGlobals kg,
+                                                 ccl_private const Ray *ray,
+                                                 ccl_private Intersection *isect,
                                                  const uint visibility)
 {
-  PROFILING_INIT(kg, PROFILING_INTERSECT_VOLUME);
-
 #  ifdef __KERNEL_OPTIX__
   uint p0 = 0;
   uint p1 = 0;
@@ -453,16 +471,21 @@ ccl_device_intersect bool scene_intersect_volume(KernelGlobals *kg,
   uint p4 = visibility;
   uint p5 = PRIMITIVE_NONE;
 
+  uint ray_mask = visibility & 0xFF;
+  if (0 == ray_mask && (visibility & ~0xFF) != 0) {
+    ray_mask = 0xFF;
+  }
+
   optixTrace(scene_intersect_valid(ray) ? kernel_data.bvh.scene : 0,
              ray->P,
              ray->D,
              0.0f,
              ray->t,
              ray->time,
-             // Skip everything but volumes
-             0x2,
-             OPTIX_RAY_FLAG_NONE,
-             0,  // SBT offset for PG_HITD
+             ray_mask,
+             /* Need to always call into __anyhit__kernel_optix_volume_test. */
+             OPTIX_RAY_FLAG_ENFORCE_ANYHIT,
+             3, /* SBT offset for PG_HITV */
              0,
              0,
              p0,
@@ -497,14 +520,12 @@ ccl_device_intersect bool scene_intersect_volume(KernelGlobals *kg,
 #endif /* __VOLUME__ */
 
 #ifdef __VOLUME_RECORD_ALL__
-ccl_device_intersect uint scene_intersect_volume_all(KernelGlobals *kg,
-                                                     const Ray *ray,
-                                                     Intersection *isect,
+ccl_device_intersect uint scene_intersect_volume_all(KernelGlobals kg,
+                                                     ccl_private const Ray *ray,
+                                                     ccl_private Intersection *isect,
                                                      const uint max_hits,
                                                      const uint visibility)
 {
-  PROFILING_INIT(kg, PROFILING_INTERSECT_VOLUME_ALL);
-
   if (!scene_intersect_valid(ray)) {
     return false;
   }
@@ -532,98 +553,5 @@ ccl_device_intersect uint scene_intersect_volume_all(KernelGlobals *kg,
   return bvh_intersect_volume_all(kg, ray, isect, max_hits, visibility);
 }
 #endif /* __VOLUME_RECORD_ALL__ */
-
-/* Ray offset to avoid self intersection.
- *
- * This function should be used to compute a modified ray start position for
- * rays leaving from a surface. */
-
-ccl_device_inline float3 ray_offset(float3 P, float3 Ng)
-{
-#ifdef __INTERSECTION_REFINE__
-  const float epsilon_f = 1e-5f;
-  /* ideally this should match epsilon_f, but instancing and motion blur
-   * precision makes it problematic */
-  const float epsilon_test = 1.0f;
-  const int epsilon_i = 32;
-
-  float3 res;
-
-  /* x component */
-  if (fabsf(P.x) < epsilon_test) {
-    res.x = P.x + Ng.x * epsilon_f;
-  }
-  else {
-    uint ix = __float_as_uint(P.x);
-    ix += ((ix ^ __float_as_uint(Ng.x)) >> 31) ? -epsilon_i : epsilon_i;
-    res.x = __uint_as_float(ix);
-  }
-
-  /* y component */
-  if (fabsf(P.y) < epsilon_test) {
-    res.y = P.y + Ng.y * epsilon_f;
-  }
-  else {
-    uint iy = __float_as_uint(P.y);
-    iy += ((iy ^ __float_as_uint(Ng.y)) >> 31) ? -epsilon_i : epsilon_i;
-    res.y = __uint_as_float(iy);
-  }
-
-  /* z component */
-  if (fabsf(P.z) < epsilon_test) {
-    res.z = P.z + Ng.z * epsilon_f;
-  }
-  else {
-    uint iz = __float_as_uint(P.z);
-    iz += ((iz ^ __float_as_uint(Ng.z)) >> 31) ? -epsilon_i : epsilon_i;
-    res.z = __uint_as_float(iz);
-  }
-
-  return res;
-#else
-  const float epsilon_f = 1e-4f;
-  return P + epsilon_f * Ng;
-#endif
-}
-
-#if defined(__VOLUME_RECORD_ALL__) || (defined(__SHADOW_RECORD_ALL__) && defined(__KERNEL_CPU__))
-/* ToDo: Move to another file? */
-ccl_device int intersections_compare(const void *a, const void *b)
-{
-  const Intersection *isect_a = (const Intersection *)a;
-  const Intersection *isect_b = (const Intersection *)b;
-
-  if (isect_a->t < isect_b->t)
-    return -1;
-  else if (isect_a->t > isect_b->t)
-    return 1;
-  else
-    return 0;
-}
-#endif
-
-#if defined(__SHADOW_RECORD_ALL__)
-ccl_device_inline void sort_intersections(Intersection *hits, uint num_hits)
-{
-#  ifdef __KERNEL_GPU__
-  /* Use bubble sort which has more friendly memory pattern on GPU. */
-  bool swapped;
-  do {
-    swapped = false;
-    for (int j = 0; j < num_hits - 1; ++j) {
-      if (hits[j].t > hits[j + 1].t) {
-        struct Intersection tmp = hits[j];
-        hits[j] = hits[j + 1];
-        hits[j + 1] = tmp;
-        swapped = true;
-      }
-    }
-    --num_hits;
-  } while (swapped);
-#  else
-  qsort(hits, num_hits, sizeof(Intersection), intersections_compare);
-#  endif
-}
-#endif /* __SHADOW_RECORD_ALL__ | __VOLUME_RECORD_ALL__ */
 
 CCL_NAMESPACE_END

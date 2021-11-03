@@ -37,7 +37,7 @@ if [ $USE_DEBUG_TRAP -ne 0 ]; then
   trap 'err_report $LINENO' ERR
 fi
 
-# Noisy, show every line that runs with it's line number.
+# Noisy, show every line that runs with its line number.
 if [ $USE_DEBUG_LOG -ne 0 ]; then
   PS4='\e[0;33m$(printf %4d ${LINENO}):\e\033[0m '
   set -x
@@ -371,71 +371,78 @@ NO_BUILD=false
 NO_CONFIRM=false
 USE_CXX11=true
 
-# Note about versions: Min is inclusive, Max is exclusive (i.e. XXX_VERSION_MIN <= ACTUAL_VERSION < XXX_VERSION_MAX)
+# Note about versions: Min is inclusive, Mex is 'minimum exclusive' (i.e. XXX_VERSION_MIN <= ACTUAL_VERSION < XXX_VERSION_MEX)
 # XXX_VERSION is officially supported/used version in official builds.
 # XXX_VERSION_SHORT is used for various things, like preferred version (when distribution provides several of them),
 #                   and to name shortcuts to built libraries' installation directories...
 
 CLANG_FORMAT_VERSION_MIN="6.0"
-CLANG_FORMAT_VERSION_MAX="10.0"
+CLANG_FORMAT_VERSION_MEX="10.0"
 
-PYTHON_VERSION="3.9.2"
+PYTHON_VERSION="3.9.7"
 PYTHON_VERSION_SHORT="3.9"
 PYTHON_VERSION_MIN="3.7"
-PYTHON_VERSION_MAX="3.11"
+PYTHON_VERSION_MEX="3.11"
 PYTHON_VERSION_INSTALLED=$PYTHON_VERSION_SHORT
 PYTHON_FORCE_BUILD=false
 PYTHON_FORCE_REBUILD=false
 PYTHON_SKIP=false
 
 # Additional Python modules.
-PYTHON_IDNA_VERSION="2.9"
+PYTHON_IDNA_VERSION="3.2"
 PYTHON_IDNA_VERSION_MIN="2.0"
-PYTHON_IDNA_VERSION_MAX="3.0"
+PYTHON_IDNA_VERSION_MEX="4.0"
 PYTHON_IDNA_NAME="idna"
 
-PYTHON_CHARDET_VERSION="3.0.4"
-PYTHON_CHARDET_VERSION_MIN="3.0"
-PYTHON_CHARDET_VERSION_MAX="5.0"
-PYTHON_CHARDET_NAME="chardet"
+PYTHON_CHARSET_NORMALIZER_VERSION="2.0.6"
+PYTHON_CHARSET_NORMALIZER_VERSION_MIN="2.0.6"
+PYTHON_CHARSET_NORMALIZER_VERSION_MEX="2.1.0"  # requests uses `charset_normalizer~=2.0.0`
+PYTHON_CHARSET_NORMALIZER_NAME="charset-normalizer"
 
-PYTHON_URLLIB3_VERSION="1.25.9"
+PYTHON_URLLIB3_VERSION="1.26.7"
 PYTHON_URLLIB3_VERSION_MIN="1.0"
-PYTHON_URLLIB3_VERSION_MAX="2.0"
+PYTHON_URLLIB3_VERSION_MEX="2.0"
 PYTHON_URLLIB3_NAME="urllib3"
 
-PYTHON_CERTIFI_VERSION="2020.4.5.2"
-PYTHON_CERTIFI_VERSION_MIN="2020.0"
-PYTHON_CERTIFI_VERSION_MAX="2021.0"
+PYTHON_CERTIFI_VERSION="2021.10.8"
+PYTHON_CERTIFI_VERSION_MIN="2021.0"
+PYTHON_CERTIFI_VERSION_MEX="2023.0"
 PYTHON_CERTIFI_NAME="certifi"
 
 PYTHON_REQUESTS_VERSION="2.23.0"
 PYTHON_REQUESTS_VERSION_MIN="2.0"
-PYTHON_REQUESTS_VERSION_MAX="3.0"
+PYTHON_REQUESTS_VERSION_MEX="3.0"
 PYTHON_REQUESTS_NAME="requests"
 
-PYTHON_NUMPY_VERSION="1.19.5"
+PYTHON_ZSTANDARD_VERSION="0.15.2"
+PYTHON_ZSTANDARD_VERSION_MIN="0.15.2"
+PYTHON_ZSTANDARD_VERSION_MEX="0.16.0"
+PYTHON_ZSTANDARD_NAME="zstandard"
+
+PYTHON_NUMPY_VERSION="1.21.2"
 PYTHON_NUMPY_VERSION_MIN="1.14"
-PYTHON_NUMPY_VERSION_MAX="2.0"
+PYTHON_NUMPY_VERSION_MEX="2.0"
 PYTHON_NUMPY_NAME="numpy"
 
 # As package-ready parameters (only used with distro packages).
 PYTHON_MODULES_PACKAGES=(
-  "$PYTHON_IDNA_NAME $PYTHON_IDNA_VERSION_MIN $PYTHON_IDNA_VERSION_MAX"
-  "$PYTHON_CHARDET_NAME $PYTHON_CHARDET_VERSION_MIN $PYTHON_CHARDET_VERSION_MAX"
-  "$PYTHON_URLLIB3_NAME $PYTHON_URLLIB3_VERSION_MIN $PYTHON_URLLIB3_VERSION_MAX"
-  "$PYTHON_CERTIFI_NAME $PYTHON_CERTIFI_VERSION_MIN $PYTHON_CERTIFI_VERSION_MAX"
-  "$PYTHON_REQUESTS_NAME $PYTHON_REQUESTS_VERSION_MIN $PYTHON_REQUESTS_VERSION_MAX"
-  "$PYTHON_NUMPY_NAME $PYTHON_NUMPY_VERSION_MIN $PYTHON_NUMPY_VERSION_MAX"
+  "$PYTHON_IDNA_NAME $PYTHON_IDNA_VERSION_MIN $PYTHON_IDNA_VERSION_MEX"
+  "$PYTHON_CHARSET_NORMALIZER_NAME $PYTHON_CHARSET_NORMALIZER_VERSION_MIN $PYTHON_CHARSET_NORMALIZER_VERSION_MEX"
+  "$PYTHON_URLLIB3_NAME $PYTHON_URLLIB3_VERSION_MIN $PYTHON_URLLIB3_VERSION_MEX"
+  "$PYTHON_CERTIFI_NAME $PYTHON_CERTIFI_VERSION_MIN $PYTHON_CERTIFI_VERSION_MEX"
+  "$PYTHON_REQUESTS_NAME $PYTHON_REQUESTS_VERSION_MIN $PYTHON_REQUESTS_VERSION_MEX"
+  "$PYTHON_ZSTANDARD_NAME $PYTHON_ZSTANDARD_VERSION_MIN $PYTHON_ZSTANDARD_VERSION_MEX"
+  "$PYTHON_NUMPY_NAME $PYTHON_NUMPY_VERSION_MIN $PYTHON_NUMPY_VERSION_MEX"
 )
 
 # As pip-ready parameters (only used when building python).
 PYTHON_MODULES_PIP=(
   "$PYTHON_IDNA_NAME==$PYTHON_IDNA_VERSION"
-  "$PYTHON_CHARDET_NAME==$PYTHON_CHARDET_VERSION"
+  "$PYTHON_CHARSET_NORMALIZER_NAME==$PYTHON_CHARSET_NORMALIZER_VERSION"
   "$PYTHON_URLLIB3_NAME==$PYTHON_URLLIB3_VERSION"
   "$PYTHON_CERTIFI_NAME==$PYTHON_CERTIFI_VERSION"
   "$PYTHON_REQUESTS_NAME==$PYTHON_REQUESTS_VERSION"
+  "$PYTHON_ZSTANDARD_NAME==$PYTHON_ZSTANDARD_VERSION"
   "$PYTHON_NUMPY_NAME==$PYTHON_NUMPY_VERSION"
 )
 
@@ -443,7 +450,7 @@ PYTHON_MODULES_PIP=(
 BOOST_VERSION="1.73.0"
 BOOST_VERSION_SHORT="1.73"
 BOOST_VERSION_MIN="1.49"
-BOOST_VERSION_MAX="2.0"
+BOOST_VERSION_MEX="2.0"
 BOOST_FORCE_BUILD=false
 BOOST_FORCE_REBUILD=false
 BOOST_SKIP=false
@@ -452,7 +459,7 @@ TBB_VERSION="2020"
 TBB_VERSION_SHORT="2020"
 TBB_VERSION_UPDATE="_U2"  # Used for source packages...
 TBB_VERSION_MIN="2018"
-TBB_VERSION_MAX="2022"
+TBB_VERSION_MEX="2022"
 TBB_FORCE_BUILD=false
 TBB_FORCE_REBUILD=false
 TBB_SKIP=false
@@ -460,7 +467,7 @@ TBB_SKIP=false
 OCIO_VERSION="2.0.0"
 OCIO_VERSION_SHORT="2.0"
 OCIO_VERSION_MIN="2.0"
-OCIO_VERSION_MAX="3.0"
+OCIO_VERSION_MEX="3.0"
 OCIO_FORCE_BUILD=false
 OCIO_FORCE_REBUILD=false
 OCIO_SKIP=false
@@ -468,34 +475,34 @@ OCIO_SKIP=false
 OPENEXR_VERSION="2.5.5"
 OPENEXR_VERSION_SHORT="2.5"
 OPENEXR_VERSION_MIN="2.4"
-OPENEXR_VERSION_MAX="3.0"
+OPENEXR_VERSION_MEX="3.0"
 OPENEXR_FORCE_BUILD=false
 OPENEXR_FORCE_REBUILD=false
 OPENEXR_SKIP=false
 _with_built_openexr=false
 
-OIIO_VERSION="2.1.15.0"
-OIIO_VERSION_SHORT="2.1"
+OIIO_VERSION="2.2.15.1"
+OIIO_VERSION_SHORT="2.2"
 OIIO_VERSION_MIN="2.1.12"
-OIIO_VERSION_MAX="2.2.10"
+OIIO_VERSION_MEX="2.3.0"
 OIIO_FORCE_BUILD=false
 OIIO_FORCE_REBUILD=false
 OIIO_SKIP=false
 
-LLVM_VERSION="9.0.1"
-LLVM_VERSION_SHORT="9.0"
-LLVM_VERSION_MIN="6.0"
-LLVM_VERSION_MAX="12.0"
+LLVM_VERSION="12.0.0"
+LLVM_VERSION_SHORT="12.0"
+LLVM_VERSION_MIN="11.0"
+LLVM_VERSION_MEX="13.0"
 LLVM_VERSION_FOUND=""
 LLVM_FORCE_BUILD=false
 LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.11.10.0"
+OSL_VERSION="1.11.14.1"
 OSL_VERSION_SHORT="1.11"
 OSL_VERSION_MIN="1.11"
-OSL_VERSION_MAX="2.0"
+OSL_VERSION_MEX="2.0"
 OSL_FORCE_BUILD=false
 OSL_FORCE_REBUILD=false
 OSL_SKIP=false
@@ -504,7 +511,7 @@ OSL_SKIP=false
 OSD_VERSION="3.4.3"
 OSD_VERSION_SHORT="3.4"
 OSD_VERSION_MIN="3.4"
-OSD_VERSION_MAX="4.0"
+OSD_VERSION_MEX="4.0"
 OSD_FORCE_BUILD=false
 OSD_FORCE_REBUILD=false
 OSD_SKIP=false
@@ -515,7 +522,7 @@ OPENVDB_BLOSC_VERSION="1.5.0"
 OPENVDB_VERSION="8.0.1"
 OPENVDB_VERSION_SHORT="8.0"
 OPENVDB_VERSION_MIN="8.0"
-OPENVDB_VERSION_MAX="8.1"
+OPENVDB_VERSION_MEX="8.1"
 OPENVDB_FORCE_BUILD=false
 OPENVDB_FORCE_REBUILD=false
 OPENVDB_SKIP=false
@@ -524,7 +531,7 @@ OPENVDB_SKIP=false
 ALEMBIC_VERSION="1.7.16"
 ALEMBIC_VERSION_SHORT="1.7"
 ALEMBIC_VERSION_MIN="1.7"
-ALEMBIC_VERSION_MAX="2.0"
+ALEMBIC_VERSION_MEX="2.0"
 ALEMBIC_FORCE_BUILD=false
 ALEMBIC_FORCE_REBUILD=false
 ALEMBIC_SKIP=false
@@ -532,7 +539,7 @@ ALEMBIC_SKIP=false
 USD_VERSION="21.02"
 USD_VERSION_SHORT="21.02"
 USD_VERSION_MIN="20.05"
-USD_VERSION_MAX="22.00"
+USD_VERSION_MEX="22.00"
 USD_FORCE_BUILD=false
 USD_FORCE_REBUILD=false
 USD_SKIP=false
@@ -540,7 +547,7 @@ USD_SKIP=false
 OPENCOLLADA_VERSION="1.6.68"
 OPENCOLLADA_VERSION_SHORT="1.6"
 OPENCOLLADA_VERSION_MIN="1.6.68"
-OPENCOLLADA_VERSION_MAX="1.7"
+OPENCOLLADA_VERSION_MEX="1.7"
 OPENCOLLADA_FORCE_BUILD=false
 OPENCOLLADA_FORCE_REBUILD=false
 OPENCOLLADA_SKIP=false
@@ -548,34 +555,34 @@ OPENCOLLADA_SKIP=false
 EMBREE_VERSION="3.10.0"
 EMBREE_VERSION_SHORT="3.10"
 EMBREE_VERSION_MIN="3.10"
-EMBREE_VERSION_MAX="4.0"
+EMBREE_VERSION_MEX="4.0"
 EMBREE_FORCE_BUILD=false
 EMBREE_FORCE_REBUILD=false
 EMBREE_SKIP=false
 
-OIDN_VERSION="1.3.0"
-OIDN_VERSION_SHORT="1.3"
-OIDN_VERSION_MIN="1.3.0"
-OIDN_VERSION_MAX="1.4"
+OIDN_VERSION="1.4.1"
+OIDN_VERSION_SHORT="1.4"
+OIDN_VERSION_MIN="1.4.0"
+OIDN_VERSION_MEX="1.5"
 OIDN_FORCE_BUILD=false
 OIDN_FORCE_REBUILD=false
 OIDN_SKIP=false
 
-ISPC_VERSION="1.14.1"
+ISPC_VERSION="1.16.0"
 
-FFMPEG_VERSION="4.2.3"
-FFMPEG_VERSION_SHORT="4.2"
+FFMPEG_VERSION="4.4"
+FFMPEG_VERSION_SHORT="4.4"
 FFMPEG_VERSION_MIN="3.0"
-FFMPEG_VERSION_MAX="5.0"
+FFMPEG_VERSION_MEX="5.0"
 FFMPEG_FORCE_BUILD=false
 FFMPEG_FORCE_REBUILD=false
 FFMPEG_SKIP=false
 _ffmpeg_list_sep=";"
 
-XR_OPENXR_VERSION="1.0.14"
+XR_OPENXR_VERSION="1.0.17"
 XR_OPENXR_VERSION_SHORT="1.0"
 XR_OPENXR_VERSION_MIN="1.0.8"
-XR_OPENXR_VERSION_MAX="2.0"
+XR_OPENXR_VERSION_MEX="2.0"
 XR_OPENXR_FORCE_BUILD=false
 XR_OPENXR_FORCE_REBUILD=false
 XR_OPENXR_SKIP=false
@@ -1019,7 +1026,7 @@ PRINT ""
 PYTHON_SOURCE=( "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz" )
 
 _boost_version_nodots=`echo "$BOOST_VERSION" | sed -r 's/\./_/g'`
-BOOST_SOURCE=( "https://dl.bintray.com/boostorg/release/$BOOST_VERSION/source/boost_$_boost_version_nodots.tar.bz2" )
+BOOST_SOURCE=( "https://boostorg.jfrog.io/artifactory/main/release/$BOOST_VERSION/source/boost_$_boost_version_nodots.tar.bz2" )
 BOOST_BUILD_MODULES="--with-system --with-filesystem --with-thread --with-regex --with-locale --with-date_time --with-wave --with-iostreams --with-python --with-program_options --with-serialization --with-atomic"
 
 TBB_SOURCE=( "https://github.com/oneapi-src/oneTBB/archive/$TBB_VERSION$TBB_VERSION_UPDATE.tar.gz" )
@@ -1073,7 +1080,7 @@ OPENVDB_SOURCE=( "https://github.com/AcademySoftwareFoundation/openvdb/archive/v
 #~ OPENVDB_SOURCE_REPO_BRANCH="dev"
 
 NANOVDB_USE_REPO=false
-NANOVDB_SOURCE_REPO_UID="e62f7a0bf1e27397223c61ddeaaf57edf111b77f"
+NANOVDB_SOURCE_REPO_UID="dc37d8a631922e7bef46712947dc19b755f3e841"
 NANOVDB_SOURCE=( "https://github.com/AcademySoftwareFoundation/openvdb/archive/${NANOVDB_SOURCE_REPO_UID}.tar.gz" )
 
 ALEMBIC_USE_REPO=false
@@ -1108,9 +1115,9 @@ FFMPEG_SOURCE=( "http://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.bz2" )
 
 XR_OPENXR_USE_REPO=false
 XR_OPENXR_SOURCE=("https://github.com/KhronosGroup/OpenXR-SDK/archive/release-${XR_OPENXR_VERSION}.tar.gz")
-#~ XR_OPENXR_SOURCE_REPO=("https://github.com/KhronosGroup/OpenXR-SDK.git")
-#~ XR_OPENXR_REPO_UID="5900c51562769b03bea699dc0352cae56acb6419d"
-#~ XR_OPENXR_REPO_BRANCH="master"
+XR_OPENXR_SOURCE_REPO=("https://github.com/KhronosGroup/OpenXR-SDK.git")
+XR_OPENXR_REPO_UID="bf21ccb1007bb531b45d9978919a56ea5059c245"
+XR_OPENXR_REPO_BRANCH="master"
 
 # C++11 is required now
 CXXFLAGS_BACK=$CXXFLAGS
@@ -1128,7 +1135,8 @@ Those libraries should be available as packages in all recent distributions (opt
     * Basics of dev environment (cmake, gcc, svn , git, ...).
     * libjpeg, libpng, libtiff, [openjpeg2], [libopenal].
     * libx11, libxcursor, libxi, libxrandr, libxinerama (and other libx... as needed).
-    * libsqlite3, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp.
+    * libwayland-client0, libwayland-cursor0, libwayland-egl1, libxkbcommon0, libdbus-1-3, libegl1 (Wayland)
+    * libsqlite3, libzstd, libbz2, libssl, libfftw3, libxml2, libtinyxml, yasm, libyaml-cpp, flex.
     * libsdl2, libglew, libpugixml, libpotrace, [libgmp], [libglewmx], fontconfig, [libharu/libhpdf].\""
 
 DEPS_SPECIFIC_INFO="\"BUILDABLE DEPENDENCIES:
@@ -1140,10 +1148,11 @@ You may also want to build them yourself (optional ones are [between brackets]):
 
     * Python $PYTHON_VERSION (from $PYTHON_SOURCE).
     ** [IDNA $PYTHON_IDNA_VERSION] (use pip).
-    ** [Chardet $PYTHON_CHARDET_VERSION] (use pip).
+    ** [Charset Normalizer $PYTHON_CHARSET_NORMALIZER_VERSION] (use pip).
     ** [Urllib3 $PYTHON_URLLIB3_VERSION] (use pip).
     ** [Certifi $PYTHON_CERTIFI_VERSION] (use pip).
     ** [Requests $PYTHON_REQUESTS_VERSION] (use pip).
+    ** [ZStandard $PYTHON_ZSTANDARD_VERSION] (use pip).
     ** [NumPy $PYTHON_NUMPY_VERSION] (use pip).
     * Boost $BOOST_VERSION (from $BOOST_SOURCE, modules: $BOOST_BUILD_MODULES).
     * TBB $TBB_VERSION (from $TBB_SOURCE).
@@ -1446,9 +1455,7 @@ compile_Python() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "Python--$PYTHON_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -1464,6 +1471,9 @@ compile_Python() {
     INFO "If you want to force rebuild of this lib, use the --force-python option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "python-$PYTHON_VERSION_SHORT"
 
   # Extra step: install required modules with pip.
@@ -1557,9 +1567,7 @@ compile_Boost() {
          --prefix=$_inst --disable-icu boost.locale.icu=off install
     ./b2 --clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "Boost-$BOOST_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -1573,7 +1581,9 @@ compile_Boost() {
     INFO "If you want to force rebuild of this lib, use the --force-boost option."
   fi
 
-  # Just always run it, much simpler this way!
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "boost"
 }
 
@@ -1686,9 +1696,7 @@ compile_TBB() {
 
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "TBB-$TBB_VERSION$TBB_VERSION_UPDATE failed to compile, exiting"
       exit 1
     fi
@@ -1702,6 +1710,9 @@ compile_TBB() {
     INFO "If you want to force rebuild of this lib, use the --force-tbb option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "tbb"
 }
 
@@ -1797,6 +1808,10 @@ compile_OCIO() {
     cmake_d="$cmake_d -D OCIO_BUILD_PYTHON=OFF"
     cmake_d="$cmake_d -D OCIO_BUILD_GPU_TESTS=OFF"
 
+    if [ $(uname -m) == "aarch64" ]; then
+      cmake_d="$cmake_d -D OCIO_USE_SSE=OFF"
+    fi
+
     if file /bin/cp | grep -q '32-bit'; then
       cflags="-fPIC -m32 -march=i686"
     else
@@ -1817,9 +1832,7 @@ compile_OCIO() {
 
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenColorIO-$OCIO_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -1833,6 +1846,9 @@ compile_OCIO() {
     INFO "If you want to force rebuild of this lib, use the --force-ocio option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "ocio"
 }
 
@@ -1948,9 +1964,7 @@ compile_OPENEXR() {
 
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenEXR-$OPENEXR_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -1966,7 +1980,9 @@ compile_OPENEXR() {
 
   _with_built_openexr=true
 
-  # Just always run it, much simpler this way!
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "openexr"
 }
 
@@ -2005,7 +2021,7 @@ compile_OIIO() {
   fi
 
   # To be changed each time we make edits that would modify the compiled result!
-  oiio_magic=17
+  oiio_magic=18
   _init_oiio
 
   # Force having own builds for the dependencies.
@@ -2059,7 +2075,10 @@ compile_OIIO() {
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D LINKSTATIC=OFF"
-    cmake_d="$cmake_d -D USE_SIMD=sse2"
+
+    if [ $(uname -m) != "aarch64" ]; then
+      cmake_d="$cmake_d -D USE_SIMD=sse2"
+    fi
 
     cmake_d="$cmake_d -D OPENEXR_VERSION=$OPENEXR_VERSION"
 
@@ -2077,9 +2096,10 @@ compile_OIIO() {
     cmake_d="$cmake_d -D USE_PYTHON=OFF"
     cmake_d="$cmake_d -D USE_FFMPEG=OFF"
     cmake_d="$cmake_d -D USE_OPENCV=OFF"
+    cmake_d="$cmake_d -D USE_OPENVDB=OFF"
     cmake_d="$cmake_d -D BUILD_TESTING=OFF"
     cmake_d="$cmake_d -D OIIO_BUILD_TESTS=OFF"
-    cmake_d="$cmake_d -D OIIO_BUILD_TOOLS=ON"
+    cmake_d="$cmake_d -D OIIO_BUILD_TOOLS=OFF"
     cmake_d="$cmake_d -D TXT2MAN="
     #cmake_d="$cmake_d -D CMAKE_EXPORT_COMPILE_COMMANDS=ON"
     #cmake_d="$cmake_d -D CMAKE_VERBOSE_MAKEFILE=ON"
@@ -2104,9 +2124,7 @@ compile_OIIO() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenImageIO-$OIIO_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2120,7 +2138,9 @@ compile_OIIO() {
     INFO "If you want to force rebuild of this lib, use the --force-oiio option."
   fi
 
-  # Just always run it, much simpler this way!
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "oiio"
 }
 
@@ -2209,10 +2229,15 @@ compile_LLVM() {
     mkdir build
     cd build
 
+    LLVM_TARGETS="X86"
+    if [ $(uname -m) == "aarch64" ]; then
+      LLVM_TARGETS="AArch64"
+    fi
+
     cmake_d="-D CMAKE_BUILD_TYPE=Release"
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
     cmake_d="$cmake_d -D LLVM_ENABLE_FFI=ON"
-    cmake_d="$cmake_d -D LLVM_TARGETS_TO_BUILD=X86"
+    cmake_d="$cmake_d -D LLVM_TARGETS_TO_BUILD=$LLVM_TARGETS"
     cmake_d="$cmake_d -D LLVM_ENABLE_TERMINFO=OFF"
 
     if [ -d $_FFI_INCLUDE_DIR ]; then
@@ -2224,9 +2249,7 @@ compile_LLVM() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "LLVM-$LLVM_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2238,6 +2261,10 @@ compile_LLVM() {
   else
     INFO "Own LLVM-$LLVM_VERSION (CLANG included) is up to date, nothing to do!"
     INFO "If you want to force rebuild of this lib, use the --force-llvm option."
+  fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
   fi
 }
 
@@ -2303,6 +2330,7 @@ compile_OSL() {
         tar -C $SRC --transform "s,(.*/?)OpenShadingLanguage-[^/]*(.*),\1OpenShadingLanguage-$OSL_VERSION\2,x" \
             -xf $_src.tar.gz
       fi
+      patch -d $_src -p1 < $SCRIPT_DIR/patches/osl.diff
     fi
 
     cd $_src
@@ -2325,16 +2353,21 @@ compile_OSL() {
 
     cmake_d="-D CMAKE_BUILD_TYPE=Release"
     cmake_d="$cmake_d -D CMAKE_INSTALL_PREFIX=$_inst"
-    cmake_d="$cmake_d -D BUILD_TESTING=OFF"
     cmake_d="$cmake_d -D STOP_ON_WARNING=OFF"
     cmake_d="$cmake_d -D OSL_BUILD_PLUGINS=OFF"
     cmake_d="$cmake_d -D OSL_BUILD_TESTS=OFF"
-    cmake_d="$cmake_d -D USE_SIMD=sse2"
     cmake_d="$cmake_d -D USE_LLVM_BITCODE=OFF"
     cmake_d="$cmake_d -D USE_PARTIO=OFF"
     cmake_d="$cmake_d -D OSL_BUILD_MATERIALX=OFF"
     cmake_d="$cmake_d -D USE_QT=OFF"
+    cmake_d="$cmake_d -D USE_Qt5=OFF"
     cmake_d="$cmake_d -D USE_PYTHON=OFF"
+    cmake_d="$cmake_d -D USE_PARTIO=OFF"
+    cmake_d="$cmake_d -D INSTALL_DOCS=OFF"
+
+    if [ $(uname -m) != "aarch64" ]; then
+      cmake_d="$cmake_d -D USE_SIMD=sse2"
+    fi
 
     cmake_d="$cmake_d -D CMAKE_CXX_STANDARD=14"
 
@@ -2352,10 +2385,7 @@ compile_OSL() {
     fi
 
     if [ -d $INST/oiio ]; then
-      cmake_d="$cmake_d -D OPENIMAGEIO_ROOT_DIR=$INST/oiio"
-      # HACK! SIC!!!!
-      # Quiet incredible, but if root dir is given, path to lib is found, but not path to include...
-      cmake_d="$cmake_d -D OPENIMAGEIO_INCLUDE_DIR=$INST/oiio/include"
+      cmake_d="$cmake_d -D OpenImageIO_ROOT=$INST/oiio"
     fi
 
     if [ ! -z $LLVM_VERSION_FOUND ]; then
@@ -2374,9 +2404,7 @@ compile_OSL() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenShadingLanguage-$OSL_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2390,6 +2418,9 @@ compile_OSL() {
     INFO "If you want to force rebuild of this lib, use the --force-osl option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "osl"
 }
 
@@ -2490,9 +2521,7 @@ compile_OSD() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenSubdiv-$OSD_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2506,6 +2535,9 @@ compile_OSD() {
     INFO "If you want to force rebuild of this lib, use the --force-osd option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "osd"
 }
 
@@ -2595,9 +2627,7 @@ compile_BLOSC() {
 
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "Blosc-$OPENVDB_BLOSC_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2610,6 +2640,9 @@ compile_BLOSC() {
 
   magic_compile_set blosc-$OPENVDB_BLOSC_VERSION $blosc_magic
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "blosc"
 }
 
@@ -2700,9 +2733,7 @@ install_NanoVDB() {
     #~ mkdir -p $_inst
     #~ cp -r $_src/include $_inst/include
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "NanoVDB-v$OPENVDB_VERSION failed to install, exiting"
       exit 1
     fi
@@ -2714,6 +2745,10 @@ install_NanoVDB() {
   else
     INFO "Own NanoVDB-v$OPENVDB_VERSION is up to date, nothing to do!"
   fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
 }
 
 
@@ -2722,7 +2757,7 @@ _init_openvdb() {
   _git=false
   _inst=$INST/openvdb-$OPENVDB_VERSION_SHORT
   _inst_shortcut=$INST/openvdb
-  
+
   _openvdb_source=$OPENVDB_SOURCE
   if [ "$WITH_NANOVDB" = true ]; then
     _openvdb_source=$NANOVDB_SOURCE
@@ -2827,15 +2862,13 @@ compile_OPENVDB() {
     if [ -d $INST/blosc ]; then
       cmake_d="$cmake_d -D Blosc_ROOT=$INST/blosc"
     fi
-  
+
     cmake $cmake_d ..
 
     make -j$THREADS install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenVDB-$OPENVDB_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2849,6 +2882,9 @@ compile_OPENVDB() {
     INFO "If you want to force rebuild of this lib, use the --force-openvdb option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "openvdb"
 
   if [ "$WITH_NANOVDB" = true ]; then
@@ -2946,9 +2982,7 @@ compile_ALEMBIC() {
     make -j$THREADS install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "Alembic-$ALEMBIC_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -2962,6 +2996,9 @@ compile_ALEMBIC() {
     INFO "If you want to force rebuild of this lib, use the --force-alembic option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "alembic"
 }
 
@@ -3046,9 +3083,7 @@ compile_USD() {
     make -j$THREADS install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "USD-$USD_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -3062,6 +3097,9 @@ compile_USD() {
     INFO "If you want to force rebuild of this lib, use the --force-usd option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "usd"
 }
 
@@ -3155,9 +3193,7 @@ compile_OpenCOLLADA() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenCOLLADA-$OPENCOLLADA_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -3169,6 +3205,10 @@ compile_OpenCOLLADA() {
   else
     INFO "Own OpenCOLLADA-$OPENCOLLADA_VERSION is up to date, nothing to do!"
     INFO "If you want to force rebuild of this lib, use the --force-opencollada option."
+  fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
   fi
 }
 
@@ -3270,9 +3310,7 @@ compile_Embree() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "Embree-$EMBREE_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -3284,6 +3322,10 @@ compile_Embree() {
   else
     INFO "Own Embree-$EMBREE_VERSION is up to date, nothing to do!"
     INFO "If you want to force rebuild of this lib, use the --force-embree option."
+  fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
   fi
 }
 
@@ -3347,9 +3389,7 @@ install_ISPC() {
     mkdir -p $_inst
     cp -r $_src/bin $_inst/bin
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "ISPC-v$ISPC_VERSION failed to install, exiting"
       exit 1
     fi
@@ -3360,6 +3400,10 @@ install_ISPC() {
     INFO "Done compiling ISPC-v$ISPC_VERSION!"
   else
     INFO "Own ISPC-v$ISPC_VERSION is up to date, nothing to do!"
+  fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
   fi
 
   _ispc_path_bin=$_inst/bin
@@ -3461,9 +3505,7 @@ compile_OIDN() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "OpenImageDenoise-$OIDN_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -3477,6 +3519,9 @@ compile_OIDN() {
     INFO "If you want to force rebuild of this lib, use the --force-oidn option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "oidn"
 }
 
@@ -3593,9 +3638,7 @@ compile_FFmpeg() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "FFmpeg-$FFMPEG_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -3607,6 +3650,10 @@ compile_FFmpeg() {
   else
     INFO "Own ffmpeg-$FFMPEG_VERSION is up to date, nothing to do!"
     INFO "If you want to force rebuild of this lib, use the --force-ffmpeg option."
+  fi
+
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
   fi
 }
 
@@ -3706,9 +3753,7 @@ compile_XR_OpenXR_SDK() {
     make -j$THREADS && make install
     make clean
 
-    if [ -d $_inst ]; then
-      _create_inst_shortcut
-    else
+    if [ ! -d $_inst ]; then
       ERROR "XR-OpenXR-SDK-$XR_OPENXR_VERSION failed to compile, exiting"
       exit 1
     fi
@@ -3722,6 +3767,9 @@ compile_XR_OpenXR_SDK() {
     INFO "If you want to force rebuild of this lib, use the --force-xr-openxr option."
   fi
 
+  if [ -d $_inst ]; then
+    _create_inst_shortcut
+  fi
   run_ldconfig "xr-openxr-sdk"
 }
 
@@ -3824,10 +3872,11 @@ install_DEB() {
   _packages="gawk cmake cmake-curses-gui build-essential libjpeg-dev libpng-dev libtiff-dev \
              git libfreetype6-dev libfontconfig-dev libx11-dev flex bison libxxf86vm-dev \
              libxcursor-dev libxi-dev wget libsqlite3-dev libxrandr-dev libxinerama-dev \
+             libwayland-dev wayland-protocols libegl-dev libxkbcommon-dev libdbus-1-dev linux-libc-dev \
              libbz2-dev libncurses5-dev libssl-dev liblzma-dev libreadline-dev \
              libopenal-dev libglew-dev yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV \
              libsdl2-dev libfftw3-dev patch bzip2 libxml2-dev libtinyxml-dev libjemalloc-dev \
-             libgmp-dev libpugixml-dev libpotrace-dev libhpdf-dev"
+             libgmp-dev libpugixml-dev libpotrace-dev libhpdf-dev libzstd-dev"
              # libglewmx-dev  (broken in deb testing currently...)
 
   VORBIS_USE=true
@@ -3987,7 +4036,7 @@ install_DEB() {
     INFO "Forced Python building, as requested..."
     _do_compile_python=true
   else
-    check_package_version_ge_lt_DEB python3-dev $PYTHON_VERSION_MIN $PYTHON_VERSION_MAX
+    check_package_version_ge_lt_DEB python3-dev $PYTHON_VERSION_MIN $PYTHON_VERSION_MEX
     if [ $? -eq 0 ]; then
       PYTHON_VERSION_INSTALLED=$(echo `get_package_version_DEB python3-dev` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
 
@@ -4000,8 +4049,8 @@ install_DEB() {
         module=($module)
         package="python3-${module[0]}"
         package_vmin=${module[1]}
-        package_vmax=${module[2]}
-        check_package_version_ge_lt_DEB "$package" $package_vmin $package_vmax
+        package_vmex=${module[2]}
+        check_package_version_ge_lt_DEB "$package" $package_vmin $package_vmex
         if [ $? -eq 0 ]; then
           install_packages_DEB "$package"
         else
@@ -4027,7 +4076,7 @@ install_DEB() {
     INFO "Forced Boost building, as requested..."
     compile_Boost
   else
-    check_package_version_ge_lt_DEB libboost-dev $BOOST_VERSION_MIN $BOOST_VERSION_MAX
+    check_package_version_ge_lt_DEB libboost-dev $BOOST_VERSION_MIN $BOOST_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB libboost-dev
 
@@ -4048,7 +4097,7 @@ install_DEB() {
     INFO "Forced TBB building, as requested..."
     compile_TBB
   else
-    check_package_version_ge_lt_DEB libtbb-dev $TBB_VERSION_MIN $TBB_VERSION_MAX
+    check_package_version_ge_lt_DEB libtbb-dev $TBB_VERSION_MIN $TBB_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB libtbb-dev
       clean_TBB
@@ -4065,7 +4114,7 @@ install_DEB() {
     INFO "Forced OpenColorIO building, as requested..."
     compile_OCIO
   else
-    check_package_version_ge_lt_DEB libopencolorio-dev $OCIO_VERSION_MIN $OCIO_VERSION_MAX
+    check_package_version_ge_lt_DEB libopencolorio-dev $OCIO_VERSION_MIN $OCIO_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB libopencolorio-dev
       clean_OCIO
@@ -4082,7 +4131,7 @@ install_DEB() {
     INFO "Forced ILMBase/OpenEXR building, as requested..."
     compile_OPENEXR
   else
-    check_package_version_ge_lt_DEB libopenexr-dev $OPENEXR_VERSION_MIN $OPENEXR_VERSION_MAX
+    check_package_version_ge_lt_DEB libopenexr-dev $OPENEXR_VERSION_MIN $OPENEXR_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB libopenexr-dev
       OPENEXR_VERSION=`get_package_version_DEB libopenexr-dev`
@@ -4095,13 +4144,15 @@ install_DEB() {
 
 
   PRINT ""
+  # Debian OIIO includes again libopencv, without even properly dealing with this dependency...
+  OIIO_FORCE_BUILD=true
   if [ "$OIIO_SKIP" = true ]; then
     WARNING "Skipping OpenImageIO installation, as requested..."
   elif [ "$OIIO_FORCE_BUILD" = true ]; then
     INFO "Forced OpenImageIO building, as requested..."
     compile_OIIO
   else
-    check_package_version_ge_lt_DEB libopenimageio-dev $OIIO_VERSION_MIN $OIIO_VERSION_MAX
+    check_package_version_ge_lt_DEB libopenimageio-dev $OIIO_VERSION_MIN $OIIO_VERSION_MEX
     if [ $? -eq 0 -a "$_with_built_openexr" = false ]; then
       install_packages_DEB libopenimageio-dev openimageio-tools
       clean_OIIO
@@ -4121,7 +4172,7 @@ install_DEB() {
     INFO "Forced LLVM building, as requested..."
     _do_compile_llvm=true
   else
-    check_package_version_ge_lt_DEB llvm-dev $LLVM_VERSION_MIN $LLVM_VERSION_MAX
+    check_package_version_ge_lt_DEB llvm-dev $LLVM_VERSION_MIN $LLVM_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB llvm-dev clang libclang-dev
       have_llvm=true
@@ -4152,7 +4203,7 @@ install_DEB() {
     INFO "Forced OpenShadingLanguage building, as requested..."
     _do_compile_osl=true
   else
-    check_package_version_ge_lt_DEB  libopenshadinglanguage-dev $OSL_VERSION_MIN $OSL_VERSION_MAX
+    check_package_version_ge_lt_DEB  libopenshadinglanguage-dev $OSL_VERSION_MIN $OSL_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB libopenshadinglanguage-dev
       clean_OSL
@@ -4190,7 +4241,7 @@ install_DEB() {
     INFO "Forced OpenVDB building, as requested..."
     compile_OPENVDB
   else
-    check_package_version_ge_lt_DEB libopenvdb-dev $OPENVDB_VERSION_MIN $OPENVDB_VERSION_MAX
+    check_package_version_ge_lt_DEB libopenvdb-dev $OPENVDB_VERSION_MIN $OPENVDB_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_DEB libopenvdb-dev libblosc-dev
       clean_OPENVDB
@@ -4252,7 +4303,7 @@ install_DEB() {
       _do_compile_embree=true
     else
       # There is a package, but it does not provide everything that Blender needs...
-      #~ check_package_version_ge_lt_DEB libembree-dev $EMBREE_VERSION_MIN $EMBREE_VERSION_MAX
+      #~ check_package_version_ge_lt_DEB libembree-dev $EMBREE_VERSION_MIN $EMBREE_VERSION_MEX
       #~ if [ $? -eq 0 ]; then
         #~ install_packages_DEB libembree-dev
         #~ clean_Embree
@@ -4294,7 +4345,7 @@ install_DEB() {
     # XXX Debian Testing / Ubuntu 16.04 finally includes FFmpeg, so check as usual
     check_package_DEB ffmpeg
     if [ $? -eq 0 ]; then
-      check_package_version_ge_lt_DEB ffmpeg $FFMPEG_VERSION_MIN $FFMPEG_VERSION_MAX
+      check_package_version_ge_lt_DEB ffmpeg $FFMPEG_VERSION_MIN $FFMPEG_VERSION_MEX
       if [ $? -eq 0 ]; then
         install_packages_DEB libavdevice-dev
         clean_FFmpeg
@@ -4493,10 +4544,11 @@ install_RPM() {
   _packages="gcc gcc-c++ git make cmake tar bzip2 xz findutils flex bison fontconfig-devel \
              libtiff-devel libjpeg-devel libpng-devel sqlite-devel fftw-devel SDL2-devel \
              libX11-devel libXi-devel libXcursor-devel libXrandr-devel libXinerama-devel \
+             wayland-devel wayland-protocols-devel mesa-libEGL-devel libxkbcommon-devel dbus-devel kernel-headers \
              wget ncurses-devel readline-devel $OPENJPEG_DEV openal-soft-devel \
              glew-devel yasm $THEORA_DEV $VORBIS_DEV $OGG_DEV patch \
              libxml2-devel yaml-cpp-devel tinyxml-devel jemalloc-devel \
-             gmp-devel pugixml-devel potrace-devel libharu-devel"
+             gmp-devel pugixml-devel potrace-devel libharu-devel libzstd-devel"
 
   OPENJPEG_USE=true
   VORBIS_USE=true
@@ -4627,7 +4679,7 @@ install_RPM() {
     INFO "Forced Python building, as requested..."
     _do_compile_python=true
   else
-    check_package_version_ge_lt_RPM python3-devel $PYTHON_VERSION_MIN $PYTHON_VERSION_MAX
+    check_package_version_ge_lt_RPM python3-devel $PYTHON_VERSION_MIN $PYTHON_VERSION_MEX
     if [ $? -eq 0 ]; then
       PYTHON_VERSION_INSTALLED=$(echo `get_package_version_RPM python3-devel` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
 
@@ -4639,8 +4691,8 @@ install_RPM() {
         module=($module)
         package="python3-${module[0]}"
         package_vmin=${module[1]}
-        package_vmax=${module[2]}
-        check_package_version_ge_lt_RPM "$package" $package_vmin $package_vmax
+        package_vmex=${module[2]}
+        check_package_version_ge_lt_RPM "$package" $package_vmin $package_vmex
         if [ $? -eq 0 ]; then
           install_packages_RPM "$package"
         else
@@ -4667,7 +4719,7 @@ install_RPM() {
     INFO "Forced Boost building, as requested..."
     _do_compile_boost=true
   else
-    check_package_version_ge_lt_RPM boost-devel $BOOST_VERSION_MIN $BOOST_VERSION_MAX
+    check_package_version_ge_lt_RPM boost-devel $BOOST_VERSION_MIN $BOOST_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_RPM boost-devel
       clean_Boost
@@ -4694,7 +4746,7 @@ install_RPM() {
     INFO "Forced TBB building, as requested..."
     compile_TBB
   else
-    check_package_version_ge_lt_RPM tbb-devel $TBB_VERSION_MIN $TBB_VERSION_MAX
+    check_package_version_ge_lt_RPM tbb-devel $TBB_VERSION_MIN $TBB_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_RPM tbb-devel
       clean_TBB
@@ -4712,7 +4764,7 @@ install_RPM() {
     compile_OCIO
   else
     if [ "$RPM" = "SUSE" ]; then
-      check_package_version_ge_lt_RPM OpenColorIO-devel $OCIO_VERSION_MIN $OCIO_VERSION_MAX
+      check_package_version_ge_lt_RPM OpenColorIO-devel $OCIO_VERSION_MIN $OCIO_VERSION_MEX
       if [ $? -eq 0 ]; then
         install_packages_RPM OpenColorIO-devel
         clean_OCIO
@@ -4732,7 +4784,7 @@ install_RPM() {
     INFO "Forced ILMBase/OpenEXR building, as requested..."
     compile_OPENEXR
   else
-    check_package_version_ge_lt_RPM openexr-devel $OPENEXR_VERSION_MIN $OPENEXR_VERSION_MAX
+    check_package_version_ge_lt_RPM openexr-devel $OPENEXR_VERSION_MIN $OPENEXR_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_RPM openexr-devel
       OPENEXR_VERSION=`get_package_version_RPM openexr-devel`
@@ -4750,7 +4802,7 @@ install_RPM() {
     INFO "Forced OpenImageIO building, as requested..."
     compile_OIIO
   else
-    check_package_version_ge_lt_RPM OpenImageIO-devel $OIIO_VERSION_MIN $OIIO_VERSION_MAX
+    check_package_version_ge_lt_RPM OpenImageIO-devel $OIIO_VERSION_MIN $OIIO_VERSION_MEX
     if [ $? -eq 0 -a $_with_built_openexr == false ]; then
       install_packages_RPM OpenImageIO-devel OpenImageIO-utils
       clean_OIIO
@@ -4775,7 +4827,7 @@ install_RPM() {
     else
       CLANG_DEV="clang-devel"
     fi
-    check_package_version_ge_lt_RPM llvm-devel $LLVM_VERSION_MIN $LLVM_VERSION_MAX
+    check_package_version_ge_lt_RPM llvm-devel $LLVM_VERSION_MIN $LLVM_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_RPM llvm-devel $CLANG_DEV
       have_llvm=true
@@ -4811,7 +4863,7 @@ install_RPM() {
     else
       OSL_DEV="openshadinglanguage-devel"
     fi
-    check_package_version_ge_lt_RPM $OSL_DEV $OSL_VERSION_MIN $OSL_VERSION_MAX
+    check_package_version_ge_lt_RPM $OSL_DEV $OSL_VERSION_MIN $OSL_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_RPM $OSL_DEV
       clean_OSL
@@ -4906,7 +4958,7 @@ install_RPM() {
       _do_compile_embree=true
     else
       # There is a package, but it does not provide everything that Blender needs...
-      #~ check_package_version_ge_lt_RPM embree-devel $EMBREE_VERSION_MIN $EMBREE_VERSION_MAX
+      #~ check_package_version_ge_lt_RPM embree-devel $EMBREE_VERSION_MIN $EMBREE_VERSION_MEX
       #~ if [ $? -eq 0 ]; then
         #~ install_packages_RPM embree-devel
         #~ clean_Embree
@@ -4945,7 +4997,7 @@ install_RPM() {
     INFO "Forced FFMpeg building, as requested..."
     compile_FFmpeg
   else
-    check_package_version_ge_lt_RPM ffmpeg-devel $FFMPEG_VERSION_MIN $FFMPEG_VERSION_MAX
+    check_package_version_ge_lt_RPM ffmpeg-devel $FFMPEG_VERSION_MIN $FFMPEG_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_RPM ffmpeg ffmpeg-devel
       clean_FFmpeg
@@ -5074,10 +5126,11 @@ install_ARCH() {
     BASE_DEVEL=`pacman -Sgq base-devel | sed -e 's/^gcc$/gcc-multilib/g' | paste -s -d' '`
   fi
 
-  _packages="$BASE_DEVEL git cmake fontconfig \
+  _packages="$BASE_DEVEL git cmake fontconfig flex \
              libxi libxcursor libxrandr libxinerama glew libpng libtiff wget openal \
              $OPENJPEG_DEV $VORBIS_DEV $OGG_DEV $THEORA_DEV yasm sdl2 fftw \
-             libxml2 yaml-cpp tinyxml python-requests jemalloc gmp potrace pugixml libharu"
+             libxml2 yaml-cpp tinyxml python-requests jemalloc gmp potrace pugixml libharu \
+             zstd"
 
   OPENJPEG_USE=true
   VORBIS_USE=true
@@ -5169,7 +5222,7 @@ install_ARCH() {
     INFO "Forced Python building, as requested..."
     _do_compile_python=true
   else
-    check_package_version_ge_lt_ARCH python $PYTHON_VERSION_MIN $PYTHON_VERSION_MAX
+    check_package_version_ge_lt_ARCH python $PYTHON_VERSION_MIN $PYTHON_VERSION_MEX
     if [ $? -eq 0 ]; then
       PYTHON_VERSION_INSTALLED=$(echo `get_package_version_ARCH python` | sed -r 's/^([0-9]+\.[0-9]+).*/\1/')
 
@@ -5182,8 +5235,8 @@ install_ARCH() {
         module=($module)
         package="python-${module[0]}"
         package_vmin=${module[1]}
-        package_vmax=${module[2]}
-        check_package_version_ge_lt_ARCH "$package" $package_vmin $package_vmax
+        package_vmex=${module[2]}
+        check_package_version_ge_lt_ARCH "$package" $package_vmin $package_vmex
         if [ $? -eq 0 ]; then
           install_packages_ARCH "$package"
         else
@@ -5209,7 +5262,7 @@ install_ARCH() {
     INFO "Forced Boost building, as requested..."
     compile_Boost
   else
-    check_package_version_ge_lt_ARCH boost $BOOST_VERSION_MIN $BOOST_VERSION_MAX
+    check_package_version_ge_lt_ARCH boost $BOOST_VERSION_MIN $BOOST_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH boost
       clean_Boost
@@ -5226,7 +5279,7 @@ install_ARCH() {
     INFO "Forced TBB building, as requested..."
     compile_TBB
   else
-    check_package_version_ge_lt_ARCH intel-tbb $TBB_VERSION_MIN $TBB_VERSION_MAX
+    check_package_version_ge_lt_ARCH intel-tbb $TBB_VERSION_MIN $TBB_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH intel-tbb
       clean_TBB
@@ -5243,7 +5296,7 @@ install_ARCH() {
     INFO "Forced OpenColorIO building, as requested..."
     compile_OCIO
   else
-    check_package_version_ge_lt_ARCH opencolorio $OCIO_VERSION_MIN $OCIO_VERSION_MAX
+    check_package_version_ge_lt_ARCH opencolorio $OCIO_VERSION_MIN $OCIO_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH opencolorio
       clean_OCIO
@@ -5260,7 +5313,7 @@ install_ARCH() {
     INFO "Forced ILMBase/OpenEXR building, as requested..."
     compile_OPENEXR
   else
-    check_package_version_ge_lt_ARCH openexr $OPENEXR_VERSION_MIN $OPENEXR_VERSION_MAX
+    check_package_version_ge_lt_ARCH openexr $OPENEXR_VERSION_MIN $OPENEXR_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH openexr
       OPENEXR_VERSION=`get_package_version_ARCH openexr`
@@ -5279,7 +5332,7 @@ install_ARCH() {
     INFO "Forced OpenImageIO building, as requested..."
     compile_OIIO
   else
-    check_package_version_ge_lt_ARCH openimageio $OIIO_VERSION_MIN $OIIO_VERSION_MAX
+    check_package_version_ge_lt_ARCH openimageio $OIIO_VERSION_MIN $OIIO_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH openimageio
       clean_OIIO
@@ -5299,7 +5352,7 @@ install_ARCH() {
     INFO "Forced LLVM building, as requested..."
     _do_compile_llvm=true
   else
-    check_package_version_ge_lt_ARCH llvm $LLVM_VERSION_MIN $LLVM_VERSION_MAX
+    check_package_version_ge_lt_ARCH llvm $LLVM_VERSION_MIN $LLVM_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH llvm clang
       have_llvm=true
@@ -5330,7 +5383,7 @@ install_ARCH() {
     INFO "Forced OpenShadingLanguage building, as requested..."
     _do_compile_osl=true
   else
-    check_package_version_ge_lt_ARCH openshadinglanguage $OSL_VERSION_MIN $OSL_VERSION_MAX
+    check_package_version_ge_lt_ARCH openshadinglanguage $OSL_VERSION_MIN $OSL_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH openshadinglanguage
       clean_OSL
@@ -5356,7 +5409,7 @@ install_ARCH() {
     INFO "Forced OpenSubdiv building, as requested..."
     compile_OSD
   else
-    check_package_version_ge_lt_ARCH opensubdiv $OSD_VERSION_MIN $OSD_VERSION_MAX
+    check_package_version_ge_lt_ARCH opensubdiv $OSD_VERSION_MIN $OSD_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH opensubdiv
       clean_OSD
@@ -5373,7 +5426,7 @@ install_ARCH() {
     INFO "Forced OpenVDB building, as requested..."
     compile_OPENVDB
   else
-    check_package_version_ge_lt_ARCH openvdb $OPENVDB_VERSION_MIN $OPENVDB_VERSION_MAX
+    check_package_version_ge_lt_ARCH openvdb $OPENVDB_VERSION_MIN $OPENVDB_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH openvdb
       clean_OPENVDB
@@ -5439,7 +5492,7 @@ install_ARCH() {
       _do_compile_embree=true
     else
       # There is a package, but it does not provide everything that Blender needs...
-      #~ check_package_version_ge_lt_ARCH embree $EMBREE_VERSION_MIN $EMBREE_VERSION_MAX
+      #~ check_package_version_ge_lt_ARCH embree $EMBREE_VERSION_MIN $EMBREE_VERSION_MEX
       #~ if [ $? -eq 0 ]; then
         #~ install_packages_ARCH embree
         #~ clean_Embree
@@ -5478,7 +5531,7 @@ install_ARCH() {
     INFO "Forced FFMpeg building, as requested..."
     compile_FFmpeg
   else
-    check_package_version_ge_lt_ARCH ffmpeg $FFMPEG_VERSION_MIN $FFMPEG_VERSION_MAX
+    check_package_version_ge_lt_ARCH ffmpeg $FFMPEG_VERSION_MIN $FFMPEG_VERSION_MEX
     if [ $? -eq 0 ]; then
       install_packages_ARCH ffmpeg
       clean_FFmpeg

@@ -25,7 +25,7 @@ class NodeCategory:
     def poll(cls, _context):
         return True
 
-    def __init__(self, identifier, name, description="", items=None):
+    def __init__(self, identifier, name, *, description="", items=None):
         self.identifier = identifier
         self.name = name
         self.description = description
@@ -43,7 +43,7 @@ class NodeCategory:
 
 
 class NodeItem:
-    def __init__(self, nodetype, label=None, settings=None, poll=None):
+    def __init__(self, nodetype, *, label=None, settings=None, poll=None):
 
         if settings is None:
             settings = {}
@@ -77,7 +77,7 @@ class NodeItem:
             else:
                 return bpy.app.translations.contexts.default
 
-    # NB: is a staticmethod because called with an explicit self argument
+    # NOTE: is a staticmethod because called with an explicit self argument
     # NodeItemCustom sets this as a variable attribute in __init__
     @staticmethod
     def draw(self, layout, _context):
@@ -92,7 +92,7 @@ class NodeItem:
 
 
 class NodeItemCustom:
-    def __init__(self, poll=None, draw=None):
+    def __init__(self, *, poll=None, draw=None):
         self.poll = poll
         self.draw = draw
 
@@ -108,7 +108,7 @@ def register_node_categories(identifier, cat_list):
     # works as draw function for menus
     def draw_node_item(self, context):
         layout = self.layout
-        col = layout.column()
+        col = layout.column(align=True)
         for item in self.category.items(context):
             item.draw(item, col, context)
 

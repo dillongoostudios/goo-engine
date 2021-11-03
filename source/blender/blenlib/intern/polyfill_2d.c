@@ -77,9 +77,9 @@ typedef signed char eSign;
 #ifdef USE_KDTREE
 /**
  * Spatial optimization for point-in-triangle intersection checks.
- * The simple version of this algorithm is ``O(n^2)`` complexity
+ * The simple version of this algorithm is `O(n^2)` complexity
  * (every point needing to check the triangle defined by every other point),
- * Using a binary-tree reduces the complexity to ``O(n log n)``
+ * Using a binary-tree reduces the complexity to `O(n log n)`
  * plus some overhead of creating the tree.
  *
  * This is a single purpose KDTree based on BLI_kdtree with some modifications
@@ -719,7 +719,7 @@ static bool pf_ear_tip_check(PolyFill *pf, PolyIndex *pi_ear_tip)
        * the area sign will be positive if the point is strictly inside.
        * It will be 0 on the edge, which we want to include as well. */
 
-      /* note: check (v3, v1) first since it fails _far_ more often than the other 2 checks
+      /* NOTE: check (v3, v1) first since it fails _far_ more often than the other 2 checks
        * (those fail equally).
        * It's logical - the chance is low that points exist on the
        * same side as the ear we're clipping off. */
@@ -898,7 +898,7 @@ void BLI_polyfill_calc_arena(const float (*coords)[2],
  * \param coords_sign: Pass this when we know the sign in advance to avoid extra calculations.
  *
  * \param r_tris: This array is filled in with triangle indices in clockwise order.
- * The length of the array must be ``coords_tot - 2``.
+ * The length of the array must be `coords_tot - 2`.
  * Indices are guaranteed to be assigned to unique triangles, with valid indices,
  * even in the case of degenerate input (self intersecting polygons, zero area ears... etc).
  */

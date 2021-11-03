@@ -93,26 +93,26 @@ static void screen_foreach_id_dopesheet(LibraryForeachIDData *data, bDopeSheet *
 {
   if (ads != NULL) {
     BKE_LIB_FOREACHID_PROCESS_ID(data, ads->source, IDWALK_CB_NOP);
-    BKE_LIB_FOREACHID_PROCESS(data, ads->filter_grp, IDWALK_CB_NOP);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, ads->filter_grp, IDWALK_CB_NOP);
   }
 }
 
 void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area)
 {
-  BKE_LIB_FOREACHID_PROCESS(data, area->full, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, area->full, IDWALK_CB_NOP);
 
-  /* TODO this should be moved to a callback in `SpaceType`, defined in each editor's own code.
+  /* TODO: this should be moved to a callback in `SpaceType`, defined in each editor's own code.
    * Will be for a later round of cleanup though... */
   LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
     switch (sl->spacetype) {
       case SPACE_VIEW3D: {
         View3D *v3d = (View3D *)sl;
 
-        BKE_LIB_FOREACHID_PROCESS(data, v3d->camera, IDWALK_CB_NOP);
-        BKE_LIB_FOREACHID_PROCESS(data, v3d->ob_center, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->camera, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->ob_center, IDWALK_CB_NOP);
 
         if (v3d->localvd) {
-          BKE_LIB_FOREACHID_PROCESS(data, v3d->localvd->camera, IDWALK_CB_NOP);
+          BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, v3d->localvd->camera, IDWALK_CB_NOP);
         }
         break;
       }
@@ -134,21 +134,21 @@ void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area
         SpaceAction *saction = (SpaceAction *)sl;
 
         screen_foreach_id_dopesheet(data, &saction->ads);
-        BKE_LIB_FOREACHID_PROCESS(data, saction->action, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, saction->action, IDWALK_CB_NOP);
         break;
       }
       case SPACE_IMAGE: {
         SpaceImage *sima = (SpaceImage *)sl;
 
-        BKE_LIB_FOREACHID_PROCESS(data, sima->image, IDWALK_CB_USER_ONE);
-        BKE_LIB_FOREACHID_PROCESS(data, sima->mask_info.mask, IDWALK_CB_USER_ONE);
-        BKE_LIB_FOREACHID_PROCESS(data, sima->gpd, IDWALK_CB_USER);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->image, IDWALK_CB_USER_ONE);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->mask_info.mask, IDWALK_CB_USER_ONE);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sima->gpd, IDWALK_CB_USER);
         break;
       }
       case SPACE_SEQ: {
         SpaceSeq *sseq = (SpaceSeq *)sl;
 
-        BKE_LIB_FOREACHID_PROCESS(data, sseq->gpd, IDWALK_CB_USER);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sseq->gpd, IDWALK_CB_USER);
         break;
       }
       case SPACE_NLA: {
@@ -160,13 +160,13 @@ void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area
       case SPACE_TEXT: {
         SpaceText *st = (SpaceText *)sl;
 
-        BKE_LIB_FOREACHID_PROCESS(data, st->text, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, st->text, IDWALK_CB_NOP);
         break;
       }
       case SPACE_SCRIPT: {
         SpaceScript *scpt = (SpaceScript *)sl;
 
-        BKE_LIB_FOREACHID_PROCESS(data, scpt->script, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, scpt->script, IDWALK_CB_NOP);
         break;
       }
       case SPACE_OUTLINER: {
@@ -194,19 +194,19 @@ void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area
         BKE_LIB_FOREACHID_PROCESS_ID(data, snode->id, IDWALK_CB_NOP);
         BKE_LIB_FOREACHID_PROCESS_ID(data, snode->from, IDWALK_CB_NOP);
 
-        BKE_LIB_FOREACHID_PROCESS(
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(
             data, snode->nodetree, is_private_nodetree ? IDWALK_CB_EMBEDDED : IDWALK_CB_USER_ONE);
 
         LISTBASE_FOREACH (bNodeTreePath *, path, &snode->treepath) {
           if (path == snode->treepath.first) {
             /* first nodetree in path is same as snode->nodetree */
-            BKE_LIB_FOREACHID_PROCESS(data,
-                                      path->nodetree,
-                                      is_private_nodetree ? IDWALK_CB_EMBEDDED :
-                                                            IDWALK_CB_USER_ONE);
+            BKE_LIB_FOREACHID_PROCESS_IDSUPER(data,
+                                              path->nodetree,
+                                              is_private_nodetree ? IDWALK_CB_EMBEDDED :
+                                                                    IDWALK_CB_USER_ONE);
           }
           else {
-            BKE_LIB_FOREACHID_PROCESS(data, path->nodetree, IDWALK_CB_USER_ONE);
+            BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, path->nodetree, IDWALK_CB_USER_ONE);
           }
 
           if (path->nodetree == NULL) {
@@ -214,14 +214,14 @@ void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area
           }
         }
 
-        BKE_LIB_FOREACHID_PROCESS(data, snode->edittree, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, snode->edittree, IDWALK_CB_NOP);
         break;
       }
       case SPACE_CLIP: {
         SpaceClip *sclip = (SpaceClip *)sl;
 
-        BKE_LIB_FOREACHID_PROCESS(data, sclip->clip, IDWALK_CB_USER_ONE);
-        BKE_LIB_FOREACHID_PROCESS(data, sclip->mask_info.mask, IDWALK_CB_USER_ONE);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sclip->clip, IDWALK_CB_USER_ONE);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, sclip->mask_info.mask, IDWALK_CB_USER_ONE);
         break;
       }
       case SPACE_SPREADSHEET: {
@@ -229,7 +229,7 @@ void BKE_screen_foreach_id_screen_area(LibraryForeachIDData *data, ScrArea *area
 
         LISTBASE_FOREACH (SpreadsheetContext *, context, &sspreadsheet->context_path) {
           if (context->type == SPREADSHEET_CONTEXT_OBJECT) {
-            BKE_LIB_FOREACHID_PROCESS(
+            BKE_LIB_FOREACHID_PROCESS_IDSUPER(
                 data, ((SpreadsheetContextObject *)context)->object, IDWALK_CB_NOP);
           }
         }
@@ -255,18 +255,16 @@ static void screen_foreach_id(ID *id, LibraryForeachIDData *data)
 static void screen_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   bScreen *screen = (bScreen *)id;
-  /* Screens are reference counted, only saved if used by a workspace. */
-  if (screen->id.us > 0 || BLO_write_is_undo(writer)) {
-    /* write LibData */
-    /* in 2.50+ files, the file identifier for screens is patched, forward compatibility */
-    BLO_write_struct_at_address_with_filecode(writer, ID_SCRN, bScreen, id_address, screen);
-    BKE_id_blend_write(writer, &screen->id);
 
-    BKE_previewimg_blend_write(writer, screen->preview);
+  /* write LibData */
+  /* in 2.50+ files, the file identifier for screens is patched, forward compatibility */
+  BLO_write_struct_at_address_with_filecode(writer, ID_SCRN, bScreen, id_address, screen);
+  BKE_id_blend_write(writer, &screen->id);
 
-    /* direct data */
-    BKE_screen_area_map_blend_write(writer, AREAMAP_FROM_SCREEN(screen));
-  }
+  BKE_previewimg_blend_write(writer, screen->preview);
+
+  /* direct data */
+  BKE_screen_area_map_blend_write(writer, AREAMAP_FROM_SCREEN(screen));
 }
 
 /* Cannot use IDTypeInfo callback yet, because of the return value. */
@@ -289,7 +287,7 @@ bool BKE_screen_blend_read_data(BlendDataReader *reader, bScreen *screen)
   return success;
 }
 
-/* note: file read without screens option G_FILE_NO_UI;
+/* NOTE: file read without screens option G_FILE_NO_UI;
  * check lib pointers in call below */
 static void screen_blend_read_lib(BlendLibReader *reader, ID *id)
 {
@@ -314,7 +312,7 @@ IDTypeInfo IDType_ID_SCR = {
     .name = "Screen",
     .name_plural = "screens",
     .translation_context = BLT_I18NCONTEXT_ID_SCREEN,
-    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_MAKELOCAL | IDTYPE_FLAGS_NO_ANIMDATA,
+    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA,
 
     .init_data = NULL,
     .copy_data = NULL,
@@ -467,7 +465,7 @@ static void panel_list_copy(ListBase *newlb, const ListBase *lb)
   Panel *panel = lb->first;
   for (; new_panel; new_panel = new_panel->next, panel = panel->next) {
     new_panel->activedata = NULL;
-    new_panel->runtime.custom_data_ptr = NULL;
+    memset(&new_panel->runtime, 0x0, sizeof(new_panel->runtime));
     panel_list_copy(&new_panel->children, &panel->children);
   }
 }
@@ -475,6 +473,8 @@ static void panel_list_copy(ListBase *newlb, const ListBase *lb)
 ARegion *BKE_area_region_copy(const SpaceType *st, const ARegion *region)
 {
   ARegion *newar = MEM_dupallocN(region);
+
+  memset(&newar->runtime, 0x0, sizeof(newar->runtime));
 
   newar->prev = newar->next = NULL;
   BLI_listbase_clear(&newar->handlers);
@@ -680,19 +680,13 @@ void BKE_area_region_free(SpaceType *st, ARegion *region)
   BKE_area_region_panels_free(&region->panels);
 
   LISTBASE_FOREACH (uiList *, uilst, &region->ui_lists) {
-    if (uilst->dyn_data) {
-      uiListDyn *dyn_data = uilst->dyn_data;
-      if (dyn_data->items_filter_flags) {
-        MEM_freeN(dyn_data->items_filter_flags);
-      }
-      if (dyn_data->items_filter_neworder) {
-        MEM_freeN(dyn_data->items_filter_neworder);
-      }
-      MEM_freeN(dyn_data);
+    if (uilst->dyn_data && uilst->dyn_data->free_runtime_data_fn) {
+      uilst->dyn_data->free_runtime_data_fn(uilst);
     }
     if (uilst->properties) {
       IDP_FreeProperty(uilst->properties);
     }
+    MEM_SAFE_FREE(uilst->dyn_data);
   }
 
   if (region->gizmo_map != NULL) {
@@ -734,7 +728,7 @@ void BKE_screen_area_map_free(ScrAreaMap *area_map)
 }
 
 /** Free (or release) any data used by this screen (does not free the screen itself). */
-void BKE_screen_free(bScreen *screen)
+void BKE_screen_free_data(bScreen *screen)
 {
   screen_free_data(&screen->id);
 }
@@ -770,7 +764,7 @@ void BKE_screen_remove_double_scrverts(bScreen *screen)
       while (v1) {
         if (v1->newv == NULL) { /* !?! */
           if (v1->vec.x == verg->vec.x && v1->vec.y == verg->vec.y) {
-            /* printf("doublevert\n"); */
+            // printf("doublevert\n");
             v1->newv = verg;
           }
         }
@@ -1355,12 +1349,21 @@ static void write_area(BlendWriter *writer, ScrArea *area)
     }
     else if (sl->spacetype == SPACE_SPREADSHEET) {
       BLO_write_struct(writer, SpaceSpreadsheet, sl);
-
       SpaceSpreadsheet *sspreadsheet = (SpaceSpreadsheet *)sl;
+
+      LISTBASE_FOREACH (SpreadsheetRowFilter *, row_filter, &sspreadsheet->row_filters) {
+        BLO_write_struct(writer, SpreadsheetRowFilter, row_filter);
+        BLO_write_string(writer, row_filter->value_string);
+      }
+
       LISTBASE_FOREACH (SpreadsheetColumn *, column, &sspreadsheet->columns) {
         BLO_write_struct(writer, SpreadsheetColumn, column);
         BLO_write_struct(writer, SpreadsheetColumnID, column->id);
         BLO_write_string(writer, column->id->name);
+        /* While the display name is technically runtime data, we write it here, otherwise the row
+         * filters might not now their type if their region draws before the main region.
+         * This would ideally be cleared here. */
+        BLO_write_string(writer, column->display_name);
       }
       LISTBASE_FOREACH (SpreadsheetContext *, context, &sspreadsheet->context_path) {
         switch (context->type) {
@@ -1419,6 +1422,8 @@ static void direct_link_panel_list(BlendDataReader *reader, ListBase *lb)
 
 static void direct_link_region(BlendDataReader *reader, ARegion *region, int spacetype)
 {
+  memset(&region->runtime, 0x0, sizeof(region->runtime));
+
   direct_link_panel_list(reader, &region->panels);
 
   BLO_read_list(reader, &region->panels_category_active);
@@ -1454,7 +1459,6 @@ static void direct_link_region(BlendDataReader *reader, ARegion *region, int spa
         BLO_read_data_address(reader, &rv3d->localvd);
         BLO_read_data_address(reader, &rv3d->clipbb);
 
-        rv3d->depths = NULL;
         rv3d->render_engine = NULL;
         rv3d->sms = NULL;
         rv3d->smooth_timer = NULL;
@@ -1560,15 +1564,14 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
 
     if (sl->spacetype == SPACE_VIEW3D) {
       View3D *v3d = (View3D *)sl;
+
+      memset(&v3d->runtime, 0x0, sizeof(v3d->runtime));
+
       if (v3d->gpd) {
         BLO_read_data_address(reader, &v3d->gpd);
         BKE_gpencil_blend_read_data(reader, v3d->gpd);
       }
       BLO_read_data_address(reader, &v3d->localvd);
-
-      /* Runtime data */
-      v3d->runtime.properties_storage = NULL;
-      v3d->runtime.flag = 0;
 
       /* render can be quite heavy, set to solid on load */
       if (v3d->shading.type == OB_RENDER) {
@@ -1584,7 +1587,7 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
       SpaceGraph *sipo = (SpaceGraph *)sl;
 
       BLO_read_data_address(reader, &sipo->ads);
-      BLI_listbase_clear(&sipo->runtime.ghost_curves);
+      memset(&sipo->runtime, 0x0, sizeof(sipo->runtime));
     }
     else if (sl->spacetype == SPACE_NLA) {
       SpaceNla *snla = (SpaceNla *)sl;
@@ -1621,7 +1624,6 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
       SpaceImage *sima = (SpaceImage *)sl;
 
       sima->iuser.scene = NULL;
-      sima->iuser.ok = 1;
       sima->scopes.waveform_1 = NULL;
       sima->scopes.waveform_2 = NULL;
       sima->scopes.waveform_3 = NULL;
@@ -1652,7 +1654,7 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
     }
     else if (sl->spacetype == SPACE_TEXT) {
       SpaceText *st = (SpaceText *)sl;
-      memset(&st->runtime, 0, sizeof(st->runtime));
+      memset(&st->runtime, 0x0, sizeof(st->runtime));
     }
     else if (sl->spacetype == SPACE_SEQ) {
       SpaceSeq *sseq = (SpaceSeq *)sl;
@@ -1676,6 +1678,7 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
       sseq->scopes.sep_waveform_ibuf = NULL;
       sseq->scopes.vector_ibuf = NULL;
       sseq->scopes.histogram_ibuf = NULL;
+      memset(&sseq->runtime, 0x0, sizeof(sseq->runtime));
     }
     else if (sl->spacetype == SPACE_PROPERTIES) {
       SpaceProperties *sbuts = (SpaceProperties *)sl;
@@ -1692,9 +1695,9 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
       BLO_read_list(reader, &sconsole->scrollback);
       BLO_read_list(reader, &sconsole->history);
 
-      /* comma expressions, (e.g. expr1, expr2, expr3) evaluate each expression,
+      /* Comma expressions, (e.g. expr1, expr2, expr3) evaluate each expression,
        * from left to right.  the right-most expression sets the result of the comma
-       * expression as a whole*/
+       * expression as a whole. */
       LISTBASE_FOREACH_MUTABLE (ConsoleLine *, cl, &sconsole->history) {
         BLO_read_data_address(reader, &cl->line);
         if (cl->line) {
@@ -1723,6 +1726,17 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
       sfile->runtime = NULL;
       BLO_read_data_address(reader, &sfile->params);
       BLO_read_data_address(reader, &sfile->asset_params);
+      if (sfile->params) {
+        sfile->params->rename_id = NULL;
+      }
+      if (sfile->asset_params) {
+        sfile->asset_params->base_params.rename_id = NULL;
+      }
+    }
+    else if (sl->spacetype == SPACE_ACTION) {
+      SpaceAction *saction = (SpaceAction *)sl;
+
+      memset(&saction->runtime, 0x0, sizeof(saction->runtime));
     }
     else if (sl->spacetype == SPACE_CLIP) {
       SpaceClip *sclip = (SpaceClip *)sl;
@@ -1735,11 +1749,18 @@ static void direct_link_area(BlendDataReader *reader, ScrArea *area)
       SpaceSpreadsheet *sspreadsheet = (SpaceSpreadsheet *)sl;
 
       sspreadsheet->runtime = NULL;
-
+      BLO_read_list(reader, &sspreadsheet->row_filters);
+      LISTBASE_FOREACH (SpreadsheetRowFilter *, row_filter, &sspreadsheet->row_filters) {
+        BLO_read_data_address(reader, &row_filter->value_string);
+      }
       BLO_read_list(reader, &sspreadsheet->columns);
       LISTBASE_FOREACH (SpreadsheetColumn *, column, &sspreadsheet->columns) {
         BLO_read_data_address(reader, &column->id);
         BLO_read_data_address(reader, &column->id->name);
+        /* While the display name is technically runtime data, it is loaded here, otherwise the row
+         * filters might not now their type if their region draws before the main region.
+         * This would ideally be cleared here. */
+        BLO_read_data_address(reader, &column->display_name);
       }
 
       BLO_read_list(reader, &sspreadsheet->context_path);

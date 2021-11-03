@@ -47,7 +47,7 @@
 #endif
 
 #include <fcntl.h>
-#include <string.h> /* strcpy etc.. */
+#include <string.h> /* `strcpy` etc. */
 
 #ifdef WIN32
 #  include "BLI_string_utf8.h"
@@ -114,7 +114,7 @@ double BLI_dir_free_space(const char *dir)
 
   tmp[0] = '\\';
   tmp[1] = 0; /* Just a fail-safe. */
-  if (ELEM(dir[0] == '/', '\\')) {
+  if (ELEM(dir[0], '/', '\\')) {
     tmp[0] = '\\';
     tmp[1] = 0;
   }
@@ -266,7 +266,8 @@ eFileAttributes BLI_file_attributes(const char *path)
   if (attr & FILE_ATTRIBUTE_SPARSE_FILE) {
     ret |= FILE_ATTR_SPARSE_FILE;
   }
-  if (attr & FILE_ATTRIBUTE_OFFLINE) {
+  if (attr & FILE_ATTRIBUTE_OFFLINE || attr & FILE_ATTRIBUTE_RECALL_ON_OPEN ||
+      attr & FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS) {
     ret |= FILE_ATTR_OFFLINE;
   }
   if (attr & FILE_ATTRIBUTE_REPARSE_POINT) {
@@ -292,7 +293,7 @@ bool BLI_file_alias_target(const char *filepath,
                            /* This parameter can only be `const` on Linux since
                             * redirections are not supported there.
                             * NOLINTNEXTLINE: readability-non-const-parameter. */
-                           char r_targetpath[FILE_MAXDIR])
+                           char r_targetpath[/*FILE_MAXDIR*/])
 {
 #  ifdef WIN32
   if (!BLI_path_extension_check(filepath, ".lnk")) {

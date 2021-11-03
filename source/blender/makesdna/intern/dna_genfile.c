@@ -47,7 +47,7 @@
 /**
  * \section dna_genfile Overview
  *
- * - please note: no builtin security to detect input of double structs
+ * - please NOTE: no builtin security to detect input of double structs
  * - if you want a struct not to be in DNA file: add two hash marks above it `(#<enter>#<enter>)`.
  *
  * Structure DNA data is added to each blender file and to each executable, this to detect
@@ -84,8 +84,8 @@
  * **Remember to read/write integer and short aligned!**
  *
  * While writing a file, the names of a struct is indicated with a type number,
- * to be found with: ``type = DNA_struct_find_nr(SDNA *, const char *)``
- * The value of ``type`` corresponds with the index within the structs array
+ * to be found with: `type = DNA_struct_find_nr(SDNA *, const char *)`
+ * The value of `type` corresponds with the index within the structs array
  *
  * For the moment: the complete DNA file is included in a .blend file. For
  * the future we can think of smarter methods, like only included the used
@@ -101,7 +101,7 @@
  *  - Change of a pointer type: when the name doesn't change the contents is copied.
  *
  * NOT YET:
- *  - array (``vec[3]``) to float struct (``vec3f``).
+ *  - array (`vec[3]`) to float struct (`vec3f`).
  *
  * DONE:
  *  - Endian compatibility.
@@ -525,7 +525,7 @@ static bool init_structDNA(SDNA *sdna, bool do_endian_swap, const char **r_error
 
     sdna->pointer_size = sdna->types_size[struct_info->type] / 2;
 
-    if (struct_info->members_len != 2 || (sdna->pointer_size != 4 && sdna->pointer_size != 8)) {
+    if (struct_info->members_len != 2 || (!ELEM(sdna->pointer_size, 4, 8))) {
       *r_error_message = "ListBase struct error! Needs it to calculate pointerize.";
       /* well, at least sizeof(ListBase) is error proof! (ton) */
       return false;
@@ -855,7 +855,7 @@ static void cast_pointer_64_to_32(const int array_len,
                                   uint32_t *new_data)
 {
   /* WARNING: 32-bit Blender trying to load file saved by 64-bit Blender,
-   * pointers may lose uniqueness on truncation! (Hopefully this wont
+   * pointers may lose uniqueness on truncation! (Hopefully this won't
    * happen unless/until we ever get to multi-gigabyte .blend files...) */
   for (int a = 0; a < array_len; a++) {
     new_data[a] = old_data[a] >> 3;
@@ -1060,7 +1060,7 @@ void DNA_struct_switch_endian(const SDNA *sdna, int struct_nr, char *data)
           }
           case SDNA_TYPE_INT:
           case SDNA_TYPE_FLOAT: {
-            /* Note, intentionally ignore long/ulong, because these could be 4 or 8 bytes.
+            /* NOTE: intentionally ignore long/ulong, because these could be 4 or 8 bytes.
              * Fortunately, we only use these types for runtime variables and only once for a
              * struct type that is no longer used. */
             BLI_endian_switch_int32_array((int32_t *)member_data, member_array_length);
@@ -1398,7 +1398,7 @@ static void init_reconstruct_step_for_member(const SDNA *oldsdna,
         r_step->data.cast_pointer.array_len = shared_array_length;
       }
       else {
-        BLI_assert(!"invalid pointer size");
+        BLI_assert_msg(0, "invalid pointer size");
         r_step->type = RECONSTRUCT_STEP_INIT_ZERO;
       }
       break;
@@ -1546,9 +1546,9 @@ DNA_ReconstructInfo *DNA_reconstruct_info_create(const SDNA *oldsdna,
   reconstruct_info->oldsdna = oldsdna;
   reconstruct_info->newsdna = newsdna;
   reconstruct_info->compare_flags = compare_flags;
-  reconstruct_info->step_counts = MEM_malloc_arrayN(sizeof(int), newsdna->structs_len, __func__);
+  reconstruct_info->step_counts = MEM_malloc_arrayN(newsdna->structs_len, sizeof(int), __func__);
   reconstruct_info->steps = MEM_malloc_arrayN(
-      sizeof(ReconstructStep *), newsdna->structs_len, __func__);
+      newsdna->structs_len, sizeof(ReconstructStep *), __func__);
 
   /* Generate reconstruct steps for all structs. */
   for (int new_struct_nr = 0; new_struct_nr < newsdna->structs_len; new_struct_nr++) {
@@ -1564,9 +1564,8 @@ DNA_ReconstructInfo *DNA_reconstruct_info_create(const SDNA *oldsdna,
     ReconstructStep *steps = create_reconstruct_steps_for_struct(
         oldsdna, newsdna, compare_flags, old_struct, new_struct);
 
-    int steps_len = new_struct->members_len;
     /* Comment the line below to skip the compression for debugging purposes. */
-    steps_len = compress_reconstruct_steps(steps, new_struct->members_len);
+    const int steps_len = compress_reconstruct_steps(steps, new_struct->members_len);
 
     reconstruct_info->steps[new_struct_nr] = steps;
     reconstruct_info->step_counts[new_struct_nr] = steps_len;
@@ -1801,7 +1800,7 @@ static void sdna_expand_names(SDNA *sdna)
 
   int names_expand_index = 0;
   for (int struct_nr = 0; struct_nr < sdna->structs_len; struct_nr++) {
-    /* We can't edit this memory 'sdna->structs' points to (readonly datatoc file). */
+    /* We can't edit this memory 'sdna->structs' points to (read-only `datatoc` file). */
     const SDNA_Struct *struct_old = sdna->structs[struct_nr];
 
     const int array_size = sizeof(short) * 2 + sizeof(SDNA_StructMember) * struct_old->members_len;

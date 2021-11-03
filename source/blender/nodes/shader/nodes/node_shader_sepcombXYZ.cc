@@ -23,17 +23,18 @@
 
 #include "node_shader_util.h"
 
-/* **************** SEPARATE XYZ ******************** */
-static bNodeSocketTemplate sh_node_sepxyz_in[] = {
-    {SOCK_VECTOR, N_("Vector"), 0.0f, 0.0f, 0.0f, 0.0f, -10000.0f, 10000.0f},
-    {-1, ""},
+namespace blender::nodes {
+
+static void sh_node_sepxyz_declare(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  b.add_input<decl::Vector>(N_("Vector")).min(-10000.0f).max(10000.0f);
+  b.add_output<decl::Float>(N_("X"));
+  b.add_output<decl::Float>(N_("Y"));
+  b.add_output<decl::Float>(N_("Z"));
 };
-static bNodeSocketTemplate sh_node_sepxyz_out[] = {
-    {SOCK_FLOAT, N_("X")},
-    {SOCK_FLOAT, N_("Y")},
-    {SOCK_FLOAT, N_("Z")},
-    {-1, ""},
-};
+
+}  // namespace blender::nodes
 
 static int gpu_shader_sepxyz(GPUMaterial *mat,
                              bNode *node,
@@ -81,7 +82,7 @@ class MF_SeparateXYZ : public blender::fn::MultiFunction {
   }
 };
 
-static void sh_node_sepxyz_expand_in_mf_network(blender::nodes::NodeMFNetworkBuilder &builder)
+static void sh_node_sepxyz_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
 {
   static MF_SeparateXYZ separate_fn;
   builder.set_matching_fn(separate_fn);
@@ -91,25 +92,26 @@ void register_node_type_sh_sepxyz(void)
 {
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_SEPXYZ, "Separate XYZ", NODE_CLASS_CONVERTOR, 0);
-  node_type_socket_templates(&ntype, sh_node_sepxyz_in, sh_node_sepxyz_out);
+  sh_fn_node_type_base(&ntype, SH_NODE_SEPXYZ, "Separate XYZ", NODE_CLASS_CONVERTER, 0);
+  ntype.declare = blender::nodes::sh_node_sepxyz_declare;
   node_type_gpu(&ntype, gpu_shader_sepxyz);
-  ntype.expand_in_mf_network = sh_node_sepxyz_expand_in_mf_network;
+  ntype.build_multi_function = sh_node_sepxyz_build_multi_function;
 
   nodeRegisterType(&ntype);
 }
 
-/* **************** COMBINE XYZ ******************** */
-static bNodeSocketTemplate sh_node_combxyz_in[] = {
-    {SOCK_FLOAT, N_("X"), 0.0f, 0.0f, 0.0f, 1.0f, -10000.0f, 10000.0f},
-    {SOCK_FLOAT, N_("Y"), 0.0f, 0.0f, 0.0f, 1.0f, -10000.0f, 10000.0f},
-    {SOCK_FLOAT, N_("Z"), 0.0f, 0.0f, 0.0f, 1.0f, -10000.0f, 10000.0f},
-    {-1, ""},
+namespace blender::nodes {
+
+static void sh_node_combxyz_declare(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  b.add_input<decl::Float>(N_("X")).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>(N_("Y")).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>(N_("Z")).min(-10000.0f).max(10000.0f);
+  b.add_output<decl::Vector>(N_("Vector"));
 };
-static bNodeSocketTemplate sh_node_combxyz_out[] = {
-    {SOCK_VECTOR, N_("Vector")},
-    {-1, ""},
-};
+
+}  // namespace blender::nodes
 
 static int gpu_shader_combxyz(GPUMaterial *mat,
                               bNode *node,
@@ -120,7 +122,7 @@ static int gpu_shader_combxyz(GPUMaterial *mat,
   return GPU_stack_link(mat, node, "combine_xyz", in, out);
 }
 
-static void sh_node_combxyz_expand_in_mf_network(blender::nodes::NodeMFNetworkBuilder &builder)
+static void sh_node_combxyz_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
 {
   static blender::fn::CustomMF_SI_SI_SI_SO<float, float, float, blender::float3> fn{
       "Combine Vector", [](float x, float y, float z) { return blender::float3(x, y, z); }};
@@ -131,10 +133,10 @@ void register_node_type_sh_combxyz(void)
 {
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_COMBXYZ, "Combine XYZ", NODE_CLASS_CONVERTOR, 0);
-  node_type_socket_templates(&ntype, sh_node_combxyz_in, sh_node_combxyz_out);
+  sh_fn_node_type_base(&ntype, SH_NODE_COMBXYZ, "Combine XYZ", NODE_CLASS_CONVERTER, 0);
+  ntype.declare = blender::nodes::sh_node_combxyz_declare;
   node_type_gpu(&ntype, gpu_shader_combxyz);
-  ntype.expand_in_mf_network = sh_node_combxyz_expand_in_mf_network;
+  ntype.build_multi_function = sh_node_combxyz_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

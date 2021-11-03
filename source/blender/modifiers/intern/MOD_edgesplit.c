@@ -20,10 +20,10 @@
 /** \file
  * \ingroup modifiers
  *
- * EdgeSplit modifier
+ * Edge Split modifier
  *
  * Splits edges in the mesh according to sharpness flag
- * or edge angle (can be used to achieve autosmoothing)
+ * or edge angle (can be used to achieve auto-smoothing)
  */
 
 #include "BLI_utildefines.h"
@@ -89,7 +89,7 @@ Mesh *doEdgeSplit(const Mesh *mesh, EdgeSplitModifierData *emd)
             UNLIKELY(l1 != l2->radial_next) ||
             /* O° angle setting, we want to split on all edges. */
             do_split_all ||
-            /* 2 face edge - check angle*/
+            /* 2 face edge - check angle. */
             (dot_v3v3(l1->f->no, l2->f->no) < threshold)) {
           BM_elem_flag_enable(e, BM_ELEM_TAG);
         }
@@ -115,7 +115,7 @@ Mesh *doEdgeSplit(const Mesh *mesh, EdgeSplitModifierData *emd)
   result = BKE_mesh_from_bmesh_for_eval_nomain(bm, NULL, mesh);
   BM_mesh_free(bm);
 
-  result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+  BKE_mesh_normals_tag_dirty(result);
   return result;
 }
 
@@ -187,7 +187,6 @@ ModifierTypeInfo modifierType_EdgeSplit = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ NULL,

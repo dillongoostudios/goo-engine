@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_texture_types.h"
 
 namespace blender::compositor {
@@ -27,13 +27,13 @@ namespace blender::compositor {
  * this program converts an input color to an output value.
  * it assumes we are in sRGB color space.
  */
-class MapValueOperation : public NodeOperation {
+class MapValueOperation : public MultiThreadedOperation {
  private:
   /**
-   * Cached reference to the inputProgram
+   * Cached reference to the input_program
    */
-  SocketReader *m_inputOperation;
-  TexMapping *m_settings;
+  SocketReader *input_operation_;
+  TexMapping *settings_;
 
  public:
   /**
@@ -44,25 +44,29 @@ class MapValueOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
   /**
    * \brief set the TexMapping settings
    */
-  void setSettings(TexMapping *settings)
+  void set_settings(TexMapping *settings)
   {
-    this->m_settings = settings;
+    settings_ = settings;
   }
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

@@ -62,7 +62,7 @@ struct wmWindow;
 struct wmWindowManager;
 
 /* spacetype has everything stored to get an editor working, it gets initialized via
- * ED_spacetypes_init() in editors/space_api/spacetypes.c   */
+ * #ED_spacetypes_init() in `editors/space_api/spacetypes.c` */
 /* an editor in Blender is a combined ScrArea + SpaceType + SpaceData */
 
 #define BKE_ST_MAXNAME 64
@@ -206,7 +206,7 @@ typedef struct ARegionType {
    * performed.
    *
    * This callback is not called on indirect changes of the current viewport (which could happen
-   * when the `v2d->tot is changed and `cur` is adopted accordingly).  */
+   * when the `v2d->tot is changed and `cur` is adopted accordingly). */
   void (*on_view2d_changed)(const struct bContext *C, struct ARegion *region);
 
   /* custom drawing callbacks */
@@ -301,8 +301,6 @@ enum {
   PANEL_TYPE_LAYOUT_VERT_BAR = (1 << 3),
   /** This panel type represents data external to the UI. */
   PANEL_TYPE_INSTANCED = (1 << 4),
-  /** Draw panel like a box widget. */
-  PANEL_TYPE_DRAW_BOX = (1 << 6),
   /** Don't search panels with this type during property search. */
   PANEL_TYPE_NO_SEARCH = (1 << 7),
 };
@@ -332,6 +330,9 @@ typedef void (*uiListFilterItemsFunc)(struct uiList *ui_list,
                                       struct PointerRNA *,
                                       const char *propname);
 
+/* Listen to notifiers. Only for lists defined in C. */
+typedef void (*uiListListener)(struct uiList *ui_list, wmRegionListenerParams *params);
+
 typedef struct uiListType {
   struct uiListType *next, *prev;
 
@@ -340,6 +341,9 @@ typedef struct uiListType {
   uiListDrawItemFunc draw_item;
   uiListDrawFilterFunc draw_filter;
   uiListFilterItemsFunc filter_items;
+
+  /* For lists defined in C only. */
+  uiListListener listener;
 
   /* RNA integration */
   ExtensionRNA rna_ext;
@@ -467,7 +471,7 @@ void BKE_screen_view3d_shading_init(struct View3DShading *shading);
 /* screen */
 void BKE_screen_foreach_id_screen_area(struct LibraryForeachIDData *data, struct ScrArea *area);
 
-void BKE_screen_free(struct bScreen *screen);
+void BKE_screen_free_data(struct bScreen *screen);
 void BKE_screen_area_map_free(struct ScrAreaMap *area_map) ATTR_NONNULL();
 
 struct ScrEdge *BKE_screen_find_edge(const struct bScreen *screen,

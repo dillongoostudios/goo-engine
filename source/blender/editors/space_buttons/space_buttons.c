@@ -202,11 +202,11 @@ int ED_buttons_tabs_list(SpaceProperties *sbuts, short *context_tabs_array)
     context_tabs_array[length] = BCONTEXT_WORLD;
     length++;
   }
-  if (length != 0) {
-    context_tabs_array[length] = -1;
-    length++;
-  }
   if (sbuts->pathflag & (1 << BCONTEXT_COLLECTION)) {
+    if (length != 0) {
+      context_tabs_array[length] = -1;
+      length++;
+    }
     context_tabs_array[length] = BCONTEXT_COLLECTION;
     length++;
   }
@@ -811,6 +811,9 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
       break;
     case NC_ANIMATION:
       switch (wmn->data) {
+        case ND_NLA_ACTCHANGE:
+          ED_area_tag_redraw(area);
+          break;
         case ND_KEYFRAME:
           if (ELEM(wmn->action, NA_EDITED, NA_ADDED, NA_REMOVED)) {
             ED_area_tag_redraw(area);

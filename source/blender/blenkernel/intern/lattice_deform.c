@@ -93,29 +93,29 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
 
   /* for example with a particle system: (ob == NULL) */
   if (ob == NULL) {
-    /* in deformspace, calc matrix  */
+    /* In deform-space, calc matrix. */
     invert_m4_m4(latmat, oblatt->obmat);
 
     /* back: put in deform array */
     invert_m4_m4(imat, latmat);
   }
   else {
-    /* in deformspace, calc matrix */
+    /* In deform-space, calc matrix. */
     invert_m4_m4(imat, oblatt->obmat);
     mul_m4_m4m4(latmat, imat, ob->obmat);
 
-    /* back: put in deform array */
+    /* back: put in deform array. */
     invert_m4_m4(imat, latmat);
   }
 
-  /* Prefetch latice deform group weights. */
+  /* Prefetch lattice deform group weights. */
   int defgrp_index = -1;
   const MDeformVert *dvert = BKE_lattice_deform_verts_get(oblatt);
   if (lt->vgroup[0] && dvert) {
-    defgrp_index = BKE_object_defgroup_name_index(oblatt, lt->vgroup);
+    defgrp_index = BKE_id_defgroup_name_index(&lt->id, lt->vgroup);
 
     if (defgrp_index != -1) {
-      lattice_weights = MEM_malloc_arrayN(sizeof(float), num_points, "lattice_weights");
+      lattice_weights = MEM_malloc_arrayN(num_points, sizeof(float), "lattice_weights");
       for (int index = 0; index < num_points; index++) {
         lattice_weights[index] = BKE_defvert_find_weight(dvert + index, defgrp_index);
       }
@@ -320,7 +320,9 @@ static void lattice_deform_vert_task(void *__restrict userdata,
   lattice_deform_vert_with_dvert(data, index, data->dvert ? &data->dvert[index] : NULL);
 }
 
-static void lattice_vert_task_editmesh(void *__restrict userdata, MempoolIterData *iter)
+static void lattice_vert_task_editmesh(void *__restrict userdata,
+                                       MempoolIterData *iter,
+                                       const TaskParallelTLS *__restrict UNUSED(tls))
 {
   const LatticeDeformUserdata *data = userdata;
   BMVert *v = (BMVert *)iter;
@@ -328,7 +330,9 @@ static void lattice_vert_task_editmesh(void *__restrict userdata, MempoolIterDat
   lattice_deform_vert_with_dvert(data, BM_elem_index_get(v), dvert);
 }
 
-static void lattice_vert_task_editmesh_no_dvert(void *__restrict userdata, MempoolIterData *iter)
+static void lattice_vert_task_editmesh_no_dvert(void *__restrict userdata,
+                                                MempoolIterData *iter,
+                                                const TaskParallelTLS *__restrict UNUSED(tls))
 {
   const LatticeDeformUserdata *data = userdata;
   BMVert *v = (BMVert *)iter;
@@ -360,7 +364,7 @@ static void lattice_deform_coords_impl(const Object *ob_lattice,
    * We want either a Mesh/Lattice with no derived data, or derived data with deformverts.
    */
   if (defgrp_name && defgrp_name[0] && ob_target && ELEM(ob_target->type, OB_MESH, OB_LATTICE)) {
-    defgrp_index = BKE_object_defgroup_name_index(ob_target, defgrp_name);
+    defgrp_index = BKE_id_defgroup_name_index((ID *)ob_target->data, defgrp_name);
 
     if (defgrp_index != -1) {
       /* if there's derived data without deformverts, don't use vgroups */
@@ -397,12 +401,16 @@ static void lattice_deform_coords_impl(const Object *ob_lattice,
      * have already been properly set. */
     BM_mesh_elem_index_ensure(em_target->bm, BM_VERT);
 
+    TaskParallelSettings settings;
+    BLI_parallel_mempool_settings_defaults(&settings);
+
     if (cd_dvert_offset != -1) {
-      BLI_task_parallel_mempool(em_target->bm->vpool, &data, lattice_vert_task_editmesh, true);
+      BLI_task_parallel_mempool(
+          em_target->bm->vpool, &data, lattice_vert_task_editmesh, &settings);
     }
     else {
       BLI_task_parallel_mempool(
-          em_target->bm->vpool, &data, lattice_vert_task_editmesh_no_dvert, true);
+          em_target->bm->vpool, &data, lattice_vert_task_editmesh_no_dvert, &settings);
     }
   }
   else {

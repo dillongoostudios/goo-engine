@@ -58,7 +58,7 @@ void _bli_array_grow_func(void **arr_p,
 /** \name Public defines
  * \{ */
 
-/** use ``sizeof(*(arr))`` to ensure the array exists and is an array */
+/** use `sizeof(*(arr))` to ensure the array exists and is an array */
 #define BLI_array_declare(arr) \
   int _##arr##_len = ((void)(sizeof(*(arr))), 0); \
   void *_##arr##_static = NULL
@@ -105,8 +105,9 @@ void _bli_array_grow_func(void **arr_p,
   ((void)BLI_array_grow_one(arr), (void)(arr[_##arr##_len - 1] = item))
 
 /**
- * appends an item to the array and returns a pointer to the item in the array.
- * item is not a pointer, but actual data value.*/
+ * Appends an item to the array and returns a pointer to the item in the array.
+ * item is not a pointer, but actual data value.
+ */
 #define BLI_array_append_r(arr, item) \
   ((void)BLI_array_grow_one(arr), (void)(arr[_##arr##_len - 1] = item), (&arr[_##arr##_len - 1]))
 
@@ -155,7 +156,7 @@ void _bli_array_grow_func(void **arr_p,
  * \{ */
 
 /**
- * not part of the 'API' but handy funcs,
+ * Not part of the 'API' but handy functions,
  * same purpose as #BLI_array_staticdeclare()
  * but use when the max size is known ahead of time */
 #define BLI_array_fixedstack_declare(arr, maxstatic, realsize, allocstr) \

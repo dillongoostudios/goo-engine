@@ -383,7 +383,7 @@ static void meshdeformModifier_do(ModifierData *md,
 
   /* bind weights if needed */
   if (!mmd->bindcagecos) {
-    /* progress bar redraw can make this recursive .. */
+    /* progress bar redraw can make this recursive. */
     if (!DEG_is_active(ctx->depsgraph)) {
       BKE_modifier_set_error(ob, md, "Attempt to bind from inactive dependency graph");
       goto finally;
@@ -644,7 +644,6 @@ ModifierTypeInfo modifierType_MeshDeform = {
     /* modifyMesh */ NULL,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

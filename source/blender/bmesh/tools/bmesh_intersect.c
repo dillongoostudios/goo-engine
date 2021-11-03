@@ -379,7 +379,7 @@ static BMVert *bm_isect_edge_tri(struct ISectState *s,
   } \
   (void)0
 
-  /* order tri, then order (1-2, 2-3)*/
+  /* Order tri, then order (1-2, 2-3). */
 #define KEY_EDGE_TRI_ORDER(k) \
   { \
     if (k[2] > k[3]) { \
@@ -560,8 +560,8 @@ static void bm_isect_tri_tri(
   /* vert-vert
    * --------- */
   {
-    /* first check in any verts are touching
-     * (any case where we wont create new verts)
+    /* first check if any verts are touching
+     * (any case where we won't create new verts)
      */
     uint i_a;
     for (i_a = 0; i_a < 3; i_a++) {
@@ -901,7 +901,7 @@ static int isect_bvhtree_point_v3(BVHTree *tree, const float **looptris, const f
   const float dir[3] = {1.0f, 0.0f, 0.0f};
 
   /* Need to initialize hit even tho it's not used.
-   * This is to make it so kd-tree believes we didn't intersect anything and
+   * This is to make it so KD-tree believes we didn't intersect anything and
    * keeps calling the intersect callback.
    */
   hit.index = -1;
@@ -1606,7 +1606,7 @@ bool BM_mesh_intersect(BMesh *bm,
       for (node = s.vert_dissolve; node; node = node->next) {
         BMVert *v = node->link;
         if (BM_vert_is_edge_pair(v)) {
-          /* we wont create degenerate faces from this */
+          /* we won't create degenerate faces from this */
           bool ok = true;
 
           /* would we create a 2-sided-face?

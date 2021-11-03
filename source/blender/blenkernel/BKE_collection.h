@@ -65,7 +65,7 @@ void BKE_collection_add_from_collection(struct Main *bmain,
                                         struct Scene *scene,
                                         struct Collection *collection_src,
                                         struct Collection *collection_dst);
-void BKE_collection_free(struct Collection *collection);
+void BKE_collection_free_data(struct Collection *collection);
 bool BKE_collection_delete(struct Main *bmain, struct Collection *collection, bool hierarchy);
 
 struct Collection *BKE_collection_duplicate(struct Main *bmain,
@@ -76,6 +76,7 @@ struct Collection *BKE_collection_duplicate(struct Main *bmain,
 
 /* Master Collection for Scene */
 
+#define BKE_SCENE_COLLECTION_NAME "Scene Collection"
 struct Collection *BKE_collection_master_add(void);
 
 /* Collection Objects */
@@ -164,7 +165,8 @@ bool BKE_collection_move(struct Main *bmain,
 bool BKE_collection_cycle_find(struct Collection *new_ancestor, struct Collection *collection);
 bool BKE_collection_cycles_fix(struct Main *bmain, struct Collection *collection);
 
-bool BKE_collection_has_collection(struct Collection *parent, struct Collection *collection);
+bool BKE_collection_has_collection(const struct Collection *parent,
+                                   const struct Collection *collection);
 
 void BKE_collection_parent_relations_rebuild(struct Collection *collection);
 void BKE_main_collections_parent_relations_rebuild(struct Main *bmain);
@@ -195,13 +197,14 @@ typedef void (*BKE_scene_collections_Cb)(struct Collection *ob, void *data);
 #define FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_BEGIN(_collection, _object, _mode) \
   { \
     int _base_flag = (_mode == DAG_EVAL_VIEWPORT) ? BASE_ENABLED_VIEWPORT : BASE_ENABLED_RENDER; \
-    int _object_restrict_flag = (_mode == DAG_EVAL_VIEWPORT) ? OB_RESTRICT_VIEWPORT : \
-                                                               OB_RESTRICT_RENDER; \
+    int _object_visibility_flag = (_mode == DAG_EVAL_VIEWPORT) ? OB_HIDE_VIEWPORT : \
+                                                                 OB_HIDE_RENDER; \
     int _base_id = 0; \
     for (Base *_base = (Base *)BKE_collection_object_cache_get(_collection).first; _base; \
          _base = _base->next, _base_id++) { \
       Object *_object = _base->object; \
-      if ((_base->flag & _base_flag) && (_object->restrictflag & _object_restrict_flag) == 0) {
+      if ((_base->flag & _base_flag) && \
+          (_object->visibility_flag & _object_visibility_flag) == 0) {
 
 #define FOREACH_COLLECTION_VISIBLE_OBJECT_RECURSIVE_END \
   } \

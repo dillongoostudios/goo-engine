@@ -19,17 +19,19 @@
  *
  * This file defines the gpu.state API.
  *
- * - Use ``bpygpu_`` for local API.
- * - Use ``BPyGPU`` for public API.
+ * - Use `bpygpu_` for local API.
+ * - Use `BPyGPU` for public API.
  */
 
 #include <Python.h>
 
+#include "GPU_framebuffer.h"
 #include "GPU_state.h"
 
 #include "../generic/py_capi_utils.h"
 #include "../generic/python_utildefines.h"
 
+#include "gpu_py_framebuffer.h"
 #include "gpu_py_state.h" /* own include */
 
 /* -------------------------------------------------------------------- */
@@ -119,6 +121,28 @@ static PyObject *pygpu_state_blend_get(PyObject *UNUSED(self))
 {
   eGPUBlend blend = GPU_blend_get();
   return PyUnicode_FromString(PyC_StringEnum_FindIDFromValue(pygpu_state_blend_items, blend));
+}
+
+PyDoc_STRVAR(pygpu_state_clip_distances_set_doc,
+             ".. function:: clip_distances_set(distances_enabled)\n"
+             "\n"
+             "   Sets the number of `gl_ClipDistance` planes used for clip geometry.\n"
+             "\n"
+             "   :param distances_enabled: Number of clip distances enabled.\n"
+             "   :type distances_enabled: int\n");
+static PyObject *pygpu_state_clip_distances_set(PyObject *UNUSED(self), PyObject *value)
+{
+  int distances_enabled = (int)PyLong_AsUnsignedLong(value);
+  if (distances_enabled == -1) {
+    return NULL;
+  }
+
+  if (distances_enabled > 6) {
+    PyErr_SetString(PyExc_ValueError, "too many distances enabled, max is 6");
+  }
+
+  GPU_clip_distances(distances_enabled);
+  Py_RETURN_NONE;
 }
 
 PyDoc_STRVAR(pygpu_state_depth_test_set_doc,
@@ -334,6 +358,16 @@ static PyObject *pygpu_state_program_point_size_set(PyObject *UNUSED(self), PyOb
   Py_RETURN_NONE;
 }
 
+PyDoc_STRVAR(pygpu_state_framebuffer_active_get_doc,
+             ".. function:: framebuffer_active_get(enable)\n"
+             "\n"
+             "   Return the active framefuffer in context.\n");
+static PyObject *pygpu_state_framebuffer_active_get(PyObject *UNUSED(self))
+{
+  GPUFrameBuffer *fb = GPU_framebuffer_active_get();
+  return BPyGPUFrameBuffer_CreatePyObject(fb, true);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -344,6 +378,10 @@ static struct PyMethodDef pygpu_state__tp_methods[] = {
     /* Manage Stack */
     {"blend_set", (PyCFunction)pygpu_state_blend_set, METH_O, pygpu_state_blend_set_doc},
     {"blend_get", (PyCFunction)pygpu_state_blend_get, METH_NOARGS, pygpu_state_blend_get_doc},
+    {"clip_distances_set",
+     (PyCFunction)pygpu_state_clip_distances_set,
+     METH_O,
+     pygpu_state_clip_distances_set_doc},
     {"depth_test_set",
      (PyCFunction)pygpu_state_depth_test_set,
      METH_O,
@@ -396,6 +434,10 @@ static struct PyMethodDef pygpu_state__tp_methods[] = {
      (PyCFunction)pygpu_state_program_point_size_set,
      METH_O,
      pygpu_state_program_point_size_set_doc},
+    {"active_framebuffer_get",
+     (PyCFunction)pygpu_state_framebuffer_active_get,
+     METH_NOARGS,
+     pygpu_state_framebuffer_active_get_doc},
     {NULL, NULL, 0, NULL},
 };
 

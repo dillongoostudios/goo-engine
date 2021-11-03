@@ -25,16 +25,20 @@
 
 #include "NOD_math_functions.hh"
 
-/* **************** VECTOR MATH ******************** */
-static bNodeSocketTemplate sh_node_vector_math_in[] = {
-    {SOCK_VECTOR, N_("Vector"), 0.0f, 0.0f, 0.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_VECTOR, N_("Vector"), 0.0f, 0.0f, 0.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_VECTOR, N_("Vector"), 0.0f, 0.0f, 0.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("Scale"), 1.0f, 1.0f, 1.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {-1, ""}};
+namespace blender::nodes {
 
-static bNodeSocketTemplate sh_node_vector_math_out[] = {
-    {SOCK_VECTOR, N_("Vector")}, {SOCK_FLOAT, N_("Value")}, {-1, ""}};
+static void sh_node_vector_math_declare(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  b.add_input<decl::Vector>(N_("Vector")).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Vector>(N_("Vector"), "Vector_001").min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Vector>(N_("Vector"), "Vector_002").min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>(N_("Scale")).default_value(1.0f).min(-10000.0f).max(10000.0f);
+  b.add_output<decl::Vector>(N_("Vector"));
+  b.add_output<decl::Float>(N_("Value"));
+};
+
+}  // namespace blender::nodes
 
 static const char *gpu_shader_get_name(int mode)
 {
@@ -94,6 +98,8 @@ static const char *gpu_shader_get_name(int mode)
       return "vector_math_refract";
     case NODE_VECTOR_MATH_FACEFORWARD:
       return "vector_math_faceforward";
+    case NODE_VECTOR_MATH_MULTIPLY_ADD:
+      return "vector_math_multiply_add";
   }
 
   return nullptr;
@@ -134,8 +140,11 @@ static void node_shader_update_vector_math(bNodeTree *UNUSED(ntree), bNode *node
                                   NODE_VECTOR_MATH_ABSOLUTE,
                                   NODE_VECTOR_MATH_FRACTION,
                                   NODE_VECTOR_MATH_NORMALIZE));
-  nodeSetSocketAvailability(
-      sockC, ELEM(node->custom1, NODE_VECTOR_MATH_WRAP, NODE_VECTOR_MATH_FACEFORWARD));
+  nodeSetSocketAvailability(sockC,
+                            ELEM(node->custom1,
+                                 NODE_VECTOR_MATH_WRAP,
+                                 NODE_VECTOR_MATH_FACEFORWARD,
+                                 NODE_VECTOR_MATH_MULTIPLY_ADD));
   nodeSetSocketAvailability(sockScale,
                             ELEM(node->custom1, NODE_VECTOR_MATH_SCALE, NODE_VECTOR_MATH_REFRACT));
   nodeSetSocketAvailability(sockVector,
@@ -154,6 +163,10 @@ static void node_shader_update_vector_math(bNodeTree *UNUSED(ntree), bNode *node
   node_sock_label_clear(sockC);
   node_sock_label_clear(sockScale);
   switch (node->custom1) {
+    case NODE_VECTOR_MATH_MULTIPLY_ADD:
+      node_sock_label(sockB, "Multiplier");
+      node_sock_label(sockC, "Addend");
+      break;
     case NODE_VECTOR_MATH_FACEFORWARD:
       node_sock_label(sockB, "Incident");
       node_sock_label(sockC, "Reference");
@@ -174,12 +187,11 @@ static void node_shader_update_vector_math(bNodeTree *UNUSED(ntree), bNode *node
   }
 }
 
-static const blender::fn::MultiFunction &get_multi_function(
-    blender::nodes::NodeMFNetworkBuilder &builder)
+static const blender::fn::MultiFunction *get_multi_function(bNode &node)
 {
   using blender::float3;
 
-  NodeVectorMathOperation operation = NodeVectorMathOperation(builder.bnode().custom1);
+  NodeVectorMathOperation operation = NodeVectorMathOperation(node.custom1);
 
   const blender::fn::MultiFunction *multi_fn = nullptr;
 
@@ -190,7 +202,7 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
   blender::nodes::try_dispatch_float_math_fl3_fl3_fl3_to_fl3(
@@ -200,7 +212,7 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
   blender::nodes::try_dispatch_float_math_fl3_fl3_fl_to_fl3(
@@ -210,7 +222,7 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
   blender::nodes::try_dispatch_float_math_fl3_fl3_to_fl(
@@ -220,7 +232,7 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
   blender::nodes::try_dispatch_float_math_fl3_fl_to_fl3(
@@ -230,7 +242,7 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
   blender::nodes::try_dispatch_float_math_fl3_to_fl3(
@@ -239,7 +251,7 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
   blender::nodes::try_dispatch_float_math_fl3_to_fl(
@@ -248,15 +260,16 @@ static const blender::fn::MultiFunction &get_multi_function(
         multi_fn = &fn;
       });
   if (multi_fn != nullptr) {
-    return *multi_fn;
+    return multi_fn;
   }
 
-  return builder.get_not_implemented_fn();
+  return nullptr;
 }
 
-static void sh_node_vector_math_expand_in_mf_network(blender::nodes::NodeMFNetworkBuilder &builder)
+static void sh_node_vector_math_build_multi_function(
+    blender::nodes::NodeMultiFunctionBuilder &builder)
 {
-  const blender::fn::MultiFunction &fn = get_multi_function(builder);
+  const blender::fn::MultiFunction *fn = get_multi_function(builder.node());
   builder.set_matching_fn(fn);
 }
 
@@ -265,11 +278,11 @@ void register_node_type_sh_vect_math(void)
   static bNodeType ntype;
 
   sh_fn_node_type_base(&ntype, SH_NODE_VECTOR_MATH, "Vector Math", NODE_CLASS_OP_VECTOR, 0);
-  node_type_socket_templates(&ntype, sh_node_vector_math_in, sh_node_vector_math_out);
+  ntype.declare = blender::nodes::sh_node_vector_math_declare;
   node_type_label(&ntype, node_vector_math_label);
   node_type_gpu(&ntype, gpu_shader_vector_math);
   node_type_update(&ntype, node_shader_update_vector_math);
-  ntype.expand_in_mf_network = sh_node_vector_math_expand_in_mf_network;
+  ntype.build_multi_function = sh_node_vector_math_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

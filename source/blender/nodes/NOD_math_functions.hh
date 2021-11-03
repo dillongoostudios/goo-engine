@@ -266,7 +266,7 @@ inline bool try_dispatch_float_math_fl3_fl3_to_fl3(const NodeVectorMathOperation
       return dispatch([](float3 a, float3 b) { return float3::cross_high_precision(a, b); });
     case NODE_VECTOR_MATH_PROJECT:
       return dispatch([](float3 a, float3 b) {
-        float length_squared = float3::dot(a, b);
+        float length_squared = b.length_squared();
         return (length_squared != 0.0) ? (float3::dot(a, b) / length_squared) * b : float3(0.0f);
       });
     case NODE_VECTOR_MATH_REFLECT:
@@ -347,6 +347,8 @@ inline bool try_dispatch_float_math_fl3_fl3_fl3_to_fl3(const NodeVectorMathOpera
   };
 
   switch (operation) {
+    case NODE_VECTOR_MATH_MULTIPLY_ADD:
+      return dispatch([](float3 a, float3 b, float3 c) { return a * b + c; });
     case NODE_VECTOR_MATH_WRAP:
       return dispatch([](float3 a, float3 b, float3 c) {
         return float3(wrapf(a.x, b.x, c.x), wrapf(a.y, b.y, c.y), wrapf(a.z, b.z, c.z));

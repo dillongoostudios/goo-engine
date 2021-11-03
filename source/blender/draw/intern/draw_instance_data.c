@@ -80,7 +80,7 @@ typedef struct DRWTempInstancingHandle {
   GPUBatch *batch;
   /** Batch containing instancing attributes. */
   GPUBatch *instancer;
-  /** Callbuffer to be used instead of instancer . */
+  /** Callbuffer to be used instead of instancer. */
   GPUVertBuf *buf;
   /** Original non-instanced batch pointer. */
   GPUBatch *geom;
@@ -364,6 +364,8 @@ void DRW_instance_data_list_free(DRWInstanceDataList *idatalist)
   BLI_memblock_destroy(idatalist->pool_batching, (MemblockValFreeFP)temp_batch_free);
 
   BLI_remlink(&g_idatalists, idatalist);
+
+  MEM_freeN(idatalist);
 }
 
 void DRW_instance_data_list_reset(DRWInstanceDataList *idatalist)

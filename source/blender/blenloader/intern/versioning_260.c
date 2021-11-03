@@ -169,7 +169,7 @@ static void do_versions_image_settings_2_60(Scene *sce)
     R_JPEG2K_CINE_48FPS = (1 << 9),
   };
 
-  /* note: rd->subimtype is moved into individual settings now and no longer
+  /* NOTE: rd->subimtype is moved into individual settings now and no longer
    * exists */
   RenderData *rd = &sce->r;
   ImageFormatData *imf = &sce->r.im_format;
@@ -663,6 +663,53 @@ static void do_versions_nodetree_customnodes(bNodeTree *ntree, int UNUSED(is_gro
   }
 }
 
+static bool seq_colorbalance_update_cb(Sequence *seq, void *UNUSED(user_data))
+{
+  Strip *strip = seq->strip;
+
+  if (strip && strip->color_balance) {
+    SequenceModifierData *smd;
+    ColorBalanceModifierData *cbmd;
+
+    smd = SEQ_modifier_new(seq, NULL, seqModifierType_ColorBalance);
+    cbmd = (ColorBalanceModifierData *)smd;
+
+    cbmd->color_balance = *strip->color_balance;
+
+    /* multiplication with color balance used is handled differently,
+     * so we need to move multiplication to modifier so files would be
+     * compatible
+     */
+    cbmd->color_multiply = seq->mul;
+    seq->mul = 1.0f;
+
+    MEM_freeN(strip->color_balance);
+    strip->color_balance = NULL;
+  }
+  return true;
+}
+
+static bool seq_set_alpha_mode_cb(Sequence *seq, void *UNUSED(user_data))
+{
+  enum { SEQ_MAKE_PREMUL = (1 << 6) };
+  if (seq->flag & SEQ_MAKE_PREMUL) {
+    seq->alpha_mode = SEQ_ALPHA_STRAIGHT;
+  }
+  else {
+    SEQ_alpha_mode_from_file_extension(seq);
+  }
+  return true;
+}
+
+static bool seq_set_wipe_angle_cb(Sequence *seq, void *UNUSED(user_data))
+{
+  if (seq->type == SEQ_TYPE_WIPE) {
+    WipeVars *wv = seq->effectdata;
+    wv->angle = DEG2RADF(wv->angle);
+  }
+  return true;
+}
+
 /* NOLINTNEXTLINE: readability-function-size */
 void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
 {
@@ -861,7 +908,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
         int i;
         for (i = 0; i < 3; i++) {
           if ((ob->dsize[i] == 0.0f) || /* simple case, user never touched dsize */
-              (ob->scale[i] == 0.0f))   /* cant scale the dsize to give a non zero result,
+              (ob->scale[i] == 0.0f))   /* can't scale the dsize to give a non zero result,
                                          * so fallback to 1.0f */
           {
             ob->dscale[i] = 1.0f;
@@ -1337,7 +1384,6 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
             tex->iuser.frames = 1;
             tex->iuser.sfra = 1;
-            tex->iuser.ok = 1;
           }
         }
       }
@@ -1492,32 +1538,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
     for (scene = bmain->scenes.first; scene; scene = scene->id.next) {
       if (scene->ed) {
-        Sequence *seq;
-
-        SEQ_ALL_BEGIN (scene->ed, seq) {
-          Strip *strip = seq->strip;
-
-          if (strip && strip->color_balance) {
-            SequenceModifierData *smd;
-            ColorBalanceModifierData *cbmd;
-
-            smd = SEQ_modifier_new(seq, NULL, seqModifierType_ColorBalance);
-            cbmd = (ColorBalanceModifierData *)smd;
-
-            cbmd->color_balance = *strip->color_balance;
-
-            /* multiplication with color balance used is handled differently,
-             * so we need to move multiplication to modifier so files would be
-             * compatible
-             */
-            cbmd->color_multiply = seq->mul;
-            seq->mul = 1.0f;
-
-            MEM_freeN(strip->color_balance);
-            strip->color_balance = NULL;
-          }
-        }
-        SEQ_ALL_END;
+        SEQ_for_each_callback(&scene->ed->seqbase, seq_colorbalance_update_cb, NULL);
       }
     }
   }
@@ -1778,7 +1799,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
             }
             case SPACE_SEQ: {
               SpaceSeq *sseq = (SpaceSeq *)sl;
-              sseq->flag |= SEQ_SHOW_GPENCIL;
+              sseq->flag |= SEQ_PREVIEW_SHOW_GPENCIL;
               break;
             }
             case SPACE_IMAGE: {
@@ -1807,18 +1828,9 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
     Tex *tex;
 
     for (scene = bmain->scenes.first; scene; scene = scene->id.next) {
-      Sequence *seq;
-
-      SEQ_ALL_BEGIN (scene->ed, seq) {
-        enum { SEQ_MAKE_PREMUL = (1 << 6) };
-        if (seq->flag & SEQ_MAKE_PREMUL) {
-          seq->alpha_mode = SEQ_ALPHA_STRAIGHT;
-        }
-        else {
-          SEQ_alpha_mode_from_file_extension(seq);
-        }
+      if (scene->ed) {
+        SEQ_for_each_callback(&scene->ed->seqbase, seq_set_alpha_mode_cb, NULL);
       }
-      SEQ_ALL_END;
 
       if (scene->r.bake_samples == 0) {
         scene->r.bake_samples = 256;
@@ -2149,7 +2161,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
 
     for (scene = bmain->scenes.first; scene; scene = scene->id.next) {
-      /* NB: scene->nodetree is a local ID block, has been direct_link'ed */
+      /* NOTE: `scene->nodetree` is a local ID block, has been direct_link'ed. */
       if (scene->nodetree) {
         scene->nodetree->active_viewer_key = active_viewer_key;
       }
@@ -2390,7 +2402,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
         for (md = ob->modifiers.first; md; md = md->next) {
           if (md->type == eModifierType_Triangulate) {
             TriangulateModifierData *tmd = (TriangulateModifierData *)md;
-            if ((tmd->flag & MOD_TRIANGULATE_BEAUTY)) {
+            if (tmd->flag & MOD_TRIANGULATE_BEAUTY) {
               tmd->quad_method = MOD_TRIANGULATE_QUAD_BEAUTY;
               tmd->ngon_method = MOD_TRIANGULATE_NGON_BEAUTY;
             }
@@ -2411,8 +2423,8 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
       }
 
       /* 'Increment' mode disabled for nodes, use true grid snapping instead */
-      if (scene->toolsettings->snap_node_mode == SCE_SNAP_MODE_INCREMENT) {
-        scene->toolsettings->snap_node_mode = SCE_SNAP_MODE_GRID;
+      if (scene->toolsettings->snap_node_mode == 0) { /* SCE_SNAP_MODE_INCREMENT */
+        scene->toolsettings->snap_node_mode = 8;      /* SCE_SNAP_MODE_GRID */
       }
 
 #ifdef WITH_FFMPEG
@@ -2450,14 +2462,9 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
       }
 
       for (scene = bmain->scenes.first; scene; scene = scene->id.next) {
-        Sequence *seq;
-        SEQ_ALL_BEGIN (scene->ed, seq) {
-          if (seq->type == SEQ_TYPE_WIPE) {
-            WipeVars *wv = seq->effectdata;
-            wv->angle = DEG2RADF(wv->angle);
-          }
+        if (scene->ed) {
+          SEQ_for_each_callback(&scene->ed->seqbase, seq_set_wipe_angle_cb, NULL);
         }
-        SEQ_ALL_END;
       }
 
       FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
@@ -2594,11 +2601,11 @@ void do_versions_after_linking_260(Main *bmain)
    *
    * This assumes valid typeinfo pointers, as set in lib_link_ntree.
    *
-   * Note: theoretically only needed in node groups (main->nodetree),
+   * NOTE: theoretically only needed in node groups (main->nodetree),
    * but due to a temporary bug such links could have been added in all trees,
    * so have to clean up all of them ...
    *
-   * Note: this always runs, without it links with NULL fromnode and tonode remain
+   * NOTE: this always runs, without it links with NULL fromnode and tonode remain
    * which causes problems.
    */
   if (!MAIN_VERSION_ATLEAST(bmain, 266, 3)) {
@@ -2614,9 +2621,9 @@ void do_versions_after_linking_260(Main *bmain)
 
       float input_locx = 1000000.0f, input_locy = 0.0f;
       float output_locx = -1000000.0f, output_locy = 0.0f;
-      /* rough guess, not nice but we don't have access to UI constants here ... */
-      static const float offsetx = 42 + 3 * 20 + 20;
-      /*static const float offsety = 0.0f;*/
+      /* Rough guess, not nice but we don't have access to UI constants here. */
+      const float offsetx = 42 + 3 * 20 + 20;
+      // const float offsety = 0.0f;
 
       if (create_io_nodes) {
         if (ntree->inputs.first) {

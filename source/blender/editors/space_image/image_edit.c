@@ -51,21 +51,19 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
-/* note; image_panel_properties() uses pointer to sima->image directly */
-Image *ED_space_image(SpaceImage *sima)
+/* NOTE: image_panel_properties() uses pointer to sima->image directly. */
+Image *ED_space_image(const SpaceImage *sima)
 {
   return sima->image;
 }
 
-void ED_space_image_set(Main *bmain, SpaceImage *sima, Object *obedit, Image *ima, bool automatic)
+void ED_space_image_set(Main *bmain, SpaceImage *sima, Image *ima, bool automatic)
 {
   /* Automatically pin image when manually assigned, otherwise it follows object. */
   if (!automatic && sima->image != ima && sima->mode == SI_MODE_UV) {
     sima->pin = true;
   }
 
-  /* change the space ima after because uvedit_face_visible_test uses the space ima
-   * to check if the face is displayed in UV-localview */
   sima->image = ima;
 
   if (ima == NULL || ima->type == IMA_TYPE_R_RESULT || ima->type == IMA_TYPE_COMPOSITE) {
@@ -79,10 +77,6 @@ void ED_space_image_set(Main *bmain, SpaceImage *sima, Object *obedit, Image *im
   }
 
   id_us_ensure_real((ID *)sima->image);
-
-  if (obedit) {
-    WM_main_add_notifier(NC_GEOM | ND_DATA, obedit->data);
-  }
 
   WM_main_add_notifier(NC_SPACE | ND_SPACE_IMAGE, NULL);
 }
@@ -119,7 +113,7 @@ void ED_space_image_auto_set(const bContext *C, SpaceImage *sima)
   }
 }
 
-Mask *ED_space_image_get_mask(SpaceImage *sima)
+Mask *ED_space_image_get_mask(const SpaceImage *sima)
 {
   return sima->mask_info.mask;
 }
@@ -141,8 +135,10 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **r_lock, int tile)
   ImBuf *ibuf;
 
   if (sima && sima->image) {
+    const Image *image = sima->image;
+
 #if 0
-    if (sima->image->type == IMA_TYPE_R_RESULT && BIF_show_render_spare()) {
+    if (image->type == IMA_TYPE_R_RESULT && BIF_show_render_spare()) {
       return BIF_render_spare_imbuf();
     }
     else
@@ -154,6 +150,12 @@ ImBuf *ED_space_image_acquire_buffer(SpaceImage *sima, void **r_lock, int tile)
     }
 
     if (ibuf) {
+      if (image->type == IMA_TYPE_R_RESULT && ibuf->x != 0 && ibuf->y != 0) {
+        /* Render result might be lazily allocated. Return ibuf without buffers to indicate that
+         * there is image buffer but it has no data yet. */
+        return ibuf;
+      }
+
       if (ibuf->rect || ibuf->rect_float) {
         return ibuf;
       }
@@ -376,7 +378,7 @@ void ED_image_point_pos__reverse(SpaceImage *sima,
 }
 
 /**
- * This is more a user-level functionality, for going to next/prev used slot,
+ * This is more a user-level functionality, for going to `next/prev` used slot,
  * Stepping onto the last unused slot too.
  */
 bool ED_image_slot_cycle(struct Image *image, int direction)
@@ -432,7 +434,7 @@ void ED_space_image_scopes_update(const struct bContext *C,
   /* We also don't update scopes of render result during render. */
   if (G.is_rendering) {
     const Image *image = sima->image;
-    if (image != NULL && (image->type == IMA_TYPE_R_RESULT || image->type == IMA_TYPE_COMPOSITE)) {
+    if (image != NULL && (ELEM(image->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE))) {
       return;
     }
   }
@@ -443,12 +445,12 @@ void ED_space_image_scopes_update(const struct bContext *C,
                     &scene->display_settings);
 }
 
-bool ED_space_image_show_render(SpaceImage *sima)
+bool ED_space_image_show_render(const SpaceImage *sima)
 {
   return (sima->image && ELEM(sima->image->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE));
 }
 
-bool ED_space_image_show_paint(SpaceImage *sima)
+bool ED_space_image_show_paint(const SpaceImage *sima)
 {
   if (ED_space_image_show_render(sima)) {
     return false;
@@ -457,7 +459,7 @@ bool ED_space_image_show_paint(SpaceImage *sima)
   return (sima->mode == SI_MODE_PAINT);
 }
 
-bool ED_space_image_show_uvedit(SpaceImage *sima, Object *obedit)
+bool ED_space_image_show_uvedit(const SpaceImage *sima, Object *obedit)
 {
   if (sima) {
     if (ED_space_image_show_render(sima)) {

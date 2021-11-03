@@ -159,7 +159,7 @@ std::vector<bAction *> bc_getSceneActions(const bContext *C, Object *ob, bool al
     for (id = (ID *)bmain->actions.first; id; id = (ID *)(id->next)) {
       bAction *act = (bAction *)id;
       /* XXX This currently creates too many actions.
-       * TODO Need to check if the action is compatible to the given object. */
+       * TODO: Need to check if the action is compatible to the given object. */
       actions.push_back(act);
     }
   }
@@ -281,7 +281,7 @@ bool bc_has_object_type(LinkNode *export_set, short obtype)
 
   for (node = export_set; node; node = node->next) {
     Object *ob = (Object *)node->link;
-    /* XXX - why is this checking for ob->data? - we could be looking for empties */
+    /* XXX: why is this checking for ob->data? - we could be looking for empties. */
     if (ob->type == obtype && ob->data) {
       return true;
     }
@@ -636,7 +636,7 @@ void BoneExtended::set_bone_layers(std::string layerString, std::vector<std::str
 
   while (ss >> layer) {
 
-    /* Blender uses numbers to specify layers*/
+    /* Blender uses numbers to specify layers. */
     if (isInteger(layer)) {
       pos = atoi(layer.c_str());
       if (pos >= 0 && pos < 32) {
@@ -645,10 +645,10 @@ void BoneExtended::set_bone_layers(std::string layerString, std::vector<std::str
       }
     }
 
-    /* layer uses labels (not supported by blender). Map to layer numbers:*/
+    /* Layer uses labels (not supported by blender). Map to layer numbers: */
     pos = find(layer_labels.begin(), layer_labels.end(), layer) - layer_labels.begin();
     if (pos >= layer_labels.size()) {
-      layer_labels.push_back(layer); /* remember layer number for future usage*/
+      layer_labels.push_back(layer); /* Remember layer number for future usage. */
     }
 
     if (pos > 31) {
@@ -728,7 +728,7 @@ void bc_set_IDPropertyMatrix(EditBone *ebone, const char *key, float mat[4][4])
 /**
  * Stores a Float value as a custom bone property
  *
- * Note: This function is currently not needed. Keep for future usage
+ * NOTE: This function is currently not needed. Keep for future usage
  */
 static void bc_set_IDProperty(EditBone *ebone, const char *key, float value)
 {
@@ -1018,7 +1018,7 @@ void bc_apply_global_transform(Vector &to_vec, const BCMatrix &global_transform,
  * Check if custom information about bind matrix exists and modify the from_mat
  * accordingly.
  *
- * Note: This is old style for Blender <= 2.78 only kept for compatibility
+ * NOTE: This is old style for Blender <= 2.78 only kept for compatibility
  */
 void bc_create_restpose_mat(BCExportSettings &export_settings,
                             Bone *bone,
@@ -1216,8 +1216,10 @@ static bNodeSocket *bc_group_add_input_socket(bNodeTree *ntree,
 {
   bNodeSocket *to_socket = (bNodeSocket *)BLI_findlink(&to_node->inputs, to_index);
 
-  //bNodeSocket *socket = ntreeAddSocketInterfaceFromSocket(ntree, to_node, to_socket);
-  //return socket;
+#  if 0
+  bNodeSocket *socket = ntreeAddSocketInterfaceFromSocket(ntree, to_node, to_socket);
+  return socket;
+#  endif
 
   bNodeSocket *gsock = ntreeAddSocketInterfaceFromSocket(ntree, to_node, to_socket);
   bNode *inputGroup = ntreeFindType(ntree, NODE_GROUP_INPUT);
@@ -1235,8 +1237,10 @@ static bNodeSocket *bc_group_add_output_socket(bNodeTree *ntree,
 {
   bNodeSocket *from_socket = (bNodeSocket *)BLI_findlink(&from_node->outputs, from_index);
 
-  //bNodeSocket *socket = ntreeAddSocketInterfaceFromSocket(ntree, to_node, to_socket);
-  //return socket;
+#  if 0
+  bNodeSocket *socket = ntreeAddSocketInterfaceFromSocket(ntree, to_node, to_socket);
+  return socket;
+#  endif
 
   bNodeSocket *gsock = ntreeAddSocketInterfaceFromSocket(ntree, from_node, from_socket);
   bNode *outputGroup = ntreeFindType(ntree, NODE_GROUP_OUTPUT);

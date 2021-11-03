@@ -33,14 +33,14 @@ GHOST_DisplayManagerSDL::GHOST_DisplayManagerSDL(GHOST_SystemSDL *system)
   memset(&m_mode, 0, sizeof(m_mode));
 }
 
-GHOST_TSuccess GHOST_DisplayManagerSDL::getNumDisplays(GHOST_TUns8 &numDisplays) const
+GHOST_TSuccess GHOST_DisplayManagerSDL::getNumDisplays(uint8_t &numDisplays) const
 {
   numDisplays = SDL_GetNumVideoDisplays();
   return GHOST_kSuccess;
 }
 
-GHOST_TSuccess GHOST_DisplayManagerSDL::getNumDisplaySettings(GHOST_TUns8 display,
-                                                              GHOST_TInt32 &numSettings) const
+GHOST_TSuccess GHOST_DisplayManagerSDL::getNumDisplaySettings(uint8_t display,
+                                                              int32_t &numSettings) const
 {
   GHOST_ASSERT(display < 1, "Only single display systems are currently supported.\n");
 
@@ -66,8 +66,8 @@ static void ghost_mode_to_sdl(const GHOST_DisplaySetting &setting, SDL_DisplayMo
   mode->refresh_rate = setting.frequency;
 }
 
-GHOST_TSuccess GHOST_DisplayManagerSDL::getDisplaySetting(GHOST_TUns8 display,
-                                                          GHOST_TInt32 index,
+GHOST_TSuccess GHOST_DisplayManagerSDL::getDisplaySetting(uint8_t display,
+                                                          int32_t index,
                                                           GHOST_DisplaySetting &setting) const
 {
   GHOST_ASSERT(display < 1, "Only single display systems are currently supported.\n");
@@ -81,7 +81,7 @@ GHOST_TSuccess GHOST_DisplayManagerSDL::getDisplaySetting(GHOST_TUns8 display,
 }
 
 GHOST_TSuccess GHOST_DisplayManagerSDL::getCurrentDisplaySetting(
-    GHOST_TUns8 display, GHOST_DisplaySetting &setting) const
+    uint8_t display, GHOST_DisplaySetting &setting) const
 {
   SDL_DisplayMode mode;
   SDL_GetCurrentDisplayMode(display, &mode);
@@ -98,15 +98,14 @@ GHOST_TSuccess GHOST_DisplayManagerSDL::getCurrentDisplayModeSDL(SDL_DisplayMode
 }
 
 GHOST_TSuccess GHOST_DisplayManagerSDL::setCurrentDisplaySetting(
-    GHOST_TUns8 display, const GHOST_DisplaySetting &setting)
+    uint8_t display, const GHOST_DisplaySetting &setting)
 {
   /*
-   * Mode switching code ported from Quake 2 version 3.21 and bzflag version
-   * 2.4.0:
+   * Mode switching code ported from Quake 2 version 3.21 and BZFLAG version 2.4.0:
    * ftp://ftp.idsoftware.com/idstuff/source/q2source-3.21.zip
    * See linux/gl_glx.c:GLimp_SetMode
    * http://wiki.bzflag.org/BZFlag_Source
-   * See src/platform/SDLDisplay.cxx:SDLDisplay and createWindow
+   * See: `src/platform/SDLDisplay.cxx:SDLDisplay` and `createWindow`.
    */
   SDL_DisplayMode mode;
   const int num_modes = SDL_GetNumDisplayModes(display);
@@ -160,7 +159,7 @@ GHOST_TSuccess GHOST_DisplayManagerSDL::setCurrentDisplaySetting(
   else {
     /* this is a problem for the BGE player :S, perhaps SDL2 will resolve at some point.
      * we really need SDL_SetDisplayModeForDisplay() to become an API func! - campbell */
-    printf("no windows available, cant fullscreen\n");
+    printf("no windows available, can't fullscreen\n");
 
     /* do not fail, we will try again later when the window is created - wander */
     return GHOST_kSuccess;

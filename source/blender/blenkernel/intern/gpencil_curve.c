@@ -242,8 +242,8 @@ static int gpencil_get_stroke_material_fromcurve(
   float color_fill[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 
   /* If the curve has 2 materials, the first is considered as Fill and the second as Stroke.
-   * If the has only one material, if the name contains _stroke, the is used
-   * as stroke, else as fill.*/
+   * If the has only one material, if the name contains "_stroke",
+   * it's used as a stroke, otherwise as fill. */
   if (ob_cu->totcol >= 2) {
     *do_stroke = true;
     *do_fill = true;
@@ -350,7 +350,7 @@ static void gpencil_convert_spline(Main *bmain,
   /* Assign material index to stroke. */
   gps->mat_nr = r_idx;
 
-  /* Add stroke to frame.*/
+  /* Add stroke to frame. */
   BLI_addtail(&gpf->strokes, gps);
 
   float *coord_array = NULL;
@@ -515,7 +515,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
     if (collection != NULL) {
       gpl = BKE_gpencil_layer_named_get(gpd, collection->id.name + 2);
       if (gpl == NULL) {
-        gpl = BKE_gpencil_layer_addnew(gpd, collection->id.name + 2, true);
+        gpl = BKE_gpencil_layer_addnew(gpd, collection->id.name + 2, true, false);
       }
     }
   }
@@ -523,7 +523,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
   if (gpl == NULL) {
     gpl = BKE_gpencil_layer_active_get(gpd);
     if (gpl == NULL) {
-      gpl = BKE_gpencil_layer_addnew(gpd, DATA_("GP_Layer"), true);
+      gpl = BKE_gpencil_layer_addnew(gpd, DATA_("GP_Layer"), true, false);
     }
   }
 
@@ -543,7 +543,7 @@ void BKE_gpencil_convert_curve(Main *bmain,
   int actcol = ob_gp->actcol;
 
   for (int slot = 1; slot <= ob_gp->totcol; slot++) {
-    while (slot <= ob_gp->totcol && !BKE_object_material_slot_used(ob_gp->data, slot)) {
+    while (slot <= ob_gp->totcol && !BKE_object_material_slot_used(ob_gp, slot)) {
       ob_gp->actcol = slot;
       BKE_object_material_slot_remove(bmain, ob_gp);
 
@@ -883,7 +883,7 @@ static void gpencil_interpolate_fl_from_to(
   float *r = point_offset;
   for (int i = 0; i <= it; i++) {
     float fac = (float)i / (float)it;
-    fac = 3.0f * fac * fac - 2.0f * fac * fac * fac;  // smooth
+    fac = 3.0f * fac * fac - 2.0f * fac * fac * fac; /* Smooth. */
     *r = interpf(to, from, fac);
     r = POINTER_OFFSET(r, stride);
   }
@@ -896,7 +896,7 @@ static void gpencil_interpolate_v4_from_to(
   float *r = point_offset;
   for (int i = 0; i <= it; i++) {
     float fac = (float)i / (float)it;
-    fac = 3.0f * fac * fac - 2.0f * fac * fac * fac;  // smooth
+    fac = 3.0f * fac * fac - 2.0f * fac * fac * fac; /* Smooth. */
     interp_v4_v4v4(r, from, to, fac);
     r = POINTER_OFFSET(r, stride);
   }
@@ -1167,7 +1167,7 @@ void BKE_gpencil_editcurve_recalculate_handles(bGPDstroke *gps)
     bGPDcurve_point *gpc_pt = &gpc->curve_points[i];
     bGPDcurve_point *gpc_pt_prev = &gpc->curve_points[i - 1];
     bGPDcurve_point *gpc_pt_next = &gpc->curve_points[i + 1];
-    /* update handle if point or neighbour is selected */
+    /* update handle if point or neighbor is selected */
     if (gpc_pt->flag & GP_CURVE_POINT_SELECT || gpc_pt_prev->flag & GP_CURVE_POINT_SELECT ||
         gpc_pt_next->flag & GP_CURVE_POINT_SELECT) {
       BezTriple *bezt = &gpc_pt->bezt;

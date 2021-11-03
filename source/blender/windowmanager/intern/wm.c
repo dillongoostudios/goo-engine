@@ -86,7 +86,7 @@ static void window_manager_foreach_id(ID *id, LibraryForeachIDData *data)
   wmWindowManager *wm = (wmWindowManager *)id;
 
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
-    BKE_LIB_FOREACHID_PROCESS(data, win->scene, IDWALK_CB_USER_ONE);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, win->scene, IDWALK_CB_USER_ONE);
 
     /* This pointer can be NULL during old files reading, better be safe than sorry. */
     if (win->workspace_hook != NULL) {
@@ -153,7 +153,7 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
     if (win->workspace_hook != NULL) {
       /* We need to restore a pointer to this later when reading workspaces,
        * so store in global oldnew-map.
-       * Note that this is only needed for versioning of older .blend files now.. */
+       * Note that this is only needed for versioning of older .blend files now. */
       BLO_read_data_globmap_add(reader, hook, win->workspace_hook);
       /* Cleanup pointers to data outside of this data-block scope. */
       win->workspace_hook->act_layout = NULL;
@@ -168,7 +168,7 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
     win->eventstate = NULL;
     win->cursor_keymap_status = NULL;
     win->tweak = NULL;
-#ifdef WIN32
+#if defined(WIN32) || defined(__APPLE__)
     win->ime_data = NULL;
 #endif
 
@@ -266,8 +266,7 @@ IDTypeInfo IDType_ID_WM = {
     .name = "WindowManager",
     .name_plural = "window_managers",
     .translation_context = BLT_I18NCONTEXT_ID_WINDOWMANAGER,
-    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_MAKELOCAL |
-             IDTYPE_FLAGS_NO_ANIMDATA,
+    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA,
 
     .init_data = NULL,
     .copy_data = NULL,
@@ -516,7 +515,7 @@ void WM_check(bContext *C)
   }
 
   /* Case: fileread. */
-  /* Note: this runs in background mode to set the screen context cb. */
+  /* NOTE: this runs in background mode to set the screen context cb. */
   if ((wm->initialized & WM_WINDOW_IS_INIT) == 0) {
     ED_screens_init(bmain, wm);
     wm->initialized |= WM_WINDOW_IS_INIT;
@@ -628,6 +627,7 @@ void wm_close_and_free_all(bContext *C, ListBase *wmlist)
     wm_close_and_free(C, wm);
     BLI_remlink(wmlist, wm);
     BKE_libblock_free_data(&wm->id, true);
+    BKE_libblock_free_data_py(&wm->id);
     MEM_freeN(wm);
   }
 }

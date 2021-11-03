@@ -258,10 +258,6 @@ typedef struct ModifierTypeInfo {
                             const struct ModifierEvalContext *ctx,
                             struct GeometrySet *geometry_set);
 
-  struct Volume *(*modifyVolume)(struct ModifierData *md,
-                                 const struct ModifierEvalContext *ctx,
-                                 struct Volume *volume);
-
   /********************* Optional functions *********************/
 
   /**
@@ -323,12 +319,14 @@ typedef struct ModifierTypeInfo {
    * changes.
    *
    * This function is optional (assumes false if not present).
+   *
+   * The dag_eval_mode should be of type eEvaluationMode.
    */
-  bool (*dependsOnTime)(struct ModifierData *md);
+  bool (*dependsOnTime)(struct Scene *scene, struct ModifierData *md, const int dag_eval_mode);
 
   /**
    * True when a deform modifier uses normals, the requiredDataMask
-   * cant be used here because that refers to a normal layer whereas
+   * can't be used here because that refers to a normal layer whereas
    * in this case we need to know if the deform modifier uses normals.
    *
    * this is needed because applying 2 deform modifiers will give the
@@ -429,7 +427,7 @@ void BKE_modifier_copydata(struct ModifierData *md, struct ModifierData *target)
 void BKE_modifier_copydata_ex(struct ModifierData *md,
                               struct ModifierData *target,
                               const int flag);
-bool BKE_modifier_depends_ontime(struct ModifierData *md);
+bool BKE_modifier_depends_ontime(struct Scene *scene, struct ModifierData *md, int dag_eval_mode);
 bool BKE_modifier_supports_mapping(struct ModifierData *md);
 bool BKE_modifier_supports_cage(struct Scene *scene, struct ModifierData *md);
 bool BKE_modifier_couldbe_cage(struct Scene *scene, struct ModifierData *md);

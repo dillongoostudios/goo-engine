@@ -51,7 +51,7 @@
 /* *************************** Calculate Range ************************** */
 
 /* Get the min/max keyframes. */
-/* Note: it should return total boundbox, filter for selection only can be argument... */
+/* NOTE: it should return total boundbox, filter for selection only can be argument... */
 void get_graph_keyframe_extents(bAnimContext *ac,
                                 float *xmin,
                                 float *xmax,
@@ -137,7 +137,7 @@ void get_graph_keyframe_extents(bAnimContext *ac,
       }
     }
 
-    /* Ensure that the extents are not too extreme that view implodes...*/
+    /* Ensure that the extents are not too extreme that view implodes. */
     if (foundBounds) {
       if ((xmin && xmax) && (fabsf(*xmax - *xmin) < 0.001f)) {
         *xmin -= 0.0005f;
@@ -213,13 +213,13 @@ static int graphkeys_previewrange_exec(bContext *C, wmOperator *UNUSED(op))
   scene = ac.scene;
 
   /* Set the range directly. */
-  get_graph_keyframe_extents(&ac, &min, &max, NULL, NULL, false, false);
+  get_graph_keyframe_extents(&ac, &min, &max, NULL, NULL, true, false);
   scene->r.flag |= SCER_PRV_RANGE;
   scene->r.psfra = round_fl_to_int(min);
   scene->r.pefra = round_fl_to_int(max);
 
   /* Set notifier that things have changed. */
-  // XXX Err... there's nothing for frame ranges yet, but this should do fine too.
+  /* XXX: Err... there's nothing for frame ranges yet, but this should do fine too. */
   WM_event_add_notifier(C, NC_SCENE | ND_FRAME, ac.scene);
 
   return OPERATOR_FINISHED;
@@ -228,9 +228,9 @@ static int graphkeys_previewrange_exec(bContext *C, wmOperator *UNUSED(op))
 void GRAPH_OT_previewrange_set(wmOperatorType *ot)
 {
   /* Identifiers */
-  ot->name = "Auto-Set Preview Range";
+  ot->name = "Set Preview Range to Selected";
   ot->idname = "GRAPH_OT_previewrange_set";
-  ot->description = "Automatically set Preview Range based on range of keyframes";
+  ot->description = "Set Preview Range based on range of selected keyframes";
 
   /* API callbacks */
   ot->exec = graphkeys_previewrange_exec;
@@ -269,7 +269,7 @@ static int graphkeys_viewall(bContext *C,
   BLI_rctf_scale(&cur_new, 1.1f);
 
   /* Take regions into account, that could block the view.
-   * Marker region is supposed to be larger than the scroll-bar, so prioritize it.*/
+   * Marker region is supposed to be larger than the scroll-bar, so prioritize it. */
   float pad_top = UI_TIME_SCRUB_MARGIN_Y;
   float pad_bottom = BLI_listbase_is_empty(ED_context_get_markers(C)) ? V2D_SCROLL_HANDLE_HEIGHT :
                                                                         UI_MARKER_MARGIN_Y;
@@ -398,7 +398,7 @@ static void create_ghost_curves(bAnimContext *ac, int start, int end)
             ANIMFILTER_NODUPLIS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
-  /* Loop through filtered data and add keys between selected keyframes on every frame . */
+  /* Loop through filtered data and add keys between selected keyframes on every frame. */
   for (ale = anim_data.first; ale; ale = ale->next) {
     FCurve *fcu = (FCurve *)ale->key_data;
     FCurve *gcu = BKE_fcurve_create();

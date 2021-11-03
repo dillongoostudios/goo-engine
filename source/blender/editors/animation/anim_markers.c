@@ -123,7 +123,7 @@ ListBase *ED_animcontext_get_markers(const bAnimContext *ac)
  * so don't assume anything.
  * \param scene: Current scene (for getting current frame)
  * \param mode: (TfmMode) transform mode that this transform is for
- * \param value: From the transform code, this is ``t->vec[0]``
+ * \param value: From the transform code, this is `t->vec[0]`
  * (which is delta transform for grab/extend, and scale factor for scale)
  * \param side: (B/L/R) for 'extend' functionality, which side of current frame to use
  */
@@ -445,7 +445,7 @@ static void draw_marker_name(const uchar *text_color,
   if (marker->camera) {
     Object *camera = marker->camera;
     name = camera->id.name + 2;
-    if (camera->restrictflag & OB_RESTRICT_RENDER) {
+    if (camera->visibility_flag & OB_HIDE_RENDER) {
       final_text_color[3] = 100;
     }
   }
@@ -483,7 +483,8 @@ static int marker_get_icon_id(TimeMarker *marker, int flag)
 {
   if (flag & DRAW_MARKERS_LOCAL) {
     return (marker->flag & ACTIVE) ? ICON_PMARKER_ACT :
-                                     (marker->flag & SELECT) ? ICON_PMARKER_SEL : ICON_PMARKER;
+           (marker->flag & SELECT) ? ICON_PMARKER_SEL :
+                                     ICON_PMARKER;
   }
 #ifdef DURIAN_CAMERA_SWITCH
   if (marker->camera) {
@@ -687,7 +688,7 @@ static int ed_marker_add_exec(bContext *C, wmOperator *UNUSED(op))
   marker = MEM_callocN(sizeof(TimeMarker), "TimeMarker");
   marker->flag = SELECT;
   marker->frame = frame;
-  BLI_snprintf(marker->name, sizeof(marker->name), "F_%02d", frame); /* XXX - temp code only */
+  BLI_snprintf(marker->name, sizeof(marker->name), "F_%02d", frame); /* XXX: temp code only. */
   BLI_addtail(markers, marker);
 
   WM_event_add_notifier(C, NC_SCENE | ND_MARKERS, NULL);
@@ -871,7 +872,7 @@ static int ed_marker_move_invoke(bContext *C, wmOperator *op, const wmEvent *eve
     ARegion *region = CTX_wm_region(C);
     View2D *v2d = &region->v2d;
     ListBase *markers = ED_context_get_markers(C);
-    if (!region_position_is_over_marker(v2d, markers, event->x - region->winrct.xmin)) {
+    if (!region_position_is_over_marker(v2d, markers, event->xy[0] - region->winrct.xmin)) {
       return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
     }
   }
@@ -879,8 +880,8 @@ static int ed_marker_move_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   if (ed_marker_move_init(C, op)) {
     MarkerMove *mm = op->customdata;
 
-    mm->evtx = event->x;
-    mm->firstx = event->x;
+    mm->evtx = event->xy[0];
+    mm->firstx = event->xy[0];
     mm->event_type = event->type;
 
     /* add temp handler */
@@ -897,7 +898,7 @@ static int ed_marker_move_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   return OPERATOR_CANCELLED;
 }
 
-/* note, init has to be called successfully */
+/* NOTE: init has to be called successfully. */
 static void ed_marker_move_apply(bContext *C, wmOperator *op)
 {
 #ifdef DURIAN_CAMERA_SWITCH
@@ -992,11 +993,11 @@ static int ed_marker_move_modal(bContext *C, wmOperator *op, const wmEvent *even
 
           dx = BLI_rctf_size_x(&v2d->cur) / BLI_rcti_size_x(&v2d->mask);
 
-          if (event->x != mm->evtx) { /* XXX maybe init for first time */
+          if (event->xy[0] != mm->evtx) { /* XXX maybe init for first time */
             float fac;
 
-            mm->evtx = event->x;
-            fac = ((float)(event->x - mm->firstx) * dx);
+            mm->evtx = event->xy[0];
+            fac = ((float)(event->xy[0] - mm->firstx) * dx);
 
             apply_keyb_grid(event->shift, event->ctrl, &fac, 0.0, FPS, 0.1 * FPS, 0);
 
@@ -1353,7 +1354,8 @@ static int ed_marker_box_select_invoke(bContext *C, wmOperator *op, const wmEven
   View2D *v2d = &region->v2d;
 
   ListBase *markers = ED_context_get_markers(C);
-  bool over_marker = region_position_is_over_marker(v2d, markers, event->x - region->winrct.xmin);
+  bool over_marker = region_position_is_over_marker(
+      v2d, markers, event->xy[0] - region->winrct.xmin);
 
   bool tweak = RNA_boolean_get(op->ptr, "tweak");
   if (tweak && over_marker) {

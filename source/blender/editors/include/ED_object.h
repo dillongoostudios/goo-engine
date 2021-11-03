@@ -50,6 +50,7 @@ struct bContext;
 struct bFaceMap;
 struct bPoseChannel;
 struct uiLayout;
+struct wmEvent;
 struct wmKeyConfig;
 struct wmOperator;
 struct wmOperatorType;
@@ -62,7 +63,8 @@ struct Object *ED_object_active_context(const struct bContext *C);
 void ED_collection_hide_menu_draw(const struct bContext *C, struct uiLayout *layout);
 
 Object **ED_object_array_in_mode_or_selected(struct bContext *C,
-                                             bool (*filter_fn)(struct Object *ob, void *user_data),
+                                             bool (*filter_fn)(const struct Object *ob,
+                                                               void *user_data),
                                              void *filter_user_data,
                                              uint *r_objects_len);
 
@@ -119,6 +121,8 @@ void ED_object_xform_skip_child_container_item_ensure(struct XFormObjectSkipChil
                                                       struct Object *ob,
                                                       struct Object *ob_parent_recurse,
                                                       int mode);
+
+void ED_object_xform_array_m4(struct Object **objects, uint objects_len, const float matrix[4][4]);
 
 /* object_ops.c */
 void ED_operatortypes_object(void);
@@ -198,6 +202,9 @@ void ED_object_parent(struct Object *ob,
                       struct Object *parent,
                       const int type,
                       const char *substr);
+char *ED_object_ot_drop_named_material_tooltip(struct bContext *C,
+                                               struct PointerRNA *properties,
+                                               const int mval[2]);
 
 /* bitflags for enter/exit editmode */
 enum {
@@ -281,6 +288,7 @@ float ED_object_new_primitive_matrix(struct bContext *C,
                                      struct Object *obedit,
                                      const float loc[3],
                                      const float rot[3],
+                                     const float scale[3],
                                      float primmat[4][4]);
 
 /* Avoid allowing too much insane values even by typing
@@ -295,12 +303,12 @@ void ED_object_add_mesh_props(struct wmOperatorType *ot);
 bool ED_object_add_generic_get_opts(struct bContext *C,
                                     struct wmOperator *op,
                                     const char view_align_axis,
-                                    float loc[3],
-                                    float rot[3],
-                                    float scale[3],
-                                    bool *enter_editmode,
-                                    unsigned short *local_view_bits,
-                                    bool *is_view_aligned);
+                                    float r_loc[3],
+                                    float r_rot[3],
+                                    float r_scale[3],
+                                    bool *r_enter_editmode,
+                                    unsigned short *r_local_view_bits,
+                                    bool *r_is_view_aligned);
 
 struct Object *ED_object_add_type_with_obdata(struct bContext *C,
                                               const int type,
@@ -333,7 +341,16 @@ typedef enum eObjectPathCalcRange {
 
 void ED_objects_recalculate_paths(struct bContext *C,
                                   struct Scene *scene,
-                                  eObjectPathCalcRange range);
+                                  eObjectPathCalcRange range,
+                                  struct ListBase *ld_objects);
+
+void ED_objects_recalculate_paths_selected(struct bContext *C,
+                                           struct Scene *scene,
+                                           eObjectPathCalcRange range);
+
+void ED_objects_recalculate_paths_visible(struct bContext *C,
+                                          struct Scene *scene,
+                                          eObjectPathCalcRange range);
 
 /* constraints */
 struct ListBase *ED_object_constraint_active_list(struct Object *ob);
@@ -387,7 +404,7 @@ void ED_object_mode_generic_exit(struct Main *bmain,
                                  struct Depsgraph *depsgraph,
                                  struct Scene *scene,
                                  struct Object *ob);
-bool ED_object_mode_generic_has_data(struct Depsgraph *depsgraph, struct Object *ob);
+bool ED_object_mode_generic_has_data(struct Depsgraph *depsgraph, const struct Object *ob);
 
 void ED_object_posemode_set_for_weight_paint(struct bContext *C,
                                              struct Main *bmain,

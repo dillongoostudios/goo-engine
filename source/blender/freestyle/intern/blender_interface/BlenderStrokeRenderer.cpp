@@ -94,17 +94,15 @@ BlenderStrokeRenderer::BlenderStrokeRenderer(Render *re, int render_count)
   freestyle_scene = BKE_scene_add(freestyle_bmain, name);
   freestyle_scene->r.cfra = old_scene->r.cfra;
   freestyle_scene->r.mode = old_scene->r.mode & ~(R_EDGE_FRS | R_BORDER);
-  freestyle_scene->r.xsch = re->rectx;  // old_scene->r.xsch
-  freestyle_scene->r.ysch = re->recty;  // old_scene->r.ysch
-  freestyle_scene->r.xasp = 1.0f;       // old_scene->r.xasp;
-  freestyle_scene->r.yasp = 1.0f;       // old_scene->r.yasp;
-  freestyle_scene->r.tilex = old_scene->r.tilex;
-  freestyle_scene->r.tiley = old_scene->r.tiley;
+  freestyle_scene->r.xsch = re->rectx;    // old_scene->r.xsch
+  freestyle_scene->r.ysch = re->recty;    // old_scene->r.ysch
+  freestyle_scene->r.xasp = 1.0f;         // old_scene->r.xasp;
+  freestyle_scene->r.yasp = 1.0f;         // old_scene->r.yasp;
   freestyle_scene->r.size = 100;          // old_scene->r.size
   freestyle_scene->r.color_mgt_flag = 0;  // old_scene->r.color_mgt_flag;
   freestyle_scene->r.scemode = (old_scene->r.scemode &
                                 ~(R_SINGLE_LAYER | R_NO_FRAME_UPDATE | R_MULTIVIEW)) &
-                               (re->r.scemode | ~R_FULL_SAMPLE);
+                               (re->r.scemode);
   freestyle_scene->r.flag = old_scene->r.flag;
   freestyle_scene->r.threads = old_scene->r.threads;
   freestyle_scene->r.border.xmin = old_scene->r.border.xmin;
@@ -138,7 +136,7 @@ BlenderStrokeRenderer::BlenderStrokeRenderer(Render *re, int render_count)
 
   // Scene layer.
   ViewLayer *view_layer = (ViewLayer *)freestyle_scene->view_layers.first;
-  view_layer->layflag = SCE_LAY_SOLID | SCE_LAY_ZTRA;
+  view_layer->layflag = SCE_LAY_SOLID;
 
   // Camera
   Object *object_camera = BKE_object_add(freestyle_bmain, view_layer, OB_CAMERA, nullptr);
@@ -671,7 +669,7 @@ void BlenderStrokeRenderer::GenerateStrokeMesh(StrokeGroup *group, bool hasTex)
 
       visible = false;
 
-      // Note: Mesh generation in the following loop assumes stroke strips
+      // NOTE: Mesh generation in the following loop assumes stroke strips
       // to be triangle strips.
       for (int n = 2; n < strip_vertex_count; n++, v[0]++, v[1]++, v[2]++) {
         svRep[0] = *(v[0]);

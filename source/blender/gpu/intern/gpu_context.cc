@@ -24,11 +24,11 @@
  * Use these instead of glGenBuffers & its friends
  * - alloc must be called from a thread that is bound
  *   to the context that will be used for drawing with
- *   this vao.
+ *   this VAO.
  * - free can be called from any thread
  */
 
-/* TODO Create cmake option. */
+/* TODO: Create cmake option. */
 #define WITH_OPENGL_BACKEND 1
 
 #include "BLI_assert.h"
@@ -99,7 +99,7 @@ Context *Context::get()
 GPUContext *GPU_context_create(void *ghost_window)
 {
   if (GPUBackend::get() == nullptr) {
-    /* TODO move where it make sense. */
+    /* TODO: move where it make sense. */
     GPU_backend_init(GPU_BACKEND_OPENGL);
   }
 
@@ -182,7 +182,7 @@ void GPU_backend_init(eGPUBackendType backend_type)
 
 void GPU_backend_exit(void)
 {
-  /* TODO assert no resource left. Currently UI textures are still not freed in their context
+  /* TODO: assert no resource left. Currently UI textures are still not freed in their context
    * correctly. */
   delete g_backend;
   g_backend = nullptr;

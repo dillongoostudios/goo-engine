@@ -314,7 +314,7 @@ static void gpencil_primitive_set_initdata(bContext *C, tGPDprimitive *tgpi)
 
   /* if layer doesn't exist, create a new one */
   if (gpl == NULL) {
-    gpl = BKE_gpencil_layer_addnew(tgpi->gpd, DATA_("Primitives"), true);
+    gpl = BKE_gpencil_layer_addnew(tgpi->gpd, DATA_("Primitives"), true, false);
   }
   tgpi->gpl = gpl;
 
@@ -334,6 +334,9 @@ static void gpencil_primitive_set_initdata(bContext *C, tGPDprimitive *tgpi)
   copy_v2_fl(gps->aspect_ratio, 1.0f);
   gps->uv_scale = 1.0f;
   gps->inittime = 0.0f;
+
+  /* Set stroke caps. */
+  gps->caps[0] = gps->caps[1] = (short)brush->gpencil_settings->caps_type;
 
   /* Apply the vertex color to fill. */
   ED_gpencil_fill_vertex_color_set(ts, brush, gps);
@@ -792,7 +795,7 @@ static void gpencil_primitive_update_strokes(bContext *C, tGPDprimitive *tgpi)
                              (ts->gpencil_v3d_align & GP_PROJECT_DEPTH_STROKE) ?
                                  V3D_DEPTH_GPENCIL_ONLY :
                                  V3D_DEPTH_NO_GPENCIL,
-                             false);
+                             NULL);
 
     depth_arr = MEM_mallocN(sizeof(float) * gps->totpoints, "depth_points");
     tGPspoint *ptc = &points2D[0];
@@ -1315,8 +1318,8 @@ static void gpencil_primitive_interaction_end(bContext *C,
   Brush *brush = tgpi->brush;
   BrushGpencilSettings *brush_settings = brush->gpencil_settings;
 
-  const int def_nr = tgpi->ob->actdef - 1;
-  const bool have_weight = (bool)BLI_findlink(&tgpi->ob->defbase, def_nr);
+  const int def_nr = tgpi->gpd->vertex_group_active_index - 1;
+  const bool have_weight = BLI_findlink(&tgpi->gpd->vertex_group_names, def_nr) != NULL;
 
   /* return to normal cursor and header status */
   ED_workspace_status_text(C, NULL);
@@ -1379,11 +1382,23 @@ static void gpencil_primitive_interaction_end(bContext *C,
   if (ts->gpencil_flags & GP_TOOL_FLAG_AUTOMERGE_STROKE) {
     if (ELEM(tgpi->type, GP_STROKE_ARC, GP_STROKE_LINE, GP_STROKE_CURVE, GP_STROKE_POLYLINE)) {
       if (gps->prev != NULL) {
+        BKE_gpencil_stroke_boundingbox_calc(gps);
+        float diff_mat[4][4], ctrl1[2], ctrl2[2];
+        BKE_gpencil_layer_transform_matrix_get(tgpi->depsgraph, tgpi->ob, tgpi->gpl, diff_mat);
+        ED_gpencil_stroke_extremes_to2d(&tgpi->gsc, diff_mat, gps, ctrl1, ctrl2);
+
         int pt_index = 0;
         bool doit = true;
         while (doit && gps) {
-          bGPDstroke *gps_target = ED_gpencil_stroke_nearest_to_ends(
-              C, &tgpi->gsc, tgpi->gpl, gpf, gps, GPENCIL_MINIMUM_JOIN_DIST, &pt_index);
+          bGPDstroke *gps_target = ED_gpencil_stroke_nearest_to_ends(C,
+                                                                     &tgpi->gsc,
+                                                                     tgpi->gpl,
+                                                                     gpf,
+                                                                     gps,
+                                                                     ctrl1,
+                                                                     ctrl2,
+                                                                     GPENCIL_MINIMUM_JOIN_DIST,
+                                                                     &pt_index);
           if (gps_target != NULL) {
             gps = ED_gpencil_stroke_join_and_trim(tgpi->gpd, gpf, gps, gps_target, pt_index);
           }
@@ -1536,24 +1551,22 @@ static void gpencil_primitive_strength(tGPDprimitive *tgpi, bool reset)
   Brush *brush = tgpi->brush;
   BrushGpencilSettings *brush_settings = brush->gpencil_settings;
 
-  if (brush) {
-    if (reset) {
-      brush_settings->draw_strength = tgpi->brush_strength;
-      tgpi->brush_strength = 0.0f;
-    }
-    else {
-      if (tgpi->brush_strength == 0.0f) {
-        tgpi->brush_strength = brush_settings->draw_strength;
-      }
-      float move[2];
-      sub_v2_v2v2(move, tgpi->mval, tgpi->mvalo);
-      float adjust = (move[1] > 0.0f) ? 0.01f : -0.01f;
-      brush_settings->draw_strength += adjust * fabsf(len_manhattan_v2(move));
-    }
-
-    /* limit low limit because below 0.2f the stroke is invisible */
-    CLAMP(brush_settings->draw_strength, 0.2f, 1.0f);
+  if (reset) {
+    brush_settings->draw_strength = tgpi->brush_strength;
+    tgpi->brush_strength = 0.0f;
   }
+  else {
+    if (tgpi->brush_strength == 0.0f) {
+      tgpi->brush_strength = brush_settings->draw_strength;
+    }
+    float move[2];
+    sub_v2_v2v2(move, tgpi->mval, tgpi->mvalo);
+    float adjust = (move[1] > 0.0f) ? 0.01f : -0.01f;
+    brush_settings->draw_strength += adjust * fabsf(len_manhattan_v2(move));
+  }
+
+  /* limit low limit because below 0.2f the stroke is invisible */
+  CLAMP(brush_settings->draw_strength, 0.2f, 1.0f);
 }
 
 /* brush size */
@@ -1829,11 +1842,6 @@ static int gpencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *e
       else if ((event->val == KM_RELEASE) && (tgpi->flag == IN_MOVE)) {
         tgpi->flag = IN_CURVE_EDIT;
       }
-      else {
-        if (G.debug & G_DEBUG) {
-          printf("GP Add Primitive Modal: LEFTMOUSE %d, Status = %d\n", event->val, tgpi->flag);
-        }
-      }
       break;
     }
     case EVT_SPACEKEY: /* confirm */
@@ -1948,9 +1956,9 @@ static int gpencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *e
       if (ELEM(tgpi->flag, IN_CURVE_EDIT)) {
         break;
       }
-      /* only handle mousemove if not doing numinput */
+      /* Only handle mouse-move if not doing numeric-input. */
       if (has_numinput == false) {
-        /* update position of mouse */
+        /* Update position of mouse. */
         copy_v2_v2(tgpi->end, tgpi->mval);
         copy_v2_v2(tgpi->start, tgpi->origin);
         if (tgpi->flag == IDLE) {

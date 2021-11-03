@@ -69,10 +69,11 @@ static void image_buf_fill_color_slice(
   }
 }
 
-static void image_buf_fill_color_thread_do(void *data_v, int start_scanline, int num_scanlines)
+static void image_buf_fill_color_thread_do(void *data_v, int scanline)
 {
   FillColorThreadData *data = (FillColorThreadData *)data_v;
-  size_t offset = ((size_t)start_scanline) * data->width * 4;
+  const int num_scanlines = 1;
+  size_t offset = ((size_t)scanline) * data->width * 4;
   unsigned char *rect = (data->rect != NULL) ? (data->rect + offset) : NULL;
   float *rect_float = (data->rect_float != NULL) ? (data->rect_float + offset) : NULL;
   image_buf_fill_color_slice(rect, rect_float, data->width, num_scanlines, data->color);
@@ -100,13 +101,12 @@ static void image_buf_fill_checker_slice(
   /* these two passes could be combined into one, but it's more readable and
    * easy to tweak like this, speed isn't really that much of an issue in this situation... */
 
-  int checkerwidth = 32, dark = 1;
+  int checkerwidth = 32;
   int x, y;
 
   unsigned char *rect_orig = rect;
   float *rect_float_orig = rect_float;
 
-  float h = 0.0, hoffs = 0.0;
   float hsv[3] = {0.0f, 0.9f, 0.9f};
   float rgb[3];
 
@@ -118,7 +118,7 @@ static void image_buf_fill_checker_slice(
 
   /* checkers */
   for (y = offset; y < height + offset; y++) {
-    dark = powf(-1.0f, floorf(y / checkerwidth));
+    int dark = powf(-1.0f, floorf(y / checkerwidth));
 
     for (x = 0; x < width; x++) {
       if (x % checkerwidth == 0) {
@@ -155,10 +155,10 @@ static void image_buf_fill_checker_slice(
 
   /* 2nd pass, colored + */
   for (y = offset; y < height + offset; y++) {
-    hoffs = 0.125f * floorf(y / checkerwidth);
+    float hoffs = 0.125f * floorf(y / checkerwidth);
 
     for (x = 0; x < width; x++) {
-      h = 0.125f * floorf(x / checkerwidth);
+      float h = 0.125f * floorf(x / checkerwidth);
 
       if ((abs((x % checkerwidth) - (checkerwidth / 2)) < 4) &&
           (abs((y % checkerwidth) - (checkerwidth / 2)) < 4)) {
@@ -197,13 +197,14 @@ typedef struct FillCheckerThreadData {
   int width;
 } FillCheckerThreadData;
 
-static void image_buf_fill_checker_thread_do(void *data_v, int start_scanline, int num_scanlines)
+static void image_buf_fill_checker_thread_do(void *data_v, int scanline)
 {
   FillCheckerThreadData *data = (FillCheckerThreadData *)data_v;
-  size_t offset = ((size_t)start_scanline) * data->width * 4;
+  size_t offset = ((size_t)scanline) * data->width * 4;
+  const int num_scanlines = 1;
   unsigned char *rect = (data->rect != NULL) ? (data->rect + offset) : NULL;
   float *rect_float = (data->rect_float != NULL) ? (data->rect_float + offset) : NULL;
-  image_buf_fill_checker_slice(rect, rect_float, data->width, num_scanlines, start_scanline);
+  image_buf_fill_checker_slice(rect, rect_float, data->width, num_scanlines, scanline);
 }
 
 void BKE_image_buf_fill_checker(unsigned char *rect, float *rect_float, int width, int height)
@@ -444,16 +445,15 @@ typedef struct FillCheckerColorThreadData {
   int width, height;
 } FillCheckerColorThreadData;
 
-static void checker_board_color_prepare_thread_do(void *data_v,
-                                                  int start_scanline,
-                                                  int num_scanlines)
+static void checker_board_color_prepare_thread_do(void *data_v, int scanline)
 {
   FillCheckerColorThreadData *data = (FillCheckerColorThreadData *)data_v;
-  size_t offset = ((size_t)data->width) * start_scanline * 4;
+  const int num_scanlines = 1;
+  size_t offset = ((size_t)data->width) * scanline * 4;
   unsigned char *rect = (data->rect != NULL) ? (data->rect + offset) : NULL;
   float *rect_float = (data->rect_float != NULL) ? (data->rect_float + offset) : NULL;
   checker_board_color_prepare_slice(
-      rect, rect_float, data->width, num_scanlines, start_scanline, data->height);
+      rect, rect_float, data->width, num_scanlines, scanline, data->height);
 }
 
 void BKE_image_buf_fill_checker_color(unsigned char *rect,

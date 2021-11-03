@@ -23,12 +23,21 @@
 
 #pragma once
 
+#include "DNA_space_types.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* internal exports only */
 
 struct ARegion;
 struct ARegionType;
+struct AssetLibrary;
 struct FileSelectParams;
+struct FileAssetSelectParams;
 struct SpaceFile;
+struct uiLayout;
 struct View2D;
 
 /* file_draw.c */
@@ -38,7 +47,7 @@ struct View2D;
 
 void file_calc_previews(const bContext *C, ARegion *region);
 void file_draw_list(const bContext *C, ARegion *region);
-bool file_draw_hint_if_invalid(const SpaceFile *sfile, const ARegion *region);
+bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegion *region);
 
 void file_draw_check_ex(bContext *C, struct ScrArea *area);
 void file_draw_check(bContext *C);
@@ -63,12 +72,14 @@ void FILE_OT_bookmark_move(struct wmOperatorType *ot);
 void FILE_OT_reset_recent(wmOperatorType *ot);
 void FILE_OT_hidedot(struct wmOperatorType *ot);
 void FILE_OT_execute(struct wmOperatorType *ot);
+void FILE_OT_mouse_execute(struct wmOperatorType *ot);
 void FILE_OT_cancel(struct wmOperatorType *ot);
 void FILE_OT_parent(struct wmOperatorType *ot);
 void FILE_OT_directory_new(struct wmOperatorType *ot);
 void FILE_OT_previous(struct wmOperatorType *ot);
 void FILE_OT_next(struct wmOperatorType *ot);
 void FILE_OT_refresh(struct wmOperatorType *ot);
+void FILE_OT_asset_library_refresh(struct wmOperatorType *ot);
 void FILE_OT_filenum(struct wmOperatorType *ot);
 void FILE_OT_delete(struct wmOperatorType *ot);
 void FILE_OT_rename(struct wmOperatorType *ot);
@@ -91,6 +102,9 @@ void file_sfile_to_operator(struct Main *bmain, struct wmOperator *op, struct Sp
 
 void file_operator_to_sfile(struct Main *bmain, struct SpaceFile *sfile, struct wmOperator *op);
 
+/* space_file.c */
+extern const char *file_context_dir[]; /* doc access */
+
 /* filesel.c */
 void fileselect_refresh_params(struct SpaceFile *sfile);
 void fileselect_file_set(SpaceFile *sfile, const int index);
@@ -107,10 +121,22 @@ FileAttributeColumnType file_attribute_column_type_find_isect(const View2D *v2d,
 float file_string_width(const char *str);
 
 float file_font_pointsize(void);
+void file_select_deselect_all(SpaceFile *sfile, uint flag);
 int file_select_match(struct SpaceFile *sfile, const char *pattern, char *matched_file);
 int autocomplete_directory(struct bContext *C, char *str, void *arg_v);
 int autocomplete_file(struct bContext *C, char *str, void *arg_v);
 
+void file_params_smoothscroll_timer_clear(struct wmWindowManager *wm,
+                                          struct wmWindow *win,
+                                          SpaceFile *sfile);
+void file_params_renamefile_clear(struct FileSelectParams *params);
+void file_params_invoke_rename_postscroll(struct wmWindowManager *wm,
+                                          struct wmWindow *win,
+                                          SpaceFile *sfile);
+void file_params_rename_end(struct wmWindowManager *wm,
+                            struct wmWindow *win,
+                            SpaceFile *sfile,
+                            struct FileDirEntry *rename_file);
 void file_params_renamefile_activate(struct SpaceFile *sfile, struct FileSelectParams *params);
 
 typedef void *onReloadFnData;
@@ -131,8 +157,40 @@ void file_on_reload_callback_register(struct SpaceFile *sfile,
 /* file_panels.c */
 void file_tool_props_region_panels_register(struct ARegionType *art);
 void file_execute_region_panels_register(struct ARegionType *art);
+void file_tools_region_panels_register(struct ARegionType *art);
 
 /* file_utils.c */
 void file_tile_boundbox(const ARegion *region, FileLayout *layout, const int file, rcti *r_bounds);
 
 void file_path_to_ui_path(const char *path, char *r_pathi, int max_size);
+
+/* asset_catalog_tree_view.cc */
+
+/* C-handle for #ed::asset_browser::AssetCatalogFilterSettings. */
+typedef struct FileAssetCatalogFilterSettingsHandle FileAssetCatalogFilterSettingsHandle;
+
+FileAssetCatalogFilterSettingsHandle *file_create_asset_catalog_filter_settings(void);
+void file_delete_asset_catalog_filter_settings(
+    FileAssetCatalogFilterSettingsHandle **filter_settings_handle);
+/**
+ * \return True if the stored filter settings were modified.
+ */
+bool file_set_asset_catalog_filter_settings(
+    FileAssetCatalogFilterSettingsHandle *filter_settings_handle,
+    eFileSel_Params_AssetCatalogVisibility catalog_visibility,
+    bUUID catalog_id);
+void file_ensure_updated_catalog_filter_data(
+    FileAssetCatalogFilterSettingsHandle *filter_settings_handle,
+    const struct AssetLibrary *asset_library);
+bool file_is_asset_visible_in_catalog_filter_settings(
+    const FileAssetCatalogFilterSettingsHandle *filter_settings_handle,
+    const AssetMetaData *asset_data);
+
+void file_create_asset_catalog_tree_view_in_layout(struct AssetLibrary *asset_library,
+                                                   struct uiLayout *layout,
+                                                   struct SpaceFile *space_file,
+                                                   struct FileAssetSelectParams *params);
+
+#ifdef __cplusplus
+}
+#endif

@@ -128,8 +128,8 @@ void BKE_pbvh_build_bmesh(PBVH *pbvh,
 void BKE_pbvh_free(PBVH *pbvh);
 
 /* Hierarchical Search in the BVH, two methods:
- * - for each hit calling a callback
- * - gather nodes in an array (easy to multithread) */
+ * - For each hit calling a callback.
+ * - Gather nodes in an array (easy to multi-thread). */
 
 void BKE_pbvh_search_callback(PBVH *pbvh,
                               BKE_pbvh_SearchCallback scb,
@@ -140,7 +140,7 @@ void BKE_pbvh_search_callback(PBVH *pbvh,
 void BKE_pbvh_search_gather(
     PBVH *pbvh, BKE_pbvh_SearchCallback scb, void *search_data, PBVHNode ***array, int *tot);
 
-/* Raycast
+/* Ray-cast
  * the hit callback is called for all leaf nodes intersecting the ray;
  * it's up to the callback to find the primitive within the leaves that is
  * hit first */
@@ -329,7 +329,7 @@ bool BKE_pbvh_is_deformed(struct PBVH *pbvh);
  * - allow the compiler to eliminate dead code and variables
  * - spend most of the time in the relatively simple inner loop */
 
-/* note: PBVH_ITER_ALL does not skip hidden vertices,
+/* NOTE: PBVH_ITER_ALL does not skip hidden vertices,
  * PBVH_ITER_UNIQUE does */
 #define PBVH_ITER_ALL 0
 #define PBVH_ITER_UNIQUE 1
@@ -474,7 +474,7 @@ bool BKE_pbvh_node_vert_update_check_any(PBVH *pbvh, PBVHNode *node);
 // void BKE_pbvh_node_BB_reset(PBVHNode *node);
 // void BKE_pbvh_node_BB_expand(PBVHNode *node, float co[3]);
 
-bool pbvh_has_mask(PBVH *pbvh);
+bool pbvh_has_mask(const PBVH *pbvh);
 void pbvh_show_mask_set(PBVH *pbvh, bool show_mask);
 
 bool pbvh_has_face_sets(PBVH *pbvh);

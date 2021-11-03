@@ -209,9 +209,9 @@ class TOPBAR_MT_editor_menus(Menu):
 
         # Allow calling this menu directly (this might not be a header area).
         if getattr(context.area, "show_menus", False):
-            layout.menu("TOPBAR_MT_app", text="", icon='BLENDER')
+            layout.menu("TOPBAR_MT_blender", text="", icon='BLENDER')
         else:
-            layout.menu("TOPBAR_MT_app", text="Blender")
+            layout.menu("TOPBAR_MT_blender", text="Blender")
 
         layout.menu("TOPBAR_MT_file")
         layout.menu("TOPBAR_MT_edit")
@@ -222,7 +222,7 @@ class TOPBAR_MT_editor_menus(Menu):
         layout.menu("TOPBAR_MT_help")
 
 
-class TOPBAR_MT_app(Menu):
+class TOPBAR_MT_blender(Menu):
     bl_label = "Blender"
 
     def draw(self, _context):
@@ -238,7 +238,7 @@ class TOPBAR_MT_app(Menu):
 
         layout.separator()
 
-        layout.menu("TOPBAR_MT_app_system")
+        layout.menu("TOPBAR_MT_blender_system")
 
 
 class TOPBAR_MT_file_cleanup(Menu):
@@ -430,7 +430,7 @@ class TOPBAR_MT_file_defaults(Menu):
 
 
 # Include technical operators here which would otherwise have no way for users to access.
-class TOPBAR_MT_app_system(Menu):
+class TOPBAR_MT_blender_system(Menu):
     bl_label = "System"
 
     def draw(self, _context):
@@ -468,6 +468,9 @@ class TOPBAR_MT_file_import(Menu):
                                  text="Collada (Default) (.dae)")
         if bpy.app.build_options.alembic:
             self.layout.operator("wm.alembic_import", text="Alembic (.abc)")
+        if bpy.app.build_options.usd:
+            self.layout.operator(
+                "wm.usd_import", text="Universal Scene Description (.usd, .usdc, .usda)")
 
         self.layout.operator("wm.gpencil_import_svg", text="SVG as Grease Pencil")
 
@@ -504,8 +507,6 @@ class TOPBAR_MT_file_external_data(Menu):
         icon = 'CHECKBOX_HLT' if bpy.data.use_autopack else 'CHECKBOX_DEHLT'
         layout.operator("file.autopack_toggle", icon=icon)
 
-        layout.separator()
-
         pack_all = layout.row()
         pack_all.operator("file.pack_all")
         pack_all.active = not bpy.data.use_autopack
@@ -516,8 +517,16 @@ class TOPBAR_MT_file_external_data(Menu):
 
         layout.separator()
 
+        layout.operator("file.pack_libraries")
+        layout.operator("file.unpack_libraries")
+
+        layout.separator()
+
         layout.operator("file.make_paths_relative")
         layout.operator("file.make_paths_absolute")
+
+        layout.separator()
+
         layout.operator("file.report_missing_files")
         layout.operator("file.find_missing_files")
 
@@ -625,6 +634,8 @@ class TOPBAR_MT_window(Menu):
 
         layout = self.layout
 
+        operator_context_default = layout.operator_context
+
         layout.operator("wm.window_new")
         layout.operator("wm.window_new_main")
 
@@ -646,6 +657,14 @@ class TOPBAR_MT_window(Menu):
         layout.separator()
 
         layout.operator("screen.screenshot")
+
+        # Showing the status in the area doesn't work well in this case.
+        # - From the top-bar, the text replaces the file-menu (not so bad but strange).
+        # - From menu-search it replaces the area that the user may want to screen-shot.
+        # Setting the context to screen causes the status to show in the global status-bar.
+        layout.operator_context = 'INVOKE_SCREEN'
+        layout.operator("screen.screenshot_area")
+        layout.operator_context = operator_context_default
 
         if sys.platform[:3] == "win":
             layout.separator()
@@ -800,7 +819,7 @@ class TOPBAR_PT_name(Panel):
         found = False
         if space_type == 'SEQUENCE_EDITOR':
             layout.label(text="Sequence Strip Name")
-            item = getattr(scene.sequence_editor, "active_strip")
+            item = context.active_sequence_strip
             if item:
                 row = row_with_icon(layout, 'SEQUENCE')
                 row.prop(item, "name", text="")
@@ -845,8 +864,8 @@ classes = (
     TOPBAR_MT_file_context_menu,
     TOPBAR_MT_workspace_menu,
     TOPBAR_MT_editor_menus,
-    TOPBAR_MT_app,
-    TOPBAR_MT_app_system,
+    TOPBAR_MT_blender,
+    TOPBAR_MT_blender_system,
     TOPBAR_MT_file,
     TOPBAR_MT_file_new,
     TOPBAR_MT_file_recover,

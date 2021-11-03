@@ -15,7 +15,7 @@
  */
 
 /** \file
- * \ingroup bli
+ * \ingroup bke
  */
 
 #include "MEM_guardedalloc.h"
@@ -1026,7 +1026,7 @@ static void pbvh_update_normals_accum_task_cb(void *__restrict userdata,
   PBVHNode *node = data->nodes[n];
   float(*vnors)[3] = data->vnors;
 
-  if ((node->flag & PBVH_UpdateNormals)) {
+  if (node->flag & PBVH_UpdateNormals) {
     unsigned int mpoly_prev = UINT_MAX;
     float fn[3];
 
@@ -1053,7 +1053,7 @@ static void pbvh_update_normals_accum_task_cb(void *__restrict userdata,
         const int v = vtri[j];
 
         if (pbvh->verts[v].flag & ME_VERT_PBVH_UPDATE) {
-          /* Note: This avoids `lock, add_v3_v3, unlock`
+          /* NOTE: This avoids `lock, add_v3_v3, unlock`
            * and is five to ten times quicker than a spin-lock.
            * Not exact equivalent though, since atomicity is only ensured for one component
            * of the vector at a time, but here it shall not make any sensible difference. */
@@ -1379,7 +1379,7 @@ static int pbvh_flush_bb(PBVH *pbvh, PBVHNode *node, int flag)
 {
   int update = 0;
 
-  /* difficult to multithread well, we just do single threaded recursive */
+  /* Difficult to multi-thread well, we just do single threaded recursive. */
   if (node->flag & PBVH_Leaf) {
     if (flag & PBVH_UpdateBB) {
       update |= (node->flag & PBVH_UpdateBB);
@@ -1977,7 +1977,7 @@ bool BKE_pbvh_node_vert_update_check_any(PBVH *pbvh, PBVHNode *node)
   return false;
 }
 
-/********************************* Raycast ***********************************/
+/********************************* Ray-cast ***********************************/
 
 typedef struct {
   struct IsectRayAABB_Precalc ray;
@@ -2056,7 +2056,7 @@ bool ray_face_intersection_tri(const float ray_start[3],
   return false;
 }
 
-/* Take advantage of the fact we know this wont be an intersection.
+/* Take advantage of the fact we know this won't be an intersection.
  * Just handle ray-tri edges. */
 static float dist_squared_ray_to_tri_v3_fast(const float ray_origin[3],
                                              const float ray_direction[3],
@@ -2157,7 +2157,7 @@ static bool pbvh_faces_node_raycast(PBVH *pbvh,
 
     const float *co[3];
     if (origco) {
-      /* intersect with backuped original coordinates */
+      /* Intersect with backed up original coordinates. */
       co[0] = origco[face_verts[0]];
       co[1] = origco[face_verts[1]];
       co[2] = origco[face_verts[2]];
@@ -2798,7 +2798,7 @@ float (*BKE_pbvh_vert_coords_alloc(PBVH *pbvh))[3]
 void BKE_pbvh_vert_coords_apply(PBVH *pbvh, const float (*vertCos)[3], const int totvert)
 {
   if (totvert != pbvh->totvert) {
-    BLI_assert(!"PBVH: Given deforming vcos number does not natch PBVH vertex number!");
+    BLI_assert_msg(0, "PBVH: Given deforming vcos number does not natch PBVH vertex number!");
     return;
   }
 
@@ -2985,7 +2985,7 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
   }
 }
 
-bool pbvh_has_mask(PBVH *pbvh)
+bool pbvh_has_mask(const PBVH *pbvh)
 {
   switch (pbvh->type) {
     case PBVH_GRIDS:

@@ -47,6 +47,7 @@ extern char datatoc_gpu_shader_material_anisotropic_glsl[];
 extern char datatoc_gpu_shader_material_attribute_glsl[];
 extern char datatoc_gpu_shader_material_background_glsl[];
 extern char datatoc_gpu_shader_material_bevel_glsl[];
+extern char datatoc_gpu_shader_material_wavelength_glsl[];
 extern char datatoc_gpu_shader_material_blackbody_glsl[];
 extern char datatoc_gpu_shader_material_bright_contrast_glsl[];
 extern char datatoc_gpu_shader_material_bump_glsl[];
@@ -61,6 +62,7 @@ extern char datatoc_gpu_shader_material_diffuse_glsl[];
 extern char datatoc_gpu_shader_material_displacement_glsl[];
 extern char datatoc_gpu_shader_material_eevee_specular_glsl[];
 extern char datatoc_gpu_shader_material_emission_glsl[];
+extern char datatoc_gpu_shader_material_float_curve_glsl[];
 extern char datatoc_gpu_shader_material_fractal_noise_glsl[];
 extern char datatoc_gpu_shader_material_fresnel_glsl[];
 extern char datatoc_gpu_shader_material_gamma_glsl[];
@@ -199,6 +201,11 @@ static GPUMaterialLibrary gpu_shader_material_bevel_library = {
     .dependencies = {NULL},
 };
 
+static GPUMaterialLibrary gpu_shader_material_wavelength_library = {
+    .code = datatoc_gpu_shader_material_wavelength_glsl,
+    .dependencies = {NULL},
+};
+
 static GPUMaterialLibrary gpu_shader_material_blackbody_library = {
     .code = datatoc_gpu_shader_material_blackbody_glsl,
     .dependencies = {NULL},
@@ -261,6 +268,11 @@ static GPUMaterialLibrary gpu_shader_material_eevee_specular_library = {
 
 static GPUMaterialLibrary gpu_shader_material_emission_library = {
     .code = datatoc_gpu_shader_material_emission_glsl,
+    .dependencies = {NULL},
+};
+
+static GPUMaterialLibrary gpu_shader_material_float_curve_library = {
+    .code = datatoc_gpu_shader_material_float_curve_glsl,
     .dependencies = {NULL},
 };
 
@@ -645,6 +657,7 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_sdf_util_library,
     &gpu_shader_material_hash_library,
     &gpu_shader_material_noise_library,
+    &gpu_shader_material_float_curve_library,
     &gpu_shader_material_fractal_noise_library,
     &gpu_shader_material_add_shader_library,
     &gpu_shader_material_ambient_occlusion_library,
@@ -653,6 +666,7 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
     &gpu_shader_material_attribute_library,
     &gpu_shader_material_background_library,
     &gpu_shader_material_bevel_library,
+    &gpu_shader_material_wavelength_library,
     &gpu_shader_material_blackbody_library,
     &gpu_shader_material_bright_contrast_library,
     &gpu_shader_material_bump_library,
@@ -744,7 +758,7 @@ static GPUMaterialLibrary *gpu_material_libraries[] = {
 
 static GHash *FUNCTION_HASH = NULL;
 
-char *gpu_str_skip_token(char *str, char *token, int max)
+const char *gpu_str_skip_token(const char *str, char *token, int max)
 {
   int len = 0;
 
@@ -812,7 +826,7 @@ static void gpu_parse_material_library(GHash *hash, GPUMaterialLibrary *library)
   eGPUType type;
   GPUFunctionQual qual;
   int i;
-  char *code = library->code;
+  const char *code = library->code;
 
   while ((code = strstr(code, "void "))) {
     function = MEM_callocN(sizeof(GPUFunction), "GPUFunction");

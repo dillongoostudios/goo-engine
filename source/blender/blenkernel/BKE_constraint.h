@@ -59,7 +59,7 @@ typedef struct bConstraintOb {
   /** space matrix for custom object space */
   float space_obj_world_matrix[4][4];
 
-  /** type of owner  */
+  /** type of owner. */
   short type;
   /** rotation order for constraint owner (as defined in eEulerRotationOrders in BLI_math.h) */
   short rotOrder;
@@ -191,6 +191,28 @@ bool BKE_constraint_remove_ex(ListBase *list,
                               struct bConstraint *con,
                               bool clear_dep);
 bool BKE_constraint_remove(ListBase *list, struct bConstraint *con);
+
+bool BKE_constraint_apply_for_object(struct Depsgraph *depsgraph,
+                                     struct Scene *scene,
+                                     struct Object *ob,
+                                     struct bConstraint *con);
+bool BKE_constraint_apply_and_remove_for_object(struct Depsgraph *depsgraph,
+                                                struct Scene *scene,
+                                                ListBase /*bConstraint*/ *constraints,
+                                                struct Object *ob,
+                                                struct bConstraint *con);
+
+bool BKE_constraint_apply_for_pose(struct Depsgraph *depsgraph,
+                                   struct Scene *scene,
+                                   struct Object *ob,
+                                   struct bPoseChannel *pchan,
+                                   struct bConstraint *con);
+bool BKE_constraint_apply_and_remove_for_pose(struct Depsgraph *depsgraph,
+                                              struct Scene *scene,
+                                              ListBase /*bConstraint*/ *constraints,
+                                              struct Object *ob,
+                                              struct bConstraint *con,
+                                              struct bPoseChannel *pchan);
 
 void BKE_constraint_panel_expand(struct bConstraint *con);
 

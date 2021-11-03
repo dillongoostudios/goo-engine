@@ -18,8 +18,9 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_node_types.h"
+#include <functional>
 
 namespace blender::compositor {
 
@@ -27,16 +28,23 @@ namespace blender::compositor {
  * \brief base class of CalculateMean, implementing the simple CalculateMean
  * \ingroup operation
  */
-class CalculateMeanOperation : public NodeOperation {
+class CalculateMeanOperation : public MultiThreadedOperation {
+ public:
+  struct PixelsSum {
+    float sum;
+    int num_pixels;
+  };
+
  protected:
   /**
    * \brief Cached reference to the reader
    */
-  SocketReader *m_imageReader;
+  SocketReader *image_reader_;
 
-  bool m_iscalculated;
-  float m_result;
-  int m_setting;
+  bool iscalculated_;
+  float result_;
+  int setting_;
+  std::function<float(const float *elem)> setting_func_;
 
  public:
   CalculateMeanOperation();
@@ -44,30 +52,41 @@ class CalculateMeanOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
-  void *initializeTileData(rcti *rect) override;
+  void *initialize_tile_data(rcti *rect) override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
-  void setSetting(int setting)
-  {
-    this->m_setting = setting;
-  }
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+  void set_setting(int setting);
+
+  void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
+
+  virtual void update_memory_buffer_started(MemoryBuffer *output,
+                                            const rcti &area,
+                                            Span<MemoryBuffer *> inputs) override;
+
+  virtual void update_memory_buffer_partial(MemoryBuffer *output,
+                                            const rcti &area,
+                                            Span<MemoryBuffer *> inputs) override;
 
  protected:
-  void calculateMean(MemoryBuffer *tile);
+  void calculate_mean(MemoryBuffer *tile);
+  float calc_mean(const MemoryBuffer *input);
+
+ private:
+  PixelsSum calc_area_sum(const MemoryBuffer *input, const rcti &area);
 };
 
 }  // namespace blender::compositor

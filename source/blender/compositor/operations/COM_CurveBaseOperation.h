@@ -18,17 +18,18 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
-#include "DNA_color_types.h"
+#include "COM_MultiThreadedOperation.h"
+
+struct CurveMapping;
 
 namespace blender::compositor {
 
-class CurveBaseOperation : public NodeOperation {
+class CurveBaseOperation : public MultiThreadedOperation {
  protected:
   /**
-   * Cached reference to the inputProgram
+   * Cached reference to the input_program
    */
-  CurveMapping *m_curveMapping;
+  CurveMapping *curve_mapping_;
 
  public:
   CurveBaseOperation();
@@ -37,10 +38,10 @@ class CurveBaseOperation : public NodeOperation {
   /**
    * Initialize the execution
    */
-  void initExecution() override;
-  void deinitExecution() override;
+  void init_execution() override;
+  void deinit_execution() override;
 
-  void setCurveMapping(CurveMapping *mapping);
+  void set_curve_mapping(CurveMapping *mapping);
 };
 
 }  // namespace blender::compositor

@@ -38,7 +38,7 @@ struct wmMsgSubscribeKey;
 struct wmMsgSubscribeValue;
 struct wmOperatorType;
 
-/* wm_toolsystem.c  */
+/* wm_toolsystem.c */
 
 #define WM_TOOLSYSTEM_SPACE_MASK \
   ((1 << SPACE_IMAGE) | (1 << SPACE_NODE) | (1 << SPACE_VIEW3D) | (1 << SPACE_SEQ))
@@ -134,6 +134,7 @@ void WM_toolsystem_refresh_active(struct bContext *C);
 void WM_toolsystem_refresh_screen_area(struct WorkSpace *workspace,
                                        struct ViewLayer *view_layer,
                                        struct ScrArea *area);
+void WM_toolsystem_refresh_screen_window(struct wmWindow *win);
 void WM_toolsystem_refresh_screen_all(struct Main *bmain);
 
 #ifdef __cplusplus

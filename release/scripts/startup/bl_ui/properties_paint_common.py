@@ -1141,16 +1141,18 @@ def brush_basic__draw_color_selector(context, layout, brush, gp_settings, props)
     if not gp_settings.use_material_pin:
         ma = context.object.active_material
     icon_id = 0
+    txt_ma = ""
     if ma:
-        icon_id = ma.id_data.preview.icon_id
-        txt_ma = ma.name
-        maxw = 25
-        if len(txt_ma) > maxw:
-            txt_ma = txt_ma[:maxw - 5] + '..' + txt_ma[-3:]
-    else:
-        txt_ma = ""
+        ma.id_data.preview_ensure()
+        if ma.id_data.preview:
+            icon_id = ma.id_data.preview.icon_id
+            txt_ma = ma.name
+            maxw = 25
+            if len(txt_ma) > maxw:
+                txt_ma = txt_ma[:maxw - 5] + '..' + txt_ma[-3:]
 
-    sub = row.row()
+    sub = row.row(align=True)
+    sub.enabled = not gp_settings.use_material_pin
     sub.ui_units_x = 8
     sub.popover(
         panel="TOPBAR_PT_gpencil_materials",
@@ -1225,7 +1227,7 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
         row = layout.row(align=True)
         row.prop(gp_settings, "fill_factor")
         row = layout.row(align=True)
-        row.prop(gp_settings, "fill_leak", text="Leak Size")
+        row.prop(gp_settings, "dilate")
         row = layout.row(align=True)
         row.prop(brush, "size", text="Thickness")
         layout.use_property_split = use_property_split_prev
@@ -1235,7 +1237,7 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
         row.prop(brush, "size", text="Radius")
         row.prop(gp_settings, "use_pressure", text="", icon='STYLUS_PRESSURE')
 
-        if gp_settings.use_pressure and context.area.type == 'PROPERTIES':
+        if gp_settings.use_pressure and not compact:
             col = layout.column()
             col.template_curve_mapping(gp_settings, "curve_sensitivity", brush=True,
                                        use_negative_slope=True)
@@ -1244,7 +1246,7 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
         row.prop(gp_settings, "pen_strength", slider=True)
         row.prop(gp_settings, "use_strength_pressure", text="", icon='STYLUS_PRESSURE')
 
-        if gp_settings.use_strength_pressure and context.area.type == 'PROPERTIES':
+        if gp_settings.use_strength_pressure and not compact:
             col = layout.column()
             col.template_curve_mapping(gp_settings, "curve_strength", brush=True,
                                        use_negative_slope=True)
@@ -1252,6 +1254,12 @@ def brush_basic_gpencil_paint_settings(layout, context, brush, *, compact=False)
         if brush.gpencil_tool == 'TINT':
             row = layout.row(align=True)
             row.prop(gp_settings, "vertex_mode", text="Mode")
+        else:
+            row = layout.row(align=True)
+            if context.region.type == 'TOOL_HEADER':
+                row.prop(gp_settings, "caps_type", text="", expand=True)
+            else:
+                row.prop(gp_settings, "caps_type", text="Caps Type")
 
     # FIXME: tools must use their own UI drawing!
     if tool.idname in {

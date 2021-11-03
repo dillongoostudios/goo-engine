@@ -69,9 +69,6 @@
 /** \name Menu Search Template Implementation
  * \{ */
 
-/* Unicode arrow. */
-#define MENU_SEP "\xe2\x96\xb6"
-
 /**
  * Use when #menu_items_from_ui_create is called with `include_all_areas`.
  * so we can run the menu item in the area it was extracted from.
@@ -350,24 +347,28 @@ static void menu_types_add_from_keymap_items(bContext *C,
 
       if (handler_base->poll == NULL || handler_base->poll(region, win->eventstate)) {
         wmEventHandler_Keymap *handler = (wmEventHandler_Keymap *)handler_base;
-        wmKeyMap *keymap = WM_event_get_keymap_from_handler(wm, handler);
-        if (keymap && WM_keymap_poll(C, keymap)) {
-          LISTBASE_FOREACH (wmKeyMapItem *, kmi, &keymap->items) {
-            if (kmi->flag & KMI_INACTIVE) {
-              continue;
-            }
-            if (STR_ELEM(kmi->idname, "WM_OT_call_menu", "WM_OT_call_menu_pie")) {
-              char menu_idname[MAX_NAME];
-              RNA_string_get(kmi->ptr, "name", menu_idname);
-              MenuType *mt = WM_menutype_find(menu_idname, false);
+        wmEventHandler_KeymapResult km_result;
+        WM_event_get_keymaps_from_handler(wm, win, handler, &km_result);
+        for (int km_index = 0; km_index < km_result.keymaps_len; km_index++) {
+          wmKeyMap *keymap = km_result.keymaps[km_index];
+          if (keymap && WM_keymap_poll(C, keymap)) {
+            LISTBASE_FOREACH (wmKeyMapItem *, kmi, &keymap->items) {
+              if (kmi->flag & KMI_INACTIVE) {
+                continue;
+              }
+              if (STR_ELEM(kmi->idname, "WM_OT_call_menu", "WM_OT_call_menu_pie")) {
+                char menu_idname[MAX_NAME];
+                RNA_string_get(kmi->ptr, "name", menu_idname);
+                MenuType *mt = WM_menutype_find(menu_idname, false);
 
-              if (mt && BLI_gset_add(menu_tagged, mt)) {
-                /* Unlikely, but possible this will be included twice. */
-                BLI_linklist_prepend(menuid_stack_p, mt);
+                if (mt && BLI_gset_add(menu_tagged, mt)) {
+                  /* Unlikely, but possible this will be included twice. */
+                  BLI_linklist_prepend(menuid_stack_p, mt);
 
-                void **kmi_p;
-                if (!BLI_ghash_ensure_p(menu_to_kmi, mt, &kmi_p)) {
-                  *kmi_p = kmi;
+                  void **kmi_p;
+                  if (!BLI_ghash_ensure_p(menu_to_kmi, mt, &kmi_p)) {
+                    *kmi_p = kmi;
+                  }
                 }
               }
             }
@@ -411,7 +412,7 @@ static void menu_items_from_all_operators(bContext *C, struct MenuSearch_Data *d
       char uiname[256];
       WM_operator_py_idname(idname_as_py, ot->idname);
 
-      SNPRINTF(uiname, "%s " MENU_SEP "%s", idname_as_py, ot_ui_name);
+      SNPRINTF(uiname, "%s " UI_MENU_ARROW_SEP "%s", idname_as_py, ot_ui_name);
 
       item->drawwstr_full = strdup_memarena(memarena, uiname);
       item->drawstr = ot_ui_name;
@@ -837,7 +838,7 @@ static struct MenuSearch_Data *menu_items_from_ui_create(
       }
       while (menu_parent) {
         BLI_dynstr_append(dyn_str, menu_parent->drawstr);
-        BLI_dynstr_append(dyn_str, " " MENU_SEP " ");
+        BLI_dynstr_append(dyn_str, " " UI_MENU_ARROW_SEP " ");
         menu_parent = menu_parent->temp_child;
       }
     }
@@ -855,13 +856,13 @@ static struct MenuSearch_Data *menu_items_from_ui_create(
         BLI_dynstr_appendf(dyn_str, " (%s)", kmi_str);
       }
 
-      BLI_dynstr_append(dyn_str, " " MENU_SEP " ");
+      BLI_dynstr_append(dyn_str, " " UI_MENU_ARROW_SEP " ");
     }
 
     /* Optional nested menu. */
     if (item->drawstr_submenu != NULL) {
       BLI_dynstr_append(dyn_str, item->drawstr_submenu);
-      BLI_dynstr_append(dyn_str, " " MENU_SEP " ");
+      BLI_dynstr_append(dyn_str, " " UI_MENU_ARROW_SEP " ");
     }
 
     BLI_dynstr_append(dyn_str, item->drawstr);
@@ -873,7 +874,7 @@ static struct MenuSearch_Data *menu_items_from_ui_create(
 
   /* Finally sort menu items.
    *
-   * Note: we might want to keep the in-menu order, for now sort all. */
+   * NOTE: we might want to keep the in-menu order, for now sort all. */
   BLI_listbase_sort(&data->items, menu_item_sort_by_drawstr_full);
 
   BLI_ghash_free(menu_parent_map, NULL, NULL);
@@ -955,7 +956,8 @@ static void menu_search_exec_fn(bContext *C, void *UNUSED(arg1), void *arg2)
   switch (item->type) {
     case MENU_SEARCH_TYPE_OP: {
       CTX_store_set(C, item->op.context);
-      WM_operator_name_call_ptr(C, item->op.type, item->op.opcontext, item->op.opptr);
+      WM_operator_name_call_ptr_with_depends_on_cursor(
+          C, item->op.type, item->op.opcontext, item->op.opptr, item->drawstr);
       CTX_store_set(C, NULL);
       break;
     }
@@ -1037,7 +1039,7 @@ static void menu_search_update_fn(const bContext *UNUSED(C),
 static bool ui_search_menu_create_context_menu(struct bContext *C,
                                                void *arg,
                                                void *active,
-                                               const struct wmEvent *UNUSED(event))
+                                               const struct wmEvent *event)
 {
   struct MenuSearch_Data *data = arg;
   struct MenuSearch_Item *item = active;
@@ -1058,7 +1060,7 @@ static bool ui_search_menu_create_context_menu(struct bContext *C,
       CTX_wm_region_set(C, item->wm_context->region);
     }
 
-    if (ui_popup_context_menu_for_button(C, but)) {
+    if (ui_popup_context_menu_for_button(C, but, event)) {
       has_menu = true;
     }
 
@@ -1097,8 +1099,8 @@ static struct ARegion *ui_search_menu_create_tooltip(struct bContext *C,
   /* Place the fake button at the cursor so the tool-tip is places properly. */
   float tip_init[2];
   const wmEvent *event = CTX_wm_window(C)->eventstate;
-  tip_init[0] = event->x;
-  tip_init[1] = event->y - (UI_UNIT_Y / 2);
+  tip_init[0] = event->xy[0];
+  tip_init[1] = event->xy[1] - (UI_UNIT_Y / 2);
   ui_window_to_block_fl(region, block, &tip_init[0], &tip_init[1]);
 
   but->rect.xmin = tip_init[0];
@@ -1155,7 +1157,7 @@ void UI_but_func_menu_search(uiBut *but)
 
   UI_but_func_search_set_context_menu(but, ui_search_menu_create_context_menu);
   UI_but_func_search_set_tooltip(but, ui_search_menu_create_tooltip);
-  UI_but_func_search_set_sep_string(but, MENU_SEP);
+  UI_but_func_search_set_sep_string(but, UI_MENU_ARROW_SEP);
 }
 
 void uiTemplateMenuSearch(uiLayout *layout)
@@ -1171,7 +1173,5 @@ void uiTemplateMenuSearch(uiLayout *layout)
       block, search, 0, ICON_VIEWZOOM, sizeof(search), 0, 0, UI_UNIT_X * 6, UI_UNIT_Y, 0, 0, "");
   UI_but_func_menu_search(but);
 }
-
-#undef MENU_SEP
 
 /** \} */

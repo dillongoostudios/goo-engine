@@ -48,7 +48,7 @@ static bool vertex_weight_paint_mode_poll(bContext *C)
 {
   Object *ob = CTX_data_active_object(C);
   Mesh *me = BKE_mesh_from_object(ob);
-  return (ob && (ob->mode == OB_MODE_VERTEX_PAINT || ob->mode == OB_MODE_WEIGHT_PAINT)) &&
+  return (ob && (ELEM(ob->mode, OB_MODE_VERTEX_PAINT, OB_MODE_WEIGHT_PAINT))) &&
          (me && me->totpoly && me->dvert);
 }
 
@@ -149,7 +149,7 @@ static bool vertex_paint_from_weight(Object *ob)
   /* TODO: respect selection. */
   /* TODO: Do we want to take weights from evaluated mesh instead? 2.7x was not doing it anyway. */
   mp = me->mpoly;
-  vgroup_active = ob->actdef - 1;
+  vgroup_active = me->vertex_group_active_index - 1;
   for (int i = 0; i < me->totpoly; i++, mp++) {
     MLoopCol *lcol = &me->mloopcol[mp->loopstart];
     uint j = 0;

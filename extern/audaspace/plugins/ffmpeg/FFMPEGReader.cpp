@@ -31,6 +31,25 @@ AUD_NAMESPACE_BEGIN
 #define FFMPEG_OLD_CODE
 #endif
 
+SampleFormat FFMPEGReader::convertSampleFormat(AVSampleFormat format)
+{
+	switch(av_get_packed_sample_fmt(format))
+	{
+	case AV_SAMPLE_FMT_U8:
+		return FORMAT_U8;
+	case AV_SAMPLE_FMT_S16:
+		return FORMAT_S16;
+	case AV_SAMPLE_FMT_S32:
+		return FORMAT_S32;
+	case AV_SAMPLE_FMT_FLT:
+		return FORMAT_FLOAT32;
+	case AV_SAMPLE_FMT_DBL:
+		return FORMAT_FLOAT64;
+	default:
+		AUD_THROW(FileException, "FFMPEG sample format unknown.");
+	}
+}
+
 int FFMPEGReader::decode(AVPacket& packet, Buffer& buffer)
 {
 	int buf_size = buffer.getSize();
@@ -123,7 +142,7 @@ int FFMPEGReader::decode(AVPacket& packet, Buffer& buffer)
 	return buf_pos;
 }
 
-void FFMPEGReader::init()
+void FFMPEGReader::init(int stream)
 {
 	m_position = 0;
 	m_pkgbuf_left = 0;
@@ -143,8 +162,13 @@ void FFMPEGReader::init()
 #endif
 			&& (m_stream < 0))
 		{
-			m_stream=i;
-			break;
+			if(stream == 0)
+			{
+				m_stream=i;
+				break;
+			}
+			else
+				stream--;
 		}
 	}
 
@@ -215,7 +239,7 @@ void FFMPEGReader::init()
 	m_specs.rate = (SampleRate) m_codecCtx->sample_rate;
 }
 
-FFMPEGReader::FFMPEGReader(std::string filename) :
+FFMPEGReader::FFMPEGReader(std::string filename, int stream) :
 	m_pkgbuf(),
 	m_formatCtx(nullptr),
 	m_codecCtx(nullptr),
@@ -229,7 +253,7 @@ FFMPEGReader::FFMPEGReader(std::string filename) :
 
 	try
 	{
-		init();
+		init(stream);
 	}
 	catch(Exception&)
 	{
@@ -238,7 +262,7 @@ FFMPEGReader::FFMPEGReader(std::string filename) :
 	}
 }
 
-FFMPEGReader::FFMPEGReader(std::shared_ptr<Buffer> buffer) :
+FFMPEGReader::FFMPEGReader(std::shared_ptr<Buffer> buffer, int stream) :
 		m_pkgbuf(),
 		m_codecCtx(nullptr),
 		m_frame(nullptr),
@@ -265,7 +289,7 @@ FFMPEGReader::FFMPEGReader(std::shared_ptr<Buffer> buffer) :
 
 	try
 	{
-		init();
+		init(stream);
 	}
 	catch(Exception&)
 	{
@@ -286,6 +310,51 @@ FFMPEGReader::~FFMPEGReader()
 		avcodec_free_context(&m_codecCtx);
 #endif
 	avformat_close_input(&m_formatCtx);
+}
+
+std::vector<StreamInfo> FFMPEGReader::queryStreams()
+{
+	std::vector<StreamInfo> result;
+
+	for(unsigned int i = 0; i < m_formatCtx->nb_streams; i++)
+	{
+#ifdef FFMPEG_OLD_CODE
+		if(m_formatCtx->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO)
+#else
+		if(m_formatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO)
+#endif
+		{
+			StreamInfo info;
+
+			double time_base = av_q2d(m_formatCtx->streams[i]->time_base);
+
+			if(m_formatCtx->streams[i]->start_time != AV_NOPTS_VALUE)
+				info.start = m_formatCtx->streams[i]->start_time * time_base;
+			else
+				info.start = 0;
+
+			if(m_formatCtx->streams[i]->duration != AV_NOPTS_VALUE)
+				info.duration = m_formatCtx->streams[i]->duration * time_base;
+			else if(m_formatCtx->duration != AV_NOPTS_VALUE)
+				info.duration = double(m_formatCtx->duration) / AV_TIME_BASE - info.start;
+			else
+				info.duration = 0;
+
+#ifdef FFMPEG_OLD_CODE
+			info.specs.channels = Channels(m_formatCtx->streams[i]->codec->channels);
+			info.specs.rate = m_formatCtx->streams[i]->codec->sample_rate;
+			info.specs.format = convertSampleFormat(m_formatCtx->streams[i]->codec->sample_fmt);
+#else
+			info.specs.channels = Channels(m_formatCtx->streams[i]->codecpar->channels);
+			info.specs.rate = m_formatCtx->streams[i]->codecpar->sample_rate;
+			info.specs.format = convertSampleFormat(AVSampleFormat(m_formatCtx->streams[i]->codecpar->format));
+#endif
+
+			result.emplace_back(info);
+		}
+	}
+
+	return result;
 }
 
 int FFMPEGReader::read_packet(void* opaque, uint8_t* buf, int buf_size)
@@ -338,22 +407,16 @@ void FFMPEGReader::seek(int position)
 {
 	if(position >= 0)
 	{
-		uint64_t st_time = m_formatCtx->start_time;
-		uint64_t seek_pos = ((uint64_t)position) * ((uint64_t)AV_TIME_BASE) / ((uint64_t)m_specs.rate);
+		double pts_time_base = av_q2d(m_formatCtx->streams[m_stream]->time_base);
 
-		if(st_time != AV_NOPTS_VALUE) {
+		uint64_t st_time = m_formatCtx->streams[m_stream]->start_time;
+		uint64_t seek_pos = (uint64_t)(position / (pts_time_base * m_specs.rate));
+
+		if(st_time != AV_NOPTS_VALUE)
 			seek_pos += st_time;
-		}
-
-		double pts_time_base = 
-			av_q2d(m_formatCtx->streams[m_stream]->time_base);
-		uint64_t pts_st_time =
-			((st_time != AV_NOPTS_VALUE) ? st_time : 0)
-			/ pts_time_base / (uint64_t) AV_TIME_BASE;
 
 		// a value < 0 tells us that seeking failed
-		if(av_seek_frame(m_formatCtx, -1, seek_pos,
-				 AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY) >= 0)
+		if(av_seek_frame(m_formatCtx, m_stream, seek_pos, AVSEEK_FLAG_BACKWARD | AVSEEK_FLAG_ANY) >= 0)
 		{
 			avcodec_flush_buffers(m_codecCtx);
 			m_position = position;
@@ -374,7 +437,7 @@ void FFMPEGReader::seek(int position)
 					if(packet.pts != AV_NOPTS_VALUE)
 					{
 						// calculate real position, and read to frame!
-						m_position = (packet.pts - pts_st_time) * pts_time_base * m_specs.rate;
+						m_position = (packet.pts - (st_time != AV_NOPTS_VALUE ? st_time : 0)) * pts_time_base * m_specs.rate;
 
 						if(m_position < position)
 						{
@@ -404,9 +467,25 @@ void FFMPEGReader::seek(int position)
 
 int FFMPEGReader::getLength() const
 {
+	auto stream = m_formatCtx->streams[m_stream];
+
+	double time_base = av_q2d(stream->time_base);
+	double duration;
+
+	if(stream->duration != AV_NOPTS_VALUE)
+		duration = stream->duration * time_base;
+	else if(m_formatCtx->duration != AV_NOPTS_VALUE)
+	{
+		duration = float(m_formatCtx->duration) / AV_TIME_BASE;
+
+		if(stream->start_time != AV_NOPTS_VALUE)
+			duration -= stream->start_time * time_base;
+	}
+	else
+		duration = -1;
+
 	// return approximated remaning size
-	return (int)((m_formatCtx->duration * m_codecCtx->sample_rate)
-				 / AV_TIME_BASE)-m_position;
+	return (int)(duration * m_codecCtx->sample_rate) - m_position;
 }
 
 int FFMPEGReader::getPosition() const

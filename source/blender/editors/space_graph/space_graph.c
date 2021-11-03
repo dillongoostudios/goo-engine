@@ -172,6 +172,8 @@ static SpaceLink *graph_duplicate(SpaceLink *sl)
 {
   SpaceGraph *sipon = MEM_dupallocN(sl);
 
+  memset(&sipon->runtime, 0x0, sizeof(sipon->runtime));
+
   /* clear or remove stuff from old */
   BLI_duplicatelist(&sipon->runtime.ghost_curves, &((SpaceGraph *)sl)->runtime.ghost_curves);
   sipon->ads = MEM_dupallocN(sipon->ads);
@@ -227,7 +229,7 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
     graph_draw_curves(&ac, sipo, region, 0);
     graph_draw_curves(&ac, sipo, region, 1);
 
-    /* XXX the slow way to set tot rect... but for nice sliders needed (ton) */
+    /* XXX(ton): the slow way to set tot rect... but for nice sliders needed. */
     get_graph_keyframe_extents(
         &ac, &v2d->tot.xmin, &v2d->tot.xmax, &v2d->tot.ymin, &v2d->tot.ymax, false, true);
     /* extra offset so that these items are visible */
@@ -235,29 +237,27 @@ static void graph_main_region_draw(const bContext *C, ARegion *region)
     v2d->tot.xmax += 10.0f;
   }
 
-  if (((sipo->flag & SIPO_NODRAWCURSOR) == 0) || (sipo->mode == SIPO_MODE_DRIVERS)) {
+  if (((sipo->flag & SIPO_NODRAWCURSOR) == 0)) {
     uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
     immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
 
     /* horizontal component of value-cursor (value line before the current frame line) */
-    if ((sipo->flag & SIPO_NODRAWCURSOR) == 0) {
-      float y = sipo->cursorVal;
+    float y = sipo->cursorVal;
 
-      /* Draw a green line to indicate the cursor value */
-      immUniformThemeColorShadeAlpha(TH_CFRAME, -10, -50);
-      GPU_blend(GPU_BLEND_ALPHA);
-      GPU_line_width(2.0);
+    /* Draw a line to indicate the cursor value. */
+    immUniformThemeColorShadeAlpha(TH_CFRAME, -10, -50);
+    GPU_blend(GPU_BLEND_ALPHA);
+    GPU_line_width(2.0);
 
-      immBegin(GPU_PRIM_LINES, 2);
-      immVertex2f(pos, v2d->cur.xmin, y);
-      immVertex2f(pos, v2d->cur.xmax, y);
-      immEnd();
+    immBegin(GPU_PRIM_LINES, 2);
+    immVertex2f(pos, v2d->cur.xmin, y);
+    immVertex2f(pos, v2d->cur.xmax, y);
+    immEnd();
 
-      GPU_blend(GPU_BLEND_NONE);
-    }
+    GPU_blend(GPU_BLEND_NONE);
 
-    /* current frame or vertical component of vertical component of the cursor */
+    /* Vertical component of of the cursor. */
     if (sipo->mode == SIPO_MODE_DRIVERS) {
       /* cursor x-value */
       float x = sipo->cursorTime;
@@ -309,12 +309,17 @@ static void graph_main_region_draw_overlay(const bContext *C, ARegion *region)
 {
   /* draw entirely, view changes should be handled here */
   const SpaceGraph *sipo = CTX_wm_space_graph(C);
+
+  /* Driver Editor's X axis is not time. */
+  if (sipo->mode == SIPO_MODE_DRIVERS) {
+    return;
+  }
+
   const Scene *scene = CTX_data_scene(C);
-  const bool draw_vert_line = sipo->mode != SIPO_MODE_DRIVERS;
   View2D *v2d = &region->v2d;
 
   /* scrubbing region */
-  ED_time_scrub_draw_current_frame(region, scene, sipo->flag & SIPO_DRAWTIME, draw_vert_line);
+  ED_time_scrub_draw_current_frame(region, scene, sipo->flag & SIPO_DRAWTIME);
 
   /* scrollers */
   /* FIXME: args for scrollers depend on the type of data being shown. */
@@ -554,8 +559,8 @@ static void graph_listener(const wmSpaceTypeListenerParams *params)
   /* context changes */
   switch (wmn->category) {
     case NC_ANIMATION:
-      /* for selection changes of animation data, we can just redraw...
-       * otherwise autocolor might need to be done again */
+      /* For selection changes of animation data, we can just redraw...
+       * otherwise auto-color might need to be done again. */
       if (ELEM(wmn->data, ND_KEYFRAME, ND_ANIMCHAN) && (wmn->action == NA_SELECTED)) {
         ED_area_tag_redraw(area);
       }
@@ -586,7 +591,7 @@ static void graph_listener(const wmSpaceTypeListenerParams *params)
           ED_area_tag_refresh(area);
           break;
         case ND_TRANSFORM:
-          break; /*do nothing*/
+          break; /* Do nothing. */
 
         default: /* just redrawing the view will do */
           ED_area_tag_redraw(area);
@@ -757,7 +762,7 @@ static void graph_refresh(const bContext *C, ScrArea *area)
       break;
     }
 
-    case SIPO_MODE_DRIVERS: /* drivers only  */
+    case SIPO_MODE_DRIVERS: /* Drivers only. */
     {
       break;
     }

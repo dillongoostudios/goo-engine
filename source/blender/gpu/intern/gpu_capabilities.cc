@@ -82,6 +82,56 @@ int GPU_max_textures(void)
   return GCaps.max_textures;
 }
 
+int GPU_max_work_group_count(int index)
+{
+  return GCaps.max_work_group_count[index];
+}
+
+int GPU_max_work_group_size(int index)
+{
+  return GCaps.max_work_group_size[index];
+}
+
+int GPU_max_uniforms_vert(void)
+{
+  return GCaps.max_uniforms_vert;
+}
+
+int GPU_max_uniforms_frag(void)
+{
+  return GCaps.max_uniforms_frag;
+}
+
+int GPU_max_batch_indices(void)
+{
+  return GCaps.max_batch_indices;
+}
+
+int GPU_max_batch_vertices(void)
+{
+  return GCaps.max_batch_vertices;
+}
+
+int GPU_max_vertex_attribs(void)
+{
+  return GCaps.max_vertex_attribs;
+}
+
+int GPU_max_varying_floats(void)
+{
+  return GCaps.max_varying_floats;
+}
+
+int GPU_extensions_len(void)
+{
+  return GCaps.extensions_len;
+}
+
+const char *GPU_extension_get(int i)
+{
+  return GCaps.extension_get ? GCaps.extension_get(i) : "\0";
+}
+
 bool GPU_mip_render_workaround(void)
 {
   return GCaps.mip_render_workaround;
@@ -106,6 +156,16 @@ bool GPU_crappy_amd_driver(void)
 bool GPU_use_hq_normals_workaround(void)
 {
   return GCaps.use_hq_normals_workaround;
+}
+
+bool GPU_compute_shader_support(void)
+{
+  return GCaps.compute_shader_support;
+}
+
+bool GPU_shader_storage_buffer_objects_support(void)
+{
+  return GCaps.shader_storage_buffer_objects_support;
 }
 
 bool GPU_shader_image_load_store_support(void)

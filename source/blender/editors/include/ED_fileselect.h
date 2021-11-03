@@ -23,6 +23,8 @@
 
 #pragma once
 
+#include "DNA_uuid_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -66,7 +68,7 @@ typedef struct FileAttributeColumn {
 } FileAttributeColumn;
 
 typedef struct FileLayout {
-  /* view settings - XXX - move into own struct */
+  /* view settings - XXX: move into own struct. */
   int offset_top;
   /* Height of the header for the different FileAttributeColumn's. */
   int attribute_column_header_h;
@@ -110,7 +112,7 @@ struct FileAssetSelectParams *ED_fileselect_get_asset_params(const struct SpaceF
 
 void ED_fileselect_set_params_from_userdef(struct SpaceFile *sfile);
 void ED_fileselect_params_to_userdef(struct SpaceFile *sfile,
-                                     const int temp_win_size[],
+                                     const int temp_win_size[2],
                                      const bool is_maximized);
 
 void ED_fileselect_init_layout(struct SpaceFile *sfile, struct ARegion *region);
@@ -136,22 +138,25 @@ void ED_fileselect_layout_tilepos(FileLayout *layout, int tile, int *x, int *y);
 
 void ED_operatormacros_file(void);
 
-void ED_fileselect_clear(struct wmWindowManager *wm,
-                         struct Scene *owner_scene,
-                         struct SpaceFile *sfile);
+void ED_fileselect_clear(struct wmWindowManager *wm, struct SpaceFile *sfile);
 
-void ED_fileselect_exit(struct wmWindowManager *wm,
-                        struct Scene *owner_scene,
-                        struct SpaceFile *sfile);
+void ED_fileselect_exit(struct wmWindowManager *wm, struct SpaceFile *sfile);
 
+bool ED_fileselect_is_file_browser(const struct SpaceFile *sfile);
 bool ED_fileselect_is_asset_browser(const struct SpaceFile *sfile);
+struct AssetLibrary *ED_fileselect_active_asset_library_get(const struct SpaceFile *sfile);
 struct ID *ED_fileselect_active_asset_get(const struct SpaceFile *sfile);
 
-/* Activate the file that corresponds to the given ID.
+void ED_fileselect_activate_asset_catalog(const struct SpaceFile *sfile, bUUID catalog_id);
+
+/* Activate and select the file that corresponds to the given ID.
  * Pass deferred=true to wait for the next refresh before activating. */
 void ED_fileselect_activate_by_id(struct SpaceFile *sfile,
                                   struct ID *asset_id,
                                   const bool deferred);
+
+void ED_fileselect_deselect_all(struct SpaceFile *sfile);
+void ED_fileselect_activate_by_relpath(struct SpaceFile *sfile, const char *relative_path);
 
 void ED_fileselect_window_params_get(const struct wmWindow *win,
                                      int win_size[2],
@@ -166,7 +171,7 @@ int ED_file_icon(const struct FileDirEntry *file);
 
 void ED_file_read_bookmarks(void);
 
-void ED_file_change_dir_ex(struct bContext *C, struct bScreen *screen, struct ScrArea *area);
+void ED_file_change_dir_ex(struct bContext *C, struct ScrArea *area);
 void ED_file_change_dir(struct bContext *C);
 
 void ED_file_path_button(struct bScreen *screen,

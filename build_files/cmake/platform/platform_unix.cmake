@@ -99,6 +99,7 @@ endif()
 find_package_wrapper(JPEG REQUIRED)
 find_package_wrapper(PNG REQUIRED)
 find_package_wrapper(ZLIB REQUIRED)
+find_package_wrapper(Zstd REQUIRED)
 find_package_wrapper(Freetype REQUIRED)
 
 if(WITH_PYTHON)
@@ -457,6 +458,10 @@ endif()
 
 if(WITH_TBB)
   find_package_wrapper(TBB)
+  if(NOT TBB_FOUND)
+    message(WARNING "TBB not found, disabling WITH_TBB")
+    set(WITH_TBB OFF)
+  endif()
 endif()
 
 if(WITH_XR_OPENXR)
@@ -575,17 +580,17 @@ if(WITH_GHOST_WAYLAND)
   pkg_check_modules(wayland-scanner REQUIRED wayland-scanner)
   pkg_check_modules(xkbcommon REQUIRED xkbcommon)
   pkg_check_modules(wayland-cursor REQUIRED wayland-cursor)
+  pkg_check_modules(dbus REQUIRED dbus-1)
 
   set(WITH_GL_EGL ON)
 
-  if(WITH_GHOST_WAYLAND)
-    list(APPEND PLATFORM_LINKLIBS
-      ${wayland-client_LIBRARIES}
-      ${wayland-egl_LIBRARIES}
-      ${xkbcommon_LIBRARIES}
-      ${wayland-cursor_LIBRARIES}
-    )
-  endif()
+  list(APPEND PLATFORM_LINKLIBS
+    ${wayland-client_LINK_LIBRARIES}
+    ${wayland-egl_LINK_LIBRARIES}
+    ${xkbcommon_LINK_LIBRARIES}
+    ${wayland-cursor_LINK_LIBRARIES}
+    ${dbus_LINK_LIBRARIES}
+  )
 endif()
 
 if(WITH_GHOST_X11)

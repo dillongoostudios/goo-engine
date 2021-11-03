@@ -228,7 +228,7 @@ static void set_prop_dist(TransInfo *t, const bool with_dist)
    * Used to find #TransData from the index returned by #BLI_kdtree_find_nearest. */
   TransData **td_table = MEM_mallocN(sizeof(*td_table) * td_table_len, __func__);
 
-  /* Create and fill kd-tree of selected's positions - in global or proj_vec space. */
+  /* Create and fill KD-tree of selected's positions - in global or proj_vec space. */
   KDTree_3d *td_tree = BLI_kdtree_3d_new(td_table_len);
 
   int td_table_index = 0;
@@ -816,7 +816,7 @@ bool constraints_list_needinv(TransInfo *t, ListBase *list)
       /* only consider constraint if it is enabled, and has influence on result */
       if ((con->flag & CONSTRAINT_DISABLE) == 0 && (con->enforce != 0.0f)) {
         /* (affirmative) returns for specific constraints here... */
-        /* constraints that require this regardless  */
+        /* constraints that require this regardless. */
         if (ELEM(con->type,
                  CONSTRAINT_TYPE_FOLLOWPATH,
                  CONSTRAINT_TYPE_CLAMPTO,
@@ -849,8 +849,11 @@ bool constraints_list_needinv(TransInfo *t, ListBase *list)
           /* Copy Transforms constraint only does this in the Before mode. */
           bTransLikeConstraint *data = (bTransLikeConstraint *)con->data;
 
-          if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE) &&
+          if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE, TRANSLIKE_MIX_BEFORE_FULL) &&
               ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION)) {
+            return true;
+          }
+          if (ELEM(data->mix_mode, TRANSLIKE_MIX_BEFORE_SPLIT) && ELEM(t->mode, TFM_ROTATION)) {
             return true;
           }
         }
@@ -858,8 +861,11 @@ bool constraints_list_needinv(TransInfo *t, ListBase *list)
           /* The Action constraint only does this in the Before mode. */
           bActionConstraint *data = (bActionConstraint *)con->data;
 
-          if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE) &&
+          if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE, ACTCON_MIX_BEFORE_FULL) &&
               ELEM(t->mode, TFM_ROTATION, TFM_TRANSLATION)) {
+            return true;
+          }
+          if (ELEM(data->mix_mode, ACTCON_MIX_BEFORE_SPLIT) && ELEM(t->mode, TFM_ROTATION)) {
             return true;
           }
         }
@@ -939,6 +945,7 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
       break;
     case TC_ARMATURE_VERTS:
     case TC_CURSOR_IMAGE:
+    case TC_CURSOR_SEQUENCER:
     case TC_CURSOR_VIEW3D:
     case TC_CURVE_VERTS:
     case TC_GPENCIL:
@@ -949,6 +956,7 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
     case TC_OBJECT_TEXSPACE:
     case TC_PAINT_CURVE_VERTS:
     case TC_PARTICLE_VERTS:
+    case TC_SEQ_IMAGE_DATA:
     case TC_NONE:
     default:
       break;
@@ -957,6 +965,9 @@ void special_aftertrans_update(bContext *C, TransInfo *t)
 
 int special_transform_moving(TransInfo *t)
 {
+  if (t->options & CTX_CURSOR) {
+    return G_TRANSFORM_CURSOR;
+  }
   if (t->spacetype == SPACE_SEQ) {
     return G_TRANSFORM_SEQ;
   }
@@ -1030,12 +1041,14 @@ static void init_proportional_edit(TransInfo *t)
     case TC_POSE: /* Disable PET, its not usable in pose mode yet T32444. */
     case TC_ARMATURE_VERTS:
     case TC_CURSOR_IMAGE:
+    case TC_CURSOR_SEQUENCER:
     case TC_CURSOR_VIEW3D:
     case TC_NLA_DATA:
     case TC_OBJECT_TEXSPACE:
     case TC_PAINT_CURVE_VERTS:
     case TC_SCULPT:
     case TC_SEQ_DATA:
+    case TC_SEQ_IMAGE_DATA:
     case TC_TRACKING_DATA:
     case TC_NONE:
     default:
@@ -1066,7 +1079,8 @@ static void init_proportional_edit(TransInfo *t)
     else if (convert_type == TC_MESH_UV && t->flag & T_PROP_CONNECTED) {
       /* Already calculated by uv_set_connectivity_distance. */
     }
-    else if (convert_type == TC_CURVE_VERTS && t->obedit_type == OB_CURVE) {
+    else if (convert_type == TC_CURVE_VERTS) {
+      BLI_assert(t->obedit_type == OB_CURVE);
       set_prop_dist(t, false);
     }
     else {
@@ -1103,6 +1117,7 @@ static void init_TransDataContainers(TransInfo *t,
     case TC_ACTION_DATA:
     case TC_GRAPH_EDIT_DATA:
     case TC_CURSOR_IMAGE:
+    case TC_CURSOR_SEQUENCER:
     case TC_CURSOR_VIEW3D:
     case TC_MASKING_DATA:
     case TC_NLA_DATA:
@@ -1113,6 +1128,7 @@ static void init_TransDataContainers(TransInfo *t,
     case TC_PARTICLE_VERTS:
     case TC_SCULPT:
     case TC_SEQ_DATA:
+    case TC_SEQ_IMAGE_DATA:
     case TC_TRACKING_DATA:
     case TC_NONE:
     default:
@@ -1147,8 +1163,7 @@ static void init_TransDataContainers(TransInfo *t,
 
     for (int i = 0; i < objects_len; i++) {
       TransDataContainer *tc = &t->data_container[i];
-      if (((t->flag & T_NO_MIRROR) == 0) && ((t->options & CTX_NO_MIRROR) == 0) &&
-          (objects[i]->type == OB_MESH)) {
+      if (!(t->flag & T_NO_MIRROR) && (objects[i]->type == OB_MESH)) {
         tc->use_mirror_axis_x = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_X) != 0;
         tc->use_mirror_axis_y = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_Y) != 0;
         tc->use_mirror_axis_z = (((Mesh *)objects[i]->data)->symmetry & ME_SYMMETRY_Z) != 0;
@@ -1198,6 +1213,7 @@ static eTFlag flags_from_data_type(eTConvertType data_type)
     case TC_NODE_DATA:
     case TC_PAINT_CURVE_VERTS:
     case TC_SEQ_DATA:
+    case TC_SEQ_IMAGE_DATA:
     case TC_TRACKING_DATA:
       return T_POINTS | T_2D_EDIT;
     case TC_ARMATURE_VERTS:
@@ -1213,6 +1229,7 @@ static eTFlag flags_from_data_type(eTConvertType data_type)
     case TC_MESH_UV:
       return T_EDIT | T_POINTS | T_2D_EDIT;
     case TC_CURSOR_IMAGE:
+    case TC_CURSOR_SEQUENCER:
       return T_2D_EDIT;
     case TC_PARTICLE_VERTS:
       return T_POINTS;
@@ -1238,6 +1255,9 @@ static eTConvertType convert_type_get(const TransInfo *t, Object **r_obj_armatur
   if (t->options & CTX_CURSOR) {
     if (t->spacetype == SPACE_IMAGE) {
       convert_type = TC_CURSOR_IMAGE;
+    }
+    else if (t->spacetype == SPACE_SEQ) {
+      convert_type = TC_CURSOR_SEQUENCER;
     }
     else {
       convert_type = TC_CURSOR_VIEW3D;
@@ -1276,7 +1296,12 @@ static eTConvertType convert_type_get(const TransInfo *t, Object **r_obj_armatur
     convert_type = TC_NLA_DATA;
   }
   else if (t->spacetype == SPACE_SEQ) {
-    convert_type = TC_SEQ_DATA;
+    if (t->options & CTX_SEQUENCER_IMAGE) {
+      convert_type = TC_SEQ_IMAGE_DATA;
+    }
+    else {
+      convert_type = TC_SEQ_DATA;
+    }
   }
   else if (t->spacetype == SPACE_GRAPH) {
     convert_type = TC_GRAPH_EDIT_DATA;
@@ -1366,7 +1391,6 @@ void createTransData(bContext *C, TransInfo *t)
 
   switch (t->data_type) {
     case TC_ACTION_DATA:
-      t->obedit_type = -1;
       createTransActionData(C, t);
       break;
     case TC_POSE:
@@ -1382,6 +1406,9 @@ void createTransData(bContext *C, TransInfo *t)
     case TC_CURSOR_IMAGE:
       createTransCursor_image(t);
       break;
+    case TC_CURSOR_SEQUENCER:
+      createTransCursor_sequencer(t);
+      break;
     case TC_CURSOR_VIEW3D:
       createTransCursor_view3d(t);
       break;
@@ -1389,7 +1416,6 @@ void createTransData(bContext *C, TransInfo *t)
       createTransCurveVerts(t);
       break;
     case TC_GRAPH_EDIT_DATA:
-      t->obedit_type = -1;
       createTransGraphEditData(C, t);
       break;
     case TC_GPENCIL:
@@ -1399,9 +1425,6 @@ void createTransData(bContext *C, TransInfo *t)
       createTransLatticeVerts(t);
       break;
     case TC_MASKING_DATA:
-      if (t->spacetype == SPACE_CLIP) {
-        t->obedit_type = -1;
-      }
       createTransMaskingData(C, t);
       break;
     case TC_MBALL_VERTS:
@@ -1420,11 +1443,9 @@ void createTransData(bContext *C, TransInfo *t)
       createTransUVs(C, t);
       break;
     case TC_NLA_DATA:
-      t->obedit_type = -1;
       createTransNlaData(C, t);
       break;
     case TC_NODE_DATA:
-      t->obedit_type = -1;
       createTransNodeData(t);
       break;
     case TC_OBJECT:
@@ -1468,12 +1489,14 @@ void createTransData(bContext *C, TransInfo *t)
       createTransSculpt(C, t);
       break;
     case TC_SEQ_DATA:
-      t->obedit_type = -1;
       t->num.flag |= NUM_NO_FRACTION; /* sequencer has no use for floating point transform. */
       createTransSeqData(t);
       break;
-    case TC_TRACKING_DATA:
+    case TC_SEQ_IMAGE_DATA:
       t->obedit_type = -1;
+      createTransSeqImageData(t);
+      break;
+    case TC_TRACKING_DATA:
       createTransTrackingData(C, t);
       break;
     case TC_NONE:
@@ -1487,8 +1510,6 @@ void createTransData(bContext *C, TransInfo *t)
   countAndCleanTransDataContainer(t);
 
   init_proportional_edit(t);
-
-  BLI_assert((!(t->flag & T_EDIT)) == (!(t->obedit_type != -1)));
 }
 
 /** \} */
@@ -1497,91 +1518,89 @@ void createTransData(bContext *C, TransInfo *t)
 /** \name Transform Data Recalc/Flush
  * \{ */
 
-void clipMirrorModifier(TransInfo *t)
+void transform_convert_clip_mirror_modifier_apply(TransDataContainer *tc)
 {
-  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    Object *ob = tc->obedit;
-    ModifierData *md = ob->modifiers.first;
-    float tolerance[3] = {0.0f, 0.0f, 0.0f};
-    int axis = 0;
+  Object *ob = tc->obedit;
+  ModifierData *md = ob->modifiers.first;
+  float tolerance[3] = {0.0f, 0.0f, 0.0f};
+  int axis = 0;
 
-    for (; md; md = md->next) {
-      if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {
-        MirrorModifierData *mmd = (MirrorModifierData *)md;
+  for (; md; md = md->next) {
+    if ((md->type == eModifierType_Mirror) && (md->mode & eModifierMode_Realtime)) {
+      MirrorModifierData *mmd = (MirrorModifierData *)md;
 
-        if (mmd->flag & MOD_MIR_CLIPPING) {
-          axis = 0;
-          if (mmd->flag & MOD_MIR_AXIS_X) {
-            axis |= 1;
-            tolerance[0] = mmd->tolerance;
+      if (mmd->flag & MOD_MIR_CLIPPING) {
+        axis = 0;
+        if (mmd->flag & MOD_MIR_AXIS_X) {
+          axis |= 1;
+          tolerance[0] = mmd->tolerance;
+        }
+        if (mmd->flag & MOD_MIR_AXIS_Y) {
+          axis |= 2;
+          tolerance[1] = mmd->tolerance;
+        }
+        if (mmd->flag & MOD_MIR_AXIS_Z) {
+          axis |= 4;
+          tolerance[2] = mmd->tolerance;
+        }
+        if (axis) {
+          float mtx[4][4], imtx[4][4];
+          int i;
+
+          if (mmd->mirror_ob) {
+            float obinv[4][4];
+
+            invert_m4_m4(obinv, mmd->mirror_ob->obmat);
+            mul_m4_m4m4(mtx, obinv, ob->obmat);
+            invert_m4_m4(imtx, mtx);
           }
-          if (mmd->flag & MOD_MIR_AXIS_Y) {
-            axis |= 2;
-            tolerance[1] = mmd->tolerance;
-          }
-          if (mmd->flag & MOD_MIR_AXIS_Z) {
-            axis |= 4;
-            tolerance[2] = mmd->tolerance;
-          }
-          if (axis) {
-            float mtx[4][4], imtx[4][4];
-            int i;
 
-            if (mmd->mirror_ob) {
-              float obinv[4][4];
+          TransData *td = tc->data;
+          for (i = 0; i < tc->data_len; i++, td++) {
+            int clip;
+            float loc[3], iloc[3];
 
-              invert_m4_m4(obinv, mmd->mirror_ob->obmat);
-              mul_m4_m4m4(mtx, obinv, ob->obmat);
-              invert_m4_m4(imtx, mtx);
+            if (td->loc == NULL) {
+              break;
             }
 
-            TransData *td = tc->data;
-            for (i = 0; i < tc->data_len; i++, td++) {
-              int clip;
-              float loc[3], iloc[3];
+            if (td->flag & TD_SKIP) {
+              continue;
+            }
 
-              if (td->loc == NULL) {
-                break;
+            copy_v3_v3(loc, td->loc);
+            copy_v3_v3(iloc, td->iloc);
+
+            if (mmd->mirror_ob) {
+              mul_m4_v3(mtx, loc);
+              mul_m4_v3(mtx, iloc);
+            }
+
+            clip = 0;
+            if (axis & 1) {
+              if (fabsf(iloc[0]) <= tolerance[0] || loc[0] * iloc[0] < 0.0f) {
+                loc[0] = 0.0f;
+                clip = 1;
               }
+            }
 
-              if (td->flag & TD_SKIP) {
-                continue;
+            if (axis & 2) {
+              if (fabsf(iloc[1]) <= tolerance[1] || loc[1] * iloc[1] < 0.0f) {
+                loc[1] = 0.0f;
+                clip = 1;
               }
-
-              copy_v3_v3(loc, td->loc);
-              copy_v3_v3(iloc, td->iloc);
-
+            }
+            if (axis & 4) {
+              if (fabsf(iloc[2]) <= tolerance[2] || loc[2] * iloc[2] < 0.0f) {
+                loc[2] = 0.0f;
+                clip = 1;
+              }
+            }
+            if (clip) {
               if (mmd->mirror_ob) {
-                mul_m4_v3(mtx, loc);
-                mul_m4_v3(mtx, iloc);
+                mul_m4_v3(imtx, loc);
               }
-
-              clip = 0;
-              if (axis & 1) {
-                if (fabsf(iloc[0]) <= tolerance[0] || loc[0] * iloc[0] < 0.0f) {
-                  loc[0] = 0.0f;
-                  clip = 1;
-                }
-              }
-
-              if (axis & 2) {
-                if (fabsf(iloc[1]) <= tolerance[1] || loc[1] * iloc[1] < 0.0f) {
-                  loc[1] = 0.0f;
-                  clip = 1;
-                }
-              }
-              if (axis & 4) {
-                if (fabsf(iloc[2]) <= tolerance[2] || loc[2] * iloc[2] < 0.0f) {
-                  loc[2] = 0.0f;
-                  clip = 1;
-                }
-              }
-              if (clip) {
-                if (mmd->mirror_ob) {
-                  mul_m4_v3(imtx, loc);
-                }
-                copy_v3_v3(td->loc, loc);
-              }
+              copy_v3_v3(td->loc, loc);
             }
           }
         }
@@ -1669,35 +1688,23 @@ void animrecord_check_state(TransInfo *t, struct Object *ob)
   }
 }
 
-static void recalcData_cursor_image(TransInfo *t)
+void transform_convert_flush_handle2D(TransData *td, TransData2D *td2d, const float y_fac)
 {
-  TransDataContainer *tc = t->data_container;
-  TransData *td = tc->data;
-  float aspect_inv[2];
+  float delta_x = td->loc[0] - td->iloc[0];
+  float delta_y = (td->loc[1] - td->iloc[1]) * y_fac;
 
-  aspect_inv[0] = 1.0f / t->aspect[0];
-  aspect_inv[1] = 1.0f / t->aspect[1];
-
-  td->loc[0] = td->loc[0] * aspect_inv[0];
-  td->loc[1] = td->loc[1] * aspect_inv[1];
-
-  DEG_id_tag_update(&t->scene->id, ID_RECALC_COPY_ON_WRITE);
-}
-
-static void recalcData_cursor(TransInfo *t)
-{
-  DEG_id_tag_update(&t->scene->id, ID_RECALC_COPY_ON_WRITE);
-}
-
-static void recalcData_obedit(TransInfo *t)
-{
-  if (t->state != TRANS_CANCEL) {
-    applyProject(t);
+  /* If the handles are to be moved too
+   * (as side-effect of keyframes moving, to keep the general effect)
+   * offset them by the same amount so that the general angles are maintained
+   * (i.e. won't change while handles are free-to-roam and keyframes are snap-locked).
+   */
+  if ((td->flag & TD_MOVEHANDLE1) && td2d->h1) {
+    td2d->h1[0] = td2d->ih1[0] + delta_x;
+    td2d->h1[1] = td2d->ih1[1] + delta_y;
   }
-  FOREACH_TRANS_DATA_CONTAINER (t, tc) {
-    if (tc->data_len) {
-      DEG_id_tag_update(tc->obedit->data, 0); /* sets recalc flags */
-    }
+  if ((td->flag & TD_MOVEHANDLE2) && td2d->h2) {
+    td2d->h2[0] = td2d->ih2[0] + delta_x;
+    td2d->h2[1] = td2d->ih2[1] + delta_y;
   }
 }
 
@@ -1720,8 +1727,11 @@ void recalcData(TransInfo *t)
     case TC_CURSOR_IMAGE:
       recalcData_cursor_image(t);
       break;
+    case TC_CURSOR_SEQUENCER:
+      recalcData_cursor_sequencer(t);
+      break;
     case TC_CURSOR_VIEW3D:
-      recalcData_cursor(t);
+      recalcData_cursor_view3d(t);
       break;
     case TC_GRAPH_EDIT_DATA:
       recalcData_graphedit(t);
@@ -1733,8 +1743,10 @@ void recalcData(TransInfo *t)
       recalcData_mask_common(t);
       break;
     case TC_MESH_VERTS:
-    case TC_MESH_EDGES:
       recalcData_mesh(t);
+      break;
+    case TC_MESH_EDGES:
+      recalcData_mesh_edge(t);
       break;
     case TC_MESH_SKIN:
       recalcData_mesh_skin(t);
@@ -1763,11 +1775,14 @@ void recalcData(TransInfo *t)
     case TC_SEQ_DATA:
       recalcData_sequencer(t);
       break;
+    case TC_SEQ_IMAGE_DATA:
+      recalcData_sequencer_image(t);
+      break;
     case TC_TRACKING_DATA:
       recalcData_tracking(t);
       break;
     case TC_MBALL_VERTS:
-      recalcData_obedit(t);
+      recalcData_mball(t);
       break;
     case TC_LATTICE_VERTS:
       recalcData_lattice(t);

@@ -30,6 +30,8 @@
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
+#include "PIL_time.h"
+
 #include "BLT_translation.h"
 
 #include "BKE_context.h"
@@ -115,43 +117,46 @@ static const char *object_mode_op_string(eObjectMode mode)
  */
 bool ED_object_mode_compat_test(const Object *ob, eObjectMode mode)
 {
-  if (ob) {
-    if (mode == OB_MODE_OBJECT) {
-      return true;
-    }
+  if (mode == OB_MODE_OBJECT) {
+    return true;
+  }
 
-    switch (ob->type) {
-      case OB_MESH:
-        if (mode & (OB_MODE_EDIT | OB_MODE_SCULPT | OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT |
-                    OB_MODE_TEXTURE_PAINT | OB_MODE_PARTICLE_EDIT)) {
+  switch (ob->type) {
+    case OB_MESH:
+      if (mode & (OB_MODE_EDIT | OB_MODE_SCULPT | OB_MODE_VERTEX_PAINT | OB_MODE_WEIGHT_PAINT |
+                  OB_MODE_TEXTURE_PAINT)) {
+        return true;
+      }
+      if (mode & OB_MODE_PARTICLE_EDIT) {
+        if (ED_object_particle_edit_mode_supported(ob)) {
           return true;
         }
-        break;
-      case OB_CURVE:
-      case OB_SURF:
-      case OB_FONT:
-      case OB_MBALL:
-        if (mode & OB_MODE_EDIT) {
-          return true;
-        }
-        break;
-      case OB_LATTICE:
-        if (mode & (OB_MODE_EDIT | OB_MODE_WEIGHT_PAINT)) {
-          return true;
-        }
-        break;
-      case OB_ARMATURE:
-        if (mode & (OB_MODE_EDIT | OB_MODE_POSE)) {
-          return true;
-        }
-        break;
-      case OB_GPENCIL:
-        if (mode & (OB_MODE_EDIT | OB_MODE_EDIT_GPENCIL | OB_MODE_PAINT_GPENCIL |
-                    OB_MODE_SCULPT_GPENCIL | OB_MODE_WEIGHT_GPENCIL | OB_MODE_VERTEX_GPENCIL)) {
-          return true;
-        }
-        break;
-    }
+      }
+      break;
+    case OB_CURVE:
+    case OB_SURF:
+    case OB_FONT:
+    case OB_MBALL:
+      if (mode & OB_MODE_EDIT) {
+        return true;
+      }
+      break;
+    case OB_LATTICE:
+      if (mode & (OB_MODE_EDIT | OB_MODE_WEIGHT_PAINT)) {
+        return true;
+      }
+      break;
+    case OB_ARMATURE:
+      if (mode & (OB_MODE_EDIT | OB_MODE_POSE)) {
+        return true;
+      }
+      break;
+    case OB_GPENCIL:
+      if (mode & (OB_MODE_EDIT_GPENCIL | OB_MODE_PAINT_GPENCIL | OB_MODE_SCULPT_GPENCIL |
+                  OB_MODE_WEIGHT_GPENCIL | OB_MODE_VERTEX_GPENCIL)) {
+        return true;
+      }
+      break;
   }
 
   return false;
@@ -396,9 +401,9 @@ void ED_object_mode_generic_exit(struct Main *bmain,
   ed_object_mode_generic_exit_ex(bmain, depsgraph, scene, ob, false);
 }
 
-bool ED_object_mode_generic_has_data(struct Depsgraph *depsgraph, struct Object *ob)
+bool ED_object_mode_generic_has_data(struct Depsgraph *depsgraph, const struct Object *ob)
 {
-  return ed_object_mode_generic_exit_ex(NULL, depsgraph, NULL, ob, true);
+  return ed_object_mode_generic_exit_ex(NULL, depsgraph, NULL, (Object *)ob, true);
 }
 
 /** \} */
@@ -416,7 +421,7 @@ static bool object_transfer_mode_poll(bContext *C)
     return false;
   }
   const Object *ob = CTX_data_active_object(C);
-  return ob && (ob->mode & (OB_MODE_SCULPT));
+  return ob && (ob->mode != OB_MODE_OBJECT);
 }
 
 /* Update the viewport rotation origin to the mouse cursor. */
@@ -433,6 +438,13 @@ static void object_transfer_mode_reposition_view_pivot(bContext *C, const int mv
   copy_v3_v3(ups->average_stroke_accum, global_loc);
   ups->average_stroke_counter = 1;
   ups->last_stroke_valid = true;
+}
+
+static void object_overlay_mode_transfer_animation_start(bContext *C, Object *ob_dst)
+{
+  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
+  Object *ob_dst_eval = DEG_get_evaluated_object(depsgraph, ob_dst);
+  ob_dst_eval->runtime.overlay_mode_transfer_start_time = PIL_check_seconds_timer();
 }
 
 static bool object_transfer_mode_to_base(bContext *C, wmOperator *op, Base *base_dst)
@@ -472,6 +484,10 @@ static bool object_transfer_mode_to_base(bContext *C, wmOperator *op, Base *base
     ob_dst_orig = DEG_get_original_object(ob_dst);
     ED_object_mode_set_ex(C, last_mode, true, op->reports);
 
+    if (RNA_boolean_get(op->ptr, "use_flash_on_transfer")) {
+      object_overlay_mode_transfer_animation_start(C, ob_dst);
+    }
+
     WM_event_add_notifier(C, NC_SCENE | ND_OB_SELECT, scene);
     WM_toolsystem_update_from_context_view3d(C);
     mode_transfered = true;
@@ -481,51 +497,8 @@ static bool object_transfer_mode_to_base(bContext *C, wmOperator *op, Base *base
   return mode_transfered;
 }
 
-static int object_transfer_mode_modal(bContext *C, wmOperator *op, const wmEvent *event)
-{
-  switch (event->type) {
-    case LEFTMOUSE:
-      if (event->val == KM_PRESS) {
-        WM_cursor_modal_restore(CTX_wm_window(C));
-        ED_workspace_status_text(C, NULL);
-
-        /* This ensures that the click was done in an viewport region. */
-        bScreen *screen = CTX_wm_screen(C);
-        ARegion *region = BKE_screen_find_main_region_at_xy(
-            screen, SPACE_VIEW3D, event->x, event->y);
-        if (!region) {
-          return OPERATOR_CANCELLED;
-        }
-
-        const int mval[2] = {event->x - region->winrct.xmin, event->y - region->winrct.ymin};
-        Base *base_dst = ED_view3d_give_base_under_cursor(C, mval);
-        const bool mode_transfered = object_transfer_mode_to_base(C, op, base_dst);
-        if (!mode_transfered) {
-          return OPERATOR_CANCELLED;
-        }
-
-        return OPERATOR_FINISHED;
-      }
-      break;
-    case RIGHTMOUSE: {
-      WM_cursor_modal_restore(CTX_wm_window(C));
-      ED_workspace_status_text(C, NULL);
-      return OPERATOR_CANCELLED;
-    }
-  }
-  return OPERATOR_RUNNING_MODAL;
-}
-
 static int object_transfer_mode_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
-  const bool use_eyedropper = RNA_boolean_get(op->ptr, "use_eyedropper");
-  if (use_eyedropper) {
-    ED_workspace_status_text(C, TIP_("Click in the viewport to select an object"));
-    WM_cursor_modal_set(CTX_wm_window(C), WM_CURSOR_EYEDROPPER);
-    WM_event_add_modal_handler(C, op);
-    return OPERATOR_RUNNING_MODAL;
-  }
-
   Object *ob_src = CTX_data_active_object(C);
   const eObjectMode src_mode = (eObjectMode)ob_src->mode;
 
@@ -553,17 +526,18 @@ void OBJECT_OT_transfer_mode(wmOperatorType *ot)
 
   /* api callbacks */
   ot->invoke = object_transfer_mode_invoke;
-  ot->modal = object_transfer_mode_modal;
   ot->poll = object_transfer_mode_poll;
 
   /* Undo push is handled by the operator. */
-  ot->flag = OPTYPE_REGISTER;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
+
+  ot->cursor_pending = WM_CURSOR_EYEDROPPER;
 
   RNA_def_boolean(ot->srna,
-                  "use_eyedropper",
-                  false,
-                  "Use Eyedropper",
-                  "Pick the object to switch to using an eyedropper");
+                  "use_flash_on_transfer",
+                  true,
+                  "Flash On Transfer",
+                  "Flash the target object when transferring the mode");
 }
 
 /** \} */

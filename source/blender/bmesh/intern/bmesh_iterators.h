@@ -61,11 +61,11 @@ typedef enum BMIterType {
   BM_LOOPS_OF_FACE = 11,
   /* returns elements from all boundaries, and returns
    * the first element at the end to flag that we're entering
-   * a different face hole boundary*/
+   * a different face hole boundary. */
   // BM_ALL_LOOPS_OF_FACE = 12,
   /* iterate through loops around this loop, which are fetched
    * from the other faces in the radial cycle surrounding the
-   * input loop's edge.*/
+   * input loop's edge. */
   BM_LOOPS_OF_LOOP = 12,
   BM_LOOPS_OF_EDGE = 13,
 } BMIterType;
@@ -89,7 +89,7 @@ extern const char bm_iter_itype_htype_map[BM_ITYPE_MAX];
 #  define BM_ITER_MESH_MUTABLE(ele, ele_next, iter, bm, itype) \
     for (BM_CHECK_TYPE_ELEM_ASSIGN(ele) = BM_iter_new(iter, bm, itype, NULL); \
          ele ? ((void)((iter)->count = BM_iter_mesh_count(itype, bm)), \
-                (void)(ele_next = BM_iter_step(iter)), \
+                (void)(BM_CHECK_TYPE_ELEM_ASSIGN(ele_next) = BM_iter_step(iter)), \
                 1) : \
                0; \
          BM_CHECK_TYPE_ELEM_ASSIGN(ele) = ele_next)
@@ -158,7 +158,7 @@ typedef void (*BMIter__begin_cb)(void *);
 typedef void *(*BMIter__step_cb)(void *);
 
 /* Iterator Structure */
-/* note: some of these vars are not used,
+/* NOTE: some of these vars are not used,
  * so they have been commented to save stack space since this struct is used all over */
 typedef struct BMIter {
   /* keep union first */
@@ -180,7 +180,7 @@ typedef struct BMIter {
   BMIter__begin_cb begin;
   BMIter__step_cb step;
 
-  int count; /* note, only some iterators set this, don't rely on it */
+  int count; /* NOTE: only some iterators set this, don't rely on it. */
   char itype;
 } BMIter;
 

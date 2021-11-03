@@ -79,15 +79,15 @@ typedef struct CLG_IDFilter {
 } CLG_IDFilter;
 
 typedef struct CLogContext {
-  /** Single linked list of types.  */
+  /** Single linked list of types. */
   CLG_LogType *types;
-  /** Single linked list of references.  */
+  /** Single linked list of references. */
   CLG_LogRef *refs;
 #ifdef WITH_CLOG_PTHREADS
   pthread_mutex_t types_lock;
 #endif
 
-  /* exclude, include filters.  */
+  /* exclude, include filters. */
   CLG_IDFilter *filters[2];
   bool use_color;
   bool use_basename;
@@ -322,7 +322,9 @@ static bool clg_ctx_filter_check(CLogContext *ctx, const char *identifier)
       if (flt->match[0] == '*' && flt->match[len - 1] == '*') {
         char *match = MEM_callocN(sizeof(char) * len - 1, __func__);
         memcpy(match, flt->match + 1, len - 2);
-        if (strstr(identifier, match) != NULL) {
+        const bool success = (strstr(identifier, match) != NULL);
+        MEM_freeN(match);
+        if (success) {
           return (bool)i;
         }
       }

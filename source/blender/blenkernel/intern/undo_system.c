@@ -140,12 +140,12 @@ static void undosys_id_ref_store(void *UNUSED(user_data), UndoRefID *id_ref)
 
 static void undosys_id_ref_resolve(void *user_data, UndoRefID *id_ref)
 {
-  /* Note: we could optimize this,
+  /* NOTE: we could optimize this,
    * for now it's not too bad since it only runs when we access undo! */
   Main *bmain = user_data;
   ListBase *lb = which_libbase(bmain, GS(id_ref->name));
   LISTBASE_FOREACH (ID *, id, lb) {
-    if (STREQ(id_ref->name, id->name) && (id->lib == NULL)) {
+    if (STREQ(id_ref->name, id->name) && !ID_IS_LINKED(id)) {
       id_ref->ptr = id;
       break;
     }
@@ -346,7 +346,7 @@ static bool undosys_stack_push_main(UndoStack *ustack, const char *name, struct 
   CLOG_INFO(&LOG, 1, "'%s'", name);
   bContext *C_temp = CTX_create();
   CTX_data_main_set(C_temp, bmain);
-  UndoPushReturn ret = BKE_undosys_step_push_with_type(
+  eUndoPushReturn ret = BKE_undosys_step_push_with_type(
       ustack, C_temp, name, BKE_UNDOSYS_TYPE_MEMFILE);
   CTX_free(C_temp);
   return (ret & UNDO_PUSH_RET_SUCCESS);
@@ -368,10 +368,10 @@ void BKE_undosys_stack_init_from_context(UndoStack *ustack, bContext *C)
 }
 
 /* name optional */
-bool BKE_undosys_stack_has_undo(UndoStack *ustack, const char *name)
+bool BKE_undosys_stack_has_undo(const UndoStack *ustack, const char *name)
 {
   if (name) {
-    UndoStep *us = BLI_rfindstring(&ustack->steps, name, offsetof(UndoStep, name));
+    const UndoStep *us = BLI_rfindstring(&ustack->steps, name, offsetof(UndoStep, name));
     return us && us->prev;
   }
 
@@ -500,17 +500,17 @@ UndoStep *BKE_undosys_step_push_init(UndoStack *ustack, bContext *C, const char 
 /**
  * \param C: Can be NULL from some callers if their encoding function doesn't need it
  */
-UndoPushReturn BKE_undosys_step_push_with_type(UndoStack *ustack,
-                                               bContext *C,
-                                               const char *name,
-                                               const UndoType *ut)
+eUndoPushReturn BKE_undosys_step_push_with_type(UndoStack *ustack,
+                                                bContext *C,
+                                                const char *name,
+                                                const UndoType *ut)
 {
   BLI_assert((ut->flags & UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE) == 0 || C != NULL);
 
   UNDO_NESTED_ASSERT(false);
   undosys_stack_validate(ustack, false);
   bool is_not_empty = ustack->step_active != NULL;
-  UndoPushReturn retval = UNDO_PUSH_RET_FAILURE;
+  eUndoPushReturn retval = UNDO_PUSH_RET_FAILURE;
 
   /* Might not be final place for this to be called - probably only want to call it from some
    * undo handlers, not all of them? */
@@ -602,7 +602,7 @@ UndoPushReturn BKE_undosys_step_push_with_type(UndoStack *ustack,
   return (retval | UNDO_PUSH_RET_SUCCESS);
 }
 
-UndoPushReturn BKE_undosys_step_push(UndoStack *ustack, bContext *C, const char *name)
+eUndoPushReturn BKE_undosys_step_push(UndoStack *ustack, bContext *C, const char *name)
 {
   UNDO_NESTED_ASSERT(false);
   const UndoType *ut = ustack->step_init ? ustack->step_init->type :
@@ -717,23 +717,42 @@ eUndoStepDir BKE_undosys_step_calc_direction(const UndoStack *ustack,
     }
   }
 
-  BLI_assert(!"Target undo step not found, this should not happen and may indicate an undo stack corruption");
+  BLI_assert_msg(0,
+                 "Target undo step not found, this should not happen and may indicate an undo "
+                 "stack corruption");
   return STEP_INVALID;
+}
+
+/**
+ * When reading undo steps for undo/redo,
+ * some extra checks are needed when so the correct undo step is decoded.
+ */
+static UndoStep *undosys_step_iter_first(UndoStep *us_reference, const eUndoStepDir undo_dir)
+{
+  if (us_reference->type->flags & UNDOTYPE_FLAG_DECODE_ACTIVE_STEP) {
+    /* Reading this step means an undo action reads undo twice.
+     * This should be avoided where possible, however some undo systems require it.
+     *
+     * Redo skips the current state as this represents the currently loaded state. */
+    return (undo_dir == -1) ? us_reference : us_reference->next;
+  }
+
+  /* Typical case, skip reading the current undo step. */
+  return (undo_dir == -1) ? us_reference->prev : us_reference->next;
 }
 
 /**
  * Undo/Redo until the given `us_target` step becomes the active (currently loaded) one.
  *
- * \note Unless `us_target` is a 'skipped' one and `use_skip` is true, `us_target` will become the
- *       active step.
+ * \note Unless `us_target` is a 'skipped' one and `use_skip` is true, `us_target`
+ * will become the active step.
  *
- * \note In case `use_skip` is true, the final target will always be **beyond** the given one (if
- *       the given one has to be skipped).
+ * \note In case `use_skip` is true, the final target will always be **beyond** the given one
+ * (if the given one has to be skipped).
  *
- * \param us_reference If NULL, will be set to current active step in the undo stack. Otherwise, it
- *                     is assumed to match the current state, and will be used as basis for the
- *                     undo/redo process (i.e. all steps in-between `us_reference` and `us_target`
- *                     will be processed).
+ * \param us_reference: If NULL, will be set to current active step in the undo stack. Otherwise,
+ * it is assumed to match the current state, and will be used as basis for the undo/redo process
+ * (i.e. all steps in-between `us_reference` and `us_target` will be processed).
  */
 bool BKE_undosys_step_load_data_ex(UndoStack *ustack,
                                    bContext *C,
@@ -786,15 +805,10 @@ bool BKE_undosys_step_load_data_ex(UndoStack *ustack,
             us_target->type->name,
             undo_dir);
 
-  /* Undo/Redo steps until we reach given target step (or beyond if it has to be skipped), from
-   * given reference step.
-   *
-   * NOTE: Unlike with redo case, where we can expect current active step to fully reflect current
-   * data status, in undo case we also do reload the active step.
-   * FIXME: this feels weak, and should probably not be actually needed? Or should also be done in
-   * redo case? */
+  /* Undo/Redo steps until we reach given target step (or beyond if it has to be skipped),
+   * from given reference step. */
   bool is_processing_extra_skipped_steps = false;
-  for (UndoStep *us_iter = (undo_dir == -1) ? us_reference : us_reference->next; us_iter != NULL;
+  for (UndoStep *us_iter = undosys_step_iter_first(us_reference, undo_dir); us_iter != NULL;
        us_iter = (undo_dir == -1) ? us_iter->prev : us_iter->next) {
     BLI_assert(us_iter != NULL);
 

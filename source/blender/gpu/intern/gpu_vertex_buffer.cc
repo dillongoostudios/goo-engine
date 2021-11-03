@@ -28,8 +28,8 @@
 #include "gpu_backend.hh"
 #include "gpu_vertex_format_private.h"
 
-#include "gl_vertex_buffer.hh"    /* TODO remove */
-#include "gpu_context_private.hh" /* TODO remove */
+#include "gl_vertex_buffer.hh"    /* TODO: remove. */
+#include "gpu_context_private.hh" /* TODO: remove. */
 
 #include "gpu_vertex_buffer_private.hh"
 
@@ -149,6 +149,16 @@ GPUVertBuf *GPU_vertbuf_duplicate(GPUVertBuf *verts_)
   return wrap(unwrap(verts_)->duplicate());
 }
 
+const void *GPU_vertbuf_read(GPUVertBuf *verts)
+{
+  return unwrap(verts)->read();
+}
+
+void *GPU_vertbuf_unmap(const GPUVertBuf *verts, const void *mapped_data)
+{
+  return unwrap(verts)->unmap(mapped_data);
+}
+
 /** Same as discard but does not free. */
 void GPU_vertbuf_clear(GPUVertBuf *verts)
 {
@@ -219,7 +229,7 @@ void GPU_vertbuf_attr_fill(GPUVertBuf *verts_, uint a_idx, const void *data)
   GPU_vertbuf_attr_fill_stride(verts_, a_idx, stride, data);
 }
 
-/** Fills a whole vertex (all attributes). Data must match packed layout.  */
+/** Fills a whole vertex (all attributes). Data must match packed layout. */
 void GPU_vertbuf_vert_set(GPUVertBuf *verts_, uint v_idx, const void *data)
 {
   VertBuf *verts = unwrap(verts_);
@@ -277,7 +287,7 @@ void GPU_vertbuf_attr_get_raw_data(GPUVertBuf *verts_, uint a_idx, GPUVertBufRaw
 /* NOTE: Be careful when using this. The data needs to match the expected format. */
 void *GPU_vertbuf_get_data(const GPUVertBuf *verts)
 {
-  /* TODO Assert that the format has no padding. */
+  /* TODO: Assert that the format has no padding. */
   return unwrap(verts)->data;
 }
 
@@ -286,7 +296,7 @@ void *GPU_vertbuf_get_data(const GPUVertBuf *verts)
 void *GPU_vertbuf_steal_data(GPUVertBuf *verts_)
 {
   VertBuf *verts = unwrap(verts_);
-  /* TODO Assert that the format has no padding. */
+  /* TODO: Assert that the format has no padding. */
   BLI_assert(verts->data);
   void *data = verts->data;
   verts->data = nullptr;
@@ -322,6 +332,11 @@ uint GPU_vertbuf_get_memory_usage()
 void GPU_vertbuf_use(GPUVertBuf *verts)
 {
   unwrap(verts)->upload();
+}
+
+void GPU_vertbuf_bind_as_ssbo(struct GPUVertBuf *verts, int binding)
+{
+  unwrap(verts)->bind_as_ssbo(binding);
 }
 
 /* XXX this is just a wrapper for the use of the Hair refine workaround.

@@ -338,7 +338,7 @@ float diffuse_occlusion(
  * radius2 : Second caps’ radius (in radians)
  * dist : Distance between caps (radians between centers of caps)
  * Note: Result is divided by pi to save one multiply.
- **/
+ */
 float spherical_cap_intersection(float radius1, float radius2, float dist)
 {
   /* From "Ambient Aperture Lighting" by Chris Oat
@@ -379,7 +379,7 @@ float specular_occlusion(
   /* Visibility to cone angle (eq. 18). */
   float vis_angle = fast_acos(sqrt(1 - visibility));
   /* Roughness to cone angle (eq. 26). */
-  float spec_angle = max(0.001, fast_acos(cone_cosine(roughness)));
+  float spec_angle = max(0.00990998744964599609375, fast_acos(cone_cosine(roughness)));
   /* Angle between cone axes. */
   float cone_cone_dist = fast_acos(saturate(dot(visibility_dir, specular_dir)));
   float cone_nor_dist = fast_acos(saturate(dot(N, specular_dir)));
@@ -407,7 +407,7 @@ OcclusionData occlusion_load(vec3 vP, float custom_occlusion)
     data = unpack_occlusion_data(texelFetch(horizonBuffer, ivec2(gl_FragCoord.xy), 0));
   }
 #else
-  /* For blended surfaces.  */
+  /* For blended surfaces. */
   data = occlusion_search(vP, maxzBuffer, aoDistance, 0.0, 8.0);
 #endif
 

@@ -42,8 +42,8 @@ def geometry_node_group_empty_new():
 def geometry_modifier_poll(context):
     ob = context.object
 
-    # Test object support for geometry node modifier (No volume, curve, or hair object support yet)
-    if not ob or ob.type not in {'MESH', 'POINTCLOUD'}:
+    # Test object support for geometry node modifier (No hair object support yet)
+    if not ob or ob.type not in {'MESH', 'POINTCLOUD', 'VOLUME', 'CURVE', 'FONT'}:
         return False
 
     return True
@@ -81,7 +81,10 @@ class NewGeometryNodeTreeAssign(Operator):
         return geometry_modifier_poll(context)
 
     def execute(self, context):
-        modifier = context.object.modifiers.active
+        if context.area.type == 'PROPERTIES':
+            modifier = context.modifier
+        else:
+            modifier = context.object.modifiers.active
 
         if not modifier:
             return {'CANCELLED'}

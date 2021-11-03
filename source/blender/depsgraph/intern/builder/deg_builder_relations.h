@@ -72,6 +72,7 @@ struct Simulation;
 struct Speaker;
 struct Tex;
 struct ViewLayer;
+struct VFont;
 struct World;
 struct bAction;
 struct bArmature;
@@ -286,7 +287,6 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_freestyle_linestyle(FreestyleLineStyle *linestyle);
   virtual void build_texture(Tex *tex);
   virtual void build_image(Image *image);
-  virtual void build_gpencil(bGPdata *gpd);
   virtual void build_cachefile(CacheFile *cache_file);
   virtual void build_mask(Mask *mask);
   virtual void build_movieclip(MovieClip *clip);
@@ -297,6 +297,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_scene_sequencer(Scene *scene);
   virtual void build_scene_audio(Scene *scene);
   virtual void build_scene_speakers(Scene *scene, ViewLayer *view_layer);
+  virtual void build_vfont(VFont *vfont);
 
   virtual void build_nested_datablock(ID *owner, ID *id);
   virtual void build_nested_nodetree(ID *owner, bNodeTree *ntree);

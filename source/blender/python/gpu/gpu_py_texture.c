@@ -19,8 +19,8 @@
  *
  * This file defines the texture functionalities of the 'gpu' module
  *
- * - Use ``bpygpu_`` for local API.
- * - Use ``BPyGPU`` for public API.
+ * - Use `bpygpu_` for local API.
+ * - Use `BPyGPU` for public API.
  */
 
 #include <Python.h>
@@ -153,7 +153,13 @@ static PyObject *pygpu_texture__tp_new(PyTypeObject *UNUSED(self), PyObject *arg
   int len = 1;
   if (PySequence_Check(py_size)) {
     len = PySequence_Size(py_size);
-    if (PyC_AsArray(size, py_size, len, &PyLong_Type, false, "GPUTexture.__new__") == -1) {
+    if ((len < 1) || (len > 3)) {
+      PyErr_Format(PyExc_ValueError,
+                   "GPUTexture.__new__: \"size\" must be between 1 and 3 in length (got %d)",
+                   len);
+      return NULL;
+    }
+    if (PyC_AsArray(size, sizeof(*size), py_size, len, &PyLong_Type, "GPUTexture.__new__") == -1) {
       return NULL;
     }
   }
@@ -247,7 +253,7 @@ static PyObject *pygpu_texture__tp_new(PyTypeObject *UNUSED(self), PyObject *arg
     return NULL;
   }
 
-  return BPyGPUTexture_CreatePyObject(tex);
+  return BPyGPUTexture_CreatePyObject(tex, false);
 }
 
 PyDoc_STRVAR(pygpu_texture_width_doc, "Width of the texture.\n\n:type: `int`");
@@ -321,10 +327,11 @@ static PyObject *pygpu_texture_clear(BPyGPUTexture *self, PyObject *args, PyObje
 
   memset(&values, 0, sizeof(values));
   if (PyC_AsArray(&values,
+                  (pygpu_dataformat.value_found == GPU_DATA_FLOAT) ? sizeof(*values.f) :
+                                                                     sizeof(*values.i),
                   py_values,
                   shape,
-                  pygpu_dataformat.value_found == GPU_DATA_FLOAT ? &PyFloat_Type : &PyLong_Type,
-                  false,
+                  (pygpu_dataformat.value_found == GPU_DATA_FLOAT) ? &PyFloat_Type : &PyLong_Type,
                   "clear") == -1) {
     return NULL;
   }
@@ -417,6 +424,9 @@ static PyObject *pygpu_texture_free(BPyGPUTexture *self)
 static void BPyGPUTexture__tp_dealloc(BPyGPUTexture *self)
 {
   if (self->tex) {
+#ifndef GPU_NO_USE_PY_REFERENCES
+    GPU_texture_py_reference_set(self->tex, NULL);
+#endif
     GPU_texture_free(self->tex);
   }
   Py_TYPE(self)->tp_free((PyObject *)self);
@@ -526,7 +536,7 @@ PyDoc_STRVAR(pygpu_texture_from_image_doc,
              "premultiplied or straight alpha matching the image alpha mode.\n"
              "\n"
              "   :arg image: The Image datablock.\n"
-             "   :type image: `bpy.types.Image`\n"
+             "   :type image: :class:`bpy.types.Image`\n"
              "   :return: The GPUTexture used by the image.\n"
              "   :rtype: :class:`gpu.types.GPUTexture`\n");
 static PyObject *pygpu_texture_from_image(PyObject *UNUSED(self), PyObject *arg)
@@ -540,10 +550,7 @@ static PyObject *pygpu_texture_from_image(PyObject *UNUSED(self), PyObject *arg)
   BKE_imageuser_default(&iuser);
   GPUTexture *tex = BKE_image_get_gpu_texture(ima, &iuser, NULL);
 
-  /* Increase the texture reference count. */
-  GPU_texture_ref(tex);
-
-  return BPyGPUTexture_CreatePyObject(tex);
+  return BPyGPUTexture_CreatePyObject(tex, true);
 }
 
 static struct PyMethodDef pygpu_texture__m_methods[] = {
@@ -600,12 +607,32 @@ PyObject *bpygpu_texture_init(void)
 /** \name Public API
  * \{ */
 
-PyObject *BPyGPUTexture_CreatePyObject(GPUTexture *tex)
+PyObject *BPyGPUTexture_CreatePyObject(GPUTexture *tex, bool shared_reference)
 {
   BPyGPUTexture *self;
 
+  if (shared_reference) {
+#ifndef GPU_NO_USE_PY_REFERENCES
+    void **ref = GPU_texture_py_reference_get(tex);
+    if (ref) {
+      /* Retrieve BPyGPUTexture reference. */
+      self = (BPyGPUTexture *)POINTER_OFFSET(ref, -offsetof(BPyGPUTexture, tex));
+      BLI_assert(self->tex == tex);
+      Py_INCREF(self);
+      return (PyObject *)self;
+    }
+#endif
+
+    GPU_texture_ref(tex);
+  }
+
   self = PyObject_New(BPyGPUTexture, &BPyGPUTexture_Type);
   self->tex = tex;
+
+#ifndef GPU_NO_USE_PY_REFERENCES
+  BLI_assert(GPU_texture_py_reference_get(tex) == NULL);
+  GPU_texture_py_reference_set(tex, (void **)&self->tex);
+#endif
 
   return (PyObject *)self;
 }

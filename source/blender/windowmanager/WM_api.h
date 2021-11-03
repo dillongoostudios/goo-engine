@@ -31,14 +31,18 @@
 
 /* dna-savable wmStructs here */
 #include "BLI_compiler_attrs.h"
+#include "BLI_sys_types.h"
 #include "DNA_windowmanager_types.h"
 #include "WM_keymap.h"
+#include "WM_types.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct ARegion;
+struct AssetHandle;
+struct AssetLibraryReference;
 struct GHashIterator;
 struct GPUViewport;
 struct ID;
@@ -69,6 +73,10 @@ struct wmTabletData;
 
 #ifdef WITH_INPUT_NDOF
 struct wmNDOFMotionData;
+#endif
+
+#ifdef WITH_XR_OPENXR
+struct wmXrRuntimeData;
 #endif
 
 typedef struct wmGizmo wmGizmo;
@@ -105,12 +113,11 @@ void WM_reinit_gizmomap_all(struct Main *bmain);
 
 void WM_script_tag_reload(void);
 
-bool WM_window_find_under_cursor(const wmWindowManager *wm,
-                                 const wmWindow *win_ignore,
-                                 const wmWindow *win,
-                                 const int mval[2],
-                                 wmWindow **r_win,
-                                 int r_mval[2]);
+wmWindow *WM_window_find_under_cursor(const wmWindowManager *wm,
+                                      const wmWindow *win_ignore,
+                                      const wmWindow *win,
+                                      const int mval[2],
+                                      int r_mval[2]);
 void WM_window_pixel_sample_read(const wmWindowManager *wm,
                                  const wmWindow *win,
                                  const int pos[2],
@@ -171,12 +178,12 @@ void WM_opengl_context_dispose(void *context);
 void WM_opengl_context_activate(void *context);
 void WM_opengl_context_release(void *context);
 
-/* WM_window_open alignment */
-typedef enum WindowAlignment {
+/* #WM_window_open alignment */
+typedef enum eWindowAlignment {
   WIN_ALIGN_ABSOLUTE = 0,
   WIN_ALIGN_LOCATION_CENTER,
   WIN_ALIGN_PARENT_CENTER,
-} WindowAlignment;
+} eWindowAlignment;
 
 struct wmWindow *WM_window_open(struct bContext *C,
                                 const char *title,
@@ -185,9 +192,10 @@ struct wmWindow *WM_window_open(struct bContext *C,
                                 int sizex,
                                 int sizey,
                                 int space_type,
+                                bool toplevel,
                                 bool dialog,
                                 bool temp,
-                                WindowAlignment alignment);
+                                eWindowAlignment alignment);
 
 void WM_window_set_dpi(const wmWindow *win);
 
@@ -200,13 +208,22 @@ void WM_autosave_init(struct wmWindowManager *wm);
 bool WM_recover_last_session(struct bContext *C, struct ReportList *reports);
 void WM_file_tag_modified(void);
 
+struct ID *WM_file_link_datablock(struct Main *bmain,
+                                  struct Scene *scene,
+                                  struct ViewLayer *view_layer,
+                                  struct View3D *v3d,
+                                  const char *filepath,
+                                  const short id_code,
+                                  const char *id_name,
+                                  int flag);
 struct ID *WM_file_append_datablock(struct Main *bmain,
                                     struct Scene *scene,
                                     struct ViewLayer *view_layer,
                                     struct View3D *v3d,
                                     const char *filepath,
                                     const short id_code,
-                                    const char *id_name);
+                                    const char *id_name,
+                                    int flag);
 void WM_lib_reload(struct Library *lib, struct bContext *C, struct ReportList *reports);
 
 /* mouse cursors */
@@ -249,13 +266,24 @@ struct wmEventHandler_Keymap *WM_event_add_keymap_handler_priority(ListBase *han
                                                                    wmKeyMap *keymap,
                                                                    int priority);
 
-typedef struct wmKeyMap *(wmEventHandler_KeymapDynamicFn)(
-    wmWindowManager *wm, struct wmEventHandler_Keymap *handler)ATTR_WARN_UNUSED_RESULT;
+typedef struct wmEventHandler_KeymapResult {
+  wmKeyMap *keymaps[3];
+  int keymaps_len;
+} wmEventHandler_KeymapResult;
 
-struct wmKeyMap *WM_event_get_keymap_from_toolsystem_fallback(
-    struct wmWindowManager *wm, struct wmEventHandler_Keymap *handler);
-struct wmKeyMap *WM_event_get_keymap_from_toolsystem(struct wmWindowManager *wm,
-                                                     struct wmEventHandler_Keymap *handler);
+typedef void(wmEventHandler_KeymapDynamicFn)(wmWindowManager *wm,
+                                             struct wmWindow *win,
+                                             struct wmEventHandler_Keymap *handler,
+                                             struct wmEventHandler_KeymapResult *km_result);
+
+void WM_event_get_keymap_from_toolsystem_with_gizmos(struct wmWindowManager *wm,
+                                                     struct wmWindow *win,
+                                                     struct wmEventHandler_Keymap *handler,
+                                                     wmEventHandler_KeymapResult *km_result);
+void WM_event_get_keymap_from_toolsystem(struct wmWindowManager *wm,
+                                         struct wmWindow *win,
+                                         struct wmEventHandler_Keymap *handler,
+                                         wmEventHandler_KeymapResult *km_result);
 
 struct wmEventHandler_Keymap *WM_event_add_keymap_handler_dynamic(
     ListBase *handlers, wmEventHandler_KeymapDynamicFn *keymap_fn, void *user_data);
@@ -267,8 +295,10 @@ void WM_event_set_keymap_handler_post_callback(struct wmEventHandler_Keymap *han
                                                                 wmKeyMapItem *kmi,
                                                                 void *user_data),
                                                void *user_data);
-wmKeyMap *WM_event_get_keymap_from_handler(wmWindowManager *wm,
-                                           struct wmEventHandler_Keymap *handler);
+void WM_event_get_keymaps_from_handler(wmWindowManager *wm,
+                                       struct wmWindow *win,
+                                       struct wmEventHandler_Keymap *handler,
+                                       struct wmEventHandler_KeymapResult *km_result);
 
 wmKeyMapItem *WM_event_match_keymap_item(struct bContext *C,
                                          wmKeyMap *keymap,
@@ -276,6 +306,7 @@ wmKeyMapItem *WM_event_match_keymap_item(struct bContext *C,
 
 wmKeyMapItem *WM_event_match_keymap_item_from_handlers(struct bContext *C,
                                                        struct wmWindowManager *wm,
+                                                       struct wmWindow *win,
                                                        struct ListBase *handlers,
                                                        const struct wmEvent *event);
 
@@ -341,8 +372,8 @@ void WM_main_remap_editor_id_reference(struct ID *old_id, struct ID *new_id);
 /* reports */
 void WM_report_banner_show(void);
 void WM_report_banners_cancel(struct Main *bmain);
-void WM_report(ReportType type, const char *message);
-void WM_reportf(ReportType type, const char *format, ...) ATTR_PRINTF_FORMAT(2, 3);
+void WM_report(eReportType type, const char *message);
+void WM_reportf(eReportType type, const char *format, ...) ATTR_PRINTF_FORMAT(2, 3);
 
 struct wmEvent *wm_event_add_ex(struct wmWindow *win,
                                 const struct wmEvent *event_to_add,
@@ -458,6 +489,12 @@ int WM_operator_call_py(struct bContext *C,
                         struct ReportList *reports,
                         const bool is_undo);
 
+void WM_operator_name_call_ptr_with_depends_on_cursor(struct bContext *C,
+                                                      wmOperatorType *ot,
+                                                      short opcontext,
+                                                      PointerRNA *properties,
+                                                      const char *drawstr);
+
 /* Used for keymap and macro items. */
 void WM_operator_properties_alloc(struct PointerRNA **ptr,
                                   struct IDProperty **properties,
@@ -560,7 +597,11 @@ void WM_operator_py_idname(char *to, const char *from);
 bool WM_operator_py_idname_ok_or_report(struct ReportList *reports,
                                         const char *classname,
                                         const char *idname);
-const char *WM_context_member_from_ptr(struct bContext *C, const struct PointerRNA *ptr);
+char *WM_context_path_resolve_property_full(const struct bContext *C,
+                                            const PointerRNA *ptr,
+                                            PropertyRNA *prop,
+                                            int index);
+char *WM_context_path_resolve_full(struct bContext *C, const PointerRNA *ptr);
 
 /* wm_operator_type.c */
 struct wmOperatorType *WM_operatortype_find(const char *idname, bool quiet);
@@ -604,8 +645,13 @@ void WM_operator_type_modal_from_exec_for_object_edit_coords(struct wmOperatorTy
 void WM_uilisttype_init(void);
 struct uiListType *WM_uilisttype_find(const char *idname, bool quiet);
 bool WM_uilisttype_add(struct uiListType *ult);
-void WM_uilisttype_freelink(struct uiListType *ult);
+void WM_uilisttype_remove_ptr(struct Main *bmain, struct uiListType *ult);
 void WM_uilisttype_free(void);
+
+void WM_uilisttype_to_full_list_id(const struct uiListType *ult,
+                                   const char *list_id,
+                                   char r_full_list_id[]);
+const char *WM_uilisttype_list_id_get(const struct uiListType *ult, struct uiList *list);
 
 /* wm_menu_type.c */
 void WM_menutype_init(void);
@@ -678,6 +724,8 @@ void WM_event_fileselect_event(struct wmWindowManager *wm, void *ophandle, int e
 
 void WM_operator_region_active_win_set(struct bContext *C);
 
+int WM_operator_flag_only_pass_through_on_press(int retval, const struct wmEvent *event);
+
 /* drag and drop */
 struct wmDrag *WM_event_start_drag(
     struct bContext *C, int icon, int type, void *poin, double value, unsigned int flags);
@@ -685,27 +733,52 @@ void WM_event_drag_image(struct wmDrag *, struct ImBuf *, float scale, int sx, i
 void WM_drag_free(struct wmDrag *drag);
 void WM_drag_data_free(int dragtype, void *poin);
 void WM_drag_free_list(struct ListBase *lb);
-
 struct wmDropBox *WM_dropbox_add(
     ListBase *lb,
     const char *idname,
-    bool (*poll)(struct bContext *, struct wmDrag *, const struct wmEvent *event, const char **),
+    bool (*poll)(struct bContext *, struct wmDrag *, const struct wmEvent *event),
     void (*copy)(struct wmDrag *, struct wmDropBox *),
-    void (*cancel)(struct Main *, struct wmDrag *, struct wmDropBox *));
+    void (*cancel)(struct Main *, struct wmDrag *, struct wmDropBox *),
+    WMDropboxTooltipFunc tooltip);
+void WM_drag_draw_item_name_fn(struct bContext *C,
+                               struct wmWindow *win,
+                               struct wmDrag *drag,
+                               const int xy[2]);
+void WM_drag_draw_default_fn(struct bContext *C,
+                             struct wmWindow *win,
+                             struct wmDrag *drag,
+                             const int xy[2]);
 ListBase *WM_dropboxmap_find(const char *idname, int spaceid, int regionid);
 
 /* ID drag and drop */
+ID *WM_drag_asset_id_import(wmDragAsset *asset_drag, int flag_extra);
+bool WM_drag_asset_will_import_linked(const wmDrag *drag);
 void WM_drag_add_local_ID(struct wmDrag *drag, struct ID *id, struct ID *from_parent);
 struct ID *WM_drag_get_local_ID(const struct wmDrag *drag, short idcode);
 struct ID *WM_drag_get_local_ID_from_event(const struct wmEvent *event, short idcode);
 bool WM_drag_is_ID_type(const struct wmDrag *drag, int idcode);
 
+wmDragAsset *WM_drag_create_asset_data(const struct AssetHandle *asset,
+                                       struct AssetMetaData *metadata,
+                                       const char *path,
+                                       int import_type);
 struct wmDragAsset *WM_drag_get_asset_data(const struct wmDrag *drag, int idcode);
+struct AssetMetaData *WM_drag_get_asset_meta_data(const struct wmDrag *drag, int idcode);
 struct ID *WM_drag_get_local_ID_or_import_from_asset(const struct wmDrag *drag, int idcode);
 
 void WM_drag_free_imported_drag_ID(struct Main *bmain,
                                    struct wmDrag *drag,
                                    struct wmDropBox *drop);
+
+struct wmDragAssetCatalog *WM_drag_get_asset_catalog_data(const struct wmDrag *drag);
+
+void WM_drag_add_asset_list_item(wmDrag *drag,
+                                 const struct bContext *C,
+                                 const struct AssetLibraryReference *asset_library_ref,
+                                 const struct AssetHandle *asset);
+const ListBase *WM_drag_asset_list_get(const wmDrag *drag);
+
+const char *WM_drag_get_item_name(struct wmDrag *drag);
 
 /* Set OpenGL viewport and scissor */
 void wmViewport(const struct rcti *winrct);
@@ -756,26 +829,27 @@ enum {
   WM_JOB_TYPE_QUADRIFLOW_REMESH,
   WM_JOB_TYPE_TRACE_IMAGE,
   WM_JOB_TYPE_LINEART,
+  WM_JOB_TYPE_SEQ_DRAW_THUMBNAIL,
   /* add as needed, bake, seq proxy build
    * if having hard coded values is a problem */
 };
 
 struct wmJob *WM_jobs_get(struct wmWindowManager *wm,
                           struct wmWindow *win,
-                          void *owner,
+                          const void *owner,
                           const char *name,
                           int flag,
                           int job_type);
 
-bool WM_jobs_test(struct wmWindowManager *wm, void *owner, int job_type);
-float WM_jobs_progress(struct wmWindowManager *wm, void *owner);
-char *WM_jobs_name(struct wmWindowManager *wm, void *owner);
-double WM_jobs_starttime(struct wmWindowManager *wm, void *owner);
-void *WM_jobs_customdata(struct wmWindowManager *wm, void *owner);
+bool WM_jobs_test(const struct wmWindowManager *wm, const void *owner, int job_type);
+float WM_jobs_progress(const struct wmWindowManager *wm, const void *owner);
+const char *WM_jobs_name(const struct wmWindowManager *wm, const void *owner);
+double WM_jobs_starttime(const struct wmWindowManager *wm, const void *owner);
+void *WM_jobs_customdata(struct wmWindowManager *wm, const void *owner);
 void *WM_jobs_customdata_from_type(struct wmWindowManager *wm, int job_type);
 
-bool WM_jobs_is_running(struct wmJob *);
-bool WM_jobs_is_stopped(wmWindowManager *wm, void *owner);
+bool WM_jobs_is_running(const struct wmJob *wm_job);
+bool WM_jobs_is_stopped(const wmWindowManager *wm, const void *owner);
 void *WM_jobs_customdata_get(struct wmJob *);
 void WM_jobs_customdata_set(struct wmJob *, void *customdata, void (*free)(void *));
 void WM_jobs_timer(struct wmJob *, double timestep, unsigned int note, unsigned int endnote);
@@ -792,15 +866,15 @@ void WM_jobs_callbacks(struct wmJob *,
                        void (*endjob)(void *));
 
 void WM_jobs_start(struct wmWindowManager *wm, struct wmJob *);
-void WM_jobs_stop(struct wmWindowManager *wm, void *owner, void *startjob);
+void WM_jobs_stop(struct wmWindowManager *wm, const void *owner, void *startjob);
 void WM_jobs_kill(struct wmWindowManager *wm,
                   void *owner,
                   void (*)(void *, short int *, short int *, float *));
 void WM_jobs_kill_all(struct wmWindowManager *wm);
-void WM_jobs_kill_all_except(struct wmWindowManager *wm, void *owner);
-void WM_jobs_kill_type(struct wmWindowManager *wm, void *owner, int job_type);
+void WM_jobs_kill_all_except(struct wmWindowManager *wm, const void *owner);
+void WM_jobs_kill_type(struct wmWindowManager *wm, const void *owner, int job_type);
 
-bool WM_jobs_has_running(struct wmWindowManager *wm);
+bool WM_jobs_has_running(const struct wmWindowManager *wm);
 
 void WM_job_main_thread_lock_acquire(struct wmJob *job);
 void WM_job_main_thread_lock_release(struct wmJob *job);
@@ -862,6 +936,8 @@ int WM_event_modifier_flag(const struct wmEvent *event);
 bool WM_event_is_modal_tweak_exit(const struct wmEvent *event, int tweak_event);
 bool WM_event_is_last_mousemove(const struct wmEvent *event);
 bool WM_event_is_mouse_drag(const struct wmEvent *event);
+bool WM_event_is_mouse_drag_or_press(const wmEvent *event);
+bool WM_cursor_test_motion_and_update(const int mval[2]) ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
 
 int WM_event_drag_threshold(const struct wmEvent *event);
 bool WM_event_drag_test(const struct wmEvent *event, const int prev_xy[2]);
@@ -880,6 +956,10 @@ void WM_event_ndof_rotate_get(const struct wmNDOFMotionData *ndof, float r_rot[3
 float WM_event_ndof_to_axis_angle(const struct wmNDOFMotionData *ndof, float axis[3]);
 void WM_event_ndof_to_quat(const struct wmNDOFMotionData *ndof, float q[4]);
 #endif /* WITH_INPUT_NDOF */
+
+#ifdef WITH_XR_OPENXR
+bool WM_event_is_xr(const struct wmEvent *event);
+#endif
 
 float WM_event_tablet_data(const struct wmEvent *event, int *pen_flip, float tilt[2]);
 bool WM_event_is_tablet(const struct wmEvent *event);
@@ -929,17 +1009,135 @@ void WM_generic_user_data_free(struct wmGenericUserData *wm_userdata);
 bool WM_region_use_viewport(struct ScrArea *area, struct ARegion *region);
 
 #ifdef WITH_XR_OPENXR
-/* wm_xr.c */
+/* wm_xr_session.c */
 bool WM_xr_session_exists(const wmXrData *xr);
 bool WM_xr_session_is_ready(const wmXrData *xr);
 struct wmXrSessionState *WM_xr_session_state_handle_get(const wmXrData *xr);
+struct ScrArea *WM_xr_session_area_get(const wmXrData *xr);
 void WM_xr_session_base_pose_reset(wmXrData *xr);
 bool WM_xr_session_state_viewer_pose_location_get(const wmXrData *xr, float r_location[3]);
 bool WM_xr_session_state_viewer_pose_rotation_get(const wmXrData *xr, float r_rotation[4]);
 bool WM_xr_session_state_viewer_pose_matrix_info_get(const wmXrData *xr,
                                                      float r_viewmat[4][4],
                                                      float *r_focal_len);
-#endif
+bool WM_xr_session_state_controller_grip_location_get(const wmXrData *xr,
+                                                      unsigned int subaction_idx,
+                                                      float r_location[3]);
+bool WM_xr_session_state_controller_grip_rotation_get(const wmXrData *xr,
+                                                      unsigned int subaction_idx,
+                                                      float r_rotation[4]);
+bool WM_xr_session_state_controller_aim_location_get(const wmXrData *xr,
+                                                     unsigned int subaction_idx,
+                                                     float r_location[3]);
+bool WM_xr_session_state_controller_aim_rotation_get(const wmXrData *xr,
+                                                     unsigned int subaction_idx,
+                                                     float r_rotation[4]);
+bool WM_xr_session_state_nav_location_get(const wmXrData *xr, float r_location[3]);
+void WM_xr_session_state_nav_location_set(wmXrData *xr, const float location[3]);
+bool WM_xr_session_state_nav_rotation_get(const wmXrData *xr, float r_rotation[4]);
+void WM_xr_session_state_nav_rotation_set(wmXrData *xr, const float rotation[4]);
+bool WM_xr_session_state_nav_scale_get(const wmXrData *xr, float *r_scale);
+void WM_xr_session_state_nav_scale_set(wmXrData *xr, float scale);
+void WM_xr_session_state_navigation_reset(struct wmXrSessionState *state);
+
+struct ARegionType *WM_xr_surface_controller_region_type_get(void);
+
+/* wm_xr_actions.c */
+/* XR action functions to be called pre-XR session start.
+ * NOTE: The "destroy" functions can also be called post-session start. */
+bool WM_xr_action_set_create(wmXrData *xr, const char *action_set_name);
+void WM_xr_action_set_destroy(wmXrData *xr, const char *action_set_name);
+bool WM_xr_action_create(wmXrData *xr,
+                         const char *action_set_name,
+                         const char *action_name,
+                         eXrActionType type,
+                         unsigned int count_subaction_paths,
+                         const char **subaction_paths,
+                         struct wmOperatorType *ot,
+                         struct IDProperty *op_properties,
+                         const char *haptic_name,
+                         const int64_t *haptic_duration,
+                         const float *haptic_frequency,
+                         const float *haptic_amplitude,
+                         eXrOpFlag op_flag,
+                         eXrActionFlag action_flag,
+                         eXrHapticFlag haptic_flag);
+void WM_xr_action_destroy(wmXrData *xr, const char *action_set_name, const char *action_name);
+bool WM_xr_action_binding_create(wmXrData *xr,
+                                 const char *action_set_name,
+                                 const char *action_name,
+                                 const char *profile_path,
+                                 unsigned int count_subaction_paths,
+                                 const char **subaction_paths,
+                                 const char **component_paths,
+                                 const float *float_thresholds,
+                                 const eXrAxisFlag *axis_flags,
+                                 const struct wmXrPose *poses);
+void WM_xr_action_binding_destroy(wmXrData *xr,
+                                  const char *action_set_name,
+                                  const char *action_name,
+                                  const char *profile_path);
+
+/* If action_set_name is NULL, then all action sets will be treated as active. */
+bool WM_xr_active_action_set_set(wmXrData *xr, const char *action_set_name);
+
+bool WM_xr_controller_pose_actions_set(wmXrData *xr,
+                                       const char *action_set_name,
+                                       const char *grip_action_name,
+                                       const char *aim_action_name);
+
+/* XR action functions to be called post-XR session start. */
+bool WM_xr_action_state_get(const wmXrData *xr,
+                            const char *action_set_name,
+                            const char *action_name,
+                            const char *subaction_path,
+                            struct wmXrActionState *r_state);
+bool WM_xr_haptic_action_apply(wmXrData *xr,
+                               const char *action_set_name,
+                               const char *action_name,
+                               const char *subaction_path,
+                               const int64_t *duration,
+                               const float *frequency,
+                               const float *amplitude);
+void WM_xr_haptic_action_stop(wmXrData *xr,
+                              const char *action_set_name,
+                              const char *action_name,
+                              const char *subaction_path);
+
+/* wm_xr_actionmap.c */
+XrActionMap *WM_xr_actionmap_new(struct wmXrRuntimeData *runtime,
+                                 const char *name,
+                                 bool replace_existing);
+void WM_xr_actionmap_ensure_unique(struct wmXrRuntimeData *runtime, XrActionMap *actionmap);
+XrActionMap *WM_xr_actionmap_add_copy(struct wmXrRuntimeData *runtime, XrActionMap *am_src);
+bool WM_xr_actionmap_remove(struct wmXrRuntimeData *runtime, XrActionMap *actionmap);
+XrActionMap *WM_xr_actionmap_find(struct wmXrRuntimeData *runtime, const char *name);
+void WM_xr_actionmap_clear(XrActionMap *actionmap);
+void WM_xr_actionmaps_clear(struct wmXrRuntimeData *runtime);
+ListBase *WM_xr_actionmaps_get(struct wmXrRuntimeData *runtime);
+short WM_xr_actionmap_active_index_get(const struct wmXrRuntimeData *runtime);
+void WM_xr_actionmap_active_index_set(struct wmXrRuntimeData *runtime, short idx);
+short WM_xr_actionmap_selected_index_get(const struct wmXrRuntimeData *runtime);
+void WM_xr_actionmap_selected_index_set(struct wmXrRuntimeData *runtime, short idx);
+
+XrActionMapItem *WM_xr_actionmap_item_new(XrActionMap *actionmap,
+                                          const char *name,
+                                          bool replace_existing);
+void WM_xr_actionmap_item_ensure_unique(XrActionMap *actionmap, XrActionMapItem *ami);
+XrActionMapItem *WM_xr_actionmap_item_add_copy(XrActionMap *actionmap, XrActionMapItem *ami_src);
+bool WM_xr_actionmap_item_remove(XrActionMap *actionmap, XrActionMapItem *ami);
+XrActionMapItem *WM_xr_actionmap_item_find(XrActionMap *actionmap, const char *name);
+void WM_xr_actionmap_item_properties_update_ot(XrActionMapItem *ami);
+
+XrActionMapBinding *WM_xr_actionmap_binding_new(XrActionMapItem *ami,
+                                                const char *name,
+                                                bool replace_existing);
+void WM_xr_actionmap_binding_ensure_unique(XrActionMapItem *ami, XrActionMapBinding *amb);
+XrActionMapBinding *WM_xr_actionmap_binding_add_copy(XrActionMapItem *ami,
+                                                     XrActionMapBinding *amb_src);
+bool WM_xr_actionmap_binding_remove(XrActionMapItem *ami, XrActionMapBinding *amb);
+XrActionMapBinding *WM_xr_actionmap_binding_find(XrActionMapItem *ami, const char *name);
+#endif /* WITH_XR_OPENXR */
 
 #ifdef __cplusplus
 }

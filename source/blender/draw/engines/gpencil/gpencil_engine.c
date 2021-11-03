@@ -120,15 +120,9 @@ void GPENCIL_engine_init(void *ved)
   bool use_scene_world = false;
 
   if (v3d) {
-    use_scene_lights = ((v3d->shading.type == OB_MATERIAL) &&
-                        (v3d->shading.flag & V3D_SHADING_SCENE_LIGHTS)) ||
-                       ((v3d->shading.type == OB_RENDER) &&
-                        (v3d->shading.flag & V3D_SHADING_SCENE_LIGHTS_RENDER));
+    use_scene_lights = V3D_USES_SCENE_LIGHTS(v3d);
 
-    use_scene_world = ((v3d->shading.type == OB_MATERIAL) &&
-                       (v3d->shading.flag & V3D_SHADING_SCENE_WORLD)) ||
-                      ((v3d->shading.type == OB_RENDER) &&
-                       (v3d->shading.flag & V3D_SHADING_SCENE_WORLD_RENDER));
+    use_scene_world = V3D_USES_SCENE_WORLD(v3d);
 
     stl->pd->v3d_color_type = (v3d->shading.type == OB_SOLID) ? v3d->shading.color_type : -1;
     /* Special case: If Vertex Paint mode, use always Vertex mode. */
@@ -240,8 +234,9 @@ void GPENCIL_cache_init(void *ved)
   }
   else {
     pd->do_onion = true;
-    pd->simplify_fill = false;
-    pd->simplify_fx = false;
+    Scene *scene = draw_ctx->scene;
+    pd->simplify_fill = GPENCIL_SIMPLIFY_FILL(scene, false);
+    pd->simplify_fx = GPENCIL_SIMPLIFY_FX(scene, false);
     pd->fade_layer_opacity = -1.0f;
     pd->playing = false;
   }
@@ -262,7 +257,7 @@ void GPENCIL_cache_init(void *ved)
         pd->sbuffer_gpd = gpd;
         pd->sbuffer_stroke = DRW_cache_gpencil_sbuffer_stroke_data_get(pd->obact);
         pd->sbuffer_layer = BKE_gpencil_layer_active_get(pd->sbuffer_gpd);
-        pd->do_fast_drawing = false; /* TODO option */
+        pd->do_fast_drawing = false; /* TODO: option. */
       }
     }
   }
@@ -320,7 +315,7 @@ void GPENCIL_cache_init(void *ved)
     float focal_len = cam->lens;
 
     const float scale_camera = 0.001f;
-    /* we want radius here for the aperture number  */
+    /* We want radius here for the aperture number. */
     float aperture = 0.5f * scale_camera * focal_len / fstop;
     float focal_len_scaled = scale_camera * focal_len;
     float sensor_scaled = scale_camera * sensor;
@@ -640,13 +635,13 @@ void GPENCIL_cache_populate(void *ved, Object *ob)
       }
     }
 
-    BKE_gpencil_visible_stroke_iter(is_final_render ? pd->view_layer : NULL,
-                                    ob,
-                                    gpencil_layer_cache_populate,
-                                    gpencil_stroke_cache_populate,
-                                    &iter,
-                                    do_onion,
-                                    pd->cfra);
+    BKE_gpencil_visible_stroke_advanced_iter(is_final_render ? pd->view_layer : NULL,
+                                             ob,
+                                             gpencil_layer_cache_populate,
+                                             gpencil_stroke_cache_populate,
+                                             &iter,
+                                             do_onion,
+                                             pd->cfra);
 
     gpencil_drawcall_flush(&iter);
 

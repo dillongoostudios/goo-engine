@@ -48,6 +48,9 @@
 #include "text_format.h"
 #include "text_intern.h"
 
+#include "WM_api.h"
+#include "WM_types.h"
+
 /******************** text font drawing ******************/
 
 typedef struct TextDrawContext {
@@ -686,10 +689,7 @@ static void text_update_drawcache(SpaceText *st, ARegion *region)
     }
   }
   else {
-    if (drawcache->line_height) {
-      MEM_freeN(drawcache->line_height);
-      drawcache->line_height = NULL;
-    }
+    MEM_SAFE_FREE(drawcache->line_height);
 
     if (full_update || drawcache->update_flag) {
       nlines = BLI_listbase_count(&txt->lines);
@@ -938,7 +938,7 @@ static void calc_text_rcts(SpaceText *st, ARegion *region, rcti *scroll, rcti *b
         hlstart = barstart + barheight;
       }
       else if (lhlend > st->top && lhlstart < st->top && hlstart > barstart) {
-        /*fill out start */
+        /* Fill out start. */
         hlstart = barstart;
       }
 
@@ -1475,7 +1475,7 @@ static void draw_brackets(const SpaceText *st, const TextDrawContext *tdc, ARegi
     /* closing bracket, search backward for open */
     fc--;
     if (c > 0) {
-      c -= linep->line + c - BLI_str_prev_char_utf8(linep->line + c);
+      c -= linep->line + c - BLI_str_find_prev_char_utf8(linep->line + c, linep->line);
     }
     while (linep) {
       while (fc >= 0) {
@@ -1496,7 +1496,7 @@ static void draw_brackets(const SpaceText *st, const TextDrawContext *tdc, ARegi
         }
         fc--;
         if (c > 0) {
-          c -= linep->line + c - BLI_str_prev_char_utf8(linep->line + c);
+          c -= linep->line + c - BLI_str_find_prev_char_utf8(linep->line + c, linep->line);
         }
       }
       if (endl) {
@@ -1511,7 +1511,7 @@ static void draw_brackets(const SpaceText *st, const TextDrawContext *tdc, ARegi
           fc = -1;
         }
         if (linep->len) {
-          c = BLI_str_prev_char_utf8(linep->line + linep->len) - linep->line;
+          c = BLI_str_find_prev_char_utf8(linep->line + linep->len, linep->line) - linep->line;
         }
         else {
           fc = -1;
@@ -1735,6 +1735,23 @@ void text_update_character_width(SpaceText *st)
   st->runtime.cwidth_px = BLF_fixed_width(tdc.font_id);
   st->runtime.cwidth_px = MAX2(st->runtime.cwidth_px, (char)1);
   text_font_end(&tdc);
+}
+
+bool ED_text_activate_in_screen(bContext *C, Text *text)
+{
+  ScrArea *area = BKE_screen_find_big_area(CTX_wm_screen(C), SPACE_TEXT, 0);
+  if (area) {
+    SpaceText *st = area->spacedata.first;
+    ARegion *region = BKE_area_find_region_type(area, RGN_TYPE_WINDOW);
+    st->text = text;
+    if (region) {
+      ED_text_scroll_to_cursor(st, region, true);
+    }
+    WM_event_add_notifier(C, NC_TEXT | ND_CURSOR, text);
+    return true;
+  }
+
+  return false;
 }
 
 /* Moves the view to the cursor location,

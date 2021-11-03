@@ -17,6 +17,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
+#include "BKE_material.h"
 #include "BKE_mesh.h"
 
 #include "UI_interface.h"
@@ -24,29 +25,25 @@
 
 #include "node_geometry_util.hh"
 
-static bNodeSocketTemplate geo_node_mesh_primitive_grid_in[] = {
-    {SOCK_FLOAT, N_("Size X"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, FLT_MAX, PROP_DISTANCE},
-    {SOCK_FLOAT, N_("Size Y"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, FLT_MAX, PROP_DISTANCE},
-    {SOCK_INT, N_("Vertices X"), 3, 0.0f, 0.0f, 0.0f, 2, 1000},
-    {SOCK_INT, N_("Vertices Y"), 3, 0.0f, 0.0f, 0.0f, 2, 1000},
-    {-1, ""},
-};
-
-static bNodeSocketTemplate geo_node_mesh_primitive_grid_out[] = {
-    {SOCK_GEOMETRY, N_("Geometry")},
-    {-1, ""},
-};
-
 namespace blender::nodes {
+
+static void geo_node_mesh_primitive_grid_declare(NodeDeclarationBuilder &b)
+{
+  b.add_input<decl::Float>(N_("Size X")).default_value(1.0f).min(0.0f).subtype(PROP_DISTANCE);
+  b.add_input<decl::Float>(N_("Size Y")).default_value(1.0f).min(0.0f).subtype(PROP_DISTANCE);
+  b.add_input<decl::Int>(N_("Vertices X")).default_value(3).min(2).max(1000);
+  b.add_input<decl::Int>(N_("Vertices Y")).default_value(3).min(2).max(1000);
+  b.add_output<decl::Geometry>(N_("Mesh"));
+}
 
 static void calculate_uvs(
     Mesh *mesh, Span<MVert> verts, Span<MLoop> loops, const float size_x, const float size_y)
 {
   MeshComponent mesh_component;
   mesh_component.replace(mesh, GeometryOwnershipType::Editable);
-  OutputAttributePtr uv_attribute = mesh_component.attribute_try_get_for_output(
-      "uv_map", ATTR_DOMAIN_CORNER, CD_PROP_FLOAT2, nullptr);
-  MutableSpan<float2> uvs = uv_attribute->get_span_for_write_only<float2>();
+  OutputAttribute_Typed<float2> uv_attribute =
+      mesh_component.attribute_try_get_for_output_only<float2>("uv_map", ATTR_DOMAIN_CORNER);
+  MutableSpan<float2> uvs = uv_attribute.as_span();
 
   const float dx = (size_x == 0.0f) ? 0.0f : 1.0f / size_x;
   const float dy = (size_y == 0.0f) ? 0.0f : 1.0f / size_y;
@@ -56,15 +53,15 @@ static void calculate_uvs(
     uvs[i].y = (co.y + size_y * 0.5f) * dy;
   }
 
-  uv_attribute.apply_span_and_save();
+  uv_attribute.save();
 }
 
-static Mesh *create_grid_mesh(const int verts_x,
-                              const int verts_y,
-                              const float size_x,
-                              const float size_y)
+Mesh *create_grid_mesh(const int verts_x,
+                       const int verts_y,
+                       const float size_x,
+                       const float size_y)
 {
-  BLI_assert(verts_x > 1 && verts_y > 1);
+  BLI_assert(verts_x > 0 && verts_y > 0);
   const int edges_x = verts_x - 1;
   const int edges_y = verts_y - 1;
   Mesh *mesh = BKE_mesh_new_nomain(verts_x * verts_y,
@@ -78,19 +75,17 @@ static Mesh *create_grid_mesh(const int verts_x,
   MutableSpan<MPoly> polys{mesh->mpoly, mesh->totpoly};
 
   {
-    const float dx = size_x / edges_x;
-    const float dy = size_y / edges_y;
-    float x = -size_x * 0.5;
+    const float dx = edges_x == 0 ? 0.0f : size_x / edges_x;
+    const float dy = edges_y == 0 ? 0.0f : size_y / edges_y;
+    const float x_shift = edges_x / 2.0f;
+    const float y_shift = edges_y / 2.0f;
     for (const int x_index : IndexRange(verts_x)) {
-      float y = -size_y * 0.5;
       for (const int y_index : IndexRange(verts_y)) {
         const int vert_index = x_index * verts_y + y_index;
-        verts[vert_index].co[0] = x;
-        verts[vert_index].co[1] = y;
+        verts[vert_index].co[0] = (x_index - x_shift) * dx;
+        verts[vert_index].co[1] = (y_index - y_shift) * dy;
         verts[vert_index].co[2] = 0.0f;
-        y += dy;
       }
-      x += dx;
     }
   }
 
@@ -102,6 +97,8 @@ static Mesh *create_grid_mesh(const int verts_x,
 
   /* Build the horizontal edges in the X direction. */
   const int y_edges_start = 0;
+  const short edge_flag = (edges_x == 0 || edges_y == 0) ? ME_LOOSEEDGE :
+                                                           ME_EDGEDRAW | ME_EDGERENDER;
   int edge_index = 0;
   for (const int x : IndexRange(verts_x)) {
     for (const int y : IndexRange(edges_y)) {
@@ -109,7 +106,7 @@ static Mesh *create_grid_mesh(const int verts_x,
       MEdge &edge = edges[edge_index++];
       edge.v1 = vert_index;
       edge.v2 = vert_index + 1;
-      edge.flag = ME_EDGEDRAW | ME_EDGERENDER;
+      edge.flag = edge_flag;
     }
   }
 
@@ -121,7 +118,7 @@ static Mesh *create_grid_mesh(const int verts_x,
       MEdge &edge = edges[edge_index++];
       edge.v1 = vert_index;
       edge.v2 = vert_index + verts_y;
-      edge.flag = ME_EDGEDRAW | ME_EDGERENDER;
+      edge.flag = edge_flag;
     }
   }
 
@@ -149,7 +146,9 @@ static Mesh *create_grid_mesh(const int verts_x,
     }
   }
 
-  calculate_uvs(mesh, verts, loops, size_x, size_y);
+  if (mesh->totpoly != 0) {
+    calculate_uvs(mesh, verts, loops, size_x, size_y);
+  }
 
   return mesh;
 }
@@ -160,15 +159,16 @@ static void geo_node_mesh_primitive_grid_exec(GeoNodeExecParams params)
   const float size_y = params.extract_input<float>("Size Y");
   const int verts_x = params.extract_input<int>("Vertices X");
   const int verts_y = params.extract_input<int>("Vertices Y");
-  if (verts_x < 2 || verts_y < 2) {
-    params.set_output("Geometry", GeometrySet());
+  if (verts_x < 1 || verts_y < 1) {
+    params.set_output("Mesh", GeometrySet());
     return;
   }
 
   Mesh *mesh = create_grid_mesh(verts_x, verts_y, size_x, size_y);
   BLI_assert(BKE_mesh_is_valid(mesh));
+  BKE_id_material_eval_ensure_default_slot(&mesh->id);
 
-  params.set_output("Geometry", GeometrySet::create_with_mesh(mesh));
+  params.set_output("Mesh", GeometrySet::create_with_mesh(mesh));
 }
 
 }  // namespace blender::nodes
@@ -178,8 +178,7 @@ void register_node_type_geo_mesh_primitive_grid()
   static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_MESH_PRIMITIVE_GRID, "Grid", NODE_CLASS_GEOMETRY, 0);
-  node_type_socket_templates(
-      &ntype, geo_node_mesh_primitive_grid_in, geo_node_mesh_primitive_grid_out);
+  ntype.declare = blender::nodes::geo_node_mesh_primitive_grid_declare;
   ntype.geometry_node_execute = blender::nodes::geo_node_mesh_primitive_grid_exec;
   nodeRegisterType(&ntype);
 }

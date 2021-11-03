@@ -910,7 +910,7 @@ static bool gpencil_vertexpaint_select_stroke(tGP_BrushVertexpaintData *gso,
           ((!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1])) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
         /* Check if point segment of stroke had anything to do with
          * brush region  (either within stroke painted, or on its lines)
-         * - this assumes that linewidth is irrelevant
+         * - this assumes that line-width is irrelevant.
          */
         if (gpencil_stroke_inside_circle(gso->mval, radius, pc1[0], pc1[1], pc2[0], pc2[1])) {
 
@@ -919,7 +919,7 @@ static bool gpencil_vertexpaint_select_stroke(tGP_BrushVertexpaintData *gso,
           pt_active = pt->runtime.pt_orig;
           if (pt_active != NULL) {
             /* If masked and the point is not selected, skip it. */
-            if ((GPENCIL_ANY_VERTEX_MASK(gso->mask)) &&
+            if (GPENCIL_ANY_VERTEX_MASK(gso->mask) &&
                 ((pt_active->flag & GP_SPOINT_SELECT) == 0)) {
               continue;
             }
@@ -1107,7 +1107,7 @@ static bool gpencil_vertexpaint_brush_do_frame(bContext *C,
         break;
     }
   }
-  /* Clear the selected array, but keep the memory allocation.*/
+  /* Clear the selected array, but keep the memory allocation. */
   gso->pbuffer = gpencil_select_buffer_ensure(
       gso->pbuffer, &gso->pbuffer_size, &gso->pbuffer_used, true);
 
@@ -1335,7 +1335,7 @@ static int gpencil_vertexpaint_brush_modal(bContext *C, wmOperator *op, const wm
 
   /* The operator can be in 2 states: Painting and Idling */
   if (gso->is_painting) {
-    /* Painting  */
+    /* Painting. */
     switch (event->type) {
       /* Mouse Move = Apply somewhere else */
       case MOUSEMOVE:

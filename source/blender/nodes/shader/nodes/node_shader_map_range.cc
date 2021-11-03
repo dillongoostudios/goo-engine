@@ -25,20 +25,21 @@
 
 #include "BLI_math_base_safe.h"
 
-/* **************** Map Range ******************** */
-static bNodeSocketTemplate sh_node_map_range_in[] = {
-    {SOCK_FLOAT, N_("Value"), 1.0f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("From Min"), 0.0f, 1.0f, 1.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("From Max"), 1.0f, 1.0f, 1.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("To Min"), 0.0f, 1.0f, 1.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("To Max"), 1.0f, 1.0f, 1.0f, 1.0f, -10000.0f, 10000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("Steps"), 4.0f, 1.0f, 1.0f, 1.0f, 0.0f, 10000.0f, PROP_NONE},
-    {-1, ""},
+namespace blender::nodes {
+
+static void sh_node_map_range_declare(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  b.add_input<decl::Float>(N_("Value")).min(-10000.0f).max(10000.0f).default_value(1.0f);
+  b.add_input<decl::Float>(N_("From Min")).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>(N_("From Max")).min(-10000.0f).max(10000.0f).default_value(1.0f);
+  b.add_input<decl::Float>(N_("To Min")).min(-10000.0f).max(10000.0f);
+  b.add_input<decl::Float>(N_("To Max")).min(-10000.0f).max(10000.0f).default_value(1.0f);
+  b.add_input<decl::Float>(N_("Steps")).min(-10000.0f).max(10000.0f).default_value(4.0f);
+  b.add_output<decl::Float>(N_("Result"));
 };
-static bNodeSocketTemplate sh_node_map_range_out[] = {
-    {SOCK_FLOAT, N_("Result")},
-    {-1, ""},
-};
+
+}  // namespace blender::nodes
 
 static void node_shader_update_map_range(bNodeTree *UNUSED(ntree), bNode *node)
 {
@@ -261,9 +262,10 @@ class MapRangeSmootherstepFunction : public blender::fn::MultiFunction {
   }
 };
 
-static void sh_node_map_range_expand_in_mf_network(blender::nodes::NodeMFNetworkBuilder &builder)
+static void sh_node_map_range_build_multi_function(
+    blender::nodes::NodeMultiFunctionBuilder &builder)
 {
-  bNode &bnode = builder.bnode();
+  bNode &bnode = builder.node();
   bool clamp = bnode.custom1 != 0;
   int interpolation_type = bnode.custom2;
 
@@ -301,7 +303,6 @@ static void sh_node_map_range_expand_in_mf_network(blender::nodes::NodeMFNetwork
       break;
     }
     default:
-      builder.set_not_implemented();
       break;
   }
 }
@@ -310,12 +311,12 @@ void register_node_type_sh_map_range(void)
 {
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_MAP_RANGE, "Map Range", NODE_CLASS_CONVERTOR, 0);
-  node_type_socket_templates(&ntype, sh_node_map_range_in, sh_node_map_range_out);
+  sh_fn_node_type_base(&ntype, SH_NODE_MAP_RANGE, "Map Range", NODE_CLASS_CONVERTER, 0);
+  ntype.declare = blender::nodes::sh_node_map_range_declare;
   node_type_init(&ntype, node_shader_init_map_range);
   node_type_update(&ntype, node_shader_update_map_range);
   node_type_gpu(&ntype, gpu_shader_map_range);
-  ntype.expand_in_mf_network = sh_node_map_range_expand_in_mf_network;
+  ntype.build_multi_function = sh_node_map_range_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

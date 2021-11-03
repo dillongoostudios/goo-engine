@@ -70,6 +70,7 @@ typedef struct Global {
    *   * -16384 and below: Reserved for python (add-ons) usage.
    *   *     -1: Disable faster motion paths computation (since 08/2018).
    *   * 1 - 30: EEVEE debug/stats values (01/2018).
+   *   *     31: Enable the Select Debug Engine. Only available with #WITH_DRAW_DEBUG (08/2021).
    *   *    101: Enable UI debug drawing of fullscreen area's corner widget (10/2014).
    *   *    666: Use quicker batch delete for outliners' delete hierarchy (01/2019).
    *   *    777: Enable UI node panel's sockets polling (11/2011).
@@ -123,7 +124,10 @@ enum {
 /** Don't overwrite these flags when reading a file. */
 #define G_FLAG_ALL_RUNTIME \
   (G_FLAG_SCRIPT_AUTOEXEC | G_FLAG_SCRIPT_OVERRIDE_PREF | G_FLAG_EVENT_SIMULATE | \
-   G_FLAG_USERPREF_NO_SAVE_ON_EXIT)
+   G_FLAG_USERPREF_NO_SAVE_ON_EXIT | \
+\
+   /* #BPY_python_reset is responsible for resetting these flags on file load. */ \
+   G_FLAG_SCRIPT_AUTOEXEC_FAIL | G_FLAG_SCRIPT_AUTOEXEC_FAIL_QUIET)
 
 /** Flags to read from blend file. */
 #define G_FLAG_ALL_READFILE 0
@@ -144,12 +148,13 @@ enum {
   G_DEBUG_DEPSGRAPH_TIME = (1 << 11),       /* depsgraph timing statistics and messages */
   G_DEBUG_DEPSGRAPH_NO_THREADS = (1 << 12), /* single threaded depsgraph */
   G_DEBUG_DEPSGRAPH_PRETTY = (1 << 13),     /* use pretty colors in depsgraph messages */
-  G_DEBUG_DEPSGRAPH_UUID = (1 << 14),       /* use pretty colors in depsgraph messages */
+  G_DEBUG_DEPSGRAPH_UUID = (1 << 14),       /* Verify validness of session-wide identifiers
+                                             * assigned to ID datablocks */
   G_DEBUG_DEPSGRAPH = (G_DEBUG_DEPSGRAPH_BUILD | G_DEBUG_DEPSGRAPH_EVAL | G_DEBUG_DEPSGRAPH_TAG |
                        G_DEBUG_DEPSGRAPH_TIME | G_DEBUG_DEPSGRAPH_UUID),
   G_DEBUG_SIMDATA = (1 << 15),               /* sim debug data display */
   G_DEBUG_GPU = (1 << 16),                   /* gpu debug */
-  G_DEBUG_IO = (1 << 17),                    /* IO Debugging (for Collada, ...)*/
+  G_DEBUG_IO = (1 << 17),                    /* IO Debugging (for Collada, ...). */
   G_DEBUG_GPU_FORCE_WORKAROUNDS = (1 << 18), /* force gpu workarounds bypassing detections. */
   G_DEBUG_XR = (1 << 19),                    /* XR/OpenXR messages */
   G_DEBUG_XR_TIME = (1 << 20),               /* XR/OpenXR timing messages */
@@ -199,20 +204,6 @@ enum {
  */
 #define G_FILE_FLAG_ALL_RUNTIME (G_FILE_NO_UI | G_FILE_RECOVER_READ | G_FILE_RECOVER_WRITE)
 
-/** ENDIAN_ORDER: indicates what endianness the platform where the file was written had. */
-#if !defined(__BIG_ENDIAN__) && !defined(__LITTLE_ENDIAN__)
-#  error Either __BIG_ENDIAN__ or __LITTLE_ENDIAN__ must be defined.
-#endif
-
-#define L_ENDIAN 1
-#define B_ENDIAN 0
-
-#ifdef __BIG_ENDIAN__
-#  define ENDIAN_ORDER B_ENDIAN
-#else
-#  define ENDIAN_ORDER L_ENDIAN
-#endif
-
 /** #Global.moving, signals drawing in (3d) window to denote transform */
 enum {
   G_TRANSFORM_OBJ = (1 << 0),
@@ -220,6 +211,12 @@ enum {
   G_TRANSFORM_SEQ = (1 << 2),
   G_TRANSFORM_FCURVES = (1 << 3),
   G_TRANSFORM_WM = (1 << 4),
+  /**
+   * Set when transforming the cursor it's self.
+   * Used as a hint to draw the cursor (even when hidden).
+   * Otherwise it's not possible to see whats being transformed.
+   */
+  G_TRANSFORM_CURSOR = (1 << 5),
 };
 
 /** Defined in blender.c */

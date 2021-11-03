@@ -26,6 +26,7 @@
 #pragma once
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_rect.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,7 +52,7 @@ enum eView2D_CommonViewTypes {
   V2D_COMMONVIEW_STANDARD,
   /* listview (i.e. Outliner) */
   V2D_COMMONVIEW_LIST,
-  /* stackview (this is basically a list where new items are added at the top) */
+  /* Stack-view (this is basically a list where new items are added at the top). */
   V2D_COMMONVIEW_STACK,
   /* headers (this is basically the same as listview, but no y-panning) */
   V2D_COMMONVIEW_HEADER,
@@ -105,8 +106,12 @@ struct ScrArea;
 struct bContext;
 struct bScreen;
 struct rctf;
+struct rcti;
+struct wmEvent;
 struct wmGizmoGroupType;
 struct wmKeyConfig;
+struct wmOperator;
+struct wmOperatorType;
 
 typedef struct View2DScrollers View2DScrollers;
 
@@ -118,6 +123,7 @@ void UI_view2d_region_reinit(struct View2D *v2d, short type, int winx, int winy)
 
 void UI_view2d_curRect_validate(struct View2D *v2d);
 void UI_view2d_curRect_reset(struct View2D *v2d);
+bool UI_view2d_area_supports_sync(struct ScrArea *area);
 void UI_view2d_sync(struct bScreen *screen, struct ScrArea *area, struct View2D *v2dcur, int flag);
 
 /* Perform all required updates after `v2d->cur` as been modified.
@@ -139,17 +145,23 @@ void UI_view2d_view_orthoSpecial(struct ARegion *region, struct View2D *v2d, con
 void UI_view2d_view_restore(const struct bContext *C);
 
 /* grid drawing */
-void UI_view2d_constant_grid_draw(const struct View2D *v2d, float step);
 void UI_view2d_multi_grid_draw(
     const struct View2D *v2d, int colorid, float step, int level_size, int totlevels);
+void UI_view2d_dot_grid_draw(const struct View2D *v2d,
+                             int grid_color_id,
+                             float step,
+                             int grid_levels);
 
 void UI_view2d_draw_lines_y__values(const struct View2D *v2d);
 void UI_view2d_draw_lines_x__values(const struct View2D *v2d);
-void UI_view2d_draw_lines_x__discrete_values(const struct View2D *v2d);
-void UI_view2d_draw_lines_x__discrete_time(const struct View2D *v2d, const struct Scene *scene);
+void UI_view2d_draw_lines_x__discrete_values(const struct View2D *v2d, bool display_minor_lines);
+void UI_view2d_draw_lines_x__discrete_time(const struct View2D *v2d,
+                                           const struct Scene *scene,
+                                           bool display_minor_lines);
 void UI_view2d_draw_lines_x__discrete_frames_or_seconds(const struct View2D *v2d,
                                                         const struct Scene *scene,
-                                                        bool display_seconds);
+                                                        bool display_seconds,
+                                                        bool display_minor_lines);
 void UI_view2d_draw_lines_x__frames_or_seconds(const struct View2D *v2d,
                                                const struct Scene *scene,
                                                bool display_seconds);
@@ -241,19 +253,20 @@ void UI_view2d_center_set(struct View2D *v2d, float x, float y);
 
 void UI_view2d_offset(struct View2D *v2d, float xfac, float yfac);
 
-char UI_view2d_mouse_in_scrollers_ex(
-    const struct ARegion *region, const struct View2D *v2d, int x, int y, int *r_scroll);
+char UI_view2d_mouse_in_scrollers_ex(const struct ARegion *region,
+                                     const struct View2D *v2d,
+                                     const int xy[2],
+                                     int *r_scroll) ATTR_NONNULL(1, 2, 3, 4);
 char UI_view2d_mouse_in_scrollers(const struct ARegion *region,
                                   const struct View2D *v2d,
-                                  int x,
-                                  int y);
+                                  const int xy[2]) ATTR_NONNULL(1, 2, 3);
 char UI_view2d_rect_in_scrollers_ex(const struct ARegion *region,
                                     const struct View2D *v2d,
                                     const struct rcti *rect,
-                                    int *r_scroll);
+                                    int *r_scroll) ATTR_NONNULL(1, 2, 3);
 char UI_view2d_rect_in_scrollers(const struct ARegion *region,
                                  const struct View2D *v2d,
-                                 const struct rcti *rect);
+                                 const struct rcti *rect) ATTR_NONNULL(1, 2, 3);
 
 /* cached text drawing in v2d, to allow pixel-aligned draw as post process */
 void UI_view2d_text_cache_add(struct View2D *v2d,
@@ -284,8 +297,95 @@ void UI_view2d_smooth_view(struct bContext *C,
 /* Gizmo Types */
 
 /* view2d_gizmo_navigate.c */
-/* Caller passes in own idname.  */
+/* Caller passes in own idname. */
 void VIEW2D_GGT_navigate_impl(struct wmGizmoGroupType *gzgt, const char *idname);
+
+/* Edge pan */
+
+/**
+ * Custom-data for view panning operators.
+ */
+typedef struct View2DEdgePanData {
+  /** Screen where view pan was initiated. */
+  struct bScreen *screen;
+  /** Area where view pan was initiated. */
+  struct ScrArea *area;
+  /** Region where view pan was initiated. */
+  struct ARegion *region;
+  /** View2d we're operating in. */
+  struct View2D *v2d;
+
+  /** Panning should only start once being in the inside rect once (e.g. adding nodes can happen
+   * outside). */
+  bool enabled;
+  /** Inside distance in UI units from the edge of the region within which to start panning. */
+  float inside_pad;
+  /** Outside distance in UI units from the edge of the region at which to stop panning. */
+  float outside_pad;
+  /**
+   * Width of the zone in UI units where speed increases with distance from the edge.
+   * At the end of this zone max speed is reached.
+   */
+  float speed_ramp;
+  /** Maximum speed in UI units per second. */
+  float max_speed;
+  /** Delay in seconds before maximum speed is reached. */
+  float delay;
+  /** Influence factor for view zoom:
+   *    0 = Constant speed in UI units
+   *    1 = Constant speed in view space, UI speed slows down when zooming out
+   */
+  float zoom_influence;
+
+  /** Initial view rect. */
+  rctf initial_rect;
+
+  /** Amount to move view relative to zoom. */
+  float facx, facy;
+
+  /* Timers. */
+  double edge_pan_last_time;
+  double edge_pan_start_time_x, edge_pan_start_time_y;
+} View2DEdgePanData;
+
+bool UI_view2d_edge_pan_poll(struct bContext *C);
+
+void UI_view2d_edge_pan_init(struct bContext *C,
+                             struct View2DEdgePanData *vpd,
+                             float inside_pad,
+                             float outside_pad,
+                             float speed_ramp,
+                             float max_speed,
+                             float delay,
+                             float zoom_influence);
+
+void UI_view2d_edge_pan_reset(struct View2DEdgePanData *vpd);
+
+/* Apply transform to view (i.e. adjust 'cur' rect). */
+void UI_view2d_edge_pan_apply(struct bContext *C, struct View2DEdgePanData *vpd, const int xy[2])
+    ATTR_NONNULL(1, 2, 3);
+
+/* Apply transform to view using mouse events. */
+void UI_view2d_edge_pan_apply_event(struct bContext *C,
+                                    struct View2DEdgePanData *vpd,
+                                    const struct wmEvent *event);
+
+void UI_view2d_edge_pan_cancel(struct bContext *C, struct View2DEdgePanData *vpd);
+
+void UI_view2d_edge_pan_operator_properties(struct wmOperatorType *ot);
+
+void UI_view2d_edge_pan_operator_properties_ex(struct wmOperatorType *ot,
+                                               float inside_pad,
+                                               float outside_pad,
+                                               float speed_ramp,
+                                               float max_speed,
+                                               float delay,
+                                               float zoom_influence);
+
+/* Initialize panning data with operator settings. */
+void UI_view2d_edge_pan_operator_init(struct bContext *C,
+                                      struct View2DEdgePanData *vpd,
+                                      struct wmOperator *op);
 
 #ifdef __cplusplus
 }

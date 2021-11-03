@@ -98,7 +98,9 @@ static void freeData(ModifierData *md)
   }
 }
 
-static bool dependsOnTime(ModifierData *UNUSED(md))
+static bool dependsOnTime(struct Scene *UNUSED(scene),
+                          ModifierData *UNUSED(md),
+                          const int UNUSED(dag_eval_mode))
 {
   return true;
 }
@@ -184,13 +186,17 @@ static void deformVerts(ModifierData *md,
 
     surmd->cfra = cfra;
 
-    surmd->bvhtree = MEM_callocN(sizeof(BVHTreeFromMesh), "BVHTreeFromMesh");
+    const bool has_poly = surmd->mesh->totpoly > 0;
+    const bool has_edge = surmd->mesh->totedge > 0;
+    if (has_poly || has_edge) {
+      surmd->bvhtree = MEM_callocN(sizeof(BVHTreeFromMesh), "BVHTreeFromMesh");
 
-    if (surmd->mesh->totpoly) {
-      BKE_bvhtree_from_mesh_get(surmd->bvhtree, surmd->mesh, BVHTREE_FROM_LOOPTRI, 2);
-    }
-    else {
-      BKE_bvhtree_from_mesh_get(surmd->bvhtree, surmd->mesh, BVHTREE_FROM_EDGES, 2);
+      if (has_poly) {
+        BKE_bvhtree_from_mesh_get(surmd->bvhtree, surmd->mesh, BVHTREE_FROM_LOOPTRI, 2);
+      }
+      else if (has_edge) {
+        BKE_bvhtree_from_mesh_get(surmd->bvhtree, surmd->mesh, BVHTREE_FROM_EDGES, 2);
+      }
     }
   }
 }
@@ -201,7 +207,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, NULL);
 
-  uiItemL(layout, IFACE_("Settings are inside the Physics tab"), ICON_NONE);
+  uiItemL(layout, TIP_("Settings are inside the Physics tab"), ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
@@ -241,7 +247,6 @@ ModifierTypeInfo modifierType_Surface = {
     /* modifyMesh */ NULL,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ NULL,

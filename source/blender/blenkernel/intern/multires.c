@@ -468,15 +468,9 @@ void multires_force_sculpt_rebuild(Object *object)
     object->sculpt->pbvh = NULL;
   }
 
-  if (ss->pmap != NULL) {
-    MEM_freeN(ss->pmap);
-    ss->pmap = NULL;
-  }
+  MEM_SAFE_FREE(ss->pmap);
 
-  if (ss->pmap_mem != NULL) {
-    MEM_freeN(ss->pmap_mem);
-    ss->pmap_mem = NULL;
-  }
+  MEM_SAFE_FREE(ss->pmap_mem);
 }
 
 void multires_force_external_reload(Object *object)
@@ -994,7 +988,7 @@ static void multiresModifier_disp_run(
     }
   }
 
-  /*numGrids = dm->getNumGrids(dm);*/ /*UNUSED*/
+  // numGrids = dm->getNumGrids(dm); /* UNUSED */
   gridSize = dm->getGridSize(dm);
   gridData = dm->getGridData(dm);
   gridOffset = dm->getGridOffset(dm);
@@ -1285,7 +1279,7 @@ DerivedMesh *multires_make_derived_from_derived(
   multires_set_tot_mdisps(me, mmd->totlvl);
   multiresModifier_ensure_external_read(me, mmd);
 
-  /*run displacement*/
+  /* Run displacement. */
   multiresModifier_disp_run(result, ob->data, dm, APPLY_DISPLACEMENTS, subGridData, mmd->totlvl);
 
   /* copy hidden elements for this level */
@@ -1502,7 +1496,7 @@ void multires_topology_changed(Mesh *me)
     if (!mdisp->totdisp || !mdisp->disps) {
       if (grid) {
         mdisp->totdisp = grid;
-        mdisp->disps = MEM_calloc_arrayN(sizeof(float[3]), mdisp->totdisp, "mdisp topology");
+        mdisp->disps = MEM_calloc_arrayN(mdisp->totdisp, sizeof(float[3]), "mdisp topology");
       }
 
       continue;
@@ -1514,7 +1508,7 @@ void multires_topology_changed(Mesh *me)
  *
  * Since the multires data files only contain displacement vectors without knowledge about
  * subdivision level some extra work is needed. Namely make is to all displacement grids have
- * proper level and number of displacement vectors set.  */
+ * proper level and number of displacement vectors set. */
 void multires_ensure_external_read(struct Mesh *mesh, int top_level)
 {
   if (!CustomData_external_test(&mesh->ldata, CD_MDISPS)) {

@@ -26,7 +26,7 @@ __all__ = (
 )
 
 
-def generate(context, space_type, use_fallback_keys=True, use_reset=True):
+def generate(context, space_type, *, use_fallback_keys=True, use_reset=True):
     """
     Keymap for popup toolbar, currently generated each time.
     """
@@ -448,7 +448,6 @@ def generate(context, space_type, use_fallback_keys=True, use_reset=True):
             any=True,
         )
         kmi.properties.skip_depressed = True
-
 
     wm.keyconfigs.update()
     return keymap

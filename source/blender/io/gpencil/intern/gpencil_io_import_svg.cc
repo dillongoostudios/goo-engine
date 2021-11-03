@@ -42,7 +42,7 @@
 #define NANOSVG_ALL_COLOR_KEYWORDS
 #define NANOSVG_IMPLEMENTATION
 
-#include "nanosvg/nanosvg.h"
+#include "nanosvg.h"
 
 using blender::MutableSpan;
 
@@ -69,9 +69,7 @@ bool GpencilImporterSVG::read()
   params_.ob = create_object();
   if (params_.ob == nullptr) {
     std::cout << "Unable to create new object.\n";
-    if (svg_data) {
-      nsvgDelete(svg_data);
-    }
+    nsvgDelete(svg_data);
 
     return false;
   }
@@ -102,7 +100,7 @@ bool GpencilImporterSVG::read()
     bGPDlayer *gpl = (bGPDlayer *)BLI_findstring(
         &gpd_->layers, layer_id, offsetof(bGPDlayer, info));
     if (gpl == nullptr) {
-      gpl = BKE_gpencil_layer_addnew(gpd_, layer_id, true);
+      gpl = BKE_gpencil_layer_addnew(gpd_, layer_id, true, false);
       /* Disable lights. */
       gpl->flag &= ~GP_LAYER_USE_LIGHTS;
     }
@@ -150,6 +148,8 @@ bool GpencilImporterSVG::read()
         for (bGPDspoint &pt : MutableSpan(gps->points, gps->totpoints)) {
           sub_v3_v3(&pt.x, gp_center);
         }
+        /* Calc stroke bounding box. */
+        BKE_gpencil_stroke_boundingbox_calc(gps);
       }
     }
   }

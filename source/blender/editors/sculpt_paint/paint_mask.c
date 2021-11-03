@@ -293,8 +293,8 @@ typedef struct SculptGestureContext {
   /* These store the view origin and normal in world space, which is used in some gestures to
    * generate geometry aligned from the view directly in world space. */
   /* World space view origin and normal are not affected by object symmetry when doing symmetry
-   * passes, so there is no separate variables with the true_ prefix to store their original values
-   * without symmetry modifications. */
+   * passes, so there is no separate variables with the `true_` prefix to store their original
+   * values without symmetry modifications. */
   float world_space_view_origin[3];
   float world_space_view_normal[3];
 
@@ -1239,10 +1239,9 @@ static void sculpt_gesture_apply_trim(SculptGestureContext *sgcontext)
                      }));
 
   const int looptris_tot = poly_to_tri_count(bm->totface, bm->totloop);
-  int tottri;
   BMLoop *(*looptris)[3];
   looptris = MEM_malloc_arrayN(looptris_tot, sizeof(*looptris), __func__);
-  BM_mesh_calc_tessellation_beauty(bm, looptris, &tottri);
+  BM_mesh_calc_tessellation_beauty(bm, looptris);
 
   BMIter iter;
   int i;
@@ -1290,7 +1289,7 @@ static void sculpt_gesture_apply_trim(SculptGestureContext *sgcontext)
         break;
     }
     BM_mesh_boolean(
-        bm, looptris, tottri, bm_face_isect_pair, NULL, 2, true, true, false, boolean_mode);
+        bm, looptris, looptris_tot, bm_face_isect_pair, NULL, 2, true, true, false, boolean_mode);
   }
 
   MEM_freeN(looptris);
@@ -1301,7 +1300,7 @@ static void sculpt_gesture_apply_trim(SculptGestureContext *sgcontext)
                                             }),
                                             sculpt_mesh);
   BM_mesh_free(bm);
-  result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+  BKE_mesh_normals_tag_dirty(result);
   BKE_mesh_nomain_to_mesh(
       result, sgcontext->vc.obact->data, sgcontext->vc.obact, &CD_MASK_MESH, true);
 }
@@ -1652,7 +1651,7 @@ void PAINT_OT_mask_lasso_gesture(wmOperatorType *ot)
 
   ot->poll = SCULPT_mode_poll_view3d;
 
-  ot->flag = OPTYPE_REGISTER;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* Properties. */
   WM_operator_properties_gesture_lasso(ot);
@@ -1715,6 +1714,8 @@ void SCULPT_OT_face_set_lasso_gesture(wmOperatorType *ot)
 
   ot->poll = SCULPT_mode_poll_view3d;
 
+  ot->flag = OPTYPE_DEPENDS_ON_CURSOR;
+
   /* Properties. */
   WM_operator_properties_gesture_lasso(ot);
   sculpt_gesture_operator_properties(ot);
@@ -1751,7 +1752,7 @@ void SCULPT_OT_trim_lasso_gesture(wmOperatorType *ot)
 
   ot->poll = SCULPT_mode_poll_view3d;
 
-  ot->flag = OPTYPE_REGISTER;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* Properties. */
   WM_operator_properties_gesture_lasso(ot);

@@ -36,8 +36,12 @@ class DataSource {
    * Calls the callback with all the column ids that should be displayed as long as the user does
    * not manually add or remove columns. The column id can be stack allocated. Therefore, the
    * callback should not keep a reference to it (and copy it instead).
+   *
+   * The `is_extra` argument indicates that this column is special and should be drawn as the first
+   * column. (This can be made a bit more generic in the future when necessary.)
    */
-  virtual void foreach_default_column_ids(FunctionRef<void(const SpreadsheetColumnID &)> fn) const
+  virtual void foreach_default_column_ids(
+      FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const
   {
     UNUSED_VARS(fn);
   }
@@ -51,6 +55,15 @@ class DataSource {
   {
     UNUSED_VARS(column_id);
     return {};
+  }
+
+  /**
+   * Returns true if the data source has the ability to limit visible rows
+   * by user interface selection status.
+   */
+  virtual bool has_selection_filter() const
+  {
+    return false;
   }
 
   /**

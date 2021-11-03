@@ -18,13 +18,15 @@
 
 #pragma once
 
-#include "COM_ExecutionGroup.h"
-
-#include "COM_Device.h"
-#include "COM_WorkPackage.h"
-#include "COM_defines.h"
+#ifdef WITH_CXX_GUARDEDALLOC
+#  include "MEM_guardedalloc.h"
+#endif
 
 namespace blender::compositor {
+
+struct WorkPackage;
+
+class CompositorContext;
 
 /** \brief the workscheduler
  * \ingroup execution
@@ -65,7 +67,7 @@ struct WorkScheduler {
    * for every device a thread is created.
    * \see initialize Initialization and query of the number of devices
    */
-  static void start(CompositorContext &context);
+  static void start(const CompositorContext &context);
 
   /**
    * \brief stop the execution
@@ -83,9 +85,11 @@ struct WorkScheduler {
    * \brief Are there OpenCL capable GPU devices initialized?
    * the result of this method is stored in the CompositorContext
    * A node can generate a different operation tree when OpenCLDevices exists.
-   * \see CompositorContext.getHasActiveOpenCLDevices
+   * \see CompositorContext.get_has_active_opencl_devices
    */
   static bool has_gpu_devices();
+
+  static int get_num_cpu_threads();
 
   static int current_thread_id();
 

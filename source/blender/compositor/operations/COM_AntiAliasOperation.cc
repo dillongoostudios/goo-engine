@@ -17,12 +17,6 @@
  */
 
 #include "COM_AntiAliasOperation.h"
-#include "BLI_math.h"
-#include "BLI_utildefines.h"
-
-#include "MEM_guardedalloc.h"
-
-#include "RE_texture.h"
 
 namespace blender::compositor {
 
@@ -116,26 +110,26 @@ static int extrapolate9(float *E0,
 
 AntiAliasOperation::AntiAliasOperation()
 {
-  this->addInputSocket(DataType::Value);
-  this->addOutputSocket(DataType::Value);
-  this->m_valueReader = nullptr;
-  this->flags.complex = true;
+  this->add_input_socket(DataType::Value);
+  this->add_output_socket(DataType::Value);
+  value_reader_ = nullptr;
+  flags_.complex = true;
 }
 
-void AntiAliasOperation::initExecution()
+void AntiAliasOperation::init_execution()
 {
-  this->m_valueReader = this->getInputSocketReader(0);
+  value_reader_ = this->get_input_socket_reader(0);
 }
 
-void AntiAliasOperation::executePixel(float output[4], int x, int y, void *data)
+void AntiAliasOperation::execute_pixel(float output[4], int x, int y, void *data)
 {
   MemoryBuffer *input_buffer = (MemoryBuffer *)data;
-  const int buffer_width = input_buffer->getWidth(), buffer_height = input_buffer->getHeight();
+  const int buffer_width = input_buffer->get_width(), buffer_height = input_buffer->get_height();
   if (y < 0 || y >= buffer_height || x < 0 || x >= buffer_width) {
     output[0] = 0.0f;
   }
   else {
-    const float *buffer = input_buffer->getBuffer();
+    const float *buffer = input_buffer->get_buffer();
     const float *row_curr = &buffer[y * buffer_width];
     if (x == 0 || x == buffer_width - 1 || y == 0 || y == buffer_height - 1) {
       output[0] = row_curr[x];
@@ -179,27 +173,95 @@ void AntiAliasOperation::executePixel(float output[4], int x, int y, void *data)
   }
 }
 
-void AntiAliasOperation::deinitExecution()
+void AntiAliasOperation::deinit_execution()
 {
-  this->m_valueReader = nullptr;
+  value_reader_ = nullptr;
 }
 
-bool AntiAliasOperation::determineDependingAreaOfInterest(rcti *input,
-                                                          ReadBufferOperation *readOperation,
-                                                          rcti *output)
+bool AntiAliasOperation::determine_depending_area_of_interest(rcti *input,
+                                                              ReadBufferOperation *read_operation,
+                                                              rcti *output)
 {
-  rcti imageInput;
-  NodeOperation *operation = getInputOperation(0);
-  imageInput.xmax = input->xmax + 1;
-  imageInput.xmin = input->xmin - 1;
-  imageInput.ymax = input->ymax + 1;
-  imageInput.ymin = input->ymin - 1;
-  return operation->determineDependingAreaOfInterest(&imageInput, readOperation, output);
+  rcti image_input;
+  NodeOperation *operation = get_input_operation(0);
+  image_input.xmax = input->xmax + 1;
+  image_input.xmin = input->xmin - 1;
+  image_input.ymax = input->ymax + 1;
+  image_input.ymin = input->ymin - 1;
+  return operation->determine_depending_area_of_interest(&image_input, read_operation, output);
 }
 
-void *AntiAliasOperation::initializeTileData(rcti *rect)
+void *AntiAliasOperation::initialize_tile_data(rcti *rect)
 {
-  return getInputOperation(0)->initializeTileData(rect);
+  return get_input_operation(0)->initialize_tile_data(rect);
+}
+
+void AntiAliasOperation::get_area_of_interest(const int input_idx,
+                                              const rcti &output_area,
+                                              rcti &r_input_area)
+{
+  BLI_assert(input_idx == 0);
+  UNUSED_VARS_NDEBUG(input_idx);
+  r_input_area.xmax = output_area.xmax + 1;
+  r_input_area.xmin = output_area.xmin - 1;
+  r_input_area.ymax = output_area.ymax + 1;
+  r_input_area.ymin = output_area.ymin - 1;
+}
+
+void AntiAliasOperation::update_memory_buffer_partial(MemoryBuffer *output,
+                                                      const rcti &area,
+                                                      Span<MemoryBuffer *> inputs)
+{
+  const MemoryBuffer *input = inputs[0];
+  const rcti &input_area = input->get_rect();
+  float ninepix[9];
+  for (int y = area.ymin; y < area.ymax; y++) {
+    float *out = output->get_elem(area.xmin, y);
+    const float *row_curr = input->get_elem(area.xmin, y);
+    const float *row_prev = row_curr - input->row_stride;
+    const float *row_next = row_curr + input->row_stride;
+    int x_offset = 0;
+    for (int x = area.xmin; x < area.xmax;
+         x++, out += output->elem_stride, x_offset += input->elem_stride) {
+      if (x == input_area.xmin || x == input_area.xmax - 1 || y == input_area.xmin ||
+          y == input_area.ymax - 1) {
+        out[0] = row_curr[x_offset];
+        continue;
+      }
+
+      if (extrapolate9(&ninepix[0],
+                       &ninepix[1],
+                       &ninepix[2],
+                       &ninepix[3],
+                       &ninepix[4],
+                       &ninepix[5],
+                       &ninepix[6],
+                       &ninepix[7],
+                       &ninepix[8],
+                       &row_prev[x_offset - input->elem_stride],
+                       &row_prev[x_offset],
+                       &row_prev[x_offset + input->elem_stride],
+                       &row_curr[x_offset - input->elem_stride],
+                       &row_curr[x_offset],
+                       &row_curr[x_offset + input->elem_stride],
+                       &row_next[x_offset - input->elem_stride],
+                       &row_next[x_offset],
+                       &row_next[x_offset + input->elem_stride])) {
+        /* Some rounding magic to make weighting correct with the
+         * original coefficients. */
+        unsigned char result = ((3 * ninepix[0] + 5 * ninepix[1] + 3 * ninepix[2] +
+                                 5 * ninepix[3] + 6 * ninepix[4] + 5 * ninepix[5] +
+                                 3 * ninepix[6] + 5 * ninepix[7] + 3 * ninepix[8]) *
+                                    255.0f +
+                                19.0f) /
+                               38.0f;
+        out[0] = result / 255.0f;
+      }
+      else {
+        out[0] = row_curr[x_offset];
+      }
+    }
+  }
 }
 
 }  // namespace blender::compositor

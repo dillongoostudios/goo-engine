@@ -637,7 +637,6 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
     set(render_tests
       bsdf
       denoise
-      denoise_animation
       displacement
       hair
       image_colorspace
@@ -740,6 +739,46 @@ if(WITH_COMPOSITOR)
 
 endif()
 
+set(geo_node_tests
+  attributes
+  curve_primitives
+  curves
+  geometry
+  mesh_primitives
+  mesh
+  points
+  utilities
+  vector
+)
+
+if(WITH_GMP)
+  list(APPEND geo_node_tests mesh/boolean)
+endif()
+
+if(WITH_OPENVDB)
+  list(APPEND geo_node_tests volume)
+endif()
+
+if(WITH_OPENSUBDIV)
+  list(APPEND geo_node_tests mesh/subdivision_tests)
+endif()
+
+foreach(geo_node_test ${geo_node_tests})
+  if(EXISTS "${TEST_SRC_DIR}/modeling/geometry_nodes/${geo_node_test}/")
+    file(GLOB files "${TEST_SRC_DIR}/modeling/geometry_nodes/${geo_node_test}/*.blend")
+    foreach(file ${files})
+      get_filename_component(filename ${file} NAME_WE)
+      add_blender_test(
+        geo_node_${geo_node_test}_test_${filename}
+        ${file}
+        --python ${TEST_PYTHON_DIR}/geo_node_test.py
+      )
+      endforeach()
+  else()
+    MESSAGE(STATUS "Directory named ${TEST_SRC_DIR}/modeling/geometry_nodes/${geo_node_test}/ Not Found, disabling test.")
+  endif()
+endforeach()
+
 if(WITH_OPENGL_DRAW_TESTS)
   if(NOT OPENIMAGEIO_IDIFF)
     MESSAGE(STATUS "Disabling OpenGL draw tests because OIIO idiff does not exist")
@@ -790,6 +829,15 @@ if(WITH_ALEMBIC)
     --python ${CMAKE_CURRENT_LIST_DIR}/bl_alembic_io_test.py
     --
     --testdir "${TEST_SRC_DIR}/alembic"
+  )
+endif()
+
+if(WITH_USD)
+  add_blender_test(
+    usd_import_test
+    --python ${CMAKE_CURRENT_LIST_DIR}/bl_usd_import_test.py
+    --
+    --testdir "${TEST_SRC_DIR}/usd"
   )
 endif()
 

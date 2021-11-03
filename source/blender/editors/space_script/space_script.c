@@ -81,7 +81,7 @@ static void script_free(SpaceLink *sl)
   SpaceScript *sscript = (SpaceScript *)sl;
 
 #ifdef WITH_PYTHON
-  /*free buttons references*/
+  /* Free buttons references. */
   if (sscript->but_refs) {
     sscript->but_refs = NULL;
   }
@@ -156,7 +156,7 @@ static void script_header_region_draw(const bContext *C, ARegion *region)
 
 static void script_main_region_listener(const wmRegionListenerParams *UNUSED(params))
 {
-/* XXX - Todo, need the ScriptSpace accessible to get the python script to run. */
+/* XXX: Todo, need the ScriptSpace accessible to get the python script to run. */
 #if 0
   BPY_run_script_space_listener()
 #endif

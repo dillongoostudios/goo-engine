@@ -69,6 +69,10 @@ void BKE_libblock_free_data(ID *id, const bool do_id_user)
     BKE_asset_metadata_free(&id->asset_data);
   }
 
+  if (id->library_weak_reference != NULL) {
+    MEM_freeN(id->library_weak_reference);
+  }
+
   BKE_animdata_free(id, do_id_user);
 }
 
@@ -83,7 +87,7 @@ void BKE_libblock_free_datablock(ID *id, const int UNUSED(flag))
     return;
   }
 
-  BLI_assert(!"IDType Missing IDTypeInfo");
+  BLI_assert_msg(0, "IDType Missing IDTypeInfo");
 }
 
 /**
@@ -142,14 +146,7 @@ void BKE_id_free_ex(Main *bmain, void *idv, int flag, const bool use_flag_from_i
     DEG_id_type_tag(bmain, type);
   }
 
-#ifdef WITH_PYTHON
-#  ifdef WITH_PYTHON_SAFETY
-  BPY_id_release(id);
-#  endif
-  if (id->py_instance) {
-    BPY_DECREF_RNA_INVALIDATE(id->py_instance);
-  }
-#endif
+  BKE_libblock_free_data_py(id);
 
   Key *key = ((flag & LIB_ID_FREE_NO_MAIN) == 0) ? BKE_key_from_id(id) : NULL;
 
@@ -226,7 +223,7 @@ void BKE_id_free_us(Main *bmain, void *idv) /* test users */
    *     Otherwise, there is no real way to get rid of an object anymore -
    *     better handling of this is TODO.
    */
-  if ((GS(id->name) == ID_OB) && (id->us == 1) && (id->lib == NULL)) {
+  if ((GS(id->name) == ID_OB) && (id->us == 1) && !ID_IS_LINKED(id)) {
     id_us_clear_real(id);
   }
 
@@ -277,7 +274,7 @@ static size_t id_delete(Main *bmain, const bool do_tagged_deletion)
 
         for (id = lb->first; id; id = id_next) {
           id_next = id->next;
-          /* Note: in case we delete a library, we also delete all its datablocks! */
+          /* NOTE: in case we delete a library, we also delete all its datablocks! */
           if ((id->tag & tag) || (id->lib != NULL && (id->lib->id.tag & tag))) {
             BLI_remlink(lb, id);
             BLI_addtail(&tagged_deleted_ids, id);
@@ -331,7 +328,7 @@ static size_t id_delete(Main *bmain, const bool do_tagged_deletion)
 
       for (id = lb->first; id; id = id_next) {
         id_next = id->next;
-        /* Note: in case we delete a library, we also delete all its datablocks! */
+        /* NOTE: in case we delete a library, we also delete all its datablocks! */
         if ((id->tag & tag) || (id->lib != NULL && (id->lib->id.tag & tag))) {
           id->tag |= tag;
 
@@ -406,3 +403,29 @@ size_t BKE_id_multi_tagged_delete(Main *bmain)
 {
   return id_delete(bmain, true);
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Python Data Handling
+ * \{ */
+
+/**
+ * In most cases #BKE_id_free_ex handles this, when lower level functions are called directly
+ * this function will need to be called too, if Python has access to the data.
+ *
+ * ID data-blocks such as #Material.nodetree are not stored in #Main.
+ */
+void BKE_libblock_free_data_py(ID *id)
+{
+#ifdef WITH_PYTHON
+#  ifdef WITH_PYTHON_SAFETY
+  BPY_id_release(id);
+#  endif
+  if (id->py_instance) {
+    BPY_DECREF_RNA_INVALIDATE(id->py_instance);
+  }
+#else
+  UNUSED_VARS(id);
+#endif
+}
+
+/** \} */

@@ -105,35 +105,34 @@ static void pointcloud_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   PointCloud *pointcloud = (PointCloud *)id;
   for (int i = 0; i < pointcloud->totcol; i++) {
-    BKE_LIB_FOREACHID_PROCESS(data, pointcloud->mat[i], IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, pointcloud->mat[i], IDWALK_CB_USER);
   }
 }
 
 static void pointcloud_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   PointCloud *pointcloud = (PointCloud *)id;
-  if (pointcloud->id.us > 0 || BLO_write_is_undo(writer)) {
-    CustomDataLayer *players = nullptr, players_buff[CD_TEMP_CHUNK_SIZE];
-    CustomData_blend_write_prepare(
-        &pointcloud->pdata, &players, players_buff, ARRAY_SIZE(players_buff));
 
-    /* Write LibData */
-    BLO_write_id_struct(writer, PointCloud, id_address, &pointcloud->id);
-    BKE_id_blend_write(writer, &pointcloud->id);
+  CustomDataLayer *players = nullptr, players_buff[CD_TEMP_CHUNK_SIZE];
+  CustomData_blend_write_prepare(
+      &pointcloud->pdata, &players, players_buff, ARRAY_SIZE(players_buff));
 
-    /* Direct data */
-    CustomData_blend_write(
-        writer, &pointcloud->pdata, players, pointcloud->totpoint, CD_MASK_ALL, &pointcloud->id);
+  /* Write LibData */
+  BLO_write_id_struct(writer, PointCloud, id_address, &pointcloud->id);
+  BKE_id_blend_write(writer, &pointcloud->id);
 
-    BLO_write_pointer_array(writer, pointcloud->totcol, pointcloud->mat);
-    if (pointcloud->adt) {
-      BKE_animdata_blend_write(writer, pointcloud->adt);
-    }
+  /* Direct data */
+  CustomData_blend_write(
+      writer, &pointcloud->pdata, players, pointcloud->totpoint, CD_MASK_ALL, &pointcloud->id);
 
-    /* Remove temporary data. */
-    if (players && players != players_buff) {
-      MEM_freeN(players);
-    }
+  BLO_write_pointer_array(writer, pointcloud->totcol, pointcloud->mat);
+  if (pointcloud->adt) {
+    BKE_animdata_blend_write(writer, pointcloud->adt);
+  }
+
+  /* Remove temporary data. */
+  if (players && players != players_buff) {
+    MEM_freeN(players);
   }
 }
 
@@ -175,7 +174,7 @@ IDTypeInfo IDType_ID_PT = {
     /* name */ "PointCloud",
     /* name_plural */ "pointclouds",
     /* translation_context */ BLT_I18NCONTEXT_ID_POINTCLOUD,
-    /* flags */ 0,
+    /* flags */ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
 
     /* init_data */ pointcloud_init_data,
     /* copy_data */ pointcloud_copy_data,

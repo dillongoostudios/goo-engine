@@ -63,6 +63,7 @@
 #include "BKE_lattice.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
+#include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_mesh_mapping.h"
 #include "BKE_mesh_runtime.h"
@@ -124,7 +125,7 @@ static void object_force_modifier_update_for_bind(Depsgraph *depsgraph, Object *
     BKE_displist_make_mball(depsgraph, scene_eval, ob_eval);
   }
   else if (ELEM(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
-    BKE_displist_make_curveTypes(depsgraph, scene_eval, ob_eval, false, false);
+    BKE_displist_make_curveTypes(depsgraph, scene_eval, ob_eval, false);
   }
   else if (ob->type == OB_GPENCIL) {
     BKE_gpencil_modifiers_calc(depsgraph, scene_eval, ob_eval);
@@ -210,7 +211,7 @@ ModifierData *ED_object_modifier_add(
     /* special cases */
     if (type == eModifierType_Softbody) {
       if (!ob->soft) {
-        ob->soft = sbNew(scene);
+        ob->soft = sbNew();
         ob->softflag |= OB_SB_GOAL | OB_SB_EDGES;
       }
     }
@@ -351,7 +352,7 @@ static bool object_modifier_remove(
 
   /* special cases */
   if (md->type == eModifierType_ParticleSystem) {
-    object_remove_particle_system(bmain, scene, ob);
+    object_remove_particle_system(bmain, scene, ob, ((ParticleSystemModifierData *)md)->psys);
     return true;
   }
 
@@ -772,6 +773,8 @@ static bool modifier_apply_obdata(
         return false;
       }
 
+      Main *bmain = DEG_get_bmain(depsgraph);
+      BKE_object_material_from_eval_data(bmain, ob, &mesh_applied->id);
       BKE_mesh_nomain_to_mesh(mesh_applied, me, ob, &CD_MASK_MESH, true);
 
       if (md_eval->type == eModifierType_Multires) {
@@ -1041,6 +1044,10 @@ bool edit_modifier_poll_generic(bContext *C,
   Object *ob = (ptr.owner_id) ? (Object *)ptr.owner_id : ED_object_active_context(C);
   ModifierData *mod = ptr.data; /* May be NULL. */
 
+  if (mod == NULL && ob != NULL) {
+    mod = BKE_object_active_modifier(ob);
+  }
+
   if (!ob || ID_IS_LINKED(ob)) {
     return false;
   }
@@ -1120,10 +1127,10 @@ bool edit_modifier_invoke_properties(bContext *C, wmOperator *op)
  * with a UI panel below the mouse cursor, unless a specific modifier is set with a context
  * pointer. Used in order to apply modifier operators on hover over their panels.
  */
-bool edit_modifier_invoke_properties_with_hover(bContext *C,
-                                                wmOperator *op,
-                                                const wmEvent *event,
-                                                int *r_retval)
+static bool edit_modifier_invoke_properties_with_hover(bContext *C,
+                                                       wmOperator *op,
+                                                       const wmEvent *event,
+                                                       int *r_retval)
 {
   if (RNA_struct_property_is_set(op->ptr, "modifier")) {
     return true;
@@ -1920,8 +1927,8 @@ static int multires_subdivide_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  const eMultiresSubdivideModeType subdivide_mode = (eMultiresSubdivideModeType)(
-      RNA_enum_get(op->ptr, "mode"));
+  const eMultiresSubdivideModeType subdivide_mode = (eMultiresSubdivideModeType)(RNA_enum_get(
+      op->ptr, "mode"));
   multiresModifier_subdivide(object, mmd, subdivide_mode);
 
   ED_object_iter_other(
@@ -2144,7 +2151,7 @@ static int multires_external_pack_exec(bContext *C, wmOperator *UNUSED(op))
     return OPERATOR_CANCELLED;
   }
 
-  /* XXX don't remove.. */
+  /* XXX don't remove. */
   CustomData_external_remove(&me->ldata, &me->id, CD_MDISPS, me->totloop);
 
   return OPERATOR_FINISHED;
@@ -2595,7 +2602,7 @@ static Object *modifier_skin_armature_create(Depsgraph *depsgraph, Main *bmain, 
 
   BLI_bitmap *edges_visited = BLI_BITMAP_NEW(me->totedge, "edge_visited");
 
-  /* note: we use EditBones here, easier to set them up and use
+  /* NOTE: we use EditBones here, easier to set them up and use
    * edit-armature functions to convert back to regular bones */
   for (int v = 0; v < me->totvert; v++) {
     if (mvert_skin[v].flag & MVERT_SKIN_ROOT) {
@@ -3097,7 +3104,7 @@ void OBJECT_OT_ocean_bake(wmOperatorType *ot)
 /** \} */
 
 /* ------------------------------------------------------------------- */
-/** \name Laplaciandeform Bind Operator
+/** \name Laplacian-Deform Bind Operator
  * \{ */
 
 static bool laplaciandeform_poll(bContext *C)
@@ -3236,6 +3243,57 @@ void OBJECT_OT_surfacedeform_bind(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Toggle Value or Attribute Operator
+ *
+ * \note This operator basically only exists to provide a better tooltip for the toggle button,
+ * since it is stored as an IDProperty. It also stops the button from being highlighted when
+ * "use_attribute" is on, which isn't expected.
+ * \{ */
+
+static int geometry_nodes_input_attribute_toggle_exec(bContext *C, wmOperator *op)
+{
+  Object *ob = ED_object_active_context(C);
+
+  char modifier_name[MAX_NAME];
+  RNA_string_get(op->ptr, "modifier_name", modifier_name);
+  NodesModifierData *nmd = (NodesModifierData *)BKE_modifiers_findby_name(ob, modifier_name);
+  if (nmd == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  char prop_path[MAX_NAME];
+  RNA_string_get(op->ptr, "prop_path", prop_path);
+
+  PointerRNA mod_ptr;
+  RNA_pointer_create(&ob->id, &RNA_Modifier, nmd, &mod_ptr);
+
+  const int old_value = RNA_int_get(&mod_ptr, prop_path);
+  const int new_value = !old_value;
+  RNA_int_set(&mod_ptr, prop_path, new_value);
+
+  DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+  WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
+  return OPERATOR_FINISHED;
+}
+
+void OBJECT_OT_geometry_nodes_input_attribute_toggle(wmOperatorType *ot)
+{
+  ot->name = "Input Attribute Toggle";
+  ot->description =
+      "Switch between an attribute and a single value to define the data for every element";
+  ot->idname = "OBJECT_OT_geometry_nodes_input_attribute_toggle";
+
+  ot->exec = geometry_nodes_input_attribute_toggle_exec;
+
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  RNA_def_string(ot->srna, "prop_path", NULL, 0, "Prop Path", "");
+  RNA_def_string(ot->srna, "modifier_name", NULL, MAX_NAME, "Modifier Name", "");
 }
 
 /** \} */

@@ -28,7 +28,6 @@
 #include "GHOST_EventManager.h"
 #include "GHOST_Debug.h"
 #include <algorithm>
-#include <stdio.h>  // [mce] temp debug
 
 GHOST_EventManager::GHOST_EventManager()
 {
@@ -46,14 +45,14 @@ GHOST_EventManager::~GHOST_EventManager()
   }
 }
 
-GHOST_TUns32 GHOST_EventManager::getNumEvents()
+uint32_t GHOST_EventManager::getNumEvents()
 {
-  return (GHOST_TUns32)m_events.size();
+  return (uint32_t)m_events.size();
 }
 
-GHOST_TUns32 GHOST_EventManager::getNumEvents(GHOST_TEventType type)
+uint32_t GHOST_EventManager::getNumEvents(GHOST_TEventType type)
 {
-  GHOST_TUns32 numEvents = 0;
+  uint32_t numEvents = 0;
   TEventStack::iterator p;
   for (p = m_events.begin(); p != m_events.end(); ++p) {
     if ((*p)->getType() == type) {
@@ -109,12 +108,12 @@ GHOST_TSuccess GHOST_EventManager::addConsumer(GHOST_IEventConsumer *consumer)
   GHOST_TSuccess success;
   GHOST_ASSERT(consumer, "invalid consumer");
 
-  // Check to see whether the consumer is already in our list
+  /* Check to see whether the consumer is already in our list. */
   TConsumerVector::const_iterator iter = std::find(
       m_consumers.begin(), m_consumers.end(), consumer);
 
   if (iter == m_consumers.end()) {
-    // Add the consumer
+    /* Add the consumer. */
     m_consumers.push_back(consumer);
     success = GHOST_kSuccess;
   }
@@ -129,11 +128,11 @@ GHOST_TSuccess GHOST_EventManager::removeConsumer(GHOST_IEventConsumer *consumer
   GHOST_TSuccess success;
   GHOST_ASSERT(consumer, "invalid consumer");
 
-  // Check to see whether the consumer is in our list
+  /* Check to see whether the consumer is in our list. */
   TConsumerVector::iterator iter = std::find(m_consumers.begin(), m_consumers.end(), consumer);
 
   if (iter != m_consumers.end()) {
-    // Remove the consumer
+    /* Remove the consumer. */
     m_consumers.erase(iter);
     success = GHOST_kSuccess;
   }

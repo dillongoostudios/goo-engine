@@ -150,7 +150,11 @@ class Object(bpy_types.ID):
 class WindowManager(bpy_types.ID):
     __slots__ = ()
 
-    def popup_menu(self, draw_func, title="", icon='NONE'):
+    def popup_menu(
+            self, draw_func, *,
+            title="",
+            icon='NONE',
+    ):
         import bpy
         popup = self.popmenu_begin__internal(title, icon=icon)
 
@@ -176,7 +180,11 @@ class WindowManager(bpy_types.ID):
         finally:
             self.popover_end__internal(popup, keymap=keymap)
 
-    def popup_menu_pie(self, event, draw_func, title="", icon='NONE'):
+    def popup_menu_pie(
+            self, event, draw_func, *,
+            title="",
+            icon='NONE',
+    ):
         import bpy
         pie = self.piemenu_begin__internal(title, icon=icon, event=event)
 
@@ -370,10 +378,9 @@ class PoseBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
     def children(self):
         obj = self.id_data
         pbones = obj.pose.bones
-        self_bone = self.bone
 
-        return tuple(pbones[bone.name] for bone in obj.data.bones
-                     if bone.parent == self_bone)
+        # Use Bone.children, which is a native RNA property.
+        return tuple(pbones[bone.name] for bone in self.bone.children)
 
 
 class Bone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
@@ -392,7 +399,7 @@ class EditBone(StructRNA, _GenericBone, metaclass=StructMetaPropGroup):
         self.tail = self.head + vec
         self.roll = other.roll
 
-    def transform(self, matrix, scale=True, roll=True):
+    def transform(self, matrix, *, scale=True, roll=True):
         """
         Transform the the bones head, tail, roll and envelope
         (when the matrix has a scale component).
@@ -469,29 +476,34 @@ class Mesh(bpy_types.ID):
 
         face_lengths = tuple(map(len, faces))
 
-        self.vertices.add(len(vertices))
-        self.edges.add(len(edges))
+        # NOTE: check non-empty lists by length because of how `numpy` handles truth tests, see: T90268.
+        vertices_len = len(vertices)
+        edges_len = len(edges)
+        faces_len = len(faces)
+
+        self.vertices.add(vertices_len)
+        self.edges.add(edges_len)
         self.loops.add(sum(face_lengths))
-        self.polygons.add(len(faces))
+        self.polygons.add(faces_len)
 
         self.vertices.foreach_set("co", tuple(chain.from_iterable(vertices)))
         self.edges.foreach_set("vertices", tuple(chain.from_iterable(edges)))
 
         vertex_indices = tuple(chain.from_iterable(faces))
-        loop_starts = tuple(islice(chain([0], accumulate(face_lengths)), len(faces)))
+        loop_starts = tuple(islice(chain([0], accumulate(face_lengths)), faces_len))
 
         self.polygons.foreach_set("loop_total", face_lengths)
         self.polygons.foreach_set("loop_start", loop_starts)
         self.polygons.foreach_set("vertices", vertex_indices)
 
-        if edges or faces:
+        if edges_len or faces_len:
             self.update(
                 # Needed to either:
                 # - Calculate edges that don't exist for polygons.
                 # - Assign edges to polygon loops.
-                calc_edges=bool(faces),
+                calc_edges=bool(faces_len),
                 # Flag loose edges.
-                calc_edges_loose=bool(edges),
+                calc_edges_loose=bool(edges_len),
             )
 
     @property
@@ -560,9 +572,17 @@ class Text(bpy_types.ID):
         self.write(string)
 
     def as_module(self):
-        from os.path import splitext
+        import bpy
+        from os.path import splitext, join
         from types import ModuleType
-        mod = ModuleType(splitext(self.name)[0])
+        name = self.name
+        mod = ModuleType(splitext(name)[0])
+        # This is a fake file-path, set this since some scripts check `__file__`,
+        # error messages may include this as well.
+        # NOTE: the file path may be a blank string if the file hasn't been saved.
+        mod.__dict__.update({
+            "__file__": join(bpy.data.filepath, name),
+        })
         # TODO: We could use Text.compiled (C struct member)
         # if this is called often it will be much faster.
         exec(self.as_string(), mod.__dict__)
@@ -657,16 +677,14 @@ class Gizmo(StructRNA):
             use_blend = color[3] < 1.0
 
         if use_blend:
-            # TODO: wrap GPU_blend from GPU state.
-            from bgl import glEnable, glDisable, GL_BLEND
-            glEnable(GL_BLEND)
+            gpu.state.blend_set('ALPHA')
 
         with gpu.matrix.push_pop():
             gpu.matrix.multiply_matrix(matrix)
             batch.draw()
 
         if use_blend:
-            glDisable(GL_BLEND)
+            gpu.state.blend_set('NONE')
 
     @staticmethod
     def new_custom_shape(type, verts):
@@ -733,7 +751,7 @@ class Operator(StructRNA, metaclass=RNAMeta):
             return delattr(properties, attr)
         return super().__delattr__(attr)
 
-    def as_keywords(self, ignore=()):
+    def as_keywords(self, *, ignore=()):
         """Return a copy of the properties as a dictionary"""
         ignore = ignore + ("rna_type",)
         return {attr: getattr(self, attr)
@@ -747,9 +765,9 @@ class Macro(StructRNA):
     __slots__ = ()
 
     @classmethod
-    def define(self, opname):
+    def define(cls, opname):
         from _bpy import ops
-        return ops.macro_define(self, opname)
+        return ops.macro_define(cls, opname)
 
 
 class PropertyGroup(StructRNA, metaclass=RNAMetaPropGroup):

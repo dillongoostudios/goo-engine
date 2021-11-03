@@ -688,6 +688,39 @@ class VIEW3D_PT_tools_brush_stroke_smooth_stroke(Panel, View3DPaintPanel, Smooth
     bl_options = {'DEFAULT_CLOSED'}
 
 
+class VIEW3D_PT_tools_weight_gradient(Panel, View3DPaintPanel):
+    bl_context = ".weightpaint" # dot on purpose (access from topbar)
+    bl_label = "Falloff"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        settings = context.tool_settings.weight_paint
+        brush = settings.brush
+        return brush is not None
+
+    def draw(self, context):
+        layout = self.layout
+        settings = context.tool_settings.weight_paint
+        brush = settings.brush
+
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.prop(brush, "curve_preset", text="")
+
+        if brush.curve_preset == 'CUSTOM':
+            layout.template_curve_mapping(brush, "curve", brush=True)
+
+            col = layout.column(align=True)
+            row = col.row(align=True)
+            row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
+            row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
+            row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
+            row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
+            row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
+            row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
+
+
 # TODO, move to space_view3d.py
 class VIEW3D_PT_tools_brush_falloff(Panel, View3DPaintPanel, FalloffPanel):
     bl_context = ".paint_common"  # dot on purpose (access from topbar)
@@ -832,7 +865,6 @@ class VIEW3D_PT_sculpt_voxel_remesh(Panel, View3DPaintPanel):
         props.mode = 'VOXEL'
         col.prop(mesh, "remesh_voxel_adaptivity")
         col.prop(mesh, "use_remesh_fix_poles")
-        col.prop(mesh, "use_remesh_smooth_normals")
 
         col = layout.column(heading="Preserve", align=True)
         col.prop(mesh, "use_remesh_preserve_volume", text="Volume")
@@ -1030,7 +1062,7 @@ class VIEW3D_PT_tools_vertexpaint_options(Panel, View3DPaintPanel):
     bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
-    def poll(self, _context):
+    def poll(cls, _context):
         # This is currently unused, since there aren't any Vertex Paint mode specific options.
         return False
 
@@ -1322,6 +1354,14 @@ class VIEW3D_PT_tools_particlemode_options_display(View3DPanel, Panel):
 
 # Grease Pencil drawing brushes
 
+def tool_use_brush(context):
+    from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+    tool = ToolSelectPanelHelper.tool_active_from_context(context)
+    if tool and tool.has_datablock is False:
+        return False
+
+    return True
+
 
 class GreasePencilPaintPanel:
     bl_context = ".greasepencil_paint"
@@ -1331,6 +1371,10 @@ class GreasePencilPaintPanel:
     def poll(cls, context):
         if context.space_data.type in {'VIEW_3D', 'PROPERTIES'}:
             if context.gpencil_data is None:
+                return False
+
+            # Hide for tools not using bruhses
+            if tool_use_brush(context) is False:
                 return False
 
             gpd = context.gpencil_data
@@ -1456,7 +1500,12 @@ class VIEW3D_PT_tools_grease_pencil_brush_advanced(View3DPanel, Panel):
             elif brush.gpencil_tool == 'FILL':
                 row = col.row(align=True)
                 row.prop(gp_settings, "fill_draw_mode", text="Boundary")
-                row.prop(gp_settings, "show_fill_boundary", text="", icon='GRID')
+                row.prop(
+                    gp_settings,
+                    "show_fill_boundary",
+                    icon='HIDE_OFF' if gp_settings.show_fill_boundary else 'HIDE_ON',
+                    text="",
+                )
 
                 col.separator()
                 row = col.row(align=True)
@@ -1465,7 +1514,15 @@ class VIEW3D_PT_tools_grease_pencil_brush_advanced(View3DPanel, Panel):
                 col.separator()
                 row = col.row(align=True)
                 row.prop(gp_settings, "extend_stroke_factor")
-                row.prop(gp_settings, "show_fill_extend", text="", icon='GRID')
+                row.prop(
+                    gp_settings,
+                    "show_fill_extend",
+                    icon='HIDE_OFF' if gp_settings.show_fill_extend else 'HIDE_ON',
+                    text="",
+                )
+
+                col.separator()
+                col.prop(gp_settings, "fill_leak", text="Leak Size")
 
                 col.separator()
                 col.prop(gp_settings, "fill_simplify_level", text="Simplify")
@@ -1705,9 +1762,14 @@ class VIEW3D_PT_tools_grease_pencil_brush_paint_falloff(GreasePencilBrushFalloff
         if brush is None:
             return False
 
-        tool = brush.gpencil_tool
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+        tool = ToolSelectPanelHelper.tool_active_from_context(context)
+        if tool and tool.idname != 'builtin_brush.Tint':
+            return False
 
-        return (settings and settings.brush and settings.brush.curve and tool == 'TINT')
+        gptool = brush.gpencil_tool
+
+        return (settings and settings.brush and settings.brush.curve and gptool == 'TINT')
 
 
 # Grease Pencil stroke sculpting tools
@@ -2026,6 +2088,11 @@ class VIEW3D_PT_tools_grease_pencil_brush_mixcolor(View3DPanel, Panel):
         if context.region.type == 'TOOL_HEADER':
             return False
 
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+        tool = ToolSelectPanelHelper.tool_active_from_context(context)
+        if tool and tool.idname in {'builtin.cutter', 'builtin.eyedropper', 'builtin.interpolate'}:
+            return False
+
         if brush.gpencil_tool == 'TINT':
             return True
 
@@ -2080,6 +2147,11 @@ class VIEW3D_PT_tools_grease_pencil_brush_mix_palette(View3DPanel, Panel):
         brush = settings.brush
 
         if ob is None or brush is None:
+            return False
+
+        from bl_ui.space_toolsystem_common import ToolSelectPanelHelper
+        tool = ToolSelectPanelHelper.tool_active_from_context(context)
+        if tool and tool.idname in {'builtin.cutter', 'builtin.eyedropper', 'builtin.interpolate'}:
             return False
 
         if brush.gpencil_tool == 'TINT':
@@ -2180,6 +2252,7 @@ classes = (
     VIEW3D_PT_tools_brush_falloff_frontface,
     VIEW3D_PT_tools_brush_falloff_normal,
     VIEW3D_PT_tools_brush_display,
+    VIEW3D_PT_tools_weight_gradient,
 
     VIEW3D_PT_sculpt_dyntopo,
     VIEW3D_PT_sculpt_voxel_remesh,

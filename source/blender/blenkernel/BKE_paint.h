@@ -486,7 +486,11 @@ typedef struct SculptSession {
   /* Total number of polys of the base mesh. */
   int totfaces;
   /* Face sets store its visibility in the sign of the integer, using the absolute value as the
-   * Face Set ID. Positive IDs are visible, negative IDs are hidden. */
+   * Face Set ID. Positive IDs are visible, negative IDs are hidden.
+   * The 0 ID is not used by the tools or the visibility system, it is just used when creating new
+   * geometry (the trim tool, for example) to detect which geometry was just added, so it can be
+   * assigned a valid Face Set after creation. Tools are not intended to run with Face Sets IDs set
+   * to 0. */
   int *face_sets;
 
   /* BMesh for dynamic topology sculpting */
@@ -534,7 +538,7 @@ typedef struct SculptSession {
   float cursor_sampled_normal[3];
   float cursor_view_normal[3];
 
-  /* For Sculpt trimming gesture tools, initial raycast data from the position of the mouse when
+  /* For Sculpt trimming gesture tools, initial ray-cast data from the position of the mouse when
    * the gesture starts (intersection with the surface and if they ray hit the surface or not). */
   float gesture_initial_location[3];
   float gesture_initial_normal[3];

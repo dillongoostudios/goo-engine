@@ -30,6 +30,7 @@
 #include "BLI_gsqueue.h"
 #include "BLI_hash.h"
 #include "BLI_math.h"
+#include "BLI_math_color.h"
 #include "BLI_math_color_blend.h"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
@@ -780,6 +781,10 @@ static void sculpt_vertex_neighbors_get_faces(SculptSession *ss,
   iter->neighbors = iter->neighbors_fixed;
 
   for (int i = 0; i < ss->pmap[index].count; i++) {
+    if (ss->face_sets[vert_map->indices[i]] < 0) {
+      /* Skip connectivity from hidden faces. */
+      continue;
+    }
     const MPoly *p = &ss->mpoly[vert_map->indices[i]];
     uint f_adj_v[2];
     if (poly_get_adj_loops_from_vert(p, ss->mloop, index, f_adj_v) != -1) {
@@ -1041,7 +1046,7 @@ int SCULPT_nearest_vertex_get(
 
 bool SCULPT_is_symmetry_iteration_valid(char i, char symm)
 {
-  return i == 0 || (symm & i && (symm != 5 || i != 3) && (symm != 6 || (i != 3 && i != 5)));
+  return i == 0 || (symm & i && (symm != 5 || i != 3) && (symm != 6 || (!ELEM(i, 3, 5))));
 }
 
 /* Checks if a vertex is inside the brush radius from any of its mirrored axis. */
@@ -1142,10 +1147,9 @@ void SCULPT_floodfill_add_active(
       v = SCULPT_active_vertex_get(ss);
     }
     else if (radius > 0.0f) {
-      float radius_squared = (radius == FLT_MAX) ? FLT_MAX : radius * radius;
       float location[3];
       flip_v3_v3(location, SCULPT_active_vertex_co_get(ss), i);
-      v = SCULPT_nearest_vertex_get(sd, ob, location, radius_squared, false);
+      v = SCULPT_nearest_vertex_get(sd, ob, location, radius, false);
     }
 
     if (v != -1) {
@@ -1850,7 +1854,7 @@ static void flip_v3(float v[3], const ePaintSymmetryFlags symm)
   flip_v3_v3(v, v, symm);
 }
 
-static void flip_qt(float quat[3], const ePaintSymmetryFlags symm)
+static void flip_qt(float quat[4], const ePaintSymmetryFlags symm)
 {
   flip_qt_qt(quat, quat, symm);
 }
@@ -2391,7 +2395,7 @@ static float brush_strength(const Sculpt *sd,
         case BRUSH_MASK_SMOOTH:
           return alpha * pressure * feather;
       }
-      BLI_assert(!"Not supposed to happen");
+      BLI_assert_msg(0, "Not supposed to happen");
       return 0.0f;
 
     case SCULPT_TOOL_CREASE:
@@ -3313,7 +3317,7 @@ static void do_draw_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
   mul_v3_v3(offset, ss->cache->scale);
   mul_v3_fl(offset, bstrength);
 
-  /* XXX - this shouldn't be necessary, but sculpting crashes in blender2.8 otherwise
+  /* XXX: this shouldn't be necessary, but sculpting crashes in blender2.8 otherwise
    * initialize before threads so they can do curve mapping. */
   BKE_curvemapping_init(brush->curve);
 
@@ -3392,7 +3396,7 @@ static void do_draw_sharp_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int to
   mul_v3_v3(offset, ss->cache->scale);
   mul_v3_fl(offset, bstrength);
 
-  /* XXX - this shouldn't be necessary, but sculpting crashes in blender2.8 otherwise
+  /* XXX: this shouldn't be necessary, but sculpting crashes in blender2.8 otherwise
    * initialize before threads so they can do curve mapping. */
   BKE_curvemapping_init(brush->curve);
 
@@ -4192,7 +4196,7 @@ void SCULPT_flip_v3_by_symm_area(float v[3],
   }
 }
 
-void SCULPT_flip_quat_by_symm_area(float quat[3],
+void SCULPT_flip_quat_by_symm_area(float quat[4],
                                    const ePaintSymmetryFlags symm,
                                    const ePaintSymmetryAreas symmarea,
                                    const float pivot[3])
@@ -5788,7 +5792,7 @@ void SCULPT_vertcos_to_key(Object *ob, KeyBlock *kb, const float (*vertCos)[3])
   BKE_keyblock_update_from_vertcos(ob, kb, vertCos);
 }
 
-/* Note: we do the topology update before any brush actions to avoid
+/* NOTE: we do the topology update before any brush actions to avoid
  * issues with the proxies. The size of the proxy can't change, so
  * topology must be updated first. */
 static void sculpt_topology_update(Sculpt *sd,
@@ -6359,7 +6363,7 @@ void SCULPT_flush_stroke_deform(Sculpt *sd, Object *ob, bool is_proxy_used)
     MEM_SAFE_FREE(nodes);
 
     /* Modifiers could depend on mesh normals, so we should update them.
-     * Note, then if sculpting happens on locked key, normals should be re-calculate after applying
+     * NOTE: then if sculpting happens on locked key, normals should be re-calculate after applying
      * coords from key-block on base mesh. */
     BKE_mesh_calc_normals(me);
   }
@@ -6557,10 +6561,7 @@ static void sculpt_update_tex(const Scene *scene, Sculpt *sd, SculptSession *ss)
   Brush *brush = BKE_paint_brush(&sd->paint);
   const int radius = BKE_brush_size_get(scene, brush);
 
-  if (ss->texcache) {
-    MEM_freeN(ss->texcache);
-    ss->texcache = NULL;
-  }
+  MEM_SAFE_FREE(ss->texcache);
 
   if (ss->tex_pool) {
     BKE_image_pool_free(ss->tex_pool);
@@ -6602,7 +6603,7 @@ bool SCULPT_poll_view3d(bContext *C)
 
 bool SCULPT_poll(bContext *C)
 {
-  return SCULPT_mode_poll(C) && paint_poll(C);
+  return SCULPT_mode_poll(C) && PAINT_brush_tool_poll(C);
 }
 
 static const char *sculpt_tool_name(Sculpt *sd)
@@ -7694,8 +7695,7 @@ static void sculpt_restore_mesh(Sculpt *sd, Object *ob)
 
   /* Restore the mesh before continuing with anchored stroke. */
   if ((brush->flag & BRUSH_ANCHORED) ||
-      ((brush->sculpt_tool == SCULPT_TOOL_GRAB ||
-        brush->sculpt_tool == SCULPT_TOOL_ELASTIC_DEFORM) &&
+      ((ELEM(brush->sculpt_tool, SCULPT_TOOL_GRAB, SCULPT_TOOL_ELASTIC_DEFORM)) &&
        BKE_brush_use_size_pressure(brush)) ||
       (brush->flag & BRUSH_DRAG_DOT)) {
 
@@ -7871,7 +7871,7 @@ static bool over_mesh(bContext *C, struct wmOperator *UNUSED(op), float x, float
 static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const float mouse[2])
 {
   /* Don't start the stroke until mouse goes over the mesh.
-   * note: mouse will only be null when re-executing the saved stroke.
+   * NOTE: mouse will only be null when re-executing the saved stroke.
    * We have exception for 'exec' strokes since they may not set 'mouse',
    * only 'location', see: T52195. */
   if (((op->flag & OP_IS_INVOKE) == 0) || (mouse == NULL) ||
@@ -7883,6 +7883,9 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
     ED_view3d_init_mats_rv3d(ob, CTX_wm_region_view3d(C));
 
     sculpt_update_cache_invariants(C, sd, ss, op, mouse);
+
+    SculptCursorGeometryInfo sgi;
+    SCULPT_cursor_geometry_info_update(C, &sgi, mouse, false);
 
     SCULPT_undo_push_begin(ob, sculpt_tool_name(sd));
 
@@ -8054,7 +8057,7 @@ static int sculpt_brush_stroke_invoke(bContext *C, wmOperator *op, const wmEvent
   /* For tablet rotation. */
   ignore_background_click = RNA_boolean_get(op->ptr, "ignore_background_click");
 
-  if (ignore_background_click && !over_mesh(C, op, event->x, event->y)) {
+  if (ignore_background_click && !over_mesh(C, op, event->xy[0], event->xy[1])) {
     paint_stroke_free(C, op);
     return OPERATOR_PASS_THROUGH;
   }
@@ -8681,10 +8684,12 @@ static int vertex_to_loop_colors_exec(bContext *C, wmOperator *UNUSED(op))
     for (int j = 0; j < c_poly->totloop; j++) {
       int loop_index = c_poly->loopstart + j;
       MLoop *c_loop = &loops[c_poly->loopstart + j];
-      loopcols[loop_index].r = (char)(vertcols[c_loop->v].color[0] * 255);
-      loopcols[loop_index].g = (char)(vertcols[c_loop->v].color[1] * 255);
-      loopcols[loop_index].b = (char)(vertcols[c_loop->v].color[2] * 255);
-      loopcols[loop_index].a = (char)(vertcols[c_loop->v].color[3] * 255);
+      float srgb_color[4];
+      linearrgb_to_srgb_v4(srgb_color, vertcols[c_loop->v].color);
+      loopcols[loop_index].r = (char)(srgb_color[0] * 255);
+      loopcols[loop_index].g = (char)(srgb_color[1] * 255);
+      loopcols[loop_index].b = (char)(srgb_color[2] * 255);
+      loopcols[loop_index].a = (char)(srgb_color[3] * 255);
     }
   }
 
@@ -8748,6 +8753,7 @@ static int loop_to_vertex_colors_exec(bContext *C, wmOperator *UNUSED(op))
       vertcols[c_loop->v].color[1] = (loopcols[loop_index].g / 255.0f);
       vertcols[c_loop->v].color[2] = (loopcols[loop_index].b / 255.0f);
       vertcols[c_loop->v].color[3] = (loopcols[loop_index].a / 255.0f);
+      srgb_to_linearrgb_v4(vertcols[c_loop->v].color, vertcols[c_loop->v].color);
     }
   }
 

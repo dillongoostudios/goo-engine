@@ -199,7 +199,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   const uint numLoops = (uint)mesh->totloop;
   uint newLoops = 0, newPolys = 0, newEdges = 0, newVerts = 0, rimVerts = 0;
 
-  /* only use material offsets if we have 2 or more materials  */
+  /* Only use material offsets if we have 2 or more materials. */
   const short mat_nr_max = ctx->object->totcol > 1 ? ctx->object->totcol - 1 : 0;
   const short mat_ofs = mat_nr_max ? smd->mat_ofs : 0;
   const short mat_ofs_rim = mat_nr_max ? smd->mat_ofs_rim : 0;
@@ -242,9 +242,8 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   MDeformVert *dvert;
   const bool defgrp_invert = (smd->flag & MOD_SOLIDIFY_VGROUP_INV) != 0;
   int defgrp_index;
-  const int shell_defgrp_index = BKE_object_defgroup_name_index(ctx->object,
-                                                                smd->shell_defgrp_name);
-  const int rim_defgrp_index = BKE_object_defgroup_name_index(ctx->object, smd->rim_defgrp_name);
+  const int shell_defgrp_index = BKE_id_defgroup_name_index(&mesh->id, smd->shell_defgrp_name);
+  const int rim_defgrp_index = BKE_id_defgroup_name_index(&mesh->id, smd->rim_defgrp_name);
 
   /* array size is doubled in case of using a shell */
   const uint stride = do_shell ? 2 : 1;
@@ -260,14 +259,12 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
     /* calculate only face normals */
     poly_nors = MEM_malloc_arrayN(numPolys, sizeof(*poly_nors), __func__);
     BKE_mesh_calc_normals_poly(orig_mvert,
-                               NULL,
                                (int)numVerts,
                                orig_mloop,
-                               orig_mpoly,
                                (int)numLoops,
+                               orig_mpoly,
                                (int)numPolys,
-                               poly_nors,
-                               true);
+                               poly_nors);
   }
 
   STACK_INIT(new_vert_arr, numVerts * 2);
@@ -424,7 +421,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
     CustomData_copy_data(&mesh->pdata, &result->pdata, 0, 0, (int)numPolys);
   }
 
-  /* initializes: (i_end, do_shell_align, mv)  */
+  /* initializes: (i_end, do_shell_align, mv). */
 #define INIT_VERT_ARRAY_OFFSETS(test) \
   if (((ofs_new >= ofs_orig) == do_flip) == test) { \
     i_end = numVerts; \
@@ -505,11 +502,10 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
     }
   }
 
-  /* note, copied vertex layers don't have flipped normals yet. do this after applying offset */
+  /* NOTE: copied vertex layers don't have flipped normals yet. do this after applying offset. */
   if ((smd->flag & MOD_SOLIDIFY_EVEN) == 0) {
     /* no even thickness, very simple */
-    float scalar_short;
-    float scalar_short_vgroup;
+    float ofs_new_vgroup;
 
     /* for clamping */
     float *vert_lens = NULL;
@@ -598,7 +594,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
       uint i_orig, i_end;
       bool do_shell_align;
 
-      scalar_short = scalar_short_vgroup = ofs_new / 32767.0f;
+      ofs_new_vgroup = ofs_new;
 
       INIT_VERT_ARRAY_OFFSETS(false);
 
@@ -607,36 +603,40 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
         if (dvert) {
           MDeformVert *dv = &dvert[i];
           if (defgrp_invert) {
-            scalar_short_vgroup = 1.0f - BKE_defvert_find_weight(dv, defgrp_index);
+            ofs_new_vgroup = 1.0f - BKE_defvert_find_weight(dv, defgrp_index);
           }
           else {
-            scalar_short_vgroup = BKE_defvert_find_weight(dv, defgrp_index);
+            ofs_new_vgroup = BKE_defvert_find_weight(dv, defgrp_index);
           }
-          scalar_short_vgroup = (offset_fac_vg + (scalar_short_vgroup * offset_fac_vg_inv)) *
-                                scalar_short;
+          ofs_new_vgroup = (offset_fac_vg + (ofs_new_vgroup * offset_fac_vg_inv)) * ofs_new;
         }
         if (do_clamp && offset > FLT_EPSILON) {
           /* always reset because we may have set before */
           if (dvert == NULL) {
-            scalar_short_vgroup = scalar_short;
+            ofs_new_vgroup = ofs_new;
           }
           if (do_angle_clamp) {
             float cos_ang = cosf(((2 * M_PI) - vert_angs[i]) * 0.5f);
             if (cos_ang > 0) {
               float max_off = sqrtf(vert_lens[i]) * 0.5f / cos_ang;
               if (max_off < offset * 0.5f) {
-                scalar_short_vgroup *= max_off / offset * 2;
+                ofs_new_vgroup *= max_off / offset * 2;
               }
             }
           }
           else {
             if (vert_lens[i] < offset_sq) {
               float scalar = sqrtf(vert_lens[i]) / offset;
-              scalar_short_vgroup *= scalar;
+              ofs_new_vgroup *= scalar;
             }
           }
         }
-        madd_v3v3short_fl(mv->co, mv->no, scalar_short_vgroup);
+        if (vert_nors) {
+          madd_v3_v3fl(mv->co, vert_nors[i], ofs_new_vgroup);
+        }
+        else {
+          madd_v3v3short_fl(mv->co, mv->no, ofs_new_vgroup / 32767.0f);
+        }
       }
     }
 
@@ -644,7 +644,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
       uint i_orig, i_end;
       bool do_shell_align;
 
-      scalar_short = scalar_short_vgroup = ofs_orig / 32767.0f;
+      ofs_new_vgroup = ofs_orig;
 
       /* as above but swapped */
       INIT_VERT_ARRAY_OFFSETS(true);
@@ -654,36 +654,40 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
         if (dvert) {
           MDeformVert *dv = &dvert[i];
           if (defgrp_invert) {
-            scalar_short_vgroup = 1.0f - BKE_defvert_find_weight(dv, defgrp_index);
+            ofs_new_vgroup = 1.0f - BKE_defvert_find_weight(dv, defgrp_index);
           }
           else {
-            scalar_short_vgroup = BKE_defvert_find_weight(dv, defgrp_index);
+            ofs_new_vgroup = BKE_defvert_find_weight(dv, defgrp_index);
           }
-          scalar_short_vgroup = (offset_fac_vg + (scalar_short_vgroup * offset_fac_vg_inv)) *
-                                scalar_short;
+          ofs_new_vgroup = (offset_fac_vg + (ofs_new_vgroup * offset_fac_vg_inv)) * ofs_orig;
         }
         if (do_clamp && offset > FLT_EPSILON) {
           /* always reset because we may have set before */
           if (dvert == NULL) {
-            scalar_short_vgroup = scalar_short;
+            ofs_new_vgroup = ofs_orig;
           }
           if (do_angle_clamp) {
             float cos_ang = cosf(vert_angs[i_orig] * 0.5f);
             if (cos_ang > 0) {
               float max_off = sqrtf(vert_lens[i]) * 0.5f / cos_ang;
               if (max_off < offset * 0.5f) {
-                scalar_short_vgroup *= max_off / offset * 2;
+                ofs_new_vgroup *= max_off / offset * 2;
               }
             }
           }
           else {
             if (vert_lens[i] < offset_sq) {
               float scalar = sqrtf(vert_lens[i]) / offset;
-              scalar_short_vgroup *= scalar;
+              ofs_new_vgroup *= scalar;
             }
           }
         }
-        madd_v3v3short_fl(mv->co, mv->no, scalar_short_vgroup);
+        if (vert_nors) {
+          madd_v3_v3fl(mv->co, vert_nors[i], ofs_new_vgroup);
+        }
+        else {
+          madd_v3v3short_fl(mv->co, mv->no, ofs_new_vgroup / 32767.0f);
+        }
       }
     }
 
@@ -984,7 +988,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
 
   /* must recalculate normals with vgroups since they can displace unevenly T26888. */
   if ((mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) || do_rim || dvert) {
-    result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+    BKE_mesh_normals_tag_dirty(result);
   }
   else if (do_shell) {
     uint i;
@@ -1028,20 +1032,19 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
   if (do_rim) {
     uint i;
 
-    /* bugger, need to re-calculate the normals for the new edge faces.
+    /* NOTE(campbell): Unfortunately re-calculate the normals for the new edge faces is necessary.
      * This could be done in many ways, but probably the quickest way
      * is to calculate the average normals for side faces only.
      * Then blend them with the normals of the edge verts.
      *
-     * at the moment its easiest to allocate an entire array for every vertex,
-     * even though we only need edge verts - campbell
-     */
+     * At the moment its easiest to allocate an entire array for every vertex,
+     * even though we only need edge verts. */
 
 #define SOLIDIFY_SIDE_NORMALS
 
 #ifdef SOLIDIFY_SIDE_NORMALS
-    /* Note that, due to the code setting cd_dirty_vert a few lines above,
-     * do_side_normals is always false. - Sybren */
+    /* NOTE(@sybren): due to the code setting cd_dirty_vert a few lines above,
+     * do_side_normals is always false. */
     const bool do_side_normals = !(result->runtime.cd_dirty_vert & CD_MASK_NORMAL);
     /* annoying to allocate these since we only need the edge verts, */
     float(*edge_vert_nos)[3] = do_side_normals ?
@@ -1200,7 +1203,7 @@ Mesh *MOD_solidify_extrude_modifyMesh(ModifierData *md, const ModifierEvalContex
         short *nor_short;
         int k;
 
-        /* note, only the first vertex (lower half of the index) is calculated */
+        /* NOTE: only the first vertex (lower half of the index) is calculated. */
         BLI_assert(ed->v1 < numVerts);
         normalize_v3_v3(nor_cpy, edge_vert_nos[ed_orig->v1]);
 

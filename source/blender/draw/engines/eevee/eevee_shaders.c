@@ -1315,7 +1315,7 @@ Material *EEVEE_material_default_error_get(void)
   return e_data.error_mat;
 }
 
-/* Configure a default nodetree with the given material.  */
+/* Configure a default nodetree with the given material. */
 struct bNodeTree *EEVEE_shader_default_surface_nodetree(Material *ma)
 {
   /* WARNING: This function is not threadsafe. Which is not a problem for the moment. */
@@ -1343,7 +1343,7 @@ struct bNodeTree *EEVEE_shader_default_surface_nodetree(Material *ma)
   return e_data.surface.ntree;
 }
 
-/* Configure a default nodetree with the given world.  */
+/* Configure a default nodetree with the given world. */
 struct bNodeTree *EEVEE_shader_default_world_nodetree(World *wo)
 {
   /* WARNING: This function is not threadsafe. Which is not a problem for the moment. */
@@ -1483,7 +1483,7 @@ static void eevee_material_post_eval(GPUMaterial *mat,
   const bool is_mesh = (options & VAR_MAT_MESH) != 0;
 
   /* Force geometry usage if GPU_BARYCENTRIC_DIST or GPU_BARYCENTRIC_TEXCO are used.
-   * Note: GPU_BARYCENTRIC_TEXCO only requires it if the shader is not drawing hairs. */
+   * NOTE: GPU_BARYCENTRIC_TEXCO only requires it if the shader is not drawing hairs. */
   if (!is_hair && is_mesh && GPU_material_flag_get(mat, GPU_MATFLAG_BARYCENTRIC) &&
       *geom_code == NULL) {
     *geom_code = e_data.surface_geom_barycentric;
@@ -1537,7 +1537,7 @@ static struct GPUMaterial *eevee_material_get_ex(
   return mat;
 }
 
-/* Note: Compilation is not deferred. */
+/* NOTE: Compilation is not deferred. */
 struct GPUMaterial *EEVEE_material_default_get(struct Scene *scene, Material *ma, int options)
 {
   Material *def_ma = (ma && (options & VAR_MAT_VOLUME)) ? BKE_material_default_volume() :

@@ -127,6 +127,10 @@ typedef struct Mesh_Runtime {
   /** Needed in case we need to lazily initialize the mesh. */
   CustomData_MeshMasks cd_mask_extra;
 
+  /** Needed to ensure some thread-safety during render data pre-processing. */
+  void *render_mutex;
+  void *_pad3;
+
 } Mesh_Runtime;
 
 typedef struct Mesh {
@@ -141,7 +145,7 @@ typedef struct Mesh {
   struct MSelect *mselect;
 
   /* BMESH ONLY */
-  /*new face structures*/
+  /* New face structures. */
   struct MPoly *mpoly;
   struct MLoop *mloop;
   struct MLoopUV *mloopuv;
@@ -164,8 +168,10 @@ typedef struct Mesh {
   struct MVert *mvert;
   /** Array of edges. */
   struct MEdge *medge;
-  /** Deformgroup vertices. */
+  /** Deform-group vertices. */
   struct MDeformVert *dvert;
+  /** List of bDeformGroup names and flag only. */
+  ListBase vertex_group_names;
 
   /* array of colors for the tessellated faces, must be number of tessellated
    * faces * 4 in length */
@@ -173,7 +179,7 @@ typedef struct Mesh {
   struct Mesh *texcomesh;
 
   /* When the object is available, the preferred access method is: BKE_editmesh_from_object(ob) */
-  /** Not saved in file!. */
+  /** Not saved in file. */
   struct BMEditMesh *edit_mesh;
 
   struct CustomData vdata, edata, fdata;
@@ -189,7 +195,7 @@ typedef struct Mesh {
   /* END BMESH ONLY */
 
   int attributes_active_index;
-  int _pad3;
+  int vertex_group_active_index;
 
   /* the last selected vertex/edge/face are used for the active face however
    * this means the active face must always be selected, this is to keep track
@@ -229,6 +235,7 @@ typedef struct Mesh {
    * default and Face Sets can be used without affecting the color of the mesh. */
   int face_sets_color_default;
 
+  void *_pad2;
   Mesh_Runtime runtime;
 } Mesh;
 
@@ -276,12 +283,12 @@ enum {
 #define ME_USING_MIRROR_X_VERTEX_GROUPS(_me) \
   (((_me)->editflag & ME_EDIT_MIRROR_VERTEX_GROUPS) && ((_me)->symmetry & ME_SYMMETRY_X))
 
-/* We cant have both flags enabled at once,
+/* We can't have both flags enabled at once,
  * flags defined in DNA_scene_types.h */
 #define ME_EDIT_PAINT_SEL_MODE(_me) \
-  (((_me)->editflag & ME_EDIT_PAINT_FACE_SEL) ? \
-       SCE_SELECT_FACE : \
-       ((_me)->editflag & ME_EDIT_PAINT_VERT_SEL) ? SCE_SELECT_VERTEX : 0)
+  (((_me)->editflag & ME_EDIT_PAINT_FACE_SEL) ? SCE_SELECT_FACE : \
+   ((_me)->editflag & ME_EDIT_PAINT_VERT_SEL) ? SCE_SELECT_VERTEX : \
+                                                0)
 
 /* me->flag */
 enum {
@@ -296,7 +303,7 @@ enum {
   ME_REMESH_REPROJECT_VERTEX_COLORS = 1 << 8,
   ME_DS_EXPAND = 1 << 9,
   ME_SCULPT_DYNAMIC_TOPOLOGY = 1 << 10,
-  ME_REMESH_SMOOTH_NORMALS = 1 << 11,
+  ME_FLAG_UNUSED_8 = 1 << 11, /* cleared */
   ME_REMESH_REPROJECT_PAINT_MASK = 1 << 12,
   ME_REMESH_FIX_POLES = 1 << 13,
   ME_REMESH_REPROJECT_VOLUME = 1 << 14,

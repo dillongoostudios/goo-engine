@@ -1,20 +1,20 @@
 [submodule "release/scripts/addons"]
 	path = release/scripts/addons
 	url = git@github.com:studiogoobot/goo-blender-addons.git
-	branch = custom-eevee 
+	branch = goo-blender-master-v3.0 
 	ignore = all
 [submodule "release/scripts/addons_contrib"]
 	path = release/scripts/addons_contrib
 	url = https://git.blender.org/blender-addons-contrib.git
-	branch = blender-v2.93-release 
+	branch = blender-v3.0-release 
 	ignore = all
 [submodule "release/datafiles/locale"]
 	path = release/datafiles/locale
 	url = https://git.blender.org/blender-translations.git
-	branch = blender-v2.93-release
+	branch = blender-v3.0-release
 	ignore = all
 [submodule "source/tools"]
 	path = source/tools
 	url = https://git.blender.org/blender-dev-tools.git
-	branch = blender-v2.93-release
+	branch = blender-v3.0-release
 	ignore = all

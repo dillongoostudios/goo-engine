@@ -107,7 +107,7 @@ void ED_gpencil_layer_make_cfra_list(bGPDlayer *gpl, ListBase *elems, bool onlys
 /* Selection Tools */
 
 /* check if one of the frames in this layer is selected */
-bool ED_gpencil_layer_frame_select_check(bGPDlayer *gpl)
+bool ED_gpencil_layer_frame_select_check(const bGPDlayer *gpl)
 {
   /* error checking */
   if (gpl == NULL) {
@@ -115,7 +115,7 @@ bool ED_gpencil_layer_frame_select_check(bGPDlayer *gpl)
   }
 
   /* stop at the first one found */
-  LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
+  LISTBASE_FOREACH (const bGPDframe *, gpf, &gpl->frames) {
     if (gpf->flag & GP_FRAME_SELECT) {
       return true;
     }
@@ -268,7 +268,7 @@ void ED_gpencil_layer_frames_duplicate(bGPDlayer *gpl)
     return;
   }
 
-  /* duplicate selected frames  */
+  /* Duplicate selected frames. */
   LISTBASE_FOREACH_MUTABLE (bGPDframe *, gpf, &gpl->frames) {
 
     /* duplicate this frame */
@@ -421,7 +421,7 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
     return false;
   }
 
-  /* check if single channel in buffer (disregard names if so)  */
+  /* Check if single channel in buffer (disregard names if so). */
   if (gpencil_anim_copybuf.first == gpencil_anim_copybuf.last) {
     no_name = true;
   }
@@ -513,7 +513,7 @@ bool ED_gpencil_anim_copybuf_paste(bAnimContext *ac, const short offset_mode)
 
 static bool gpencil_frame_snap_nearest(bGPDframe *UNUSED(gpf), Scene *UNUSED(scene))
 {
-#if 0 /* note: gpf->framenum is already an int! */
+#if 0 /* NOTE: gpf->framenum is already an int! */
   if (gpf->flag & GP_FRAME_SELECT) {
     gpf->framenum = (int)(floor(gpf->framenum + 0.5));
   }

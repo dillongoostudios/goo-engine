@@ -35,6 +35,7 @@ extern "C" {
 #define MAXTEXTBOX 256 /* used in readfile.c and editfont.c */
 
 struct AnimData;
+struct CurveEval;
 struct CurveProfile;
 struct EditFont;
 struct GHash;
@@ -300,6 +301,15 @@ typedef struct Curve {
   char _pad2[6];
   float fsize_realtime;
 
+  /**
+   * A pointer to curve data from evaluation. Owned by the object's #geometry_set_eval, either as a
+   * geometry instance or the data of the evaluated #CurveComponent. The curve may also contain
+   * data in the #nurb list, but for evaluated curves this is the proper place to retrieve data,
+   * since it also contains the result of geometry nodes evaluation, and isn't just a copy of the
+   * original object data.
+   */
+  struct CurveEval *curve_eval;
+
   void *batch_cache;
 } Curve;
 
@@ -337,8 +347,7 @@ enum {
   CU_DS_EXPAND = 1 << 11,
   /** make use of the path radius if this is enabled (default for new curves) */
   CU_PATH_RADIUS = 1 << 12,
-  /** fill 2d curve after deformation */
-  CU_DEFORM_FILL = 1 << 13,
+  /* CU_DEFORM_FILL = 1 << 13, */ /* DEPRECATED */
   /** fill bevel caps */
   CU_FILL_CAPS = 1 << 14,
   /** map taper object to beveled area */
@@ -591,7 +600,7 @@ typedef enum eBezTriple_KeyframeType {
 
 /* CharInfo.flag */
 enum {
-  /* note: CU_CHINFO_WRAP, CU_CHINFO_SMALLCAPS_TEST and CU_CHINFO_TRUNCATE are set dynamically */
+  /* NOTE: CU_CHINFO_WRAP, CU_CHINFO_SMALLCAPS_TEST and CU_CHINFO_TRUNCATE are set dynamically. */
   CU_CHINFO_BOLD = 1 << 0,
   CU_CHINFO_ITALIC = 1 << 1,
   CU_CHINFO_UNDERLINE = 1 << 2,

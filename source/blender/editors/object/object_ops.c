@@ -56,13 +56,13 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_mode_set_with_submode);
   WM_operatortype_append(OBJECT_OT_editmode_toggle);
   WM_operatortype_append(OBJECT_OT_posemode_toggle);
-  WM_operatortype_append(OBJECT_OT_proxy_make);
   WM_operatortype_append(OBJECT_OT_shade_smooth);
   WM_operatortype_append(OBJECT_OT_shade_flat);
   WM_operatortype_append(OBJECT_OT_paths_calculate);
   WM_operatortype_append(OBJECT_OT_paths_update);
   WM_operatortype_append(OBJECT_OT_paths_clear);
   WM_operatortype_append(OBJECT_OT_paths_range_update);
+  WM_operatortype_append(OBJECT_OT_paths_update_visible);
   WM_operatortype_append(OBJECT_OT_forcefield_toggle);
 
   WM_operatortype_append(OBJECT_OT_transfer_mode);
@@ -112,6 +112,7 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_volume_import);
   WM_operatortype_append(OBJECT_OT_add);
   WM_operatortype_append(OBJECT_OT_add_named);
+  WM_operatortype_append(OBJECT_OT_transform_to_mouse);
   WM_operatortype_append(OBJECT_OT_effector_add);
   WM_operatortype_append(OBJECT_OT_collection_instance_add);
   WM_operatortype_append(OBJECT_OT_data_instance_add);
@@ -145,6 +146,7 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_skin_loose_mark_clear);
   WM_operatortype_append(OBJECT_OT_skin_radii_equalize);
   WM_operatortype_append(OBJECT_OT_skin_armature_create);
+  WM_operatortype_append(OBJECT_OT_geometry_nodes_input_attribute_toggle);
 
   /* grease pencil modifiers */
   WM_operatortype_append(OBJECT_OT_gpencil_modifier_add);
@@ -155,6 +157,10 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_gpencil_modifier_apply);
   WM_operatortype_append(OBJECT_OT_gpencil_modifier_copy);
   WM_operatortype_append(OBJECT_OT_gpencil_modifier_copy_to_selected);
+
+  WM_operatortype_append(GPENCIL_OT_segment_add);
+  WM_operatortype_append(GPENCIL_OT_segment_remove);
+  WM_operatortype_append(GPENCIL_OT_segment_move);
 
   /* grease pencil line art */
   WM_operatortypes_lineart();
@@ -183,6 +189,9 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(POSE_OT_ik_add);
   WM_operatortype_append(POSE_OT_ik_clear);
   WM_operatortype_append(CONSTRAINT_OT_delete);
+  WM_operatortype_append(CONSTRAINT_OT_apply);
+  WM_operatortype_append(CONSTRAINT_OT_copy);
+  WM_operatortype_append(CONSTRAINT_OT_copy_to_selected);
   WM_operatortype_append(CONSTRAINT_OT_move_up);
   WM_operatortype_append(CONSTRAINT_OT_move_down);
   WM_operatortype_append(CONSTRAINT_OT_move_to_index);
@@ -201,7 +210,6 @@ void ED_operatortypes_object(void)
   WM_operatortype_append(OBJECT_OT_vertex_group_remove_from);
   WM_operatortype_append(OBJECT_OT_vertex_group_select);
   WM_operatortype_append(OBJECT_OT_vertex_group_deselect);
-  WM_operatortype_append(OBJECT_OT_vertex_group_copy_to_linked);
   WM_operatortype_append(OBJECT_OT_vertex_group_copy_to_selected);
   WM_operatortype_append(OBJECT_OT_vertex_group_copy);
   WM_operatortype_append(OBJECT_OT_vertex_group_normalize);
@@ -322,7 +330,7 @@ void ED_keymap_object(wmKeyConfig *keyconf)
   keymap = WM_keymap_ensure(keyconf, "Object Non-modal", 0, 0);
 
   /* Object Mode ---------------------------------------------------------------- */
-  /* Note: this keymap gets disabled in non-objectmode,  */
+  /* NOTE: this keymap gets disabled in non-objectmode. */
   keymap = WM_keymap_ensure(keyconf, "Object Mode", 0, 0);
   keymap->poll = object_mode_poll;
 }

@@ -27,6 +27,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -351,20 +352,15 @@ static bool get_show_adaptive_options(const bContext *C, Panel *panel)
     return false;
   }
 
-  /* Don't show adaptive options if regular subdivision used*/
+  /* Don't show adaptive options if regular subdivision used. */
   if (!RNA_boolean_get(ptr, "use_limit_surface")) {
     return false;
   }
 
   /* Don't show adaptive options if the cycles experimental feature set is disabled. */
   Scene *scene = CTX_data_scene(C);
-  PointerRNA scene_ptr;
-  RNA_id_pointer_create(&scene->id, &scene_ptr);
-  if (BKE_scene_uses_cycles(scene)) {
-    PointerRNA cycles_ptr = RNA_pointer_get(&scene_ptr, "cycles");
-    if (RNA_enum_get(&cycles_ptr, "feature_set") != 1) { /* EXPERIMENTAL */
-      return false;
-    }
+  if (!BKE_scene_uses_cycles_experimental_features(scene)) {
+    return false;
   }
 
   return true;
@@ -419,8 +415,12 @@ static void panel_draw(const bContext *C, Panel *panel)
     float preview = MAX2(RNA_float_get(&cycles_ptr, "preview_dicing_rate") *
                              RNA_float_get(&ob_cycles_ptr, "dicing_rate"),
                          0.1f);
-    char output[64];
-    snprintf(output, 64, "Final Scale: Render %.2f px, Viewport %.2f px", render, preview);
+    char output[256];
+    BLI_snprintf(output,
+                 sizeof(output),
+                 TIP_("Final Scale: Render %.2f px, Viewport %.2f px"),
+                 render,
+                 preview);
     uiItemL(layout, output, ICON_NONE);
 
     uiItemS(layout);
@@ -509,7 +509,6 @@ ModifierTypeInfo modifierType_Subsurf = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

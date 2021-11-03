@@ -78,6 +78,12 @@ static IDProperty *cycles_properties_from_ID(ID *id)
   return (idprop) ? IDP_GetPropertyTypeFromGroup(idprop, "cycles", IDP_GROUP) : NULL;
 }
 
+static IDProperty *cycles_visibility_properties_from_ID(ID *id)
+{
+  IDProperty *idprop = IDP_GetProperties(id, false);
+  return (idprop) ? IDP_GetPropertyTypeFromGroup(idprop, "cycles_visibility", IDP_GROUP) : NULL;
+}
+
 static IDProperty *cycles_properties_from_view_layer(ViewLayer *view_layer)
 {
   IDProperty *idprop = view_layer->id_properties;
@@ -182,7 +188,7 @@ static void displacement_principled_nodes(bNode *node)
   }
 }
 
-static bool node_has_roughness(bNode *node)
+static bool node_has_roughness(const bNode *node)
 {
   return ELEM(node->type,
               SH_NODE_BSDF_ANISOTROPIC,
@@ -1367,6 +1373,11 @@ void blo_do_versions_cycles(FileData *UNUSED(fd), Library *UNUSED(lib), Main *bm
 
 void do_versions_after_linking_cycles(Main *bmain)
 {
+  const int DENOISER_AUTO = 0;
+  const int DENOISER_NLM = 1;
+  const int DENOISER_OPTIX = 2;
+  const int DENOISER_OPENIMAGEDENOISE = 4;
+
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 66)) {
     /* Shader node tree changes. After lib linking so we have all the typeinfo
      * pointers and updated sockets and we can use the high level node API to
@@ -1572,10 +1583,6 @@ void do_versions_after_linking_cycles(Main *bmain)
       }
 
       if (cscene) {
-        const int DENOISER_AUTO = 0;
-        const int DENOISER_NLM = 1;
-        const int DENOISER_OPTIX = 2;
-
         /* Enable denoiser if it was enabled for one view layer before. */
         cycles_property_int_set(cscene, "denoiser", (use_optix) ? DENOISER_OPTIX : DENOISER_NLM);
         cycles_property_boolean_set(cscene, "use_denoising", use_denoising);
@@ -1596,6 +1603,50 @@ void do_versions_after_linking_cycles(Main *bmain)
           if (cview_layer) {
             cycles_property_boolean_set(cview_layer, "use_denoising", true);
           }
+        }
+      }
+    }
+  }
+
+  /* Move visibility from Cycles to Blender. */
+  if (!MAIN_VERSION_ATLEAST(bmain, 300, 17)) {
+    LISTBASE_FOREACH (Object *, object, &bmain->objects) {
+      IDProperty *cvisibility = cycles_visibility_properties_from_ID(&object->id);
+      int flag = 0;
+
+      if (cvisibility) {
+        flag |= cycles_property_boolean(cvisibility, "camera", true) ? 0 : OB_HIDE_CAMERA;
+        flag |= cycles_property_boolean(cvisibility, "diffuse", true) ? 0 : OB_HIDE_DIFFUSE;
+        flag |= cycles_property_boolean(cvisibility, "glossy", true) ? 0 : OB_HIDE_GLOSSY;
+        flag |= cycles_property_boolean(cvisibility, "transmission", true) ? 0 :
+                                                                             OB_HIDE_TRANSMISSION;
+        flag |= cycles_property_boolean(cvisibility, "scatter", true) ? 0 : OB_HIDE_VOLUME_SCATTER;
+        flag |= cycles_property_boolean(cvisibility, "shadow", true) ? 0 : OB_HIDE_SHADOW;
+      }
+
+      IDProperty *cobject = cycles_properties_from_ID(&object->id);
+      if (cobject) {
+        flag |= cycles_property_boolean(cobject, "is_holdout", false) ? OB_HOLDOUT : 0;
+        flag |= cycles_property_boolean(cobject, "is_shadow_catcher", false) ? OB_SHADOW_CATCHER :
+                                                                               0;
+      }
+
+      if (object->type == OB_LAMP) {
+        flag |= OB_HIDE_CAMERA | OB_SHADOW_CATCHER;
+      }
+
+      object->visibility_flag |= flag;
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 300, 25)) {
+    /* Removal of NLM denoiser. */
+    for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+      IDProperty *cscene = cycles_properties_from_ID(&scene->id);
+
+      if (cscene) {
+        if (cycles_property_int(cscene, "denoiser", DENOISER_NLM) == DENOISER_NLM) {
+          cycles_property_int_set(cscene, "denoiser", DENOISER_OPENIMAGEDENOISE);
         }
       }
     }

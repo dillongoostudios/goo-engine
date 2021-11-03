@@ -72,7 +72,7 @@ static void requiredDataMask(Object *UNUSED(ob),
                              CustomData_MeshMasks *r_cddata_masks)
 {
   /* ask for UV coordinates */
-  r_cddata_masks->lmask |= CD_MLOOPUV;
+  r_cddata_masks->lmask |= CD_MASK_MLOOPUV;
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
@@ -169,7 +169,7 @@ static Mesh *uvprojectModifier_do(UVProjectModifierData *umd,
         BKE_camera_params_init(&params);
         BKE_camera_params_from_object(&params, projectors[i].ob);
 
-        /* compute matrix, viewplane, .. */
+        /* Compute matrix, view-plane, etc. */
         BKE_camera_params_compute_viewplane(&params, 1, 1, aspx, aspy);
 
         /* scale the view-plane */
@@ -385,7 +385,6 @@ ModifierTypeInfo modifierType_UVProject = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

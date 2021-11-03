@@ -20,8 +20,6 @@
  * \ingroup draw
  */
 
-#include "GPU_glew.h"
-
 #include "BLI_listbase.h"
 #include "BLI_rect.h"
 #include "BLI_string.h"
@@ -44,7 +42,7 @@
 #define MAX_TIMER_NAME 32
 #define MAX_NESTED_TIMER 8
 #define CHUNK_SIZE 8
-#define GPU_TIMER_FALLOFF_DEFAULT 0.1
+#define GPU_TIMER_FALLOFF 0.1
 
 typedef struct DRWTimer {
   uint32_t query[2];
@@ -62,16 +60,15 @@ static struct DRWTimerPool {
   int end_increment;   /* Keep track of bad usage. */
   bool is_recording;   /* Are we in the render loop? */
   bool is_querying;    /* Keep track of bad usage. */
-  float timer_falloff; /* Adjustable average time falloff */
-} DTP = {NULL, .timer_falloff = GPU_TIMER_FALLOFF_DEFAULT};
+} DTP = {NULL};
 
 void DRW_stats_free(void)
 {
   if (DTP.timers != NULL) {
-    for (int i = 0; i < DTP.timer_count; i++) {
-    DRWTimer *timer = &DTP.timers[i];
-    glDeleteQueries(2, timer->query);
-    }
+    // for (int i = 0; i < DTP.timer_count; i++) {
+    // DRWTimer *timer = &DTP.timers[i];
+    // glDeleteQueries(2, timer->query);
+    // }
     MEM_freeN(DTP.timers);
     DTP.timers = NULL;
   }
@@ -121,12 +118,12 @@ static void drw_stats_timer_start_ex(const char *name, const bool is_query)
     BLI_assert(!DTP.is_querying);
     if (timer->is_query) {
       if (timer->query[0] == 0) {
-        glGenQueries(1, timer->query);
+        // glGenQueries(1, timer->query);
       }
 
-      glFinish();
+      // glFinish();
       /* Issue query for the next frame */
-      glBeginQuery(GL_TIME_ELAPSED, timer->query[0]);
+      // glBeginQuery(GL_TIME_ELAPSED, timer->query[0]);
       DTP.is_querying = true;
     }
   }
@@ -163,7 +160,7 @@ void DRW_stats_query_end(void)
   if (DTP.is_recording) {
     DTP.end_increment++;
     BLI_assert(DTP.is_querying);
-    glEndQuery(GL_TIME_ELAPSED);
+    // glEndQuery(GL_TIME_ELAPSED);
     DTP.is_querying = false;
   }
 }
@@ -188,14 +185,14 @@ void DRW_stats_reset(void)
       if (timer->is_query) {
         uint64_t time = 0;
         if (timer->query[0] != 0) {
-          glGetQueryObjectui64v(timer->query[0], GL_QUERY_RESULT, &time);
+          // glGetQueryObjectui64v(timer->query[0], GL_QUERY_RESULT, &time);
         }
         else {
           time = 1000000000; /* 1ms default */
         }
 
-        timer->time_average = timer->time_average * (1.0 - DTP.timer_falloff) +
-                              time * DTP.timer_falloff;
+        timer->time_average = timer->time_average * (1.0 - GPU_TIMER_FALLOFF) +
+                              time * GPU_TIMER_FALLOFF;
         timer->time_average = MIN2(timer->time_average, 1000000000);
       }
       else {
@@ -212,16 +209,16 @@ void DRW_stats_reset(void)
 
 static void draw_stat_5row(const rcti *rect, int u, int v, const char *txt, const int size)
 {
-  BLF_draw_default_ascii(rect->xmin + (1 + u * 5) * U.widget_unit,
-                         rect->ymax - (3 + v) * U.widget_unit,
-                         0.0f,
-                         txt,
-                         size);
+  BLF_draw_default(rect->xmin + (1 + u * 5) * U.widget_unit,
+                   rect->ymax - (3 + v) * U.widget_unit,
+                   0.0f,
+                   txt,
+                   size);
 }
 
 static void draw_stat(const rcti *rect, int u, int v, const char *txt, const int size)
 {
-  BLF_draw_default_ascii(
+  BLF_draw_default(
       rect->xmin + (1 + u) * U.widget_unit, rect->ymax - (3 + v) * U.widget_unit, 0.0f, txt, size);
 }
 
@@ -260,10 +257,8 @@ void DRW_stats_draw(const rcti *rect)
 
   /* Engines rows */
   char time_to_txt[16];
-  LISTBASE_FOREACH (LinkData *, link, &DST.enabled_engines) {
+  DRW_ENABLED_ENGINE_ITER (DST.view_data_active, engine, data) {
     u = 0;
-    DrawEngineType *engine = link->data;
-    ViewportEngineData *data = drw_viewport_engine_data_ensure(engine);
 
     draw_stat_5row(rect, u++, v, engine->idname, sizeof(engine->idname));
 
@@ -300,7 +295,7 @@ void DRW_stats_draw(const rcti *rect)
   v += 2;
 
   u = 0;
-  double *cache_time = GPU_viewport_cache_time_get(DST.viewport);
+  double *cache_time = DRW_view_data_cache_time_get(DST.view_data_active);
   sprintf(col_label, "Cache Time");
   draw_stat_5row(rect, u++, v, col_label, sizeof(col_label));
   sprintf(time_to_txt, "%.2fms", *cache_time);

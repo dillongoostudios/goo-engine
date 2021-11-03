@@ -57,8 +57,6 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   endif()
 endif()
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ${WINDOWS_USE_VISUAL_STUDIO_PROJECT_FOLDERS})
-
 if(NOT WITH_PYTHON_MODULE)
   set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT blender)
 endif()
@@ -119,7 +117,7 @@ string(APPEND CMAKE_MODULE_LINKER_FLAGS " /SAFESEH:NO /ignore:4099")
 list(APPEND PLATFORM_LINKLIBS
   ws2_32 vfw32 winmm kernel32 user32 gdi32 comdlg32 Comctl32 version
   advapi32 shfolder shell32 ole32 oleaut32 uuid psapi Dbghelp Shlwapi
-  pathcch
+  pathcch Shcore
 )
 
 if(WITH_INPUT_IME)
@@ -144,8 +142,8 @@ add_definitions(-D_ALLOW_KEYWORD_MACROS)
 # that both /GR and /GR- are specified.
 remove_cc_flag("/GR")
 
-# We want to support Windows 7 level ABI
-add_definitions(-D_WIN32_WINNT=0x601)
+# Make the Windows 8.1 API available for use.
+add_definitions(-D_WIN32_WINNT=0x603)
 include(build_files/cmake/platform/platform_win32_bundle_crt.cmake)
 remove_cc_flag("/MDd" "/MD" "/Zi")
 
@@ -153,8 +151,8 @@ if(MSVC_CLANG) # Clangs version of cl doesn't support all flags
   string(APPEND CMAKE_CXX_FLAGS " ${CXX_WARN_FLAGS} /nologo /J /Gd /EHsc -Wno-unused-command-line-argument -Wno-microsoft-enum-forward-reference ")
   set(CMAKE_C_FLAGS     "${CMAKE_C_FLAGS} /nologo /J /Gd -Wno-unused-command-line-argument -Wno-microsoft-enum-forward-reference")
 else()
-  string(APPEND CMAKE_CXX_FLAGS " /nologo /J /Gd /MP /EHsc /bigobj")
-  set(CMAKE_C_FLAGS     "${CMAKE_C_FLAGS} /nologo /J /Gd /MP /bigobj")
+  string(APPEND CMAKE_CXX_FLAGS " /nologo /J /Gd /MP /EHsc /bigobj /Zc:inline")
+  set(CMAKE_C_FLAGS     "${CMAKE_C_FLAGS} /nologo /J /Gd /MP /bigobj /Zc:inline")
 endif()
 
 # X64 ASAN is available and usable on MSVC 16.9 preview 4 and up)
@@ -217,8 +215,8 @@ else()
 endif()
 
 if(WITH_WINDOWS_PDB)
-	set(PDB_INFO_OVERRIDE_FLAGS "${SYMBOL_FORMAT_RELEASE}")
-	set(PDB_INFO_OVERRIDE_LINKER_FLAGS "/DEBUG /OPT:REF /OPT:ICF /INCREMENTAL:NO")
+  set(PDB_INFO_OVERRIDE_FLAGS "${SYMBOL_FORMAT_RELEASE}")
+  set(PDB_INFO_OVERRIDE_LINKER_FLAGS "/DEBUG /OPT:REF /OPT:ICF /INCREMENTAL:NO")
 endif()
 
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " /MDd ${SYMBOL_FORMAT}")
@@ -261,8 +259,10 @@ if(NOT DEFINED LIBDIR)
   else()
     message(FATAL_ERROR "32 bit compiler detected, blender no longer provides pre-build libraries for 32 bit windows, please set the LIBDIR cmake variable to your own library folder")
   endif()
-  # Can be 1910..1912
-  if(MSVC_VERSION GREATER 1919)
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.30.30423)
+    message(STATUS "Visual Studio 2022 detected.")
+    set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
+  elseif(MSVC_VERSION GREATER 1919)
     message(STATUS "Visual Studio 2019 detected.")
     set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
   elseif(MSVC_VERSION GREATER 1909)
@@ -548,7 +548,6 @@ if(WITH_OPENIMAGEIO)
   set(OPENIMAGEIO_LIBRARIES ${OIIO_OPTIMIZED} ${OIIO_DEBUG})
 
   set(OPENIMAGEIO_DEFINITIONS "-DUSE_TBB=0")
-  set(OPENCOLORIO_DEFINITIONS "-DDOpenColorIO_SKIP_IMPORTS")
   set(OPENIMAGEIO_IDIFF "${OPENIMAGEIO}/bin/idiff.exe")
   add_definitions(-DOIIO_STATIC_DEFINE)
   add_definitions(-DOIIO_NO_SSE=1)
@@ -594,7 +593,7 @@ if(WITH_OPENCOLORIO)
     debug ${OPENCOLORIO_LIBPATH}/libexpatdMD.lib
     debug ${OPENCOLORIO_LIBPATH}/pystring_d.lib
   )
-  set(OPENCOLORIO_DEFINITIONS)
+  set(OPENCOLORIO_DEFINITIONS "-DOpenColorIO_SKIP_IMPORTS")
 endif()
 
 if(WITH_OPENVDB)
@@ -675,10 +674,11 @@ if(WITH_SYSTEM_AUDASPACE)
 endif()
 
 if(WITH_TBB)
-  set(TBB_LIBRARIES optimized ${LIBDIR}/tbb/lib/tbb.lib debug ${LIBDIR}/tbb/lib/debug/tbb_debug.lib)
+  set(TBB_LIBRARIES optimized ${LIBDIR}/tbb/lib/tbb.lib debug ${LIBDIR}/tbb/lib/tbb_debug.lib)
   set(TBB_INCLUDE_DIR ${LIBDIR}/tbb/include)
   set(TBB_INCLUDE_DIRS ${TBB_INCLUDE_DIR})
   if(WITH_TBB_MALLOC_PROXY)
+    set(TBB_MALLOC_LIBRARIES optimized ${LIBDIR}/tbb/lib/tbbmalloc.lib debug ${LIBDIR}/tbb/lib/tbbmalloc_debug.lib)
     add_definitions(-DWITH_TBB_MALLOC)
   endif()
 endif()
@@ -873,3 +873,6 @@ if(WITH_HARU)
     set(WITH_HARU OFF)
   endif()
 endif()
+
+set(ZSTD_INCLUDE_DIRS ${LIBDIR}/zstd/include)
+set(ZSTD_LIBRARIES ${LIBDIR}/zstd/lib/zstd_static.lib)

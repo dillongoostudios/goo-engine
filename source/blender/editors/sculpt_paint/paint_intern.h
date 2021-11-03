@@ -87,7 +87,7 @@ struct ViewContext *paint_stroke_view_context(struct PaintStroke *stroke);
 void *paint_stroke_mode_data(struct PaintStroke *stroke);
 float paint_stroke_distance_get(struct PaintStroke *stroke);
 void paint_stroke_set_mode_data(struct PaintStroke *stroke, void *mode_data);
-bool paint_poll(struct bContext *C);
+bool PAINT_brush_tool_poll(struct bContext *C);
 void paint_cursor_start(struct Paint *p, bool (*poll)(struct bContext *C));
 void paint_cursor_delete_textures(void);
 
@@ -304,7 +304,7 @@ bool paint_curve_poll(struct bContext *C);
 
 bool facemask_paint_poll(struct bContext *C);
 void flip_v3_v3(float out[3], const float in[3], const enum ePaintSymmetryFlags symm);
-void flip_qt_qt(float out[3], const float in[3], const enum ePaintSymmetryFlags symm);
+void flip_qt_qt(float out[4], const float in[4], const enum ePaintSymmetryFlags symm);
 
 /* stroke operator */
 typedef enum BrushStrokeMode {

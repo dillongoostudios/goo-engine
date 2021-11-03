@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_texture_types.h"
 
 namespace blender::compositor {
@@ -27,18 +27,18 @@ namespace blender::compositor {
  * this program converts an input color to an output value.
  * it assumes we are in sRGB color space.
  */
-class MapRangeOperation : public NodeOperation {
+class MapRangeOperation : public MultiThreadedOperation {
  private:
   /**
-   * Cached reference to the inputProgram
+   * Cached reference to the input_program
    */
-  SocketReader *m_inputOperation;
-  SocketReader *m_sourceMinOperation;
-  SocketReader *m_sourceMaxOperation;
-  SocketReader *m_destMinOperation;
-  SocketReader *m_destMaxOperation;
+  SocketReader *input_operation_;
+  SocketReader *source_min_operation_;
+  SocketReader *source_max_operation_;
+  SocketReader *dest_min_operation_;
+  SocketReader *dest_max_operation_;
 
-  bool m_useClamp;
+  bool use_clamp_;
 
  public:
   /**
@@ -49,25 +49,29 @@ class MapRangeOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
   /**
    * Clamp the output
    */
-  void setUseClamp(bool value)
+  void set_use_clamp(bool value)
   {
-    this->m_useClamp = value;
+    use_clamp_ = value;
   }
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

@@ -293,7 +293,7 @@ void createTransMaskingData(bContext *C, TransInfo *t)
   for (masklay = mask->masklayers.first; masklay; masklay = masklay->next) {
     MaskSpline *spline;
 
-    if (masklay->restrictflag & (MASK_RESTRICT_VIEW | MASK_RESTRICT_SELECT)) {
+    if (masklay->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 
@@ -330,7 +330,7 @@ void createTransMaskingData(bContext *C, TransInfo *t)
     }
   }
 
-  /* note: in prop mode we need at least 1 selected */
+  /* NOTE: in prop mode we need at least 1 selected. */
   if (countsel == 0) {
     return;
   }
@@ -351,7 +351,7 @@ void createTransMaskingData(bContext *C, TransInfo *t)
   for (masklay = mask->masklayers.first; masklay; masklay = masklay->next) {
     MaskSpline *spline;
 
-    if (masklay->restrictflag & (MASK_RESTRICT_VIEW | MASK_RESTRICT_SELECT)) {
+    if (masklay->visibility_flag & (MASK_HIDE_VIEW | MASK_HIDE_SELECT)) {
       continue;
     }
 

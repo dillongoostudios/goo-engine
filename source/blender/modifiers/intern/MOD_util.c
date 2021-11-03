@@ -71,7 +71,7 @@ void MOD_init_texture(MappingInfoModifierData *dmd, const ModifierEvalContext *c
   }
 }
 
-/* TODO to be renamed to get_texture_coords once we are done with moving modifiers to Mesh. */
+/* TODO: to be renamed to get_texture_coords once we are done with moving modifiers to Mesh. */
 /** \param cos: may be NULL, in which case we use directly mesh vertices' coordinates. */
 void MOD_get_texture_coords(MappingInfoModifierData *dmd,
                             const ModifierEvalContext *UNUSED(ctx),
@@ -216,7 +216,6 @@ Mesh *MOD_deform_mesh_eval_get(Object *ob,
      * we really need vertexCos here. */
     else if (vertexCos) {
       BKE_mesh_vert_coords_apply(mesh, vertexCos);
-      mesh->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
     }
 
     if (use_orco) {
@@ -254,15 +253,22 @@ Mesh *MOD_deform_mesh_eval_get(Object *ob,
 void MOD_get_vgroup(
     Object *ob, struct Mesh *mesh, const char *name, MDeformVert **dvert, int *defgrp_index)
 {
-  *defgrp_index = BKE_object_defgroup_name_index(ob, name);
-  *dvert = NULL;
-
-  if (*defgrp_index != -1) {
-    if (ob->type == OB_LATTICE) {
+  if (mesh) {
+    *defgrp_index = BKE_id_defgroup_name_index(&mesh->id, name);
+    if (*defgrp_index != -1) {
+      *dvert = mesh->dvert;
+    }
+    else {
+      *dvert = NULL;
+    }
+  }
+  else {
+    *defgrp_index = BKE_object_defgroup_name_index(ob, name);
+    if (*defgrp_index != -1 && ob->type == OB_LATTICE) {
       *dvert = BKE_lattice_deform_verts_get(ob);
     }
-    else if (mesh) {
-      *dvert = mesh->dvert;
+    else {
+      *dvert = NULL;
     }
   }
 }

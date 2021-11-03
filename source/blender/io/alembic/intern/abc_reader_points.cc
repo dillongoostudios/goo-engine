@@ -82,7 +82,7 @@ bool AbcPointsReader::accepts_object_type(
 void AbcPointsReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelector &sample_sel)
 {
   Mesh *mesh = BKE_mesh_add(bmain, m_data_name.c_str());
-  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, 0, nullptr);
+  Mesh *read_mesh = this->read_mesh(mesh, sample_sel, 0, "", 0.0f, nullptr);
 
   if (read_mesh != mesh) {
     BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_MESH, true);
@@ -95,7 +95,7 @@ void AbcPointsReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSel
   m_object = BKE_object_add_only_object(bmain, OB_MESH, m_object_name.c_str());
   m_object->data = mesh;
 
-  if (has_animations(m_schema, m_settings)) {
+  if (m_settings->always_add_cache_reader || has_animations(m_schema, m_settings)) {
     addCacheModifier();
   }
 }
@@ -127,6 +127,8 @@ void read_points_sample(const IPointsSchema &schema,
 struct Mesh *AbcPointsReader::read_mesh(struct Mesh *existing_mesh,
                                         const ISampleSelector &sample_sel,
                                         int read_flag,
+                                        const char * /*velocity_name*/,
+                                        const float /*velocity_scale*/,
                                         const char **err_str)
 {
   IPointsSchema::Sample sample;

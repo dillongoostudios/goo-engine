@@ -23,8 +23,10 @@
 
 #include <stdlib.h>
 
+#include "MEM_guardedalloc.h"
+
+#include "BLI_blenlib.h"
 #include "BLI_math.h"
-#include "BLI_string.h"
 
 #include "BKE_context.h"
 #include "BKE_unit.h"
@@ -37,6 +39,10 @@
 #include "UI_interface.h"
 #include "UI_view2d.h"
 
+#include "SEQ_iterator.h"
+#include "SEQ_sequencer.h"
+#include "SEQ_time.h"
+
 #include "BLT_translation.h"
 
 #include "transform.h"
@@ -47,18 +53,6 @@
 /* -------------------------------------------------------------------- */
 /** \name Transform (Sequencer Slide)
  * \{ */
-
-static eRedrawFlag seq_slide_handleEvent(struct TransInfo *t, const wmEvent *event)
-{
-  BLI_assert(t->mode == TFM_SEQ_SLIDE);
-  const wmKeyMapItem *kmi = t->custom.mode.data;
-  if (kmi && event->type == kmi->type && event->val == kmi->val) {
-    /* Allows the "Expand to Fit" effect to be enabled as a toggle. */
-    t->flag ^= T_ALT_TRANSFORM;
-    return TREDRAW_HARD;
-  }
-  return TREDRAW_NOTHING;
-}
 
 static void headerSeqSlide(TransInfo *t, const float val[2], char str[UI_MAX_DRAW_STR])
 {
@@ -72,18 +66,8 @@ static void headerSeqSlide(TransInfo *t, const float val[2], char str[UI_MAX_DRA
     BLI_snprintf(&tvec[0], NUM_STR_REP_LEN, "%.0f, %.0f", val[0], val[1]);
   }
 
-  ofs += BLI_snprintf(
-      str + ofs, UI_MAX_DRAW_STR - ofs, TIP_("Sequence Slide: %s%s, ("), &tvec[0], t->con.text);
-
-  const wmKeyMapItem *kmi = t->custom.mode.data;
-  if (kmi) {
-    ofs += WM_keymap_item_to_string(kmi, false, str + ofs, UI_MAX_DRAW_STR - ofs);
-  }
-
-  ofs += BLI_snprintf(str + ofs,
-                      UI_MAX_DRAW_STR - ofs,
-                      TIP_(" or Alt) Expand to fit %s"),
-                      WM_bool_as_string((t->flag & T_ALT_TRANSFORM) != 0));
+  ofs += BLI_snprintf_rlen(
+      str + ofs, UI_MAX_DRAW_STR - ofs, TIP_("Sequence Slide: %s%s"), &tvec[0], t->con.text);
 }
 
 static void applySeqSlideValue(TransInfo *t, const float val[2])
@@ -102,13 +86,11 @@ static void applySeqSlideValue(TransInfo *t, const float val[2])
   }
 }
 
-static void applySeqSlide(TransInfo *t, const int mval[2])
+static void applySeqSlide(TransInfo *t, const int UNUSED(mval[2]))
 {
   char str[UI_MAX_DRAW_STR];
   float values_final[3] = {0.0f};
 
-  snapSequenceBounds(t, mval);
-  transform_convert_sequencer_channel_clamp(t);
   if (applyNumInput(&t->num, values_final)) {
     if (t->con.mode & CON_APPLY) {
       if (t->con.mode & CON_AXIS0) {
@@ -119,11 +101,14 @@ static void applySeqSlide(TransInfo *t, const int mval[2])
       }
     }
   }
-  else if (t->con.mode & CON_APPLY) {
-    t->con.applyVec(t, NULL, NULL, t->values, values_final);
-  }
   else {
     copy_v2_v2(values_final, t->values);
+    applySnapping(t, values_final);
+    transform_convert_sequencer_channel_clamp(t, values_final);
+
+    if (t->con.mode & CON_APPLY) {
+      t->con.applyVec(t, NULL, NULL, values_final, values_final);
+    }
   }
 
   values_final[0] = floorf(values_final[0] + 0.5f);
@@ -141,7 +126,7 @@ static void applySeqSlide(TransInfo *t, const int mval[2])
 void initSeqSlide(TransInfo *t)
 {
   t->transform = applySeqSlide;
-  t->handleEvent = seq_slide_handleEvent;
+  t->tsnap.applySnap = transform_snap_sequencer_apply_translate;
 
   initMouseInputMode(t, &t->mouse, INPUT_VECTOR);
 
@@ -164,4 +149,5 @@ void initSeqSlide(TransInfo *t)
     t->custom.mode.data = (void *)WM_modalkeymap_find_propvalue(t->keymap, TFM_MODAL_TRANSLATE);
   }
 }
+
 /** \} */

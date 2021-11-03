@@ -278,7 +278,7 @@ void SCULPT_flip_v3_by_symm_area(float v[3],
                                  const ePaintSymmetryFlags symm,
                                  const ePaintSymmetryAreas symmarea,
                                  const float pivot[3]);
-void SCULPT_flip_quat_by_symm_area(float quat[3],
+void SCULPT_flip_quat_by_symm_area(float quat[4],
                                    const ePaintSymmetryFlags symm,
                                    const ePaintSymmetryAreas symmarea,
                                    const float pivot[3]);
@@ -623,7 +623,7 @@ typedef struct SculptUndoNode {
 
   SculptUndoType type;
 
-  char idname[MAX_ID_NAME]; /* name instead of pointer*/
+  char idname[MAX_ID_NAME]; /* Name instead of pointer. */
   void *node;               /* only during push, not valid afterwards! */
 
   float (*co)[3];
@@ -704,7 +704,7 @@ typedef struct SculptThreadedTaskData {
 
   /* Data specific to some callbacks. */
 
-  /* Note: even if only one or two of those are used at a time,
+  /* NOTE: even if only one or two of those are used at a time,
    *       keeping them separated, names help figuring out
    *       what it is, and memory overhead is ridiculous anyway. */
   float flippedbstrength;
@@ -977,7 +977,7 @@ typedef struct StrokeCache {
   /* Symmetry index between 0 and 7 bit combo 0 is Brush only;
    * 1 is X mirror; 2 is Y mirror; 3 is XY; 4 is Z; 5 is XZ; 6 is YZ; 7 is XYZ */
   int symmetry;
-  int mirror_symmetry_pass; /* the symmetry pass we are currently on between 0 and 7*/
+  int mirror_symmetry_pass; /* The symmetry pass we are currently on between 0 and 7. */
   float true_view_normal[3];
   float view_normal[3];
 

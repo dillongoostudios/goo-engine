@@ -92,13 +92,19 @@ class DNode {
   operator bool() const;
 
   uint64_t hash() const;
+
+  DInputSocket input(int index) const;
+  DOutputSocket output(int index) const;
+
+  DInputSocket input_by_identifier(StringRef identifier) const;
+  DOutputSocket output_by_identifier(StringRef identifier) const;
 };
 
 /* A (nullable) reference to a socket and the context it is in. It is unique within an entire
  * nested node group hierarchy. This type is small and can be passed around by value.
  *
  * A #DSocket can represent an input or an output socket. If the type of a socket is known at
- * compile time is is preferable to use #DInputSocket or #DOutputSocket instead. */
+ * compile time is preferable to use #DInputSocket or #DOutputSocket instead. */
 class DSocket {
  protected:
   const DTreeContext *context_ = nullptr;
@@ -152,8 +158,19 @@ class DOutputSocket : public DSocket {
   DInputSocket get_corresponding_group_node_input() const;
   DInputSocket get_active_corresponding_group_output_socket() const;
 
-  void foreach_target_socket(FunctionRef<void(DInputSocket)> target_fn,
-                             FunctionRef<void(DSocket)> skipped_fn) const;
+  struct TargetSocketPathInfo {
+    /** All sockets on the path from the current to the final target sockets, excluding `this`. */
+    Vector<DSocket, 16> sockets;
+  };
+
+  using ForeachTargetSocketFn =
+      FunctionRef<void(DInputSocket, const TargetSocketPathInfo &path_info)>;
+
+  void foreach_target_socket(ForeachTargetSocketFn target_fn) const;
+
+ private:
+  void foreach_target_socket(ForeachTargetSocketFn target_fn,
+                             TargetSocketPathInfo &path_info) const;
 };
 
 class DerivedNodeTree {
@@ -170,6 +187,7 @@ class DerivedNodeTree {
   Span<const NodeTreeRef *> used_node_tree_refs() const;
 
   bool has_link_cycles() const;
+  bool has_undefined_nodes_or_sockets() const;
   void foreach_node(FunctionRef<void(DNode)> callback) const;
 
   std::string to_dot() const;
@@ -195,9 +213,9 @@ using nodes::DSocket;
 using nodes::DTreeContext;
 }  // namespace derived_node_tree_types
 
-/* --------------------------------------------------------------------
- * DTreeContext inline methods.
- */
+/* -------------------------------------------------------------------- */
+/** \name #DTreeContext Inline Methods
+ * \{ */
 
 inline const NodeTreeRef &DTreeContext::tree() const
 {
@@ -228,10 +246,11 @@ inline bool DTreeContext::is_root() const
 {
   return parent_context_ == nullptr;
 }
+/** \} */
 
-/* --------------------------------------------------------------------
- * DNode inline methods.
- */
+/* -------------------------------------------------------------------- */
+/** \name #DNode Inline Methods
+ * \{ */
 
 inline DNode::DNode(const DTreeContext *context, const NodeRef *node_ref)
     : context_(context), node_ref_(node_ref)
@@ -274,9 +293,30 @@ inline uint64_t DNode::hash() const
   return get_default_hash_2(context_, node_ref_);
 }
 
-/* --------------------------------------------------------------------
- * DSocket inline methods.
- */
+inline DInputSocket DNode::input(int index) const
+{
+  return {context_, &node_ref_->input(index)};
+}
+
+inline DOutputSocket DNode::output(int index) const
+{
+  return {context_, &node_ref_->output(index)};
+}
+
+inline DInputSocket DNode::input_by_identifier(StringRef identifier) const
+{
+  return {context_, &node_ref_->input_by_identifier(identifier)};
+}
+
+inline DOutputSocket DNode::output_by_identifier(StringRef identifier) const
+{
+  return {context_, &node_ref_->output_by_identifier(identifier)};
+}
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #DSocket Inline Methods
+ * \{ */
 
 inline DSocket::DSocket(const DTreeContext *context, const SocketRef *socket_ref)
     : context_(context), socket_ref_(socket_ref)
@@ -334,10 +374,11 @@ inline DNode DSocket::node() const
   BLI_assert(socket_ref_ != nullptr);
   return {context_, &socket_ref_->node()};
 }
+/** \} */
 
-/* --------------------------------------------------------------------
- * DInputSocket inline methods.
- */
+/* -------------------------------------------------------------------- */
+/** \name #DInputSocket Inline Methods
+ * \{ */
 
 inline DInputSocket::DInputSocket(const DTreeContext *context, const InputSocketRef *socket_ref)
     : DSocket(context, socket_ref)
@@ -358,10 +399,11 @@ inline const InputSocketRef *DInputSocket::operator->() const
 {
   return (const InputSocketRef *)socket_ref_;
 }
+/** \} */
 
-/* --------------------------------------------------------------------
- * DOutputSocket inline methods.
- */
+/* -------------------------------------------------------------------- */
+/** \name #DOutputSocket Inline Methods
+ * \{ */
 
 inline DOutputSocket::DOutputSocket(const DTreeContext *context, const OutputSocketRef *socket_ref)
     : DSocket(context, socket_ref)
@@ -382,10 +424,11 @@ inline const OutputSocketRef *DOutputSocket::operator->() const
 {
   return (const OutputSocketRef *)socket_ref_;
 }
+/** \} */
 
-/* --------------------------------------------------------------------
- * DerivedNodeTree inline methods.
- */
+/* -------------------------------------------------------------------- */
+/** \name #DerivedNodeTree Inline Methods
+ * \{ */
 
 inline const DTreeContext &DerivedNodeTree::root_context() const
 {
@@ -396,5 +439,7 @@ inline Span<const NodeTreeRef *> DerivedNodeTree::used_node_tree_refs() const
 {
   return used_node_tree_refs_;
 }
+
+/** \} */
 
 }  // namespace blender::nodes

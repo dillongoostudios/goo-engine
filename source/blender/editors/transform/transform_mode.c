@@ -68,14 +68,14 @@ int transform_mode_really_used(bContext *C, int mode)
   return mode;
 }
 
-bool transdata_check_local_center(TransInfo *t, short around)
+bool transdata_check_local_center(const TransInfo *t, short around)
 {
   return ((around == V3D_AROUND_LOCAL_ORIGINS) &&
           ((t->options & (CTX_OBJECT | CTX_POSE_BONE)) ||
            /* implicit: (t->flag & T_EDIT) */
            (ELEM(t->obedit_type, OB_MESH, OB_CURVE, OB_MBALL, OB_ARMATURE, OB_GPENCIL)) ||
            (t->spacetype == SPACE_GRAPH) ||
-           (t->options & (CTX_MOVIECLIP | CTX_MASK | CTX_PAINT_CURVE))));
+           (t->options & (CTX_MOVIECLIP | CTX_MASK | CTX_PAINT_CURVE | CTX_SEQUENCER_IMAGE))));
 }
 
 /* Informs if the mode can be switched during modal. */
@@ -248,7 +248,7 @@ void protectedSizeBits(short protectflag, float size[3])
 /** \name Transform Limits
  * \{ */
 
-void constraintTransLim(TransInfo *t, TransData *td)
+void constraintTransLim(const TransInfo *t, TransData *td)
 {
   if (td->con) {
     const bConstraintTypeInfo *ctiLoc = BKE_constraint_typeinfo_from_type(
@@ -359,7 +359,7 @@ static void constraintob_from_transdata(bConstraintOb *cob, TransData *td)
   }
 }
 
-static void constraintRotLim(TransInfo *UNUSED(t), TransData *td)
+static void constraintRotLim(const TransInfo *UNUSED(t), TransData *td)
 {
   if (td->con) {
     const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_from_type(CONSTRAINT_TYPE_ROTLIMIT);
@@ -432,7 +432,7 @@ static void constraintRotLim(TransInfo *UNUSED(t), TransData *td)
   }
 }
 
-void constraintSizeLim(TransInfo *t, TransData *td)
+void constraintSizeLim(const TransInfo *t, TransData *td)
 {
   if (td->con && td->ext) {
     const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_from_type(CONSTRAINT_TYPE_SIZELIMIT);
@@ -524,7 +524,7 @@ void constraintSizeLim(TransInfo *t, TransData *td)
 /** \name Transform (Rotation Utils)
  * \{ */
 /* Used by Transform Rotation and Transform Normal Rotation */
-void headerRotation(TransInfo *t, char str[UI_MAX_DRAW_STR], float final)
+void headerRotation(TransInfo *t, char *str, const int str_size, float final)
 {
   size_t ofs = 0;
 
@@ -533,25 +533,21 @@ void headerRotation(TransInfo *t, char str[UI_MAX_DRAW_STR], float final)
 
     outputNumInput(&(t->num), c, &t->scene->unit);
 
-    ofs += BLI_snprintf(str + ofs,
-                        UI_MAX_DRAW_STR - ofs,
-                        TIP_("Rotation: %s %s %s"),
-                        &c[0],
-                        t->con.text,
-                        t->proptext);
+    ofs += BLI_snprintf_rlen(
+        str + ofs, str_size - ofs, TIP_("Rotation: %s %s %s"), &c[0], t->con.text, t->proptext);
   }
   else {
-    ofs += BLI_snprintf(str + ofs,
-                        UI_MAX_DRAW_STR - ofs,
-                        TIP_("Rotation: %.2f%s %s"),
-                        RAD2DEGF(final),
-                        t->con.text,
-                        t->proptext);
+    ofs += BLI_snprintf_rlen(str + ofs,
+                             str_size - ofs,
+                             TIP_("Rotation: %.2f%s %s"),
+                             RAD2DEGF(final),
+                             t->con.text,
+                             t->proptext);
   }
 
   if (t->flag & T_PROP_EDIT_ALL) {
-    ofs += BLI_snprintf(
-        str + ofs, UI_MAX_DRAW_STR - ofs, TIP_(" Proportional size: %.2f"), t->prop_size);
+    ofs += BLI_snprintf_rlen(
+        str + ofs, str_size - ofs, TIP_(" Proportional size: %.2f"), t->prop_size);
   }
 }
 
@@ -561,8 +557,8 @@ void headerRotation(TransInfo *t, char str[UI_MAX_DRAW_STR], float final)
  *
  * Protected axis and other transform settings are taken into account.
  */
-void ElementRotation_ex(TransInfo *t,
-                        TransDataContainer *tc,
+void ElementRotation_ex(const TransInfo *t,
+                        const TransDataContainer *tc,
                         TransData *td,
                         const float mat[3][3],
                         const float *center)
@@ -738,9 +734,25 @@ void ElementRotation_ex(TransInfo *t,
         /* can be called for texture space translate for example, then opt out */
         if (td->ext->quat) {
           mul_m3_series(fmat, td->smtx, mat, td->mtx);
+
+          if (!is_zero_v3(td->ext->dquat)) {
+            /* Correct for delta quat */
+            float tmp_mat[3][3];
+            quat_to_mat3(tmp_mat, td->ext->dquat);
+            mul_m3_m3m3(fmat, fmat, tmp_mat);
+          }
+
           mat3_to_quat(quat, fmat); /* Actual transform */
 
+          if (!is_zero_v4(td->ext->dquat)) {
+            /* Correct back for delta quat. */
+            float idquat[4];
+            invert_qt_qt_normalized(idquat, td->ext->dquat);
+            mul_qt_qtqt(quat, idquat, quat);
+          }
+
           mul_qt_qtqt(td->ext->quat, quat, td->ext->iquat);
+
           /* this function works on end result */
           protectedQuaternionBits(td->protectflag, td->ext->quat, td->ext->iquat);
         }
@@ -765,21 +777,28 @@ void ElementRotation_ex(TransInfo *t,
                                td->ext->irotAngle);
       }
       else {
+        /* Calculate the total rotation in eulers. */
         float obmat[3][3];
 
         mul_m3_m3m3(totmat, mat, td->mtx);
         mul_m3_m3m3(smat, td->smtx, totmat);
 
-        /* Calculate the total rotation in eulers. */
-        add_v3_v3v3(eul, td->ext->irot, td->ext->drot); /* correct for delta rot */
-        eulO_to_mat3(obmat, eul, td->ext->rotOrder);
-        /* mat = transform, obmat = object rotation */
-        mul_m3_m3m3(fmat, smat, obmat);
+        if (!is_zero_v3(td->ext->drot)) {
+          /* Correct for delta rot */
+          add_eul_euleul(eul, td->ext->irot, td->ext->drot, td->ext->rotOrder);
+        }
+        else {
+          copy_v3_v3(eul, td->ext->irot);
+        }
 
+        eulO_to_mat3(obmat, eul, td->ext->rotOrder);
+        mul_m3_m3m3(fmat, smat, obmat);
         mat3_to_compatible_eulO(eul, td->ext->rot, td->ext->rotOrder, fmat);
 
-        /* correct back for delta rot */
-        sub_v3_v3v3(eul, eul, td->ext->drot);
+        if (!is_zero_v3(td->ext->drot)) {
+          /* Correct back for delta rot. */
+          sub_eul_euleul(eul, eul, td->ext->drot, td->ext->rotOrder);
+        }
 
         /* and apply */
         protectedRotateBits(td->protectflag, eul, td->ext->irot);
@@ -791,8 +810,11 @@ void ElementRotation_ex(TransInfo *t,
   }
 }
 
-void ElementRotation(
-    TransInfo *t, TransDataContainer *tc, TransData *td, float mat[3][3], const short around)
+void ElementRotation(const TransInfo *t,
+                     const TransDataContainer *tc,
+                     TransData *td,
+                     const float mat[3][3],
+                     const short around)
 {
   const float *center;
 
@@ -811,7 +833,7 @@ void ElementRotation(
 /* -------------------------------------------------------------------- */
 /** \name Transform (Resize Utils)
  * \{ */
-void headerResize(TransInfo *t, const float vec[3], char str[UI_MAX_DRAW_STR])
+void headerResize(TransInfo *t, const float vec[3], char *str, const int str_size)
 {
   char tvec[NUM_STR_REP_LEN * 3];
   size_t ofs = 0;
@@ -827,59 +849,55 @@ void headerResize(TransInfo *t, const float vec[3], char str[UI_MAX_DRAW_STR])
   if (t->con.mode & CON_APPLY) {
     switch (t->num.idx_max) {
       case 0:
-        ofs += BLI_snprintf(str + ofs,
-                            UI_MAX_DRAW_STR - ofs,
-                            TIP_("Scale: %s%s %s"),
-                            &tvec[0],
-                            t->con.text,
-                            t->proptext);
+        ofs += BLI_snprintf_rlen(
+            str + ofs, str_size - ofs, TIP_("Scale: %s%s %s"), &tvec[0], t->con.text, t->proptext);
         break;
       case 1:
-        ofs += BLI_snprintf(str + ofs,
-                            UI_MAX_DRAW_STR - ofs,
-                            TIP_("Scale: %s : %s%s %s"),
-                            &tvec[0],
-                            &tvec[NUM_STR_REP_LEN],
-                            t->con.text,
-                            t->proptext);
+        ofs += BLI_snprintf_rlen(str + ofs,
+                                 str_size - ofs,
+                                 TIP_("Scale: %s : %s%s %s"),
+                                 &tvec[0],
+                                 &tvec[NUM_STR_REP_LEN],
+                                 t->con.text,
+                                 t->proptext);
         break;
       case 2:
-        ofs += BLI_snprintf(str + ofs,
-                            UI_MAX_DRAW_STR - ofs,
-                            TIP_("Scale: %s : %s : %s%s %s"),
-                            &tvec[0],
-                            &tvec[NUM_STR_REP_LEN],
-                            &tvec[NUM_STR_REP_LEN * 2],
-                            t->con.text,
-                            t->proptext);
+        ofs += BLI_snprintf_rlen(str + ofs,
+                                 str_size - ofs,
+                                 TIP_("Scale: %s : %s : %s%s %s"),
+                                 &tvec[0],
+                                 &tvec[NUM_STR_REP_LEN],
+                                 &tvec[NUM_STR_REP_LEN * 2],
+                                 t->con.text,
+                                 t->proptext);
         break;
     }
   }
   else {
     if (t->flag & T_2D_EDIT) {
-      ofs += BLI_snprintf(str + ofs,
-                          UI_MAX_DRAW_STR - ofs,
-                          TIP_("Scale X: %s   Y: %s%s %s"),
-                          &tvec[0],
-                          &tvec[NUM_STR_REP_LEN],
-                          t->con.text,
-                          t->proptext);
+      ofs += BLI_snprintf_rlen(str + ofs,
+                               str_size - ofs,
+                               TIP_("Scale X: %s   Y: %s%s %s"),
+                               &tvec[0],
+                               &tvec[NUM_STR_REP_LEN],
+                               t->con.text,
+                               t->proptext);
     }
     else {
-      ofs += BLI_snprintf(str + ofs,
-                          UI_MAX_DRAW_STR - ofs,
-                          TIP_("Scale X: %s   Y: %s  Z: %s%s %s"),
-                          &tvec[0],
-                          &tvec[NUM_STR_REP_LEN],
-                          &tvec[NUM_STR_REP_LEN * 2],
-                          t->con.text,
-                          t->proptext);
+      ofs += BLI_snprintf_rlen(str + ofs,
+                               str_size - ofs,
+                               TIP_("Scale X: %s   Y: %s  Z: %s%s %s"),
+                               &tvec[0],
+                               &tvec[NUM_STR_REP_LEN],
+                               &tvec[NUM_STR_REP_LEN * 2],
+                               t->con.text,
+                               t->proptext);
     }
   }
 
   if (t->flag & T_PROP_EDIT_ALL) {
-    ofs += BLI_snprintf(
-        str + ofs, UI_MAX_DRAW_STR - ofs, TIP_(" Proportional size: %.2f"), t->prop_size);
+    ofs += BLI_snprintf_rlen(
+        str + ofs, str_size - ofs, TIP_(" Proportional size: %.2f"), t->prop_size);
   }
 }
 
@@ -906,7 +924,10 @@ static void TransMat3ToSize(const float mat[3][3], const float smat[3][3], float
   }
 }
 
-void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, float mat[3][3])
+void ElementResize(const TransInfo *t,
+                   const TransDataContainer *tc,
+                   TransData *td,
+                   const float mat[3][3])
 {
   float tmat[3][3], smat[3][3], center[3];
   float vec[3];
@@ -947,9 +968,9 @@ void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, float ma
       float obsizemat[3][3];
       /* Reorient the size mat to fit the oriented object. */
       mul_m3_m3m3(obsizemat, tmat, td->axismtx);
-      /* print_m3("obsizemat", obsizemat); */
+      // print_m3("obsizemat", obsizemat);
       TransMat3ToSize(obsizemat, td->axismtx, fsize);
-      /* print_v3("fsize", fsize); */
+      // print_v3("fsize", fsize);
     }
     else {
       mat3_to_size(fsize, tmat);
@@ -999,17 +1020,31 @@ void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, float ma
     sub_v3_v3(vec, td->center);
   }
 
-  /* grease pencil falloff */
+  /* Grease pencil falloff.
+   *
+   * FIXME: This is bad on multiple levels!
+   *
+   * - #applyNumInput is not intended to be run for every element,
+   *   this writes back into the number input in a way that doesn't make sense to run many times.
+   *
+   * - Writing into #TransInfo should be avoided since it means order of operations
+   *   may impact the result and isn't thread-safe.
+   *
+   *   Operating on copies as a temporary solution.
+   */
   if (t->options & CTX_GPENCIL_STROKES) {
     bGPDstroke *gps = (bGPDstroke *)td->extra;
     mul_v3_fl(vec, td->factor * gps->runtime.multi_frame_falloff);
 
-    /* scale stroke thickness */
+    /* Scale stroke thickness. */
     if (td->val) {
-      transform_snap_increment(t, t->values_final);
-      applyNumInput(&t->num, t->values_final);
+      NumInput num_evil = t->num;
+      float values_final_evil[4];
+      copy_v4_v4(values_final_evil, t->values_final);
+      transform_snap_increment(t, values_final_evil);
+      applyNumInput(&num_evil, values_final_evil);
 
-      float ratio = t->values_final[0];
+      float ratio = values_final_evil[0];
       *td->val = td->ival * ratio * gps->runtime.multi_frame_falloff;
       CLAMP_MIN(*td->val, 0.001f);
     }
@@ -1019,6 +1054,11 @@ void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, float ma
   }
 
   if (t->options & (CTX_OBJECT | CTX_POSE_BONE)) {
+    if (t->options & CTX_POSE_BONE) {
+      /* Without this, the resulting location of scaled bones aren't correct,
+       * especially noticeable scaling root or disconnected bones around the cursor, see T92515. */
+      mul_mat3_m4_v3(tc->poseobj->obmat, vec);
+    }
     mul_m3_v3(td->smtx, vec);
   }
 
@@ -1029,102 +1069,7 @@ void ElementResize(TransInfo *t, TransDataContainer *tc, TransData *td, float ma
 
   constraintTransLim(t, td);
 }
-/** \} */
 
-/* -------------------------------------------------------------------- */
-/** \name Transform (Frame Utils)
- * \{ */
-
-/**
- * This function returns the snapping 'mode' for Animation Editors only.
- * We cannot use the standard snapping due to NLA-strip scaling complexities.
- *
- * TODO: these modifier checks should be key-mappable.
- */
-short getAnimEdit_SnapMode(TransInfo *t)
-{
-  short autosnap = SACTSNAP_OFF;
-
-  if (t->spacetype == SPACE_ACTION) {
-    SpaceAction *saction = (SpaceAction *)t->area->spacedata.first;
-
-    if (saction) {
-      autosnap = saction->autosnap;
-    }
-  }
-  else if (t->spacetype == SPACE_GRAPH) {
-    SpaceGraph *sipo = (SpaceGraph *)t->area->spacedata.first;
-
-    if (sipo) {
-      autosnap = sipo->autosnap;
-    }
-  }
-  else if (t->spacetype == SPACE_NLA) {
-    SpaceNla *snla = (SpaceNla *)t->area->spacedata.first;
-
-    if (snla) {
-      autosnap = snla->autosnap;
-    }
-  }
-  else {
-    autosnap = SACTSNAP_OFF;
-  }
-
-  /* toggle autosnap on/off
-   * - when toggling on, prefer nearest frame over 1.0 frame increments
-   */
-  if (t->modifiers & MOD_SNAP_INVERT) {
-    if (autosnap) {
-      autosnap = SACTSNAP_OFF;
-    }
-    else {
-      autosnap = SACTSNAP_FRAME;
-    }
-  }
-
-  return autosnap;
-}
-
-/* This function is used by Animation Editor specific transform functions to do
- * the Snap Keyframe to Nearest Frame/Marker
- */
-void doAnimEdit_SnapFrame(
-    TransInfo *t, TransData *td, TransData2D *td2d, AnimData *adt, short autosnap)
-{
-  if (autosnap != SACTSNAP_OFF) {
-    float val;
-
-    /* convert frame to nla-action time (if needed) */
-    if (adt && (t->spacetype != SPACE_SEQ)) {
-      val = BKE_nla_tweakedit_remap(adt, *(td->val), NLATIME_CONVERT_MAP);
-    }
-    else {
-      val = *(td->val);
-    }
-
-    snapFrameTransform(t, autosnap, true, val, &val);
-
-    /* convert frame out of nla-action time */
-    if (adt && (t->spacetype != SPACE_SEQ)) {
-      *(td->val) = BKE_nla_tweakedit_remap(adt, val, NLATIME_CONVERT_UNMAP);
-    }
-    else {
-      *(td->val) = val;
-    }
-  }
-
-  /* If the handles are to be moved too
-   * (as side-effect of keyframes moving, to keep the general effect)
-   * offset them by the same amount so that the general angles are maintained
-   * (i.e. won't change while handles are free-to-roam and keyframes are snap-locked).
-   */
-  if ((td->flag & TD_MOVEHANDLE1) && td2d->h1) {
-    td2d->h1[0] = td2d->ih1[0] + *td->val - td->ival;
-  }
-  if ((td->flag & TD_MOVEHANDLE2) && td2d->h2) {
-    td2d->h2[0] = td2d->ih2[0] + *td->val - td->ival;
-  }
-}
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1142,9 +1087,24 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
     case TFM_ROTATION:
       initRotation(t);
       break;
-    case TFM_RESIZE:
-      initResize(t);
+    case TFM_RESIZE: {
+      float mouse_dir_constraint[3];
+      if (op) {
+        PropertyRNA *prop = RNA_struct_find_property(op->ptr, "mouse_dir_constraint");
+        if (prop) {
+          RNA_property_float_get_array(op->ptr, prop, mouse_dir_constraint);
+        }
+        else {
+          /* Resize is expected to have this property. */
+          BLI_assert(!STREQ(op->idname, "TRANSFORM_OT_resize"));
+        }
+      }
+      else {
+        zero_v3(mouse_dir_constraint);
+      }
+      initResize(t, mouse_dir_constraint);
       break;
+    }
     case TFM_SKIN_RESIZE:
       initSkinResize(t);
       break;
@@ -1264,7 +1224,7 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
   if (t->data_type == TC_MESH_VERTS) {
     /* Init Custom Data correction.
      * Ideally this should be called when creating the TransData. */
-    mesh_customdatacorrect_init(t);
+    transform_convert_mesh_customdatacorrect_init(t);
   }
 
   /* TODO(germano): Some of these operations change the `t->mode`.
@@ -1273,7 +1233,7 @@ void transform_mode_init(TransInfo *t, wmOperator *op, const int mode)
 }
 
 /**
- * When in modal nad not set, initializes a default orientation for the mode.
+ * When in modal and not set, initializes a default orientation for the mode.
  */
 void transform_mode_default_modal_orientation_set(TransInfo *t, int type)
 {
@@ -1292,14 +1252,24 @@ void transform_mode_default_modal_orientation_set(TransInfo *t, int type)
     return;
   }
 
+  View3D *v3d = NULL;
   RegionView3D *rv3d = NULL;
   if ((type == V3D_ORIENT_VIEW) && (t->spacetype == SPACE_VIEW3D) && t->region &&
       (t->region->regiontype == RGN_TYPE_WINDOW)) {
+    v3d = t->view;
     rv3d = t->region->regiondata;
   }
 
   t->orient[O_DEFAULT].type = ED_transform_calc_orientation_from_type_ex(
-      NULL, t->orient[O_DEFAULT].matrix, NULL, rv3d, NULL, NULL, type, 0);
+      t->scene,
+      t->view_layer,
+      v3d,
+      rv3d,
+      NULL,
+      NULL,
+      type,
+      V3D_AROUND_CENTER_BOUNDS,
+      t->orient[O_DEFAULT].matrix);
 
   if (t->orient_curr == O_DEFAULT) {
     /* Update Orientation. */

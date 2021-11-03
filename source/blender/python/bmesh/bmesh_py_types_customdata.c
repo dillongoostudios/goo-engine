@@ -78,7 +78,7 @@ static CustomDataLayer *bpy_bmlayeritem_get(BPy_BMLayerItem *self)
 /* getseters
  * ========= */
 
-/* used for many different types  */
+/* used for many different types. */
 
 PyDoc_STRVAR(bpy_bmlayeraccess_collection__float_doc,
              "Generic float custom-data layer.\n\ntype: :class:`BMLayerCollection`");
@@ -843,9 +843,11 @@ static PyObject *bpy_bmlayercollection_subscript(BPy_BMLayerCollection *self, Py
       const Py_ssize_t len = bpy_bmlayercollection_length(self);
       if (start < 0) {
         start += len;
+        CLAMP_MIN(start, 0);
       }
       if (stop < 0) {
         stop += len;
+        CLAMP_MIN(stop, 0);
       }
     }
 

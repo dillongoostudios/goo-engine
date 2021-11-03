@@ -58,7 +58,7 @@ template<class T> static const char *bc_get_joint_name(T *node)
 FCurve *AnimationImporter::create_fcurve(int array_index, const char *rna_path)
 {
   FCurve *fcu = BKE_fcurve_create();
-  fcu->flag = (FCURVE_VISIBLE | FCURVE_AUTO_HANDLES | FCURVE_SELECTED);
+  fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
   fcu->rna_path = BLI_strdupn(rna_path, strlen(rna_path));
   fcu->array_index = array_index;
   return fcu;
@@ -102,7 +102,7 @@ void AnimationImporter::animation_to_fcurves(COLLADAFW::AnimationCurve *curve)
       for (i = 0; i < dim; i++) {
         FCurve *fcu = BKE_fcurve_create();
 
-        fcu->flag = (FCURVE_VISIBLE | FCURVE_AUTO_HANDLES | FCURVE_SELECTED);
+        fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
         fcu->array_index = 0;
         fcu->auto_smoothing = U.auto_smoothing_new;
 
@@ -164,7 +164,7 @@ void AnimationImporter::animation_to_fcurves(COLLADAFW::AnimationCurve *curve)
 void AnimationImporter::fcurve_deg_to_rad(FCurve *cu)
 {
   for (unsigned int i = 0; i < cu->totvert; i++) {
-    /* TODO convert handles too */
+    /* TODO: convert handles too. */
     cu->bezt[i].vec[1][1] *= DEG2RADF(1.0f);
     cu->bezt[i].vec[0][1] *= DEG2RADF(1.0f);
     cu->bezt[i].vec[2][1] *= DEG2RADF(1.0f);
@@ -174,7 +174,7 @@ void AnimationImporter::fcurve_deg_to_rad(FCurve *cu)
 void AnimationImporter::fcurve_scale(FCurve *cu, int scale)
 {
   for (unsigned int i = 0; i < cu->totvert; i++) {
-    /* TODO convert handles too */
+    /* TODO: convert handles too. */
     cu->bezt[i].vec[1][1] *= scale;
     cu->bezt[i].vec[0][1] *= scale;
     cu->bezt[i].vec[2][1] *= scale;
@@ -305,7 +305,7 @@ bool AnimationImporter::write_animation(const COLLADAFW::Animation *anim)
           animation_to_fcurves(curve);
           break;
         default:
-          /* TODO there are also CARDINAL, HERMITE, BSPLINE and STEP types. */
+          /* TODO: there are also CARDINAL, HERMITE, BSPLINE and STEP types. */
           fprintf(stderr,
                   "CARDINAL, HERMITE and BSPLINE anim interpolation types not supported yet.\n");
           break;
@@ -624,7 +624,7 @@ void AnimationImporter::Assign_transform_animations(
           }
         } break;
         case COLLADAFW::AnimationList::AXISANGLE:
-        /* TODO convert axis-angle to quat? or XYZ? */
+        /* TODO: convert axis-angle to quat? or XYZ? */
         default:
           unused_fcurve(curves);
           fprintf(stderr,
@@ -972,7 +972,7 @@ void AnimationImporter::apply_matrix_curves(Object *ob,
 /*
  * This function returns the aspect ration from the Collada camera.
  *
- * Note:COLLADA allows to specify either XFov, or YFov alone.
+ * NOTE:COLLADA allows to specify either XFov, or YFov alone.
  * In that case the aspect ratio can be determined from
  * the viewport aspect ratio (which is 1:1 ?)
  * XXX: check this: its probably wrong!
@@ -1090,7 +1090,7 @@ void AnimationImporter::translate_Animations(
           apply_matrix_curves(ob, animcurves, root, node, transform);
         }
         else {
-          /* calculate rnapaths and array index of fcurves according to transformation and
+          /* Calculate RNA-paths and array index of F-curves according to transformation and
            * animation class */
           Assign_transform_animations(transform, &bindings[j], &animcurves, is_joint, joint_path);
 
@@ -1363,7 +1363,7 @@ void AnimationImporter::add_bone_animation_sampled(Object *ob,
     calc_joint_parent_mat_rest(par, nullptr, root, node);
     mul_m4_m4m4(temp, par, matfra);
 
-    /* evaluate_joint_world_transform_at_frame(temp, NULL, node, fra); */
+    // evaluate_joint_world_transform_at_frame(temp, NULL, node, fra);
 
     /* calc special matrix */
     mul_m4_series(mat, irest, temp, irest_dae, rest);
@@ -1979,7 +1979,7 @@ bool AnimationImporter::evaluate_animation(COLLADAFW::Transformation *tm,
           return false;
         }
 
-        /* TODO support other animclasses */
+        /* TODO: support other animclasses. */
         if (animclass != COLLADAFW::AnimationList::ANGLE) {
           report_class_type_unsupported(path, animclass, type);
           return false;

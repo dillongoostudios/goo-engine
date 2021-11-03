@@ -47,6 +47,7 @@
 #include "WM_types.h"
 
 #include "file_intern.h"
+#include "filelist.h"
 #include "fsmenu.h"
 
 #include <string.h>
@@ -55,6 +56,12 @@ static bool file_panel_operator_poll(const bContext *C, PanelType *UNUSED(pt))
 {
   SpaceFile *sfile = CTX_wm_space_file(C);
   return (sfile && sfile->op);
+}
+
+static bool file_panel_asset_browsing_poll(const bContext *C, PanelType *UNUSED(pt))
+{
+  SpaceFile *sfile = CTX_wm_space_file(C);
+  return sfile && sfile->files && ED_fileselect_is_asset_browser(sfile);
 }
 
 static void file_panel_operator_header(const bContext *C, Panel *panel)
@@ -72,7 +79,7 @@ static void file_panel_operator(const bContext *C, Panel *panel)
 
   UI_block_func_set(uiLayoutGetBlock(panel->layout), file_draw_check_cb, NULL, NULL);
 
-  /* Hack: temporary hide.*/
+  /* Hack: temporary hide. */
   const char *hide[] = {"filepath", "files", "directory", "filename"};
   for (int i = 0; i < ARRAY_SIZE(hide); i++) {
     PropertyRNA *prop = RNA_struct_find_property(op->ptr, hide[i]);
@@ -84,7 +91,7 @@ static void file_panel_operator(const bContext *C, Panel *panel)
   uiTemplateOperatorPropertyButs(
       C, panel->layout, op, UI_BUT_LABEL_ALIGN_NONE, UI_TEMPLATE_OP_PROPS_SHOW_EMPTY);
 
-  /* Hack: temporary hide.*/
+  /* Hack: temporary hide. */
   for (int i = 0; i < ARRAY_SIZE(hide); i++) {
     PropertyRNA *prop = RNA_struct_find_property(op->ptr, hide[i]);
     if (prop) {
@@ -220,5 +227,44 @@ void file_execute_region_panels_register(ARegionType *art)
   pt->flag = PANEL_TYPE_NO_HEADER;
   pt->poll = file_panel_operator_poll;
   pt->draw = file_panel_execution_buttons_draw;
+  BLI_addtail(&art->paneltypes, pt);
+}
+
+static void file_panel_asset_catalog_buttons_draw(const bContext *C, Panel *panel)
+{
+  bScreen *screen = CTX_wm_screen(C);
+  SpaceFile *sfile = CTX_wm_space_file(C);
+  /* May be null if the library wasn't loaded yet. */
+  struct AssetLibrary *asset_library = filelist_asset_library(sfile->files);
+  FileAssetSelectParams *params = ED_fileselect_get_asset_params(sfile);
+  BLI_assert(params != NULL);
+
+  uiLayout *col = uiLayoutColumn(panel->layout, false);
+  uiLayout *row = uiLayoutRow(col, true);
+
+  PointerRNA params_ptr;
+  RNA_pointer_create(&screen->id, &RNA_FileAssetSelectParams, params, &params_ptr);
+
+  uiItemR(row, &params_ptr, "asset_library_ref", 0, "", ICON_NONE);
+  if (params->asset_library_ref.type != ASSET_LIBRARY_LOCAL) {
+    uiItemO(row, "", ICON_FILE_REFRESH, "FILE_OT_asset_library_refresh");
+  }
+
+  uiItemS(col);
+
+  file_create_asset_catalog_tree_view_in_layout(asset_library, col, sfile, params);
+}
+
+void file_tools_region_panels_register(ARegionType *art)
+{
+  PanelType *pt;
+
+  pt = MEM_callocN(sizeof(PanelType), "spacetype file asset catalog buttons");
+  strcpy(pt->idname, "FILE_PT_asset_catalog_buttons");
+  strcpy(pt->label, N_("Asset Catalogs"));
+  strcpy(pt->translation_context, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
+  pt->flag = PANEL_TYPE_NO_HEADER;
+  pt->poll = file_panel_asset_browsing_poll;
+  pt->draw = file_panel_asset_catalog_buttons_draw;
   BLI_addtail(&art->paneltypes, pt);
 }

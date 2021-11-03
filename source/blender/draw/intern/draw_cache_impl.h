@@ -43,6 +43,10 @@ struct bGPdata;
 
 #include "BKE_mesh_types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Expose via BKE callbacks */
 void DRW_mball_batch_cache_dirty_tag(struct MetaBall *mb, int mode);
 void DRW_mball_batch_cache_validate(struct MetaBall *mb);
@@ -215,7 +219,7 @@ struct GPUVertBuf *DRW_mesh_batch_cache_pos_vertbuf_get(struct Mesh *me);
 struct GPUVertBuf *DRW_curve_batch_cache_pos_vertbuf_get(struct Curve *cu);
 struct GPUVertBuf *DRW_mball_batch_cache_pos_vertbuf_get(struct Object *ob);
 
-int DRW_mesh_material_count_get(struct Mesh *me);
+int DRW_mesh_material_count_get(const struct Mesh *me);
 
 /* See 'common_globals_lib.glsl' for duplicate defines. */
 
@@ -262,3 +266,6 @@ struct GPUBatch *DRW_particles_batch_cache_get_edit_inner_points(struct Object *
 struct GPUBatch *DRW_particles_batch_cache_get_edit_tip_points(struct Object *object,
                                                                struct ParticleSystem *psys,
                                                                struct PTCacheEdit *edit);
+#ifdef __cplusplus
+}
+#endif

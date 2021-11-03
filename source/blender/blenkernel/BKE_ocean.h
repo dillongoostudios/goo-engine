@@ -19,7 +19,7 @@
 #include <stdbool.h>
 
 /** \file
- * \ingroup bli
+ * \ingroup bke
  */
 
 #ifdef __cplusplus
@@ -74,11 +74,13 @@ struct Ocean *BKE_ocean_add(void);
 void BKE_ocean_free_data(struct Ocean *oc);
 void BKE_ocean_free(struct Ocean *oc);
 bool BKE_ocean_ensure(struct OceanModifierData *omd, const int resolution);
-void BKE_ocean_init_from_modifier(struct Ocean *ocean,
+bool BKE_ocean_init_from_modifier(struct Ocean *ocean,
                                   struct OceanModifierData const *omd,
                                   const int resolution);
 
-void BKE_ocean_init(struct Ocean *o,
+bool BKE_ocean_is_valid(const struct Ocean *o);
+
+bool BKE_ocean_init(struct Ocean *o,
                     int M,
                     int N,
                     float Lx,

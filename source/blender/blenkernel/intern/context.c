@@ -80,7 +80,17 @@ struct bContext {
     struct ARegion *menu;
     struct wmGizmoGroup *gizmo_group;
     struct bContextStore *store;
-    const char *operator_poll_msg; /* reason for poll failing */
+
+    /* Operator poll. */
+    /**
+     * Store the reason the poll function fails (static string, not allocated).
+     * For more advanced formatting use `operator_poll_msg_dyn_params`.
+     */
+    const char *operator_poll_msg;
+    /**
+     * Store values to dynamically to create the string (called when a tool-tip is shown).
+     */
+    struct bContextPollMsgDyn_Params operator_poll_msg_dyn_params;
   } wm;
 
   /* data context */
@@ -113,11 +123,16 @@ bContext *CTX_copy(const bContext *C)
 {
   bContext *newC = MEM_dupallocN((void *)C);
 
+  memset(&newC->wm.operator_poll_msg_dyn_params, 0, sizeof(newC->wm.operator_poll_msg_dyn_params));
+
   return newC;
 }
 
 void CTX_free(bContext *C)
 {
+  /* This may contain a dynamically allocated message, free. */
+  CTX_wm_operator_poll_msg_clear(C);
+
   MEM_freeN(C);
 }
 
@@ -640,6 +655,11 @@ void CTX_data_pointer_set(bContextDataResult *result, ID *id, StructRNA *type, v
   RNA_pointer_create(id, type, data, &result->ptr);
 }
 
+void CTX_data_pointer_set_ptr(bContextDataResult *result, const PointerRNA *ptr)
+{
+  result->ptr = *ptr;
+}
+
 void CTX_data_id_list_add(bContextDataResult *result, ID *id)
 {
   CollectionPointerLink *link = MEM_callocN(sizeof(CollectionPointerLink), "CTX_data_id_list_add");
@@ -652,6 +672,14 @@ void CTX_data_list_add(bContextDataResult *result, ID *id, StructRNA *type, void
 {
   CollectionPointerLink *link = MEM_callocN(sizeof(CollectionPointerLink), "CTX_data_list_add");
   RNA_pointer_create(id, type, data, &link->ptr);
+
+  BLI_addtail(&result->list, link);
+}
+
+void CTX_data_list_add_ptr(bContextDataResult *result, const PointerRNA *ptr)
+{
+  CollectionPointerLink *link = MEM_callocN(sizeof(CollectionPointerLink), "CTX_data_list_add");
+  link->ptr = *ptr;
 
   BLI_addtail(&result->list, link);
 }
@@ -1003,13 +1031,45 @@ void CTX_wm_gizmo_group_set(bContext *C, struct wmGizmoGroup *gzgroup)
   C->wm.gizmo_group = gzgroup;
 }
 
+void CTX_wm_operator_poll_msg_clear(bContext *C)
+{
+  struct bContextPollMsgDyn_Params *params = &C->wm.operator_poll_msg_dyn_params;
+  if (params->free_fn != NULL) {
+    params->free_fn(C, params->user_data);
+  }
+  params->get_fn = NULL;
+  params->free_fn = NULL;
+  params->user_data = NULL;
+
+  C->wm.operator_poll_msg = NULL;
+}
 void CTX_wm_operator_poll_msg_set(bContext *C, const char *msg)
 {
+  CTX_wm_operator_poll_msg_clear(C);
+
   C->wm.operator_poll_msg = msg;
 }
 
-const char *CTX_wm_operator_poll_msg_get(bContext *C)
+void CTX_wm_operator_poll_msg_set_dynamic(bContext *C,
+                                          const struct bContextPollMsgDyn_Params *params)
 {
+  CTX_wm_operator_poll_msg_clear(C);
+
+  C->wm.operator_poll_msg_dyn_params = *params;
+}
+
+const char *CTX_wm_operator_poll_msg_get(bContext *C, bool *r_free)
+{
+  struct bContextPollMsgDyn_Params *params = &C->wm.operator_poll_msg_dyn_params;
+  if (params->get_fn != NULL) {
+    char *msg = params->get_fn(C, params->user_data);
+    if (msg != NULL) {
+      *r_free = true;
+    }
+    return msg;
+  }
+
+  *r_free = false;
   return IFACE_(C->wm.operator_poll_msg);
 }
 
@@ -1178,8 +1238,11 @@ enum eContextObjectMode CTX_data_mode_enum(const bContext *C)
   return CTX_data_mode_enum_ex(obedit, obact, obact ? obact->mode : OB_MODE_OBJECT);
 }
 
-/* would prefer if we can use the enum version below over this one - Campbell */
-/* must be aligned with above enum  */
+/**
+ * Would prefer if we can use the enum version below over this one - Campbell.
+ *
+ * \note Must be aligned with above enum.
+ */
 static const char *data_mode_strings[] = {
     "mesh_edit",           "curve_edit",          "surface_edit",        "text_edit",
     "armature_edit",       "mball_edit",          "lattice_edit",        "posemode",
@@ -1396,6 +1459,36 @@ int CTX_data_editable_gpencil_layers(const bContext *C, ListBase *list)
 int CTX_data_editable_gpencil_strokes(const bContext *C, ListBase *list)
 {
   return ctx_data_collection_get(C, "editable_gpencil_strokes", list);
+}
+
+const AssetLibraryReference *CTX_wm_asset_library_ref(const bContext *C)
+{
+  return ctx_data_pointer_get(C, "asset_library_ref");
+}
+
+AssetHandle CTX_wm_asset_handle(const bContext *C, bool *r_is_valid)
+{
+  AssetHandle *asset_handle_p =
+      (AssetHandle *)CTX_data_pointer_get_type(C, "asset_handle", &RNA_AssetHandle).data;
+  if (asset_handle_p) {
+    *r_is_valid = true;
+    return *asset_handle_p;
+  }
+
+  /* If the asset handle was not found in context directly, try if there's an active file with
+   * asset data there instead. Not nice to have this here, would be better to have this in
+   * `ED_asset.h`, but we can't include that in BKE. Even better would be not needing this at all
+   * and being able to have editors return this in the usual `context` callback. But that would
+   * require returning a non-owning pointer, which we don't have in the Asset Browser (yet). */
+  FileDirEntry *file =
+      (FileDirEntry *)CTX_data_pointer_get_type(C, "active_file", &RNA_FileSelectEntry).data;
+  if (file && file->asset_data) {
+    *r_is_valid = true;
+    return (AssetHandle){.file_data = file};
+  }
+
+  *r_is_valid = false;
+  return (AssetHandle){0};
 }
 
 Depsgraph *CTX_data_depsgraph_pointer(const bContext *C)

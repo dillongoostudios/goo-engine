@@ -219,7 +219,7 @@ def enable_addons(addons=None, support=None, disable=False, check_only=False):
     try:
         import bpy
     except ModuleNotFoundError:
-        print("Could not import bpy, enable_addons must be run from whithin Blender.")
+        print("Could not import bpy, enable_addons must be run from within Blender.")
         return
 
     if addons is None:
@@ -780,7 +780,6 @@ class I18nMessages:
         except ModuleNotFoundError:
             print("Could not import bpy, find_best_messages_matches must be run from whithin Blender.")
             return
-
 
         # Build helper mappings.
         # Note it's user responsibility to know when to invalidate (and hence force rebuild) this cache!
@@ -1356,7 +1355,7 @@ class I18n:
         print(prefix.join(lines))
 
     @classmethod
-    def check_py_module_has_translations(clss, src, settings=settings):
+    def check_py_module_has_translations(cls, src, settings=settings):
         """
         Check whether a given src (a py module, either a directory or a py file) has some i18n translation data,
         and returns a tuple (src_file, translations_tuple) if yes, else (None, None).
@@ -1368,11 +1367,11 @@ class I18n:
                     if not fname.endswith(".py"):
                         continue
                     path = os.path.join(root, fname)
-                    _1, txt, _2, has_trans = clss._parser_check_file(path)
+                    _1, txt, _2, has_trans = cls._parser_check_file(path)
                     if has_trans:
                         txts.append((path, txt))
         elif src.endswith(".py") and os.path.isfile(src):
-            _1, txt, _2, has_trans = clss._parser_check_file(src)
+            _1, txt, _2, has_trans = cls._parser_check_file(src)
             if has_trans:
                 txts.append((src, txt))
         for path, txt in txts:
@@ -1572,7 +1571,7 @@ class I18n:
             if not os.path.isfile(dst):
                 print("WARNING: trying to write as python code into {}, which is not a file! Aborting.".format(dst))
                 return
-            prev, txt, nxt, has_trans = self._parser_check_file(dst)
+            prev, txt, nxt, _has_trans = self._parser_check_file(dst)
             if prev is None and nxt is None:
                 print("WARNING: Looks like given python file {} has no auto-generated translations yet, will be added "
                       "at the end of the file, you can move that section later if needed...".format(dst))

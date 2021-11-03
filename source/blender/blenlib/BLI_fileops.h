@@ -34,6 +34,7 @@
 #include <limits.h> /* for PATH_MAX */
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_fileops_types.h"
 #include "BLI_utildefines.h"
 
 #ifdef __cplusplus
@@ -87,7 +88,7 @@ typedef enum eFileAttributes {
   FILE_ATTR_RESTRICTED = 1 << 6,      /* Protected by OS. */
   FILE_ATTR_TEMPORARY = 1 << 7,       /* Used for temporary storage. */
   FILE_ATTR_SPARSE_FILE = 1 << 8,     /* Sparse File. */
-  FILE_ATTR_OFFLINE = 1 << 9,         /* Data is not immediately available. */
+  FILE_ATTR_OFFLINE = 1 << 9,         /* Contents available after a short delay. */
   FILE_ATTR_ALIAS = 1 << 10,          /* Mac Alias or Windows LNK. File-based redirection. */
   FILE_ATTR_REPARSE_POINT = 1 << 11,  /* File has associated re-parse point. */
   FILE_ATTR_SYMLINK = 1 << 12,        /* Reference to another file. */
@@ -125,15 +126,20 @@ void BLI_filelist_free(struct direntry *filelist, const unsigned int nrentries);
 void BLI_filelist_entry_size_to_string(const struct stat *st,
                                        const uint64_t sz,
                                        const bool compact,
-                                       char r_size[]);
-void BLI_filelist_entry_mode_to_string(
-    const struct stat *st, const bool compact, char r_mode1[], char r_mode2[], char r_mode3[]);
-void BLI_filelist_entry_owner_to_string(const struct stat *st, const bool compact, char r_owner[]);
+                                       char r_size[FILELIST_DIRENTRY_SIZE_LEN]);
+void BLI_filelist_entry_mode_to_string(const struct stat *st,
+                                       const bool compact,
+                                       char r_mode1[FILELIST_DIRENTRY_MODE_LEN],
+                                       char r_mode2[FILELIST_DIRENTRY_MODE_LEN],
+                                       char r_mode3[FILELIST_DIRENTRY_MODE_LEN]);
+void BLI_filelist_entry_owner_to_string(const struct stat *st,
+                                        const bool compact,
+                                        char r_owner[FILELIST_DIRENTRY_OWNER_LEN]);
 void BLI_filelist_entry_datetime_to_string(const struct stat *st,
                                            const int64_t ts,
                                            const bool compact,
-                                           char r_time[],
-                                           char r_date[],
+                                           char r_time[FILELIST_DIRENTRY_TIME_LEN],
+                                           char r_date[FILELIST_DIRENTRY_DATE_LEN],
                                            bool *r_is_today,
                                            bool *r_is_yesterday);
 
@@ -148,18 +154,17 @@ bool BLI_file_is_writable(const char *file) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL
 bool BLI_file_touch(const char *file) ATTR_NONNULL();
 bool BLI_file_alias_target(const char *filepath, char *r_targetpath) ATTR_WARN_UNUSED_RESULT;
 
-#if 0 /* UNUSED */
-int BLI_file_gzip(const char *from, const char *to) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-#endif
-char *BLI_file_ungzip_to_mem(const char *from_file, int *r_size) ATTR_WARN_UNUSED_RESULT
-    ATTR_NONNULL();
-size_t BLI_gzip_mem_to_file_at_pos(void *buf,
-                                   size_t len,
-                                   FILE *file,
-                                   size_t gz_stream_offset,
-                                   int compression_level) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
-size_t BLI_ungzip_file_to_mem_at_pos(void *buf, size_t len, FILE *file, size_t gz_stream_offset)
+bool BLI_file_magic_is_gzip(const char header[4]);
+
+size_t BLI_file_zstd_from_mem_at_pos(void *buf,
+                                     size_t len,
+                                     FILE *file,
+                                     size_t file_offset,
+                                     int compression_level) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+size_t BLI_file_unzstd_to_mem_at_pos(void *buf, size_t len, FILE *file, size_t file_offset)
     ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
+bool BLI_file_magic_is_zstd(const char header[4]);
+
 size_t BLI_file_descriptor_size(int file) ATTR_WARN_UNUSED_RESULT;
 size_t BLI_file_size(const char *path) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 

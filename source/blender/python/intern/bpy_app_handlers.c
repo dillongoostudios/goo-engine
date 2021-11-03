@@ -43,6 +43,9 @@ void bpy_app_generic_callback(struct Main *main,
 
 static PyTypeObject BlenderAppCbType;
 
+/**
+ * See `BKE_callbacks.h` #eCbEvent declaration for the policy on naming.
+ */
 static PyStructSequence_Field app_cb_info_fields[] = {
     {"frame_change_pre",
      "Called after frame change for playback and rendering, before any data is evaluated for the "
@@ -74,6 +77,7 @@ static PyStructSequence_Field app_cb_info_fields[] = {
     {"version_update", "on ending the versioning code"},
     {"load_factory_preferences_post", "on loading factory preferences (after)"},
     {"load_factory_startup_post", "on loading factory startup (after)"},
+    {"xr_session_start_pre", "on starting an xr session (before)"},
 
 /* sets the permanent tag */
 #define APP_CB_OTHER_FIELDS 1
@@ -221,7 +225,7 @@ PyObject *BPY_app_handlers_struct(void)
 #endif
 
   if (PyType_Ready(&BPyPersistent_Type) < 0) {
-    BLI_assert(!"error initializing 'bpy.app.handlers.persistent'");
+    BLI_assert_msg(0, "error initializing 'bpy.app.handlers.persistent'");
   }
 
   PyStructSequence_InitType(&BlenderAppCbType, &app_cb_info_desc);
@@ -279,7 +283,7 @@ void BPY_app_handlers_reset(const short do_all)
 
       for (i = PyList_GET_SIZE(ls) - 1; i >= 0; i--) {
 
-        if ((PyFunction_Check((item = PyList_GET_ITEM(ls, i)))) &&
+        if (PyFunction_Check((item = PyList_GET_ITEM(ls, i))) &&
             (dict_ptr = _PyObject_GetDictPtr(item)) && (*dict_ptr) &&
             (PyDict_GetItem(*dict_ptr, perm_id_str) != NULL)) {
           /* keep */
@@ -343,7 +347,7 @@ void bpy_app_generic_callback(struct Main *UNUSED(main),
     }
 
     /* Iterate the list and run the callbacks
-     * note: don't store the list size since the scripts may remove themselves */
+     * NOTE: don't store the list size since the scripts may remove themselves. */
     for (pos = 0; pos < PyList_GET_SIZE(cb_list); pos++) {
       func = PyList_GET_ITEM(cb_list, pos);
       PyObject *args = choose_arguments(func, args_all, args_single);

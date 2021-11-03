@@ -90,7 +90,7 @@ ComponentNode::ComponentNode()
 void ComponentNode::init(const ID * /*id*/, const char * /*subdata*/)
 {
   /* hook up eval context? */
-  // XXX: maybe this needs a special API?
+  /* XXX: maybe this needs a special API? */
 }
 
 /* Free 'component' node */
@@ -142,7 +142,7 @@ OperationNode *ComponentNode::get_operation(OperationIDKey key) const
             "%s: find_operation(%s) failed\n",
             this->identifier().c_str(),
             key.identifier().c_str());
-    BLI_assert(!"Request for non-existing operation, should not happen");
+    BLI_assert_msg(0, "Request for non-existing operation, should not happen");
     return nullptr;
   }
   return node;
@@ -181,7 +181,7 @@ OperationNode *ComponentNode::add_operation(const DepsEvalOperationCb &op,
     OperationIDKey key(opcode, name, name_tag);
     operations_map->add(key, op_node);
 
-    /* set backlink */
+    /* Set back-link. */
     op_node->owner = this;
   }
   else {
@@ -190,7 +190,7 @@ OperationNode *ComponentNode::add_operation(const DepsEvalOperationCb &op,
             this->identifier().c_str(),
             op_node->identifier().c_str(),
             op_node);
-    BLI_assert(!"Should not happen!");
+    BLI_assert_msg(0, "Should not happen!");
   }
 
   /* attach extra data */
@@ -237,7 +237,7 @@ void ComponentNode::tag_update(Depsgraph *graph, eUpdateSource source)
   for (OperationNode *op_node : operations) {
     op_node->tag_update(graph, source);
   }
-  // It is possible that tag happens before finalization.
+  /* It is possible that tag happens before finalization. */
   if (operations_map != nullptr) {
     for (OperationNode *op_node : operations_map->values()) {
       op_node->tag_update(graph, source);

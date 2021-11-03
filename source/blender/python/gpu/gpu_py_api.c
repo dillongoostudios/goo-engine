@@ -20,8 +20,8 @@
  * Experimental Python API, not considered public yet (called '_gpu'),
  * we may re-expose as public later.
  *
- * - Use ``bpygpu_`` for local API.
- * - Use ``BPyGPU`` for public API.
+ * - Use `bpygpu_` for local API.
+ * - Use `BPyGPU` for public API.
  */
 
 #include <Python.h>
@@ -30,7 +30,9 @@
 
 #include "../generic/python_utildefines.h"
 
+#include "gpu_py_capabilities.h"
 #include "gpu_py_matrix.h"
+#include "gpu_py_platform.h"
 #include "gpu_py_select.h"
 #include "gpu_py_state.h"
 #include "gpu_py_types.h"
@@ -61,7 +63,13 @@ PyObject *BPyInit_gpu(void)
   PyModule_AddObject(mod, "types", (submodule = bpygpu_types_init()));
   PyDict_SetItem(sys_modules, PyModule_GetNameObject(submodule), submodule);
 
+  PyModule_AddObject(mod, "capabilities", (submodule = bpygpu_capabilities_init()));
+  PyDict_SetItem(sys_modules, PyModule_GetNameObject(submodule), submodule);
+
   PyModule_AddObject(mod, "matrix", (submodule = bpygpu_matrix_init()));
+  PyDict_SetItem(sys_modules, PyModule_GetNameObject(submodule), submodule);
+
+  PyModule_AddObject(mod, "platform", (submodule = bpygpu_platform_init()));
   PyDict_SetItem(sys_modules, PyModule_GetNameObject(submodule), submodule);
 
   PyModule_AddObject(mod, "select", (submodule = bpygpu_select_init()));

@@ -37,6 +37,8 @@
 #include "BLT_translation.h"
 
 #include "transform.h"
+#include "transform_convert.h"
+
 #include "transform_mode.h"
 
 /* -------------------------------------------------------------------- */
@@ -235,8 +237,5 @@ void initMirror(TransInfo *t)
   initMouseInputMode(t, &t->mouse, INPUT_NONE);
 
   t->flag |= T_NULL_ONE;
-  if ((t->flag & T_EDIT) == 0) {
-    t->flag |= T_NO_ZERO;
-  }
 }
 /** \} */

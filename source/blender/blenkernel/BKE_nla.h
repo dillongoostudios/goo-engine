@@ -58,7 +58,14 @@ struct NlaTrack *BKE_nlatrack_copy(struct Main *bmain,
                                    struct NlaTrack *nlt,
                                    const bool use_same_actions,
                                    const int flag);
-void BKE_nla_tracks_copy(struct Main *bmain, ListBase *dst, ListBase *src, const int flag);
+void BKE_nla_tracks_copy(struct Main *bmain, ListBase *dst, const ListBase *src, const int flag);
+
+/* Copy NLA tracks from #adt_source to #adt_dest, and update the active track/strip pointers to
+ * point at those copies. */
+void BKE_nla_tracks_copy_from_adt(struct Main *bmain,
+                                  struct AnimData *adt_dest,
+                                  const struct AnimData *adt_source,
+                                  int flag);
 
 struct NlaTrack *BKE_nlatrack_add(struct AnimData *adt,
                                   struct NlaTrack *prev,
@@ -149,10 +156,10 @@ enum eNlaTime_ConvertModes {
   /* convert from global time to strip time - for evaluation */
   NLATIME_CONVERT_EVAL = 0,
   /* convert from global time to strip time - for editing corrections */
-  // XXX old 0 invert
+  /* XXX: old 0 invert. */
   NLATIME_CONVERT_UNMAP,
   /* convert from strip time to global time */
-  // xxx old 1 invert
+  /* XXX: old 1 invert. */
   NLATIME_CONVERT_MAP,
 };
 

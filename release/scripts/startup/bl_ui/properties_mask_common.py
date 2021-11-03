@@ -237,9 +237,8 @@ class MASK_PT_point:
 class MASK_PT_display:
     # subclasses must define...
     # ~ bl_space_type = 'CLIP_EDITOR'
-    # ~ bl_region_type = 'UI'
+    # ~ bl_region_type = 'HEADER'
     bl_label = "Mask Display"
-    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
@@ -418,6 +417,7 @@ class MASK_MT_select(Menu):
 
         layout.operator("mask.select_box")
         layout.operator("mask.select_circle")
+        layout.operator_menu_enum("mask.select_lasso", "mode")
 
         layout.separator()
 

@@ -112,35 +112,34 @@ static void metaball_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   MetaBall *metaball = (MetaBall *)id;
   for (int i = 0; i < metaball->totcol; i++) {
-    BKE_LIB_FOREACHID_PROCESS(data, metaball->mat[i], IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, metaball->mat[i], IDWALK_CB_USER);
   }
 }
 
 static void metaball_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   MetaBall *mb = (MetaBall *)id;
-  if (mb->id.us > 0 || BLO_write_is_undo(writer)) {
-    /* Clean up, important in undo case to reduce false detection of changed datablocks. */
-    BLI_listbase_clear(&mb->disp);
-    mb->editelems = NULL;
-    /* Must always be cleared (meta's don't have their own edit-data). */
-    mb->needs_flush_to_id = 0;
-    mb->lastelem = NULL;
-    mb->batch_cache = NULL;
 
-    /* write LibData */
-    BLO_write_id_struct(writer, MetaBall, id_address, &mb->id);
-    BKE_id_blend_write(writer, &mb->id);
+  /* Clean up, important in undo case to reduce false detection of changed datablocks. */
+  BLI_listbase_clear(&mb->disp);
+  mb->editelems = NULL;
+  /* Must always be cleared (meta's don't have their own edit-data). */
+  mb->needs_flush_to_id = 0;
+  mb->lastelem = NULL;
+  mb->batch_cache = NULL;
 
-    /* direct data */
-    BLO_write_pointer_array(writer, mb->totcol, mb->mat);
-    if (mb->adt) {
-      BKE_animdata_blend_write(writer, mb->adt);
-    }
+  /* write LibData */
+  BLO_write_id_struct(writer, MetaBall, id_address, &mb->id);
+  BKE_id_blend_write(writer, &mb->id);
 
-    LISTBASE_FOREACH (MetaElem *, ml, &mb->elems) {
-      BLO_write_struct(writer, MetaElem, ml);
-    }
+  /* direct data */
+  BLO_write_pointer_array(writer, mb->totcol, mb->mat);
+  if (mb->adt) {
+    BKE_animdata_blend_write(writer, mb->adt);
+  }
+
+  LISTBASE_FOREACH (MetaElem *, ml, &mb->elems) {
+    BLO_write_struct(writer, MetaElem, ml);
   }
 }
 
@@ -158,7 +157,7 @@ static void metaball_blend_read_data(BlendDataReader *reader, ID *id)
   mb->editelems = NULL;
   /* Must always be cleared (meta's don't have their own edit-data). */
   mb->needs_flush_to_id = 0;
-  /*  mb->edit_elems.first= mb->edit_elems.last= NULL;*/
+  // mb->edit_elems.first = mb->edit_elems.last = NULL;
   mb->lastelem = NULL;
   mb->batch_cache = NULL;
 }
@@ -189,7 +188,7 @@ IDTypeInfo IDType_ID_MB = {
     .name = "Metaball",
     .name_plural = "metaballs",
     .translation_context = BLT_I18NCONTEXT_ID_METABALL,
-    .flags = 0,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
 
     .init_data = metaball_init_data,
     .copy_data = metaball_copy_data,
@@ -289,7 +288,7 @@ void BKE_mball_texspace_calc(Object *ob)
   bb = ob->runtime.bb;
 
   /* Weird one, this. */
-  /*      INIT_MINMAX(min, max); */
+  // INIT_MINMAX(min, max);
   (min)[0] = (min)[1] = (min)[2] = 1.0e30f;
   (max)[0] = (max)[1] = (max)[2] = -1.0e30f;
 
@@ -559,7 +558,7 @@ bool BKE_mball_minmax_ex(
         copy_v3_v3(centroid, &ml->x);
       }
 
-      /* TODO, non circle shapes cubes etc, probably nobody notices - campbell */
+      /* TODO(campbell): non circle shapes cubes etc, probably nobody notices. */
       for (int i = -1; i != 3; i += 2) {
         copy_v3_v3(vec, centroid);
         add_v3_fl(vec, scale_mb * i);

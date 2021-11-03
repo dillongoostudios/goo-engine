@@ -348,7 +348,7 @@ static void annotation_draw_stroke_3d(
     /* If there was a significant pressure change, stop the curve,
      * change the thickness of the stroke, and continue drawing again
      * (since line-width cannot change in middle of GL_LINE_STRIP)
-     * Note: we want more visible levels of pressures when thickness is bigger.
+     * NOTE: we want more visible levels of pressures when thickness is bigger.
      */
     if (fabsf(pt->pressure - curpressure) > 0.2f / (float)thickness) {
       /* if the pressure changes before get at least 2 vertices,
@@ -760,15 +760,15 @@ static void annotation_draw_data_all(Scene *scene,
                                      int winy,
                                      int cfra,
                                      int dflag,
-                                     const char spacetype)
+                                     const eSpace_Type space_type)
 {
   bGPdata *gpd_source = NULL;
 
   if (scene) {
-    if (spacetype == SPACE_VIEW3D) {
+    if (space_type == SPACE_VIEW3D) {
       gpd_source = (scene->gpd ? scene->gpd : NULL);
     }
-    else if (spacetype == SPACE_CLIP && scene->clip) {
+    else if (space_type == SPACE_CLIP && scene->clip) {
       /* currently drawing only gpencil data from either clip or track,
        * but not both - XXX fix logic behind */
       gpd_source = (scene->clip->gpd ? scene->clip->gpd : NULL);
@@ -901,7 +901,7 @@ void ED_annotation_draw_view2d(const bContext *C, bool onlyv2d)
 }
 
 /* draw annotations sketches to specified 3d-view assuming that matrices are already set
- * correctly Note: this gets called twice - first time with only3d=true to draw 3d-strokes,
+ * correctly NOTE: this gets called twice - first time with only3d=true to draw 3d-strokes,
  * second time with only3d=false for screen-aligned strokes */
 void ED_annotation_draw_view3d(
     Scene *scene, struct Depsgraph *depsgraph, View3D *v3d, ARegion *region, bool only3d)
@@ -918,7 +918,7 @@ void ED_annotation_draw_view3d(
     return;
   }
 
-  /* when rendering to the offscreen buffer we don't want to
+  /* When rendering to the off-screen buffer we don't want to
    * deal with the camera border, otherwise map the coords to the camera border. */
   if ((rv3d->persp == RV3D_CAMOB) && !(G.f & G_FLAG_RENDER_VIEWPORT)) {
     rctf rectf;

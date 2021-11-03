@@ -75,6 +75,8 @@ ToolDef = namedtuple(
         "icon",
         # An optional cursor to use when this tool is active.
         "cursor",
+        # The properties to use for the widget.
+        "widget_properties",
         # An optional gizmo group to activate when the tool is set or None for no gizmo.
         "widget",
         # Optional key-map for tool, possible values are:
@@ -116,6 +118,8 @@ ToolDef = namedtuple(
         "draw_settings",
         # Optional draw cursor.
         "draw_cursor",
+        # Various options, see: `bpy.types.WorkSpaceTool.setup` options argument.
+        "options",
     )
 )
 del namedtuple
@@ -131,7 +135,9 @@ def from_dict(kw_args):
         "description": None,
         "icon": None,
         "cursor": None,
+        "options": None,
         "widget": None,
+        "widget_properties": None,
         "keymap": None,
         "data_block": None,
         "operator": None,
@@ -184,7 +190,7 @@ class ToolActivePanelHelper:
         ToolSelectPanelHelper.draw_active_tool_header(
             context,
             layout.column(),
-            show_tool_name=True,
+            show_tool_icon_always=True,
             tool_key=ToolSelectPanelHelper._tool_key_from_context(context, space_type=self.bl_space_type),
         )
 
@@ -218,7 +224,7 @@ class ToolSelectPanelHelper:
             assert(type(icon_name) is str)
             icon_value = _icon_cache.get(icon_name)
             if icon_value is None:
-                dirname = bpy.utils.system_resource('DATAFILES', "icons")
+                dirname = bpy.utils.system_resource('DATAFILES', path="icons")
                 filename = os.path.join(dirname, icon_name + ".dat")
                 try:
                     icon_value = bpy.app.icons.new_triangles_from_file(filename)
@@ -533,6 +539,9 @@ class ToolSelectPanelHelper:
                     visited.add(km_name)
 
                     yield (km_name, cls.bl_space_type, 'WINDOW', [])
+                    # Callable types don't use fall-backs.
+                    if isinstance(km_name, str):
+                        yield (km_name + " (fallback)", cls.bl_space_type, 'WINDOW', [])
 
     # -------------------------------------------------------------------------
     # Layout Generators
@@ -757,7 +766,7 @@ class ToolSelectPanelHelper:
     def draw_active_tool_header(
             context, layout,
             *,
-            show_tool_name=False,
+            show_tool_icon_always=False,
             tool_key=None,
     ):
         if tool_key is None:
@@ -774,9 +783,16 @@ class ToolSelectPanelHelper:
             return None
         # Note: we could show 'item.text' here but it makes the layout jitter when switching tools.
         # Add some spacing since the icon is currently assuming regular small icon size.
-        layout.label(text="    " + item.label if show_tool_name else " ", icon_value=icon_value)
-        if show_tool_name:
+        if show_tool_icon_always:
+            layout.label(text="    " + item.label, icon_value=icon_value)
             layout.separator()
+        else:
+            if context.space_data.show_region_toolbar:
+                layout.template_icon(icon_value=0, scale=0.5)
+            else:
+                layout.template_icon(icon_value=icon_value, scale=0.5)
+            layout.separator()
+
         draw_settings = item.draw_settings
         if draw_settings is not None:
             draw_settings(context, layout, tool)
@@ -983,17 +999,43 @@ def _activate_by_item(context, space_type, item, index, *, as_fallback=False):
         item_fallback, _index = cls._tool_get_active_by_index(context, select_index)
     # End calculating fallback.
 
+    gizmo_group = item.widget or ""
+
+    idname_fallback = (item_fallback and item_fallback.idname) or ""
+    keymap_fallback = (item_fallback and item_fallback.keymap and item_fallback.keymap[0]) or ""
+    if keymap_fallback:
+        keymap_fallback = keymap_fallback + " (fallback)"
+
     tool.setup(
         idname=item.idname,
         keymap=item.keymap[0] if item.keymap is not None else "",
         cursor=item.cursor or 'DEFAULT',
-        gizmo_group=item.widget or "",
+        options=item.options or set(),
+        gizmo_group=gizmo_group,
         data_block=item.data_block or "",
         operator=item.operator or "",
         index=index,
-        idname_fallback=(item_fallback and item_fallback.idname) or "",
-        keymap_fallback=(item_fallback and item_fallback.keymap and item_fallback.keymap[0]) or "",
+        idname_fallback=idname_fallback,
+        keymap_fallback=keymap_fallback,
     )
+
+    if (
+            (gizmo_group != "") and
+            (props := tool.gizmo_group_properties(gizmo_group))
+    ):
+        if props is None:
+            print("Error:", gizmo_group, "could not access properties!")
+        else:
+            for key in props.bl_rna.properties.keys():
+                props.property_unset(key)
+
+            gizmo_properties = item.widget_properties
+            if gizmo_properties is not None:
+                if not isinstance(gizmo_properties, list):
+                    raise Exception("expected a list, not a %r" % type(gizmo_properties))
+
+                from bl_keymap_utils.io import _init_properties_from_data
+                _init_properties_from_data(props, gizmo_properties)
 
     WindowManager = bpy.types.WindowManager
 

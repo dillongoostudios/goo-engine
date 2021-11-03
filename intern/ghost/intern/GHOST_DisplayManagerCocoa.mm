@@ -29,26 +29,26 @@ GHOST_DisplayManagerCocoa::GHOST_DisplayManagerCocoa(void)
 {
 }
 
-GHOST_TSuccess GHOST_DisplayManagerCocoa::getNumDisplays(GHOST_TUns8 &numDisplays) const
+GHOST_TSuccess GHOST_DisplayManagerCocoa::getNumDisplays(uint8_t &numDisplays) const
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-  numDisplays = (GHOST_TUns8)[[NSScreen screens] count];
+  numDisplays = (uint8_t)[[NSScreen screens] count];
 
   [pool drain];
   return GHOST_kSuccess;
 }
 
-GHOST_TSuccess GHOST_DisplayManagerCocoa::getNumDisplaySettings(GHOST_TUns8 display,
-                                                                GHOST_TInt32 &numSettings) const
+GHOST_TSuccess GHOST_DisplayManagerCocoa::getNumDisplaySettings(uint8_t display,
+                                                                int32_t &numSettings) const
 {
-  numSettings = (GHOST_TInt32)3;  // Width, Height, BitsPerPixel
+  numSettings = (int32_t)3;  // Width, Height, BitsPerPixel
 
   return GHOST_kSuccess;
 }
 
-GHOST_TSuccess GHOST_DisplayManagerCocoa::getDisplaySetting(GHOST_TUns8 display,
-                                                            GHOST_TInt32 index,
+GHOST_TSuccess GHOST_DisplayManagerCocoa::getDisplaySetting(uint8_t display,
+                                                            int32_t index,
                                                             GHOST_DisplaySetting &setting) const
 {
   NSScreen *askedDisplay;
@@ -86,7 +86,7 @@ GHOST_TSuccess GHOST_DisplayManagerCocoa::getDisplaySetting(GHOST_TUns8 display,
 }
 
 GHOST_TSuccess GHOST_DisplayManagerCocoa::getCurrentDisplaySetting(
-    GHOST_TUns8 display, GHOST_DisplaySetting &setting) const
+    uint8_t display, GHOST_DisplaySetting &setting) const
 {
   NSScreen *askedDisplay;
 
@@ -127,7 +127,7 @@ GHOST_TSuccess GHOST_DisplayManagerCocoa::getCurrentDisplaySetting(
 }
 
 GHOST_TSuccess GHOST_DisplayManagerCocoa::setCurrentDisplaySetting(
-    GHOST_TUns8 display, const GHOST_DisplaySetting &setting)
+    uint8_t display, const GHOST_DisplaySetting &setting)
 {
   GHOST_ASSERT(
       (display == kMainDisplay),
@@ -141,25 +141,29 @@ GHOST_TSuccess GHOST_DisplayManagerCocoa::setCurrentDisplaySetting(
   printf("  setting.frequency=%d\n", setting.frequency);
 #endif  // GHOST_DEBUG
 
-  // Display configuration is no more available in 10.6
+  /* Display configuration is no more available in 10.6. */
 
-  /*  CFDictionaryRef displayModeValues = ::CGDisplayBestModeForParametersAndRefreshRate(
-    m_displayIDs[display],
-    (size_t)setting.bpp,
-    (size_t)setting.xPixels,
-    (size_t)setting.yPixels,
-    (CGRefreshRate)setting.frequency,
-    NULL);*/
+#if 0
+  CFDictionaryRef displayModeValues = ::CGDisplayBestModeForParametersAndRefreshRate(
+      m_displayIDs[display],
+      (size_t)setting.bpp,
+      (size_t)setting.xPixels,
+      (size_t)setting.yPixels,
+      (CGRefreshRate)setting.frequency,
+      NULL);
+#endif
 
 #ifdef GHOST_DEBUG
-/*  printf("GHOST_DisplayManagerCocoa::setCurrentDisplaySetting(): switching to:\n");
+#  if 0
+  printf("GHOST_DisplayManagerCocoa::setCurrentDisplaySetting(): switching to:\n");
   printf("  setting.xPixels=%d\n", getValue(displayModeValues, kCGDisplayWidth));
   printf("  setting.yPixels=%d\n", getValue(displayModeValues, kCGDisplayHeight));
   printf("  setting.bpp=%d\n", getValue(displayModeValues, kCGDisplayBitsPerPixel));
-  printf("  setting.frequency=%d\n", getValue(displayModeValues, kCGDisplayRefreshRate)); */
+  printf("  setting.frequency=%d\n", getValue(displayModeValues, kCGDisplayRefreshRate));
+#  endif
 #endif  // GHOST_DEBUG
 
   // CGDisplayErr err = ::CGDisplaySwitchToMode(m_displayIDs[display], displayModeValues);
 
-  return /*err == CGDisplayNoErr ?*/ GHOST_kSuccess /*: GHOST_kFailure*/;
+  return /* err == CGDisplayNoErr ? */ GHOST_kSuccess /* : GHOST_kFailure */;
 }

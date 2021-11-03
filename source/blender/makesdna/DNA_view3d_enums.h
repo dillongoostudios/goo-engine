@@ -24,12 +24,15 @@
 extern "C" {
 #endif
 
-/** Settings for offscreen rendering */
+/** Settings for off-screen rendering. */
 typedef enum eV3DOffscreenDrawFlag {
   V3D_OFSDRAW_NONE = (0),
   V3D_OFSDRAW_SHOW_ANNOTATION = (1 << 0),
   V3D_OFSDRAW_OVERRIDE_SCENE_SETTINGS = (1 << 1),
   V3D_OFSDRAW_SHOW_GRIDFLOOR = (1 << 2),
+  V3D_OFSDRAW_SHOW_SELECTION = (1 << 3),
+  V3D_OFSDRAW_XR_SHOW_CONTROLLERS = (1 << 4),
+  V3D_OFSDRAW_XR_SHOW_CUSTOM_OVERLAYS = (1 << 5),
 } eV3DOffscreenDrawFlag;
 
 /** #View3DShading.light */

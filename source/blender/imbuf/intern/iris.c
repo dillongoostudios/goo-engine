@@ -39,7 +39,7 @@
 #define IMAGIC 0732
 
 typedef struct {
-  ushort imagic; /* stuff saved on disk . . */
+  ushort imagic; /* Stuff saved on disk. */
   ushort type;
   ushort dim;
   ushort xsize;
@@ -72,14 +72,14 @@ BLI_STATIC_ASSERT(sizeof(IMAGE) == HEADER_SIZE, "Invalid header size");
 
 // #define TYPEMASK        0xff00
 #define BPPMASK 0x00ff
-// #define ITYPE_VERBATIM      0x0000 // UNUSED
+// #define ITYPE_VERBATIM      0x0000 /* UNUSED */
 #define ITYPE_RLE 0x0100
 #define ISRLE(type) (((type)&0xff00) == ITYPE_RLE)
 // #define ISVERBATIM(type)    (((type) & 0xff00) == ITYPE_VERBATIM)
 #define BPP(type) ((type)&BPPMASK)
 #define RLE(bpp) (ITYPE_RLE | (bpp))
-// #define VERBATIM(bpp)       (ITYPE_VERBATIM | (bpp)) // UNUSED
-// #define IBUFSIZE(pixels)    ((pixels + (pixels >> 6)) << 2) // UNUSED
+// #define VERBATIM(bpp)       (ITYPE_VERBATIM | (bpp)) /* UNUSED */
+// #define IBUFSIZE(pixels)    ((pixels + (pixels >> 6)) << 2) /* UNUSED */
 // #define RLE_NOP         0x00
 
 /* local struct for mem access */
@@ -237,10 +237,10 @@ static void test_endian_zbuf(struct ImBuf *ibuf)
   }
 }
 
-/* from misc_util: flip the bytes from x  */
+/* From misc_util: flip the bytes from x. */
 #define GS(x) (((uchar *)(x))[0] << 8 | ((uchar *)(x))[1])
 
-/* this one is only def-ed once, strangely... */
+/* This one is only def-ed once, strangely... */
 #define GSS(x) (((uchar *)(x))[1] << 8 | ((uchar *)(x))[0])
 
 bool imb_is_a_iris(const uchar *mem, size_t size)
@@ -274,7 +274,7 @@ struct ImBuf *imb_loadiris(const uchar *mem, size_t size, int flags, char colors
     return NULL;
   }
 
-  /* Could pe part of the magic check above,
+  /* Could be part of the magic check above,
    * by convention this check only requests the size needed to read it's magic though. */
   if (size < HEADER_SIZE) {
     return NULL;

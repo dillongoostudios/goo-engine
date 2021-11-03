@@ -457,7 +457,7 @@ static void separated_armature_fix_links(Main *bmain, Object *origArm, Object *n
   bConstraint *con;
   ListBase *opchans, *npchans;
 
-  /* get reference to list of bones in original and new armatures  */
+  /* Get reference to list of bones in original and new armatures. */
   opchans = &origArm->pose->chanbase;
   npchans = &newArm->pose->chanbase;
 
@@ -576,7 +576,7 @@ static void separate_armature_bones(Main *bmain, Object *ob, const bool is_selec
     /* check if bone needs to be removed */
     if (is_select == (EBONE_VISIBLE(arm, curbone) && (curbone->flag & BONE_SELECTED))) {
 
-      /* clear the bone->parent var of any bone that had this as its parent  */
+      /* Clear the bone->parent var of any bone that had this as its parent. */
       LISTBASE_FOREACH (EditBone *, ebo, arm->edbo) {
         if (ebo->parent == curbone) {
           ebo->parent = NULL;
@@ -703,7 +703,7 @@ static int separate_armature_exec(bContext *C, wmOperator *op)
 
     ok = true;
 
-    /* note, notifier might evolve */
+    /* NOTE: notifier might evolve. */
     WM_event_add_notifier(C, NC_OBJECT | ND_POSE, ob_old);
   }
   MEM_freeN(bases);
@@ -838,7 +838,7 @@ static int armature_parent_set_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* If there is only 1 selected bone, we assume that that is the active bone,
+  /* If there is only 1 selected bone, we assume that it is the active bone,
    * since a user will need to have clicked on a bone (thus selecting it) to make it active. */
   bool is_active_only_selected = false;
   if (actbone->flag & BONE_SELECTED) {
@@ -893,7 +893,7 @@ static int armature_parent_set_exec(bContext *C, wmOperator *op)
     }
   }
 
-  /* note, notifier might evolve */
+  /* NOTE: notifier might evolve. */
   WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
   DEG_id_tag_update(&ob->id, ID_RECALC_SELECT);
 
@@ -1004,7 +1004,7 @@ static int armature_parent_clear_exec(bContext *C, wmOperator *op)
 
     ED_armature_edit_sync_selection(arm->edbo);
 
-    /* Note, notifier might evolve. */
+    /* NOTE: notifier might evolve. */
     WM_event_add_notifier(C, NC_OBJECT | ND_BONE_SELECT, ob);
   }
   MEM_freeN(objects);

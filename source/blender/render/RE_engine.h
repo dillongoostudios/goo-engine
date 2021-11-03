@@ -40,6 +40,7 @@ struct RenderData;
 struct RenderEngine;
 struct RenderEngineType;
 struct RenderLayer;
+struct RenderPass;
 struct RenderResult;
 struct ReportList;
 struct Scene;
@@ -59,12 +60,14 @@ extern "C" {
 #define RE_USE_PREVIEW 4
 #define RE_USE_POSTPROCESS 8
 #define RE_USE_EEVEE_VIEWPORT 16
-#define RE_USE_SAVE_BUFFERS 32
+/* #define RE_USE_SAVE_BUFFERS_DEPRECATED 32 */
 #define RE_USE_SHADING_NODES_CUSTOM 64
 #define RE_USE_SPHERICAL_STEREO 128
 #define RE_USE_STEREO_VIEWPORT 256
 #define RE_USE_GPU_CONTEXT 512
 #define RE_USE_CUSTOM_FREESTYLE 1024
+#define RE_USE_NO_IMAGE_SAVE 2048
+#define RE_USE_ALEMBIC_PROCEDURAL 4096
 
 /* RenderEngine.flag */
 #define RE_ENGINE_ANIMATION 1
@@ -73,6 +76,7 @@ extern "C" {
 #define RE_ENGINE_DO_UPDATE 8
 #define RE_ENGINE_RENDERING 16
 #define RE_ENGINE_HIGHLIGHT_TILES 32
+#define RE_ENGINE_CAN_DRAW 64
 
 extern ListBase R_engines;
 
@@ -85,7 +89,20 @@ typedef struct RenderEngineType {
   int flag;
 
   void (*update)(struct RenderEngine *engine, struct Main *bmain, struct Depsgraph *depsgraph);
+
   void (*render)(struct RenderEngine *engine, struct Depsgraph *depsgraph);
+
+  /* Offline rendering is finished - no more view layers will be rendered.
+   *
+   * All the pending data is to be communicated from the engine back to Blender. In a possibly
+   * most memory-efficient manner (engine might free its database before making Blender to allocate
+   * full-frame render result). */
+  void (*render_frame_finish)(struct RenderEngine *engine);
+
+  void (*draw)(struct RenderEngine *engine,
+               const struct bContext *context,
+               struct Depsgraph *depsgraph);
+
   void (*bake)(struct RenderEngine *engine,
                struct Depsgraph *depsgraph,
                struct Object *object,
@@ -129,9 +146,6 @@ typedef struct RenderEngine {
   int flag;
   struct Object *camera_override;
   unsigned int layer_override;
-
-  int tile_x;
-  int tile_y;
 
   struct Render *re;
   ListBase fullresult;
@@ -187,6 +201,10 @@ void RE_engine_end_result(RenderEngine *engine,
                           bool merge_results);
 struct RenderResult *RE_engine_get_result(struct RenderEngine *engine);
 
+struct RenderPass *RE_engine_pass_by_index_get(struct RenderEngine *engine,
+                                               const char *layer_name,
+                                               int index);
+
 const char *RE_engine_active_view_get(RenderEngine *engine);
 void RE_engine_active_view_set(RenderEngine *engine, const char *viewname);
 float RE_engine_get_camera_shift_x(RenderEngine *engine,
@@ -195,7 +213,7 @@ float RE_engine_get_camera_shift_x(RenderEngine *engine,
 void RE_engine_get_camera_model_matrix(RenderEngine *engine,
                                        struct Object *camera,
                                        bool use_spherical_stereo,
-                                       float *r_modelmat);
+                                       float r_modelmat[16]);
 bool RE_engine_get_spherical_stereo(RenderEngine *engine, struct Object *camera);
 
 bool RE_engine_test_break(RenderEngine *engine);
@@ -226,6 +244,24 @@ void RE_engine_register_pass(struct RenderEngine *engine,
 
 bool RE_engine_use_persistent_data(struct RenderEngine *engine);
 
+struct RenderEngine *RE_engine_get(const struct Render *re);
+
+/* Acquire render engine for drawing via its `draw()` callback.
+ *
+ * If drawing is not possible false is returned. If drawing is possible then the engine is
+ * "acquired" so that it can not be freed by the render pipeline.
+ *
+ * Drawing is possible if the engine has the `draw()` callback and it is in its `render()`
+ * callback. */
+bool RE_engine_draw_acquire(struct Render *re);
+void RE_engine_draw_release(struct Render *re);
+
+/* NOTE: Only used for Cycles's BLenderGPUDisplay integration with the draw manager. A subject
+ * for re-consideration. Do not use this functionality. */
+bool RE_engine_has_render_context(struct RenderEngine *engine);
+void RE_engine_render_context_enable(struct RenderEngine *engine);
+void RE_engine_render_context_disable(struct RenderEngine *engine);
+
 /* Engine Types */
 
 void RE_engines_init(void);
@@ -233,6 +269,12 @@ void RE_engines_exit(void);
 void RE_engines_register(RenderEngineType *render_type);
 
 bool RE_engine_is_opengl(RenderEngineType *render_type);
+
+/**
+ * Return true if the RenderEngineType has native support for direct loading of Alembic data. For
+ * Cycles, this also checks that the experimental feature set is enabled.
+ */
+bool RE_engine_supports_alembic_procedural(const RenderEngineType *render_type, Scene *scene);
 
 RenderEngineType *RE_engines_find(const char *idname);
 
@@ -243,6 +285,10 @@ void RE_bake_engine_set_engine_parameters(struct Render *re,
                                           struct Scene *scene);
 
 void RE_engine_free_blender_memory(struct RenderEngine *engine);
+
+void RE_engine_tile_highlight_set(
+    struct RenderEngine *engine, int x, int y, int width, int height, bool highlight);
+void RE_engine_tile_highlight_clear_all(struct RenderEngine *engine);
 
 #ifdef __cplusplus
 }

@@ -152,7 +152,7 @@ static struct bUnitDef buMetricLenDef[] = {
   {"micrometer", "micrometers", "µm",  "um", "Micrometers",    "MICROMETERS", UN_SC_UM,  0.0, B_UNIT_DEF_NONE},
 
   /* These get displayed because of float precision problems in the transform header,
-   * could work around, but for now probably people wont use these. */
+   * could work around, but for now probably people won't use these. */
 #if 0
   {"nanometer", "Nanometers",     "nm", NULL, 0.000000001, 0.0,   B_UNIT_DEF_NONE},
   {"picometer", "Picometers",     "pm", NULL, 0.000000000001, 0.0, B_UNIT_DEF_NONE},
@@ -358,6 +358,7 @@ static const struct bUnitCollection *bUnitSystems[][B_UNIT_TYPE_TOT] = {
      NULL,
      &buNaturalRotCollection,
      &buNaturalTimeCollection,
+     &buNaturalTimeCollection,
      NULL,
      NULL,
      NULL,
@@ -370,6 +371,7 @@ static const struct bUnitCollection *bUnitSystems[][B_UNIT_TYPE_TOT] = {
      &buMetricVolCollection,
      &buMetricMassCollection,
      &buNaturalRotCollection,
+     &buNaturalTimeCollection,
      &buNaturalTimeCollection,
      &buMetricVelCollection,
      &buMetricAclCollection,
@@ -384,12 +386,13 @@ static const struct bUnitCollection *bUnitSystems[][B_UNIT_TYPE_TOT] = {
      &buImperialMassCollection,
      &buNaturalRotCollection,
      &buNaturalTimeCollection,
+     &buNaturalTimeCollection,
      &buImperialVelCollection,
      &buImperialAclCollection,
      &buCameraLenCollection,
      &buPowerCollection,
      &buImperialTempCollection},
-    {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
+    {NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL},
 };
 
 static const bUnitCollection *unit_get_system(int system, int type)
@@ -714,7 +717,7 @@ static const char *unit_find_str(const char *str, const char *substr, bool case_
       if (str_found == str ||
           /* Weak unicode support!, so "µm" won't match up be replaced by "m"
            * since non ascii utf8 values will NEVER return true */
-          isalpha_or_utf8(*BLI_str_prev_char_utf8(str_found)) == 0) {
+          isalpha_or_utf8(*BLI_str_find_prev_char_utf8(str_found, str)) == 0) {
         /* Next char cannot be alphanum. */
         int len_name = strlen(substr);
 
@@ -741,10 +744,10 @@ static const char *unit_find_str(const char *str, const char *substr, bool case_
  *
  * "1m1cm+2mm"              - Original value.
  * "1*1#1*0.01#+2*0.001#"   - Replace numbers.
- * "1*1+1*0.01 +2*0.001 "   - Add add signs if ( + - * / | & ~ < > ^ ! = % ) not found in between.
+ * "1*1+1*0.01 +2*0.001 "   - Add plus signs if ( + - * / | & ~ < > ^ ! = % ) not found in between.
  */
 
-/* Not too strict, (+ - * /) are most common.  */
+/* Not too strict, (+ - * /) are most common. */
 static bool ch_is_op(char op)
 {
   switch (op) {
@@ -830,7 +833,7 @@ static char *find_next_op(const char *str, char *remaining_str, int len_max)
       return remaining_str + i;
     }
   }
-  BLI_assert(!"String should be NULL terminated");
+  BLI_assert_msg(0, "String should be NULL terminated");
   return remaining_str + i;
 }
 
@@ -914,7 +917,7 @@ static int unit_scale_str(char *str,
     return 0;
   }
 
-  /* XXX - investigate, does not respect len_max properly.  */
+  /* XXX: investigate, does not respect len_max properly. */
   char *str_found = (char *)unit_find_str(str, replace_str, case_sensitive);
 
   if (str_found == NULL) {
@@ -928,7 +931,7 @@ static int unit_scale_str(char *str,
   /* Deal with unit bias for temperature units. Order of operations is important, so we
    * have to add parentheses, add the bias, then multiply by the scalar like usual.
    *
-   * Note: If these changes don't fit in the buffer properly unit evaluation has failed,
+   * NOTE: If these changes don't fit in the buffer properly unit evaluation has failed,
    * just try not to destroy anything while failing. */
   if (unit->bias != 0.0) {
     /* Add the open parenthesis. */
@@ -943,7 +946,7 @@ static int unit_scale_str(char *str,
 
     /* Add the addition sign, the bias, and the close parenthesis after the value. */
     int value_end_ofs = find_end_of_value_chars(str, len_max, prev_op_ofs + 2);
-    int len_bias_num = BLI_snprintf(str_tmp, TEMP_STR_SIZE, "+%.9g)", unit->bias);
+    int len_bias_num = BLI_snprintf_rlen(str_tmp, TEMP_STR_SIZE, "+%.9g)", unit->bias);
     if (value_end_ofs + len_bias_num < len_max) {
       memmove(str + value_end_ofs + len_bias_num, str + value_end_ofs, len - value_end_ofs + 1);
       memcpy(str + value_end_ofs, str_tmp, len_bias_num);
@@ -957,7 +960,8 @@ static int unit_scale_str(char *str,
   int len_move = (len - (found_ofs + len_name)) + 1; /* 1+ to copy the string terminator. */
 
   /* "#" Removed later */
-  int len_num = BLI_snprintf(str_tmp, TEMP_STR_SIZE, "*%.9g" SEP_STR, unit->scalar / scale_pref);
+  int len_num = BLI_snprintf_rlen(
+      str_tmp, TEMP_STR_SIZE, "*%.9g" SEP_STR, unit->scalar / scale_pref);
 
   if (len_num > len_max) {
     len_num = len_max;
@@ -984,7 +988,7 @@ static int unit_scale_str(char *str,
     memcpy(str_found, str_tmp, len_num); /* Without the string terminator. */
   }
 
-  /* Since the null terminator wont be moved if the stringlen_max
+  /* Since the null terminator won't be moved if the stringlen_max
    * was not long enough to fit everything in it. */
   str[len_max - 1] = '\0';
   return found_ofs + len_num;
@@ -1132,8 +1136,8 @@ bool BKE_unit_replace_string(
     strncpy(str, str_tmp, len_max);
   }
   else {
-    /* BLI_snprintf would not fit into str_tmp, cant do much in this case.
-     * Check for this because otherwise BKE_unit_replace_string could call its self forever. */
+    /* BLI_snprintf would not fit into str_tmp, can't do much in this case.
+     * Check for this because otherwise BKE_unit_replace_string could call itself forever. */
     return changed;
   }
 
@@ -1299,7 +1303,7 @@ const char *BKE_unit_identifier_get(const void *usys_pt, int index)
 {
   const bUnitDef *unit = ((const bUnitCollection *)usys_pt)->units + index;
   if (unit->identifier == NULL) {
-    BLI_assert(false && "identifier for this unit is not specified yet");
+    BLI_assert_msg(0, "identifier for this unit is not specified yet");
   }
   return unit->identifier;
 }

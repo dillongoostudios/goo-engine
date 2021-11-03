@@ -722,6 +722,13 @@ MINLINE void madd_v3_v3v3fl(float r[3], const float a[3], const float b[3], floa
   r[2] = a[2] + b[2] * f;
 }
 
+MINLINE void madd_v3_v3v3db_db(double r[3], const double a[3], const double b[3], double f)
+{
+  r[0] = a[0] + b[0] * f;
+  r[1] = a[1] + b[1] * f;
+  r[2] = a[2] + b[2] * f;
+}
+
 MINLINE void madd_v3_v3v3v3(float r[3], const float a[3], const float b[3], const float c[3])
 {
   r[0] = a[0] + b[0] * c[0];
@@ -838,6 +845,19 @@ MINLINE void invert_v3(float r[3])
   r[0] = 1.0f / r[0];
   r[1] = 1.0f / r[1];
   r[2] = 1.0f / r[2];
+}
+
+MINLINE void invert_v3_safe(float r[3])
+{
+  if (r[0] != 0.0f) {
+    r[0] = 1.0f / r[0];
+  }
+  if (r[1] != 0.0f) {
+    r[1] = 1.0f / r[1];
+  }
+  if (r[2] != 0.0f) {
+    r[2] = 1.0f / r[2];
+  }
 }
 
 MINLINE void abs_v2(float r[2])
@@ -971,7 +991,7 @@ MINLINE void add_newell_cross_v3_v3v3(float n[3], const float v_prev[3], const f
   n[2] += (v_prev[0] - v_curr[0]) * (v_prev[1] + v_curr[1]);
 }
 
-MINLINE void star_m3_v3(float rmat[3][3], float a[3])
+MINLINE void star_m3_v3(float rmat[3][3], const float a[3])
 {
   rmat[0][0] = rmat[1][1] = rmat[2][2] = 0.0;
   rmat[0][1] = -a[2];
@@ -1125,6 +1145,22 @@ MINLINE float len_v3v3(const float a[3], const float b[3])
   return len_v3(d);
 }
 
+MINLINE float len_v4(const float a[4])
+{
+  return sqrtf(dot_v4v4(a, a));
+}
+
+MINLINE float len_v4v4(const float a[4], const float b[4])
+{
+  float d[4];
+
+  sub_v4_v4v4(d, b, a);
+  return len_v4(d);
+}
+
+/**
+ * \note any vectors containing `nan` will be zeroed out.
+ */
 MINLINE float normalize_v2_v2_length(float r[2], const float a[2], const float unit_length)
 {
   float d = dot_v2v2(a, a);
@@ -1134,6 +1170,7 @@ MINLINE float normalize_v2_v2_length(float r[2], const float a[2], const float u
     mul_v2_v2fl(r, a, unit_length / d);
   }
   else {
+    /* Either the vector is small or one of it's values contained `nan`. */
     zero_v2(r);
     d = 0.0f;
   }
@@ -1155,17 +1192,20 @@ MINLINE float normalize_v2_length(float n[2], const float unit_length)
   return normalize_v2_v2_length(n, n, unit_length);
 }
 
+/**
+ * \note any vectors containing `nan` will be zeroed out.
+ */
 MINLINE float normalize_v3_v3_length(float r[3], const float a[3], const float unit_length)
 {
   float d = dot_v3v3(a, a);
 
-  /* a larger value causes normalize errors in a
-   * scaled down models with camera extreme close */
+  /* A larger value causes normalize errors in a scaled down models with camera extreme close. */
   if (d > 1.0e-35f) {
     d = sqrtf(d);
     mul_v3_v3fl(r, a, unit_length / d);
   }
   else {
+    /* Either the vector is small or one of it's values contained `nan`. */
     zero_v3(r);
     d = 0.0f;
   }
@@ -1282,6 +1322,21 @@ MINLINE bool is_zero_v4(const float v[4])
   return (v[0] == 0.0f && v[1] == 0.0f && v[2] == 0.0f && v[3] == 0.0f);
 }
 
+MINLINE bool is_zero_v2_db(const double v[2])
+{
+  return (v[0] == 0.0 && v[1] == 0.0);
+}
+
+MINLINE bool is_zero_v3_db(const double v[3])
+{
+  return (v[0] == 0.0 && v[1] == 0.0 && v[2] == 0.0);
+}
+
+MINLINE bool is_zero_v4_db(const double v[4])
+{
+  return (v[0] == 0.0 && v[1] == 0.0 && v[2] == 0.0 && v[3] == 0.0);
+}
+
 MINLINE bool is_one_v3(const float v[3])
 {
   return (v[0] == 1.0f && v[1] == 1.0f && v[2] == 1.0f);
@@ -1290,7 +1345,7 @@ MINLINE bool is_one_v3(const float v[3])
 /* -------------------------------------------------------------------- */
 /** \name Vector Comparison
  *
- * \note use ``value <= limit``, so a limit of zero doesn't fail on an exact match.
+ * \note use `value <= limit`, so a limit of zero doesn't fail on an exact match.
  * \{ */
 
 MINLINE bool equals_v2v2(const float v1[2], const float v2[2])

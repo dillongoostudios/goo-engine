@@ -31,6 +31,7 @@ set(INC
   ../depsgraph
   ../editors/include
   ../editors/space_view3d
+  ../functions
   ../gpu
   ../imbuf
   ../makesdna
@@ -51,8 +52,38 @@ set(INC
 
 set(SRC
   intern/draw_cache.c
-  intern/draw_cache_extract_mesh.c
-  intern/draw_cache_impl_curve.c
+  intern/draw_cache_extract_mesh.cc
+  intern/draw_cache_extract_mesh_render_data.c
+  intern/mesh_extractors/extract_mesh.c
+  intern/mesh_extractors/extract_mesh_ibo_edituv.cc
+  intern/mesh_extractors/extract_mesh_ibo_fdots.cc
+  intern/mesh_extractors/extract_mesh_ibo_lines.cc
+  intern/mesh_extractors/extract_mesh_ibo_lines_adjacency.cc
+  intern/mesh_extractors/extract_mesh_ibo_lines_paint_mask.cc
+  intern/mesh_extractors/extract_mesh_ibo_points.cc
+  intern/mesh_extractors/extract_mesh_ibo_tris.cc
+  intern/mesh_extractors/extract_mesh_vbo_attributes.cc
+  intern/mesh_extractors/extract_mesh_vbo_edge_fac.cc
+  intern/mesh_extractors/extract_mesh_vbo_edit_data.cc
+  intern/mesh_extractors/extract_mesh_vbo_edituv_data.cc
+  intern/mesh_extractors/extract_mesh_vbo_edituv_stretch_angle.cc
+  intern/mesh_extractors/extract_mesh_vbo_edituv_stretch_area.cc
+  intern/mesh_extractors/extract_mesh_vbo_fdots_edituv_data.cc
+  intern/mesh_extractors/extract_mesh_vbo_fdots_nor.cc
+  intern/mesh_extractors/extract_mesh_vbo_fdots_pos.cc
+  intern/mesh_extractors/extract_mesh_vbo_fdots_uv.cc
+  intern/mesh_extractors/extract_mesh_vbo_lnor.cc
+  intern/mesh_extractors/extract_mesh_vbo_mesh_analysis.cc
+  intern/mesh_extractors/extract_mesh_vbo_orco.cc
+  intern/mesh_extractors/extract_mesh_vbo_pos_nor.cc
+  intern/mesh_extractors/extract_mesh_vbo_sculpt_data.cc
+  intern/mesh_extractors/extract_mesh_vbo_select_idx.cc
+  intern/mesh_extractors/extract_mesh_vbo_skin_roots.cc
+  intern/mesh_extractors/extract_mesh_vbo_tan.cc
+  intern/mesh_extractors/extract_mesh_vbo_uv.cc
+  intern/mesh_extractors/extract_mesh_vbo_vcol.cc
+  intern/mesh_extractors/extract_mesh_vbo_weights.cc
+  intern/draw_cache_impl_curve.cc
   intern/draw_cache_impl_displist.c
   intern/draw_cache_impl_gpencil.c
   intern/draw_cache_impl_hair.c
@@ -62,7 +93,7 @@ set(SRC
   intern/draw_cache_impl_particles.c
   intern/draw_cache_impl_pointcloud.c
   intern/draw_cache_impl_volume.c
-  intern/draw_color_management.c
+  intern/draw_color_management.cc
   intern/draw_common.c
   intern/draw_debug.c
   intern/draw_fluid.c
@@ -76,7 +107,11 @@ set(SRC
   intern/draw_manager_text.c
   intern/draw_manager_texture.c
   intern/draw_select_buffer.c
+  intern/draw_shader.c
+  intern/draw_texture_pool.cc
   intern/draw_view.c
+  intern/draw_view_data.cc
+  intern/smaa_textures.c
   engines/basic/basic_engine.c
   engines/image/image_engine.c
   engines/image/image_shader.c
@@ -147,6 +182,7 @@ set(SRC
   engines/overlay/overlay_image.c
   engines/overlay/overlay_lattice.c
   engines/overlay/overlay_metaball.c
+  engines/overlay/overlay_mode_transfer.c
   engines/overlay/overlay_motion_path.c
   engines/overlay/overlay_outline.c
   engines/overlay/overlay_paint.c
@@ -157,7 +193,6 @@ set(SRC
   engines/overlay/overlay_wireframe.c
 
   DRW_engine.h
-  DRW_engine_types.h
   DRW_select_buffer.h
   intern/DRW_render.h
   intern/draw_cache.h
@@ -173,7 +208,11 @@ set(SRC
   intern/draw_manager_profiling.h
   intern/draw_manager_testing.h
   intern/draw_manager_text.h
+  intern/draw_shader.h
+  intern/draw_texture_pool.h
   intern/draw_view.h
+  intern/draw_view_data.h
+  intern/mesh_extractors/extract_mesh.h
   intern/smaa_textures.h
   engines/basic/basic_engine.h
   engines/eevee/eevee_engine.h
@@ -325,6 +364,7 @@ data_to_c_simple(intern/shaders/common_globals_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_pointcloud_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_hair_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_hair_refine_vert.glsl SRC)
+data_to_c_simple(intern/shaders/common_hair_refine_comp.glsl SRC)
 data_to_c_simple(intern/shaders/common_math_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_math_geom_lib.glsl SRC)
 data_to_c_simple(intern/shaders/common_colorpacking_lib.glsl SRC)
@@ -417,6 +457,7 @@ data_to_c_simple(engines/overlay/shaders/extra_wire_frag.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/extra_wire_vert.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/facing_frag.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/facing_vert.glsl SRC)
+data_to_c_simple(engines/overlay/shaders/grid_background_frag.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/grid_frag.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/grid_vert.glsl SRC)
 data_to_c_simple(engines/overlay/shaders/image_vert.glsl SRC)
@@ -453,6 +494,13 @@ data_to_c_simple(engines/image/shaders/engine_image_vert.glsl SRC)
 list(APPEND INC
 )
 
+if(WITH_DRAW_DEBUG)
+  list(APPEND SRC
+    engines/select/select_debug_engine.c
+  )
+  add_definitions(-DWITH_DRAW_DEBUG)
+endif()
+
 if(WITH_MOD_FLUID)
   list(APPEND INC
     ../../../intern/mantaflow/extern
@@ -483,7 +531,10 @@ add_dependencies(bf_draw bf_dna)
 if(WITH_GTESTS)
   if(WITH_OPENGL_DRAW_TESTS)
     set(TEST_SRC
+      tests/draw_testing.cc
       tests/shaders_test.cc
+
+      tests/draw_testing.hh
     )
     set(TEST_INC
       "../../../intern/ghost/"

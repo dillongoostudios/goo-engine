@@ -53,21 +53,20 @@ static void lightprobe_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   LightProbe *probe = (LightProbe *)id;
 
-  BKE_LIB_FOREACHID_PROCESS(data, probe->image, IDWALK_CB_USER);
-  BKE_LIB_FOREACHID_PROCESS(data, probe->visibility_grp, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, probe->image, IDWALK_CB_USER);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, probe->visibility_grp, IDWALK_CB_NOP);
 }
 
 static void lightprobe_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   LightProbe *prb = (LightProbe *)id;
-  if (prb->id.us > 0 || BLO_write_is_undo(writer)) {
-    /* write LibData */
-    BLO_write_id_struct(writer, LightProbe, id_address, &prb->id);
-    BKE_id_blend_write(writer, &prb->id);
 
-    if (prb->adt) {
-      BKE_animdata_blend_write(writer, prb->adt);
-    }
+  /* write LibData */
+  BLO_write_id_struct(writer, LightProbe, id_address, &prb->id);
+  BKE_id_blend_write(writer, &prb->id);
+
+  if (prb->adt) {
+    BKE_animdata_blend_write(writer, prb->adt);
   }
 }
 
@@ -92,7 +91,7 @@ IDTypeInfo IDType_ID_LP = {
     .name = "LightProbe",
     .name_plural = "lightprobes",
     .translation_context = BLT_I18NCONTEXT_ID_LIGHTPROBE,
-    .flags = 0,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
 
     .init_data = lightprobe_init_data,
     .copy_data = NULL,
@@ -131,7 +130,7 @@ void BKE_lightprobe_type_set(LightProbe *probe, const short lightprobe_type)
       probe->attenuation_type = LIGHTPROBE_SHAPE_ELIPSOID;
       break;
     default:
-      BLI_assert(!"LightProbe type not configured.");
+      BLI_assert_msg(0, "LightProbe type not configured.");
       break;
   }
 }

@@ -34,10 +34,12 @@
 #include "DNA_gpencil_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_world_types.h"
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_blenlib.h"
+#include "BLI_dial_2d.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
 
@@ -45,7 +47,6 @@
 #include "BKE_armature.h"
 #include "BKE_camera.h"
 #include "BKE_context.h"
-#include "BKE_font.h"
 #include "BKE_gpencil_geom.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
@@ -55,6 +56,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.h"
+#include "BKE_vfont.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -189,7 +191,7 @@ typedef struct ViewOpsData {
     float dist;
     float camzoom;
     float quat[4];
-    /** #wmEvent.x, y. */
+    /** #wmEvent.xy. */
     int event_xy[2];
     /** Offset to use when #VIEWOPS_FLAG_USE_MOUSE_INIT is not set.
      * so we can simulate pressing in the middle of the screen. */
@@ -210,6 +212,9 @@ typedef struct ViewOpsData {
      * If we want the value before running the operator, add a separate member.
      */
     char persp;
+
+    /** Used for roll */
+    Dial *dial;
   } init;
 
   /** Previous state (previous modal event handled). */
@@ -392,9 +397,9 @@ enum eViewOpsFlag {
   /** When enabled, use the depth under the cursor for navigation. */
   VIEWOPS_FLAG_DEPTH_NAVIGATE = (1 << 1),
   /**
-   * When enabled run #ED_view3d_persp_ensure this may switch out of
-   * camera view when orbiting or switch from ortho to perspective when auto-persp is enabled.
-   * Some operations don't require this (view zoom/pan or ndof where subtle rotation is common
+   * When enabled run #ED_view3d_persp_ensure this may switch out of camera view
+   * when orbiting or switch from orthographic to perspective when auto-perspective is enabled.
+   * Some operations don't require this (view zoom/pan or NDOF where subtle rotation is common
    * so we don't want it to trigger auto-perspective). */
   VIEWOPS_FLAG_PERSP_ENSURE = (1 << 2),
   /** When set, ignore any options that depend on initial cursor location. */
@@ -468,17 +473,16 @@ static void viewops_data_create(bContext *C,
   vod->init.dist = rv3d->dist;
   vod->init.camzoom = rv3d->camzoom;
   copy_qt_qt(vod->init.quat, rv3d->viewquat);
-  vod->init.event_xy[0] = vod->prev.event_xy[0] = event->x;
-  vod->init.event_xy[1] = vod->prev.event_xy[1] = event->y;
+  copy_v2_v2_int(vod->init.event_xy, event->xy);
+  copy_v2_v2_int(vod->prev.event_xy, event->xy);
 
   if (viewops_flag & VIEWOPS_FLAG_USE_MOUSE_INIT) {
-    vod->init.event_xy_offset[0] = 0;
-    vod->init.event_xy_offset[1] = 0;
+    zero_v2_int(vod->init.event_xy_offset);
   }
   else {
     /* Simulate the event starting in the middle of the region. */
-    vod->init.event_xy_offset[0] = BLI_rcti_cent_x(&vod->region->winrct) - event->x;
-    vod->init.event_xy_offset[1] = BLI_rcti_cent_y(&vod->region->winrct) - event->y;
+    vod->init.event_xy_offset[0] = BLI_rcti_cent_x(&vod->region->winrct) - event->xy[0];
+    vod->init.event_xy_offset[1] = BLI_rcti_cent_y(&vod->region->winrct) - event->xy[1];
   }
 
   vod->init.event_type = event->type;
@@ -509,7 +513,7 @@ static void viewops_data_create(bContext *C,
         negate_v3_v3(my_origin, rv3d->ofs); /* ofs is flipped */
 
         /* Set the dist value to be the distance from this 3d point this means you'll
-         * always be able to zoom into it and panning wont go bad when dist was zero. */
+         * always be able to zoom into it and panning won't go bad when dist was zero. */
 
         /* remove dist value */
         upvec[0] = upvec[1] = 0;
@@ -543,10 +547,9 @@ static void viewops_data_create(bContext *C,
   ED_view3d_win_to_vector(vod->region, (const float[2]){UNPACK2(event->mval)}, vod->init.mousevec);
 
   {
-    const int event_xy_offset[2] = {
-        event->x + vod->init.event_xy_offset[0],
-        event->y + vod->init.event_xy_offset[1],
-    };
+    int event_xy_offset[2];
+    add_v2_v2v2_int(event_xy_offset, event->xy, vod->init.event_xy_offset);
+
     /* For rotation with trackball rotation. */
     calctrackballvec(&vod->region->winrct, event_xy_offset, vod->init.trackvec);
   }
@@ -575,6 +578,10 @@ static void viewops_data_free(bContext *C, wmOperator *op)
 
     if (vod->timer) {
       WM_event_remove_timer(CTX_wm_manager(C), vod->timer->win, vod->timer);
+    }
+
+    if (vod->init.dial) {
+      MEM_freeN(vod->init.dial);
     }
 
     MEM_freeN(vod);
@@ -611,7 +618,7 @@ enum {
   VIEWROT_MODAL_SWITCH_ROTATE = 6,
 };
 
-/* called in transform_ops.c, on each regeneration of keymaps  */
+/* Called in transform_ops.c, on each regeneration of key-maps. */
 void viewrotate_modal_keymap(wmKeyConfig *keyconf)
 {
   static const EnumPropertyItem modal_items[] = {
@@ -666,7 +673,6 @@ static void viewrotate_apply_snap(ViewOpsData *vod)
   float zaxis_best[3];
   int x, y, z;
   bool found = false;
-  bool is_axis_aligned = false;
 
   invert_qt_qt_normalized(viewquat_inv, vod->curr.viewquat);
 
@@ -684,10 +690,6 @@ static void viewrotate_apply_snap(ViewOpsData *vod)
           if (angle_normalized_v3v3(zaxis_test, zaxis) < axis_limit) {
             copy_v3_v3(zaxis_best, zaxis_test);
             found = true;
-
-            if (abs(x) + abs(y) + abs(z) == 1) {
-              is_axis_aligned = true;
-            }
           }
         }
       }
@@ -760,7 +762,7 @@ static void viewrotate_apply_snap(ViewOpsData *vod)
     viewrotate_apply_dyn_ofs(vod, rv3d->viewquat);
 
     if (U.uiflag & USER_AUTOPERSP) {
-      if (is_axis_aligned) {
+      if (RV3D_VIEW_IS_AXIS(rv3d->view)) {
         if (rv3d->persp == RV3D_PERSP) {
           rv3d->persp = RV3D_ORTHO;
         }
@@ -813,7 +815,6 @@ static void viewrotate_apply(ViewOpsData *vod, const int event_xy[2])
     viewrotate_apply_dyn_ofs(vod, vod->curr.viewquat);
   }
   else {
-    /* New turntable view code by John Aughey */
     float quat_local_x[4], quat_global_z[4];
     float m[3][3];
     float m_inv[3][3];
@@ -894,8 +895,8 @@ static void viewrotate_apply(ViewOpsData *vod, const int event_xy[2])
    * rotation back into the view we calculate with */
   copy_qt_qt(rv3d->viewquat, vod->curr.viewquat);
 
-  /* check for view snap,
-   * note: don't apply snap to vod->viewquat so the view wont jam up */
+  /* Check for view snap,
+   * NOTE: don't apply snap to `vod->viewquat` so the view won't jam up. */
   if (vod->axis_snap) {
     viewrotate_apply_snap(vod);
   }
@@ -947,13 +948,12 @@ static int viewrotate_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   if (event_code == VIEW_APPLY) {
-    viewrotate_apply(vod, &event->x);
+    viewrotate_apply(vod, event->xy);
     if (ED_screen_animation_playing(CTX_wm_manager(C))) {
       use_autokey = true;
     }
   }
   else if (event_code == VIEW_CONFIRM) {
-    ED_view3d_depth_tag_update(vod->rv3d);
     use_autokey = true;
     ret = OPERATOR_FINISHED;
   }
@@ -999,22 +999,19 @@ static int viewrotate_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
     if (event->type == MOUSEPAN) {
       if (event->is_direction_inverted) {
-        event_xy[0] = 2 * event->x - event->prevx;
-        event_xy[1] = 2 * event->y - event->prevy;
+        event_xy[0] = 2 * event->xy[0] - event->prev_xy[0];
+        event_xy[1] = 2 * event->xy[1] - event->prev_xy[1];
       }
       else {
-        event_xy[0] = event->prevx;
-        event_xy[1] = event->prevy;
+        copy_v2_v2_int(event_xy, event->prev_xy);
       }
     }
     else {
       /* MOUSEROTATE performs orbital rotation, so y axis delta is set to 0 */
-      event_xy[0] = event->prevx;
-      event_xy[1] = event->y;
+      copy_v2_v2_int(event_xy, event->prev_xy);
     }
 
     viewrotate_apply(vod, event_xy);
-    ED_view3d_depth_tag_update(vod->rv3d);
 
     viewops_data_free(C, op);
 
@@ -1203,7 +1200,7 @@ static void view3d_ndof_orbit(const struct wmNDOFMotionData *ndof,
   if (U.ndof_flag & NDOF_TURNTABLE) {
     float rot[3];
 
-    /* turntable view code by John Aughey, adapted for 3D mouse by [mce] */
+    /* Turntable view code adapted for 3D mouse use. */
     float angle, quat[4];
     float xvec[3] = {1, 0, 0};
 
@@ -1508,7 +1505,7 @@ static int ndof_orbit_zoom_invoke(bContext *C, wmOperator *op, const wmEvent *ev
     }
   }
   else {
-    /* Note: based on feedback from T67579, users want to have pan and orbit enabled at once.
+    /* NOTE: based on feedback from T67579, users want to have pan and orbit enabled at once.
      * It's arguable that orbit shouldn't pan (since we have a pan only operator),
      * so if there are users who like to separate orbit/pan operations - it can be a preference. */
     const bool is_orbit_around_pivot = (U.ndof_flag & NDOF_MODE_ORBIT) ||
@@ -1688,7 +1685,7 @@ void VIEW3D_OT_ndof_all(struct wmOperatorType *ot)
 
 /* NOTE: these defines are saved in keymap files, do not change values but just add new ones */
 
-/* called in transform_ops.c, on each regeneration of keymaps  */
+/* Called in transform_ops.c, on each regeneration of key-maps. */
 void viewmove_modal_keymap(wmKeyConfig *keyconf)
 {
   static const EnumPropertyItem modal_items[] = {
@@ -1793,13 +1790,12 @@ static int viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   if (event_code == VIEW_APPLY) {
-    viewmove_apply(vod, event->x, event->y);
+    viewmove_apply(vod, event->xy[0], event->xy[1]);
     if (ED_screen_animation_playing(CTX_wm_manager(C))) {
       use_autokey = true;
     }
   }
   else if (event_code == VIEW_CONFIRM) {
-    ED_view3d_depth_tag_update(vod->rv3d);
     use_autokey = true;
     ret = OPERATOR_FINISHED;
   }
@@ -1839,8 +1835,8 @@ static int viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   if (event->type == MOUSEPAN) {
     /* invert it, trackpad scroll follows same principle as 2d windows this way */
-    viewmove_apply(vod, 2 * event->x - event->prevx, 2 * event->y - event->prevy);
-    ED_view3d_depth_tag_update(vod->rv3d);
+    viewmove_apply(
+        vod, 2 * event->xy[0] - event->prev_xy[0], 2 * event->xy[1] - event->prev_xy[1]);
 
     viewops_data_free(C, op);
 
@@ -1885,8 +1881,8 @@ void VIEW3D_OT_move(wmOperatorType *ot)
 /** \name View Zoom Operator
  * \{ */
 
-/* viewdolly_modal_keymap has an exact copy of this, apply fixes to both */
-/* called in transform_ops.c, on each regeneration of keymaps  */
+/* #viewdolly_modal_keymap has an exact copy of this, apply fixes to both. */
+/* Called in transform_ops.c, on each regeneration of key-maps. */
 void viewzoom_modal_keymap(wmKeyConfig *keyconf)
 {
   static const EnumPropertyItem modal_items[] = {
@@ -1920,7 +1916,7 @@ void viewzoom_modal_keymap(wmKeyConfig *keyconf)
 
 /**
  * \param zoom_xy: Optionally zoom to window location
- * (coords compatible w/ #wmEvent.x, y). Use when not NULL.
+ * (coords compatible w/ #wmEvent.xy). Use when not NULL.
  */
 static void view_zoom_to_window_xy_camera(Scene *scene,
                                           Depsgraph *depsgraph,
@@ -1973,7 +1969,7 @@ static void view_zoom_to_window_xy_camera(Scene *scene,
 
 /**
  * \param zoom_xy: Optionally zoom to window location
- * (coords compatible w/ #wmEvent.x, y). Use when not NULL.
+ * (coords compatible w/ #wmEvent.xy). Use when not NULL.
  */
 static void view_zoom_to_window_xy_3d(ARegion *region, float dfac, const int zoom_xy[2])
 {
@@ -2245,7 +2241,7 @@ static int viewzoom_modal(bContext *C, wmOperator *op, const wmEvent *event)
   if (event_code == VIEW_APPLY) {
     const bool use_cursor_init = RNA_boolean_get(op->ptr, "use_cursor_init");
     viewzoom_apply(vod,
-                   &event->x,
+                   event->xy,
                    (eViewZoom_Style)U.viewzoom,
                    (U.uiflag & USER_ZOOM_INVERT) != 0,
                    (use_cursor_init && (U.uiflag & USER_ZOOM_TO_MOUSEPOS)));
@@ -2254,7 +2250,6 @@ static int viewzoom_modal(bContext *C, wmOperator *op, const wmEvent *event)
     }
   }
   else if (event_code == VIEW_CONFIRM) {
-    ED_view3d_depth_tag_update(vod->rv3d);
     use_autokey = true;
     ret = OPERATOR_FINISHED;
   }
@@ -2341,8 +2336,6 @@ static int viewzoom_exec(bContext *C, wmOperator *op)
     view3d_boxview_sync(area, region);
   }
 
-  ED_view3d_depth_tag_update(rv3d);
-
   ED_view3d_camera_lock_sync(depsgraph, v3d, rv3d);
   ED_view3d_camera_lock_autokey(v3d, rv3d, C, false, true);
 
@@ -2373,8 +2366,8 @@ static int viewzoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   /* if one or the other zoom position aren't set, set from event */
   if (!RNA_struct_property_is_set(op->ptr, "mx") || !RNA_struct_property_is_set(op->ptr, "my")) {
-    RNA_int_set(op->ptr, "mx", event->x);
-    RNA_int_set(op->ptr, "my", event->y);
+    RNA_int_set(op->ptr, "mx", event->xy[0]);
+    RNA_int_set(op->ptr, "my", event->xy[1]);
   }
 
   if (RNA_struct_property_is_set(op->ptr, "delta")) {
@@ -2384,21 +2377,19 @@ static int viewzoom_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     if (ELEM(event->type, MOUSEZOOM, MOUSEPAN)) {
 
       if (U.uiflag & USER_ZOOM_HORIZ) {
-        vod->init.event_xy[0] = vod->prev.event_xy[0] = event->x;
+        vod->init.event_xy[0] = vod->prev.event_xy[0] = event->xy[0];
       }
       else {
         /* Set y move = x move as MOUSEZOOM uses only x axis to pass magnification value */
-        vod->init.event_xy[1] = vod->prev.event_xy[1] = vod->init.event_xy[1] + event->x -
-                                                        event->prevx;
+        vod->init.event_xy[1] = vod->prev.event_xy[1] = vod->init.event_xy[1] + event->xy[0] -
+                                                        event->prev_xy[0];
       }
       viewzoom_apply(vod,
-                     &event->prevx,
+                     event->prev_xy,
                      USER_ZOOM_DOLLY,
                      (U.uiflag & USER_ZOOM_INVERT) != 0,
                      (use_cursor_init && (U.uiflag & USER_ZOOM_TO_MOUSEPOS)));
       ED_view3d_camera_lock_autokey(vod->v3d, vod->rv3d, C, false, true);
-
-      ED_view3d_depth_tag_update(vod->rv3d);
 
       viewops_data_free(C, op);
       return OPERATOR_FINISHED;
@@ -2454,8 +2445,8 @@ void VIEW3D_OT_zoom(wmOperatorType *ot)
  * which avoids #RegionView3D.dist approaching zero.
  * \{ */
 
-/* this is an exact copy of viewzoom_modal_keymap */
-/* called in transform_ops.c, on each regeneration of keymaps  */
+/* This is an exact copy of #viewzoom_modal_keymap. */
+/* Called in transform_ops.c, on each regeneration of key-maps. */
 void viewdolly_modal_keymap(wmKeyConfig *keyconf)
 {
   static const EnumPropertyItem modal_items[] = {
@@ -2507,7 +2498,7 @@ static void view_dolly_to_vector_3d(ARegion *region,
   madd_v3_v3v3fl(rv3d->ofs, orig_ofs, dvec, -(1.0f - dfac));
 }
 
-static void viewdolly_apply(ViewOpsData *vod, const int xy[2], const short zoom_invert)
+static void viewdolly_apply(ViewOpsData *vod, const int xy[2], const bool zoom_invert)
 {
   float zfac = 1.0;
 
@@ -2573,13 +2564,12 @@ static int viewdolly_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
 
   if (event_code == VIEW_APPLY) {
-    viewdolly_apply(vod, &event->x, (U.uiflag & USER_ZOOM_INVERT) != 0);
+    viewdolly_apply(vod, event->xy, (U.uiflag & USER_ZOOM_INVERT) != 0);
     if (ED_screen_animation_playing(CTX_wm_manager(C))) {
       use_autokey = true;
     }
   }
   else if (event_code == VIEW_CONFIRM) {
-    ED_view3d_depth_tag_update(vod->rv3d);
     use_autokey = true;
     ret = OPERATOR_FINISHED;
   }
@@ -2636,8 +2626,6 @@ static int viewdolly_exec(bContext *C, wmOperator *op)
     view3d_boxview_sync(area, region);
   }
 
-  ED_view3d_depth_tag_update(rv3d);
-
   ED_view3d_camera_lock_sync(CTX_data_ensure_evaluated_depsgraph(C), v3d, rv3d);
 
   ED_region_tag_redraw(region);
@@ -2692,8 +2680,8 @@ static int viewdolly_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   /* if one or the other zoom position aren't set, set from event */
   if (!RNA_struct_property_is_set(op->ptr, "mx") || !RNA_struct_property_is_set(op->ptr, "my")) {
-    RNA_int_set(op->ptr, "mx", event->x);
-    RNA_int_set(op->ptr, "my", event->y);
+    RNA_int_set(op->ptr, "mx", event->xy[0]);
+    RNA_int_set(op->ptr, "my", event->xy[1]);
   }
 
   if (RNA_struct_property_is_set(op->ptr, "delta")) {
@@ -2710,15 +2698,14 @@ static int viewdolly_invoke(bContext *C, wmOperator *op, const wmEvent *event)
       /* Bypass Zoom invert flag for track pads (pass false always) */
 
       if (U.uiflag & USER_ZOOM_HORIZ) {
-        vod->init.event_xy[0] = vod->prev.event_xy[0] = event->x;
+        vod->init.event_xy[0] = vod->prev.event_xy[0] = event->xy[0];
       }
       else {
         /* Set y move = x move as MOUSEZOOM uses only x axis to pass magnification value */
-        vod->init.event_xy[1] = vod->prev.event_xy[1] = vod->init.event_xy[1] + event->x -
-                                                        event->prevx;
+        vod->init.event_xy[1] = vod->prev.event_xy[1] = vod->init.event_xy[1] + event->xy[0] -
+                                                        event->prev_xy[0];
       }
-      viewdolly_apply(vod, &event->prevx, (U.uiflag & USER_ZOOM_INVERT) == 0);
-      ED_view3d_depth_tag_update(vod->rv3d);
+      viewdolly_apply(vod, event->prev_xy, (U.uiflag & USER_ZOOM_INVERT) == 0);
 
       viewops_data_free(C, op);
       return OPERATOR_FINISHED;
@@ -2968,7 +2955,7 @@ static int view3d_all_exec(bContext *C, wmOperator *op)
 
   if (!changed) {
     ED_region_tag_redraw(region);
-    /* TODO - should this be cancel?
+    /* TODO: should this be cancel?
      * I think no, because we always move the cursor, with or without
      * object, but in this case there is no change in the scene,
      * only the cursor so I choice a ED_region_tag like
@@ -3617,7 +3604,7 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
   float depth_close = FLT_MAX;
   float cent[2], p[3];
 
-  /* note; otherwise opengl won't work */
+  /* NOTE: otherwise opengl won't work. */
   view3d_operator_needs_opengl(C);
 
   /* get box select values using rna */
@@ -3629,13 +3616,13 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
   ED_view3d_dist_range_get(v3d, dist_range);
 
   ED_view3d_depth_override(
-      CTX_data_ensure_evaluated_depsgraph(C), region, v3d, NULL, V3D_DEPTH_NO_GPENCIL, false);
+      CTX_data_ensure_evaluated_depsgraph(C), region, v3d, NULL, V3D_DEPTH_NO_GPENCIL, NULL);
   {
     /* avoid allocating the whole depth buffer */
     ViewDepths depth_temp = {0};
 
     /* avoid view3d_update_depths() for speed. */
-    view3d_update_depths_rect(region, &depth_temp, &rect);
+    view3d_depths_rect_create(region, &rect, &depth_temp);
 
     /* find the closest Z pixel */
     depth_close = view3d_depth_near(&depth_temp);
@@ -3660,14 +3647,14 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
   if (rv3d->is_persp) {
     float p_corner[3];
 
-    /* no depths to use, we cant do anything! */
+    /* no depths to use, we can't do anything! */
     if (depth_close == FLT_MAX) {
       BKE_report(op->reports, RPT_ERROR, "Depth too large");
       return OPERATOR_CANCELLED;
     }
     /* convert border to 3d coordinates */
-    if ((!ED_view3d_unproject(region, cent[0], cent[1], depth_close, p)) ||
-        (!ED_view3d_unproject(region, rect.xmin, rect.ymin, depth_close, p_corner))) {
+    if ((!ED_view3d_unproject_v3(region, cent[0], cent[1], depth_close, p)) ||
+        (!ED_view3d_unproject_v3(region, rect.xmin, rect.ymin, depth_close, p_corner))) {
       return OPERATOR_CANCELLED;
     }
 
@@ -3690,7 +3677,8 @@ static int view3d_zoom_border_exec(bContext *C, wmOperator *op)
     new_dist = rv3d->dist;
 
     /* convert the drawn rectangle into 3d space */
-    if (depth_close != FLT_MAX && ED_view3d_unproject(region, cent[0], cent[1], depth_close, p)) {
+    if (depth_close != FLT_MAX &&
+        ED_view3d_unproject_v3(region, cent[0], cent[1], depth_close, p)) {
       negate_v3_v3(new_ofs, p);
     }
     else {
@@ -3974,9 +3962,10 @@ static int view_axis_exec(bContext *C, wmOperator *op)
     Object *obact = CTX_data_active_object(C);
     if (obact != NULL) {
       float twmat[3][3];
+      ViewLayer *view_layer = CTX_data_view_layer(C);
       Object *obedit = CTX_data_edit_object(C);
       /* same as transform gizmo when normal is set */
-      ED_getTransformOrientationMatrix(C, obact, obedit, V3D_AROUND_ACTIVE, twmat);
+      ED_getTransformOrientationMatrix(view_layer, v3d, obact, obedit, V3D_AROUND_ACTIVE, twmat);
       align_quat = align_quat_buf;
       mat3_to_quat(align_quat, twmat);
       invert_qt_normalized(align_quat);
@@ -4364,18 +4353,9 @@ static void view_roll_angle(
   rv3d->view = RV3D_VIEW_USER;
 }
 
-static void viewroll_apply(ViewOpsData *vod, int x, int UNUSED(y))
+static void viewroll_apply(ViewOpsData *vod, int x, int y)
 {
-  float angle = 0.0;
-
-  {
-    float len1, len2, tot;
-
-    tot = vod->region->winrct.xmax - vod->region->winrct.xmin;
-    len1 = (vod->region->winrct.xmax - x) / tot;
-    len2 = (vod->region->winrct.xmax - vod->init.event_xy[0]) / tot;
-    angle = (len1 - len2) * (float)M_PI * 4.0f;
-  }
+  float angle = BLI_dial_angle(vod->init.dial, (const float[2]){x, y});
 
   if (angle != 0.0f) {
     view_roll_angle(vod->region, vod->rv3d->viewquat, vod->init.quat, vod->init.mousevec, angle);
@@ -4421,18 +4401,24 @@ static int viewroll_modal(bContext *C, wmOperator *op, const wmEvent *event)
         break;
     }
   }
+  else if (ELEM(event->type, EVT_ESCKEY, RIGHTMOUSE)) {
+    /* Note this does not remove auto-keys on locked cameras. */
+    copy_qt_qt(vod->rv3d->viewquat, vod->init.quat);
+    ED_view3d_camera_lock_sync(vod->depsgraph, vod->v3d, vod->rv3d);
+    viewops_data_free(C, op);
+    return OPERATOR_CANCELLED;
+  }
   else if (event->type == vod->init.event_type && event->val == KM_RELEASE) {
     event_code = VIEW_CONFIRM;
   }
 
   if (event_code == VIEW_APPLY) {
-    viewroll_apply(vod, event->x, event->y);
+    viewroll_apply(vod, event->xy[0], event->xy[1]);
     if (ED_screen_animation_playing(CTX_wm_manager(C))) {
       use_autokey = true;
     }
   }
   else if (event_code == VIEW_CONFIRM) {
-    ED_view3d_depth_tag_update(vod->rv3d);
     use_autokey = true;
     ret = OPERATOR_FINISHED;
   }
@@ -4530,6 +4516,9 @@ static int viewroll_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     viewops_data_alloc(C, op);
     viewops_data_create(C, op, event, viewops_flag_from_prefs());
     vod = op->customdata;
+    vod->init.dial = BLI_dial_init((const float[2]){BLI_rcti_cent_x(&vod->region->winrct),
+                                                    BLI_rcti_cent_y(&vod->region->winrct)},
+                                   FLT_EPSILON);
 
     ED_view3d_smooth_view_force_finish(C, vod->v3d, vod->region);
 
@@ -4538,9 +4527,8 @@ static int viewroll_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     negate_v3(vod->init.mousevec);
 
     if (event->type == MOUSEROTATE) {
-      vod->init.event_xy[0] = vod->prev.event_xy[0] = event->x;
-      viewroll_apply(vod, event->prevx, event->prevy);
-      ED_view3d_depth_tag_update(vod->rv3d);
+      vod->init.event_xy[0] = vod->prev.event_xy[0] = event->xy[0];
+      viewroll_apply(vod, event->prev_xy[0], event->prev_xy[1]);
 
       viewops_data_free(C, op);
       return OPERATOR_FINISHED;
@@ -4637,7 +4625,6 @@ static int viewpan_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   viewmove_apply(vod, vod->prev.event_xy[0] + x, vod->prev.event_xy[1] + y);
 
-  ED_view3d_depth_tag_update(vod->rv3d);
   viewops_data_free(C, op);
 
   return OPERATOR_FINISHED;
@@ -4803,7 +4790,7 @@ static bool background_image_add_poll(bContext *C)
 void VIEW3D_OT_background_image_add(wmOperatorType *ot)
 {
   /* identifiers */
-  /* note: having key shortcut here is bad practice,
+  /* NOTE: having key shortcut here is bad practice,
    * but for now keep because this displays when dragging an image over the 3D viewport */
   ot->name = "Add Background Image";
   ot->description = "Add a new background image";
@@ -4880,6 +4867,60 @@ void VIEW3D_OT_background_image_remove(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Drop World Operator
+ * \{ */
+
+static int drop_world_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+  Scene *scene = CTX_data_scene(C);
+
+  char name[MAX_ID_NAME - 2];
+
+  RNA_string_get(op->ptr, "name", name);
+  World *world = (World *)BKE_libblock_find_name(bmain, ID_WO, name);
+  if (world == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  id_us_min((ID *)scene->world);
+  id_us_plus(&world->id);
+  scene->world = world;
+
+  DEG_id_tag_update(&scene->id, 0);
+  DEG_relations_tag_update(bmain);
+
+  WM_event_add_notifier(C, NC_SCENE | ND_WORLD, scene);
+
+  return OPERATOR_FINISHED;
+}
+
+static bool drop_world_poll(bContext *C)
+{
+  return ED_operator_scene_editable(C);
+}
+
+void VIEW3D_OT_drop_world(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Drop World";
+  ot->description = "Drop a world into the scene";
+  ot->idname = "VIEW3D_OT_drop_world";
+
+  /* api callbacks */
+  ot->exec = drop_world_exec;
+  ot->poll = drop_world_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  /* properties */
+  RNA_def_string(ot->srna, "name", "World", MAX_ID_NAME - 2, "Name", "World to assign");
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name View Clipping Planes Operator
  *
  * Draw border or toggle off.
@@ -4933,10 +4974,7 @@ static int view3d_clipping_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   if (rv3d->rflag & RV3D_CLIPPING) {
     rv3d->rflag &= ~RV3D_CLIPPING;
     ED_region_tag_redraw(region);
-    if (rv3d->clipbb) {
-      MEM_freeN(rv3d->clipbb);
-    }
-    rv3d->clipbb = NULL;
+    MEM_SAFE_FREE(rv3d->clipbb);
     return OPERATOR_FINISHED;
   }
   return WM_gesture_box_invoke(C, op, event);
@@ -4972,7 +5010,7 @@ void VIEW3D_OT_clip_border(wmOperatorType *ot)
  * \{ */
 
 /* cursor position in vec, result in vec, mval in region coords */
-/* note: cannot use event->mval here (called by object_add() */
+/* NOTE: cannot use `event->mval` here, called by #object_add(). */
 void ED_view3d_cursor3d_position(bContext *C,
                                  const int mval[2],
                                  const bool use_depth,
@@ -5054,18 +5092,19 @@ void ED_view3d_cursor3d_position_rotation(bContext *C,
     float ray_no[3];
     float ray_co[3];
 
-    struct SnapObjectContext *snap_context = ED_transform_snap_object_context_create_view3d(
-        scene, 0, region, v3d);
+    struct SnapObjectContext *snap_context = ED_transform_snap_object_context_create(scene, 0);
 
     float obmat[4][4];
     Object *ob_dummy = NULL;
     float dist_px = 0;
     if (ED_transform_snap_object_project_view3d_ex(snap_context,
                                                    CTX_data_ensure_evaluated_depsgraph(C),
+                                                   region,
+                                                   v3d,
                                                    SCE_SNAP_MODE_FACE,
                                                    &(const struct SnapObjectParams){
                                                        .snap_select = SNAP_ALL,
-                                                       .use_object_edit_cage = false,
+                                                       .edit_mode_type = SNAP_GEOM_FINAL,
                                                        .use_occlusion_test = true,
                                                    },
                                                    mval_fl,
@@ -5075,7 +5114,8 @@ void ED_view3d_cursor3d_position_rotation(bContext *C,
                                                    ray_no,
                                                    NULL,
                                                    &ob_dummy,
-                                                   obmat) != 0) {
+                                                   obmat,
+                                                   NULL) != 0) {
       if (use_depth) {
         copy_v3_v3(cursor_co, ray_co);
       }
@@ -5311,7 +5351,7 @@ static int toggle_shading_exec(bContext *C, wmOperator *op)
   }
 
   ED_view3d_shade_update(bmain, v3d, area);
-  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D | NS_VIEW3D_SHADING, v3d);
 
   return OPERATOR_FINISHED;
 }
@@ -5366,6 +5406,7 @@ static int toggle_xray_exec(bContext *C, wmOperator *op)
   }
 
   ED_area_tag_redraw(area);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D | NS_VIEW3D_SHADING, v3d);
 
   return OPERATOR_FINISHED;
 }

@@ -49,22 +49,22 @@ struct bGPDlayer_Mask;
 struct bGPDstroke;
 struct bGPdata;
 
-#define GPENCIL_SIMPLIFY(scene) ((scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_ENABLE))
+#define GPENCIL_SIMPLIFY(scene) (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_ENABLE)
 #define GPENCIL_SIMPLIFY_ONPLAY(playing) \
   (((playing == true) && (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_ON_PLAY)) || \
    ((scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_ON_PLAY) == 0))
 #define GPENCIL_SIMPLIFY_FILL(scene, playing) \
-  ((GPENCIL_SIMPLIFY_ONPLAY(playing) && (GPENCIL_SIMPLIFY(scene)) && \
+  ((GPENCIL_SIMPLIFY_ONPLAY(playing) && GPENCIL_SIMPLIFY(scene) && \
     (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_FILL)))
 #define GPENCIL_SIMPLIFY_MODIF(scene) \
   ((GPENCIL_SIMPLIFY(scene) && (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_MODIFIER)))
 #define GPENCIL_SIMPLIFY_FX(scene, playing) \
-  ((GPENCIL_SIMPLIFY_ONPLAY(playing) && (GPENCIL_SIMPLIFY(scene)) && \
+  ((GPENCIL_SIMPLIFY_ONPLAY(playing) && GPENCIL_SIMPLIFY(scene) && \
     (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_FX)))
 #define GPENCIL_SIMPLIFY_TINT(scene) \
-  ((GPENCIL_SIMPLIFY(scene)) && (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_TINT))
+  (GPENCIL_SIMPLIFY(scene) && (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_TINT))
 #define GPENCIL_SIMPLIFY_AA(scene) \
-  ((GPENCIL_SIMPLIFY(scene)) && (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_AA))
+  (GPENCIL_SIMPLIFY(scene) && (scene->r.simplify_gpencil & SIMPLIFY_GPENCIL_AA))
 
 /* Vertex Color macros. */
 #define GPENCIL_USE_VERTEX_COLOR(toolsettings) \
@@ -93,7 +93,7 @@ void BKE_gpencil_free_stroke(struct bGPDstroke *gps);
 bool BKE_gpencil_free_strokes(struct bGPDframe *gpf);
 void BKE_gpencil_free_frames(struct bGPDlayer *gpl);
 void BKE_gpencil_free_layers(struct ListBase *list);
-void BKE_gpencil_free(struct bGPdata *gpd, bool free_all);
+void BKE_gpencil_free_data(struct bGPdata *gpd, bool free_all);
 void BKE_gpencil_eval_delete(struct bGPdata *gpd_eval);
 void BKE_gpencil_free_layer_masks(struct bGPDlayer *gpl);
 void BKE_gpencil_tag(struct bGPdata *gpd);
@@ -108,7 +108,10 @@ void BKE_gpencil_stroke_select_index_reset(struct bGPDstroke *gps);
 
 struct bGPDframe *BKE_gpencil_frame_addnew(struct bGPDlayer *gpl, int cframe);
 struct bGPDframe *BKE_gpencil_frame_addcopy(struct bGPDlayer *gpl, int cframe);
-struct bGPDlayer *BKE_gpencil_layer_addnew(struct bGPdata *gpd, const char *name, bool setactive);
+struct bGPDlayer *BKE_gpencil_layer_addnew(struct bGPdata *gpd,
+                                           const char *name,
+                                           const bool setactive,
+                                           const bool add_to_header);
 struct bGPdata *BKE_gpencil_data_addnew(struct Main *bmain, const char name[]);
 
 struct bGPDframe *BKE_gpencil_frame_duplicate(const struct bGPDframe *gpf_src,
@@ -116,6 +119,7 @@ struct bGPDframe *BKE_gpencil_frame_duplicate(const struct bGPDframe *gpf_src,
 struct bGPDlayer *BKE_gpencil_layer_duplicate(const struct bGPDlayer *gpl_src,
                                               const bool dup_frames,
                                               const bool dup_strokes);
+void BKE_gpencil_layer_copy_settings(const struct bGPDlayer *gpl_src, struct bGPDlayer *gpl_dst);
 void BKE_gpencil_frame_copy_strokes(struct bGPDframe *gpf_src, struct bGPDframe *gpf_dst);
 void BKE_gpencil_frame_selected_hash(struct bGPdata *gpd, struct GHash *r_list);
 
@@ -149,17 +153,6 @@ bool BKE_gpencil_merge_materials(struct Object *ob,
 
 /* statistics functions */
 void BKE_gpencil_stats_update(struct bGPdata *gpd);
-
-/* Utilities for creating and populating GP strokes */
-/* - Number of values defining each point in the built-in data
- *   buffers for primitives (e.g. 2D Monkey)
- */
-#define GP_PRIM_DATABUF_SIZE 5
-
-void BKE_gpencil_stroke_add_points(struct bGPDstroke *gps,
-                                   const float *array,
-                                   const int totpoints,
-                                   const float mat[4][4]);
 
 struct bGPDstroke *BKE_gpencil_stroke_new(int mat_idx, int totpoints, short thickness);
 struct bGPDstroke *BKE_gpencil_stroke_add(
@@ -210,6 +203,10 @@ void BKE_gpencil_layer_mask_remove_ref(struct bGPdata *gpd, const char *name);
 struct bGPDlayer_Mask *BKE_gpencil_layer_mask_named_get(struct bGPDlayer *gpl, const char *name);
 void BKE_gpencil_layer_mask_sort(struct bGPdata *gpd, struct bGPDlayer *gpl);
 void BKE_gpencil_layer_mask_sort_all(struct bGPdata *gpd);
+void BKE_gpencil_layer_mask_copy(const struct bGPDlayer *gpl_src, struct bGPDlayer *gpl_dst);
+void BKE_gpencil_layer_mask_cleanup(struct bGPdata *gpd, struct bGPDlayer *gpl);
+void BKE_gpencil_layer_mask_cleanup_all_layers(struct bGPdata *gpd);
+
 void BKE_gpencil_layer_frames_sort(struct bGPDlayer *gpl, bool *r_has_duplicate_frames);
 
 struct bGPDlayer *BKE_gpencil_layer_get_by_name(struct bGPdata *gpd,
@@ -274,20 +271,25 @@ bool BKE_gpencil_from_image(struct SpaceImage *sima,
                             const float size,
                             const bool mask);
 
-/* Iterator */
+/* Iterators */
 /* frame & stroke are NULL if it is a layer callback. */
 typedef void (*gpIterCb)(struct bGPDlayer *layer,
                          struct bGPDframe *frame,
                          struct bGPDstroke *stroke,
                          void *thunk);
 
-void BKE_gpencil_visible_stroke_iter(struct ViewLayer *view_layer,
-                                     struct Object *ob,
+void BKE_gpencil_visible_stroke_iter(struct bGPdata *gpd,
                                      gpIterCb layer_cb,
                                      gpIterCb stroke_cb,
-                                     void *thunk,
-                                     bool do_onion,
-                                     int cfra);
+                                     void *thunk);
+
+void BKE_gpencil_visible_stroke_advanced_iter(struct ViewLayer *view_layer,
+                                              struct Object *ob,
+                                              gpIterCb layer_cb,
+                                              gpIterCb stroke_cb,
+                                              void *thunk,
+                                              bool do_onion,
+                                              int cfra);
 
 extern void (*BKE_gpencil_batch_cache_dirty_tag_cb)(struct bGPdata *gpd);
 extern void (*BKE_gpencil_batch_cache_free_cb)(struct bGPdata *gpd);

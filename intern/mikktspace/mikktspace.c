@@ -425,14 +425,15 @@ tbool genTangSpace(const SMikkTSpaceContext *pContext, const float fAngularThres
   index = 0;
   for (f = 0; f < iNrFaces; f++) {
     const int verts = pContext->m_pInterface->m_getNumVerticesOfFace(pContext, f);
-    if (verts != 3 && verts != 4)
+    if (verts != 3 && verts != 4) {
       continue;
+    }
 
     // I've decided to let degenerate triangles and group-with-anythings
     // vary between left/right hand coordinate systems at the vertices.
     // All healthy triangles on the other hand are built to always be either or.
-
-    /*// force the coordinate system orientation to be uniform for every face.
+#if 0
+    // force the coordinate system orientation to be uniform for every face.
     // (this is already the case for good triangles but not for
     // degenerate ones and those with bGroupWithAnything==true)
     bool bOrient = psTspace[index].bOrient;
@@ -447,7 +448,8 @@ tbool genTangSpace(const SMikkTSpaceContext *pContext, const float fAngularThres
         else ++i;
       }
       if (!bNotFound) bOrient = psTspace[index+i].bOrient;
-    }*/
+    }
+#endif
 
     // set data
     for (i = 0; i < verts; i++) {
@@ -1110,7 +1112,7 @@ static tbool AssignRecur(const int piTriListIn[],
 
 static tbool CompareSubGroups(const SSubGroup *pg1, const SSubGroup *pg2);
 static void QuickSort(int *pSortBuffer, int iLeft, int iRight, unsigned int uSeed);
-static STSpace EvalTspace(int face_indices[],
+static STSpace EvalTspace(const int face_indices[],
                           const int iFaces,
                           const int piTriListIn[],
                           const STriInfo pTriInfos[],
@@ -1290,7 +1292,7 @@ static tbool GenerateTSpaces(STSpace psTspace[],
   return TTRUE;
 }
 
-static STSpace EvalTspace(int face_indices[],
+static STSpace EvalTspace(const int face_indices[],
                           const int iFaces,
                           const int piTriListIn[],
                           const STriInfo pTriInfos[],

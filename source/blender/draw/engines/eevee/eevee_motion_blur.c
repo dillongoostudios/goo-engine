@@ -245,7 +245,7 @@ void EEVEE_motion_blur_hair_cache_populate(EEVEE_ViewLayerData *UNUSED(sldata),
 
   if (mb_data) {
     int mb_step = effects->motion_blur_step;
-    /* Store transform  */
+    /* Store transform. */
     DRW_hair_duplimat_get(ob, psys, md, mb_data->obmat[mb_step]);
 
     EEVEE_HairMotionData *mb_hair = EEVEE_motion_blur_hair_data_get(&effects->motion_blur, ob);
@@ -269,7 +269,7 @@ void EEVEE_motion_blur_hair_cache_populate(EEVEE_ViewLayerData *UNUSED(sldata),
       GPUTexture *tex_prev = mb_hair->psys[psys_id].hair_pos_tx[MB_PREV];
       GPUTexture *tex_next = mb_hair->psys[psys_id].hair_pos_tx[MB_NEXT];
 
-      grp = DRW_shgroup_hair_create_sub(ob, psys, md, effects->motion_blur.hair_grp);
+      grp = DRW_shgroup_hair_create_sub(ob, psys, md, effects->motion_blur.hair_grp, NULL);
       DRW_shgroup_uniform_mat4(grp, "prevModelMatrix", mb_data->obmat[MB_PREV]);
       DRW_shgroup_uniform_mat4(grp, "currModelMatrix", mb_data->obmat[MB_CURR]);
       DRW_shgroup_uniform_mat4(grp, "nextModelMatrix", mb_data->obmat[MB_NEXT]);
@@ -323,7 +323,7 @@ void EEVEE_motion_blur_cache_populate(EEVEE_ViewLayerData *UNUSED(sldata),
 
   if (mb_data) {
     int mb_step = effects->motion_blur_step;
-    /* Store transform  */
+    /* Store transform. */
     copy_m4_m4(mb_data->obmat[mb_step], ob->obmat);
 
     EEVEE_GeometryMotionData *mb_geom = EEVEE_motion_blur_geometry_data_get(&effects->motion_blur,
@@ -349,7 +349,7 @@ void EEVEE_motion_blur_cache_populate(EEVEE_ViewLayerData *UNUSED(sldata),
       }
 
       /* Avoid drawing object that has no motions since object_moves is always true. */
-      if (!mb_geom->use_deform && /* Object deformation can happen without transform.  */
+      if (!mb_geom->use_deform && /* Object deformation can happen without transform. */
           equals_m4m4(mb_data->obmat[MB_PREV], mb_data->obmat[MB_CURR]) &&
           equals_m4m4(mb_data->obmat[MB_NEXT], mb_data->obmat[MB_CURR])) {
         return;
@@ -405,8 +405,8 @@ void EEVEE_motion_blur_cache_finish(EEVEE_Data *vedata)
     /* Push instances attributes to the GPU. */
     DRW_render_instance_buffer_finish();
 
-    /* Need to be called after DRW_render_instance_buffer_finish() */
-    /* Also we weed to have a correct fbo bound for DRW_hair_update */
+    /* Need to be called after #DRW_render_instance_buffer_finish() */
+    /* Also we weed to have a correct FBO bound for #DRW_hair_update. */
     GPU_framebuffer_bind(vedata->fbl->main_fb);
     DRW_hair_update();
 

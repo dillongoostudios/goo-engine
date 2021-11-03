@@ -92,11 +92,6 @@ static void camera_copy_data(Main *UNUSED(bmain),
   BLI_duplicatelist(&cam_dst->bg_images, &cam_src->bg_images);
 }
 
-static void camera_make_local(Main *bmain, ID *id, const int flags)
-{
-  BKE_lib_id_make_local_generic(bmain, id, flags);
-}
-
 /** Free (or release) any data used by this camera (does not free the camera itself). */
 static void camera_free_data(ID *id)
 {
@@ -108,13 +103,13 @@ static void camera_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   Camera *camera = (Camera *)id;
 
-  BKE_LIB_FOREACHID_PROCESS(data, camera->dof.focus_object, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, camera->dof.focus_object, IDWALK_CB_NOP);
   LISTBASE_FOREACH (CameraBGImage *, bgpic, &camera->bg_images) {
     if (bgpic->source == CAM_BGIMG_SOURCE_IMAGE) {
-      BKE_LIB_FOREACHID_PROCESS(data, bgpic->ima, IDWALK_CB_USER);
+      BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, bgpic->ima, IDWALK_CB_USER);
     }
     else if (bgpic->source == CAM_BGIMG_SOURCE_MOVIE) {
-      BKE_LIB_FOREACHID_PROCESS(data, bgpic->clip, IDWALK_CB_USER);
+      BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, bgpic->clip, IDWALK_CB_USER);
     }
   }
 }
@@ -122,18 +117,17 @@ static void camera_foreach_id(ID *id, LibraryForeachIDData *data)
 static void camera_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Camera *cam = (Camera *)id;
-  if (cam->id.us > 0 || BLO_write_is_undo(writer)) {
-    /* write LibData */
-    BLO_write_id_struct(writer, Camera, id_address, &cam->id);
-    BKE_id_blend_write(writer, &cam->id);
 
-    if (cam->adt) {
-      BKE_animdata_blend_write(writer, cam->adt);
-    }
+  /* write LibData */
+  BLO_write_id_struct(writer, Camera, id_address, &cam->id);
+  BKE_id_blend_write(writer, &cam->id);
 
-    LISTBASE_FOREACH (CameraBGImage *, bgpic, &cam->bg_images) {
-      BLO_write_struct(writer, CameraBGImage, bgpic);
-    }
+  if (cam->adt) {
+    BKE_animdata_blend_write(writer, cam->adt);
+  }
+
+  LISTBASE_FOREACH (CameraBGImage *, bgpic, &cam->bg_images) {
+    BLO_write_struct(writer, CameraBGImage, bgpic);
   }
 }
 
@@ -146,7 +140,6 @@ static void camera_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_list(reader, &ca->bg_images);
 
   LISTBASE_FOREACH (CameraBGImage *, bgpic, &ca->bg_images) {
-    bgpic->iuser.ok = 1;
     bgpic->iuser.scene = NULL;
   }
 }
@@ -188,12 +181,12 @@ IDTypeInfo IDType_ID_CA = {
     .name = "Camera",
     .name_plural = "cameras",
     .translation_context = BLT_I18NCONTEXT_ID_CAMERA,
-    .flags = 0,
+    .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
 
     .init_data = camera_init_data,
     .copy_data = camera_copy_data,
     .free_data = camera_free_data,
-    .make_local = camera_make_local,
+    .make_local = NULL,
     .foreach_id = camera_foreach_id,
     .foreach_cache = NULL,
     .owner_get = NULL,
@@ -615,7 +608,7 @@ static void camera_frame_fit_data_init(const Scene *scene,
   BKE_camera_params_init(params);
   BKE_camera_params_from_object(params, ob);
 
-  /* compute matrix, viewplane, .. */
+  /* Compute matrix, view-plane, etc. */
   if (scene) {
     BKE_camera_params_compute_viewplane(
         params, scene->r.xsch, scene->r.ysch, scene->r.xasp, scene->r.yasp);
@@ -975,7 +968,7 @@ void BKE_camera_multiview_window_matrix(const RenderData *rd,
   BKE_camera_params_from_object(&params, camera);
   BKE_camera_multiview_params(rd, &params, camera, viewname);
 
-  /* Compute matrix, viewplane, .. */
+  /* Compute matrix, view-plane, etc. */
   BKE_camera_params_compute_viewplane(&params, rd->xsch, rd->ysch, rd->xasp, rd->yasp);
   BKE_camera_params_compute_matrix(&params);
 
@@ -1134,7 +1127,6 @@ CameraBGImage *BKE_camera_background_image_new(Camera *cam)
 
   bgpic->scale = 1.0f;
   bgpic->alpha = 0.5f;
-  bgpic->iuser.ok = 1;
   bgpic->iuser.flag |= IMA_ANIM_ALWAYS;
   bgpic->flag |= CAM_BGIMG_FLAG_EXPANDED;
 

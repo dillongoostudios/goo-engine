@@ -29,6 +29,7 @@
 
 #  include "BLI_array.hh"
 #  include "BLI_double3.hh"
+#  include "BLI_float3.hh"
 #  include "BLI_index_range.hh"
 #  include "BLI_map.hh"
 #  include "BLI_math_mpq.hh"
@@ -224,6 +225,7 @@ class IMeshArena : NonCopyable, NonMovable {
    */
   const Vert *add_or_find_vert(const mpq3 &co, int orig);
   const Vert *add_or_find_vert(const double3 &co, int orig);
+  const Vert *add_or_find_vert(Vert *vert);
 
   Face *add_face(Span<const Vert *> verts,
                  int orig,
@@ -340,6 +342,63 @@ class IMesh {
 std::ostream &operator<<(std::ostream &os, const IMesh &mesh);
 
 /**
+ * A Bounding Box using floats, and a routine to detect possible
+ * intersection.
+ */
+struct BoundingBox {
+  float3 min{FLT_MAX, FLT_MAX, FLT_MAX};
+  float3 max{-FLT_MAX, -FLT_MAX, -FLT_MAX};
+
+  BoundingBox() = default;
+  BoundingBox(const float3 &min, const float3 &max) : min(min), max(max)
+  {
+  }
+
+  void combine(const float3 &p)
+  {
+    min.x = min_ff(min.x, p.x);
+    min.y = min_ff(min.y, p.y);
+    min.z = min_ff(min.z, p.z);
+    max.x = max_ff(max.x, p.x);
+    max.y = max_ff(max.y, p.y);
+    max.z = max_ff(max.z, p.z);
+  }
+
+  void combine(const double3 &p)
+  {
+    min.x = min_ff(min.x, static_cast<float>(p.x));
+    min.y = min_ff(min.y, static_cast<float>(p.y));
+    min.z = min_ff(min.z, static_cast<float>(p.z));
+    max.x = max_ff(max.x, static_cast<float>(p.x));
+    max.y = max_ff(max.y, static_cast<float>(p.y));
+    max.z = max_ff(max.z, static_cast<float>(p.z));
+  }
+
+  void combine(const BoundingBox &bb)
+  {
+    min.x = min_ff(min.x, bb.min.x);
+    min.y = min_ff(min.y, bb.min.y);
+    min.z = min_ff(min.z, bb.min.z);
+    max.x = max_ff(max.x, bb.max.x);
+    max.y = max_ff(max.y, bb.max.y);
+    max.z = max_ff(max.z, bb.max.z);
+  }
+
+  void expand(float pad)
+  {
+    min.x -= pad;
+    min.y -= pad;
+    min.z -= pad;
+    max.x += pad;
+    max.y += pad;
+    max.z += pad;
+  }
+};
+
+/** Assume bounding boxes have been expanded by a sufficient epsilon. */
+bool bbs_might_intersect(const BoundingBox &bb_a, const BoundingBox &bb_b);
+
+/**
  * The output will have duplicate vertices merged and degenerate triangles ignored.
  * If the input has overlapping co-planar triangles, then there will be
  * as many duplicates as there are overlaps in each overlapping triangular region.
@@ -347,7 +406,7 @@ std::ostream &operator<<(std::ostream &os, const IMesh &mesh);
  * that the output triangle was a part of (input can have -1 for that field and then
  * the index in `tri[]` will be used as the original index).
  * The orig structure of the output #IMesh gives the originals for vertices and edges.
- * Note: if the input tm_in has a non-empty orig structure, then it is ignored.
+ * NOTE: if the input tm_in has a non-empty orig structure, then it is ignored.
  */
 IMesh trimesh_self_intersect(const IMesh &tm_in, IMeshArena *arena);
 

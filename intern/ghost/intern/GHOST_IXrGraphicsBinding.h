@@ -31,10 +31,17 @@ class GHOST_IXrGraphicsBinding {
  public:
   union {
 #if defined(WITH_GHOST_X11)
+#  if defined(WITH_GL_EGL)
+    XrGraphicsBindingEGLMNDX egl;
+#  else
     XrGraphicsBindingOpenGLXlibKHR glx;
+#  endif
 #elif defined(WIN32)
     XrGraphicsBindingOpenGLWin32KHR wgl;
     XrGraphicsBindingD3D11KHR d3d11;
+#endif
+#if defined(WITH_GHOST_WAYLAND)
+    XrGraphicsBindingOpenGLWaylandKHR wl;
 #endif
   } oxr_binding;
 
@@ -53,6 +60,7 @@ class GHOST_IXrGraphicsBinding {
                                         std::string *r_requirement_info) const = 0;
   virtual void initFromGhostContext(class GHOST_Context &ghost_ctx) = 0;
   virtual std::optional<int64_t> chooseSwapchainFormat(const std::vector<int64_t> &runtime_formats,
+                                                       GHOST_TXrSwapchainFormat &r_format,
                                                        bool &r_is_rgb_format) const = 0;
   virtual std::vector<XrSwapchainImageBaseHeader *> createSwapchainImages(
       uint32_t image_count) = 0;

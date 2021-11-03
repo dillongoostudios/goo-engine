@@ -23,17 +23,18 @@
 
 #include "node_shader_util.h"
 
-/* **************** SEPARATE RGBA ******************** */
-static bNodeSocketTemplate sh_node_seprgb_in[] = {
-    {SOCK_RGBA, N_("Image"), 0.8f, 0.8f, 0.8f, 1.0f},
-    {-1, ""},
+namespace blender::nodes {
+
+static void sh_node_seprgb_declare(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  b.add_input<decl::Color>(N_("Image")).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_output<decl::Float>(N_("R"));
+  b.add_output<decl::Float>(N_("G"));
+  b.add_output<decl::Float>(N_("B"));
 };
-static bNodeSocketTemplate sh_node_seprgb_out[] = {
-    {SOCK_FLOAT, N_("R")},
-    {SOCK_FLOAT, N_("G")},
-    {SOCK_FLOAT, N_("B")},
-    {-1, ""},
-};
+
+}  // namespace blender::nodes
 
 static void node_shader_exec_seprgb(void *UNUSED(data),
                                     int UNUSED(thread),
@@ -70,7 +71,7 @@ class SeparateRGBFunction : public blender::fn::MultiFunction {
   static blender::fn::MFSignature create_signature()
   {
     blender::fn::MFSignatureBuilder signature{"Separate RGB"};
-    signature.single_input<blender::Color4f>("Color");
+    signature.single_input<blender::ColorGeometry4f>("Color");
     signature.single_output<float>("R");
     signature.single_output<float>("G");
     signature.single_output<float>("B");
@@ -81,14 +82,14 @@ class SeparateRGBFunction : public blender::fn::MultiFunction {
             blender::fn::MFParams params,
             blender::fn::MFContext UNUSED(context)) const override
   {
-    const blender::VArray<blender::Color4f> &colors =
-        params.readonly_single_input<blender::Color4f>(0, "Color");
+    const blender::VArray<blender::ColorGeometry4f> &colors =
+        params.readonly_single_input<blender::ColorGeometry4f>(0, "Color");
     blender::MutableSpan<float> rs = params.uninitialized_single_output<float>(1, "R");
     blender::MutableSpan<float> gs = params.uninitialized_single_output<float>(2, "G");
     blender::MutableSpan<float> bs = params.uninitialized_single_output<float>(3, "B");
 
     for (int64_t i : mask) {
-      blender::Color4f color = colors[i];
+      blender::ColorGeometry4f color = colors[i];
       rs[i] = color.r;
       gs[i] = color.g;
       bs[i] = color.b;
@@ -96,7 +97,7 @@ class SeparateRGBFunction : public blender::fn::MultiFunction {
   }
 };
 
-static void sh_node_seprgb_expand_in_mf_network(blender::nodes::NodeMFNetworkBuilder &builder)
+static void sh_node_seprgb_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
 {
   static SeparateRGBFunction fn;
   builder.set_matching_fn(fn);
@@ -106,26 +107,27 @@ void register_node_type_sh_seprgb(void)
 {
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_SEPRGB, "Separate RGB", NODE_CLASS_CONVERTOR, 0);
-  node_type_socket_templates(&ntype, sh_node_seprgb_in, sh_node_seprgb_out);
+  sh_fn_node_type_base(&ntype, SH_NODE_SEPRGB, "Separate RGB", NODE_CLASS_CONVERTER, 0);
+  ntype.declare = blender::nodes::sh_node_seprgb_declare;
   node_type_exec(&ntype, nullptr, nullptr, node_shader_exec_seprgb);
   node_type_gpu(&ntype, gpu_shader_seprgb);
-  ntype.expand_in_mf_network = sh_node_seprgb_expand_in_mf_network;
+  ntype.build_multi_function = sh_node_seprgb_build_multi_function;
 
   nodeRegisterType(&ntype);
 }
 
-/* **************** COMBINE RGB ******************** */
-static bNodeSocketTemplate sh_node_combrgb_in[] = {
-    {SOCK_FLOAT, N_("R"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_UNSIGNED},
-    {SOCK_FLOAT, N_("G"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_UNSIGNED},
-    {SOCK_FLOAT, N_("B"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_UNSIGNED},
-    {-1, ""},
+namespace blender::nodes {
+
+static void sh_node_combrgb_declare(NodeDeclarationBuilder &b)
+{
+  b.is_function_node();
+  b.add_input<decl::Float>(N_("R")).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>(N_("G")).min(0.0f).max(1.0f);
+  b.add_input<decl::Float>(N_("B")).min(0.0f).max(1.0f);
+  b.add_output<decl::Color>(N_("Image"));
 };
-static bNodeSocketTemplate sh_node_combrgb_out[] = {
-    {SOCK_RGBA, N_("Image")},
-    {-1, ""},
-};
+
+}  // namespace blender::nodes
 
 static void node_shader_exec_combrgb(void *UNUSED(data),
                                      int UNUSED(thread),
@@ -153,10 +155,11 @@ static int gpu_shader_combrgb(GPUMaterial *mat,
   return GPU_stack_link(mat, node, "combine_rgb", in, out);
 }
 
-static void sh_node_combrgb_expand_in_mf_network(blender::nodes::NodeMFNetworkBuilder &builder)
+static void sh_node_combrgb_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
 {
-  static blender::fn::CustomMF_SI_SI_SI_SO<float, float, float, blender::Color4f> fn{
-      "Combine RGB", [](float r, float g, float b) { return blender::Color4f(r, g, b, 1.0f); }};
+  static blender::fn::CustomMF_SI_SI_SI_SO<float, float, float, blender::ColorGeometry4f> fn{
+      "Combine RGB",
+      [](float r, float g, float b) { return blender::ColorGeometry4f(r, g, b, 1.0f); }};
   builder.set_matching_fn(fn);
 }
 
@@ -164,11 +167,11 @@ void register_node_type_sh_combrgb(void)
 {
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_COMBRGB, "Combine RGB", NODE_CLASS_CONVERTOR, 0);
-  node_type_socket_templates(&ntype, sh_node_combrgb_in, sh_node_combrgb_out);
+  sh_fn_node_type_base(&ntype, SH_NODE_COMBRGB, "Combine RGB", NODE_CLASS_CONVERTER, 0);
+  ntype.declare = blender::nodes::sh_node_combrgb_declare;
   node_type_exec(&ntype, nullptr, nullptr, node_shader_exec_combrgb);
   node_type_gpu(&ntype, gpu_shader_combrgb);
-  ntype.expand_in_mf_network = sh_node_combrgb_expand_in_mf_network;
+  ntype.build_multi_function = sh_node_combrgb_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

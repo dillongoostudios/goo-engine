@@ -114,9 +114,7 @@ class AddPresetBase:
             filename = self.as_filename(name)
 
             target_path = os.path.join("presets", self.preset_subdir)
-            target_path = bpy.utils.user_resource('SCRIPTS',
-                                                  target_path,
-                                                  create=True)
+            target_path = bpy.utils.user_resource('SCRIPTS', path=target_path, create=True)
 
             if not target_path:
                 self.report({'WARNING'}, "Failed to create presets path")
@@ -282,7 +280,7 @@ class AddPresetRender(AddPresetBase, Operator):
     """Add or remove a Render Preset"""
     bl_idname = "render.preset_add"
     bl_label = "Add Render Preset"
-    preset_menu = "RENDER_PT_presets"
+    preset_menu = "RENDER_PT_format_presets"
 
     preset_defines = [
         "scene = bpy.context.scene"

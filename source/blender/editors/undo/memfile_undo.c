@@ -116,7 +116,7 @@ static int memfile_undosys_step_id_reused_cb(LibraryIDLinkCallbackData *cb_data)
   BLI_assert((id_self->tag & LIB_TAG_UNDO_OLD_ID_REUSED) != 0);
 
   ID *id = *id_pointer;
-  if (id != NULL && id->lib == NULL && (id->tag & LIB_TAG_UNDO_OLD_ID_REUSED) == 0) {
+  if (id != NULL && !ID_IS_LINKED(id) && (id->tag & LIB_TAG_UNDO_OLD_ID_REUSED) == 0) {
     bool do_stop_iter = true;
     if (GS(id_self->name) == ID_OB) {
       Object *ob_self = (Object *)id_self;
@@ -224,8 +224,20 @@ static void memfile_undosys_step_decode(struct bContext *C,
 
       /* Tag depsgraph to update data-block for changes that happened between the
        * current and the target state, see direct_link_id_restore_recalc(). */
-      if (id->recalc) {
+      if (id->recalc != 0) {
         DEG_id_tag_update_ex(bmain, id, id->recalc);
+      }
+
+      bNodeTree *nodetree = ntreeFromID(id);
+      if (nodetree != NULL && nodetree->id.recalc != 0) {
+        DEG_id_tag_update_ex(bmain, &nodetree->id, nodetree->id.recalc);
+      }
+      if (GS(id->name) == ID_SCE) {
+        Scene *scene = (Scene *)id;
+        if (scene->master_collection != NULL && scene->master_collection->id.recalc != 0) {
+          DEG_id_tag_update_ex(
+              bmain, &scene->master_collection->id, scene->master_collection->id.recalc);
+        }
       }
     }
     FOREACH_MAIN_ID_END;

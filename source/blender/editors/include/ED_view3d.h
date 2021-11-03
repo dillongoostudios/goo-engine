@@ -52,6 +52,7 @@ struct RegionView3D;
 struct RenderEngineType;
 struct Scene;
 struct ScrArea;
+struct SnapObjectContext;
 struct View3D;
 struct ViewContext;
 struct ViewLayer;
@@ -90,8 +91,6 @@ typedef struct ViewDepths {
   short x, y; /* only for temp use for sub-rects, added to region->winx/y */
   float *depths;
   double depth_range[2];
-
-  bool damaged;
 } ViewDepths;
 
 /* Rotate 3D cursor on placement. */
@@ -154,19 +153,20 @@ void ED_view3d_depth_override(struct Depsgraph *depsgraph,
                               struct View3D *v3d,
                               struct Object *obact,
                               eV3DDepthOverrideMode mode,
-                              bool update_cache);
+                              struct ViewDepths **r_depths);
+void ED_view3d_depths_free(ViewDepths *depths);
 bool ED_view3d_depth_read_cached(const ViewDepths *vd,
                                  const int mval[2],
                                  int margin,
                                  float *r_depth);
-bool ED_view3d_depth_read_cached_normal(const ViewContext *vc,
+bool ED_view3d_depth_read_cached_normal(const struct ARegion *region,
+                                        const ViewDepths *depths,
                                         const int mval[2],
                                         float r_normal[3]);
-bool ED_view3d_depth_unproject(const struct ARegion *region,
-                               const int mval[2],
-                               const double depth,
-                               float r_location_world[3]);
-void ED_view3d_depth_tag_update(struct RegionView3D *rv3d);
+bool ED_view3d_depth_unproject_v3(const struct ARegion *region,
+                                  const int mval[2],
+                                  const double depth,
+                                  float r_location_world[3]);
 
 /* Projection */
 #define IS_CLIPPED 12000
@@ -196,12 +196,115 @@ typedef enum {
   V3D_PROJ_TEST_CLIP_NEAR = (1 << 2),
   V3D_PROJ_TEST_CLIP_FAR = (1 << 3),
   V3D_PROJ_TEST_CLIP_ZERO = (1 << 4),
+  /**
+   * Clip the contents of the data being iterated over.
+   * Currently this is only used to edges when projecting into screen space.
+   *
+   * Clamp the edge within the viewport limits defined by
+   * #V3D_PROJ_TEST_CLIP_WIN, #V3D_PROJ_TEST_CLIP_NEAR & #V3D_PROJ_TEST_CLIP_FAR.
+   * This resolves the problem of a visible edge having one of it's vertices
+   * behind the viewport. See: T32214.
+   *
+   * This is not default behavior as it may be important for the screen-space location
+   * of an edges vertex to represent that vertices location (instead of a location along the edge).
+   *
+   * \note Perspective views should enable #V3D_PROJ_TEST_CLIP_WIN along with
+   * #V3D_PROJ_TEST_CLIP_NEAR as the near-plane-clipped location of a point
+   * may become very large (even infinite) when projected into screen-space.
+   * Unless that point happens to coincide with the camera's point of view.
+   *
+   * Use #V3D_PROJ_TEST_CLIP_CONTENT_DEFAULT instead of #V3D_PROJ_TEST_CLIP_CONTENT,
+   * to avoid accidentally enabling near clipping without clipping by window bounds.
+   */
+  V3D_PROJ_TEST_CLIP_CONTENT = (1 << 5),
 } eV3DProjTest;
 
 #define V3D_PROJ_TEST_CLIP_DEFAULT \
   (V3D_PROJ_TEST_CLIP_BB | V3D_PROJ_TEST_CLIP_WIN | V3D_PROJ_TEST_CLIP_NEAR)
 #define V3D_PROJ_TEST_ALL \
-  (V3D_PROJ_TEST_CLIP_DEFAULT | V3D_PROJ_TEST_CLIP_FAR | V3D_PROJ_TEST_CLIP_ZERO)
+  (V3D_PROJ_TEST_CLIP_DEFAULT | V3D_PROJ_TEST_CLIP_FAR | V3D_PROJ_TEST_CLIP_ZERO | \
+   V3D_PROJ_TEST_CLIP_CONTENT)
+
+#define V3D_PROJ_TEST_CLIP_CONTENT_DEFAULT \
+  (V3D_PROJ_TEST_CLIP_CONTENT | V3D_PROJ_TEST_CLIP_NEAR | V3D_PROJ_TEST_CLIP_FAR | \
+   V3D_PROJ_TEST_CLIP_WIN)
+
+/* view3d_snap.c */
+bool ED_view3d_snap_selected_to_location(struct bContext *C,
+                                         const float snap_target_global[3],
+                                         const int pivot_point);
+
+/* view3d_cursor_snap.c */
+#define USE_SNAP_DETECT_FROM_KEYMAP_HACK
+typedef enum {
+  V3D_SNAPCURSOR_TOGGLE_ALWAYS_TRUE = 1 << 0,
+  V3D_SNAPCURSOR_OCCLUSION_ALWAYS_TRUE = 1 << 1,
+  V3D_SNAPCURSOR_OCCLUSION_ALWAYS_FALSE = 1 << 2, /* TODO. */
+  V3D_SNAPCURSOR_SNAP_ONLY_ACTIVE = 1 << 3,
+  V3D_SNAPCURSOR_SNAP_EDIT_GEOM_FINAL = 1 << 4,
+  V3D_SNAPCURSOR_SNAP_EDIT_GEOM_CAGE = 1 << 5,
+} eV3DSnapCursor;
+
+typedef enum {
+  V3D_PLACE_DEPTH_SURFACE = 0,
+  V3D_PLACE_DEPTH_CURSOR_PLANE = 1,
+  V3D_PLACE_DEPTH_CURSOR_VIEW = 2,
+} eV3DPlaceDepth;
+
+typedef enum {
+  V3D_PLACE_ORIENT_SURFACE = 0,
+  V3D_PLACE_ORIENT_DEFAULT = 1,
+} eV3DPlaceOrient;
+
+typedef struct V3DSnapCursorData {
+  short snap_elem;
+  float loc[3];
+  float nor[3];
+  float obmat[4][4];
+  int elem_index[3];
+  float plane_omat[3][3];
+  bool is_snap_invert;
+
+  /** Enabled when snap is activated, even if it didn't find anything. */
+  bool is_enabled;
+} V3DSnapCursorData;
+
+typedef struct V3DSnapCursorState {
+  /* Setup. */
+  eV3DSnapCursor flag;
+  eV3DPlaceDepth plane_depth;
+  eV3DPlaceOrient plane_orient;
+  uchar color_line[4];
+  uchar color_point[4];
+  uchar color_box[4];
+  struct ARegion *region; /* Forces the cursor to be drawn only in this specific region. */
+  float *prevpoint;
+  float box_dimensions[3];
+  short snap_elem_force; /* If zero, use scene settings. */
+  short plane_axis;
+  bool use_plane_axis_auto;
+  bool draw_point;
+  bool draw_plane;
+  bool draw_box;
+} V3DSnapCursorState;
+
+void ED_view3d_cursor_snap_state_default_set(V3DSnapCursorState *state);
+V3DSnapCursorState *ED_view3d_cursor_snap_state_get(void);
+V3DSnapCursorState *ED_view3d_cursor_snap_active(void);
+void ED_view3d_cursor_snap_deactive(V3DSnapCursorState *state);
+void ED_view3d_cursor_snap_prevpoint_set(V3DSnapCursorState *state, const float prev_point[3]);
+V3DSnapCursorData *ED_view3d_cursor_snap_data_get(V3DSnapCursorState *state,
+                                                  const struct bContext *C,
+                                                  const int x,
+                                                  const int y);
+struct SnapObjectContext *ED_view3d_cursor_snap_context_ensure(struct Scene *scene);
+void ED_view3d_cursor_snap_draw_util(struct RegionView3D *rv3d,
+                                     const float loc_prev[3],
+                                     const float loc_curr[3],
+                                     const float normal[3],
+                                     const uchar color_line[4],
+                                     const uchar color_point[4],
+                                     const short snap_elem_type);
 
 /* view3d_iterators.c */
 
@@ -341,6 +444,8 @@ float ED_view3d_pixel_size(const struct RegionView3D *rv3d, const float co[3]);
 float ED_view3d_pixel_size_no_ui_scale(const struct RegionView3D *rv3d, const float co[3]);
 
 float ED_view3d_calc_zfac(const struct RegionView3D *rv3d, const float co[3], bool *r_flip);
+float ED_view3d_calc_depth_for_comparison(const struct RegionView3D *rv3d, const float co[3]);
+
 bool ED_view3d_clip_segment(const struct RegionView3D *rv3d, float ray_start[3], float ray_end[3]);
 bool ED_view3d_win_to_ray_clipped(struct Depsgraph *depsgraph,
                                   const struct ARegion *region,
@@ -404,14 +509,19 @@ bool ED_view3d_win_to_segment_clipped(struct Depsgraph *depsgraph,
                                       float r_ray_end[3],
                                       const bool do_clip);
 void ED_view3d_ob_project_mat_get(const struct RegionView3D *v3d,
-                                  struct Object *ob,
+                                  const struct Object *ob,
                                   float r_pmat[4][4]);
 void ED_view3d_ob_project_mat_get_from_obmat(const struct RegionView3D *rv3d,
                                              const float obmat[4][4],
                                              float r_pmat[4][4]);
 
-void ED_view3d_project(const struct ARegion *region, const float world[3], float r_region_co[3]);
-bool ED_view3d_unproject(
+void ED_view3d_project_v3(const struct ARegion *region,
+                          const float world[3],
+                          float r_region_co[3]);
+void ED_view3d_project_v2(const struct ARegion *region,
+                          const float world[3],
+                          float r_region_co[2]);
+bool ED_view3d_unproject_v3(
     const struct ARegion *region, float regionx, float regiony, float regionz, float world[3]);
 
 /* end */
@@ -454,7 +564,7 @@ bool ED_view3d_calc_render_border(const struct Scene *scene,
                                   struct ARegion *region,
                                   struct rcti *rect);
 
-void ED_view3d_clipping_calc_from_boundbox(float clip[6][4],
+void ED_view3d_clipping_calc_from_boundbox(float clip[4][4],
                                            const struct BoundBox *clipbb,
                                            const bool is_flip);
 void ED_view3d_clipping_calc(struct BoundBox *bb,
@@ -534,6 +644,13 @@ eV3DSelectObjectFilter ED_view3d_select_filter_from_mode(const struct Scene *sce
 void view3d_opengl_select_cache_begin(void);
 void view3d_opengl_select_cache_end(void);
 
+int view3d_opengl_select_ex(struct ViewContext *vc,
+                            unsigned int *buffer,
+                            unsigned int bufsize,
+                            const struct rcti *input,
+                            eV3DSelectMode select_mode,
+                            eV3DSelectObjectFilter select_filter,
+                            const bool do_material_slot_selection);
 int view3d_opengl_select(struct ViewContext *vc,
                          unsigned int *buffer,
                          unsigned int bufsize,
@@ -573,8 +690,8 @@ bool ED_view3d_area_user_region(const struct ScrArea *area,
                                 struct ARegion **r_region);
 bool ED_operator_rv3d_user_region_poll(struct bContext *C);
 
-void ED_view3d_init_mats_rv3d(struct Object *ob, struct RegionView3D *rv3d);
-void ED_view3d_init_mats_rv3d_gl(struct Object *ob, struct RegionView3D *rv3d);
+void ED_view3d_init_mats_rv3d(const struct Object *ob, struct RegionView3D *rv3d);
+void ED_view3d_init_mats_rv3d_gl(const struct Object *ob, struct RegionView3D *rv3d);
 #ifdef DEBUG
 void ED_view3d_clear_mats_rv3d(struct RegionView3D *rv3d);
 void ED_view3d_check_mats_rv3d(struct RegionView3D *rv3d);
@@ -606,6 +723,9 @@ void ED_view3d_draw_setup_view(const struct wmWindowManager *wm,
 
 struct Base *ED_view3d_give_base_under_cursor(struct bContext *C, const int mval[2]);
 struct Object *ED_view3d_give_object_under_cursor(struct bContext *C, const int mval[2]);
+struct Object *ED_view3d_give_material_slot_under_cursor(struct bContext *C,
+                                                         const int mval[2],
+                                                         int *r_material_slot);
 bool ED_view3d_is_object_under_cursor(struct bContext *C, const int mval[2]);
 void ED_view3d_quadview_update(struct ScrArea *area, struct ARegion *region, bool do_clip);
 void ED_view3d_update_viewmat(struct Depsgraph *depsgraph,
@@ -690,7 +810,7 @@ float ED_view3d_grid_scale(const struct Scene *scene,
 void ED_view3d_grid_steps(const struct Scene *scene,
                           struct View3D *v3d,
                           struct RegionView3D *rv3d,
-                          float *r_grid_steps);
+                          float r_grid_steps[8]);
 float ED_view3d_grid_view_scale(struct Scene *scene,
                                 struct View3D *v3d,
                                 struct ARegion *region,

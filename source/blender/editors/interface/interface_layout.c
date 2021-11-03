@@ -169,7 +169,7 @@ struct uiLayout {
   bool enabled;
   bool redalert;
   bool keepaspect;
-  /** For layouts inside gridflow, they and their items shall never have a fixed maximal size. */
+  /** For layouts inside grid-flow, they and their items shall never have a fixed maximal size. */
   bool variable_size;
   char alignment;
   eUIEmbossType emboss;
@@ -282,39 +282,93 @@ static int ui_layout_vary_direction(uiLayout *layout)
 
 static bool ui_layout_variable_size(uiLayout *layout)
 {
-  /* Note that this code is probably a bit flakey, we'd probably want to know whether it's
+  /* Note that this code is probably a bit flaky, we'd probably want to know whether it's
    * variable in X and/or Y, etc. But for now it mimics previous one,
    * with addition of variable flag set for children of grid-flow layouts. */
   return ui_layout_vary_direction(layout) == UI_ITEM_VARY_X || layout->variable_size;
 }
 
-/* estimated size of text + icon */
-static int ui_text_icon_width(uiLayout *layout, const char *name, int icon, bool compact)
+/**
+ * Factors to apply to #UI_UNIT_X when calculating button width.
+ * This is used when the layout is a varying size, see #ui_layout_variable_size.
+ */
+struct uiTextIconPadFactor {
+  float text;
+  float icon;
+  float icon_only;
+};
+
+/**
+ * This adds over an icons width of padding even when no icon is used,
+ * this is done because most buttons need additional space (drop-down chevron for example).
+ * menus and labels use much smaller `text` values compared to this default.
+ *
+ * \note It may seem odd that the icon only adds 0.25
+ * but taking margins into account its fine,
+ * except for #ui_text_pad_compact where a bit more margin is required.
+ */
+static const struct uiTextIconPadFactor ui_text_pad_default = {
+    .text = 1.50f,
+    .icon = 0.25f,
+    .icon_only = 0.0f,
+};
+
+/** #ui_text_pad_default scaled down. */
+static const struct uiTextIconPadFactor ui_text_pad_compact = {
+    .text = 1.25f,
+    .icon = 0.35f,
+    .icon_only = 0.0f,
+};
+
+/** Least amount of padding not to clip the text or icon. */
+static const struct uiTextIconPadFactor ui_text_pad_none = {
+    .text = 0.25f,
+    .icon = 1.50f,
+    .icon_only = 0.0f,
+};
+
+/**
+ * Estimated size of text + icon.
+ */
+static int ui_text_icon_width_ex(uiLayout *layout,
+                                 const char *name,
+                                 int icon,
+                                 const struct uiTextIconPadFactor *pad_factor)
 {
   const int unit_x = UI_UNIT_X * (layout->scale[0] ? layout->scale[0] : 1.0f);
 
+  /* When there is no text, always behave as if this is an icon-only button
+   * since it's not useful to return empty space. */
   if (icon && !name[0]) {
-    return unit_x; /* icon only */
+    return unit_x * (1.0f + pad_factor->icon_only);
   }
 
   if (ui_layout_variable_size(layout)) {
     if (!icon && !name[0]) {
-      return unit_x; /* No icon or name. */
+      return unit_x * (1.0f + pad_factor->icon_only);
     }
+
     if (layout->alignment != UI_LAYOUT_ALIGN_EXPAND) {
       layout->item.flag |= UI_ITEM_FIXED_SIZE;
     }
-    const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
-    float margin = compact ? 1.25 : 1.50;
+
+    float margin = pad_factor->text;
     if (icon) {
-      /* It may seem odd that the icon only adds (unit_x / 4)
-       * but taking margins into account its fine, except
-       * in compact mode a bit more margin is required. */
-      margin += compact ? 0.35 : 0.25;
+      margin += pad_factor->icon;
     }
-    return UI_fontstyle_string_width(fstyle, name) + (unit_x * margin);
+
+    const float aspect = layout->root->block->aspect;
+    const uiFontStyle *fstyle = UI_FSTYLE_WIDGET;
+    return UI_fontstyle_string_width_with_block_aspect(fstyle, name, aspect) +
+           (int)ceilf(unit_x * margin);
   }
   return unit_x * 10;
+}
+
+static int ui_text_icon_width(uiLayout *layout, const char *name, int icon, bool compact)
+{
+  return ui_text_icon_width_ex(
+      layout, name, icon, compact ? &ui_text_pad_compact : &ui_text_pad_default);
 }
 
 static void ui_item_size(uiItem *item, int *r_w, int *r_h)
@@ -643,7 +697,7 @@ static void ui_item_array(uiLayout *layout,
                    NULL);
   }
   else {
-    /* note, this block of code is a bit arbitrary and has just been made
+    /* NOTE: this block of code is a bit arbitrary and has just been made
      * to work with common cases, but may need to be re-worked */
 
     /* special case, boolean array in a menu, this could be used in a more generic way too */
@@ -662,7 +716,7 @@ static void ui_item_array(uiLayout *layout,
         }
       }
 
-      /* show checkboxes for rna on a non-emboss block (menu for eg) */
+      /* Show check-boxes for rna on a non-emboss block (menu for eg). */
       bool *boolarr = NULL;
       if (type == PROP_BOOLEAN &&
           ELEM(layout->root->block->emboss, UI_EMBOSS_NONE, UI_EMBOSS_PULLDOWN)) {
@@ -921,10 +975,10 @@ static void ui_keymap_but_cb(bContext *UNUSED(C), void *but_v, void *UNUSED(key_
 {
   uiBut *but = but_v;
 
-  RNA_boolean_set(&but->rnapoin, "shift", (but->modifier_key & KM_SHIFT) != 0);
-  RNA_boolean_set(&but->rnapoin, "ctrl", (but->modifier_key & KM_CTRL) != 0);
-  RNA_boolean_set(&but->rnapoin, "alt", (but->modifier_key & KM_ALT) != 0);
-  RNA_boolean_set(&but->rnapoin, "oskey", (but->modifier_key & KM_OSKEY) != 0);
+  RNA_int_set(&but->rnapoin, "shift", (but->modifier_key & KM_SHIFT) ? KM_MOD_HELD : KM_NOTHING);
+  RNA_int_set(&but->rnapoin, "ctrl", (but->modifier_key & KM_CTRL) ? KM_MOD_HELD : KM_NOTHING);
+  RNA_int_set(&but->rnapoin, "alt", (but->modifier_key & KM_ALT) ? KM_MOD_HELD : KM_NOTHING);
+  RNA_int_set(&but->rnapoin, "oskey", (but->modifier_key & KM_OSKEY) ? KM_MOD_HELD : KM_NOTHING);
 }
 
 /**
@@ -1191,7 +1245,7 @@ static uiBut *uiItemFullO_ptr_ex(uiLayout *layout,
 
   const eUIEmbossType prev_emboss = layout->emboss;
   if (flag & UI_ITEM_R_NO_BG) {
-    layout->emboss = UI_EMBOSS_NONE;
+    layout->emboss = UI_EMBOSS_NONE_OR_STATUS;
   }
 
   /* create the button */
@@ -1285,7 +1339,7 @@ static void ui_item_menu_hold(struct bContext *C, ARegion *butregion, uiBut *but
     UI_menutype_draw(C, mt, layout);
   }
   else {
-    uiItemL(layout, "Menu Missing:", ICON_NONE);
+    uiItemL(layout, TIP_("Menu Missing:"), ICON_NONE);
     uiItemL(layout, menu_id, ICON_NONE);
   }
   UI_popup_menu_end(C, pup);
@@ -1411,7 +1465,7 @@ BLI_INLINE bool ui_layout_is_radial(const uiLayout *layout)
 }
 
 /**
- * Create ui items for enum items in \a item_array.
+ * Create UI items for enum items in \a item_array.
  *
  * A version of #uiItemsFullEnumO that takes pre-calculated item array.
  */
@@ -1818,7 +1872,7 @@ static void ui_item_rna_size(uiLayout *layout,
     }
     else if (type == PROP_BOOLEAN) {
       if (icon == ICON_NONE) {
-        /* Exception for checkboxes, they need a little less space to align nicely. */
+        /* Exception for check-boxes, they need a little less space to align nicely. */
         is_checkbox_only = true;
       }
       icon = ICON_DOT;
@@ -1984,7 +2038,7 @@ void uiItemFullR(uiLayout *layout,
    * a label to display in the first column, the heading is inserted there. Otherwise it's inserted
    * as a new row before the first item. */
   uiLayout *heading_layout = ui_layout_heading_find(layout);
-  /* Although checkboxes use the split layout, they are an exception and should only place their
+  /* Although check-boxes use the split layout, they are an exception and should only place their
    * label in the second column, to not make that almost empty.
    *
    * Keep using 'use_prop_sep' instead of disabling it entirely because
@@ -2062,7 +2116,7 @@ void uiItemFullR(uiLayout *layout,
 
     /* Menus and pie-menus don't show checkbox without this. */
     if ((layout->root->type == UI_LAYOUT_MENU) ||
-        /* Use checkboxes only as a fallback in pie-menu's, when no icon is defined. */
+        /* Use check-boxes only as a fallback in pie-menu's, when no icon is defined. */
         ((layout->root->type == UI_LAYOUT_PIEMENU) && (icon == ICON_NONE))) {
       const int prop_flag = RNA_property_flag(prop);
       if (type == PROP_BOOLEAN) {
@@ -2122,7 +2176,7 @@ void uiItemFullR(uiLayout *layout,
 
   const eUIEmbossType prev_emboss = layout->emboss;
   if (no_bg) {
-    layout->emboss = UI_EMBOSS_NONE;
+    layout->emboss = UI_EMBOSS_NONE_OR_STATUS;
   }
 
   uiBut *but = NULL;
@@ -2346,16 +2400,16 @@ void uiItemFullR(uiLayout *layout,
    * In this case we want the ability not to have an icon.
    *
    * We could pass an argument not to set the icon to begin with however this is the one case
-   * the functionality is needed.  */
+   * the functionality is needed. */
   if (but && no_icon) {
     if ((icon == ICON_NONE) && (but->icon != ICON_NONE)) {
       ui_def_but_icon_clear(but);
     }
   }
 
-  /* Mark non-embossed textfields inside a listbox. */
+  /* Mark non-embossed text-fields inside a list-box. */
   if (but && (block->flag & UI_BLOCK_LIST_ITEM) && (but->type == UI_BTYPE_TEXT) &&
-      (but->emboss & UI_EMBOSS_NONE)) {
+      ELEM(but->emboss, UI_EMBOSS_NONE, UI_EMBOSS_NONE_OR_STATUS)) {
     UI_but_flag_enable(but, UI_BUT_LIST_ITEM);
   }
 
@@ -2831,7 +2885,7 @@ void ui_item_paneltype_func(bContext *C, uiLayout *layout, void *arg_pt)
   PanelType *pt = (PanelType *)arg_pt;
   UI_paneltype_draw(C, pt, layout);
 
-  /* panels are created flipped (from event handling pov) */
+  /* Panels are created flipped (from event handling POV). */
   layout->root->block->flag ^= UI_BLOCK_IS_FLIP;
 }
 
@@ -2857,22 +2911,22 @@ static uiBut *ui_item_menu(uiLayout *layout,
     icon = ICON_BLANK1;
   }
 
-  int w = ui_text_icon_width(layout, name, icon, 1);
-  const int h = UI_UNIT_Y;
-
-  if (layout->root->type == UI_LAYOUT_HEADER) { /* ugly .. */
+  struct uiTextIconPadFactor pad_factor = ui_text_pad_compact;
+  if (layout->root->type == UI_LAYOUT_HEADER) { /* Ugly! */
     if (icon == ICON_NONE && force_menu) {
       /* pass */
     }
     else if (force_menu) {
-      w += 0.6f * UI_UNIT_X;
+      pad_factor.text = 1.85;
+      pad_factor.icon_only = 0.6f;
     }
     else {
-      if (name[0]) {
-        w -= UI_UNIT_X / 2;
-      }
+      pad_factor.text = 0.75f;
     }
   }
+
+  const int w = ui_text_icon_width_ex(layout, name, icon, &pad_factor);
+  const int h = UI_UNIT_Y;
 
   if (heading_layout) {
     ui_layout_heading_label_add(layout, heading_layout, true, true);
@@ -2893,7 +2947,7 @@ static uiBut *ui_item_menu(uiLayout *layout,
   }
 
   if (argN) {
-    /* ugly .. */
+    /* ugly! */
     if (arg != argN) {
       but->poin = (char *)but;
     }
@@ -2911,6 +2965,12 @@ static uiBut *ui_item_menu(uiLayout *layout,
 
 void uiItemM_ptr(uiLayout *layout, MenuType *mt, const char *name, int icon)
 {
+  uiBlock *block = layout->root->block;
+  bContext *C = block->evil_C;
+  if (WM_menutype_poll(C, mt) == false) {
+    return;
+  }
+
   if (!name) {
     name = CTX_IFACE_(mt->translation_context, mt->label);
   }
@@ -2949,6 +3009,9 @@ void uiItemMContents(uiLayout *layout, const char *menuname)
 
   uiBlock *block = layout->root->block;
   bContext *C = block->evil_C;
+  if (WM_menutype_poll(C, mt) == false) {
+    return;
+  }
   UI_menutype_draw(C, mt, layout);
 }
 
@@ -3038,7 +3101,7 @@ void uiItemDecoratorR(uiLayout *layout, PointerRNA *ptr, const char *propname, i
 
 /* popover */
 void uiItemPopoverPanel_ptr(
-    uiLayout *layout, bContext *C, PanelType *pt, const char *name, int icon)
+    uiLayout *layout, const bContext *C, PanelType *pt, const char *name, int icon)
 {
   if (!name) {
     name = CTX_IFACE_(pt->translation_context, pt->label);
@@ -3067,7 +3130,7 @@ void uiItemPopoverPanel_ptr(
 }
 
 void uiItemPopoverPanel(
-    uiLayout *layout, bContext *C, const char *panel_type, const char *name, int icon)
+    uiLayout *layout, const bContext *C, const char *panel_type, const char *name, int icon)
 {
   PanelType *pt = WM_paneltype_find(panel_type, true);
   if (pt == NULL) {
@@ -3124,8 +3187,7 @@ static uiBut *uiItemL_(uiLayout *layout, const char *name, int icon)
     icon = ICON_BLANK1;
   }
 
-  const int w = ui_text_icon_width(layout, name, icon, 0);
-
+  const int w = ui_text_icon_width_ex(layout, name, icon, &ui_text_pad_none);
   uiBut *but;
   if (icon && name[0]) {
     but = uiDefIconTextBut(
@@ -3147,7 +3209,7 @@ static uiBut *uiItemL_(uiLayout *layout, const char *name, int icon)
     but->drawflag |= UI_BUT_TEXT_RIGHT;
   }
 
-  /* Mark as a label inside a listbox. */
+  /* Mark as a label inside a list-box. */
   if (block->flag & UI_BLOCK_LIST_ITEM) {
     but->flag |= UI_BUT_LIST_ITEM;
   }
@@ -3381,10 +3443,13 @@ typedef struct MenuItemLevel {
 
 static void menu_item_enum_opname_menu(bContext *UNUSED(C), uiLayout *layout, void *arg)
 {
-  MenuItemLevel *lvl = (MenuItemLevel *)(((uiBut *)arg)->func_argN);
+  uiBut *but = arg;
+  MenuItemLevel *lvl = but->func_argN;
+  /* Use the operator properties from the button owning the menu. */
+  IDProperty *op_props = but->opptr ? but->opptr->data : NULL;
 
   uiLayoutSetOperatorContext(layout, lvl->opcontext);
-  uiItemsEnumO(layout, lvl->opname, lvl->propname);
+  uiItemsFullEnumO(layout, lvl->opname, lvl->propname, op_props, lvl->opcontext, 0);
 
   layout->root->block->flag |= UI_BLOCK_IS_FLIP;
 
@@ -3392,12 +3457,13 @@ static void menu_item_enum_opname_menu(bContext *UNUSED(C), uiLayout *layout, vo
   UI_block_direction_set(layout->root->block, UI_DIR_DOWN);
 }
 
-void uiItemMenuEnumO_ptr(uiLayout *layout,
-                         bContext *C,
-                         wmOperatorType *ot,
-                         const char *propname,
-                         const char *name,
-                         int icon)
+void uiItemMenuEnumFullO_ptr(uiLayout *layout,
+                             bContext *C,
+                             wmOperatorType *ot,
+                             const char *propname,
+                             const char *name,
+                             int icon,
+                             PointerRNA *r_opptr)
 {
   /* Caller must check */
   BLI_assert(ot->srna != NULL);
@@ -3416,6 +3482,15 @@ void uiItemMenuEnumO_ptr(uiLayout *layout,
   lvl->opcontext = layout->root->opcontext;
 
   uiBut *but = ui_item_menu(layout, name, icon, menu_item_enum_opname_menu, NULL, lvl, NULL, true);
+  /* Use the menu button as owner for the operator properties, which will then be passed to the
+   * individual menu items. */
+  if (r_opptr) {
+    but->opptr = MEM_callocN(sizeof(PointerRNA), "uiButOpPtr");
+    WM_operator_properties_create_ptr(but->opptr, ot);
+    BLI_assert(but->opptr->data == NULL);
+    WM_operator_properties_alloc(&but->opptr, (IDProperty **)&but->opptr->data, ot->idname);
+    *r_opptr = *but->opptr;
+  }
 
   /* add hotkey here, lower UI code can't detect it */
   if ((layout->root->block->flag & UI_BLOCK_LOOP) && (ot->prop && ot->invoke)) {
@@ -3427,12 +3502,13 @@ void uiItemMenuEnumO_ptr(uiLayout *layout,
   }
 }
 
-void uiItemMenuEnumO(uiLayout *layout,
-                     bContext *C,
-                     const char *opname,
-                     const char *propname,
-                     const char *name,
-                     int icon)
+void uiItemMenuEnumFullO(uiLayout *layout,
+                         bContext *C,
+                         const char *opname,
+                         const char *propname,
+                         const char *name,
+                         int icon,
+                         PointerRNA *r_opptr)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, 0); /* print error next */
 
@@ -3444,7 +3520,17 @@ void uiItemMenuEnumO(uiLayout *layout,
     return;
   }
 
-  uiItemMenuEnumO_ptr(layout, C, ot, propname, name, icon);
+  uiItemMenuEnumFullO_ptr(layout, C, ot, propname, name, icon, r_opptr);
+}
+
+void uiItemMenuEnumO(uiLayout *layout,
+                     bContext *C,
+                     const char *opname,
+                     const char *propname,
+                     const char *name,
+                     int icon)
+{
+  uiItemMenuEnumFullO(layout, C, opname, propname, name, icon, NULL);
 }
 
 static void menu_item_enum_rna_menu(bContext *UNUSED(C), uiLayout *layout, void *arg)
@@ -4042,12 +4128,11 @@ static void ui_litem_layout_column_flow(uiLayout *litem)
   int emy = 0;
   int miny = 0;
 
-  int w = litem->w - (flow->totcol - 1) * style->columnspace;
   emh = toth / flow->totcol;
 
   /* create column per column */
   col = 0;
-  w = (litem->w - (flow->totcol - 1) * style->columnspace) / flow->totcol;
+  int w = (litem->w - (flow->totcol - 1) * style->columnspace) / flow->totcol;
   LISTBASE_FOREACH (uiItem *, item, &litem->items) {
     ui_item_size(item, &itemw, &itemh);
 
@@ -4616,7 +4701,7 @@ static void ui_litem_init_from_parent(uiLayout *litem, uiLayout *layout, int ali
 {
   litem->root = layout->root;
   litem->align = align;
-  /* Children of gridflow layout shall never have "ideal big size" returned as estimated size. */
+  /* Children of grid-flow layout shall never have "ideal big size" returned as estimated size. */
   litem->variable_size = layout->variable_size || layout->item.type == ITEM_LAYOUT_GRID_FLOW;
   litem->active = true;
   litem->enabled = true;
@@ -5524,28 +5609,52 @@ void ui_layout_add_but(uiLayout *layout, uiBut *but)
   ui_button_group_add_but(uiLayoutGetBlock(layout), but);
 }
 
-bool ui_layout_replace_but_ptr(uiLayout *layout, const void *old_but_ptr, uiBut *new_but)
+static uiButtonItem *ui_layout_find_button_item(const uiLayout *layout, const uiBut *but)
 {
-  ListBase *child_list = layout->child_items_layout ? &layout->child_items_layout->items :
-                                                      &layout->items;
+  const ListBase *child_list = layout->child_items_layout ? &layout->child_items_layout->items :
+                                                            &layout->items;
 
   LISTBASE_FOREACH (uiItem *, item, child_list) {
     if (item->type == ITEM_BUTTON) {
       uiButtonItem *bitem = (uiButtonItem *)item;
 
-      if (bitem->but == old_but_ptr) {
-        bitem->but = new_but;
-        return true;
+      if (bitem->but == but) {
+        return bitem;
       }
     }
     else {
-      if (ui_layout_replace_but_ptr((uiLayout *)item, old_but_ptr, new_but)) {
-        return true;
+      uiButtonItem *nested_item = ui_layout_find_button_item((uiLayout *)item, but);
+      if (nested_item) {
+        return nested_item;
       }
     }
   }
 
-  return false;
+  return NULL;
+}
+
+void ui_layout_remove_but(uiLayout *layout, const uiBut *but)
+{
+  uiButtonItem *bitem = ui_layout_find_button_item(layout, but);
+  if (!bitem) {
+    return;
+  }
+
+  BLI_freelinkN(&layout->items, bitem);
+}
+
+/**
+ * \return true if the button was successfully replaced.
+ */
+bool ui_layout_replace_but_ptr(uiLayout *layout, const void *old_but_ptr, uiBut *new_but)
+{
+  uiButtonItem *bitem = ui_layout_find_button_item(layout, old_but_ptr);
+  if (!bitem) {
+    return false;
+  }
+
+  bitem->but = new_but;
+  return true;
 }
 
 void uiLayoutSetFixedSize(uiLayout *layout, bool fixed_size)
@@ -5933,8 +6042,8 @@ uiLayout *uiItemsAlertBox(uiBlock *block, const int size, const eAlertIcon icon)
   const int text_points_max = MAX2(style->widget.points, style->widgetlabel.points);
   const int dialog_width = icon_size + (text_points_max * size * U.dpi_fac);
   /* By default, the space between icon and text/buttons will be equal to the 'columnspace',
-     this extra padding will add some space by increasing the left column width,
-     making the icon placement more symmetrical, between the block edge and the text. */
+   * this extra padding will add some space by increasing the left column width,
+   * making the icon placement more symmetrical, between the block edge and the text. */
   const float icon_padding = 5.0f * U.dpi_fac;
   /* Calculate the factor of the fixed icon column depending on the block width. */
   const float split_factor = ((float)icon_size + icon_padding) /

@@ -33,6 +33,7 @@
 
 #include "BKE_material.h"
 #include "BKE_object.h"
+#include "BKE_scene.h"
 #include "BKE_unit.h"
 
 #include "DNA_gpencil_types.h"
@@ -44,6 +45,7 @@
 #include "ED_gizmo_utils.h"
 #include "ED_gpencil.h"
 #include "ED_screen.h"
+#include "ED_transform.h"
 #include "ED_transform_snap_object_context.h"
 #include "ED_view3d.h"
 
@@ -68,6 +70,12 @@
 #include "GPU_state.h"
 
 #include "BLF_api.h"
+
+/**
+ * Supporting transform features could be removed if the actual transform system is used.
+ * Keep the option open since each transform feature is duplicating logic.
+ */
+#define USE_AXIS_CONSTRAINTS
 
 static const char *view3d_gzgt_ruler_id = "VIEW3D_GGT_ruler";
 
@@ -98,6 +106,24 @@ enum {
   RULER_STATE_DRAG,
 };
 
+#ifdef USE_AXIS_CONSTRAINTS
+/* Constrain axes */
+enum {
+  CONSTRAIN_AXIS_NONE = -1,
+  CONSTRAIN_AXIS_X = 0,
+  CONSTRAIN_AXIS_Y = 1,
+  CONSTRAIN_AXIS_Z = 2,
+};
+
+/* Constraining modes.
+   Off / Scene orientation / Global (or Local if Scene orientation is Global) */
+enum {
+  CONSTRAIN_MODE_OFF = 0,
+  CONSTRAIN_MODE_1 = 1,
+  CONSTRAIN_MODE_2 = 2,
+};
+#endif /* USE_AXIS_CONSTRAINTS */
+
 struct RulerItem;
 
 typedef struct RulerInfo {
@@ -105,6 +131,10 @@ typedef struct RulerInfo {
   int flag;
   int snap_flag;
   int state;
+
+#ifdef USE_AXIS_CONSTRAINTS
+  short constrain_axis, constrain_mode;
+#endif
 
   /* wm state */
   wmWindowManager *wm;
@@ -299,8 +329,11 @@ static void view3d_ruler_item_project(RulerInfo *ruler_info, float r_co[3], cons
   ED_view3d_win_to_3d_int(ruler_info->area->spacedata.first, ruler_info->region, r_co, xy, r_co);
 }
 
-/* use for mousemove events */
-static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
+/**
+ * Use for mouse-move events.
+ */
+static bool view3d_ruler_item_mousemove(const bContext *C,
+                                        struct Depsgraph *depsgraph,
                                         RulerInfo *ruler_info,
                                         RulerItem *ruler_item,
                                         const int mval[2],
@@ -324,8 +357,7 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
     if (do_thickness && inter->co_index != 1) {
       Scene *scene = DEG_get_input_scene(depsgraph);
       View3D *v3d = ruler_info->area->spacedata.first;
-      SnapObjectContext *snap_context = ED_gizmotypes_snap_3d_context_ensure(
-          scene, ruler_info->region, v3d, snap_gizmo);
+      SnapObjectContext *snap_context = ED_gizmotypes_snap_3d_context_ensure(scene, snap_gizmo);
       const float mval_fl[2] = {UNPACK2(mval)};
       float ray_normal[3];
       float ray_start[3];
@@ -335,10 +367,12 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
 
       if (ED_transform_snap_object_project_view3d(snap_context,
                                                   depsgraph,
+                                                  ruler_info->region,
+                                                  v3d,
                                                   SCE_SNAP_MODE_FACE,
                                                   &(const struct SnapObjectParams){
                                                       .snap_select = SNAP_ALL,
-                                                      .use_object_edit_cage = true,
+                                                      .edit_mode_type = SNAP_GEOM_CAGE,
                                                   },
                                                   mval_fl,
                                                   NULL,
@@ -350,9 +384,10 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
         madd_v3_v3v3fl(ray_start, co, ray_normal, eps_bias);
         ED_transform_snap_object_project_ray(snap_context,
                                              depsgraph,
+                                             v3d,
                                              &(const struct SnapObjectParams){
                                                  .snap_select = SNAP_ALL,
-                                                 .use_object_edit_cage = true,
+                                                 .edit_mode_type = SNAP_GEOM_CAGE,
                                              },
                                              ray_start,
                                              ray_normal,
@@ -367,7 +402,6 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
 #endif
     {
       View3D *v3d = ruler_info->area->spacedata.first;
-      const float mval_fl[2] = {UNPACK2(mval)};
       float *prev_point = NULL;
 
       if (inter->co_index != 1) {
@@ -386,12 +420,47 @@ static bool view3d_ruler_item_mousemove(struct Depsgraph *depsgraph,
             snap_gizmo->ptr, ruler_info->snap_data.prop_prevpoint, prev_point);
       }
 
-      ED_gizmotypes_snap_3d_update(
-          snap_gizmo, depsgraph, ruler_info->region, v3d, ruler_info->wm, mval_fl);
-
       if (ED_gizmotypes_snap_3d_is_enabled(snap_gizmo)) {
-        ED_gizmotypes_snap_3d_data_get(snap_gizmo, co, NULL, NULL, NULL);
+        ED_gizmotypes_snap_3d_data_get(C, snap_gizmo, co, NULL, NULL, NULL);
       }
+
+#ifdef USE_AXIS_CONSTRAINTS
+      if (!(ruler_item->flag & RULERITEM_USE_ANGLE) &&
+          ruler_info->constrain_mode != CONSTRAIN_MODE_OFF) {
+
+        Scene *scene = DEG_get_input_scene(depsgraph);
+        ViewLayer *view_layer = DEG_get_input_view_layer(depsgraph);
+        RegionView3D *rv3d = ruler_info->region->regiondata;
+        Object *ob = OBACT(view_layer);
+        Object *obedit = OBEDIT_FROM_OBACT(ob);
+
+        short orient_index = BKE_scene_orientation_get_index(scene, SCE_ORIENT_DEFAULT);
+
+        if (ruler_info->constrain_mode == CONSTRAIN_MODE_2) {
+          orient_index = (orient_index == V3D_ORIENT_GLOBAL) ? V3D_ORIENT_LOCAL :
+                                                               V3D_ORIENT_GLOBAL;
+        }
+
+        const int pivot_point = scene->toolsettings->transform_pivot_point;
+        float mat[3][3];
+
+        ED_transform_calc_orientation_from_type_ex(
+            scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, mat);
+
+        invert_m3(mat);
+        mul_m3_m3_pre(ruler_item->co, mat);
+
+        /* Loop through the axes and constrain the dragged point to the current constrained axis.
+         */
+        for (int i = 0; i <= 2; i++) {
+          if (ruler_info->constrain_axis != i) {
+            ruler_item->co[inter->co_index][i] = ruler_item->co[(inter->co_index == 0) ? 2 : 0][i];
+          }
+        }
+        invert_m3(mat);
+        mul_m3_m3_pre(ruler_item->co, mat);
+      }
+#endif
     }
     return true;
   }
@@ -446,7 +515,7 @@ static bool view3d_ruler_to_gpencil(bContext *C, wmGizmoGroup *gzgroup)
 
   gpl = view3d_ruler_layer_get(gpd);
   if (gpl == NULL) {
-    gpl = BKE_gpencil_layer_addnew(gpd, ruler_name, false);
+    gpl = BKE_gpencil_layer_addnew(gpd, ruler_name, false, false);
     copy_v4_v4(gpl->color, U.gpencil_new_layer_col);
     gpl->thickness = 1;
     gpl->flag |= GP_LAYER_HIDE | GP_LAYER_IS_RULER;
@@ -580,7 +649,7 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
   UI_GetThemeColor3ubv(TH_TEXT, color_text);
   UI_GetThemeColor3ubv(TH_WIRE, color_wire);
 
-  /* Avoid white on white text. (TODO Fix by using theme) */
+  /* Avoid white on white text. (TODO: Fix by using theme). */
   if ((int)color_text[0] + (int)color_text[1] + (int)color_text[2] > 127 * 3 * 0.6f) {
     copy_v3_fl(color_back, 0.0f);
   }
@@ -938,6 +1007,35 @@ static int gizmo_ruler_modal(bContext *C,
 
   ruler_info->region = region;
 
+#ifdef USE_AXIS_CONSTRAINTS
+  if ((event->val == KM_PRESS) && ELEM(event->type, EVT_XKEY, EVT_YKEY, EVT_ZKEY)) {
+    /* Go to Mode 1 if a new axis is selected. */
+    if (event->type == EVT_XKEY && ruler_info->constrain_axis != CONSTRAIN_AXIS_X) {
+      ruler_info->constrain_axis = CONSTRAIN_AXIS_X;
+      ruler_info->constrain_mode = CONSTRAIN_MODE_1;
+    }
+    else if (event->type == EVT_YKEY && ruler_info->constrain_axis != CONSTRAIN_AXIS_Y) {
+      ruler_info->constrain_axis = CONSTRAIN_AXIS_Y;
+      ruler_info->constrain_mode = CONSTRAIN_MODE_1;
+    }
+    else if (event->type == EVT_ZKEY && ruler_info->constrain_axis != CONSTRAIN_AXIS_Z) {
+      ruler_info->constrain_axis = CONSTRAIN_AXIS_Z;
+      ruler_info->constrain_mode = CONSTRAIN_MODE_1;
+    }
+    else {
+      /* Cycle to the next mode if the same key is pressed again. */
+      if (ruler_info->constrain_mode != CONSTRAIN_MODE_2) {
+        ruler_info->constrain_mode++;
+      }
+      else {
+        ruler_info->constrain_mode = CONSTRAIN_MODE_OFF;
+        ruler_info->constrain_axis = CONSTRAIN_AXIS_NONE;
+      }
+    }
+    do_cursor_update = true;
+  }
+#endif
+
 #ifndef USE_SNAP_DETECT_FROM_KEYMAP_HACK
   const bool do_snap = !(tweak_flag & WM_GIZMO_TWEAK_SNAP);
 #endif
@@ -949,7 +1047,8 @@ static int gizmo_ruler_modal(bContext *C,
   if (do_cursor_update) {
     if (ruler_info->state == RULER_STATE_DRAG) {
       struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-      if (view3d_ruler_item_mousemove(depsgraph,
+      if (view3d_ruler_item_mousemove(C,
+                                      depsgraph,
                                       ruler_info,
                                       ruler_item,
                                       event->mval,
@@ -984,6 +1083,11 @@ static int gizmo_ruler_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 
   const float mval_fl[2] = {UNPACK2(event->mval)};
 
+#ifdef USE_AXIS_CONSTRAINTS
+  ruler_info->constrain_axis = CONSTRAIN_AXIS_NONE;
+  ruler_info->constrain_mode = CONSTRAIN_MODE_OFF;
+#endif
+
   /* select and drag */
   if (gz->highlight_part == PART_LINE) {
     if ((ruler_item_pick->flag & RULERITEM_USE_ANGLE) == 0) {
@@ -1011,7 +1115,8 @@ static int gizmo_ruler_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 
       /* update the new location */
       struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-      view3d_ruler_item_mousemove(depsgraph,
+      view3d_ruler_item_mousemove(C,
+                                  depsgraph,
                                   ruler_info,
                                   ruler_item_pick,
                                   event->mval,
@@ -1124,12 +1229,13 @@ static void WIDGETGROUP_ruler_setup(const bContext *C, wmGizmoGroup *gzgroup)
     const wmGizmoType *gzt_snap;
     gzt_snap = WM_gizmotype_find("GIZMO_GT_snap_3d", true);
     gizmo = WM_gizmo_new_ptr(gzt_snap, gzgroup, NULL);
+
     RNA_enum_set(gizmo->ptr,
                  "snap_elements_force",
                  (SCE_SNAP_MODE_VERTEX | SCE_SNAP_MODE_EDGE | SCE_SNAP_MODE_FACE |
                   /* SCE_SNAP_MODE_VOLUME | SCE_SNAP_MODE_GRID | SCE_SNAP_MODE_INCREMENT | */
                   SCE_SNAP_MODE_EDGE_PERPENDICULAR | SCE_SNAP_MODE_EDGE_MIDPOINT));
-
+    ED_gizmotypes_snap_3d_flag_set(gizmo, V3D_SNAPCURSOR_SNAP_EDIT_GEOM_CAGE);
     WM_gizmo_set_color(gizmo, (float[4]){1.0f, 1.0f, 1.0f, 1.0f});
 
     wmOperatorType *ot = WM_operatortype_find("VIEW3D_OT_ruler_add", true);
@@ -1214,7 +1320,8 @@ static int view3d_ruler_add_invoke(bContext *C, wmOperator *op, const wmEvent *e
       struct Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
       /* snap the first point added, not essential but handy */
       inter->co_index = 0;
-      view3d_ruler_item_mousemove(depsgraph,
+      view3d_ruler_item_mousemove(C,
+                                  depsgraph,
                                   ruler_info,
                                   ruler_item,
                                   event->mval,

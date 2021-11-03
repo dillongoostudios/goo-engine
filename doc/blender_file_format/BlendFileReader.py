@@ -85,7 +85,7 @@ def openBlendFile(filename):
     '''
     handle = open(filename, 'rb')
     magic = ReadString(handle, 7)
-    if magic in ("BLENDER", "BULLETf"):
+    if magic in {"BLENDER", "BULLETf"}:
         log.debug("normal blendfile detected")
         handle.seek(0, os.SEEK_SET)
         return handle
@@ -123,7 +123,7 @@ def Align(handle):
 class BlendFile:
     '''
     Reads a blendfile and store the header, all the fileblocks, and catalogue
-    structs foound in the DNA fileblock
+    structs found in the DNA fileblock
 
     - BlendFile.Header  (BlendFileHeader instance)
     - BlendFile.Blocks  (list of BlendFileBlock instances)
@@ -137,7 +137,7 @@ class BlendFile:
         fileblock = BlendFileBlock(handle, self)
         found_dna_block = False
         while not found_dna_block:
-            if fileblock.Header.Code in ("DNA1", "SDNA"):
+            if fileblock.Header.Code in {"DNA1", "SDNA"}:
                 self.Catalog = DNACatalog(self.Header, handle)
                 found_dna_block = True
             else:

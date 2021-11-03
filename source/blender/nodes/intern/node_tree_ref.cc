@@ -14,9 +14,12 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include <mutex>
+
 #include "NOD_node_tree_ref.hh"
 
 #include "BLI_dot_export.hh"
+#include "BLI_stack.hh"
 
 namespace blender::nodes {
 
@@ -105,6 +108,7 @@ NodeTreeRef::NodeTreeRef(bNodeTree *btree) : btree_(btree)
     }
   }
 
+  this->create_socket_identifier_maps();
   this->create_linked_socket_caches();
 
   for (NodeRef *node : nodes_by_id_) {
@@ -173,12 +177,12 @@ void NodeTreeRef::create_linked_socket_caches()
     /* Find logically linked sockets. */
     Vector<const SocketRef *> logically_linked_sockets;
     Vector<const SocketRef *> logically_linked_skipped_sockets;
-    Vector<const InputSocketRef *> handled_sockets;
+    Vector<const InputSocketRef *> seen_sockets_stack;
     socket->foreach_logical_origin(
         [&](const OutputSocketRef &origin) { logically_linked_sockets.append(&origin); },
         [&](const SocketRef &socket) { logically_linked_skipped_sockets.append(&socket); },
         false,
-        handled_sockets);
+        seen_sockets_stack);
     if (logically_linked_sockets == directly_linked_sockets) {
       socket->logically_linked_sockets_ = socket->directly_linked_sockets_;
     }
@@ -219,16 +223,17 @@ void NodeTreeRef::create_linked_socket_caches()
   }
 }
 
-void InputSocketRef::foreach_logical_origin(FunctionRef<void(const OutputSocketRef &)> origin_fn,
-                                            FunctionRef<void(const SocketRef &)> skipped_fn,
-                                            bool only_follow_first_input_link,
-                                            Vector<const InputSocketRef *> &handled_sockets) const
+void InputSocketRef::foreach_logical_origin(
+    FunctionRef<void(const OutputSocketRef &)> origin_fn,
+    FunctionRef<void(const SocketRef &)> skipped_fn,
+    bool only_follow_first_input_link,
+    Vector<const InputSocketRef *> &seen_sockets_stack) const
 {
   /* Protect against loops. */
-  if (handled_sockets.contains(this)) {
+  if (seen_sockets_stack.contains(this)) {
     return;
   }
-  handled_sockets.append(this);
+  seen_sockets_stack.append(this);
 
   Span<const LinkRef *> links_to_check = this->directly_linked_links();
   if (only_follow_first_input_link) {
@@ -240,12 +245,15 @@ void InputSocketRef::foreach_logical_origin(FunctionRef<void(const OutputSocketR
     }
     const OutputSocketRef &origin = link->from();
     const NodeRef &origin_node = origin.node();
-    if (origin_node.is_reroute_node()) {
+    if (!origin.is_available()) {
+      /* Non available sockets are ignored. */
+    }
+    else if (origin_node.is_reroute_node()) {
       const InputSocketRef &reroute_input = origin_node.input(0);
       const OutputSocketRef &reroute_output = origin_node.output(0);
       skipped_fn.call_safe(reroute_input);
       skipped_fn.call_safe(reroute_output);
-      reroute_input.foreach_logical_origin(origin_fn, skipped_fn, false, handled_sockets);
+      reroute_input.foreach_logical_origin(origin_fn, skipped_fn, false, seen_sockets_stack);
     }
     else if (origin_node.is_muted()) {
       for (const InternalLinkRef *internal_link : origin_node.internal_links()) {
@@ -253,7 +261,7 @@ void InputSocketRef::foreach_logical_origin(FunctionRef<void(const OutputSocketR
           const InputSocketRef &mute_input = internal_link->from();
           skipped_fn.call_safe(origin);
           skipped_fn.call_safe(mute_input);
-          mute_input.foreach_logical_origin(origin_fn, skipped_fn, true, handled_sockets);
+          mute_input.foreach_logical_origin(origin_fn, skipped_fn, true, seen_sockets_stack);
           break;
         }
       }
@@ -262,18 +270,20 @@ void InputSocketRef::foreach_logical_origin(FunctionRef<void(const OutputSocketR
       origin_fn(origin);
     }
   }
+
+  seen_sockets_stack.pop_last();
 }
 
 void OutputSocketRef::foreach_logical_target(
     FunctionRef<void(const InputSocketRef &)> target_fn,
     FunctionRef<void(const SocketRef &)> skipped_fn,
-    Vector<const OutputSocketRef *> &handled_sockets) const
+    Vector<const OutputSocketRef *> &seen_sockets_stack) const
 {
   /* Protect against loops. */
-  if (handled_sockets.contains(this)) {
+  if (seen_sockets_stack.contains(this)) {
     return;
   }
-  handled_sockets.append(this);
+  seen_sockets_stack.append(this);
 
   for (const LinkRef *link : this->directly_linked_links()) {
     if (link->is_muted()) {
@@ -281,25 +291,119 @@ void OutputSocketRef::foreach_logical_target(
     }
     const InputSocketRef &target = link->to();
     const NodeRef &target_node = target.node();
-    if (target_node.is_reroute_node()) {
+    if (!target.is_available()) {
+      /* Non available sockets are ignored. */
+    }
+    else if (target_node.is_reroute_node()) {
       const OutputSocketRef &reroute_output = target_node.output(0);
       skipped_fn.call_safe(target);
       skipped_fn.call_safe(reroute_output);
-      reroute_output.foreach_logical_target(target_fn, skipped_fn, handled_sockets);
+      reroute_output.foreach_logical_target(target_fn, skipped_fn, seen_sockets_stack);
     }
     else if (target_node.is_muted()) {
       skipped_fn.call_safe(target);
       for (const InternalLinkRef *internal_link : target_node.internal_links()) {
         if (&internal_link->from() == &target) {
+          /* The internal link only forwards the first incoming link. */
+          if (target.is_multi_input_socket()) {
+            if (target.directly_linked_links()[0] != link) {
+              continue;
+            }
+          }
           const OutputSocketRef &mute_output = internal_link->to();
           skipped_fn.call_safe(target);
           skipped_fn.call_safe(mute_output);
-          mute_output.foreach_logical_target(target_fn, skipped_fn, handled_sockets);
+          mute_output.foreach_logical_target(target_fn, skipped_fn, seen_sockets_stack);
         }
       }
     }
     else {
       target_fn(target);
+    }
+  }
+
+  seen_sockets_stack.pop_last();
+}
+
+namespace {
+struct SocketByIdentifierMap {
+  SocketIndexByIdentifierMap *map = nullptr;
+  std::unique_ptr<SocketIndexByIdentifierMap> owned_map;
+};
+}  // namespace
+
+static std::unique_ptr<SocketIndexByIdentifierMap> create_identifier_map(const ListBase &sockets)
+{
+  std::unique_ptr<SocketIndexByIdentifierMap> map = std::make_unique<SocketIndexByIdentifierMap>();
+  int index;
+  LISTBASE_FOREACH_INDEX (bNodeSocket *, socket, &sockets, index) {
+    map->add_new(socket->identifier, index);
+  }
+  return map;
+}
+
+/* This function is not threadsafe. */
+static SocketByIdentifierMap get_or_create_identifier_map(
+    const bNode &node, const ListBase &sockets, const bNodeSocketTemplate *sockets_template)
+{
+  SocketByIdentifierMap map;
+  if (sockets_template == nullptr) {
+    if (BLI_listbase_is_empty(&sockets)) {
+      static SocketIndexByIdentifierMap empty_map;
+      map.map = &empty_map;
+    }
+    else if (node.type == NODE_REROUTE) {
+      if (&node.inputs == &sockets) {
+        static SocketIndexByIdentifierMap reroute_input_map = [] {
+          SocketIndexByIdentifierMap map;
+          map.add_new("Input", 0);
+          return map;
+        }();
+        map.map = &reroute_input_map;
+      }
+      else {
+        static SocketIndexByIdentifierMap reroute_output_map = [] {
+          SocketIndexByIdentifierMap map;
+          map.add_new("Output", 0);
+          return map;
+        }();
+        map.map = &reroute_output_map;
+      }
+    }
+    else {
+      /* The node has a dynamic amount of sockets. Therefore we need to create a new map. */
+      map.owned_map = create_identifier_map(sockets);
+      map.map = &*map.owned_map;
+    }
+  }
+  else {
+    /* Cache only one map for nodes that have the same sockets. */
+    static Map<const bNodeSocketTemplate *, std::unique_ptr<SocketIndexByIdentifierMap>> maps;
+    map.map = &*maps.lookup_or_add_cb(sockets_template,
+                                      [&]() { return create_identifier_map(sockets); });
+  }
+  return map;
+}
+
+void NodeTreeRef::create_socket_identifier_maps()
+{
+  /* `get_or_create_identifier_map` is not threadsafe, therefore we have to hold a lock here. */
+  static std::mutex mutex;
+  std::lock_guard lock{mutex};
+
+  for (NodeRef *node : nodes_by_id_) {
+    bNode &bnode = *node->bnode_;
+    SocketByIdentifierMap inputs_map = get_or_create_identifier_map(
+        bnode, bnode.inputs, bnode.typeinfo->inputs);
+    SocketByIdentifierMap outputs_map = get_or_create_identifier_map(
+        bnode, bnode.outputs, bnode.typeinfo->outputs);
+    node->input_index_by_identifier_ = inputs_map.map;
+    node->output_index_by_identifier_ = outputs_map.map;
+    if (inputs_map.owned_map) {
+      owned_identifier_maps_.append(std::move(inputs_map.owned_map));
+    }
+    if (outputs_map.owned_map) {
+      owned_identifier_maps_.append(std::move(outputs_map.owned_map));
     }
   }
 }
@@ -320,7 +424,13 @@ static bool has_link_cycles_recursive(const NodeRef &node,
   is_in_stack[node_id] = true;
 
   for (const OutputSocketRef *from_socket : node.outputs()) {
+    if (!from_socket->is_available()) {
+      continue;
+    }
     for (const InputSocketRef *to_socket : from_socket->directly_linked_sockets()) {
+      if (!to_socket->is_available()) {
+        continue;
+      }
       const NodeRef &to_node = to_socket->node();
       if (has_link_cycles_recursive(to_node, visited, is_in_stack)) {
         return true;
@@ -332,6 +442,9 @@ static bool has_link_cycles_recursive(const NodeRef &node,
   return false;
 }
 
+/**
+ * \return True when there is a link cycle. Unavailable sockets are ignored.
+ */
 bool NodeTreeRef::has_link_cycles() const
 {
   const int node_amount = nodes_by_id_.size();
@@ -344,6 +457,170 @@ bool NodeTreeRef::has_link_cycles() const
     }
   }
   return false;
+}
+
+bool NodeTreeRef::has_undefined_nodes_or_sockets() const
+{
+  for (const NodeRef *node : nodes_by_id_) {
+    if (node->is_undefined()) {
+      return true;
+    }
+  }
+  for (const SocketRef *socket : sockets_by_id_) {
+    if (socket->is_undefined()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool NodeRef::any_input_is_directly_linked() const
+{
+  for (const SocketRef *socket : inputs_) {
+    if (!socket->directly_linked_sockets().is_empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool NodeRef::any_output_is_directly_linked() const
+{
+  for (const SocketRef *socket : outputs_) {
+    if (!socket->directly_linked_sockets().is_empty()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool NodeRef::any_socket_is_directly_linked(eNodeSocketInOut in_out) const
+{
+  if (in_out == SOCK_IN) {
+    return this->any_input_is_directly_linked();
+  }
+  return this->any_output_is_directly_linked();
+}
+
+struct ToposortNodeState {
+  bool is_done = false;
+  bool is_in_stack = false;
+};
+
+static void toposort_from_start_node(const NodeTreeRef::ToposortDirection direction,
+                                     const NodeRef &start_node,
+                                     MutableSpan<ToposortNodeState> node_states,
+                                     NodeTreeRef::ToposortResult &result)
+{
+  struct Item {
+    const NodeRef *node;
+    /* Index of the next socket that is checked in the depth-first search. */
+    int socket_index = 0;
+    /* Link index in the next socket that is checked in the depth-first search. */
+    int link_index = 0;
+  };
+
+  /* Do a depth-first search to sort nodes topologically. */
+  Stack<Item, 64> nodes_to_check;
+  nodes_to_check.push({&start_node});
+  while (!nodes_to_check.is_empty()) {
+    Item &item = nodes_to_check.peek();
+    const NodeRef &node = *item.node;
+    const Span<const SocketRef *> sockets = node.sockets(
+        direction == NodeTreeRef::ToposortDirection::LeftToRight ? SOCK_IN : SOCK_OUT);
+
+    while (true) {
+      if (item.socket_index == sockets.size()) {
+        /* All sockets have already been visited. */
+        break;
+      }
+      const SocketRef &socket = *sockets[item.socket_index];
+      const Span<const SocketRef *> linked_sockets = socket.directly_linked_sockets();
+      if (item.link_index == linked_sockets.size()) {
+        /* All links connected to this socket have already been visited. */
+        item.socket_index++;
+        item.link_index = 0;
+        continue;
+      }
+      const SocketRef &linked_socket = *linked_sockets[item.link_index];
+      const NodeRef &linked_node = linked_socket.node();
+      ToposortNodeState &linked_node_state = node_states[linked_node.id()];
+      if (linked_node_state.is_done) {
+        /* The linked node has already been visited. */
+        item.link_index++;
+        continue;
+      }
+      if (linked_node_state.is_in_stack) {
+        result.has_cycle = true;
+      }
+      else {
+        nodes_to_check.push({&linked_node});
+        linked_node_state.is_in_stack = true;
+      }
+      break;
+    }
+
+    /* If no other element has been pushed, the current node can be pushed to the sorted list. */
+    if (&item == &nodes_to_check.peek()) {
+      ToposortNodeState &node_state = node_states[node.id()];
+      node_state.is_done = true;
+      node_state.is_in_stack = false;
+      result.sorted_nodes.append(&node);
+      nodes_to_check.pop();
+    }
+  }
+}
+
+/**
+ * Sort nodes topologically from left to right or right to left.
+ * In the future the result if this could be cached on #NodeTreeRef.
+ */
+NodeTreeRef::ToposortResult NodeTreeRef::toposort(const ToposortDirection direction) const
+{
+  ToposortResult result;
+  result.sorted_nodes.reserve(nodes_by_id_.size());
+
+  Array<ToposortNodeState> node_states(nodes_by_id_.size());
+
+  for (const NodeRef *node : nodes_by_id_) {
+    if (node_states[node->id()].is_done) {
+      /* Ignore nodes that are done already. */
+      continue;
+    }
+    if (node->any_socket_is_directly_linked(
+            direction == ToposortDirection::LeftToRight ? SOCK_OUT : SOCK_IN)) {
+      /* Ignore non-start nodes. */
+      continue;
+    }
+
+    toposort_from_start_node(direction, *node, node_states, result);
+  }
+
+  /* Check if the loop above forgot some nodes because there is a cycle. */
+  if (result.sorted_nodes.size() < nodes_by_id_.size()) {
+    result.has_cycle = true;
+    for (const NodeRef *node : nodes_by_id_) {
+      if (node_states[node->id()].is_done) {
+        /* Ignore nodes that are done already. */
+        continue;
+      }
+      /* Start toposort at this node which is somewhere in the middle of a loop. */
+      toposort_from_start_node(direction, *node, node_states, result);
+    }
+  }
+
+  BLI_assert(result.sorted_nodes.size() == nodes_by_id_.size());
+  return result;
+}
+
+const NodeRef *NodeTreeRef::find_node(const bNode &bnode) const
+{
+  for (const NodeRef *node : this->nodes_by_type(bnode.typeinfo)) {
+    if (node->bnode_ == &bnode) {
+      return node;
+    }
+  }
+  return nullptr;
 }
 
 std::string NodeTreeRef::to_dot() const

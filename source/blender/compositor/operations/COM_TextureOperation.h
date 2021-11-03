@@ -19,7 +19,7 @@
 #pragma once
 
 #include "BLI_listbase.h"
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_texture_types.h"
 #include "MEM_guardedalloc.h"
 
@@ -31,23 +31,22 @@ namespace blender::compositor {
 /**
  * Base class for all renderlayeroperations
  *
- * \todo: rename to operation.
+ * \todo Rename to operation.
  */
-class TextureBaseOperation : public NodeOperation {
+class TextureBaseOperation : public MultiThreadedOperation {
  private:
-  Tex *m_texture;
-  const RenderData *m_rd;
-  SocketReader *m_inputSize;
-  SocketReader *m_inputOffset;
-  struct ImagePool *m_pool;
-  bool m_sceneColorManage;
+  Tex *texture_;
+  const RenderData *rd_;
+  SocketReader *input_size_;
+  SocketReader *input_offset_;
+  struct ImagePool *pool_;
+  bool scene_color_manage_;
 
  protected:
   /**
-   * Determine the output resolution. The resolution is retrieved from the Renderer
+   * Determine the output resolution.
    */
-  void determineResolution(unsigned int resolution[2],
-                           unsigned int preferredResolution[2]) override;
+  void determine_canvas(const rcti &preferred_area, rcti &r_area) override;
 
   /**
    * Constructor
@@ -55,22 +54,26 @@ class TextureBaseOperation : public NodeOperation {
   TextureBaseOperation();
 
  public:
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
-  void setTexture(Tex *texture)
+  void set_texture(Tex *texture)
   {
-    this->m_texture = texture;
+    texture_ = texture;
   }
-  void initExecution() override;
-  void deinitExecution() override;
-  void setRenderData(const RenderData *rd)
+  void init_execution() override;
+  void deinit_execution() override;
+  void set_render_data(const RenderData *rd)
   {
-    this->m_rd = rd;
+    rd_ = rd;
   }
-  void setSceneColorManage(bool sceneColorManage)
+  void set_scene_color_manage(bool scene_color_manage)
   {
-    this->m_sceneColorManage = sceneColorManage;
+    scene_color_manage_ = scene_color_manage;
   }
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 class TextureOperation : public TextureBaseOperation {
@@ -80,7 +83,11 @@ class TextureOperation : public TextureBaseOperation {
 class TextureAlphaOperation : public TextureBaseOperation {
  public:
   TextureAlphaOperation();
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

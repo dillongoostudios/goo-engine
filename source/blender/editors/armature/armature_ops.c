@@ -131,6 +131,8 @@ void ED_operatortypes_armature(void)
   /* POSELIB */
   WM_operatortype_append(POSELIB_OT_browse_interactive);
   WM_operatortype_append(POSELIB_OT_apply_pose);
+  WM_operatortype_append(POSELIB_OT_apply_pose_asset);
+  WM_operatortype_append(POSELIB_OT_blend_pose_asset);
 
   WM_operatortype_append(POSELIB_OT_pose_add);
   WM_operatortype_append(POSELIB_OT_pose_remove);
@@ -148,6 +150,7 @@ void ED_operatortypes_armature(void)
   WM_operatortype_append(POSE_OT_push_rest);
   WM_operatortype_append(POSE_OT_relax_rest);
   WM_operatortype_append(POSE_OT_breakdown);
+  WM_operatortype_append(POSE_OT_blend_to_neighbors);
 }
 
 void ED_operatormacros_armature(void)

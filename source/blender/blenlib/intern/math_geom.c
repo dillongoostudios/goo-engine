@@ -165,7 +165,7 @@ float area_squared_poly_v3(const float verts[][3], unsigned int nr)
 /**
  * Scalar cross product of a 2d polygon.
  *
- * - equivalent to ``area * 2``
+ * - equivalent to `area * 2`
  * - useful for checking polygon winding (a positive value is clockwise).
  */
 float cross_poly_v2(const float verts[][2], unsigned int nr)
@@ -518,7 +518,7 @@ float dist_to_line_v3(const float p[3], const float l1[3], const float l2[3])
 }
 
 /**
- * Check if \a p is inside the 2x planes defined by ``(v1, v2, v3)``
+ * Check if \a p is inside the 2x planes defined by `(v1, v2, v3)`
  * where the 3x points define 2x planes.
  *
  * \param axis_ref: used when v1,v2,v3 form a line and to check if the corner is concave/convex.
@@ -527,7 +527,7 @@ float dist_to_line_v3(const float p[3], const float l1[3], const float l2[3])
  * (it just defines the planes).
  *
  * \return the lowest squared distance to either of the planes.
- * where ``(return < 0.0)`` is outside.
+ * where `(return < 0.0)` is outside.
  *
  * <pre>
  *            v1
@@ -856,7 +856,7 @@ void dist_squared_to_projected_aabb_precalc(struct DistProjectedAABBPrecalc *pre
   }
 #else
   if (!isect_plane_plane_v3(px, py, precalc->ray_origin, precalc->ray_direction)) {
-    /* Matrix with weird coplanar planes. Undetermined origin.*/
+    /* Matrix with weird co-planar planes. Undetermined origin. */
     zero_v3(precalc->ray_origin);
     precalc->ray_direction[0] = precalc->pmat[0][3];
     precalc->ray_direction[1] = precalc->pmat[1][3];
@@ -1421,7 +1421,7 @@ int isect_seg_seg_v2_lambda_mu_db(const double v1[2],
  * \return r_p1, r_p2: Intersection coordinates.
  *
  * \note The order of assignment for intersection points (\a r_p1, \a r_p2) is predictable,
- * based on the direction defined by ``l2 - l1``,
+ * based on the direction defined by `l2 - l1`,
  * this direction compared with the normal of each point on the sphere:
  * \a r_p1 always has a >= 0.0 dot product.
  * \a r_p2 always has a <= 0.0 dot product.
@@ -1756,8 +1756,8 @@ bool isect_ray_tri_v3(const float ray_origin[3],
                       float *r_lambda,
                       float r_uv[2])
 {
-  /* note: these values were 0.000001 in 2.4x but for projection snapping on
-   * a human head (1BU == 1m), subsurf level 2, this gave many errors - campbell */
+  /* NOTE(campbell): these values were 0.000001 in 2.4x but for projection snapping on
+   * a human head (1BU == 1m), subsurf level 2, this gave many errors. */
   const float epsilon = 0.00000001f;
   float p[3], s[3], e1[3], e2[3], q[3];
   float a, f, u, v;
@@ -1787,7 +1787,7 @@ bool isect_ray_tri_v3(const float ray_origin[3],
   }
 
   *r_lambda = f * dot_v3v3(e2, q);
-  if ((*r_lambda < 0.0f)) {
+  if (*r_lambda < 0.0f) {
     return false;
   }
 
@@ -1864,7 +1864,7 @@ bool isect_ray_tri_epsilon_v3(const float ray_origin[3],
   }
 
   *r_lambda = f * dot_v3v3(e2, q);
-  if ((*r_lambda < 0.0f)) {
+  if (*r_lambda < 0.0f) {
     return false;
   }
 
@@ -2024,7 +2024,7 @@ bool isect_ray_tri_threshold_v3(const float ray_origin[3],
 
   cross_v3_v3v3(q, s, e1);
   *r_lambda = f * dot_v3v3(e2, q);
-  if ((*r_lambda < 0.0f)) {
+  if (*r_lambda < 0.0f) {
     return false;
   }
 
@@ -2133,7 +2133,7 @@ bool isect_ray_line_v3(const float ray_origin[3],
   const float nlen = len_squared_v3(n);
 
   if (nlen == 0.0f) {
-    /* the lines are parallel.*/
+    /* The lines are parallel. */
     return false;
   }
 
@@ -2353,7 +2353,7 @@ bool isect_planes_v3_fn(
         for (i_test = 0; i_test < planes_len; i_test++) {
           const float *np_test = planes[i_test];
           if (((dot_v3v3(np_test, co_test) + np_test[3]) > eps_isect)) {
-            /* For low epsilon values the point could intersect it's own plane. */
+            /* For low epsilon values the point could intersect its own plane. */
             if (!ELEM(i_test, i, j, k)) {
               break;
             }
@@ -2903,7 +2903,7 @@ bool isect_sweeping_sphere_tri_v3(const float p1[3],
   /*---test edges---*/
   sub_v3_v3v3(e3, v2, v1); /* wasn't yet calculated */
 
-  /*e1*/
+  /* `e1` */
   sub_v3_v3v3(bv, v0, p1);
 
   elen2 = dot_v3v3(e1, e1);
@@ -2926,8 +2926,8 @@ bool isect_sweeping_sphere_tri_v3(const float p1[3],
     }
   }
 
-  /*e2*/
-  /*bv is same*/
+  /* `e2` */
+  /* `bv` is same. */
   elen2 = dot_v3v3(e2, e2);
   edotv = dot_v3v3(e2, vel);
   edotbv = dot_v3v3(e2, bv);
@@ -2948,11 +2948,11 @@ bool isect_sweeping_sphere_tri_v3(const float p1[3],
     }
   }
 
-  /*e3*/
-  /* sub_v3_v3v3(bv, v0, p1); */   /* UNUSED */
-  /* elen2 = dot_v3v3(e1, e1); */  /* UNUSED */
-  /* edotv = dot_v3v3(e1, vel); */ /* UNUSED */
-  /* edotbv = dot_v3v3(e1, bv); */ /* UNUSED */
+  /* `e3` */
+  // sub_v3_v3v3(bv, v0, p1);   /* UNUSED */
+  // elen2 = dot_v3v3(e1, e1);  /* UNUSED */
+  // edotv = dot_v3v3(e1, vel); /* UNUSED */
+  // edotbv = dot_v3v3(e1, bv); /* UNUSED */
 
   sub_v3_v3v3(bv, v1, p1);
   elen2 = dot_v3v3(e3, e3);
@@ -3287,8 +3287,8 @@ bool isect_ray_aabb_v3(const struct IsectRayAABB_Precalc *data,
     tmin = tzmin;
   }
 
-  /* Note: tmax does not need to be updated since we don't use it
-   * keeping this here for future reference - jwilkins */
+  /* NOTE(jwilkins): tmax does not need to be updated since we don't use it
+   * keeping this here for future reference. */
   // if (tzmax < tmax) tmax = tzmax;
 
   if (tmin_out) {
@@ -3325,7 +3325,7 @@ bool isect_ray_aabb_v3_simple(const float orig[3],
   t[5] = (double)(bb_max[2] - orig[2]) * invdirz;
   hit_dist[0] = (float)fmax(fmax(fmin(t[0], t[1]), fmin(t[2], t[3])), fmin(t[4], t[5]));
   hit_dist[1] = (float)fmin(fmin(fmax(t[0], t[1]), fmax(t[2], t[3])), fmax(t[4], t[5]));
-  if ((hit_dist[1] < 0.0f || hit_dist[0] > hit_dist[1])) {
+  if ((hit_dist[1] < 0.0f) || (hit_dist[0] > hit_dist[1])) {
     return false;
   }
 
@@ -3344,6 +3344,13 @@ float closest_to_ray_v3(float r_close[3],
                         const float ray_dir[3])
 {
   float h[3], lambda;
+
+  if (UNLIKELY(is_zero_v3(ray_dir))) {
+    lambda = 0.0f;
+    copy_v3_v3(r_close, ray_orig);
+    return lambda;
+  }
+
   sub_v3_v3v3(h, p, ray_orig);
   lambda = dot_v3v3(ray_dir, h) / dot_v3v3(ray_dir, ray_dir);
   madd_v3_v3v3fl(r_close, ray_orig, ray_dir, lambda);
@@ -3419,7 +3426,7 @@ float ray_point_factor_v3(const float p[3],
 
 /**
  * A simplified version of #closest_to_line_v3
- * we only need to return the ``lambda``
+ * we only need to return the `lambda`
  *
  * \param epsilon: avoid approaching divide-by-zero.
  * Passing a zero will just check for nonzero division.
@@ -3552,7 +3559,7 @@ static bool point_in_slice(const float p[3],
 
   sub_v3_v3v3(rp, p, v1);
   h = dot_v3v3(q, rp) / dot_v3v3(q, q);
-  /* note: when 'h' is nan/-nan, this check returns false
+  /* NOTE: when 'h' is nan/-nan, this check returns false
    * without explicit check - covering the degenerate case */
   return (h >= 0.0f && h <= 1.0f);
 }
@@ -4013,7 +4020,7 @@ void barycentric_weights_v2_persp(
 
 /**
  * same as #barycentric_weights_v2 but works with a quad,
- * note: untested for values outside the quad's bounds
+ * NOTE: untested for values outside the quad's bounds
  * this is #interp_weights_poly_v2 expanded for quads only
  */
 void barycentric_weights_v2_quad(const float v1[2],
@@ -4023,10 +4030,11 @@ void barycentric_weights_v2_quad(const float v1[2],
                                  const float co[2],
                                  float w[4])
 {
-  /* note: fabsf() here is not needed for convex quads (and not used in interp_weights_poly_v2).
-   * but in the case of concave/bow-tie quads for the mask rasterizer it gives unreliable results
-   * without adding absf(). If this becomes an issue for more general usage we could have
-   * this optional or use a different function - Campbell */
+  /* NOTE(campbell): fabsf() here is not needed for convex quads
+   * (and not used in #interp_weights_poly_v2).
+   * But in the case of concave/bow-tie quads for the mask rasterizer it
+   * gives unreliable results without adding absf(). If this becomes an issue for more general
+   * usage we could have this optional or use a different function. */
 #define MEAN_VALUE_HALF_TAN_V2(_area, i1, i2) \
   ((_area = cross_v2v2(dirs[i1], dirs[i2])) != 0.0f ? \
        fabsf(((lens[i1] * lens[i2]) - dot_v2v2(dirs[i1], dirs[i2])) / _area) : \
@@ -4467,7 +4475,7 @@ void interp_weights_poly_v2(float *w, float v[][2], const int n, const float co[
     d_curr = d_next;
     DIR_V2_SET(&d_next, v_next, co);
     ht = mean_value_half_tan_v2_db(&d_curr, &d_next);
-    w[i_curr] = (float)((ht_prev + ht) / d_curr.len);
+    w[i_curr] = (d_curr.len == 0.0) ? 0.0f : (float)((ht_prev + ht) / d_curr.len);
     totweight += w[i_curr];
 
     /* step */
@@ -4635,7 +4643,7 @@ void resolve_quad_uv_v2_deriv(float r_uv[2],
                              (st3[0] * st0[1] - st3[1] * st0[0]);
 
   /* X is 2D cross product (determinant)
-   * A = (p0 - p) X (p0 - p3)*/
+   * A = (p0 - p) X (p0 - p3) */
   const double a = (st0[0] - st[0]) * (st0[1] - st3[1]) - (st0[1] - st[1]) * (st0[0] - st3[0]);
 
   /* B = ( (p0 - p) X (p1 - p2) + (p1 - p) X (p0 - p3) ) / 2 */
@@ -4724,7 +4732,7 @@ float resolve_quad_u_v2(const float st[2],
                              (st3[0] * st0[1] - st3[1] * st0[0]);
 
   /* X is 2D cross product (determinant)
-   * A = (p0 - p) X (p0 - p3)*/
+   * A = (p0 - p) X (p0 - p3) */
   const double a = (st0[0] - st[0]) * (st0[1] - st3[1]) - (st0[1] - st[1]) * (st0[0] - st3[0]);
 
   /* B = ( (p0 - p) X (p1 - p2) + (p1 - p) X (p0 - p3) ) / 2 */
@@ -4813,7 +4821,7 @@ void orthographic_m4(float matrix[4][4],
   matrix[3][0] = -(right + left) / Xdelta;
   matrix[1][1] = 2.0f / Ydelta;
   matrix[3][1] = -(top + bottom) / Ydelta;
-  matrix[2][2] = -2.0f / Zdelta; /* note: negate Z */
+  matrix[2][2] = -2.0f / Zdelta; /* NOTE: negate Z. */
   matrix[3][2] = -(farClip + nearClip) / Zdelta;
 }
 
@@ -4837,7 +4845,7 @@ void perspective_m4(float mat[4][4],
   }
   mat[0][0] = nearClip * 2.0f / Xdelta;
   mat[1][1] = nearClip * 2.0f / Ydelta;
-  mat[2][0] = (right + left) / Xdelta; /* note: negate Z */
+  mat[2][0] = (right + left) / Xdelta; /* NOTE: negate Z. */
   mat[2][1] = (top + bottom) / Ydelta;
   mat[2][2] = -(farClip + nearClip) / Zdelta;
   mat[2][3] = -1.0f;
@@ -4904,8 +4912,8 @@ void window_translate_m4(float winmat[4][4], float perspmat[4][4], const float x
 void planes_from_projmat(const float mat[4][4],
                          float left[4],
                          float right[4],
-                         float top[4],
                          float bottom[4],
+                         float top[4],
                          float near[4],
                          float far[4])
 {
@@ -4954,7 +4962,7 @@ void planes_from_projmat(const float mat[4][4],
   }
 }
 
-void projmat_dimensions(const float projmat[4][4],
+void projmat_dimensions(const float winmat[4][4],
                         float *r_left,
                         float *r_right,
                         float *r_bottom,
@@ -4962,27 +4970,27 @@ void projmat_dimensions(const float projmat[4][4],
                         float *r_near,
                         float *r_far)
 {
-  bool is_persp = projmat[3][3] == 0.0f;
-
+  const bool is_persp = winmat[3][3] == 0.0f;
   if (is_persp) {
-    *r_left = (projmat[2][0] - 1.0f) / projmat[0][0];
-    *r_right = (projmat[2][0] + 1.0f) / projmat[0][0];
-    *r_bottom = (projmat[2][1] - 1.0f) / projmat[1][1];
-    *r_top = (projmat[2][1] + 1.0f) / projmat[1][1];
-    *r_near = projmat[3][2] / (projmat[2][2] - 1.0f);
-    *r_far = projmat[3][2] / (projmat[2][2] + 1.0f);
+    const float near = winmat[3][2] / (winmat[2][2] - 1.0f);
+    *r_left = near * ((winmat[2][0] - 1.0f) / winmat[0][0]);
+    *r_right = near * ((winmat[2][0] + 1.0f) / winmat[0][0]);
+    *r_bottom = near * ((winmat[2][1] - 1.0f) / winmat[1][1]);
+    *r_top = near * ((winmat[2][1] + 1.0f) / winmat[1][1]);
+    *r_near = near;
+    *r_far = winmat[3][2] / (winmat[2][2] + 1.0f);
   }
   else {
-    *r_left = (-projmat[3][0] - 1.0f) / projmat[0][0];
-    *r_right = (-projmat[3][0] + 1.0f) / projmat[0][0];
-    *r_bottom = (-projmat[3][1] - 1.0f) / projmat[1][1];
-    *r_top = (-projmat[3][1] + 1.0f) / projmat[1][1];
-    *r_near = (projmat[3][2] + 1.0f) / projmat[2][2];
-    *r_far = (projmat[3][2] - 1.0f) / projmat[2][2];
+    *r_left = (-winmat[3][0] - 1.0f) / winmat[0][0];
+    *r_right = (-winmat[3][0] + 1.0f) / winmat[0][0];
+    *r_bottom = (-winmat[3][1] - 1.0f) / winmat[1][1];
+    *r_top = (-winmat[3][1] + 1.0f) / winmat[1][1];
+    *r_near = (winmat[3][2] + 1.0f) / winmat[2][2];
+    *r_far = (winmat[3][2] - 1.0f) / winmat[2][2];
   }
 }
 
-void projmat_dimensions_db(const float projmat_fl[4][4],
+void projmat_dimensions_db(const float winmat_fl[4][4],
                            double *r_left,
                            double *r_right,
                            double *r_bottom,
@@ -4990,26 +4998,26 @@ void projmat_dimensions_db(const float projmat_fl[4][4],
                            double *r_near,
                            double *r_far)
 {
-  double projmat[4][4];
-  copy_m4d_m4(projmat, projmat_fl);
+  double winmat[4][4];
+  copy_m4d_m4(winmat, winmat_fl);
 
-  bool is_persp = projmat[3][3] == 0.0f;
-
+  const bool is_persp = winmat[3][3] == 0.0f;
   if (is_persp) {
-    *r_left = (projmat[2][0] - 1.0) / projmat[0][0];
-    *r_right = (projmat[2][0] + 1.0) / projmat[0][0];
-    *r_bottom = (projmat[2][1] - 1.0) / projmat[1][1];
-    *r_top = (projmat[2][1] + 1.0) / projmat[1][1];
-    *r_near = projmat[3][2] / (projmat[2][2] - 1.0);
-    *r_far = projmat[3][2] / (projmat[2][2] + 1.0);
+    const double near = winmat[3][2] / (winmat[2][2] - 1.0);
+    *r_left = near * ((winmat[2][0] - 1.0) / winmat[0][0]);
+    *r_right = near * ((winmat[2][0] + 1.0) / winmat[0][0]);
+    *r_bottom = near * ((winmat[2][1] - 1.0) / winmat[1][1]);
+    *r_top = near * ((winmat[2][1] + 1.0) / winmat[1][1]);
+    *r_near = near;
+    *r_far = winmat[3][2] / (winmat[2][2] + 1.0);
   }
   else {
-    *r_left = (-projmat[3][0] - 1.0) / projmat[0][0];
-    *r_right = (-projmat[3][0] + 1.0) / projmat[0][0];
-    *r_bottom = (-projmat[3][1] - 1.0) / projmat[1][1];
-    *r_top = (-projmat[3][1] + 1.0) / projmat[1][1];
-    *r_near = (projmat[3][2] + 1.0) / projmat[2][2];
-    *r_far = (projmat[3][2] - 1.0) / projmat[2][2];
+    *r_left = (-winmat[3][0] - 1.0) / winmat[0][0];
+    *r_right = (-winmat[3][0] + 1.0) / winmat[0][0];
+    *r_bottom = (-winmat[3][1] - 1.0) / winmat[1][1];
+    *r_top = (-winmat[3][1] + 1.0) / winmat[1][1];
+    *r_near = (winmat[3][2] + 1.0) / winmat[2][2];
+    *r_far = (winmat[3][2] - 1.0) / winmat[2][2];
   }
 }
 
@@ -5393,7 +5401,7 @@ void accumulate_vertex_normals_poly_v3(float **vertnos,
 
 void tangent_from_uv_v3(const float uv1[2],
                         const float uv2[2],
-                        const float uv3[3],
+                        const float uv3[2],
                         const float co1[3],
                         const float co2[3],
                         const float co3[3],
@@ -6211,6 +6219,19 @@ bool is_quad_flip_v3_first_third_fast(const float v1[3],
   return dot_v3v3(cross_a, cross_b) > 0.0f;
 }
 
+bool is_quad_flip_v3_first_third_fast_with_normal(const float v1[3],
+                                                  const float v2[3],
+                                                  const float v3[3],
+                                                  const float v4[3],
+                                                  const float normal[3])
+{
+  float dir_v3v1[3], tangent[3];
+  sub_v3_v3v3(dir_v3v1, v3, v1);
+  cross_v3_v3v3(tangent, dir_v3v1, normal);
+  const float dot = dot_v3v3(v1, tangent);
+  return (dot_v3v3(v4, tangent) >= dot) || (dot_v3v3(v2, tangent) <= dot);
+}
+
 /**
  * Return the value which the distance between points will need to be scaled by,
  * to define a handle, given both points are on a perfect circle.
@@ -6224,12 +6245,12 @@ float cubic_tangent_factor_circle_v3(const float tan_l[3], const float tan_r[3])
   BLI_ASSERT_UNIT_V3(tan_l);
   BLI_ASSERT_UNIT_V3(tan_r);
 
-  /* -7f causes instability/glitches with Bendy Bones + Custom Refs  */
+  /* -7f causes instability/glitches with Bendy Bones + Custom Refs. */
   const float eps = 1e-5f;
 
   const float tan_dot = dot_v3v3(tan_l, tan_r);
   if (tan_dot > 1.0f - eps) {
-    /* no angle difference (use fallback, length wont make any difference) */
+    /* no angle difference (use fallback, length won't make any difference) */
     return (1.0f / 3.0f) * 0.75f;
   }
   if (tan_dot < -1.0f + eps) {

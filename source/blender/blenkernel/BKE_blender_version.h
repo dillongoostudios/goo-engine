@@ -31,22 +31,21 @@ extern "C" {
  */
 
 /* Blender major and minor version. */
-#define BLENDER_VERSION 293
+#define BLENDER_VERSION 300
 /* Blender patch version for bugfix releases. */
-#define BLENDER_VERSION_PATCH 1
+#define BLENDER_VERSION_PATCH 0
 /** Blender release cycle stage: alpha/beta/rc/release. */
 #define BLENDER_VERSION_CYCLE custom
 
 /* Blender file format version. */
 #define BLENDER_FILE_VERSION BLENDER_VERSION
-
-#define BLENDER_FILE_SUBVERSION 20
+#define BLENDER_FILE_SUBVERSION 40
 
 /* Minimum Blender version that supports reading file written with the current
  * version. Older Blender versions will test this and show a warning if the file
  * was written with too new a version. */
-#define BLENDER_FILE_MIN_VERSION 290
-#define BLENDER_FILE_MIN_SUBVERSION 0
+#define BLENDER_FILE_MIN_VERSION 300
+#define BLENDER_FILE_MIN_SUBVERSION 36
 
 /** User readable version string. */
 const char *BKE_blender_version_string(void);

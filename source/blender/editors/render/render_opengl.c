@@ -141,7 +141,9 @@ typedef struct OGLRender {
   wmWindowManager *wm;
   wmWindow *win;
 
-  wmTimer *timer; /* use to check if running modal or not (invoke'd or exec'd)*/
+  /** Use to check if running modal or not (invoke'd or exec'd). */
+  wmTimer *timer;
+
   void **movie_ctx_arr;
 
   TaskPool *task_pool;
@@ -301,7 +303,7 @@ static void screen_opengl_render_doit(const bContext *C, OGLRender *oglrender, R
 
   if (oglrender->is_sequencer) {
     SpaceSeq *sseq = oglrender->sseq;
-    struct bGPdata *gpd = (sseq && (sseq->flag & SEQ_SHOW_GPENCIL)) ? sseq->gpd : NULL;
+    struct bGPdata *gpd = (sseq && (sseq->flag & SEQ_PREVIEW_SHOW_GPENCIL)) ? sseq->gpd : NULL;
 
     /* use pre-calculated ImBuf (avoids deadlock), see: */
     ImBuf *ibuf = oglrender->seq_data.ibufs_arr[oglrender->view_id];
@@ -461,7 +463,7 @@ static void screen_opengl_render_write(OGLRender *oglrender)
 
 static void UNUSED_FUNCTION(addAlphaOverFloat)(float dest[4], const float source[4])
 {
-  /* d = s + (1-alpha_s)d*/
+  /* `d = s + (1-alpha_s)d` */
   float mul;
 
   mul = 1.0f - source[3];
@@ -544,7 +546,7 @@ static void gather_frames_to_render_for_adt(const OGLRender *oglrender, const An
       continue;
     }
 
-    bool found = false; /* Not interesting, we just want a starting point for the for-loop.*/
+    bool found = false; /* Not interesting, we just want a starting point for the for-loop. */
     int key_index = BKE_fcurve_bezt_binarysearch_index(
         fcu->bezt, frame_start, fcu->totvert, &found);
     for (; key_index < fcu->totvert; key_index++) {
@@ -645,7 +647,7 @@ static int gather_frames_to_render_for_id(LibraryIDLinkCallbackData *cb_data)
     case ID_WM:  /* WindowManager */
     case ID_LS:  /* FreestyleLineStyle */
     case ID_PAL: /* Palette */
-    case ID_PC:  /* PaintCurve  */
+    case ID_PC:  /* PaintCurve */
     case ID_CF:  /* CacheFile */
     case ID_WS:  /* WorkSpace */
       /* Only follow pointers to specific datablocks, to avoid ending up in
@@ -695,7 +697,7 @@ static void gather_frames_to_render(bContext *C, OGLRender *oglrender)
     AnimData *adt = BKE_animdata_from_id(id);
     gather_frames_to_render_for_adt(oglrender, adt);
 
-    /* Gather the frames from linked datablocks (materials, shapkeys, etc.). */
+    /* Gather the frames from linked data-blocks (materials, shape-keys, etc.). */
     BKE_library_foreach_ID_link(
         NULL, id, gather_frames_to_render_for_id, oglrender, IDWALK_RECURSE);
   }
@@ -765,8 +767,8 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   sizey = (scene->r.size * scene->r.ysch) / 100;
 
   /* corrects render size with actual size, not every card supports non-power-of-two dimensions */
-  DRW_opengl_context_enable(); /* Offscreen creation needs to be done in DRW context. */
-  ofs = GPU_offscreen_create(sizex, sizey, true, true, err_out);
+  DRW_opengl_context_enable(); /* Off-screen creation needs to be done in DRW context. */
+  ofs = GPU_offscreen_create(sizex, sizey, true, GPU_RGBA16F, err_out);
   DRW_opengl_context_disable();
 
   if (!ofs) {
@@ -834,7 +836,6 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   BKE_image_backup_render(oglrender->scene, oglrender->ima, true);
 
   oglrender->iuser.scene = scene;
-  oglrender->iuser.ok = 1;
 
   /* create render result */
   RE_InitState(oglrender->re, NULL, &scene->r, &scene->view_layers, NULL, sizex, sizey, NULL);
@@ -1261,7 +1262,7 @@ static int screen_opengl_render_invoke(bContext *C, wmOperator *op, const wmEven
   }
 
   oglrender = op->customdata;
-  render_view_open(C, event->x, event->y, op->reports);
+  render_view_open(C, event->xy[0], event->xy[1], op->reports);
 
   /* View may be changed above #USER_RENDER_DISPLAY_WINDOW. */
   oglrender->win = CTX_wm_window(C);

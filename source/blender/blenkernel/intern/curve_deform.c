@@ -168,17 +168,15 @@ static bool calc_curve_deform(
      *
      * Now for Neg Up XYZ, the colors are all dark, and ordered clockwise - Campbell
      *
-     * note: moved functions into quat_apply_track/vec_apply_track
+     * NOTE: moved functions into quat_apply_track/vec_apply_track
      */
     copy_qt_qt(quat, new_quat);
     copy_v3_v3(cent, co);
 
-    /* zero the axis which is not used,
-     * the big block of text above now applies to these 3 lines */
-    quat_apply_track(quat,
-                     axis,
-                     (ELEM(axis, 0, 2)) ? 1 :
-                                          0); /* up flag is a dummy, set so no rotation is done */
+    /* Zero the axis which is not used,
+     * the big block of text above now applies to these 3 lines.
+     * The `upflag` argument may be a dummy, set so no rotation is done. */
+    quat_apply_track(quat, axis, (ELEM(axis, 0, 2)) ? 1 : 0);
     vec_apply_track(cent, axis);
     cent[index] = 0.0f;
 
@@ -313,7 +311,7 @@ static void curve_deform_coords_impl(const Object *ob_curve,
   } \
   ((void)0)
 
-      /* already in 'cd.curvespace', prev for loop */
+      /* Already in 'cd.curvespace', previous for loop. */
 #define DEFORM_OP_CLAMPED(dvert) \
   { \
     const float weight = invert_vgroup ? 1.0f - BKE_defvert_find_weight(dvert, defgrp_index) : \
@@ -371,7 +369,7 @@ static void curve_deform_coords_impl(const Object *ob_curve,
       }
 
       for (a = 0; a < vert_coords_len; a++) {
-        /* already in 'cd.curvespace', prev for loop */
+        /* Already in 'cd.curvespace', previous for loop. */
         calc_curve_deform(ob_curve, vert_coords[a], defaxis, &cd, NULL);
         mul_m4_v3(cd.objectspace, vert_coords[a]);
       }

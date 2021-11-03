@@ -36,7 +36,7 @@ struct Object;
 extern "C" {
 #endif
 
-void BKE_key_free(struct Key *key);
+void BKE_key_free_data(struct Key *key);
 void BKE_key_free_nolib(struct Key *key);
 struct Key *BKE_key_add(struct Main *bmain, struct ID *id);
 void BKE_key_sort(struct Key *key);
@@ -71,12 +71,12 @@ void BKE_keyblock_copy_settings(struct KeyBlock *kb_dst, const struct KeyBlock *
 char *BKE_keyblock_curval_rnapath_get(struct Key *key, struct KeyBlock *kb);
 
 /* conversion functions */
-/* Note: 'update_from' versions do not (re)allocate mem in kb, while 'convert_from' do. */
+/* NOTE: 'update_from' versions do not (re)allocate mem in kb, while 'convert_from' do. */
 void BKE_keyblock_update_from_lattice(struct Lattice *lt, struct KeyBlock *kb);
 void BKE_keyblock_convert_from_lattice(struct Lattice *lt, struct KeyBlock *kb);
 void BKE_keyblock_convert_to_lattice(struct KeyBlock *kb, struct Lattice *lt);
 
-int BKE_keyblock_curve_element_count(struct ListBase *nurb);
+int BKE_keyblock_curve_element_count(const struct ListBase *nurb);
 void BKE_keyblock_curve_data_transform(const struct ListBase *nurb,
                                        const float mat[4][4],
                                        const void *src,

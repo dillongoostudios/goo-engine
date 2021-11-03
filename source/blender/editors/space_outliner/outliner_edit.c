@@ -154,7 +154,9 @@ void OUTLINER_OT_highlight_update(wmOperatorType *ot)
 /** \name Toggle Open/Closed Operator
  * \{ */
 
-/* Open or close a tree element, optionally toggling all children recursively */
+/**
+ * Open or close a tree element, optionally toggling all children recursively.
+ */
 void outliner_item_openclose(SpaceOutliner *space_outliner,
                              TreeElement *te,
                              bool open,
@@ -964,7 +966,7 @@ void OUTLINER_OT_lib_relocate(wmOperatorType *ot)
 
 /* XXX This does not work with several items
  * (it is only called once in the end, due to the 'deferred'
- * filebrowser invocation through event system...). */
+ * file-browser invocation through event system...). */
 void lib_relocate_fn(bContext *C,
                      ReportList *UNUSED(reports),
                      Scene *UNUSED(scene),
@@ -1599,8 +1601,10 @@ void OUTLINER_OT_show_one_level(wmOperatorType *ot)
 /** \name Show Hierarchy Operator
  * \{ */
 
-/* Helper function for tree_element_shwo_hierarchy() -
- * recursively checks whether subtrees have any objects. */
+/**
+ * Helper function for #tree_element_shwo_hierarchy() -
+ * recursively checks whether subtrees have any objects.
+ */
 static int subtree_has_objects(ListBase *lb)
 {
   LISTBASE_FOREACH (TreeElement *, te, lb) {
@@ -1769,7 +1773,7 @@ static void tree_element_to_path(TreeElement *te,
           char buf[128], *name;
 
           temnext = (TreeElement *)(ld->next->data);
-          /* tsenext = TREESTORE(temnext); */ /* UNUSED */
+          // tsenext = TREESTORE(temnext); /* UNUSED */
 
           nextptr = &temnext->rnaptr;
           name = RNA_struct_name_get_alloc(nextptr, buf, sizeof(buf), NULL);

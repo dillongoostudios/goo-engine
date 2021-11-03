@@ -45,7 +45,7 @@
 
 #undef small
 
-// These definitions are also in BLI_math for simplicity
+/* These definitions are also in BLI_math for simplicity. */
 
 #ifdef __cplusplus
 extern "C" {
@@ -72,7 +72,7 @@ extern "C" {
 #if defined(_MSC_VER)
 #  define R_OK 4
 #  define W_OK 2
-// not accepted by access() on windows
+/* Not accepted by `access()` on windows. */
 //#  define X_OK    1
 #  define F_OK 0
 #endif
@@ -105,8 +105,8 @@ int closedir(DIR *dp);
 const char *dirname(char *path);
 
 /* Windows utility functions. */
-void BLI_windows_register_blend_extension(const bool background);
-void BLI_windows_get_default_root_dir(char *root_dir);
+bool BLI_windows_register_blend_extension(const bool background);
+void BLI_windows_get_default_root_dir(char root_dir[4]);
 int BLI_windows_get_executable_dir(char *str);
 
 #ifdef __cplusplus

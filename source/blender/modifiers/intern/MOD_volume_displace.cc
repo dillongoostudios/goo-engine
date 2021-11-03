@@ -18,6 +18,7 @@
  * \ingroup modifiers
  */
 
+#include "BKE_geometry_set.hh"
 #include "BKE_lib_query.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_modifier.h"
@@ -94,7 +95,9 @@ static void foreachTexLink(ModifierData *md, Object *ob, TexWalkFunc walk, void 
   walk(userData, ob, md, "texture");
 }
 
-static bool dependsOnTime(ModifierData *md)
+static bool dependsOnTime(struct Scene *UNUSED(scene),
+                          ModifierData *md,
+                          const int UNUSED(dag_eval_mode))
 {
   VolumeDisplaceModifierData *vdmd = reinterpret_cast<VolumeDisplaceModifierData *>(md);
   if (vdmd->texture) {
@@ -284,7 +287,7 @@ struct DisplaceGridOp {
 
 #endif
 
-static Volume *modifyVolume(ModifierData *md, const ModifierEvalContext *ctx, Volume *volume)
+static void displace_volume(ModifierData *md, const ModifierEvalContext *ctx, Volume *volume)
 {
 #ifdef WITH_OPENVDB
   VolumeDisplaceModifierData *vdmd = reinterpret_cast<VolumeDisplaceModifierData *>(md);
@@ -303,12 +306,20 @@ static Volume *modifyVolume(ModifierData *md, const ModifierEvalContext *ctx, Vo
     BKE_volume_grid_type_operation(grid_type, displace_grid_op);
   }
 
-  return volume;
 #else
-  UNUSED_VARS(md, ctx);
+  UNUSED_VARS(md, volume, ctx);
   BKE_modifier_set_error(ctx->object, md, "Compiled without OpenVDB");
-  return volume;
 #endif
+}
+
+static void modifyGeometrySet(ModifierData *md,
+                              const ModifierEvalContext *ctx,
+                              GeometrySet *geometry_set)
+{
+  Volume *input_volume = geometry_set->get_volume_for_write();
+  if (input_volume != nullptr) {
+    displace_volume(md, ctx, input_volume);
+  }
 }
 
 ModifierTypeInfo modifierType_VolumeDisplace = {
@@ -328,8 +339,7 @@ ModifierTypeInfo modifierType_VolumeDisplace = {
     /* deformMatricesEM */ nullptr,
     /* modifyMesh */ nullptr,
     /* modifyHair */ nullptr,
-    /* modifyGeometrySet */ nullptr,
-    /* modifyVolume */ modifyVolume,
+    /* modifyGeometrySet */ modifyGeometrySet,
 
     /* initData */ initData,
     /* requiredDataMask */ nullptr,

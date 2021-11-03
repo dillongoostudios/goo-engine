@@ -62,10 +62,10 @@ int BLI_task_scheduler_num_threads(void);
  * be launched.
  */
 
-typedef enum TaskPriority {
+typedef enum eTaskPriority {
   TASK_PRIORITY_LOW,
   TASK_PRIORITY_HIGH,
-} TaskPriority;
+} eTaskPriority;
 
 typedef struct TaskPool TaskPool;
 typedef void (*TaskRunFunction)(TaskPool *__restrict pool, void *taskdata);
@@ -73,21 +73,21 @@ typedef void (*TaskFreeFunction)(TaskPool *__restrict pool, void *taskdata);
 
 /* Regular task pool that immediately starts executing tasks as soon as they
  * are pushed, either on the current or another thread. */
-TaskPool *BLI_task_pool_create(void *userdata, TaskPriority priority);
+TaskPool *BLI_task_pool_create(void *userdata, eTaskPriority priority);
 
 /* Background: always run tasks in a background thread, never immediately
  * execute them. For running background jobs. */
-TaskPool *BLI_task_pool_create_background(void *userdata, TaskPriority priority);
+TaskPool *BLI_task_pool_create_background(void *userdata, eTaskPriority priority);
 
 /* Background Serial: run tasks one after the other in the background,
  * without parallelization between the tasks. */
-TaskPool *BLI_task_pool_create_background_serial(void *userdata, TaskPriority priority);
+TaskPool *BLI_task_pool_create_background_serial(void *userdata, eTaskPriority priority);
 
 /* Suspended: don't execute tasks until work_and_wait is called. This is slower
  * as threads can't immediately start working. But it can be used if the data
  * structures the threads operate on are not fully initialized until all tasks
  * are created. */
-TaskPool *BLI_task_pool_create_suspended(void *userdata, TaskPriority priority);
+TaskPool *BLI_task_pool_create_suspended(void *userdata, eTaskPriority priority);
 
 /* No threads: immediately executes tasks on the same thread. For debugging. */
 TaskPool *BLI_task_pool_create_no_threads(void *userdata);
@@ -129,6 +129,9 @@ typedef struct TaskParallelTLS {
 typedef void (*TaskParallelRangeFunc)(void *__restrict userdata,
                                       const int iter,
                                       const TaskParallelTLS *__restrict tls);
+
+typedef void (*TaskParallelInitFunc)(const void *__restrict userdata, void *__restrict chunk);
+
 typedef void (*TaskParallelReduceFunc)(const void *__restrict userdata,
                                        void *__restrict chunk_join,
                                        void *__restrict chunk);
@@ -147,10 +150,14 @@ typedef struct TaskParallelSettings {
    * (similar to OpenMP's firstprivate).
    */
   void *userdata_chunk;       /* Pointer to actual data. */
-  size_t userdata_chunk_size; /* Size of that data.  */
+  size_t userdata_chunk_size; /* Size of that data. */
   /* Function called from calling thread once whole range have been
    * processed.
    */
+  /* Function called to initialize user data chunk,
+   * typically to allocate data, freed by `func_free`.
+   */
+  TaskParallelInitFunc func_init;
   /* Function called to join user data chunk into another, to reduce
    * the result to the original userdata_chunk memory.
    * The reduce functions should have no side effects, so that they
@@ -221,11 +228,14 @@ void BLI_task_parallel_listbase(struct ListBase *listbase,
                                 const TaskParallelSettings *settings);
 
 typedef struct MempoolIterData MempoolIterData;
-typedef void (*TaskParallelMempoolFunc)(void *userdata, MempoolIterData *iter);
+
+typedef void (*TaskParallelMempoolFunc)(void *userdata,
+                                        MempoolIterData *iter,
+                                        const TaskParallelTLS *__restrict tls);
 void BLI_task_parallel_mempool(struct BLI_mempool *mempool,
                                void *userdata,
                                TaskParallelMempoolFunc func,
-                               const bool use_threading);
+                               const TaskParallelSettings *settings);
 
 /* TODO(sergey): Think of a better place for this. */
 BLI_INLINE void BLI_parallel_range_settings_defaults(TaskParallelSettings *settings)
@@ -234,6 +244,12 @@ BLI_INLINE void BLI_parallel_range_settings_defaults(TaskParallelSettings *setti
   settings->use_threading = true;
   /* Use default heuristic to define actual chunk size. */
   settings->min_iter_per_thread = 0;
+}
+
+BLI_INLINE void BLI_parallel_mempool_settings_defaults(TaskParallelSettings *settings)
+{
+  memset(settings, 0, sizeof(*settings));
+  settings->use_threading = true;
 }
 
 /* Don't use this, store any thread specific data in tls->userdata_chunk instead.
@@ -315,6 +331,36 @@ struct TaskNode *BLI_task_graph_node_create(struct TaskGraph *task_graph,
                                             TaskGraphNodeFreeFunction free_func);
 bool BLI_task_graph_node_push_work(struct TaskNode *task_node);
 void BLI_task_graph_edge_create(struct TaskNode *from_node, struct TaskNode *to_node);
+
+/* Task Isolation
+ *
+ * Task isolation helps avoid unexpected task scheduling decisions that can lead to bugs if wrong
+ * assumptions were made. Typically that happens when doing "nested threading", i.e. one thread
+ * schedules a bunch of main-tasks and those spawn new sub-tasks.
+ *
+ * What can happen is that when a main-task waits for its sub-tasks to complete on other threads,
+ * another main-task is scheduled within the already running main-task. Generally, this is good,
+ * because it leads to better performance. However, sometimes code (often unintentionally) makes
+ * the assumption that at most one main-task runs on a thread at a time.
+ *
+ * The bugs often show themselves in two ways:
+ * - Deadlock, when a main-task holds a mutex while waiting for its sub-tasks to complete.
+ * - Data corruption, when a main-task makes wrong assumptions about a thread-local variable.
+ *
+ * Task isolation can avoid these bugs by making sure that a main-task does not start executing
+ * another main-task while waiting for its sub-tasks. More precisely, a function that runs in an
+ * isolated region is only allowed to run sub-tasks that were spawned in the same isolated region.
+ *
+ * Unfortunately, incorrect use of task isolation can lead to deadlocks itself. This can happen
+ * when threading primitives are used that separate spawning tasks from executing them. The problem
+ * occurs when a task is spawned in one isolated region while the tasks are waited for in another
+ * isolated region. In this setup, the thread that is waiting for the spawned tasks to complete
+ * cannot run the tasks itself. On a single thread, that causes a deadlock already. When there are
+ * multiple threads, another thread will typically run the task and avoid the deadlock. However, if
+ * this situation happens on all threads at the same time, all threads will deadlock. This happened
+ * in T88598.
+ */
+void BLI_task_isolate(void (*func)(void *userdata), void *userdata);
 
 #ifdef __cplusplus
 }

@@ -20,15 +20,32 @@
 
 namespace blender::fn {
 
-CustomMF_GenericConstant::CustomMF_GenericConstant(const CPPType &type, const void *value)
-    : type_(type), value_(value)
+CustomMF_GenericConstant::CustomMF_GenericConstant(const CPPType &type,
+                                                   const void *value,
+                                                   bool make_value_copy)
+    : type_(type), owns_value_(make_value_copy)
 {
+  if (make_value_copy) {
+    void *copied_value = MEM_mallocN_aligned(type.size(), type.alignment(), __func__);
+    type.copy_construct(value, copied_value);
+    value = copied_value;
+  }
+  value_ = value;
+
   MFSignatureBuilder signature{"Constant " + type.name()};
   std::stringstream ss;
-  type.debug_print(value, ss);
+  type.print_or_default(value, ss, type.name());
   signature.single_output(ss.str(), type);
   signature_ = signature.build();
   this->set_signature(&signature_);
+}
+
+CustomMF_GenericConstant::~CustomMF_GenericConstant()
+{
+  if (owns_value_) {
+    signature_.param_types[0].data_type().single_type().destruct((void *)value_);
+    MEM_freeN((void *)value_);
+  }
 }
 
 void CustomMF_GenericConstant::call(IndexMask mask,
@@ -36,12 +53,12 @@ void CustomMF_GenericConstant::call(IndexMask mask,
                                     MFContext UNUSED(context)) const
 {
   GMutableSpan output = params.uninitialized_single_output(0);
-  type_.fill_uninitialized_indices(value_, output.data(), mask);
+  type_.fill_construct_indices(value_, output.data(), mask);
 }
 
 uint64_t CustomMF_GenericConstant::hash() const
 {
-  return type_.hash(value_);
+  return type_.hash_or_fallback(value_, (uintptr_t)this);
 }
 
 bool CustomMF_GenericConstant::equals(const MultiFunction &other) const
@@ -58,11 +75,12 @@ bool CustomMF_GenericConstant::equals(const MultiFunction &other) const
 
 static std::string gspan_to_string(GSpan array)
 {
+  const CPPType &type = array.type();
   std::stringstream ss;
   ss << "[";
   const int64_t max_amount = 5;
   for (int64_t i : IndexRange(std::min(max_amount, array.size()))) {
-    array.type().debug_print(array[i], ss);
+    type.print_or_default(array[i], ss, type.name());
     ss << ", ";
   }
   if (max_amount < array.size()) {
@@ -117,7 +135,35 @@ void CustomMF_DefaultOutput::call(IndexMask mask, MFParams params, MFContext UNU
     if (param_type.data_type().is_single()) {
       GMutableSpan span = params.uninitialized_single_output(param_index);
       const CPPType &type = span.type();
-      type.fill_uninitialized_indices(type.default_value(), span.data(), mask);
+      type.fill_construct_indices(type.default_value(), span.data(), mask);
+    }
+  }
+}
+
+CustomMF_GenericCopy::CustomMF_GenericCopy(StringRef name, MFDataType data_type)
+{
+  MFSignatureBuilder signature{name};
+  signature.input("Input", data_type);
+  signature.output("Output", data_type);
+  signature_ = signature.build();
+  this->set_signature(&signature_);
+}
+
+void CustomMF_GenericCopy::call(IndexMask mask, MFParams params, MFContext UNUSED(context)) const
+{
+  const MFDataType data_type = this->param_type(0).data_type();
+  switch (data_type.category()) {
+    case MFDataType::Single: {
+      const GVArray &inputs = params.readonly_single_input(0, "Input");
+      GMutableSpan outputs = params.uninitialized_single_output(1, "Output");
+      inputs.materialize_to_uninitialized(mask, outputs.data());
+      break;
+    }
+    case MFDataType::Vector: {
+      const GVVectorArray &inputs = params.readonly_vector_input(0, "Input");
+      GVectorArray &outputs = params.vector_output(1, "Output");
+      outputs.extend(mask, inputs);
+      break;
     }
   }
 }

@@ -37,6 +37,7 @@
 #  include "BKE_cachefile.h"
 
 #  include "DEG_depsgraph.h"
+#  include "DEG_depsgraph_build.h"
 
 #  include "WM_api.h"
 #  include "WM_types.h"
@@ -53,6 +54,12 @@ static void rna_CacheFile_update(Main *UNUSED(bmain), Scene *UNUSED(scene), Poin
   WM_main_add_notifier(NC_OBJECT | ND_DRAW, NULL);
 }
 
+static void rna_CacheFile_dependency_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  rna_CacheFile_update(bmain, scene, ptr);
+  DEG_relations_tag_update(bmain);
+}
+
 static void rna_CacheFile_object_paths_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
 {
   CacheFile *cache_file = (CacheFile *)ptr->data;
@@ -64,8 +71,8 @@ static void rna_CacheFile_object_paths_begin(CollectionPropertyIterator *iter, P
 /* cachefile.object_paths */
 static void rna_def_alembic_object_path(BlenderRNA *brna)
 {
-  StructRNA *srna = RNA_def_struct(brna, "AlembicObjectPath", NULL);
-  RNA_def_struct_sdna(srna, "AlembicObjectPath");
+  StructRNA *srna = RNA_def_struct(brna, "CacheObjectPath", NULL);
+  RNA_def_struct_sdna(srna, "CacheObjectPath");
   RNA_def_struct_ui_text(srna, "Object Path", "Path of an object inside of an Alembic archive");
   RNA_def_struct_ui_icon(srna, ICON_NONE);
 
@@ -81,8 +88,8 @@ static void rna_def_alembic_object_path(BlenderRNA *brna)
 /* cachefile.object_paths */
 static void rna_def_cachefile_object_paths(BlenderRNA *brna, PropertyRNA *cprop)
 {
-  RNA_def_property_srna(cprop, "AlembicObjectPaths");
-  StructRNA *srna = RNA_def_struct(brna, "AlembicObjectPaths", NULL);
+  RNA_def_property_srna(cprop, "CacheObjectPaths");
+  StructRNA *srna = RNA_def_struct(brna, "CacheObjectPaths", NULL);
   RNA_def_struct_sdna(srna, "CacheFile");
   RNA_def_struct_ui_text(srna, "Object Paths", "Collection of object paths");
 }
@@ -104,6 +111,16 @@ static void rna_def_cachefile(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Sequence", "Whether the cache is separated in a series of files");
   RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+
+  prop = RNA_def_property(srna, "use_render_procedural", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "Use Render Engine Procedural",
+      "Display boxes in the viewport as placeholders for the objects, Cycles will use a "
+      "procedural to load the objects during viewport rendering in experimental mode, "
+      "other render engines will also receive a placeholder and should take care of loading the "
+      "Alembic data themselves if possible");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_dependency_update");
 
   /* ----------------- For Scene time ------------------- */
 
@@ -131,6 +148,23 @@ static void rna_def_cachefile(BlenderRNA *brna)
                            "Subtracted from the current frame to use for "
                            "looking up the data in the cache file, or to "
                            "determine which file to use in a file sequence");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+
+  /* ----------------- Cache controls ----------------- */
+
+  prop = RNA_def_property(srna, "use_prefetch", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop,
+      "Use Prefetch",
+      "When enabled, the Cycles Procedural will preload animation data for faster updates");
+  RNA_def_property_update(prop, 0, "rna_CacheFile_update");
+
+  prop = RNA_def_property(srna, "prefetch_cache_size", PROP_INT, PROP_UNSIGNED);
+  RNA_def_property_ui_text(
+      prop,
+      "Prefetch Cache Size",
+      "Memory usage limit in megabytes for the Cycles Procedural cache, if the data does not "
+      "fit within the limit, rendering is aborted");
   RNA_def_property_update(prop, 0, "rna_CacheFile_update");
 
   /* ----------------- Axis Conversion ----------------- */
@@ -169,8 +203,8 @@ static void rna_def_cachefile(BlenderRNA *brna)
                                     NULL,
                                     NULL,
                                     NULL);
-  RNA_def_property_struct_type(prop, "AlembicObjectPath");
-  RNA_def_property_srna(prop, "AlembicObjectPaths");
+  RNA_def_property_struct_type(prop, "CacheObjectPath");
+  RNA_def_property_srna(prop, "CacheObjectPaths");
   RNA_def_property_ui_text(
       prop, "Object Paths", "Paths of the objects inside the Alembic archive");
 

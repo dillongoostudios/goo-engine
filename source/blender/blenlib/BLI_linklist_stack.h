@@ -28,7 +28,7 @@
  * \note These macros follow STACK_* macros defined in 'BLI_utildefines.h'
  *       and should be kept (mostly) interchangeable.
  *
- * \note ``_##var##_type`` is a dummy variable only used for typechecks.
+ * \note `_##var##_type` is a dummy variable only used for type-checks.
  */
 
 /* -------------------------------------------------------------------- */
@@ -119,7 +119,7 @@
       _##var##_free = _##var##_free->next; \
     } \
     else { \
-      _##var##_temp = alloca(sizeof(LinkNode)); \
+      _##var##_temp = (LinkNode *)alloca(sizeof(LinkNode)); \
     } \
     _##var##_temp->next = _##var##_stack; \
     _##var##_temp->link = data; \

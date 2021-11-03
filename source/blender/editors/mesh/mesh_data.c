@@ -34,6 +34,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
+#include "BKE_customdata.h"
 #include "BKE_editmesh.h"
 #include "BKE_mesh.h"
 #include "BKE_report.h"
@@ -61,7 +62,6 @@ static CustomData *mesh_customdata_get_type(Mesh *me, const char htype, int *r_t
   BMesh *bm = (me->edit_mesh) ? me->edit_mesh->bm : NULL;
   int tot;
 
-  /* this  */
   switch (htype) {
     case BM_VERT:
       if (bm) {
@@ -167,7 +167,7 @@ static void mesh_uv_reset_array(float **fuv, const int len)
 
     fuv[3][0] = 0.0;
     fuv[3][1] = 1.0;
-    /*make sure we ignore 2-sided faces*/
+    /* Make sure we ignore 2-sided faces. */
   }
   else if (len > 2) {
     float fac = 0.0f, dfac = 1.0f / (float)len;
@@ -253,7 +253,7 @@ void ED_mesh_uv_loop_reset(struct bContext *C, struct Mesh *me)
   WM_event_add_notifier(C, NC_GEOM | ND_DATA, me);
 }
 
-/* note: keep in sync with ED_mesh_color_add */
+/* NOTE: keep in sync with #ED_mesh_color_add. */
 int ED_mesh_uv_texture_add(Mesh *me, const char *name, const bool active_set, const bool do_init)
 {
   BMEditMesh *em;
@@ -378,7 +378,7 @@ bool ED_mesh_uv_texture_remove_named(Mesh *me, const char *name)
   return false;
 }
 
-/* note: keep in sync with ED_mesh_uv_texture_add */
+/* NOTE: keep in sync with #ED_mesh_uv_texture_add. */
 int ED_mesh_color_add(Mesh *me, const char *name, const bool active_set, const bool do_init)
 {
   BMEditMesh *em;
@@ -482,9 +482,35 @@ bool ED_mesh_color_remove_named(Mesh *me, const char *name)
   return false;
 }
 
+/*********************** General poll ************************/
+
+static bool layers_poll(bContext *C)
+{
+  Object *ob = ED_object_context(C);
+  ID *data = (ob) ? ob->data : NULL;
+  return (ob && !ID_IS_LINKED(ob) && ob->type == OB_MESH && data && !ID_IS_LINKED(data));
+}
+
 /*********************** Sculpt Vertex colors operators ************************/
 
-/* note: keep in sync with ED_mesh_uv_texture_add */
+static bool sculpt_vertex_color_remove_poll(bContext *C)
+{
+  if (!layers_poll(C)) {
+    return false;
+  }
+
+  Object *ob = ED_object_context(C);
+  Mesh *me = ob->data;
+  CustomData *vdata = GET_CD_DATA(me, vdata);
+  const int active = CustomData_get_active_layer(vdata, CD_PROP_COLOR);
+  if (active != -1) {
+    return true;
+  }
+
+  return false;
+}
+
+/* NOTE: keep in sync with #ED_mesh_uv_texture_add. */
 int ED_mesh_sculpt_color_add(Mesh *me, const char *name, const bool active_set, const bool do_init)
 {
   BMEditMesh *em;
@@ -591,11 +617,21 @@ bool ED_mesh_sculpt_color_remove_named(Mesh *me, const char *name)
 
 /*********************** UV texture operators ************************/
 
-static bool layers_poll(bContext *C)
+static bool uv_texture_remove_poll(bContext *C)
 {
+  if (!layers_poll(C)) {
+    return false;
+  }
+
   Object *ob = ED_object_context(C);
-  ID *data = (ob) ? ob->data : NULL;
-  return (ob && !ID_IS_LINKED(ob) && ob->type == OB_MESH && data && !ID_IS_LINKED(data));
+  Mesh *me = ob->data;
+  CustomData *ldata = GET_CD_DATA(me, ldata);
+  const int active = CustomData_get_active_layer(ldata, CD_MLOOPUV);
+  if (active != -1) {
+    return true;
+  }
+
+  return false;
 }
 
 static int mesh_uv_texture_add_exec(bContext *C, wmOperator *UNUSED(op))
@@ -657,7 +693,7 @@ void MESH_OT_uv_texture_remove(wmOperatorType *ot)
   ot->idname = "MESH_OT_uv_texture_remove";
 
   /* api callbacks */
-  ot->poll = layers_poll;
+  ot->poll = uv_texture_remove_poll;
   ot->exec = mesh_uv_texture_remove_exec;
 
   /* flags */
@@ -665,6 +701,23 @@ void MESH_OT_uv_texture_remove(wmOperatorType *ot)
 }
 
 /*********************** vertex color operators ************************/
+
+static bool vertex_color_remove_poll(bContext *C)
+{
+  if (!layers_poll(C)) {
+    return false;
+  }
+
+  Object *ob = ED_object_context(C);
+  Mesh *me = ob->data;
+  CustomData *ldata = GET_CD_DATA(me, ldata);
+  const int active = CustomData_get_active_layer(ldata, CD_MLOOPCOL);
+  if (active != -1) {
+    return true;
+  }
+
+  return false;
+}
 
 static int mesh_vertex_color_add_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -714,7 +767,7 @@ void MESH_OT_vertex_color_remove(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = mesh_vertex_color_remove_exec;
-  ot->poll = layers_poll;
+  ot->poll = vertex_color_remove_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -770,7 +823,7 @@ void MESH_OT_sculpt_vertex_color_remove(wmOperatorType *ot)
 
   /* api callbacks */
   ot->exec = mesh_sculpt_vertex_color_remove_exec;
-  ot->poll = layers_poll;
+  ot->poll = sculpt_vertex_color_remove_poll;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -954,15 +1007,8 @@ static int mesh_customdata_custom_splitnormals_add_exec(bContext *C, wmOperator 
       if (me->flag & ME_AUTOSMOOTH) {
         float(*polynors)[3] = MEM_mallocN(sizeof(*polynors) * (size_t)me->totpoly, __func__);
 
-        BKE_mesh_calc_normals_poly(me->mvert,
-                                   NULL,
-                                   me->totvert,
-                                   me->mloop,
-                                   me->mpoly,
-                                   me->totloop,
-                                   me->totpoly,
-                                   polynors,
-                                   true);
+        BKE_mesh_calc_normals_poly(
+            me->mvert, me->totvert, me->mloop, me->totloop, me->mpoly, me->totpoly, polynors);
 
         BKE_edges_sharp_from_angle_set(me->mvert,
                                        me->totvert,
@@ -1097,7 +1143,7 @@ static void mesh_add_edges(Mesh *mesh, int len)
 
   totedge = mesh->totedge + len;
 
-  /* update customdata  */
+  /* Update custom-data. */
   CustomData_copy(&mesh->edata, &edata, CD_MASK_MESH.emask, CD_DEFAULT, totedge);
   CustomData_copy_data(&mesh->edata, &edata, 0, 0, mesh->totedge);
 

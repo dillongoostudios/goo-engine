@@ -163,7 +163,7 @@ void ACTION_OT_markers_make_local(wmOperatorType *ot)
 
 /* *************************** Calculate Range ************************** */
 
-/* Get the min/max keyframes*/
+/* Get the min/max keyframes. */
 static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const short onlySel)
 {
   ListBase anim_data = {NULL, NULL};
@@ -192,7 +192,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
         bGPDlayer *gpl = ale->data;
         bGPDframe *gpf;
 
-        /* find gp-frame which is less than or equal to cframe */
+        /* Find gp-frame which is less than or equal to current-frame. */
         for (gpf = gpl->frames.first; gpf; gpf = gpf->next) {
           const float framenum = (float)gpf->framenum;
           *min = min_ff(*min, framenum);
@@ -204,7 +204,7 @@ static bool get_keyframe_extents(bAnimContext *ac, float *min, float *max, const
         MaskLayer *masklay = ale->data;
         MaskLayerShape *masklay_shape;
 
-        /* find mask layer which is less than or equal to cframe */
+        /* Find mask layer which is less than or equal to current-frame. */
         for (masklay_shape = masklay->splines_shapes.first; masklay_shape;
              masklay_shape = masklay_shape->next) {
           const float framenum = (float)masklay_shape->frame;
@@ -276,7 +276,7 @@ static int actkeys_previewrange_exec(bContext *C, wmOperator *UNUSED(op))
   scene = ac.scene;
 
   /* set the range directly */
-  get_keyframe_extents(&ac, &min, &max, false);
+  get_keyframe_extents(&ac, &min, &max, true);
   scene->r.flag |= SCER_PRV_RANGE;
   scene->r.psfra = floorf(min);
   scene->r.pefra = ceilf(max);
@@ -295,7 +295,7 @@ static int actkeys_previewrange_exec(bContext *C, wmOperator *UNUSED(op))
 void ACTION_OT_previewrange_set(wmOperatorType *ot)
 {
   /* identifiers */
-  ot->name = "Auto-Set Preview Range";
+  ot->name = "Set Preview Range to Selected";
   ot->idname = "ACTION_OT_previewrange_set";
   ot->description = "Set Preview Range based on extents of selected Keyframes";
 
@@ -576,7 +576,7 @@ static int actkeys_copy_exec(bContext *C, wmOperator *op)
     }
   }
   else if (ac.datatype == ANIMCONT_MASK) {
-    /* FIXME... */
+    /* FIXME: support this case. */
     BKE_report(op->reports, RPT_ERROR, "Keyframe pasting is not available for mask mode");
     return OPERATOR_CANCELLED;
   }
@@ -629,7 +629,7 @@ static int actkeys_paste_exec(bContext *C, wmOperator *op)
     }
   }
   else if (ac.datatype == ANIMCONT_MASK) {
-    /* FIXME... */
+    /* FIXME: support this case. */
     BKE_report(op->reports,
                RPT_ERROR,
                "Keyframe pasting is not available for grease pencil or mask mode");
@@ -1137,7 +1137,7 @@ void ACTION_OT_clean(wmOperatorType *ot)
 
 /* ******************** Sample Keyframes Operator *********************** */
 
-/* Evaluates the curves between each selected keyframe on each frame, and keys the value  */
+/* Evaluates the curves between each selected keyframe on each frame, and keys the value. */
 static void sample_action_keys(bAnimContext *ac)
 {
   ListBase anim_data = {NULL, NULL};
@@ -1149,7 +1149,7 @@ static void sample_action_keys(bAnimContext *ac)
             ANIMFILTER_FOREDIT /*| ANIMFILTER_CURVESONLY*/ | ANIMFILTER_NODUPLIS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
-  /* loop through filtered data and add keys between selected keyframes on every frame  */
+  /* Loop through filtered data and add keys between selected keyframes on every frame. */
   for (ale = anim_data.first; ale; ale = ale->next) {
     sample_fcurve((FCurve *)ale->key_data);
 
@@ -1454,7 +1454,7 @@ static void sethandles_action_keys(bAnimContext *ac, short mode)
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
   /* Loop through setting flags for handles
-   * Note: we do not supply KeyframeEditData to the looper yet.
+   * NOTE: we do not supply KeyframeEditData to the looper yet.
    * Currently that's not necessary here.
    */
   for (ale = anim_data.first; ale; ale = ale->next) {
@@ -1537,7 +1537,7 @@ static void setkeytype_action_keys(bAnimContext *ac, short mode)
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
   /* Loop through setting BezTriple interpolation
-   * Note: we do not supply KeyframeEditData to the looper yet.
+   * NOTE: we do not supply KeyframeEditData to the looper yet.
    * Currently that's not necessary here.
    */
   for (ale = anim_data.first; ale; ale = ale->next) {

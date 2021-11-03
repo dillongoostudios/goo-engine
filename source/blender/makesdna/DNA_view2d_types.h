@@ -50,7 +50,7 @@ typedef struct View2D {
   /** Scroll_ui - temp settings used for UI drawing of scrollers. */
   short scroll_ui;
 
-  /** Keeptot - 'cur' rect cannot move outside the 'tot' rect?. */
+  /** Keeptot - 'cur' rect cannot move outside the 'tot' rect? */
   short keeptot;
   /** Keepzoom - axes that zooming cannot occur on, and also clamp within zoom-limits. */
   short keepzoom;
@@ -132,6 +132,8 @@ enum {
   V2D_PIXELOFS_X = (1 << 2),
   /* apply pixel offsets on y-axis when setting view matrices */
   V2D_PIXELOFS_Y = (1 << 3),
+  /* zoom, pan or similar action is in progress */
+  V2D_IS_NAVIGATING = (1 << 9),
   /* view settings need to be set still... */
   V2D_IS_INIT = (1 << 10),
 };

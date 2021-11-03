@@ -189,7 +189,7 @@ static PyObject *bpy_bm_utils_vert_dissolve(PyObject *UNUSED(self), PyObject *ar
 
   bm = py_vert->bm;
 
-  return PyBool_FromLong((BM_vert_dissolve(bm, py_vert->v)));
+  return PyBool_FromLong(BM_vert_dissolve(bm, py_vert->v));
 }
 
 PyDoc_STRVAR(bpy_bm_utils_vert_splice_doc,
@@ -450,7 +450,7 @@ static PyObject *bpy_bm_utils_face_split(PyObject *UNUSED(self), PyObject *args,
 
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kw,
-                                   "O!O!O!|OO&O!:face_split",
+                                   "O!O!O!|$OO&O!:face_split",
                                    (char **)kwlist,
                                    &BPy_BMFace_Type,
                                    &py_face,

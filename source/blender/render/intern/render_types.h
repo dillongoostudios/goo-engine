@@ -37,6 +37,7 @@
 #include "RE_pipeline.h"
 
 struct GHash;
+struct GSet;
 struct Main;
 struct Object;
 struct RenderEngine;
@@ -46,25 +47,9 @@ struct ReportList;
 extern "C" {
 #endif
 
-/* this is handed over to threaded hiding/passes/shading engine */
-typedef struct RenderPart {
-  struct RenderPart *next, *prev;
-
-  RenderResult *result; /* result of part rendering */
-  ListBase fullresult;  /* optional full sample buffers */
-
-  rcti disprect;    /* part coordinates within total picture */
-  int rectx, recty; /* the size */
-  int nr;           /* nr is partnr */
-  short status;
-} RenderPart;
-
-enum {
-  /* PART_STATUS_NONE = 0, */ /* UNUSED */
-  PART_STATUS_IN_PROGRESS = 1,
-  PART_STATUS_RENDERED = 2,
-  PART_STATUS_MERGED = 3,
-};
+typedef struct HighlightedTile {
+  rcti rect;
+} HighlightedTile;
 
 /* controls state of render, everything that's read-only during render stage */
 struct Render {
@@ -86,6 +71,9 @@ struct Render {
    * to not conflict with writes, so no lock used for that */
   ThreadRWMutex resultmutex;
 
+  /* Guard for drawing render result using engine's `draw()` callback. */
+  ThreadMutex engine_draw_mutex;
+
   /** Window size, display rect, viewplane.
    * \note Buffer width and height with percentage applied
    * without border & crop. convert to long before multiplying together to avoid overflow. */
@@ -95,10 +83,6 @@ struct Render {
 
   /* final picture width and height (within disprect) */
   int rectx, recty;
-
-  /* real maximum size of parts after correction for minimum
-   * partx*xparts can be larger than rectx, in that case last part is smaller */
-  int partx, party;
 
   /* Camera transform, only used by Freestyle. */
   float winmat[4][4];
@@ -115,8 +99,8 @@ struct Render {
   int active_view_layer;
   struct Object *camera_override;
 
-  ThreadRWMutex partsmutex;
-  struct GHash *parts;
+  ThreadMutex highlighted_tiles_mutex;
+  struct GSet *highlighted_tiles;
 
   /* render engine */
   struct RenderEngine *engine;
@@ -153,7 +137,7 @@ struct Render {
   void **movie_ctx_arr;
   char viewname[MAX_NAME];
 
-  /* TODO replace by a whole draw manager. */
+  /* TODO: replace by a whole draw manager. */
   void *gl_context;
   void *gpu_context;
 };

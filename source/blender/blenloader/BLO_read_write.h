@@ -43,7 +43,7 @@
 /* for SDNA_TYPE_FROM_STRUCT() macro */
 #include "dna_type_offsets.h"
 
-#include "DNA_windowmanager_types.h" /* for ReportType */
+#include "DNA_windowmanager_types.h" /* for eReportType */
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +54,7 @@ typedef struct BlendExpander BlendExpander;
 typedef struct BlendLibReader BlendLibReader;
 typedef struct BlendWriter BlendWriter;
 
+struct BlendFileReadReport;
 struct Main;
 struct ReportList;
 
@@ -68,28 +69,28 @@ struct ReportList;
  * DNA Struct Writing
  * ------------------
  *
- * Functions dealing with DNA structs begin with BLO_write_struct_*.
+ * Functions dealing with DNA structs begin with `BLO_write_struct_*`.
  *
  * DNA struct types can be identified in different ways:
- *  - Run-time Name: The name is provided as const char *.
- *  - Compile-time Name: The name is provided at compile time. This is more efficient.
- *  - Struct ID: Every DNA struct type has an integer ID that can be queried with
- *      BLO_get_struct_id_by_name. Providing this ID can be a useful optimization when many structs
- *      of the same type are stored AND if those structs are not in a continuous array.
+ * - Run-time Name: The name is provided as `const char *`.
+ * - Compile-time Name: The name is provided at compile time. This is more efficient.
+ * - Struct ID: Every DNA struct type has an integer ID that can be queried with
+ *   #BLO_get_struct_id_by_name. Providing this ID can be a useful optimization when many
+ *   structs of the same type are stored AND if those structs are not in a continuous array.
  *
  * Often only a single instance of a struct is written at once. However, sometimes it is necessary
  * to write arrays or linked lists. Separate functions for that are provided as well.
  *
- * There is a special macro for writing id structs: BLO_write_id_struct. Those are handled
- * differently from other structs.
+ * There is a special macro for writing id structs: #BLO_write_id_struct.
+ * Those are handled differently from other structs.
  *
  * Raw Data Writing
  * ----------------
  *
- * At the core there is BLO_write_raw, which can write arbitrary memory buffers to the file. The
- * code that reads this data might have to correct its byte-order. For the common cases there are
- * convenience functions that write and read arrays of simple types such as int32. Those will
- * correct endianness automatically.
+ * At the core there is #BLO_write_raw, which can write arbitrary memory buffers to the file.
+ * The code that reads this data might have to correct its byte-order. For the common cases
+ * there are convenience functions that write and read arrays of simple types such as `int32`.
+ * Those will correct endianness automatically.
  */
 
 /* Mapping between names and ids. */
@@ -216,7 +217,7 @@ bool BLO_read_requires_endian_switch(BlendDataReader *reader);
 bool BLO_read_data_is_undo(BlendDataReader *reader);
 void BLO_read_data_globmap_add(BlendDataReader *reader, void *oldaddr, void *newaddr);
 void BLO_read_glob_list(BlendDataReader *reader, struct ListBase *list);
-struct ReportList *BLO_read_data_reports(BlendDataReader *reader);
+struct BlendFileReadReport *BLO_read_data_reports(BlendDataReader *reader);
 
 /* Blend Read Lib API
  * ===================
@@ -233,7 +234,7 @@ ID *BLO_read_get_new_id_address(BlendLibReader *reader, struct Library *lib, str
 /* Misc. */
 bool BLO_read_lib_is_undo(BlendLibReader *reader);
 struct Main *BLO_read_lib_get_main(BlendLibReader *reader);
-struct ReportList *BLO_read_lib_reports(BlendLibReader *reader);
+struct BlendFileReadReport *BLO_read_lib_reports(BlendLibReader *reader);
 
 /* Blend Expand API
  * ===================
@@ -250,8 +251,10 @@ void BLO_expand_id(BlendExpander *expander, struct ID *id);
  * ===================
  */
 
-void BLO_reportf_wrap(struct ReportList *reports, ReportType type, const char *format, ...)
-    ATTR_PRINTF_FORMAT(3, 4);
+void BLO_reportf_wrap(struct BlendFileReadReport *reports,
+                      eReportType type,
+                      const char *format,
+                      ...) ATTR_PRINTF_FORMAT(3, 4);
 
 #ifdef __cplusplus
 }

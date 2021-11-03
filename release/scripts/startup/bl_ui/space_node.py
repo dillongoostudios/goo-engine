@@ -49,6 +49,7 @@ class NODE_HT_header(Header):
 
         scene = context.scene
         snode = context.space_data
+        overlay = snode.overlay
         snode_id = snode.id
         id_from = snode.id_from
         tool_settings = context.tool_settings
@@ -205,6 +206,13 @@ class NODE_HT_header(Header):
         if tool_settings.snap_node_element != 'GRID':
             row.prop(tool_settings, "snap_target", text="")
 
+        # Overlay toggle & popover
+        row = layout.row(align=True)
+        row.prop(overlay, "show_overlays", icon='OVERLAY', text="")
+        sub = row.row(align=True)
+        sub.active = overlay.show_overlays
+        sub.popover(panel="NODE_PT_overlay", text="")
+
 
 class NODE_MT_editor_menus(Menu):
     bl_idname = "NODE_MT_editor_menus"
@@ -289,6 +297,7 @@ class NODE_MT_select(Menu):
 
         layout.operator("node.select_box").tweak = False
         layout.operator("node.select_circle")
+        layout.operator_menu_enum("node.select_lasso", "mode")
 
         layout.separator()
         layout.operator("node.select_all").action = 'TOGGLE'
@@ -660,8 +669,12 @@ class NODE_PT_quality(bpy.types.Panel):
 
         snode = context.space_data
         tree = snode.node_tree
+        prefs = bpy.context.preferences
 
         col = layout.column()
+        if prefs.experimental.use_full_frame_compositor:
+            col.prop(tree, "execution_mode")
+
         col.prop(tree, "render_quality", text="Render")
         col.prop(tree, "edit_quality", text="Edit")
         col.prop(tree, "chunk_size")
@@ -673,6 +686,29 @@ class NODE_PT_quality(bpy.types.Panel):
         col.prop(tree, "use_viewer_border")
         col.separator()
         col.prop(snode, "use_auto_render")
+
+
+class NODE_PT_overlay(Panel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'HEADER'
+    bl_label = "Overlays"
+    bl_ui_units_x = 7
+
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Node Editor Overlays")
+
+        snode = context.space_data
+        overlay = snode.overlay
+
+        layout.active = overlay.show_overlays
+
+        col = layout.column()
+        col.prop(overlay, "show_wire_color", text="Wire Colors")
+
+        col.separator()
+
+        col.prop(snode, "show_annotation", text="Annotations")
 
 
 class NODE_UL_interface_sockets(bpy.types.UIList):
@@ -688,6 +724,110 @@ class NODE_UL_interface_sockets(bpy.types.UIList):
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
             layout.template_node_socket(color=color)
+
+
+class NodeTreeInterfacePanel:
+    def draw_socket_list(self, context, in_out, sockets_propname, active_socket_propname):
+        layout = self.layout
+
+        snode = context.space_data
+        tree = snode.edit_tree
+        sockets = getattr(tree, sockets_propname)
+        active_socket_index = getattr(tree, active_socket_propname)
+        active_socket = sockets[active_socket_index] if active_socket_index >= 0 else None
+
+        split = layout.row()
+
+        split.template_list("NODE_UL_interface_sockets", in_out, tree, sockets_propname, tree, active_socket_propname)
+
+        ops_col = split.column()
+
+        add_remove_col = ops_col.column(align=True)
+        props = add_remove_col.operator("node.tree_socket_add", icon='ADD', text="")
+        props.in_out = in_out
+        props = add_remove_col.operator("node.tree_socket_remove", icon='REMOVE', text="")
+        props.in_out = in_out
+
+        ops_col.separator()
+
+        up_down_col = ops_col.column(align=True)
+        props = up_down_col.operator("node.tree_socket_move", icon='TRIA_UP', text="")
+        props.in_out = in_out
+        props.direction = 'UP'
+        props = up_down_col.operator("node.tree_socket_move", icon='TRIA_DOWN', text="")
+        props.in_out = in_out
+        props.direction = 'DOWN'
+
+        if active_socket is not None:
+            # Mimicking property split.
+            layout.use_property_split = False
+            layout.use_property_decorate = False
+            layout_row = layout.row(align=True)
+            layout_split = layout_row.split(factor=0.4, align=True)
+
+            label_column = layout_split.column(align=True)
+            label_column.alignment = 'RIGHT'
+            # Menu to change the socket type.
+            label_column.label(text="Type")
+
+            property_row = layout_split.row(align=True)
+            props = property_row.operator_menu_enum(
+                "node.tree_socket_change_type",
+                "socket_type",
+                text=active_socket.bl_label if active_socket.bl_label else active_socket.bl_idname
+                )
+            props.in_out = in_out
+
+            layout.use_property_split = True
+            layout.use_property_decorate = False
+
+            layout.prop(active_socket, "name")
+            # Display descriptions only for Geometry Nodes, since it's only used in the modifier panel.
+            if tree.type == 'GEOMETRY':
+                layout.prop(active_socket, "description")
+                field_socket_prefixes = {
+                    "NodeSocketInt",
+                    "NodeSocketColor",
+                    "NodeSocketVector",
+                    "NodeSocketBool",
+                    "NodeSocketFloat",
+                }
+                is_field_type = any(
+                    active_socket.bl_socket_idname.startswith(prefix)
+                    for prefix in field_socket_prefixes
+                )
+                if in_out == 'OUT' and is_field_type:
+                    layout.prop(active_socket, "attribute_domain")
+            active_socket.draw(context, layout)
+
+
+class NODE_PT_node_tree_interface_inputs(NodeTreeInterfacePanel, Panel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Group"
+    bl_label = "Inputs"
+
+    @classmethod
+    def poll(cls, context):
+        snode = context.space_data
+        return snode.edit_tree is not None
+
+    def draw(self, context):
+        self.draw_socket_list(context, "IN", "inputs", "active_input")
+
+class NODE_PT_node_tree_interface_outputs(NodeTreeInterfacePanel, Panel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "Group"
+    bl_label = "Outputs"
+
+    @classmethod
+    def poll(cls, context):
+        snode = context.space_data
+        return snode.edit_tree is not None
+
+    def draw(self, context):
+        self.draw_socket_list(context, "OUT", "outputs", "active_output")
 
 
 # Grease Pencil properties
@@ -747,7 +887,10 @@ classes = (
     NODE_PT_backdrop,
     NODE_PT_quality,
     NODE_PT_annotation,
+    NODE_PT_overlay,
     NODE_UL_interface_sockets,
+    NODE_PT_node_tree_interface_inputs,
+    NODE_PT_node_tree_interface_outputs,
 
     node_panel(EEVEE_MATERIAL_PT_settings),
     node_panel(MATERIAL_PT_viewport),

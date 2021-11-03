@@ -135,8 +135,6 @@
     .border.xmax = 1.0f, \
     .border.ymax = 1.0f, \
  \
-    .preview_start_resolution = 64, \
- \
     .line_thickness_mode = R_LINE_THICKNESS_ABSOLUTE, \
     .unit_line_thickness = 1.0f, \
  \
@@ -382,8 +380,6 @@
     /* GP Stroke Placement */ \
     .gpencil_v3d_align = GP_PROJECT_VIEWSPACE, \
     .gpencil_v2d_align = GP_PROJECT_VIEWSPACE, \
-    .gpencil_seq_align = GP_PROJECT_VIEWSPACE, \
-    .gpencil_ima_align = GP_PROJECT_VIEWSPACE, \
   }
 
 /* clang-format off */

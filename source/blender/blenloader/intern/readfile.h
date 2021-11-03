@@ -28,10 +28,10 @@
 #  include "BLI_winstuff.h"
 #endif
 
+#include "BLI_filereader.h"
 #include "DNA_sdna_types.h"
 #include "DNA_space_types.h"
-#include "DNA_windowmanager_types.h" /* for ReportType */
-#include "zlib.h"
+#include "DNA_windowmanager_types.h" /* for eReportType */
 
 struct BLI_mmap_file;
 struct BLOCacheStorage;
@@ -50,7 +50,7 @@ enum eFileDataFlag {
   FD_FLAGS_FILE_POINTSIZE_IS_4 = 1 << 1,
   FD_FLAGS_POINTSIZE_DIFFERS = 1 << 2,
   FD_FLAGS_FILE_OK = 1 << 3,
-  FD_FLAGS_NOT_MY_BUFFER = 1 << 4,
+  FD_FLAGS_IS_MEMFILE = 1 << 4,
   /* XXX Unused in practice (checked once but never set). */
   FD_FLAGS_NOT_MY_LIBMAP = 1 << 5,
 };
@@ -60,43 +60,17 @@ enum eFileDataFlag {
 #  pragma GCC poison off_t
 #endif
 
-#if defined(_MSC_VER) || defined(__APPLE__) || defined(__HAIKU__) || defined(__NetBSD__)
-typedef int64_t off64_t;
-#endif
-
-typedef ssize_t(FileDataReadFn)(struct FileData *filedata,
-                                void *buffer,
-                                size_t size,
-                                bool *r_is_memchunk_identical);
-typedef off64_t(FileDataSeekFn)(struct FileData *filedata, off64_t offset, int whence);
-
 typedef struct FileData {
   /** Linked list of BHeadN's. */
   ListBase bhead_list;
   enum eFileDataFlag flags;
   bool is_eof;
-  size_t buffersize;
-  off64_t file_offset;
 
-  FileDataReadFn *read;
-  FileDataSeekFn *seek;
+  FileReader *file;
 
-  /** Regular file reading. */
-  int filedes;
-
-  /** Variables needed for reading from memory / stream / memory-mapped files. */
-  const char *buffer;
-  struct BLI_mmap_file *mmap_file;
-  /** Variables needed for reading from memfile (undo). */
-  struct MemFile *memfile;
   /** Whether we are undoing (< 0) or redoing (> 0), used to choose which 'unchanged' flag to use
    * to detect unchanged data from memfile. */
   int undo_direction; /* eUndoStepDir */
-
-  /** Variables needed for reading from file. */
-  gzFile gzfiledes;
-  /** Gzip stream for memory decompression. */
-  z_stream strm;
 
   /** Now only in use for library appending. */
   char relabase[FILE_MAX];
@@ -145,11 +119,7 @@ typedef struct FileData {
   ListBase *old_mainlist;
   struct IDNameLib_Map *old_idmap;
 
-  struct ReportList *reports;
-  /* Counters for amount of missing libraries, and missing IDs in libraries.
-   * Used to generate a synthetic report in the UI. */
-  int library_file_missing_count;
-  int library_id_missing_count;
+  struct BlendFileReadReport *reports;
 } FileData;
 
 #define SIZEOFBLENDERHEADER 12
@@ -161,11 +131,13 @@ void blo_split_main(ListBase *mainlist, struct Main *main);
 
 BlendFileData *blo_read_file_internal(FileData *fd, const char *filepath);
 
-FileData *blo_filedata_from_file(const char *filepath, struct ReportList *reports);
-FileData *blo_filedata_from_memory(const void *mem, int memsize, struct ReportList *reports);
+FileData *blo_filedata_from_file(const char *filepath, struct BlendFileReadReport *reports);
+FileData *blo_filedata_from_memory(const void *mem,
+                                   int memsize,
+                                   struct BlendFileReadReport *reports);
 FileData *blo_filedata_from_memfile(struct MemFile *memfile,
                                     const struct BlendFileReadParams *params,
-                                    struct ReportList *reports);
+                                    struct BlendFileReadReport *reports);
 
 void blo_clear_proxy_pointers_from_lib(struct Main *oldmain);
 void blo_make_packed_pointer_map(FileData *fd, struct Main *oldmain);
@@ -210,6 +182,7 @@ void blo_do_versions_260(struct FileData *fd, struct Library *lib, struct Main *
 void blo_do_versions_270(struct FileData *fd, struct Library *lib, struct Main *bmain);
 void blo_do_versions_280(struct FileData *fd, struct Library *lib, struct Main *bmain);
 void blo_do_versions_290(struct FileData *fd, struct Library *lib, struct Main *bmain);
+void blo_do_versions_300(struct FileData *fd, struct Library *lib, struct Main *bmain);
 void blo_do_versions_cycles(struct FileData *fd, struct Library *lib, struct Main *bmain);
 
 void do_versions_after_linking_250(struct Main *bmain);
@@ -217,6 +190,7 @@ void do_versions_after_linking_260(struct Main *bmain);
 void do_versions_after_linking_270(struct Main *bmain);
 void do_versions_after_linking_280(struct Main *bmain, struct ReportList *reports);
 void do_versions_after_linking_290(struct Main *bmain, struct ReportList *reports);
+void do_versions_after_linking_300(struct Main *bmain, struct ReportList *reports);
 void do_versions_after_linking_cycles(struct Main *bmain);
 
 /* This is rather unfortunate to have to expose this here, but better use that nasty hack in

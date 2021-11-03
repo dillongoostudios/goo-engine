@@ -378,7 +378,15 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
             if cls in blacklist_rna_class:
                 return cls.__name__
             cls_id = ""
-            bl_rna = cls.bl_rna
+            bl_rna = getattr(cls, "bl_rna", None)
+            # It seems that py-defined 'wrappers' RNA classes (like `MeshEdge` in `bpy_types.py`) need to be accessed
+            # once from `bpy.types` before they have a valid `bl_rna` member.
+            # Weirdly enough, this is only triggered on release builds, debug builds somehow do not have that issue.
+            if bl_rna is None:
+                if getattr(bpy.types, cls.__name__, None) is not None:
+                    bl_rna = getattr(cls, "bl_rna", None)
+                if bl_rna is None:
+                    raise TypeError("Unknown RNA class")
             while bl_rna:
                 cls_id = bl_rna.identifier + "." + cls_id
                 bl_rna = bl_rna.base
@@ -735,7 +743,9 @@ def dump_src_messages(msgs, reports, settings):
     def clean_str(s):
         # The encode/decode to/from 'raw_unicode_escape' allows to transform the C-type unicode hexadecimal escapes
         # (like '\u2715' for the '×' symbol) back into a proper unicode character.
-        return "".join(m.group("clean") for m in _clean_str(s)).encode('raw_unicode_escape').decode('raw_unicode_escape')
+        return "".join(
+            m.group("clean") for m in _clean_str(s)
+        ).encode('raw_unicode_escape').decode('raw_unicode_escape')
 
     def dump_src_file(path, rel_path, msgs, reports, settings):
         def process_entry(_msgctxt, _msgid):
@@ -862,7 +872,10 @@ def dump_messages(do_messages, do_checks, settings):
     dump_src_messages(msgs, reports, settings)
 
     # Get strings from addons' categories.
-    for uid, label, tip in bpy.types.WindowManager.addon_filter.keywords['items'](bpy.context.window_manager, bpy.context):
+    for uid, label, tip in bpy.types.WindowManager.addon_filter.keywords['items'](
+            bpy.context.window_manager,
+            bpy.context,
+    ):
         process_msg(msgs, settings.DEFAULT_CONTEXT, label, "Add-ons' categories", reports, None, settings)
         if tip:
             process_msg(msgs, settings.DEFAULT_CONTEXT, tip, "Add-ons' categories", reports, None, settings)

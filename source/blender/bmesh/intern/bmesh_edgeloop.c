@@ -50,7 +50,7 @@ typedef struct BMEdgeLoopStore {
 #define EDGELOOP_EPS 1e-10f
 
 /* -------------------------------------------------------------------- */
-/* BM_mesh_edgeloops_find & Util Functions  */
+/* BM_mesh_edgeloops_find & Util Functions. */
 
 static int bm_vert_other_tag(BMVert *v, BMVert *v_prev, BMEdge **r_e)
 {
@@ -187,7 +187,7 @@ int BM_mesh_edgeloops_find(BMesh *bm,
 }
 
 /* -------------------------------------------------------------------- */
-/* BM_mesh_edgeloops_find_path & Util Functions  */
+/* BM_mesh_edgeloops_find_path & Util Functions. */
 
 /**
  * Find s single, open edge loop - given 2 vertices.
@@ -209,8 +209,7 @@ static void vs_add(
   /* This edge stores a direct path back to the original vertex so we can
    * backtrack without having to store an array of previous verts. */
 
-  /* WARNING - setting the edge is not common practice
-   * but currently harmless, take care. */
+  /* WARNING: Setting the edge is not common practice but currently harmless, take care. */
   BLI_assert(BM_vert_in_edge(e_prev, v));
   v->e = e_prev;
 

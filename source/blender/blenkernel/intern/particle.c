@@ -101,6 +101,8 @@ static void particle_settings_init(ID *id)
   MEMCPY_STRUCT_AFTER(particle_settings, DNA_struct_default_get(ParticleSettings), id);
 
   particle_settings->effector_weights = BKE_effector_add_weights(NULL);
+  particle_settings->pd = BKE_partdeflect_new(PFIELD_NULL);
+  particle_settings->pd2 = BKE_partdeflect_new(PFIELD_NULL);
 }
 
 static void particle_settings_copy_data(Main *UNUSED(bmain),
@@ -171,10 +173,10 @@ static void particle_settings_free_data(ID *id)
 static void particle_settings_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   ParticleSettings *psett = (ParticleSettings *)id;
-  BKE_LIB_FOREACHID_PROCESS(data, psett->instance_collection, IDWALK_CB_USER);
-  BKE_LIB_FOREACHID_PROCESS(data, psett->instance_object, IDWALK_CB_NOP);
-  BKE_LIB_FOREACHID_PROCESS(data, psett->bb_ob, IDWALK_CB_NOP);
-  BKE_LIB_FOREACHID_PROCESS(data, psett->collision_group, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->instance_collection, IDWALK_CB_USER);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->instance_object, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->bb_ob, IDWALK_CB_NOP);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->collision_group, IDWALK_CB_NOP);
 
   for (int i = 0; i < MAX_MTEX; i++) {
     if (psett->mtex[i]) {
@@ -183,16 +185,16 @@ static void particle_settings_foreach_id(ID *id, LibraryForeachIDData *data)
   }
 
   if (psett->effector_weights) {
-    BKE_LIB_FOREACHID_PROCESS(data, psett->effector_weights->group, IDWALK_CB_NOP);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->effector_weights->group, IDWALK_CB_NOP);
   }
 
   if (psett->pd) {
-    BKE_LIB_FOREACHID_PROCESS(data, psett->pd->tex, IDWALK_CB_USER);
-    BKE_LIB_FOREACHID_PROCESS(data, psett->pd->f_source, IDWALK_CB_NOP);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->pd->tex, IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->pd->f_source, IDWALK_CB_NOP);
   }
   if (psett->pd2) {
-    BKE_LIB_FOREACHID_PROCESS(data, psett->pd2->tex, IDWALK_CB_USER);
-    BKE_LIB_FOREACHID_PROCESS(data, psett->pd2->f_source, IDWALK_CB_NOP);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->pd2->tex, IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, psett->pd2->f_source, IDWALK_CB_NOP);
   }
 
   if (psett->boids) {
@@ -200,18 +202,18 @@ static void particle_settings_foreach_id(ID *id, LibraryForeachIDData *data)
       LISTBASE_FOREACH (BoidRule *, rule, &state->rules) {
         if (rule->type == eBoidRuleType_Avoid) {
           BoidRuleGoalAvoid *gabr = (BoidRuleGoalAvoid *)rule;
-          BKE_LIB_FOREACHID_PROCESS(data, gabr->ob, IDWALK_CB_NOP);
+          BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, gabr->ob, IDWALK_CB_NOP);
         }
         else if (rule->type == eBoidRuleType_FollowLeader) {
           BoidRuleFollowLeader *flbr = (BoidRuleFollowLeader *)rule;
-          BKE_LIB_FOREACHID_PROCESS(data, flbr->ob, IDWALK_CB_NOP);
+          BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, flbr->ob, IDWALK_CB_NOP);
         }
       }
     }
   }
 
   LISTBASE_FOREACH (ParticleDupliWeight *, dw, &psett->instance_weights) {
-    BKE_LIB_FOREACHID_PROCESS(data, dw->ob, IDWALK_CB_NOP);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, dw->ob, IDWALK_CB_NOP);
   }
 }
 
@@ -253,60 +255,59 @@ static void write_boid_state(BlendWriter *writer, BoidState *state)
 static void particle_settings_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   ParticleSettings *part = (ParticleSettings *)id;
-  if (part->id.us > 0 || BLO_write_is_undo(writer)) {
-    /* write LibData */
-    BLO_write_id_struct(writer, ParticleSettings, id_address, &part->id);
-    BKE_id_blend_write(writer, &part->id);
 
-    if (part->adt) {
-      BKE_animdata_blend_write(writer, part->adt);
-    }
-    BLO_write_struct(writer, PartDeflect, part->pd);
-    BLO_write_struct(writer, PartDeflect, part->pd2);
-    BLO_write_struct(writer, EffectorWeights, part->effector_weights);
+  /* write LibData */
+  BLO_write_id_struct(writer, ParticleSettings, id_address, &part->id);
+  BKE_id_blend_write(writer, &part->id);
 
-    if (part->clumpcurve) {
-      BKE_curvemapping_blend_write(writer, part->clumpcurve);
-    }
-    if (part->roughcurve) {
-      BKE_curvemapping_blend_write(writer, part->roughcurve);
-    }
-    if (part->twistcurve) {
-      BKE_curvemapping_blend_write(writer, part->twistcurve);
-    }
+  if (part->adt) {
+    BKE_animdata_blend_write(writer, part->adt);
+  }
+  BLO_write_struct(writer, PartDeflect, part->pd);
+  BLO_write_struct(writer, PartDeflect, part->pd2);
+  BLO_write_struct(writer, EffectorWeights, part->effector_weights);
 
-    LISTBASE_FOREACH (ParticleDupliWeight *, dw, &part->instance_weights) {
-      /* update indices, but only if dw->ob is set (can be NULL after loading e.g.) */
-      if (dw->ob != NULL) {
-        dw->index = 0;
-        if (part->instance_collection) { /* can be NULL if lining fails or set to None */
-          FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (part->instance_collection, object) {
-            if (object == dw->ob) {
-              break;
-            }
-            dw->index++;
+  if (part->clumpcurve) {
+    BKE_curvemapping_blend_write(writer, part->clumpcurve);
+  }
+  if (part->roughcurve) {
+    BKE_curvemapping_blend_write(writer, part->roughcurve);
+  }
+  if (part->twistcurve) {
+    BKE_curvemapping_blend_write(writer, part->twistcurve);
+  }
+
+  LISTBASE_FOREACH (ParticleDupliWeight *, dw, &part->instance_weights) {
+    /* update indices, but only if dw->ob is set (can be NULL after loading e.g.) */
+    if (dw->ob != NULL) {
+      dw->index = 0;
+      if (part->instance_collection) { /* can be NULL if lining fails or set to None */
+        FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (part->instance_collection, object) {
+          if (object == dw->ob) {
+            break;
           }
-          FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
+          dw->index++;
         }
-      }
-      BLO_write_struct(writer, ParticleDupliWeight, dw);
-    }
-
-    if (part->boids && part->phystype == PART_PHYS_BOIDS) {
-      BLO_write_struct(writer, BoidSettings, part->boids);
-
-      LISTBASE_FOREACH (BoidState *, state, &part->boids->states) {
-        write_boid_state(writer, state);
+        FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
       }
     }
-    if (part->fluid && part->phystype == PART_PHYS_FLUID) {
-      BLO_write_struct(writer, SPHFluidSettings, part->fluid);
-    }
+    BLO_write_struct(writer, ParticleDupliWeight, dw);
+  }
 
-    for (int a = 0; a < MAX_MTEX; a++) {
-      if (part->mtex[a]) {
-        BLO_write_struct(writer, MTex, part->mtex[a]);
-      }
+  if (part->boids && part->phystype == PART_PHYS_BOIDS) {
+    BLO_write_struct(writer, BoidSettings, part->boids);
+
+    LISTBASE_FOREACH (BoidState *, state, &part->boids->states) {
+      write_boid_state(writer, state);
+    }
+  }
+  if (part->fluid && part->phystype == PART_PHYS_FLUID) {
+    BLO_write_struct(writer, SPHFluidSettings, part->fluid);
+  }
+
+  for (int a = 0; a < MAX_MTEX; a++) {
+    if (part->mtex[a]) {
+      BLO_write_struct(writer, MTex, part->mtex[a]);
     }
   }
 }
@@ -382,8 +383,9 @@ void BKE_particle_partdeflect_blend_read_lib(BlendLibReader *reader, ID *id, Par
 static void particle_settings_blend_read_lib(BlendLibReader *reader, ID *id)
 {
   ParticleSettings *part = (ParticleSettings *)id;
-  BLO_read_id_address(
-      reader, part->id.lib, &part->ipo); /* XXX deprecated - old animation system */
+
+  /* XXX: deprecated - old animation system. */
+  BLO_read_id_address(reader, part->id.lib, &part->ipo);
 
   BLO_read_id_address(reader, part->id.lib, &part->instance_object);
   BLO_read_id_address(reader, part->id.lib, &part->instance_collection);
@@ -925,10 +927,7 @@ void free_hair(Object *object, ParticleSystem *psys, int dynamics)
 
   LOOP_PARTICLES
   {
-    if (pa->hair) {
-      MEM_freeN(pa->hair);
-    }
-    pa->hair = NULL;
+    MEM_SAFE_FREE(pa->hair);
     pa->totkey = 0;
   }
 
@@ -1041,25 +1040,13 @@ void psys_free_particles(ParticleSystem *psys)
 void psys_free_pdd(ParticleSystem *psys)
 {
   if (psys->pdd) {
-    if (psys->pdd->cdata) {
-      MEM_freeN(psys->pdd->cdata);
-    }
-    psys->pdd->cdata = NULL;
+    MEM_SAFE_FREE(psys->pdd->cdata);
 
-    if (psys->pdd->vdata) {
-      MEM_freeN(psys->pdd->vdata);
-    }
-    psys->pdd->vdata = NULL;
+    MEM_SAFE_FREE(psys->pdd->vdata);
 
-    if (psys->pdd->ndata) {
-      MEM_freeN(psys->pdd->ndata);
-    }
-    psys->pdd->ndata = NULL;
+    MEM_SAFE_FREE(psys->pdd->ndata);
 
-    if (psys->pdd->vedata) {
-      MEM_freeN(psys->pdd->vedata);
-    }
-    psys->pdd->vedata = NULL;
+    MEM_SAFE_FREE(psys->pdd->vedata);
 
     psys->pdd->totpoint = 0;
     psys->pdd->totpart = 0;
@@ -1435,7 +1422,7 @@ static void do_particle_interpolation(ParticleSystem *psys,
   int point_vel = (point && point->keys->vel);
   float real_t, dfra, keytime, invdt = 1.0f;
 
-  /* billboards wont fill in all of these, so start cleared */
+  /* billboards won't fill in all of these, so start cleared */
   memset(keys, 0, sizeof(keys));
 
   /* interpret timing and find keys */
@@ -2459,7 +2446,7 @@ int do_guides(Depsgraph *depsgraph,
                                           (int)(data->strength * guidetime * 100.0f),
                                           100));
       }
-      else { /* curve size*/
+      else { /* Curve size. */
         if (cu->flag & CU_PATH_RADIUS) {
           mul_v3_fl(vec_to_point, radius);
         }
@@ -2808,7 +2795,7 @@ static void psys_task_init_path(ParticleTask *task, ParticleSimulationData *sim)
   task->rng_path = BLI_rng_new(seed);
 }
 
-/* note: this function must be thread safe, except for branching! */
+/* NOTE: this function must be thread safe, except for branching! */
 static void psys_thread_create_path(ParticleTask *task,
                                     struct ChildParticle *cpa,
                                     ParticleCacheKey *child_keys,
@@ -3958,7 +3945,7 @@ static ModifierData *object_add_or_copy_particle_system(
   psys->totpart = 0;
   psys->flag = PSYS_CURRENT;
   if (scene != NULL) {
-    psys->cfra = BKE_scene_frame_to_ctime(scene, CFRA + 1);
+    psys->cfra = BKE_scene_frame_to_ctime(scene, scene->r.cfra + 1);
   }
 
   DEG_relations_tag_update(bmain);
@@ -3980,15 +3967,17 @@ ModifierData *object_copy_particle_system(Main *bmain,
   return object_add_or_copy_particle_system(bmain, scene, ob, NULL, psys_orig);
 }
 
-void object_remove_particle_system(Main *bmain, Scene *UNUSED(scene), Object *ob)
+void object_remove_particle_system(Main *bmain,
+                                   Scene *UNUSED(scene),
+                                   Object *ob,
+                                   ParticleSystem *psys)
 {
-  ParticleSystem *psys = psys_get_current(ob);
-  ParticleSystemModifierData *psmd;
-  ModifierData *md;
-
-  if (!psys) {
+  if (!ob || !psys) {
     return;
   }
+
+  ParticleSystemModifierData *psmd;
+  ModifierData *md;
 
   /* Clear particle system in fluid modifier. */
   if ((md = BKE_modifiers_findby_type(ob, eModifierType_Fluid))) {
@@ -4415,12 +4404,12 @@ void psys_get_texture(
 
       if ((event & mtex->mapto) & PAMAP_TIME) {
         /* the first time has to set the base value for time regardless of blend mode */
-        if ((setvars & MAP_PA_TIME) == 0) {
+        if ((setvars & PAMAP_TIME) == 0) {
           int flip = (mtex->timefac < 0.0f);
           float timefac = fabsf(mtex->timefac);
           ptex->time *= 1.0f - timefac;
           ptex->time += timefac * ((flip) ? 1.0f - value : value);
-          setvars |= MAP_PA_TIME;
+          setvars |= PAMAP_TIME;
         }
         else {
           ptex->time = texture_value_blend(def, ptex->time, value, mtex->timefac, blend);
@@ -4630,11 +4619,11 @@ void psys_get_particle_on_path(ParticleSimulationData *sim,
       pind.cache = cached ? psys->pointcache : NULL;
       pind.epoint = NULL;
       pind.bspline = (psys->part->flag & PART_HAIR_BSPLINE);
-      /* pind.dm disabled in editmode means we don't get effectors taken into
-       * account when subdividing for instance */
+      /* `pind.dm` disabled in edit-mode means we don't get effectors taken into
+       * account when subdividing for instance. */
       pind.mesh = psys_in_edit_mode(sim->depsgraph, psys) ?
                       NULL :
-                      psys->hair_out_mesh; /* XXX Sybren EEK */
+                      psys->hair_out_mesh; /* XXX(@sybren) EEK. */
       init_particle_interpolation(sim->ob, psys, pa, &pind);
       do_particle_interpolation(psys, p, pa, t, &pind, state);
 
@@ -5397,8 +5386,8 @@ void BKE_particle_system_blend_read_lib(BlendLibReader *reader,
       BLO_read_id_address(reader, id->lib, &psys->target_ob);
 
       if (psys->clmd) {
-        /* XXX - from reading existing code this seems correct but intended usage of
-         * pointcache /w cloth should be added in 'ParticleSystem' - campbell */
+        /* XXX(campbell): from reading existing code this seems correct but intended usage of
+         * pointcache /w cloth should be added in 'ParticleSystem'. */
         psys->clmd->point_cache = psys->pointcache;
         psys->clmd->ptcaches.first = psys->clmd->ptcaches.last = NULL;
         BLO_read_id_address(reader, id->lib, &psys->clmd->coll_parms->group);

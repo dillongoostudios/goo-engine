@@ -90,7 +90,7 @@ ScreenSpaceRay raytrace_screenspace_ray_create(Ray ray, float thickness)
 }
 
 struct RayTraceParameters {
-  /** ViewSpace thickness the objects  */
+  /** ViewSpace thickness the objects. */
   float thickness;
   /** Jitter along the ray to avoid banding artifact when steps are too large. */
   float jitter;
@@ -101,7 +101,7 @@ struct RayTraceParameters {
 };
 
 /* Returns true on hit. */
-/* TODO fclem remove the backface check and do it the SSR resolve code. */
+/* TODO(fclem): remove the back-face check and do it the SSR resolve code. */
 bool raytrace(Ray ray,
               RayTraceParameters params,
               const bool discard_backface,
@@ -151,7 +151,7 @@ bool raytrace(Ray ray,
     /* ... and above it with the added thickness. */
     hit = hit && (delta > ss_p.z - ss_p.w || abs(delta) < abs(ssray.direction.z * stride * 2.0));
   }
-  /* Discard backface hits. */
+  /* Discard back-face hits. */
   hit = hit && !(discard_backface && prev_delta < 0.0);
   /* Reject hit if background. */
   hit = hit && (depth_sample != 1.0);

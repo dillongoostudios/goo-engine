@@ -137,7 +137,7 @@ static char *blender_version_decimal(const int version)
 {
   static char version_str[5];
   BLI_assert(version < 1000);
-  BLI_snprintf(version_str, sizeof(version_str), "%d.%02d", version / 100, version % 100);
+  BLI_snprintf(version_str, sizeof(version_str), "%d.%d", version / 100, version % 100);
   return version_str;
 }
 
@@ -148,11 +148,12 @@ static char *blender_version_decimal(const int version)
  * \{ */
 
 /**
- * Get the folder that's the "natural" starting point for browsing files on an OS. On Unix that is
- * $HOME, on Windows it is %userprofile%/Documents.
+ * Get the folder that's the "natural" starting point for browsing files on an OS.
+ * - Unix: `$HOME`
+ * - Windows: `%userprofile%/Documents`
  *
  * \note On Windows `Users/{MyUserName}/Documents` is used as it's the default location to save
- *       documents.
+ * documents.
  */
 const char *BKE_appdir_folder_default(void)
 {
@@ -169,8 +170,30 @@ const char *BKE_appdir_folder_default(void)
 #endif /* WIN32 */
 }
 
+const char *BKE_appdir_folder_root(void)
+{
+#ifndef WIN32
+  return "/";
+#else
+  static char root[4];
+  BLI_windows_get_default_root_dir(root);
+  return root;
+#endif
+}
+
+const char *BKE_appdir_folder_default_or_root(void)
+{
+  const char *path = BKE_appdir_folder_default();
+  if (path == NULL) {
+    path = BKE_appdir_folder_root();
+  }
+  return path;
+}
+
 /**
- * Get the user's home directory, i.e. $HOME on UNIX, %userprofile% on Windows.
+ * Get the user's home directory, i.e.
+ * - Unix: `$HOME`
+ * - Windows: `%userprofile%`
  */
 const char *BKE_appdir_folder_home(void)
 {
@@ -182,8 +205,11 @@ const char *BKE_appdir_folder_home(void)
 }
 
 /**
- * Get the user's document directory, i.e. $HOME/Documents on Linux, %userprofile%/Documents on
- * Windows. If this can't be found using OS queries (via Ghost), try manually finding it.
+ * Get the user's document directory, i.e.
+ * - Linux: `$HOME/Documents`
+ * - Windows: `%userprofile%/Documents`
+ *
+ * If this can't be found using OS queries (via Ghost), try manually finding it.
  *
  * \returns True if the path is valid and points to an existing directory.
  */
@@ -191,8 +217,7 @@ bool BKE_appdir_folder_documents(char *dir)
 {
   dir[0] = '\0';
 
-  const char *documents_path = (const char *)GHOST_getUserSpecialDir(
-      GHOST_kUserSpecialDirDocuments);
+  const char *documents_path = GHOST_getUserSpecialDir(GHOST_kUserSpecialDirDocuments);
 
   /* Usual case: Ghost gave us the documents path. We're done here. */
   if (documents_path && BLI_is_dir(documents_path)) {
@@ -200,7 +225,7 @@ bool BKE_appdir_folder_documents(char *dir)
     return true;
   }
 
-  /* Ghost couldn't give us a documents path, let's try if we can find it ourselves.*/
+  /* Ghost couldn't give us a documents path, let's try if we can find it ourselves. */
 
   const char *home_path = BKE_appdir_folder_home();
   if (!home_path || !BLI_is_dir(home_path)) {
@@ -215,6 +240,39 @@ bool BKE_appdir_folder_documents(char *dir)
   }
 
   BLI_strncpy(dir, try_documents_path, FILE_MAXDIR);
+  return true;
+}
+
+/**
+ * Get the user's cache directory, i.e.
+ * - Linux: `$HOME/.cache/blender/`
+ * - Windows: `%USERPROFILE%\AppData\Local\Blender Foundation\Blender\`
+ * - MacOS: `/Library/Caches/Blender`
+ *
+ * \returns True if the path is valid. It doesn't create or checks format
+ * if the `blender` folder exists. It does check if the parent of the path exists.
+ */
+bool BKE_appdir_folder_caches(char *r_path, const size_t path_len)
+{
+  r_path[0] = '\0';
+
+  const char *caches_root_path = GHOST_getUserSpecialDir(GHOST_kUserSpecialDirCaches);
+  if (caches_root_path == NULL || !BLI_is_dir(caches_root_path)) {
+    caches_root_path = BKE_tempdir_base();
+  }
+  if (caches_root_path == NULL || !BLI_is_dir(caches_root_path)) {
+    return false;
+  }
+
+#ifdef WIN32
+  BLI_path_join(
+      r_path, path_len, caches_root_path, "Blender Foundation", "Blender", "Cache", SEP_STR, NULL);
+#elif defined(__APPLE__)
+  BLI_path_join(r_path, path_len, caches_root_path, "Blender", SEP_STR, NULL);
+#else /* __linux__ */
+  BLI_path_join(r_path, path_len, caches_root_path, "blender", SEP_STR, NULL);
+#endif
+
   return true;
 }
 
@@ -462,7 +520,7 @@ static bool get_path_user_ex(char *targetpath,
   }
   user_path[0] = '\0';
 
-  user_base_path = (const char *)GHOST_getUserDir(version, blender_version_decimal(version));
+  user_base_path = GHOST_getUserDir(version, blender_version_decimal(version));
   if (user_base_path) {
     BLI_strncpy(user_path, user_base_path, FILE_MAX);
   }
@@ -522,7 +580,7 @@ static bool get_path_system_ex(char *targetpath,
   }
 
   system_path[0] = '\0';
-  system_base_path = (const char *)GHOST_getSystemDir(version, blender_version_decimal(version));
+  system_base_path = GHOST_getSystemDir(version, blender_version_decimal(version));
   if (system_base_path) {
     BLI_strncpy(system_path, system_base_path, FILE_MAX);
   }
@@ -780,7 +838,7 @@ const char *BKE_appdir_folder_id_version(const int folder_id,
     default:
       path[0] = '\0'; /* in case check_is_dir is false */
       ok = false;
-      BLI_assert(!"incorrect ID");
+      BLI_assert_msg(0, "incorrect ID");
       break;
   }
   return ok ? path : NULL;

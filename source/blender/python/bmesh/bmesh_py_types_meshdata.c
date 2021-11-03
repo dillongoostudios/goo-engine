@@ -97,7 +97,7 @@ static int bpy_bmloopuv_flag_set(BPy_BMLoopUV *self, PyObject *value, void *flag
 }
 
 static PyGetSetDef bpy_bmloopuv_getseters[] = {
-    /* attributes match rna_def_mloopuv  */
+    /* attributes match rna_def_mloopuv. */
     {"uv", (getter)bpy_bmloopuv_uv_get, (setter)bpy_bmloopuv_uv_set, bpy_bmloopuv_uv_doc, NULL},
     {"pin_uv",
      (getter)bpy_bmloopuv_flag_get,
@@ -207,7 +207,7 @@ static int bpy_bmvertskin_flag_set(BPy_BMVertSkin *self, PyObject *value, void *
 }
 
 static PyGetSetDef bpy_bmvertskin_getseters[] = {
-    /* attributes match rna_mesh_gen  */
+    /* attributes match rna_mesh_gen. */
     {"radius",
      (getter)bpy_bmvertskin_radius_get,
      (setter)bpy_bmvertskin_radius_set,
@@ -443,7 +443,7 @@ static int bpy_bmdeformvert_ass_subscript(BPy_BMDeformVert *self, PyObject *key,
     }
 
     if (value) {
-      /* dvert[group_index] = 0.5 */
+      /* Handle `dvert[group_index] = 0.5`. */
       if (i < 0) {
         PyErr_SetString(PyExc_KeyError,
                         "BMDeformVert[key] = x: "
@@ -453,7 +453,7 @@ static int bpy_bmdeformvert_ass_subscript(BPy_BMDeformVert *self, PyObject *key,
 
       MDeformWeight *dw = BKE_defvert_ensure_index(self->data, i);
       const float f = PyFloat_AsDouble(value);
-      if (f == -1 && PyErr_Occurred()) {  // parsed key not a number
+      if (f == -1 && PyErr_Occurred()) { /* Parsed key not a number. */
         PyErr_SetString(PyExc_TypeError,
                         "BMDeformVert[key] = x: "
                         "assigned value not a number");
@@ -463,7 +463,7 @@ static int bpy_bmdeformvert_ass_subscript(BPy_BMDeformVert *self, PyObject *key,
       dw->weight = clamp_f(f, 0.0f, 1.0f);
     }
     else {
-      /* del dvert[group_index] */
+      /* Handle `del dvert[group_index]`. */
       MDeformWeight *dw = BKE_defvert_find_index(self->data, i);
 
       if (dw == NULL) {
@@ -500,7 +500,7 @@ static PySequenceMethods bpy_bmdeformvert_as_sequence = {
     NULL,                          /* sq_concat */
     NULL,                          /* sq_repeat */
 
-    /* Note: if this is set #PySequence_Check() returns True,
+    /* NOTE: if this is set #PySequence_Check() returns True,
      * but in this case we don't want to be treated as a seq. */
     NULL, /* sq_item */
 

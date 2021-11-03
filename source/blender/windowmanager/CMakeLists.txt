@@ -48,10 +48,6 @@ set(INC
   ${CMAKE_BINARY_DIR}/source/blender/makesdna/intern
 )
 
-set(INC_SYS
-  ${ZLIB_INCLUDE_DIRS}
-)
-
 set(SRC
   intern/wm.c
   intern/wm_cursors.c
@@ -181,7 +177,7 @@ if(WITH_INPUT_NDOF)
   add_definitions(-DWITH_INPUT_NDOF)
 endif()
 
-if(WIN32)
+if(WIN32 OR APPLE)
   if(WITH_INPUT_IME)
     add_definitions(-DWITH_INPUT_IME)
   endif()
@@ -203,7 +199,10 @@ if(WITH_XR_OPENXR)
 
   list(APPEND SRC
     xr/intern/wm_xr.c
+    xr/intern/wm_xr_action.c
+    xr/intern/wm_xr_actionmap.c
     xr/intern/wm_xr_draw.c
+    xr/intern/wm_xr_operators.c
     xr/intern/wm_xr_session.c
 
     xr/wm_xr.h

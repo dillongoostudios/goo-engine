@@ -43,13 +43,15 @@ void sort_trans_data_dist(TransInfo *t);
 void createTransData(struct bContext *C, TransInfo *t);
 bool clipUVTransform(TransInfo *t, float vec[2], const bool resize);
 void clipUVData(TransInfo *t);
+void transform_convert_flush_handle2D(TransData *td, TransData2D *td2d, const float y_fac);
+void recalcData(TransInfo *t);
 
 /* transform_convert_mesh.c */
-void mesh_customdatacorrect_init(TransInfo *t);
+void transform_convert_mesh_customdatacorrect_init(TransInfo *t);
 
 /* transform_convert_sequencer.c */
-int transform_convert_sequencer_get_snap_bound(TransInfo *t);
-void transform_convert_sequencer_channel_clamp(TransInfo *t);
+void transform_convert_sequencer_channel_clamp(TransInfo *t, float r_val[2]);
+
 /********************* intern **********************/
 
 /* transform_convert.c */
@@ -62,7 +64,7 @@ void calc_distanceCurveVerts(TransData *head, TransData *tail, bool cyclic);
 struct TransDataCurveHandleFlags *initTransDataCurveHandles(TransData *td, struct BezTriple *bezt);
 char transform_convert_frame_side_dir_get(TransInfo *t, float cframe);
 bool FrameOnMouseSide(char side, float frame, float cframe);
-void clipMirrorModifier(TransInfo *t);
+void transform_convert_clip_mirror_modifier_apply(TransDataContainer *tc);
 void animrecord_check_state(TransInfo *t, struct Object *ob);
 
 /* transform_convert_action.c */
@@ -83,7 +85,11 @@ void special_aftertrans_update__pose(bContext *C, TransInfo *t);
 
 /* transform_convert_cursor.c */
 void createTransCursor_image(TransInfo *t);
+void createTransCursor_sequencer(TransInfo *t);
 void createTransCursor_view3d(TransInfo *t);
+void recalcData_cursor_image(TransInfo *t);
+void recalcData_cursor_sequencer(TransInfo *t);
+void recalcData_cursor_view3d(TransInfo *t);
 
 /* transform_convert_curve.c */
 void createTransCurveVerts(TransInfo *t);
@@ -109,6 +115,7 @@ void special_aftertrans_update__mask(bContext *C, TransInfo *t);
 
 /* transform_convert_mball.c */
 void createTransMBallVerts(TransInfo *t);
+void recalcData_mball(TransInfo *t);
 
 /* transform_convert_mesh.c */
 struct TransIslandData {
@@ -166,6 +173,7 @@ void special_aftertrans_update__mesh(bContext *C, TransInfo *t);
 
 /* transform_convert_mesh_edge.c */
 void createTransEdge(TransInfo *t);
+void recalcData_mesh_edge(TransInfo *t);
 
 /* transform_convert_mesh_skin.c */
 void createTransMeshSkin(TransInfo *t);
@@ -211,6 +219,10 @@ void special_aftertrans_update__sculpt(bContext *C, TransInfo *t);
 void createTransSeqData(TransInfo *t);
 void recalcData_sequencer(TransInfo *t);
 void special_aftertrans_update__sequencer(bContext *C, TransInfo *t);
+
+/* transform_convert_sequencer_image.c */
+void createTransSeqImageData(TransInfo *t);
+void recalcData_sequencer_image(TransInfo *t);
 
 /* transform_convert_tracking.c */
 void createTransTrackingData(bContext *C, TransInfo *t);

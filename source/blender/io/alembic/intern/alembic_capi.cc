@@ -19,6 +19,7 @@
  */
 
 #include "../ABC_alembic.h"
+#include "IO_types.h"
 
 #include <Alembic/AbcMaterial/IMaterial.h>
 
@@ -89,18 +90,14 @@ using Alembic::AbcMaterial::IMaterial;
 
 using namespace blender::io::alembic;
 
-struct AbcArchiveHandle {
-  int unused;
-};
-
-BLI_INLINE ArchiveReader *archive_from_handle(AbcArchiveHandle *handle)
+BLI_INLINE ArchiveReader *archive_from_handle(CacheArchiveHandle *handle)
 {
   return reinterpret_cast<ArchiveReader *>(handle);
 }
 
-BLI_INLINE AbcArchiveHandle *handle_from_archive(ArchiveReader *archive)
+BLI_INLINE CacheArchiveHandle *handle_from_archive(ArchiveReader *archive)
 {
-  return reinterpret_cast<AbcArchiveHandle *>(archive);
+  return reinterpret_cast<CacheArchiveHandle *>(archive);
 }
 
 //#define USE_NURBS
@@ -150,8 +147,8 @@ static bool gather_objects_paths(const IObject &object, ListBase *object_paths)
   }
 
   if (get_path) {
-    void *abc_path_void = MEM_callocN(sizeof(AlembicObjectPath), "AlembicObjectPath");
-    AlembicObjectPath *abc_path = static_cast<AlembicObjectPath *>(abc_path_void);
+    void *abc_path_void = MEM_callocN(sizeof(CacheObjectPath), "CacheObjectPath");
+    CacheObjectPath *abc_path = static_cast<CacheObjectPath *>(abc_path_void);
 
     BLI_strncpy(abc_path->path, object.getFullName().c_str(), sizeof(abc_path->path));
     BLI_addtail(object_paths, abc_path);
@@ -160,9 +157,9 @@ static bool gather_objects_paths(const IObject &object, ListBase *object_paths)
   return parent_is_part_of_this_object;
 }
 
-AbcArchiveHandle *ABC_create_handle(struct Main *bmain,
-                                    const char *filename,
-                                    ListBase *object_paths)
+CacheArchiveHandle *ABC_create_handle(struct Main *bmain,
+                                      const char *filename,
+                                      ListBase *object_paths)
 {
   ArchiveReader *archive = new ArchiveReader(bmain, filename);
 
@@ -178,7 +175,7 @@ AbcArchiveHandle *ABC_create_handle(struct Main *bmain,
   return handle_from_archive(archive);
 }
 
-void ABC_free_handle(AbcArchiveHandle *handle)
+void ABC_free_handle(CacheArchiveHandle *handle)
 {
   delete archive_from_handle(handle);
 }
@@ -359,8 +356,8 @@ static std::pair<bool, AbcObjectReader *> visit_object(
     readers.push_back(reader);
     reader->incref();
 
-    AlembicObjectPath *abc_path = static_cast<AlembicObjectPath *>(
-        MEM_callocN(sizeof(AlembicObjectPath), "AlembicObjectPath"));
+    CacheObjectPath *abc_path = static_cast<CacheObjectPath *>(
+        MEM_callocN(sizeof(CacheObjectPath), "CacheObjectPath"));
     BLI_strncpy(abc_path->path, full_name.c_str(), sizeof(abc_path->path));
     BLI_addtail(&settings.cache_file->object_paths, abc_path);
 
@@ -463,7 +460,7 @@ static void import_startjob(void *user_data, short *stop, short *do_update, floa
 
   /* Decrement the ID ref-count because it is going to be incremented for each
    * modifier and constraint that it will be attached to, so since currently
-   * it is not used by anyone, its use count will off by one. */
+   * it is not used by anyone, its use count will be off by one. */
   id_us_min(&cache_file->id);
 
   cache_file->is_sequence = data->settings.is_sequence;
@@ -666,6 +663,7 @@ bool ABC_import(bContext *C,
                 int sequence_len,
                 int offset,
                 bool validate_meshes,
+                bool always_add_cache_reader,
                 bool as_background_job)
 {
   /* Using new here since MEM_* functions do not call constructor to properly initialize data. */
@@ -684,6 +682,7 @@ bool ABC_import(bContext *C,
   job->settings.sequence_len = sequence_len;
   job->settings.sequence_offset = offset;
   job->settings.validate_meshes = validate_meshes;
+  job->settings.always_add_cache_reader = always_add_cache_reader;
   job->error_code = ABC_NO_ERROR;
   job->was_cancelled = false;
   job->archive = nullptr;
@@ -737,7 +736,7 @@ void ABC_get_transform(CacheReader *reader, float r_mat_world[4][4], float time,
   /* Convert from the local matrix we obtain from Alembic to world coordinates
    * for Blender. This conversion is done here rather than by Blender due to
    * work around the non-standard interpretation of CONSTRAINT_SPACE_LOCAL in
-   * BKE_constraint_mat_convertspace().  */
+   * BKE_constraint_mat_convertspace(). */
   Object *object = abc_reader->object();
   if (object->parent == nullptr) {
     /* No parent, so local space is the same as world space. */
@@ -787,7 +786,9 @@ Mesh *ABC_read_mesh(CacheReader *reader,
                     Mesh *existing_mesh,
                     const float time,
                     const char **err_str,
-                    int read_flag)
+                    const int read_flag,
+                    const char *velocity_name,
+                    const float velocity_scale)
 {
   AbcObjectReader *abc_reader = get_abc_reader(reader, ob, err_str);
   if (abc_reader == nullptr) {
@@ -795,7 +796,8 @@ Mesh *ABC_read_mesh(CacheReader *reader,
   }
 
   ISampleSelector sample_sel = sample_selector_for_time(time);
-  return abc_reader->read_mesh(existing_mesh, sample_sel, read_flag, err_str);
+  return abc_reader->read_mesh(
+      existing_mesh, sample_sel, read_flag, velocity_name, velocity_scale, err_str);
 }
 
 bool ABC_mesh_topology_changed(
@@ -812,7 +814,7 @@ bool ABC_mesh_topology_changed(
 
 /* ************************************************************************** */
 
-void CacheReader_free(CacheReader *reader)
+void ABC_CacheReader_free(CacheReader *reader)
 {
   AbcObjectReader *abc_reader = reinterpret_cast<AbcObjectReader *>(reader);
   abc_reader->decref();
@@ -822,13 +824,13 @@ void CacheReader_free(CacheReader *reader)
   }
 }
 
-void CacheReader_incref(CacheReader *reader)
+void ABC_CacheReader_incref(CacheReader *reader)
 {
   AbcObjectReader *abc_reader = reinterpret_cast<AbcObjectReader *>(reader);
   abc_reader->incref();
 }
 
-CacheReader *CacheReader_open_alembic_object(AbcArchiveHandle *handle,
+CacheReader *CacheReader_open_alembic_object(CacheArchiveHandle *handle,
                                              CacheReader *reader,
                                              Object *object,
                                              const char *object_path)
@@ -847,7 +849,7 @@ CacheReader *CacheReader_open_alembic_object(AbcArchiveHandle *handle,
   find_iobject(archive->getTop(), iobject, object_path);
 
   if (reader) {
-    CacheReader_free(reader);
+    ABC_CacheReader_free(reader);
   }
 
   ImportSettings settings;
@@ -860,137 +862,4 @@ CacheReader *CacheReader_open_alembic_object(AbcArchiveHandle *handle,
   abc_reader->incref();
 
   return reinterpret_cast<CacheReader *>(abc_reader);
-}
-
-/* ************************************************************************** */
-
-static const PropertyHeader *get_property_header(const IPolyMeshSchema &schema, const char *name)
-{
-  const PropertyHeader *prop_header = schema.getPropertyHeader(name);
-
-  if (prop_header) {
-    return prop_header;
-  }
-
-  ICompoundProperty prop = schema.getArbGeomParams();
-
-  if (!has_property(prop, name)) {
-    return nullptr;
-  }
-
-  return prop.getPropertyHeader(name);
-}
-
-bool ABC_has_vec3_array_property_named(struct CacheReader *reader, const char *name)
-{
-  AbcObjectReader *abc_reader = reinterpret_cast<AbcObjectReader *>(reader);
-
-  if (!abc_reader) {
-    return false;
-  }
-
-  IObject iobject = abc_reader->iobject();
-
-  if (!iobject.valid()) {
-    return false;
-  }
-
-  const ObjectHeader &header = iobject.getHeader();
-
-  if (!IPolyMesh::matches(header)) {
-    return false;
-  }
-
-  IPolyMesh mesh(iobject, kWrapExisting);
-  IPolyMeshSchema schema = mesh.getSchema();
-
-  const PropertyHeader *prop_header = get_property_header(schema, name);
-
-  if (!prop_header) {
-    return false;
-  }
-
-  return IV3fArrayProperty::matches(prop_header->getMetaData());
-}
-
-static V3fArraySamplePtr get_velocity_prop(const IPolyMeshSchema &schema,
-                                           const ISampleSelector &iss,
-                                           const std::string &name)
-{
-  const PropertyHeader *prop_header = schema.getPropertyHeader(name);
-
-  if (prop_header) {
-    const IV3fArrayProperty &velocity_prop = IV3fArrayProperty(schema, name, 0);
-    return velocity_prop.getValue(iss);
-  }
-
-  ICompoundProperty prop = schema.getArbGeomParams();
-
-  if (!has_property(prop, name)) {
-    return V3fArraySamplePtr();
-  }
-
-  const IV3fArrayProperty &velocity_prop = IV3fArrayProperty(prop, name, 0);
-
-  if (velocity_prop) {
-    return velocity_prop.getValue(iss);
-  }
-
-  return V3fArraySamplePtr();
-}
-
-int ABC_read_velocity_cache(CacheReader *reader,
-                            const char *velocity_name,
-                            const float time,
-                            float velocity_scale,
-                            int num_vertices,
-                            float *r_vertex_velocities)
-{
-  AbcObjectReader *abc_reader = reinterpret_cast<AbcObjectReader *>(reader);
-
-  if (!abc_reader) {
-    return -1;
-  }
-
-  IObject iobject = abc_reader->iobject();
-
-  if (!iobject.valid()) {
-    return -1;
-  }
-
-  const ObjectHeader &header = iobject.getHeader();
-
-  if (!IPolyMesh::matches(header)) {
-    return -1;
-  }
-
-  IPolyMesh mesh(iobject, kWrapExisting);
-  IPolyMeshSchema schema = mesh.getSchema();
-  ISampleSelector sample_sel(time);
-  const IPolyMeshSchema::Sample sample = schema.getValue(sample_sel);
-
-  V3fArraySamplePtr velocities = get_velocity_prop(schema, sample_sel, velocity_name);
-
-  if (!velocities) {
-    return -1;
-  }
-
-  float vel[3];
-
-  int num_velocity_vectors = static_cast<int>(velocities->size());
-
-  if (num_velocity_vectors != num_vertices) {
-    return -1;
-  }
-
-  for (size_t i = 0; i < velocities->size(); ++i) {
-    const Imath::V3f &vel_in = (*velocities)[i];
-    copy_zup_from_yup(vel, vel_in.getValue());
-
-    mul_v3_fl(vel, velocity_scale);
-
-    copy_v3_v3(r_vertex_velocities + i * 3, vel);
-  }
-
-  return num_vertices;
 }

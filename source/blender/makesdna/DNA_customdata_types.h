@@ -31,6 +31,8 @@
 extern "C" {
 #endif
 
+struct AnonymousAttributeID;
+
 /** Descriptor and storage for a custom data layer. */
 typedef struct CustomDataLayer {
   /** Type of data in layer. */
@@ -53,6 +55,13 @@ typedef struct CustomDataLayer {
   char name[64];
   /** Layer data. */
   void *data;
+  /**
+   * Run-time identifier for this layer. If no one has a strong reference to this id anymore,
+   * the layer can be removed. The custom data layer only has a weak reference to the id, because
+   * otherwise there will always be a strong reference and the attribute can't be removed
+   * automatically.
+   */
+  const struct AnonymousAttributeID *anonymous_id;
 } CustomDataLayer;
 
 #define MAX_CUSTOMDATA_LAYER_NAME 64
@@ -72,10 +81,11 @@ typedef struct CustomData {
   CustomDataLayer *layers;
   /**
    * runtime only! - maps types to indices of first layer of that type,
-   * MUST be >= CD_NUMTYPES, but we cant use a define here.
+   * MUST be >= CD_NUMTYPES, but we can't use a define here.
    * Correct size is ensured in CustomData_update_typemap assert().
    */
-  int typemap[51];
+  int typemap[52];
+  char _pad[4];
   /** Number of layers, size of layers array. */
   int totlayer, maxlayer;
   /** In editmode, total size of all data layers. */
@@ -157,7 +167,9 @@ typedef enum CustomDataType {
 
   CD_PROP_BOOL = 50,
 
-  CD_NUMTYPES = 51,
+  CD_HAIRLENGTH = 51,
+
+  CD_NUMTYPES = 52,
 } CustomDataType;
 
 /* Bits for CustomDataMask */
@@ -210,6 +222,8 @@ typedef enum CustomDataType {
 #define CD_MASK_PROP_FLOAT3 (1ULL << CD_PROP_FLOAT3)
 #define CD_MASK_PROP_FLOAT2 (1ULL << CD_PROP_FLOAT2)
 #define CD_MASK_PROP_BOOL (1ULL << CD_PROP_BOOL)
+
+#define CD_MASK_HAIRLENGTH (1ULL << CD_HAIRLENGTH)
 
 /** Multires loop data. */
 #define CD_MASK_MULTIRES_GRIDS (CD_MASK_MDISPS | CD_GRID_PAINT_MASK)

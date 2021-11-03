@@ -46,6 +46,7 @@
 
 #include "BLT_translation.h"
 
+#include "BKE_anonymous_attribute.h"
 #include "BKE_customdata.h"
 #include "BKE_customdata_file.h"
 #include "BKE_deform.h"
@@ -105,8 +106,10 @@ typedef struct LayerTypeInfo {
 
   /**
    * default layer name.
-   * note! when NULL this is a way to ensure there is only ever one item
-   * see: CustomData_layertype_is_singleton() */
+   *
+   * \note when NULL this is a way to ensure there is only ever one item
+   * see: CustomData_layertype_is_singleton().
+   */
   const char *defaultname;
 
   /**
@@ -329,7 +332,7 @@ static void layerInterp_normal(const void **sources,
                                int count,
                                void *dest)
 {
-  /* Note: This is linear interpolation, which is not optimal for vectors.
+  /* NOTE: This is linear interpolation, which is not optimal for vectors.
    * Unfortunately, spherical interpolation of more than two values is hairy,
    * so for now it will do... */
   float no[3] = {0.0f};
@@ -722,10 +725,7 @@ static void layerFree_grid_paint_mask(void *data, int count, int UNUSED(size))
   GridPaintMask *gpm = data;
 
   for (int i = 0; i < count; i++) {
-    if (gpm[i].data) {
-      MEM_freeN(gpm[i].data);
-    }
-    gpm[i].data = NULL;
+    MEM_SAFE_FREE(gpm[i].data);
     gpm[i].level = 0;
   }
 }
@@ -1226,8 +1226,6 @@ static void layerInterp_mvert_skin(const void **sources,
                                    int count,
                                    void *dest)
 {
-  MVertSkin *vs_dst = dest;
-
   float radius[3];
   zero_v3(radius);
 
@@ -1239,7 +1237,7 @@ static void layerInterp_mvert_skin(const void **sources,
   }
 
   /* Delay writing to the destination in case dest is in sources. */
-  vs_dst = dest;
+  MVertSkin *vs_dst = dest;
   copy_v3_v3(vs_dst->radius, radius);
   vs_dst->flag &= ~MVERT_SKIN_ROOT;
 }
@@ -1596,7 +1594,7 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
     /* 14: CD_ORCO */
     {sizeof(float[3]), "", 0, NULL, NULL, NULL, NULL, NULL, NULL},
     /* 15: CD_MTEXPOLY */ /* DEPRECATED */
-    /* note, when we expose the UV Map / TexFace split to the user,
+    /* NOTE: when we expose the UV Map / TexFace split to the user,
      * change this back to face Texture. */
     {sizeof(int), "", 0, NULL, NULL, NULL, NULL, NULL, NULL},
     /* 16: CD_MLOOPUV */
@@ -1858,6 +1856,8 @@ static const LayerTypeInfo LAYERTYPEINFO[CD_NUMTYPES] = {
      NULL,
      NULL,
      NULL},
+    /* 51: CD_HAIRLENGTH */
+    {sizeof(float), "float", 1, NULL, NULL, NULL, NULL, NULL, NULL},
 };
 
 static const char *LAYERTYPENAMES[CD_NUMTYPES] = {
@@ -1914,6 +1914,7 @@ static const char *LAYERTYPENAMES[CD_NUMTYPES] = {
     "CDPropFloat3",
     "CDPropFloat2",
     "CDPropBoolean",
+    "CDHairLength",
 };
 
 const CustomData_MeshMasks CD_MASK_BAREMESH = {
@@ -1972,7 +1973,7 @@ const CustomData_MeshMasks CD_MASK_BMESH = {
               CD_MASK_SCULPT_FACE_SETS),
 };
 /**
- * cover values copied by #BKE_mesh_loops_to_tessdata
+ * cover values copied by #mesh_loops_to_tessdata
  */
 const CustomData_MeshMasks CD_MASK_FACECORNERS = {
     .vmask = 0,
@@ -2022,35 +2023,35 @@ static const char *layerType_getName(int type)
 
 void customData_mask_layers__print(const CustomData_MeshMasks *mask)
 {
-  printf("verts mask=0x%lx:\n", (long unsigned int)mask->vmask);
+  printf("verts mask=0x%" PRIx64 ":\n", mask->vmask);
   for (int i = 0; i < CD_NUMTYPES; i++) {
     if (mask->vmask & CD_TYPE_AS_MASK(i)) {
       printf("  %s\n", layerType_getName(i));
     }
   }
 
-  printf("edges mask=0x%lx:\n", (long unsigned int)mask->emask);
+  printf("edges mask=0x%" PRIx64 ":\n", mask->emask);
   for (int i = 0; i < CD_NUMTYPES; i++) {
     if (mask->emask & CD_TYPE_AS_MASK(i)) {
       printf("  %s\n", layerType_getName(i));
     }
   }
 
-  printf("faces mask=0x%lx:\n", (long unsigned int)mask->fmask);
+  printf("faces mask=0x%" PRIx64 ":\n", mask->fmask);
   for (int i = 0; i < CD_NUMTYPES; i++) {
     if (mask->fmask & CD_TYPE_AS_MASK(i)) {
       printf("  %s\n", layerType_getName(i));
     }
   }
 
-  printf("loops mask=0x%lx:\n", (long unsigned int)mask->lmask);
+  printf("loops mask=0x%" PRIx64 ":\n", mask->lmask);
   for (int i = 0; i < CD_NUMTYPES; i++) {
     if (mask->lmask & CD_TYPE_AS_MASK(i)) {
       printf("  %s\n", layerType_getName(i));
     }
   }
 
-  printf("polys mask=0x%lx:\n", (long unsigned int)mask->pmask);
+  printf("polys mask=0x%" PRIx64 ":\n", mask->pmask);
   for (int i = 0; i < CD_NUMTYPES; i++) {
     if (mask->pmask & CD_TYPE_AS_MASK(i)) {
       printf("  %s\n", layerType_getName(i));
@@ -2101,7 +2102,7 @@ bool CustomData_merge(const struct CustomData *source,
                       eCDAllocType alloctype,
                       int totelem)
 {
-  /*const LayerTypeInfo *typeInfo;*/
+  // const LayerTypeInfo *typeInfo;
   CustomDataLayer *layer, *newlayer;
   int lasttype = -1, lastactive = 0, lastrender = 0, lastclone = 0, lastmask = 0;
   int number = 0, maxnumber = -1;
@@ -2109,7 +2110,7 @@ bool CustomData_merge(const struct CustomData *source,
 
   for (int i = 0; i < source->totlayer; i++) {
     layer = &source->layers[i];
-    /*typeInfo = layerType_getInfo(layer->type);*/ /*UNUSED*/
+    // typeInfo = layerType_getInfo(layer->type); /* UNUSED */
 
     int type = layer->type;
     int flag = layer->flag;
@@ -2128,6 +2129,11 @@ bool CustomData_merge(const struct CustomData *source,
     }
 
     if (flag & CD_FLAG_NOCOPY) {
+      continue;
+    }
+    if (layer->anonymous_id &&
+        !BKE_anonymous_attribute_id_has_strong_references(layer->anonymous_id)) {
+      /* This attribute is not referenced anymore, so it can be treated as if it didn't exist. */
       continue;
     }
     if (!(mask & CD_TYPE_AS_MASK(type))) {
@@ -2169,6 +2175,11 @@ bool CustomData_merge(const struct CustomData *source,
       newlayer->active_mask = lastmask;
       newlayer->flag |= flag & (CD_FLAG_EXTERNAL | CD_FLAG_IN_MEMORY);
       changed = true;
+
+      if (layer->anonymous_id != NULL) {
+        BKE_anonymous_attribute_id_increment_weak(layer->anonymous_id);
+        newlayer->anonymous_id = layer->anonymous_id;
+      }
     }
   }
 
@@ -2209,6 +2220,10 @@ static void customData_free_layer__internal(CustomDataLayer *layer, int totelem)
 {
   const LayerTypeInfo *typeInfo;
 
+  if (layer->anonymous_id != NULL) {
+    BKE_anonymous_attribute_id_decrement_weak(layer->anonymous_id);
+    layer->anonymous_id = NULL;
+  }
   if (!(layer->flag & CD_FLAG_NOFREE) && layer->data) {
     typeInfo = layerType_getInfo(layer->type);
 
@@ -2580,6 +2595,11 @@ static CustomDataLayer *customData_add_layer__internal(CustomData *data,
     data->layers[index] = data->layers[index - 1];
   }
 
+  /* Clear remaining data on the layer. The original data on the layer has been moved to another
+   * index. Without this, it can happen that information from the previous layer at that index
+   * leaks into the new layer. */
+  memset(data->layers + index, 0, sizeof(CustomDataLayer));
+
   data->layers[index].type = type;
   data->layers[index].flag = flag;
   data->layers[index].data = newlayerdata;
@@ -2633,7 +2653,7 @@ void *CustomData_add_layer(
   return NULL;
 }
 
-/*same as above but accepts a name*/
+/* Same as above but accepts a name. */
 void *CustomData_add_layer_named(CustomData *data,
                                  int type,
                                  eCDAllocType alloctype,
@@ -2650,6 +2670,27 @@ void *CustomData_add_layer_named(CustomData *data,
   }
 
   return NULL;
+}
+
+void *CustomData_add_layer_anonymous(struct CustomData *data,
+                                     int type,
+                                     eCDAllocType alloctype,
+                                     void *layerdata,
+                                     int totelem,
+                                     const AnonymousAttributeID *anonymous_id)
+{
+  const char *name = BKE_anonymous_attribute_id_internal_name(anonymous_id);
+  CustomDataLayer *layer = customData_add_layer__internal(
+      data, type, alloctype, layerdata, totelem, name);
+  CustomData_update_typemap(data);
+
+  if (layer == NULL) {
+    return NULL;
+  }
+
+  BKE_anonymous_attribute_id_increment_weak(anonymous_id);
+  layer->anonymous_id = anonymous_id;
+  return layer->data;
 }
 
 bool CustomData_free_layer(CustomData *data, int type, int totelem, int index)
@@ -2813,6 +2854,28 @@ void *CustomData_duplicate_referenced_layer_named(CustomData *data,
   int layer_index = CustomData_get_named_layer_index(data, type, name);
 
   return customData_duplicate_referenced_layer_index(data, layer_index, totelem);
+}
+
+void *CustomData_duplicate_referenced_layer_anonymous(CustomData *data,
+                                                      const int UNUSED(type),
+                                                      const AnonymousAttributeID *anonymous_id,
+                                                      const int totelem)
+{
+  for (int i = 0; i < data->totlayer; i++) {
+    if (data->layers[i].anonymous_id == anonymous_id) {
+      return customData_duplicate_referenced_layer_index(data, i, totelem);
+    }
+  }
+  BLI_assert_unreachable();
+  return NULL;
+}
+
+void CustomData_duplicate_referenced_layers(CustomData *data, int totelem)
+{
+  for (int i = 0; i < data->totlayer; i++) {
+    CustomDataLayer *layer = &data->layers[i];
+    layer->data = customData_duplicate_referenced_layer_index(data, i, totelem);
+  }
 }
 
 bool CustomData_is_referenced_layer(struct CustomData *data, int type)
@@ -3549,7 +3612,7 @@ bool CustomData_bmesh_merge(const CustomData *source,
       totelem = bm->totface;
       break;
     default: /* should never happen */
-      BLI_assert(!"invalid type given");
+      BLI_assert_msg(0, "invalid type given");
       iter_type = BM_VERTS_OF_MESH;
       totelem = bm->totvert;
       break;
@@ -3561,7 +3624,7 @@ bool CustomData_bmesh_merge(const CustomData *source,
   if (iter_type != BM_LOOPS_OF_FACE) {
     BMHeader *h;
     BMIter iter;
-    /*ensure all current elements follow new customdata layout*/
+    /* Ensure all current elements follow new customdata layout. */
     BM_ITER_MESH (h, &iter, bm, iter_type) {
       void *tmp = NULL;
       CustomData_bmesh_copy_data(&destold, dest, h->data, &tmp);
@@ -3575,7 +3638,7 @@ bool CustomData_bmesh_merge(const CustomData *source,
     BMIter iter;
     BMIter liter;
 
-    /*ensure all current elements follow new customdata layout*/
+    /* Ensure all current elements follow new customdata layout. */
     BM_ITER_MESH (f, &iter, bm, BM_FACES_OF_MESH) {
       BM_ITER_ELEM (l, &liter, f, BM_LOOPS_OF_FACE) {
         void *tmp = NULL;
@@ -3799,7 +3862,7 @@ void *CustomData_bmesh_get_n(const CustomData *data, void *block, int type, int 
   return POINTER_OFFSET(block, data->layers[layer_index + n].offset);
 }
 
-/*gets from the layer at physical index n, note: doesn't check type.*/
+/* Gets from the layer at physical index n, NOTE: doesn't check type. */
 void *CustomData_bmesh_get_layer_n(const CustomData *data, void *block, int n)
 {
   if (n < 0 || n >= data->totlayer) {
@@ -3881,7 +3944,7 @@ bool CustomData_has_referenced(const struct CustomData *data)
 }
 
 /* copies the "value" (e.g. mloopuv uv or mloopcol colors) from one block to
- * another, while not overwriting anything else (e.g. flags)*/
+ * another, while not overwriting anything else (e.g. flags). */
 void CustomData_data_copy_value(int type, const void *source, void *dest)
 {
   const LayerTypeInfo *typeInfo = layerType_getInfo(type);
@@ -3899,7 +3962,7 @@ void CustomData_data_copy_value(int type, const void *source, void *dest)
 }
 
 /* Mixes the "value" (e.g. mloopuv uv or mloopcol colors) from one block into
- * another, while not overwriting anything else (e.g. flags)*/
+ * another, while not overwriting anything else (e.g. flags). */
 void CustomData_data_mix_value(
     int type, const void *source, void *dest, const int mixmode, const float mixfactor)
 {
@@ -4239,9 +4302,10 @@ void CustomData_blend_write_prepare(CustomData *data,
 
   for (i = 0, j = 0; i < totlayer; i++) {
     CustomDataLayer *layer = &data->layers[i];
-    if (layer->flag & CD_FLAG_NOCOPY) { /* Layers with this flag set are not written to file. */
+    /* Layers with this flag set are not written to file. */
+    if ((layer->flag & CD_FLAG_NOCOPY) || layer->anonymous_id != NULL) {
       data->totlayer--;
-      /* CLOG_WARN(&LOG, "skipping layer %p (%s)", layer, layer->name); */
+      // CLOG_WARN(&LOG, "skipping layer %p (%s)", layer, layer->name);
     }
     else {
       if (UNLIKELY((size_t)j >= write_layers_size)) {
@@ -4968,7 +5032,7 @@ void CustomData_data_transfer(const MeshPairRemap *me_remap,
   size_t tmp_buff_size = 32;
   const void **tmp_data_src = NULL;
 
-  /* Note: NULL data_src may happen and be valid (see vgroups...). */
+  /* NOTE: NULL data_src may happen and be valid (see vgroups...). */
   if (!data_dst) {
     return;
   }
@@ -4985,7 +5049,7 @@ void CustomData_data_transfer(const MeshPairRemap *me_remap,
   else {
     const LayerTypeInfo *type_info = layerType_getInfo(data_type);
 
-    /* Note: we can use 'fake' CDLayers, like e.g. for crease, bweight, etc. :/ */
+    /* NOTE: we can use 'fake' CDLayers, like e.g. for crease, bweight, etc. :/. */
     data_size = (size_t)type_info->size;
     data_step = laymap->elem_size ? laymap->elem_size : data_size;
     data_offset = laymap->data_offset;

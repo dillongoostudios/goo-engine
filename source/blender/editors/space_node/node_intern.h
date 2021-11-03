@@ -25,6 +25,7 @@
 
 #include "BKE_node.h"
 #include "UI_interface.h"
+#include "UI_view2d.h"
 #include <stddef.h> /* for size_t */
 
 /* internal exports only */
@@ -51,7 +52,7 @@ typedef struct bNodeLinkDrag {
   struct bNodeLinkDrag *next, *prev;
 
   /* List of links dragged by the operator.
-   * Note: This is a list of LinkData structs on top of the actual bNodeLinks.
+   * NOTE: This is a list of LinkData structs on top of the actual bNodeLinks.
    * This way the links can be added to the node tree while being stored in this list.
    */
   ListBase links;
@@ -64,6 +65,9 @@ typedef struct bNodeLinkDrag {
   /** Temporarily stores the last hovered socket for multi-input socket operator.
    *  Store it to recalculate sorting after it is no longer hovered. */
   struct bNode *last_node_hovered_while_dragging_a_link;
+
+  /* Data for edge panning */
+  View2DEdgePanData pan_data;
 } bNodeLinkDrag;
 
 typedef struct SpaceNode_Runtime {
@@ -117,7 +121,7 @@ void node_draw_sockets(const struct View2D *v2d,
 void node_update_default(const struct bContext *C, struct bNodeTree *ntree, struct bNode *node);
 int node_select_area_default(struct bNode *node, int x, int y);
 int node_tweak_area_default(struct bNode *node, int x, int y);
-void node_socket_color_get(struct bContext *C,
+void node_socket_color_get(const struct bContext *C,
                            struct bNodeTree *ntree,
                            struct PointerRNA *node_ptr,
                            struct bNodeSocket *sock,
@@ -135,9 +139,6 @@ void node_set_cursor(struct wmWindow *win, struct SpaceNode *snode, float cursor
 void node_to_view(const struct bNode *node, float x, float y, float *rx, float *ry);
 void node_to_updated_rect(const struct bNode *node, rctf *r_rect);
 void node_from_view(const struct bNode *node, float x, float y, float *rx, float *ry);
-
-/* node_buttons.c */
-void node_buttons_register(struct ARegionType *art);
 
 /* node_toolbar.c */
 void node_toolbar_register(struct ARegionType *art);
@@ -174,6 +175,7 @@ int space_node_view_flag(struct bContext *C,
 
 void NODE_OT_view_all(struct wmOperatorType *ot);
 void NODE_OT_view_selected(struct wmOperatorType *ot);
+void NODE_OT_geometry_node_view_legacy(struct wmOperatorType *ot);
 
 void NODE_OT_backimage_move(struct wmOperatorType *ot);
 void NODE_OT_backimage_zoom(struct wmOperatorType *ot);
@@ -184,8 +186,12 @@ void NODE_OT_backimage_sample(struct wmOperatorType *ot);
 void nodelink_batch_start(struct SpaceNode *snode);
 void nodelink_batch_end(struct SpaceNode *snode);
 
-void node_draw_link(struct View2D *v2d, struct SpaceNode *snode, struct bNodeLink *link);
-void node_draw_link_bezier(const struct View2D *v2d,
+void node_draw_link(const struct bContext *C,
+                    struct View2D *v2d,
+                    struct SpaceNode *snode,
+                    struct bNodeLink *link);
+void node_draw_link_bezier(const struct bContext *C,
+                           const struct View2D *v2d,
                            const struct SpaceNode *snode,
                            const struct bNodeLink *link,
                            int th_col1,
@@ -264,6 +270,8 @@ int node_find_indicated_socket(struct SpaceNode *snode,
                                struct bNodeSocket **sockp,
                                const float cursor[2],
                                int in_out);
+float node_link_dim_factor(const struct View2D *v2d, const struct bNodeLink *link);
+bool node_link_is_hidden_or_dimmed(const struct View2D *v2d, const struct bNodeLink *link);
 
 void NODE_OT_duplicate(struct wmOperatorType *ot);
 void NODE_OT_delete(struct wmOperatorType *ot);
@@ -275,7 +283,6 @@ void NODE_OT_hide_toggle(struct wmOperatorType *ot);
 void NODE_OT_hide_socket_toggle(struct wmOperatorType *ot);
 void NODE_OT_preview_toggle(struct wmOperatorType *ot);
 void NODE_OT_options_toggle(struct wmOperatorType *ot);
-void NODE_OT_active_preview_toggle(struct wmOperatorType *ot);
 void NODE_OT_node_copy_color(struct wmOperatorType *ot);
 
 void NODE_OT_read_viewlayers(struct wmOperatorType *ot);
@@ -287,12 +294,13 @@ void NODE_OT_output_file_move_active_socket(struct wmOperatorType *ot);
 
 void NODE_OT_switch_view_update(struct wmOperatorType *ot);
 
-/* Note: clipboard_cut is a simple macro of copy + delete */
+/* NOTE: clipboard_cut is a simple macro of copy + delete. */
 void NODE_OT_clipboard_copy(struct wmOperatorType *ot);
 void NODE_OT_clipboard_paste(struct wmOperatorType *ot);
 
 void NODE_OT_tree_socket_add(struct wmOperatorType *ot);
 void NODE_OT_tree_socket_remove(struct wmOperatorType *ot);
+void NODE_OT_tree_socket_change_type(struct wmOperatorType *ot);
 void NODE_OT_tree_socket_move(struct wmOperatorType *ot);
 
 void NODE_OT_shader_script_update(struct wmOperatorType *ot);
@@ -325,15 +333,23 @@ extern const char *node_context_dir[];
 #define BASIS_RAD (0.2f * U.widget_unit)
 #define NODE_DYS (U.widget_unit / 2)
 #define NODE_DY U.widget_unit
-#define NODE_SOCKDY (0.08f * U.widget_unit)
+#define NODE_SOCKDY (0.1f * U.widget_unit)
 #define NODE_WIDTH(node) (node->width * UI_DPI_FAC)
 #define NODE_HEIGHT(node) (node->height * UI_DPI_FAC)
-#define NODE_MARGIN_X (1.10f * U.widget_unit)
+#define NODE_MARGIN_X (1.2f * U.widget_unit)
 #define NODE_SOCKSIZE (0.25f * U.widget_unit)
 #define NODE_MULTI_INPUT_LINK_GAP (0.25f * U.widget_unit)
 #define NODE_RESIZE_MARGIN (0.20f * U.widget_unit)
 #define NODE_LINK_RESOL 12
 
 #ifdef __cplusplus
+}
+#endif
+
+#ifdef __cplusplus
+#  include "BLI_vector.hh"
+#  include "UI_interface.hh"
+namespace blender::ed::space_node {
+Vector<ui::ContextPathItem> context_path_for_space_node(const bContext &C);
 }
 #endif

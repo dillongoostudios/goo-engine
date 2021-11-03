@@ -24,9 +24,14 @@
 
 #include "GHOST_Window.h"
 
+#include <unordered_set>
+#include <vector>
+
 class GHOST_SystemWayland;
 
+struct output_t;
 struct window_t;
+struct wl_surface;
 
 class GHOST_WindowWayland : public GHOST_Window {
  public:
@@ -34,10 +39,10 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   GHOST_WindowWayland(GHOST_SystemWayland *system,
                       const char *title,
-                      GHOST_TInt32 left,
-                      GHOST_TInt32 top,
-                      GHOST_TUns32 width,
-                      GHOST_TUns32 height,
+                      int32_t left,
+                      int32_t top,
+                      uint32_t width,
+                      uint32_t height,
                       GHOST_TWindowState state,
                       const GHOST_IWindow *parentWindow,
                       GHOST_TDrawingContextType type,
@@ -47,6 +52,8 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   ~GHOST_WindowWayland() override;
 
+  uint16_t getDPIHint() override;
+
   GHOST_TSuccess close();
 
   GHOST_TSuccess activate();
@@ -55,13 +62,23 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   GHOST_TSuccess notify_size();
 
+  wl_surface *surface() const;
+
+  const std::vector<output_t *> &outputs() const;
+
+  std::unordered_set<const output_t *> &outputs_active();
+
+  uint16_t &dpi();
+
+  int &scale();
+
  protected:
   GHOST_TSuccess setWindowCursorGrab(GHOST_TGrabCursorMode mode) override;
 
   GHOST_TSuccess setWindowCursorShape(GHOST_TStandardCursor shape) override;
 
-  GHOST_TSuccess setWindowCustomCursorShape(GHOST_TUns8 *bitmap,
-                                            GHOST_TUns8 *mask,
+  GHOST_TSuccess setWindowCustomCursorShape(uint8_t *bitmap,
+                                            uint8_t *mask,
                                             int sizex,
                                             int sizey,
                                             int hotX,
@@ -76,21 +93,15 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   void getClientBounds(GHOST_Rect &bounds) const override;
 
-  GHOST_TSuccess setClientWidth(GHOST_TUns32 width) override;
+  GHOST_TSuccess setClientWidth(uint32_t width) override;
 
-  GHOST_TSuccess setClientHeight(GHOST_TUns32 height) override;
+  GHOST_TSuccess setClientHeight(uint32_t height) override;
 
-  GHOST_TSuccess setClientSize(GHOST_TUns32 width, GHOST_TUns32 height) override;
+  GHOST_TSuccess setClientSize(uint32_t width, uint32_t height) override;
 
-  void screenToClient(GHOST_TInt32 inX,
-                      GHOST_TInt32 inY,
-                      GHOST_TInt32 &outX,
-                      GHOST_TInt32 &outY) const override;
+  void screenToClient(int32_t inX, int32_t inY, int32_t &outX, int32_t &outY) const override;
 
-  void clientToScreen(GHOST_TInt32 inX,
-                      GHOST_TInt32 inY,
-                      GHOST_TInt32 &outX,
-                      GHOST_TInt32 &outY) const override;
+  void clientToScreen(int32_t inX, int32_t inY, int32_t &outX, int32_t &outY) const override;
 
   GHOST_TSuccess setWindowCursorVisibility(bool visible) override;
 

@@ -267,7 +267,6 @@ class USERPREF_PT_interface_editors(InterfacePanel, CenterAlignMixIn, Panel):
 
         col = layout.column()
         col.prop(system, "use_region_overlap")
-        col.prop(view, "show_layout_ui", text="Corner Splitting")
         col.prop(view, "show_navigate_ui")
         col.prop(view, "color_picker_type")
         col.row().prop(view, "header_align")
@@ -399,21 +398,26 @@ class USERPREF_PT_edit_objects_duplicate_data(EditingPanel, CenterAlignMixIn, Pa
         col = flow.column()
         col.prop(edit, "use_duplicate_action", text="Action")
         col.prop(edit, "use_duplicate_armature", text="Armature")
+        col.prop(edit, "use_duplicate_camera", text="Camera")
         col.prop(edit, "use_duplicate_curve", text="Curve")
         # col.prop(edit, "use_duplicate_fcurve", text="F-Curve")  # Not implemented.
         col.prop(edit, "use_duplicate_grease_pencil", text="Grease Pencil")
         if hasattr(edit, "use_duplicate_hair"):
             col.prop(edit, "use_duplicate_hair", text="Hair")
-        col.prop(edit, "use_duplicate_light", text="Light")
+
         col = flow.column()
+        col.prop(edit, "use_duplicate_lattice", text="Lattice")
+        col.prop(edit, "use_duplicate_light", text="Light")
         col.prop(edit, "use_duplicate_lightprobe", text="Light Probe")
         col.prop(edit, "use_duplicate_material", text="Material")
         col.prop(edit, "use_duplicate_mesh", text="Mesh")
         col.prop(edit, "use_duplicate_metaball", text="Metaball")
-        col.prop(edit, "use_duplicate_particle", text="Particle")
+
         col = flow.column()
+        col.prop(edit, "use_duplicate_particle", text="Particle")
         if hasattr(edit, "use_duplicate_pointcloud"):
             col.prop(edit, "use_duplicate_pointcloud", text="Point Cloud")
+        col.prop(edit, "use_duplicate_speaker", text="Speaker")
         col.prop(edit, "use_duplicate_surface", text="Surface")
         col.prop(edit, "use_duplicate_text", text="Text")
         # col.prop(edit, "use_duplicate_texture", text="Texture")  # Not implemented.
@@ -570,7 +574,7 @@ class USERPREF_PT_system_sound(SystemPanel, CenterAlignMixIn, Panel):
         layout.prop(system, "audio_device", expand=False)
 
         sub = layout.grid_flow(row_major=False, columns=0, even_columns=False, even_rows=False, align=False)
-        sub.active = system.audio_device not in {'NONE', 'Null'}
+        sub.active = system.audio_device not in {'NONE', 'None'}
         sub.prop(system, "audio_channels", text="Channels")
         sub.prop(system, "audio_mixing_buffer", text="Mixing Buffer")
         sub.prop(system, "audio_sample_rate", text="Sample Rate")
@@ -603,6 +607,23 @@ class USERPREF_PT_system_cycles_devices(SystemPanel, CenterAlignMixIn, Panel):
         # if hasattr(system, "opensubdiv_compute_type"):
         #     col.label(text="OpenSubdiv compute:")
         #     col.row().prop(system, "opensubdiv_compute_type", text="")
+
+
+class USERPREF_PT_system_os_settings(SystemPanel, CenterAlignMixIn, Panel):
+    bl_label = "Operating System Settings"
+
+    @classmethod
+    def poll(cls, _context):
+        # Only for Windows so far
+        import sys
+        return sys.platform[:3] == "win"
+
+    def draw_centered(self, _context, layout):
+        layout.label(text="Make this installation your default Blender")
+        split = layout.split(factor=0.4)
+        split.alignment = 'RIGHT'
+        split.label(text="")
+        split.operator("preferences.associate_blend", text="Make Default")
 
 
 class USERPREF_PT_system_memory(SystemPanel, CenterAlignMixIn, Panel):
@@ -904,6 +925,7 @@ class USERPREF_PT_theme_interface_styles(ThemePanel, CenterAlignMixIn, Panel):
         flow.prop(ui, "editor_outline")
         flow.prop(ui, "widget_text_cursor")
         flow.prop(ui, "widget_emboss")
+        flow.prop(ui, "panel_roundness")
 
 
 class USERPREF_PT_theme_interface_transparent_checker(ThemePanel, CenterAlignMixIn, Panel):
@@ -980,7 +1002,6 @@ class USERPREF_PT_theme_text_style(ThemePanel, CenterAlignMixIn, Panel):
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=True)
 
         col = flow.column()
-        col.row().prop(font_style, "font_kerning_style", expand=True)
         col.prop(font_style, "points")
 
         col = flow.column(align=True)
@@ -1055,6 +1076,25 @@ class USERPREF_PT_theme_collection_colors(ThemePanel, CenterAlignMixIn, Panel):
 
         flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
         for i, ui in enumerate(theme.collection_color, 1):
+            flow.prop(ui, "color", text=iface_("Color %d") % i, translate=False)
+
+
+class USERPREF_PT_theme_strip_colors(ThemePanel, CenterAlignMixIn, Panel):
+    bl_label = "Strip Colors"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw_header(self, _context):
+        layout = self.layout
+
+        layout.label(icon='SEQ_STRIP_DUPLICATE')
+
+    def draw_centered(self, context, layout):
+        theme = context.preferences.themes[0]
+
+        layout.use_property_split = True
+
+        flow = layout.grid_flow(row_major=False, columns=0, even_columns=True, even_rows=False, align=False)
+        for i, ui in enumerate(theme.strip_color, 1):
             flow.prop(ui, "color", text=iface_("Color %d") % i, translate=False)
 
 
@@ -1349,11 +1389,6 @@ class USERPREF_PT_saveload_autorun(FilePathsPanel, Panel):
 class USERPREF_PT_file_paths_asset_libraries(FilePathsPanel, Panel):
     bl_label = "Asset Libraries"
 
-    @classmethod
-    def poll(cls, context):
-        prefs = context.preferences
-        return prefs.experimental.use_asset_browser
-
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = False
@@ -1374,14 +1409,19 @@ class USERPREF_PT_file_paths_asset_libraries(FilePathsPanel, Panel):
         row.separator()
         row.label(text="Path")
 
-
         for i, library in enumerate(paths.asset_libraries):
-            name_col.prop(library, "name", text="")
+            row = name_col.row()
+            row.alert = not library.name
+            row.prop(library, "name", text="")
+
             row = path_col.row()
-            row.prop(library, "path", text="")
+            subrow = row.row()
+            subrow.alert = not library.path
+            subrow.prop(library, "path", text="")
             row.operator("preferences.asset_library_remove", text="", icon='X', emboss=False).index = i
+
         row = box.row()
-        row.alignment = 'LEFT'
+        row.alignment = 'RIGHT'
         row.operator("preferences.asset_library_add", text="", icon='ADD', emboss=False)
 
 
@@ -1404,7 +1444,7 @@ class USERPREF_PT_saveload_blend(SaveLoadPanel, CenterAlignMixIn, Panel):
 
         col = layout.column(heading="Save")
         col.prop(view, "use_save_prompt")
-        col.prop(paths, "use_save_preview_images")
+        col.prop(paths, "file_preview_type")
 
         col = layout.column(heading="Default To")
         col.prop(paths, "use_relative_paths")
@@ -1445,13 +1485,11 @@ class USERPREF_PT_saveload_file_browser(SaveLoadPanel, CenterAlignMixIn, Panel):
         prefs = context.preferences
         paths = prefs.filepaths
 
-        col = layout.column()
+        col = layout.column(heading="Defaults")
         col.prop(paths, "use_filter_files")
-
-        col = layout.column(heading="Hide")
-        col.prop(paths, "show_hidden_files_datablocks", text="Dot File & Data-Blocks")
-        col.prop(paths, "hide_recent_locations", text="Recent Locations")
-        col.prop(paths, "hide_system_bookmarks", text="System Bookmarks")
+        col.prop(paths, "show_hidden_files_datablocks")
+        col.prop(paths, "show_recent_locations")
+        col.prop(paths, "show_system_bookmarks")
 
 
 # -----------------------------------------------------------------------------
@@ -1815,7 +1853,7 @@ class USERPREF_PT_addons(AddOnPanel, Panel):
         addon_user_dirs = tuple(
             p for p in (
                 os.path.join(prefs.filepaths.script_directory, "addons"),
-                bpy.utils.user_resource('SCRIPTS', "addons"),
+                bpy.utils.user_resource('SCRIPTS', path="addons"),
             )
             if p
         )
@@ -2242,7 +2280,7 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
             context, (
                 ({"property": "use_sculpt_vertex_colors"}, "T71947"),
                 ({"property": "use_sculpt_tools_tilt"}, "T82877"),
-                ({"property": "use_asset_browser"}, ("project/profile/124/", "Milestone 1")),
+                ({"property": "use_extended_asset_browser"}, ("project/view/130/", "Project Page")),
                 ({"property": "use_override_templates"}, ("T73318", "Milestone 4")),
             ),
         )
@@ -2256,6 +2294,7 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
             context, (
                 ({"property": "use_new_hair_type"}, "T68981"),
                 ({"property": "use_new_point_cloud_type"}, "T75717"),
+                ({"property": "use_full_frame_compositor"}, "T88150"),
             ),
         )
 
@@ -2274,7 +2313,9 @@ class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
             context, (
                 ({"property": "use_undo_legacy"}, "T60695"),
                 ({"property": "override_auto_resync"}, "T83811"),
+                ({"property": "proxy_to_override_auto_conversion"}, "T91671"),
                 ({"property": "use_cycles_debug"}, None),
+                ({"property": "use_geometry_nodes_legacy"}, "T91274"),
             ),
         )
 
@@ -2323,6 +2364,7 @@ classes = (
     USERPREF_PT_animation_fcurves,
 
     USERPREF_PT_system_cycles_devices,
+    USERPREF_PT_system_os_settings,
     USERPREF_PT_system_memory,
     USERPREF_PT_system_video_sequencer,
     USERPREF_PT_system_sound,
@@ -2337,6 +2379,7 @@ classes = (
     USERPREF_PT_theme_text_style,
     USERPREF_PT_theme_bone_color_sets,
     USERPREF_PT_theme_collection_colors,
+    USERPREF_PT_theme_strip_colors,
 
     USERPREF_PT_file_paths_data,
     USERPREF_PT_file_paths_render,

@@ -529,7 +529,7 @@ void ANIM_OT_keying_set_active_set(wmOperatorType *ot)
 /* Keying Set Type Info declarations */
 static ListBase keyingset_type_infos = {NULL, NULL};
 
-/* Built-In Keying Sets (referencing type infos)*/
+/* Built-In Keying Sets (referencing type information). */
 ListBase builtin_keyingsets = {NULL, NULL};
 
 /* --------------- */
@@ -610,7 +610,7 @@ void ANIM_keyingset_info_unregister(Main *bmain, KeyingSetInfo *ksi)
   KeyingSet *ks, *ksn;
 
   /* find relevant builtin KeyingSets which use this, and remove them */
-  /* TODO: this isn't done now, since unregister is really only used atm when we
+  /* TODO: this isn't done now, since unregister is really only used at the moment when we
    * reload the scripts, which kindof defeats the purpose of "builtin"? */
   for (ks = builtin_keyingsets.first; ks; ks = ksn) {
     ksn = ks->next;

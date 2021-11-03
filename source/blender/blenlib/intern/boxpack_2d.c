@@ -290,7 +290,7 @@ static int vertex_sort(const void *p1, const void *p2, void *vs_ctx_p)
  *          to have some way of writing the boxes back to the original data.
  * \param len: the number of boxes in the array.
  * \param r_tot_x, r_tot_y: set so you can normalize the data.
- *  */
+ */
 void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r_tot_y)
 {
   uint box_index, verts_pack_len, i, j, k;
@@ -298,8 +298,8 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
   bool isect;
   float tot_x = 0.0f, tot_y = 0.0f;
 
-  BoxPack *box, *box_test; /*current box and another for intersection tests*/
-  BoxVert *vert;           /* the current vert */
+  BoxPack *box, *box_test; /* Current box and another for intersection tests. */
+  BoxVert *vert;           /* The current vert. */
 
   struct VertSortContext vs_ctx;
 
@@ -312,7 +312,7 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
   /* Sort boxes, biggest first */
   qsort(boxarray, (size_t)len, sizeof(BoxPack), box_areasort);
 
-  /* add verts to the boxes, these are only used internally  */
+  /* Add verts to the boxes, these are only used internally. */
   vert = MEM_mallocN(sizeof(BoxVert[4]) * (size_t)len, "BoxPack Verts");
   vertex_pack_indices = MEM_mallocN(sizeof(int[3]) * (size_t)len, "BoxPack Indices");
 
@@ -357,7 +357,7 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
   /* Pack the First box!
    * then enter the main box-packing loop */
 
-  box = boxarray; /* get the first box  */
+  box = boxarray; /* Get the first box. */
   /* First time, no boxes packed */
   box->v[BL]->free = 0; /* Can't use any if these */
   box->v[BR]->free &= ~(BLF | BRF);
@@ -409,8 +409,8 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
 
     for (i = 0; i < verts_pack_len && isect; i++) {
       vert = &vs_ctx.vertarray[vertex_pack_indices[i]];
-      /* printf("\ttesting vert %i %i %i %f %f\n", i,
-       *        vert->free, verts_pack_len, vert->x, vert->y); */
+      // printf("\ttesting vert %i %i %i %f %f\n", i,
+      //        vert->free, verts_pack_len, vert->x, vert->y);
 
       /* This vert has a free quadrant
        * Test if we can place the box here
@@ -516,7 +516,7 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
              * flag verts on one or both of the boxes
              * as being used by checking the width or
              * height of both boxes */
-            if (vert->tlb && vert->trb && (box == vert->tlb || box == vert->trb)) {
+            if (vert->tlb && vert->trb && (ELEM(box, vert->tlb, vert->trb))) {
               if (UNLIKELY(fabsf(vert->tlb->h - vert->trb->h) < EPSILON_MERGE)) {
 #ifdef USE_MERGE
 #  define A (vert->trb->v[TL])
@@ -547,7 +547,7 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
                 vert->tlb->v[TR]->free &= ~(TRF | BRF);
               }
             }
-            else if (vert->blb && vert->brb && (box == vert->blb || box == vert->brb)) {
+            else if (vert->blb && vert->brb && (ELEM(box, vert->blb, vert->brb))) {
               if (UNLIKELY(fabsf(vert->blb->h - vert->brb->h) < EPSILON_MERGE)) {
 #ifdef USE_MERGE
 #  define A (vert->blb->v[BR])
@@ -579,7 +579,7 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
               }
             }
             /* Horizontal */
-            if (vert->tlb && vert->blb && (box == vert->tlb || box == vert->blb)) {
+            if (vert->tlb && vert->blb && (ELEM(box, vert->tlb, vert->blb))) {
               if (UNLIKELY(fabsf(vert->tlb->w - vert->blb->w) < EPSILON_MERGE)) {
 #ifdef USE_MERGE
 #  define A (vert->blb->v[TL])
@@ -610,7 +610,7 @@ void BLI_box_pack_2d(BoxPack *boxarray, const uint len, float *r_tot_x, float *r
                 vert->tlb->v[BL]->free &= ~(BLF | BRF);
               }
             }
-            else if (vert->trb && vert->brb && (box == vert->trb || box == vert->brb)) {
+            else if (vert->trb && vert->brb && (ELEM(box, vert->trb, vert->brb))) {
               if (UNLIKELY(fabsf(vert->trb->w - vert->brb->w) < EPSILON_MERGE)) {
 
 #ifdef USE_MERGE

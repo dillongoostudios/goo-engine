@@ -27,39 +27,87 @@
 extern "C" {
 #endif
 
+#include "BLI_ghash.h"
+
 struct Editing;
+struct GSet;
+struct GSetIterator;
 struct Sequence;
 
-typedef struct SeqIterator {
-  struct Sequence **array;
-  int tot, cur;
+/* Utility macro to construct an unique (within a file) variable name for iterator macro.
+ * Use indirect macro evaluation to ensure the `__LINE__` is expanded (rather than being
+ * treated as a name token),
+ *
+ * The `__LINE__` is defined at the invocation of the `SEQ_ITERATOR_FOREACH` and is not changed
+ * afterwards. This makes it safe to expand it several times in the `SEQ_ITERATOR_FOREACH`.
+ *
+ * This allows to have nested `foreach` loops.
+ *
+ * NOTE: Putting nested loop to a wrapper macro is not supported. */
+#define _SEQ_ITERATOR_NAME_JOIN(x, y) x##_##y
+#define _SEQ_ITERATOR_NAME_EVALUATE(x, y) _SEQ_ITERATOR_NAME_JOIN(x, y)
+#define _SEQ_ITERATOR_NAME(prefix) _SEQ_ITERATOR_NAME_EVALUATE(prefix, __LINE__)
 
-  struct Sequence *seq;
-  int valid;
+#define SEQ_ITERATOR_FOREACH(var, collection) \
+  for (SeqIterator _SEQ_ITERATOR_NAME(iter) = {{{NULL}}}; \
+       SEQ_iterator_ensure(collection, &_SEQ_ITERATOR_NAME(iter), &var) && var != NULL; \
+       var = SEQ_iterator_yield(&_SEQ_ITERATOR_NAME(iter)))
+
+typedef struct SeqCollection {
+  struct GSet *set;
+} SeqCollection;
+
+typedef struct SeqIterator {
+  GSetIterator gsi;
+  SeqCollection *collection;
+  bool iterator_initialized;
 } SeqIterator;
 
-#define SEQ_ALL_BEGIN(ed, _seq) \
-  { \
-    SeqIterator iter_macro; \
-    for (SEQ_iterator_begin(ed, &iter_macro, false); iter_macro.valid; \
-         SEQ_iterator_next(&iter_macro)) { \
-      _seq = iter_macro.seq;
+bool SEQ_iterator_ensure(SeqCollection *collection,
+                         SeqIterator *iterator,
+                         struct Sequence **r_seq);
+struct Sequence *SEQ_iterator_yield(SeqIterator *iterator);
 
-#define SEQ_ALL_END \
-  } \
-  SEQ_iterator_end(&iter_macro); \
-  } \
-  ((void)0)
+/* Callback format for the for_each function below. */
+typedef bool (*SeqForEachFunc)(struct Sequence *seq, void *user_data);
 
-void SEQ_iterator_begin(struct Editing *ed, SeqIterator *iter, const bool use_current_sequences);
-void SEQ_iterator_next(SeqIterator *iter);
-void SEQ_iterator_end(SeqIterator *iter);
-int SEQ_iterator_seqbase_recursive_apply(struct ListBase *seqbase,
-                                         int (*apply_fn)(struct Sequence *seq, void *),
-                                         void *arg);
-int SEQ_iterator_recursive_apply(struct Sequence *seq,
-                                 int (*apply_fn)(struct Sequence *, void *),
-                                 void *arg);
+void SEQ_for_each_callback(struct ListBase *seqbase, SeqForEachFunc callback, void *user_data);
+
+SeqCollection *SEQ_collection_create(const char *name);
+SeqCollection *SEQ_collection_duplicate(SeqCollection *collection);
+uint SEQ_collection_len(const SeqCollection *collection);
+bool SEQ_collection_has_strip(const struct Sequence *seq, const SeqCollection *collection);
+bool SEQ_collection_append_strip(struct Sequence *seq, SeqCollection *data);
+bool SEQ_collection_remove_strip(struct Sequence *seq, SeqCollection *data);
+void SEQ_collection_free(SeqCollection *collection);
+void SEQ_collection_merge(SeqCollection *collection_dst, SeqCollection *collection_src);
+void SEQ_collection_exclude(SeqCollection *collection, SeqCollection *exclude_elements);
+void SEQ_collection_expand(struct ListBase *seqbase,
+                           SeqCollection *collection,
+                           void query_func(struct Sequence *seq_reference,
+                                           struct ListBase *seqbase,
+                                           SeqCollection *collection));
+SeqCollection *SEQ_query_by_reference(struct Sequence *seq_reference,
+                                      struct ListBase *seqbase,
+                                      void seq_query_func(struct Sequence *seq_reference,
+                                                          struct ListBase *seqbase,
+                                                          SeqCollection *collection));
+SeqCollection *SEQ_query_selected_strips(struct ListBase *seqbase);
+SeqCollection *SEQ_query_unselected_strips(struct ListBase *seqbase);
+SeqCollection *SEQ_query_all_strips(ListBase *seqbase);
+SeqCollection *SEQ_query_all_strips_recursive(ListBase *seqbase);
+SeqCollection *SEQ_query_rendered_strips(ListBase *seqbase,
+                                         const int timeline_frame,
+                                         const int displayed_channel);
+void SEQ_query_strip_effect_chain(struct Sequence *seq_reference,
+                                  struct ListBase *seqbase,
+                                  SeqCollection *collection);
+void SEQ_filter_selected_strips(SeqCollection *collection);
+
+/* Utilities to access these as tags. */
+int SEQ_query_rendered_strips_to_tag(ListBase *seqbase,
+                                     const int timeline_frame,
+                                     const int displayed_channel);
 
 #ifdef __cplusplus
 }

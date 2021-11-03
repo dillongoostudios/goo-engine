@@ -59,6 +59,7 @@ typedef struct TransformModeItem {
   void (*opfunc)(wmOperatorType *);
 } TransformModeItem;
 
+static const float VecZero[3] = {0, 0, 0};
 static const float VecOne[3] = {1, 1, 1};
 
 static const char OP_TRANSLATION[] = "TRANSFORM_OT_translate";
@@ -371,25 +372,24 @@ static void transformops_exit(bContext *C, wmOperator *op)
   G.moving = 0;
 }
 
+static int transformops_mode(wmOperator *op)
+{
+  for (TransformModeItem *tmode = transform_modes; tmode->idname; tmode++) {
+    if (op->type->idname == tmode->idname) {
+      return tmode->mode;
+    }
+  }
+
+  return RNA_enum_get(op->ptr, "mode");
+}
+
 static int transformops_data(bContext *C, wmOperator *op, const wmEvent *event)
 {
   int retval = 1;
   if (op->customdata == NULL) {
     TransInfo *t = MEM_callocN(sizeof(TransInfo), "TransInfo data2");
-    TransformModeItem *tmode;
-    int mode = -1;
 
-    for (tmode = transform_modes; tmode->idname; tmode++) {
-      if (op->type->idname == tmode->idname) {
-        mode = tmode->mode;
-        break;
-      }
-    }
-
-    if (mode == -1) {
-      mode = RNA_enum_get(op->ptr, "mode");
-    }
-
+    int mode = transformops_mode(op);
     retval = initTransform(C, t, op, event, mode);
 
     /* store data */
@@ -519,10 +519,11 @@ static int transform_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   /* add temp handler */
   WM_event_add_modal_handler(C, op);
 
-  op->flag |= OP_IS_MODAL_GRAB_CURSOR; /* XXX maybe we want this with the gizmo only? */
-
   /* Use when modal input has some transformation to begin with. */
   TransInfo *t = op->customdata;
+  if ((t->flag & T_NO_CURSOR_WRAP) == 0) {
+    op->flag |= OP_IS_MODAL_GRAB_CURSOR; /* XXX maybe we want this with the gizmo only? */
+  }
   if (UNLIKELY(!is_zero_v4(t->values_modal_offset))) {
     transformApply(C, t);
   }
@@ -538,7 +539,7 @@ static bool transform_poll_property(const bContext *UNUSED(C),
 
   /* Orientation/Constraints. */
   {
-    /* Hide orientation axis if no constraints are set, since it wont be used. */
+    /* Hide orientation axis if no constraints are set, since it won't be used. */
     PropertyRNA *prop_con = RNA_struct_find_property(op->ptr, "orient_type");
     if (!ELEM(prop_con, NULL, prop)) {
       if (STRPREFIX(prop_id, "constraint")) {
@@ -550,6 +551,16 @@ static bool transform_poll_property(const bContext *UNUSED(C),
           return true;
         }
 
+        return false;
+      }
+    }
+  }
+
+  /* Orientation Axis. */
+  {
+    if (STREQ(prop_id, "orient_axis")) {
+      eTfmMode mode = (eTfmMode)transformops_mode(op);
+      if (mode == TFM_ALIGN) {
         return false;
       }
     }
@@ -699,6 +710,12 @@ void Transform_Properties(struct wmOperatorType *ot, int flags)
     RNA_def_property_ui_text(prop, "Center Override", "Force using this center value (when set)");
   }
 
+  if (flags & P_VIEW2D_EDGE_PAN) {
+    prop = RNA_def_boolean(
+        ot->srna, "view2d_edge_pan", false, "Edge Pan", "Enable edge panning in 2D view");
+    RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+  }
+
   if ((flags & P_NO_DEFAULTS) == 0) {
     prop = RNA_def_boolean(ot->srna,
                            "release_confirm",
@@ -744,7 +761,8 @@ static void TRANSFORM_OT_translate(struct wmOperatorType *ot)
 
   Transform_Properties(ot,
                        P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR | P_ALIGN_SNAP |
-                           P_OPTIONS | P_GPENCIL_EDIT | P_CURSOR_EDIT | P_POST_TRANSFORM);
+                           P_OPTIONS | P_GPENCIL_EDIT | P_CURSOR_EDIT | P_VIEW2D_EDGE_PAN |
+                           P_POST_TRANSFORM);
 }
 
 static void TRANSFORM_OT_resize(struct wmOperatorType *ot)
@@ -765,6 +783,19 @@ static void TRANSFORM_OT_resize(struct wmOperatorType *ot)
 
   RNA_def_float_vector(
       ot->srna, "value", 3, VecOne, -FLT_MAX, FLT_MAX, "Scale", "", -FLT_MAX, FLT_MAX);
+
+  PropertyRNA *prop;
+  prop = RNA_def_float_vector(ot->srna,
+                              "mouse_dir_constraint",
+                              3,
+                              VecZero,
+                              -FLT_MAX,
+                              FLT_MAX,
+                              "Mouse Directional Constraint",
+                              "",
+                              -FLT_MAX,
+                              FLT_MAX);
+  RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
 
   WM_operatortype_props_advanced_begin(ot);
 
@@ -894,7 +925,8 @@ static void TRANSFORM_OT_bend(struct wmOperatorType *ot)
   ot->name = "Bend";
   ot->description = "Bend selected items between the 3D cursor and the mouse";
   ot->idname = OP_BEND;
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
+  /* Depend on cursor location because the cursor location is used to define the region to bend. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* api callbacks */
   ot->invoke = transform_invoke;
@@ -1074,7 +1106,7 @@ static void TRANSFORM_OT_edge_slide(struct wmOperatorType *ot)
   ot->name = "Edge Slide";
   ot->description = "Slide an edge loop along a mesh";
   ot->idname = OP_EDGE_SLIDE;
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* api callbacks */
   ot->invoke = transform_invoke;
@@ -1112,7 +1144,7 @@ static void TRANSFORM_OT_vert_slide(struct wmOperatorType *ot)
   ot->name = "Vertex Slide";
   ot->description = "Slide a vertex along a mesh";
   ot->idname = OP_VERT_SLIDE;
-  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_BLOCKING | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* api callbacks */
   ot->invoke = transform_invoke;

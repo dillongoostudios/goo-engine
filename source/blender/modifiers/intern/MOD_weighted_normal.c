@@ -378,7 +378,7 @@ static void apply_weights_vertex_normal(WeightedNormalModifierData *wnmd,
      * But this is not exactly trivial change, better to keep this optimization for later...
      */
     if (!has_vgroup) {
-      /* Note: in theory, we could avoid this extra allocation & copying...
+      /* NOTE: in theory, we could avoid this extra allocation & copying...
        * But think we can live with it for now,
        * and it makes code simpler & cleaner. */
       float(*vert_normals)[3] = MEM_calloc_arrayN(
@@ -615,15 +615,15 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
     polynors = CustomData_add_layer(pdata, CD_NORMAL, CD_CALLOC, NULL, numPolys);
     CustomData_set_layer_flag(pdata, CD_NORMAL, CD_FLAG_TEMPORARY);
   }
-  BKE_mesh_calc_normals_poly(
-      mvert, NULL, numVerts, mloop, mpoly, numLoops, numPolys, polynors, false);
+  BKE_mesh_calc_normals_poly_and_vertex(
+      mvert, numVerts, mloop, numLoops, mpoly, numPolys, polynors, NULL);
 
   const float split_angle = mesh->smoothresh;
   short(*clnors)[2];
   CustomData *ldata = &result->ldata;
   clnors = CustomData_get_layer(ldata, CD_CUSTOMLOOPNORMAL);
 
-  /* Keep info  whether we had clnors,
+  /* Keep info whether we had clnors,
    * it helps when generating clnor spaces and default normals. */
   const bool has_clnors = clnors != NULL;
   if (!clnors) {
@@ -764,7 +764,6 @@ ModifierTypeInfo modifierType_WeightedNormal = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,

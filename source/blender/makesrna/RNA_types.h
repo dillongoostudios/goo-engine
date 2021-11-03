@@ -82,18 +82,45 @@ typedef enum PropertyType {
 /* also update rna_property_subtype_unit when you change this */
 typedef enum PropertyUnit {
   PROP_UNIT_NONE = (0 << 16),
-  PROP_UNIT_LENGTH = (1 << 16),       /* m */
-  PROP_UNIT_AREA = (2 << 16),         /* m^2 */
-  PROP_UNIT_VOLUME = (3 << 16),       /* m^3 */
-  PROP_UNIT_MASS = (4 << 16),         /* kg */
-  PROP_UNIT_ROTATION = (5 << 16),     /* radians */
-  PROP_UNIT_TIME = (6 << 16),         /* frame */
-  PROP_UNIT_VELOCITY = (7 << 16),     /* m/s */
-  PROP_UNIT_ACCELERATION = (8 << 16), /* m/(s^2) */
-  PROP_UNIT_CAMERA = (9 << 16),       /* mm */
-  PROP_UNIT_POWER = (10 << 16),       /* W */
-  PROP_UNIT_TEMPERATURE = (11 << 16), /* C */
+  PROP_UNIT_LENGTH = (1 << 16),        /* m */
+  PROP_UNIT_AREA = (2 << 16),          /* m^2 */
+  PROP_UNIT_VOLUME = (3 << 16),        /* m^3 */
+  PROP_UNIT_MASS = (4 << 16),          /* kg */
+  PROP_UNIT_ROTATION = (5 << 16),      /* radians */
+  PROP_UNIT_TIME = (6 << 16),          /* frame */
+  PROP_UNIT_TIME_ABSOLUTE = (7 << 16), /* time in seconds (independent of scene) */
+  PROP_UNIT_VELOCITY = (8 << 16),      /* m/s */
+  PROP_UNIT_ACCELERATION = (9 << 16),  /* m/(s^2) */
+  PROP_UNIT_CAMERA = (10 << 16),       /* mm */
+  PROP_UNIT_POWER = (11 << 16),        /* W */
+  PROP_UNIT_TEMPERATURE = (12 << 16),  /* C */
 } PropertyUnit;
+
+/**
+ * Use values besides #PROP_SCALE_LINEAR
+ * so the movement of the mouse doesn't map linearly to the value of the slider.
+ *
+ * For some settings it's useful to space motion in a non-linear way, see T77868.
+ *
+ * NOTE: The scale types are available for all float sliders.
+ * For integer sliders they are only available if they use the visible value bar.
+ * Sliders with logarithmic scale and value bar must have a range > 0
+ * while logarithmic sliders without the value bar can have a range of >= 0.
+ */
+typedef enum PropertyScaleType {
+  /** Linear scale (default). */
+  PROP_SCALE_LINEAR = 0,
+  /**
+   * Logarithmic scale
+   * - Maximum range: `0 <= x < inf`
+   */
+  PROP_SCALE_LOG = 1,
+  /**
+   * Cubic scale.
+   * - Maximum range: `-inf < x < inf`
+   */
+  PROP_SCALE_CUBIC = 2,
+} PropertyScaleType;
 
 #define RNA_SUBTYPE_UNIT(subtype) ((subtype)&0x00FF0000)
 #define RNA_SUBTYPE_VALUE(subtype) ((subtype) & ~0x00FF0000)
@@ -131,6 +158,7 @@ typedef enum PropertySubType {
   PROP_FACTOR = 15,
   PROP_ANGLE = 16 | PROP_UNIT_ROTATION,
   PROP_TIME = 17 | PROP_UNIT_TIME,
+  PROP_TIME_ABSOLUTE = 17 | PROP_UNIT_TIME_ABSOLUTE,
   /** Distance in 3d space, don't use for pixel distance for eg. */
   PROP_DISTANCE = 18 | PROP_UNIT_LENGTH,
   PROP_DISTANCE_CAMERA = 19 | PROP_UNIT_CAMERA,
@@ -198,7 +226,7 @@ typedef enum PropertyFlag {
   PROP_ICONS_CONSECUTIVE = (1 << 12),
   PROP_ICONS_REVERSE = (1 << 8),
 
-  /** Hidden in  the user interface. */
+  /** Hidden in the user interface. */
   PROP_HIDDEN = (1 << 19),
   /** Do not write in presets. */
   PROP_SKIP_SAVE = (1 << 28),
@@ -227,7 +255,7 @@ typedef enum PropertyFlag {
    * Currently only used for UI, this is similar to PROP_NEVER_NULL
    * except that the value may be NULL at times, used for ObData, where an Empty's will be NULL
    * but setting NULL on a mesh object is not possible.
-   * So, if its not NULL, setting NULL cant be done!
+   * So if it's not NULL, setting NULL can't be done!
    */
   PROP_NEVER_UNLINK = (1 << 25),
 
@@ -243,7 +271,7 @@ typedef enum PropertyFlag {
 
   /**
    * flag contains multiple enums.
-   * note: not to be confused with prop->enumbitflags
+   * NOTE: not to be confused with prop->enumbitflags
    * this exposes the flag as multiple options in python and the UI.
    *
    * \note These can't be animated so use with care.
@@ -415,7 +443,7 @@ typedef struct CollectionListBase {
 
 typedef enum RawPropertyType {
   PROP_RAW_UNSET = -1,
-  PROP_RAW_INT, /* XXX - abused for types that are not set, eg. MFace.verts, needs fixing. */
+  PROP_RAW_INT, /* XXX: abused for types that are not set, eg. MFace.verts, needs fixing. */
   PROP_RAW_SHORT,
   PROP_RAW_CHAR,
   PROP_RAW_BOOLEAN,
@@ -527,7 +555,7 @@ typedef struct ParameterList {
 
 typedef struct ParameterIterator {
   struct ParameterList *parms;
-  /* PointerRNA funcptr; */ /*UNUSED*/
+  // PointerRNA funcptr; /* UNUSED */
   void *data;
   int size, offset;
 

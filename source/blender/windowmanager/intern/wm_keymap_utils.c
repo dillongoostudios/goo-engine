@@ -207,7 +207,7 @@ wmKeyMap *WM_keymap_guess_from_context(const bContext *C)
 /* Needs to be kept up to date with Keymap and Operator naming */
 wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
 {
-  /* Op types purposely skipped  for now:
+  /* Op types purposely skipped for now:
    *     BRUSH_OT
    *     BOID_OT
    *     BUTTONS_OT
@@ -247,7 +247,7 @@ wmKeyMap *WM_keymap_guess_opname(const bContext *C, const char *opname)
   else if (STRPREFIX(opname, "MARKER_OT")) {
     km = WM_keymap_find_all(wm, "Markers", 0, 0);
   }
-  /* Import/Export*/
+  /* Import/Export */
   else if (STRPREFIX(opname, "IMPORT_") || STRPREFIX(opname, "EXPORT_")) {
     km = WM_keymap_find_all(wm, "Window", 0, 0);
   }

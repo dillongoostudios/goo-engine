@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_node_types.h"
 
 namespace blender::compositor {
@@ -28,12 +28,12 @@ namespace blender::compositor {
  * it only supports anti aliasing on BW buffers.
  * \ingroup operation
  */
-class AntiAliasOperation : public NodeOperation {
+class AntiAliasOperation : public MultiThreadedOperation {
  protected:
   /**
    * \brief Cached reference to the reader
    */
-  SocketReader *m_valueReader;
+  SocketReader *value_reader_;
 
  public:
   AntiAliasOperation();
@@ -41,22 +41,28 @@ class AntiAliasOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
-  void *initializeTileData(rcti *rect) override;
+  void *initialize_tile_data(rcti *rect) override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  void deinit_execution() override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+
+  void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

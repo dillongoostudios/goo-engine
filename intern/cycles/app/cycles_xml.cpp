@@ -22,27 +22,27 @@
 
 #include "graph/node_xml.h"
 
-#include "render/background.h"
-#include "render/camera.h"
-#include "render/film.h"
-#include "render/graph.h"
-#include "render/integrator.h"
-#include "render/light.h"
-#include "render/mesh.h"
-#include "render/nodes.h"
-#include "render/object.h"
-#include "render/osl.h"
-#include "render/scene.h"
-#include "render/shader.h"
+#include "scene/background.h"
+#include "scene/camera.h"
+#include "scene/film.h"
+#include "scene/integrator.h"
+#include "scene/light.h"
+#include "scene/mesh.h"
+#include "scene/object.h"
+#include "scene/osl.h"
+#include "scene/scene.h"
+#include "scene/shader.h"
+#include "scene/shader_graph.h"
+#include "scene/shader_nodes.h"
 
-#include "subd/subd_patch.h"
-#include "subd/subd_split.h"
+#include "subd/patch.h"
+#include "subd/split.h"
 
-#include "util/util_foreach.h"
-#include "util/util_path.h"
-#include "util/util_projection.h"
-#include "util/util_transform.h"
-#include "util/util_xml.h"
+#include "util/foreach.h"
+#include "util/path.h"
+#include "util/projection.h"
+#include "util/transform.h"
+#include "util/xml.h"
 
 #include "app/cycles_xml.h"
 
@@ -51,12 +51,12 @@ CCL_NAMESPACE_BEGIN
 /* XML reading state */
 
 struct XMLReadState : public XMLReader {
-  Scene *scene;      /* scene pointer */
-  Transform tfm;     /* current transform state */
-  bool smooth;       /* smooth normal state */
-  Shader *shader;    /* current shader */
-  string base;       /* base path to current file*/
-  float dicing_rate; /* current dicing rate */
+  Scene *scene;      /* Scene pointer. */
+  Transform tfm;     /* Current transform state. */
+  bool smooth;       /* Smooth normal state. */
+  Shader *shader;    /* Current shader. */
+  string base;       /* Base path to current file. */
+  float dicing_rate; /* Current dicing rate. */
 
   XMLReadState() : scene(NULL), smooth(false), shader(NULL), dicing_rate(1.0f)
   {
@@ -333,6 +333,7 @@ static void xml_read_shader_graph(XMLReadState &state, Shader *shader, xml_node 
       }
 
       snode = (ShaderNode *)node_type->create(node_type);
+      snode->set_owner(graph);
     }
 
     xml_read_node(graph_reader, snode, node);
@@ -385,7 +386,7 @@ static Mesh *xml_add_mesh(Scene *scene, const Transform &tfm)
   Mesh *mesh = new Mesh();
   scene->geometry.push_back(mesh);
 
-  /* create object*/
+  /* Create object. */
   Object *object = new Object();
   object->set_geometry(mesh);
   object->set_tfm(tfm);
@@ -703,7 +704,7 @@ void xml_read_file(Scene *scene, const char *filepath)
 
   xml_read_include(state, path_filename(filepath));
 
-  scene->params.bvh_type = SceneParams::BVH_STATIC;
+  scene->params.bvh_type = BVH_TYPE_STATIC;
 }
 
 CCL_NAMESPACE_END

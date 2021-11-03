@@ -35,9 +35,10 @@
 #include "UI_interface.h"
 
 #include "transform.h"
-#include "transform_mode.h"
+#include "transform_convert.h"
 #include "transform_snap.h"
 
+#include "transform_mode.h"
 /* -------------------------------------------------------------------- */
 /** \name Transform (Normal Rotation)
  * \{ */
@@ -103,7 +104,7 @@ static void applyNormalRotation(TransInfo *t, const int UNUSED(mval[2]))
 
     applyNumInput(&t->num, &angle);
 
-    headerRotation(t, str, angle);
+    headerRotation(t, str, sizeof(str), angle);
 
     axis_angle_normalized_to_mat3(mat, axis, angle);
 

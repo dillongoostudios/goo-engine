@@ -18,22 +18,23 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_node_types.h"
 
 namespace blender::compositor {
 
-class ProjectorLensDistortionOperation : public NodeOperation {
+class ProjectorLensDistortionOperation : public MultiThreadedOperation {
  private:
   /**
-   * Cached reference to the inputProgram
+   * Cached reference to the input_program
    */
-  SocketReader *m_inputProgram;
+  SocketReader *input_program_;
 
-  float m_dispersion;
-  bool m_dispersionAvailable;
+  float dispersion_;
+  /* TODO(manzanilla): to be removed with tiled implementation. */
+  bool dispersion_available_;
 
-  float m_kr, m_kr2;
+  float kr_, kr2_;
 
  public:
   ProjectorLensDistortionOperation();
@@ -41,24 +42,31 @@ class ProjectorLensDistortionOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
+  void init_data() override;
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
-  void *initializeTileData(rcti *rect) override;
+  void *initialize_tile_data(rcti *rect) override;
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
 
-  void updateDispersion();
+  void update_dispersion();
+
+  void determine_canvas(const rcti &preferred_area, rcti &r_area) override;
+  void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

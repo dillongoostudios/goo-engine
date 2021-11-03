@@ -227,7 +227,12 @@ class PHYSICS_PT_settings(PhysicButtonsPanel, Panel):
                 split.enabled = note_flag and ob.mode == 'OBJECT'
 
                 bake_incomplete = (domain.cache_frame_pause_data < domain.cache_frame_end)
-                if domain.cache_resumable and domain.has_cache_baked_data and not domain.is_cache_baking_data and bake_incomplete:
+                if (
+                        domain.cache_resumable and
+                        domain.has_cache_baked_data and
+                        not domain.is_cache_baking_data and
+                        bake_incomplete
+                ):
                     col = split.column()
                     col.operator("fluid.bake_data", text="Resume")
                     col = split.column()
@@ -734,11 +739,9 @@ class PHYSICS_PT_noise(PhysicButtonsPanel, Panel):
 
         col = flow.column()
         col.prop(domain, "noise_scale", text="Upres Factor")
-        # TODO (sebbas): Mantaflow only supports wavelet noise. Maybe get rid of noise type field.
-        col.prop(domain, "noise_type", text="Noise Method")
+        col.prop(domain, "noise_strength", text="Strength")
 
         col = flow.column()
-        col.prop(domain, "noise_strength", text="Strength")
         col.prop(domain, "noise_pos_scale", text="Scale")
         col.prop(domain, "noise_time_anim", text="Time")
 
@@ -1251,7 +1254,12 @@ class PHYSICS_PT_cache(PhysicButtonsPanel, Panel):
             split.enabled = ob.mode == 'OBJECT'
 
             bake_incomplete = (domain.cache_frame_pause_data < domain.cache_frame_end)
-            if domain.cache_resumable and domain.has_cache_baked_data and not domain.is_cache_baking_data and bake_incomplete:
+            if (
+                    domain.cache_resumable and
+                    domain.has_cache_baked_data and
+                    not domain.is_cache_baking_data and
+                    bake_incomplete
+            ):
                 col = split.column()
                 col.operator("fluid.bake_all", text="Resume")
                 col = split.column()

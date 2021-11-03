@@ -21,25 +21,26 @@
 
 #include "node_geometry_util.hh"
 
-static bNodeSocketTemplate geo_node_object_info_in[] = {
-    {SOCK_OBJECT, N_("Object")},
-    {-1, ""},
-};
+namespace blender::nodes {
 
-static bNodeSocketTemplate geo_node_object_info_out[] = {
-    {SOCK_VECTOR, N_("Location")},
-    {SOCK_VECTOR, N_("Rotation")},
-    {SOCK_VECTOR, N_("Scale")},
-    {SOCK_GEOMETRY, N_("Geometry")},
-    {-1, ""},
-};
+static void geo_node_object_info_declare(NodeDeclarationBuilder &b)
+{
+  b.add_input<decl::Object>(N_("Object")).hide_label();
+  b.add_input<decl::Bool>(N_("As Instance"))
+      .description(
+          N_("Output the entire object as single instance. "
+          "This allows instancing non-geometry object types"));
+  b.add_output<decl::Vector>(N_("Location"));
+  b.add_output<decl::Vector>(N_("Rotation"));
+  b.add_output<decl::Vector>(N_("Scale"));
+  b.add_output<decl::Geometry>(N_("Geometry"));
+}
 
 static void geo_node_object_info_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "transform_space", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
 }
 
-namespace blender::nodes {
 static void geo_node_object_info_exec(GeoNodeExecParams params)
 {
   const bNode &bnode = params.node();
@@ -47,9 +48,7 @@ static void geo_node_object_info_exec(GeoNodeExecParams params)
   const bool transform_space_relative = (node_storage->transform_space ==
                                          GEO_NODE_TRANSFORM_SPACE_RELATIVE);
 
-  bke::PersistentObjectHandle object_handle = params.extract_input<bke::PersistentObjectHandle>(
-      "Object");
-  Object *object = params.handle_map().lookup(object_handle);
+  Object *object = params.get_input<Object *>("Object");
 
   float3 location = {0, 0, 0};
   float3 rotation = {0, 0, 0};
@@ -59,12 +58,11 @@ static void geo_node_object_info_exec(GeoNodeExecParams params)
   const Object *self_object = params.self_object();
 
   if (object != nullptr) {
-    float transform[4][4];
-    mul_m4_m4m4(transform, self_object->imat, object->obmat);
+    const float4x4 transform = float4x4(self_object->imat) * float4x4(object->obmat);
 
     float quaternion[4];
     if (transform_space_relative) {
-      mat4_decompose(location, quaternion, scale, transform);
+      mat4_decompose(location, quaternion, scale, transform.values);
     }
     else {
       mat4_decompose(location, quaternion, scale, object->obmat);
@@ -72,15 +70,23 @@ static void geo_node_object_info_exec(GeoNodeExecParams params)
     quat_to_eul(rotation, quaternion);
 
     if (object != self_object) {
-      InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
-
-      if (transform_space_relative) {
-        instances.add_instance(object, transform);
+      if (params.get_input<bool>("As Instance")) {
+        InstancesComponent &instances = geometry_set.get_component_for_write<InstancesComponent>();
+        const int handle = instances.add_reference(*object);
+        if (transform_space_relative) {
+          instances.add_instance(handle, transform);
+        }
+        else {
+          float unit_transform[4][4];
+          unit_m4(unit_transform);
+          instances.add_instance(handle, unit_transform);
+        }
       }
       else {
-        float unit_transform[4][4];
-        unit_m4(unit_transform);
-        instances.add_instance(object, unit_transform);
+        geometry_set = bke::object_get_evaluated_geometry_set(*object);
+        if (transform_space_relative) {
+          transform_geometry_set(geometry_set, transform, *params.depsgraph());
+        }
       }
     }
   }
@@ -106,11 +112,11 @@ void register_node_type_geo_object_info()
   static bNodeType ntype;
 
   geo_node_type_base(&ntype, GEO_NODE_OBJECT_INFO, "Object Info", NODE_CLASS_INPUT, 0);
-  node_type_socket_templates(&ntype, geo_node_object_info_in, geo_node_object_info_out);
   node_type_init(&ntype, blender::nodes::geo_node_object_info_node_init);
   node_type_storage(
       &ntype, "NodeGeometryObjectInfo", node_free_standard_storage, node_copy_standard_storage);
   ntype.geometry_node_execute = blender::nodes::geo_node_object_info_exec;
-  ntype.draw_buttons = geo_node_object_info_layout;
+  ntype.draw_buttons = blender::nodes::geo_node_object_info_layout;
+  ntype.declare = blender::nodes::geo_node_object_info_declare;
   nodeRegisterType(&ntype);
 }

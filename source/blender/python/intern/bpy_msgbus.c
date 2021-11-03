@@ -21,6 +21,7 @@
 
 #include <Python.h>
 
+#include "../generic/py_capi_rna.h"
 #include "../generic/py_capi_utils.h"
 #include "../generic/python_utildefines.h"
 #include "../mathutils/mathutils.h"
@@ -90,12 +91,12 @@ static int py_msgbus_rna_key_from_py(PyObject *py_sub,
     msg_key_params->prop = data_prop->prop;
   }
   else if (BPy_StructRNA_Check(py_sub)) {
-    /* note, this isn't typically used since we don't edit structs directly. */
+    /* NOTE: this isn't typically used since we don't edit structs directly. */
     BPy_StructRNA *data_srna = (BPy_StructRNA *)py_sub;
     PYRNA_STRUCT_CHECK_INT(data_srna);
     msg_key_params->ptr = data_srna->ptr;
   }
-  /* TODO - property / type, not instance. */
+  /* TODO: property / type, not instance. */
   else if (PyType_Check(py_sub)) {
     StructRNA *data_type = pyrna_struct_as_srna(py_sub, false, error_prefix);
     if (data_type == NULL) {
@@ -207,6 +208,9 @@ static void bpy_msgbus_subscribe_value_free_data(struct wmMsgSubscribeKey *UNUSE
 PyDoc_STRVAR(
     bpy_msgbus_subscribe_rna_doc,
     ".. function:: subscribe_rna(key, owner, args, notify, options=set())\n"
+    "\n"
+    "   Register a message bus subscription. It will be cleared when another blend file is\n"
+    "   loaded, or can be cleared explicitly via :func:`bpy.msgbus.clear_by_owner`.\n"
     "\n" BPY_MSGBUS_RNA_MSGKEY_DOC
     "   :arg owner: Handle for this subscription (compared by identity).\n"
     "   :type owner: Any type.\n"
@@ -214,7 +218,12 @@ PyDoc_STRVAR(
     "\n"
     "      - ``PERSISTENT`` when set, the subscriber will be kept when remapping ID data.\n"
     "\n"
-    "   :type options: set of str.\n");
+    "   :type options: set of str.\n"
+    "\n"
+    ".. note::\n"
+    "\n"
+    "   All subscribers will be cleared on file-load. Subscribers can be re-registered on load,\n"
+    "   see :mod:`bpy.app.handlers.load_post`.\n");
 static PyObject *bpy_msgbus_subscribe_rna(PyObject *UNUSED(self), PyObject *args, PyObject *kw)
 {
   const char *error_prefix = "subscribe_rna";
@@ -245,7 +254,7 @@ static PyObject *bpy_msgbus_subscribe_rna(PyObject *UNUSED(self), PyObject *args
       "options",
       NULL,
   };
-  static _PyArg_Parser _parser = {"OOO!O|O!:subscribe_rna", _keywords, 0};
+  static _PyArg_Parser _parser = {"OOO!O|$O!:subscribe_rna", _keywords, 0};
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -260,11 +269,11 @@ static PyObject *bpy_msgbus_subscribe_rna(PyObject *UNUSED(self), PyObject *args
   }
 
   if (py_options &&
-      (pyrna_set_to_enum_bitfield(py_options_enum, py_options, &options, error_prefix)) == -1) {
+      (pyrna_enum_bitfield_from_set(py_options_enum, py_options, &options, error_prefix)) == -1) {
     return NULL;
   }
 
-  /* Note: we may want to have a way to pass this in. */
+  /* NOTE: we may want to have a way to pass this in. */
   bContext *C = BPY_context_get();
   struct wmMsgBus *mbus = CTX_wm_message_bus(C);
   wmMsgParams_RNA msg_key_params = {{0}};
@@ -339,7 +348,7 @@ static PyObject *bpy_msgbus_publish_rna(PyObject *UNUSED(self), PyObject *args, 
     return NULL;
   }
 
-  /* Note: we may want to have a way to pass this in. */
+  /* NOTE: we may want to have a way to pass this in. */
   bContext *C = BPY_context_get();
   struct wmMsgBus *mbus = CTX_wm_message_bus(C);
   wmMsgParams_RNA msg_key_params = {{0}};

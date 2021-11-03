@@ -29,6 +29,7 @@
 
 #include "BLT_translation.h"
 
+#include "BKE_asset.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
@@ -53,6 +54,13 @@
 
 /* -------------------------------------------------------------------- */
 
+static void workspace_init_data(ID *id)
+{
+  WorkSpace *workspace = (WorkSpace *)id;
+
+  BKE_asset_library_reference_init_default(&workspace->asset_library_ref);
+}
+
 static void workspace_free_data(ID *id)
 {
   WorkSpace *workspace = (WorkSpace *)id;
@@ -74,7 +82,7 @@ static void workspace_foreach_id(ID *id, LibraryForeachIDData *data)
   WorkSpace *workspace = (WorkSpace *)id;
 
   LISTBASE_FOREACH (WorkSpaceLayout *, layout, &workspace->layouts) {
-    BKE_LIB_FOREACHID_PROCESS(data, layout->screen, IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, layout->screen, IDWALK_CB_USER);
   }
 }
 
@@ -105,8 +113,8 @@ static void workspace_blend_read_data(BlendDataReader *reader, ID *id)
   BLO_read_list(reader, &workspace->tools);
 
   LISTBASE_FOREACH (WorkSpaceDataRelation *, relation, &workspace->hook_layout_relations) {
-    /* parent pointer does not belong to workspace data and is therefore restored in lib_link step
-     * of window manager.*/
+    /* Parent pointer does not belong to workspace data and is therefore restored in lib_link step
+     * of window manager. */
     BLO_read_data_address(reader, &relation->value);
   }
 
@@ -178,9 +186,9 @@ IDTypeInfo IDType_ID_WS = {
     .name = "WorkSpace",
     .name_plural = "workspaces",
     .translation_context = BLT_I18NCONTEXT_ID_WORKSPACE,
-    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_MAKELOCAL | IDTYPE_FLAGS_NO_ANIMDATA,
+    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_ONLY_APPEND | IDTYPE_FLAGS_NO_ANIMDATA,
 
-    .init_data = NULL,
+    .init_data = workspace_init_data,
     .copy_data = NULL,
     .free_data = workspace_free_data,
     .make_local = NULL,

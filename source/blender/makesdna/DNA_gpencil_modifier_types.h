@@ -54,6 +54,10 @@ typedef enum GpencilModifierType {
   eGpencilModifierType_Multiply = 17,
   eGpencilModifierType_Texture = 18,
   eGpencilModifierType_Lineart = 19,
+  eGpencilModifierType_Length = 20,
+  eGpencilModifierType_WeightProximity = 21,
+  eGpencilModifierType_Dash = 22,
+  eGpencilModifierType_WeightAngle = 23,
   /* Keep last. */
   NUM_GREASEPENCIL_MODIFIER_TYPES,
 } GpencilModifierType;
@@ -199,6 +203,7 @@ typedef enum eThickGpencil_Flag {
   GP_THICK_NORMALIZE = (1 << 4),
   GP_THICK_INVERT_LAYERPASS = (1 << 5),
   GP_THICK_INVERT_MATERIAL = (1 << 6),
+  GP_THICK_WEIGHT_FACTOR = (1 << 7),
 } eThickGpencil_Flag;
 
 typedef struct TimeGpencilModifierData {
@@ -255,7 +260,7 @@ typedef struct ColorGpencilModifierData {
   int pass_index;
   /** Flags. */
   int flag;
-  /** Hsv factors. */
+  /** HSV factors. */
   float hsv[3];
   /** Modify stroke, fill or both. */
   char modify_color;
@@ -309,6 +314,7 @@ typedef enum eOpacityGpencil_Flag {
   GP_OPACITY_INVERT_MATERIAL = (1 << 5),
   GP_OPACITY_CUSTOM_CURVE = (1 << 6),
   GP_OPACITY_NORMALIZE = (1 << 7),
+  GP_OPACITY_WEIGHT_FACTOR = (1 << 8),
 } eOpacityGpencil_Flag;
 
 typedef struct ArrayGpencilModifierData {
@@ -470,6 +476,77 @@ typedef enum eLatticeGpencil_Flag {
   GP_LATTICE_INVERT_MATERIAL = (1 << 4),
 } eLatticeGpencil_Flag;
 
+typedef struct LengthGpencilModifierData {
+  GpencilModifierData modifier;
+  /** Material for filtering. */
+  struct Material *material;
+  /** Layer name. */
+  char layername[64];
+  /** Custom index for passes. */
+  int pass_index;
+  /** Flags. */
+  int flag;
+  /** Custom index for passes. */
+  int layer_pass;
+  /** Length. */
+  float start_fac, end_fac;
+  /** Overshoot trajectory factor. */
+  float overshoot_fac;
+  /** Modifier mode. */
+  int mode;
+  /* Curvature parameters. */
+  float point_density;
+  float segment_influence;
+  float max_angle;
+} LengthGpencilModifierData;
+
+typedef enum eLengthGpencil_Flag {
+  GP_LENGTH_INVERT_LAYER = (1 << 0),
+  GP_LENGTH_INVERT_PASS = (1 << 1),
+  GP_LENGTH_INVERT_LAYERPASS = (1 << 2),
+  GP_LENGTH_INVERT_MATERIAL = (1 << 3),
+  GP_LENGTH_USE_CURVATURE = (1 << 4),
+  GP_LENGTH_INVERT_CURVATURE = (1 << 5),
+} eLengthGpencil_Flag;
+
+typedef enum eLengthGpencil_Type {
+  GP_LENGTH_RELATIVE = 0,
+  GP_LENGTH_ABSOLUTE = 1,
+} eLengthGpencil_Type;
+
+typedef struct DashGpencilModifierSegment {
+  char name[64];
+  /* For path reference. */
+  struct DashGpencilModifierData *dmd;
+  int dash;
+  int gap;
+  float radius;
+  float opacity;
+  int mat_nr;
+  int _pad;
+} DashGpencilModifierSegment;
+
+typedef struct DashGpencilModifierData {
+  GpencilModifierData modifier;
+  /** Material for filtering. */
+  struct Material *material;
+  /** Layer name. */
+  char layername[64];
+  /** Custom index for passes. */
+  int pass_index;
+  /** Flags. */
+  int flag;
+  /** Custom index for passes. */
+  int layer_pass;
+
+  int dash_offset;
+
+  DashGpencilModifierSegment *segments;
+  int segments_len;
+  int segment_active_index;
+
+} DashGpencilModifierData;
+
 typedef struct MirrorGpencilModifierData {
   GpencilModifierData modifier;
   struct Object *object;
@@ -616,6 +693,14 @@ typedef struct OffsetGpencilModifierData {
   float loc[3];
   float rot[3];
   float scale[3];
+  /** Random Offset. */
+  float rnd_offset[3];
+  /** Random Rotation. */
+  float rnd_rot[3];
+  /** Random Scales. */
+  float rnd_scale[3];
+  /** (first element is the index) random values. */
+  int seed;
   /** Custom index for passes. */
   int layer_pass;
 } OffsetGpencilModifierData;
@@ -626,6 +711,7 @@ typedef enum eOffsetGpencil_Flag {
   GP_OFFSET_INVERT_VGROUP = (1 << 2),
   GP_OFFSET_INVERT_LAYERPASS = (1 << 3),
   GP_OFFSET_INVERT_MATERIAL = (1 << 4),
+  GP_OFFSET_UNIFORM_RANDOM_SCALE = (1 << 5),
 } eOffsetGpencil_Flag;
 
 typedef struct SmoothGpencilModifierData {
@@ -757,6 +843,7 @@ typedef enum eTintGpencil_Flag {
   GP_TINT_INVERT_LAYERPASS = (1 << 4),
   GP_TINT_INVERT_MATERIAL = (1 << 5),
   GP_TINT_CUSTOM_CURVE = (1 << 6),
+  GP_TINT_WEIGHT_FACTOR = (1 << 7),
 } eTintGpencil_Flag;
 
 typedef struct TextureGpencilModifierData {
@@ -810,35 +897,115 @@ typedef enum eTextureGpencil_Mode {
   STROKE_AND_FILL = 2,
 } eTextureGpencil_Mode;
 
+typedef struct WeightProxGpencilModifierData {
+  GpencilModifierData modifier;
+  /** Target vertexgroup name, MAX_VGROUP_NAME. */
+  char target_vgname[64];
+  /** Material for filtering. */
+  struct Material *material;
+  /** Layer name. */
+  char layername[64];
+  /** Optional vertexgroup filter name, MAX_VGROUP_NAME. */
+  char vgname[64];
+  /** Custom index for passes. */
+  int pass_index;
+  /** Flags. */
+  int flag;
+  /** Minimum valid weight (clamp value). */
+  float min_weight;
+  /** Custom index for passes. */
+  int layer_pass;
+  /** Start/end distances. */
+  float dist_start;
+  float dist_end;
+
+  /** Reference object */
+  struct Object *object;
+} WeightProxGpencilModifierData;
+
+typedef struct WeightAngleGpencilModifierData {
+  GpencilModifierData modifier;
+  /** Target vertexgroup name, MAX_VGROUP_NAME. */
+  char target_vgname[64];
+  /** Material for filtering. */
+  struct Material *material;
+  /** Layer name. */
+  char layername[64];
+  /** Optional vertexgroup filter name, MAX_VGROUP_NAME. */
+  char vgname[64];
+  /** Custom index for passes. */
+  int pass_index;
+  /** Flags. */
+  int flag;
+  /** Minimum valid weight (clamp value). */
+  float min_weight;
+  /** Custom index for passes. */
+  int layer_pass;
+  /** Axis. */
+  short axis;
+  /** Space (Local/World). */
+  short space;
+  /** Angle */
+  float angle;
+} WeightAngleGpencilModifierData;
+
+typedef enum eWeightGpencil_Flag {
+  GP_WEIGHT_INVERT_LAYER = (1 << 0),
+  GP_WEIGHT_INVERT_PASS = (1 << 1),
+  GP_WEIGHT_INVERT_VGROUP = (1 << 2),
+  GP_WEIGHT_INVERT_LAYERPASS = (1 << 3),
+  GP_WEIGHT_INVERT_MATERIAL = (1 << 4),
+  GP_WEIGHT_MULTIPLY_DATA = (1 << 5),
+  GP_WEIGHT_INVERT_OUTPUT = (1 << 6),
+} eWeightGpencil_Flag;
+
+typedef enum eGpencilModifierSpace {
+  GP_SPACE_LOCAL = 0,
+  GP_SPACE_WORLD = 1,
+} eGpencilModifierSpace;
+
 typedef enum eLineartGpencilModifierSource {
   LRT_SOURCE_COLLECTION = 0,
   LRT_SOURCE_OBJECT = 1,
   LRT_SOURCE_SCENE = 2,
 } eLineartGpencilModifierSource;
 
+/* This enum is for modifier internal state only. */
 typedef enum eLineArtGPencilModifierFlags {
-  LRT_GPENCIL_INVERT_SOURCE_VGROUP = (1 << 0),
-  LRT_GPENCIL_MATCH_OUTPUT_VGROUP = (1 << 1),
+  /* These two moved to #eLineartMainFlags to keep consistent with flag variable purpose. */
+  /* LRT_GPENCIL_INVERT_SOURCE_VGROUP = (1 << 0), */
+  /* LRT_GPENCIL_MATCH_OUTPUT_VGROUP = (1 << 1), */
   LRT_GPENCIL_BINARY_WEIGHTS = (1 << 2) /* Deprecated, this is removed for lack of use case. */,
   LRT_GPENCIL_IS_BAKED = (1 << 3),
+  LRT_GPENCIL_USE_CACHE = (1 << 4),
+  LRT_GPENCIL_OFFSET_TOWARDS_CUSTOM_CAMERA = (1 << 5),
 } eLineArtGPencilModifierFlags;
 
-typedef enum eLineartGpencilTransparencyFlags {
-  LRT_GPENCIL_TRANSPARENCY_ENABLE = (1 << 0),
-  /** Set to true means using "and" instead of "or" logic on mask bits. */
-  LRT_GPENCIL_TRANSPARENCY_MATCH = (1 << 1),
-} eLineartGpencilTransparencyFlags;
+typedef enum eLineartGpencilMaskSwitches {
+  LRT_GPENCIL_MATERIAL_MASK_ENABLE = (1 << 0),
+  /** When set, material mask bit comparisons are done with bit wise "AND" instead of "OR". */
+  LRT_GPENCIL_MATERIAL_MASK_MATCH = (1 << 1),
+  LRT_GPENCIL_INTERSECTION_MATCH = (1 << 2),
+} eLineartGpencilMaskSwitches;
+
+struct LineartCache;
+
+struct LineartCache;
 
 typedef struct LineartGpencilModifierData {
   GpencilModifierData modifier;
 
-  short edge_types; /* line type enable flags, bits in eLineartEdgeFlag */
+  /** Line type enable flags, bits in #eLineartEdgeFlag. */
+  short edge_types;
 
-  char source_type; /* Object or Collection, from eLineartGpencilModifierSource */
+  /** Object or Collection, from #eLineartGpencilModifierSource. */
+  char source_type;
 
   char use_multiple_levels;
   short level_start;
   short level_end;
+
+  struct Object *source_camera;
 
   struct Object *source_object;
   struct Collection *source_collection;
@@ -853,11 +1020,22 @@ typedef struct LineartGpencilModifierData {
   char source_vertex_group[64];
   char vgname[64];
 
+  /**
+   * Camera focal length is divided by `1 + overscan`, before calculation, which give a wider FOV,
+   * this doesn't change coordinates range internally (-1, 1), but makes the calculated frame
+   * bigger than actual output. This is for the easier shifting calculation. A value of 0.5 means
+   * the "internal" focal length become 2/3 of the actual camera.
+   */
+  float overscan;
+
   float opacity;
   short thickness;
 
-  unsigned char transparency_flags; /* eLineartGpencilTransparencyFlags */
-  unsigned char transparency_mask;
+  unsigned char mask_switches; /* #eLineartGpencilMaskSwitches */
+  unsigned char material_mask_bits;
+  unsigned char intersection_mask;
+
+  char _pad[3];
 
   /** `0..1` range for cosine angle */
   float crease_threshold;
@@ -865,19 +1043,33 @@ typedef struct LineartGpencilModifierData {
   /** `0..PI` angle, for splitting strokes at sharp points. */
   float angle_splitting_threshold;
 
+  /** Strength for smoothing jagged chains. */
+  float chain_smooth_tolerance;
+
   /* CPU mode */
   float chaining_image_threshold;
-
-  int _pad;
 
   /* Ported from SceneLineArt flags. */
   int calculation_flags;
 
-  /* Additional Switches. */
+  /* #eLineArtGPencilModifierFlags, modifier internal state. */
   int flags;
 
-  /* Runtime only. */
-  void *render_buffer;
+  /* Move strokes towards camera to avoid clipping while preserve depth for the viewport. */
+  float stroke_depth_offset;
+
+  /* Runtime data. */
+
+  /* Because we can potentially only compute features lines once per modifier stack (Use Cache), we
+   * need to have these override values to ensure that we have the data we need is computed and
+   * stored in the cache. */
+  char level_start_override;
+  char level_end_override;
+  short edge_types_override;
+
+  struct LineartCache *cache;
+  /* Keep a pointer to the render buffer so we can call destroy from ModifierData. */
+  struct LineartRenderBuffer *render_buffer_ptr;
 
 } LineartGpencilModifierData;
 

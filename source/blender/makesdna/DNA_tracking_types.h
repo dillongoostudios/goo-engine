@@ -78,9 +78,9 @@ typedef struct MovieTrackingCamera {
   float nuke_k1, nuke_k2;
 
   /* Brown-Conrady distortion model coefficients */
-  /** Brown-Conrady radial distortion **/
+  /** Brown-Conrady radial distortion. */
   float brown_k1, brown_k2, brown_k3, brown_k4;
-  /** Brown-Conrady tangential distortion **/
+  /** Brown-Conrady tangential distortion. */
   float brown_p1, brown_p2;
 } MovieTrackingCamera;
 
@@ -398,6 +398,8 @@ typedef struct MovieTrackingDopesheetChannel {
   int *segments;
   /** Longest segment length and total number of tracked frames. */
   int max_segment, total_frames;
+  /** These numbers are valid only if tot_segment > 0. */
+  int first_not_disabled_marker_framenr, last_not_disabled_marker_framenr;
 } MovieTrackingDopesheetChannel;
 
 typedef struct MovieTrackingDopesheetCoverageSegment {
@@ -592,6 +594,8 @@ enum {
   TRACKING_DOPE_SORT_LONGEST = 1,
   TRACKING_DOPE_SORT_TOTAL = 2,
   TRACKING_DOPE_SORT_AVERAGE_ERROR = 3,
+  TRACKING_DOPE_SORT_START = 4,
+  TRACKING_DOPE_SORT_END = 5,
 };
 
 /* MovieTrackingDopesheet->flag */

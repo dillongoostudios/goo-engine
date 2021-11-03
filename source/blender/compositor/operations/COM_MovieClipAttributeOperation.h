@@ -18,6 +18,7 @@
 
 #pragma once
 
+#include "COM_ConstantOperation.h"
 #include "COM_NodeOperation.h"
 #include "DNA_movieclip_types.h"
 
@@ -33,13 +34,15 @@ typedef enum MovieClipAttribute {
  * this program converts an input color to an output value.
  * it assumes we are in sRGB color space.
  */
-class MovieClipAttributeOperation : public NodeOperation {
+class MovieClipAttributeOperation : public ConstantOperation {
  private:
-  MovieClip *m_clip;
-  float m_value;
-  int m_framenumber;
-  bool m_invert;
-  MovieClipAttribute m_attribute;
+  MovieClip *clip_;
+  float value_;
+  int framenumber_;
+  bool invert_;
+  MovieClipAttribute attribute_;
+  bool is_value_calculated_;
+  NodeOperationInput *stabilization_resolution_socket_;
 
  public:
   /**
@@ -47,31 +50,43 @@ class MovieClipAttributeOperation : public NodeOperation {
    */
   MovieClipAttributeOperation();
 
-  void initExecution() override;
+  void init_execution() override;
 
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
-  void determineResolution(unsigned int resolution[2],
-                           unsigned int preferredResolution[2]) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void determine_canvas(const rcti &preferred_area, rcti &r_area) override;
 
-  void setMovieClip(MovieClip *clip)
+  const float *get_constant_elem() override;
+
+  void set_movie_clip(MovieClip *clip)
   {
-    this->m_clip = clip;
+    clip_ = clip;
   }
-  void setFramenumber(int framenumber)
+  void set_framenumber(int framenumber)
   {
-    this->m_framenumber = framenumber;
+    framenumber_ = framenumber;
   }
-  void setAttribute(MovieClipAttribute attribute)
+  void set_attribute(MovieClipAttribute attribute)
   {
-    this->m_attribute = attribute;
+    attribute_ = attribute;
   }
-  void setInvert(bool invert)
+  void set_invert(bool invert)
   {
-    this->m_invert = invert;
+    invert_ = invert;
   }
+
+  /**
+   * Set an operation socket which input will be used to get the resolution for stabilization.
+   */
+  void set_socket_input_resolution_for_stabilization(NodeOperationInput *input_socket)
+  {
+    stabilization_resolution_socket_ = input_socket;
+  }
+
+ private:
+  void calc_value();
 };
 
 }  // namespace blender::compositor

@@ -130,7 +130,9 @@ const EnumPropertyItem rna_enum_symmetrize_direction_items[] = {
 static void rna_GPencil_update(Main *UNUSED(bmain), Scene *scene, PointerRNA *UNUSED(ptr))
 {
   /* mark all grease pencil datablocks of the scene */
-  ED_gpencil_tag_scene_gpencil(scene);
+  if (scene != NULL) {
+    ED_gpencil_tag_scene_gpencil(scene);
+  }
 }
 
 const EnumPropertyItem rna_enum_particle_edit_disconnected_hair_brush_items[] = {
@@ -501,13 +503,18 @@ static void rna_ImaPaint_stencil_update(bContext *C, PointerRNA *UNUSED(ptr))
   }
 }
 
+static bool rna_ImaPaint_imagetype_poll(PointerRNA *UNUSED(ptr), PointerRNA value)
+{
+  Image *image = (Image *)value.owner_id;
+  return image->type != IMA_TYPE_R_RESULT && image->type != IMA_TYPE_COMPOSITE;
+}
+
 static void rna_ImaPaint_canvas_update(bContext *C, PointerRNA *UNUSED(ptr))
 {
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *ob = OBACT(view_layer);
-  Object *obedit = OBEDIT_FROM_OBACT(ob);
   bScreen *screen;
   Image *ima = scene->toolsettings->imapaint.canvas;
 
@@ -520,7 +527,7 @@ static void rna_ImaPaint_canvas_update(bContext *C, PointerRNA *UNUSED(ptr))
           SpaceImage *sima = (SpaceImage *)slink;
 
           if (!sima->pin) {
-            ED_space_image_set(bmain, sima, obedit, ima, true);
+            ED_space_image_set(bmain, sima, ima, true);
           }
         }
       }
@@ -786,7 +793,8 @@ static void rna_def_sculpt(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Sculpt_ShowMask_update");
 
   prop = RNA_def_property(srna, "detail_size", PROP_FLOAT, PROP_PIXEL);
-  RNA_def_property_ui_range(prop, 0.5, 40.0, 10, 2);
+  RNA_def_property_ui_range(prop, 0.5, 40.0, 0.1, 2);
+  RNA_def_property_ui_scale_type(prop, PROP_SCALE_CUBIC);
   RNA_def_property_ui_text(
       prop, "Detail Size", "Maximum edge length for dynamic topology sculpting (in pixels)");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
@@ -1033,17 +1041,20 @@ static void rna_def_image_paint(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Stencil Image", "Image used as stencil");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_stencil_update");
+  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_ImaPaint_imagetype_poll");
 
   prop = RNA_def_property(srna, "canvas", PROP_POINTER, PROP_NONE);
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_CONTEXT_UPDATE);
   RNA_def_property_ui_text(prop, "Canvas", "Image used as canvas");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, "rna_ImaPaint_canvas_update");
+  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_ImaPaint_imagetype_poll");
 
   prop = RNA_def_property(srna, "clone_image", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, NULL, "clone");
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_ui_text(prop, "Clone Image", "Image used as clone source");
   RNA_def_property_update(prop, NC_SCENE | ND_TOOLSETTINGS, NULL);
+  RNA_def_property_pointer_funcs(prop, NULL, NULL, NULL, "rna_ImaPaint_imagetype_poll");
 
   prop = RNA_def_property(srna, "stencil_color", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_range(prop, 0.0, 1.0);

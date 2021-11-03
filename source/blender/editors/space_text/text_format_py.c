@@ -290,7 +290,7 @@ static int txtfmt_py_literal_numeral(const char *string, char prev_fmt)
       return 1 + txtfmt_py_find_numeral_inner(string + 1);
     }
     /* Previous was a number; if immediately followed by '.' it's a floating point decimal number.
-     * Note: keep the decimal point, it's needed to allow leading zeros. */
+     * NOTE: keep the decimal point, it's needed to allow leading zeros. */
     if (first == '.') {
       return txtfmt_py_find_numeral_inner(string);
     }
@@ -315,10 +315,10 @@ static char txtfmt_py_format_identifier(const char *str)
   /* Keep aligned args for readability. */
   /* clang-format off */
 
-  if        ((txtfmt_py_find_specialvar(str))   != -1) { fmt = FMT_TYPE_SPECIAL;
-  } else if ((txtfmt_py_find_builtinfunc(str))  != -1) { fmt = FMT_TYPE_KEYWORD;
-  } else if ((txtfmt_py_find_decorator(str))    != -1) { fmt = FMT_TYPE_RESERVED;
-  } else                                               { fmt = FMT_TYPE_DEFAULT;
+  if        (txtfmt_py_find_specialvar(str)   != -1) { fmt = FMT_TYPE_SPECIAL;
+  } else if (txtfmt_py_find_builtinfunc(str)  != -1) { fmt = FMT_TYPE_KEYWORD;
+  } else if (txtfmt_py_find_decorator(str)    != -1) { fmt = FMT_TYPE_RESERVED;
+  } else                                             { fmt = FMT_TYPE_DEFAULT;
   }
 
   /* clang-format on */
@@ -423,7 +423,7 @@ static void txtfmt_py_format_line(SpaceText *st, TextLine *line, const bool do_n
         }
         *fmt = FMT_TYPE_STRING;
       }
-      /* Whitespace (all ws. has been converted to spaces) */
+      /* White-space (all ws. has been converted to spaces). */
       else if (*str == ' ') {
         *fmt = FMT_TYPE_WHITESPACE;
       }

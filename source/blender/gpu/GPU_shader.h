@@ -27,6 +27,7 @@
 extern "C" {
 #endif
 
+struct GPUIndexBuf;
 struct GPUVertBuf;
 
 /** Opaque type hiding #blender::gpu::Shader */
@@ -45,14 +46,20 @@ GPUShader *GPU_shader_create(const char *vertcode,
                              const char *libcode,
                              const char *defines,
                              const char *shname);
+GPUShader *GPU_shader_create_compute(const char *computecode,
+                                     const char *libcode,
+                                     const char *defines,
+                                     const char *shname);
 GPUShader *GPU_shader_create_from_python(const char *vertcode,
                                          const char *fragcode,
                                          const char *geomcode,
                                          const char *libcode,
-                                         const char *defines);
+                                         const char *defines,
+                                         const char *name);
 GPUShader *GPU_shader_create_ex(const char *vertcode,
                                 const char *fragcode,
                                 const char *geomcode,
+                                const char *computecode,
                                 const char *libcode,
                                 const char *defines,
                                 const eGPUShaderTFBType tf_type,
@@ -78,6 +85,8 @@ void GPU_shader_free(GPUShader *shader);
 
 void GPU_shader_bind(GPUShader *shader);
 void GPU_shader_unbind(void);
+
+const char *GPU_shader_get_name(GPUShader *shader);
 
 /* Returns true if transform feedback was successfully enabled. */
 bool GPU_shader_transform_feedback_enable(GPUShader *shader, struct GPUVertBuf *vertbuf);
@@ -126,6 +135,7 @@ int GPU_shader_get_uniform(GPUShader *shader, const char *name);
 int GPU_shader_get_builtin_uniform(GPUShader *shader, int builtin);
 int GPU_shader_get_builtin_block(GPUShader *shader, int builtin);
 int GPU_shader_get_uniform_block(GPUShader *shader, const char *name);
+int GPU_shader_get_ssbo(GPUShader *shader, const char *name);
 
 int GPU_shader_get_uniform_block_binding(GPUShader *shader, const char *name);
 int GPU_shader_get_texture_binding(GPUShader *shader, const char *name);
@@ -159,7 +169,7 @@ void GPU_shader_set_framebuffer_srgb_target(int use_srgb_to_linear);
 typedef enum eGPUBuiltinShader {
   /* specialized drawing */
   GPU_SHADER_TEXT,
-  GPU_SHADER_KEYFRAME_DIAMOND,
+  GPU_SHADER_KEYFRAME_SHAPE,
   GPU_SHADER_SIMPLE_LIGHTING,
   /* for simple 2D drawing */
   /**
@@ -359,7 +369,6 @@ typedef enum eGPUBuiltinShader {
   GPU_SHADER_INSTANCE_VARIYING_COLOR_VARIYING_SIZE, /* Uniformly scaled */
   /* grease pencil drawing */
   GPU_SHADER_GPENCIL_STROKE,
-  GPU_SHADER_GPENCIL_FILL,
   /* specialized for widget drawing */
   GPU_SHADER_2D_AREA_EDGES,
   GPU_SHADER_2D_WIDGET_BASE,
@@ -413,6 +422,19 @@ void GPU_shader_free_builtin_shaders(void);
 
 /* Determined by the maximum uniform buffer size divided by chunk size. */
 #define GPU_MAX_UNIFORM_ATTR 8
+
+typedef enum eGPUKeyframeShapes {
+  GPU_KEYFRAME_SHAPE_DIAMOND = (1 << 0),
+  GPU_KEYFRAME_SHAPE_CIRCLE = (1 << 1),
+  GPU_KEYFRAME_SHAPE_CLIPPED_VERTICAL = (1 << 2),
+  GPU_KEYFRAME_SHAPE_CLIPPED_HORIZONTAL = (1 << 3),
+  GPU_KEYFRAME_SHAPE_INNER_DOT = (1 << 4),
+  GPU_KEYFRAME_SHAPE_ARROW_END_MAX = (1 << 8),
+  GPU_KEYFRAME_SHAPE_ARROW_END_MIN = (1 << 9),
+  GPU_KEYFRAME_SHAPE_ARROW_END_MIXED = (1 << 10),
+} eGPUKeyframeShapes;
+#define GPU_KEYFRAME_SHAPE_SQUARE \
+  (GPU_KEYFRAME_SHAPE_CLIPPED_VERTICAL | GPU_KEYFRAME_SHAPE_CLIPPED_HORIZONTAL)
 
 #ifdef __cplusplus
 }

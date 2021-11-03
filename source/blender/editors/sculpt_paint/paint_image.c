@@ -176,7 +176,7 @@ void imapaint_image_update(
     ibuf->userflags |= IB_MIPMAP_INVALID;
   }
 
-  /* todo: should set_tpage create ->rect? */
+  /* TODO: should set_tpage create ->rect? */
   if (texpaint || (sima && sima->lock)) {
     int w = imapaintpartial.x2 - imapaintpartial.x1;
     int h = imapaintpartial.y2 - imapaintpartial.y1;
@@ -681,7 +681,7 @@ static bool paint_stroke_test_start(bContext *C, wmOperator *op, const float mou
 {
   PaintOperation *pop;
 
-  /* TODO Should avoid putting this here. Instead, last position should be requested
+  /* TODO: Should avoid putting this here. Instead, last position should be requested
    * from stroke system. */
 
   if (!(pop = texture_paint_init(C, op, mouse))) {
@@ -863,8 +863,8 @@ static int grab_clone_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   cmv = MEM_callocN(sizeof(GrabClone), "GrabClone");
   copy_v2_v2(cmv->startoffset, brush->clone.offset);
-  cmv->startx = event->x;
-  cmv->starty = event->y;
+  cmv->startx = event->xy[0];
+  cmv->starty = event->xy[1];
   op->customdata = cmv;
 
   WM_event_add_modal_handler(C, op);
@@ -890,7 +890,7 @@ static int grab_clone_modal(bContext *C, wmOperator *op, const wmEvent *event)
       /* mouse moved, so move the clone image */
       UI_view2d_region_to_view(
           &region->v2d, cmv->startx - xmin, cmv->starty - ymin, &startfx, &startfy);
-      UI_view2d_region_to_view(&region->v2d, event->x - xmin, event->y - ymin, &fx, &fy);
+      UI_view2d_region_to_view(&region->v2d, event->xy[0] - xmin, event->xy[1] - ymin, &fx, &fy);
 
       delta[0] = fx - startfx;
       delta[1] = fy - startfy;
@@ -1153,7 +1153,7 @@ void ED_object_texture_paint_mode_enter_ex(Main *bmain, Scene *scene, Object *ob
           SpaceImage *sima = (SpaceImage *)sl;
 
           if (!sima->pin) {
-            ED_space_image_set(bmain, sima, NULL, ima, true);
+            ED_space_image_set(bmain, sima, ima, true);
           }
         }
       }

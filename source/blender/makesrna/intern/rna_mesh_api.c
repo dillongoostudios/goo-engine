@@ -172,7 +172,7 @@ static void rna_Mesh_normals_split_custom_set_from_vertices(Mesh *mesh,
   DEG_id_tag_update(&mesh->id, 0);
 }
 
-static void rna_Mesh_transform(Mesh *mesh, float *mat, bool shape_keys)
+static void rna_Mesh_transform(Mesh *mesh, float mat[16], bool shape_keys)
 {
   BKE_mesh_transform(mesh, (float(*)[4])mat, shape_keys);
 
@@ -208,7 +208,7 @@ static void rna_Mesh_clear_geometry(Mesh *mesh)
 {
   BKE_mesh_clear_geometry(mesh);
 
-  DEG_id_tag_update(&mesh->id, ID_RECALC_GEOMETRY);
+  DEG_id_tag_update(&mesh->id, ID_RECALC_GEOMETRY_ALL_MODES);
   WM_main_add_notifier(NC_GEOM | ND_DATA, mesh);
 }
 
@@ -249,7 +249,7 @@ void RNA_api_mesh(StructRNA *srna)
   func = RNA_def_function(srna, "split_faces", "rna_Mesh_split_faces");
   RNA_def_function_ui_description(func, "Split faces based on the edge angle");
   RNA_def_boolean(
-      func, "free_loop_normals", 1, "Free Loop Notmals", "Free loop normals custom data layer");
+      func, "free_loop_normals", 1, "Free Loop Normals", "Free loop normals custom data layer");
 
   func = RNA_def_function(srna, "calc_tangents", "rna_Mesh_calc_tangents");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
@@ -288,7 +288,7 @@ void RNA_api_mesh(StructRNA *srna)
                                   "Define custom split normals of this mesh "
                                   "(use zero-vectors to keep auto ones)");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
-  /* TODO, see how array size of 0 works, this shouldn't be used */
+  /* TODO: see how array size of 0 works, this shouldn't be used. */
   parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
   RNA_def_property_multi_array(parm, 2, normals_array_dim);
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, PARM_REQUIRED);
@@ -301,7 +301,7 @@ void RNA_api_mesh(StructRNA *srna)
       "Define custom split normals of this mesh, from vertices' normals "
       "(use zero-vectors to keep auto ones)");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
-  /* TODO, see how array size of 0 works, this shouldn't be used */
+  /* TODO: see how array size of 0 works, this shouldn't be used. */
   parm = RNA_def_float_array(func, "normals", 1, NULL, -1.0f, 1.0f, "", "Normals", 0.0f, 0.0f);
   RNA_def_property_multi_array(parm, 2, normals_array_dim);
   RNA_def_parameter_flags(parm, PROP_DYNAMIC, PARM_REQUIRED);

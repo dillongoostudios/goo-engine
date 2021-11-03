@@ -86,12 +86,12 @@ static void gizmo_bbone_offset_get(const wmGizmo *UNUSED(gz),
   if (bh->index == 0) {
     bh->co[1] = pchan->bone->ease1 / BBONE_SCALE_Y;
     bh->co[0] = pchan->curve_in_x;
-    bh->co[2] = pchan->curve_in_y;
+    bh->co[2] = pchan->curve_in_z;
   }
   else {
     bh->co[1] = -pchan->bone->ease2 / BBONE_SCALE_Y;
     bh->co[0] = pchan->curve_out_x;
-    bh->co[2] = pchan->curve_out_y;
+    bh->co[2] = pchan->curve_out_z;
   }
   copy_v3_v3(value, bh->co);
 }
@@ -111,12 +111,12 @@ static void gizmo_bbone_offset_set(const wmGizmo *UNUSED(gz),
   if (bh->index == 0) {
     pchan->bone->ease1 = max_ff(0.0f, bh->co[1] * BBONE_SCALE_Y);
     pchan->curve_in_x = bh->co[0];
-    pchan->curve_in_y = bh->co[2];
+    pchan->curve_in_z = bh->co[2];
   }
   else {
     pchan->bone->ease2 = max_ff(0.0f, -bh->co[1] * BBONE_SCALE_Y);
     pchan->curve_out_x = bh->co[0];
-    pchan->curve_out_y = bh->co[2];
+    pchan->curve_out_z = bh->co[2];
   }
 }
 
@@ -199,7 +199,7 @@ static void WIDGETGROUP_armature_spline_refresh(const bContext *C, wmGizmoGroup 
     mul_m4_m4m4(mat, ob->obmat, (i == 0) ? pchan->disp_mat : pchan->disp_tail_mat);
     copy_m4_m4(gz->matrix_space, mat);
 
-    /* need to set property here for undo. TODO would prefer to do this in _init */
+    /* need to set property here for undo. TODO: would prefer to do this in _init. */
     WM_gizmo_target_property_def_func(gz,
                                       "offset",
                                       &(const struct wmGizmoPropertyFnParams){

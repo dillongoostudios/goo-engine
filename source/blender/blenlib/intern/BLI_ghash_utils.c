@@ -53,7 +53,7 @@ uint BLI_ghashutil_ptrhash(const void *key)
   /* bottom 3 or 4 bits are likely to be 0; rotate y by 4 to avoid
    * excessive hash collisions for dicts and sets */
 
-  /* Note: Unlike Python 'sizeof(uint)' is used instead of 'sizeof(void *)',
+  /* NOTE: Unlike Python 'sizeof(uint)' is used instead of 'sizeof(void *)',
    * Otherwise casting to 'uint' ignores the upper bits on 64bit platforms. */
   return (uint)(y >> 4) | ((uint)y << (sizeof(uint[8]) - 4));
 }
@@ -138,10 +138,10 @@ size_t BLI_ghashutil_combine_hash(size_t hash_a, size_t hash_b)
  * This function implements the widely used "djb" hash apparently posted
  * by Daniel Bernstein to comp.lang.c some time ago.  The 32 bit
  * unsigned hash value starts at 5381 and for each byte 'c' in the
- * string, is updated: ``hash = hash * 33 + c``.  This
- * function uses the signed value of each byte.
+ * string, is updated: `hash = hash * 33 + c`.
+ * This function uses the signed value of each byte.
  *
- * note: this is the same hash method that glib 2.34.0 uses.
+ * NOTE: this is the same hash method that glib 2.34.0 uses.
  */
 uint BLI_ghashutil_strhash_n(const char *key, size_t n)
 {

@@ -41,7 +41,12 @@
 #include "RNA_access.h"
 
 #include "transform.h"
+#include "transform_snap.h"
+
 #include "transform_convert.h"
+#include "transform_snap.h"
+
+#include "transform_mode.h"
 
 /** Used for NLA transform (stored in #TransData.extra pointer). */
 typedef struct TransDataNla {
@@ -203,29 +208,17 @@ void createTransNlaData(bContext *C, TransInfo *t)
               /* just set tdn to assume that it only has one handle for now */
               tdn->handle = -1;
 
-              /* now, link the transform data up to this data */
+              /* Now, link the transform data up to this data. */
+              td->loc = tdn->h1;
+              copy_v3_v3(td->iloc, tdn->h1);
+
               if (ELEM(t->mode, TFM_TRANSLATION, TFM_TIME_EXTEND)) {
-                td->loc = tdn->h1;
-                copy_v3_v3(td->iloc, tdn->h1);
-
-                /* store all the other gunk that is required by transform */
+                /* Store all the other gunk that is required by transform. */
                 copy_v3_v3(td->center, center);
-                memset(td->axismtx, 0, sizeof(td->axismtx));
                 td->axismtx[2][2] = 1.0f;
-
-                td->ext = NULL;
-                td->val = NULL;
-
                 td->flag |= TD_SELECTED;
-                td->dist = 0.0f;
-
                 unit_m3(td->mtx);
                 unit_m3(td->smtx);
-              }
-              else {
-                /* time scaling only needs single value */
-                td->val = &tdn->h1[0];
-                td->ival = tdn->h1[0];
               }
 
               td->extra = tdn;
@@ -236,29 +229,17 @@ void createTransNlaData(bContext *C, TransInfo *t)
                * then we're doing both, otherwise, only end */
               tdn->handle = (tdn->handle) ? 2 : 1;
 
-              /* now, link the transform data up to this data */
+              /* Now, link the transform data up to this data. */
+              td->loc = tdn->h2;
+              copy_v3_v3(td->iloc, tdn->h2);
+
               if (ELEM(t->mode, TFM_TRANSLATION, TFM_TIME_EXTEND)) {
-                td->loc = tdn->h2;
-                copy_v3_v3(td->iloc, tdn->h2);
-
-                /* store all the other gunk that is required by transform */
+                /* Store all the other gunk that is required by transform. */
                 copy_v3_v3(td->center, center);
-                memset(td->axismtx, 0, sizeof(td->axismtx));
                 td->axismtx[2][2] = 1.0f;
-
-                td->ext = NULL;
-                td->val = NULL;
-
                 td->flag |= TD_SELECTED;
-                td->dist = 0.0f;
-
                 unit_m3(td->mtx);
                 unit_m3(td->smtx);
-              }
-              else {
-                /* time scaling only needs single value */
-                td->val = &tdn->h2[0];
-                td->ival = tdn->h2[0];
               }
 
               td->extra = tdn;
@@ -289,21 +270,30 @@ void createTransNlaData(bContext *C, TransInfo *t)
 void recalcData_nla(TransInfo *t)
 {
   SpaceNla *snla = (SpaceNla *)t->area->spacedata.first;
-  Scene *scene = t->scene;
-  double secf = FPS;
-  int i;
 
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
-  TransDataNla *tdn = tc->custom.type.data;
+
+  /* handle auto-snapping
+   * NOTE: only do this when transform is still running, or we can't restore
+   */
+  if (t->state != TRANS_CANCEL) {
+    const short autosnap = getAnimEdit_SnapMode(t);
+    if (autosnap != SACTSNAP_OFF) {
+      TransData *td = tc->data;
+      for (int i = 0; i < tc->data_len; i++, td++) {
+        transform_snap_anim_flush_data(t, td, autosnap, td->loc);
+      }
+    }
+  }
 
   /* For each strip we've got, perform some additional validation of the values
    * that got set before using RNA to set the value (which does some special
    * operations when setting these values to make sure that everything works ok).
    */
-  for (i = 0; i < tc->data_len; i++, tdn++) {
+  TransDataNla *tdn = tc->custom.type.data;
+  for (int i = 0; i < tc->data_len; i++, tdn++) {
     NlaStrip *strip = tdn->strip;
     PointerRNA strip_ptr;
-    short iter;
     int delta_y1, delta_y2;
 
     /* if this tdn has no handles, that means it is just a dummy that should be skipped */
@@ -367,8 +357,7 @@ void recalcData_nla(TransInfo *t)
       next = next->next;
     }
 
-    for (iter = 0; iter < 5; iter++) {
-
+    for (short iter = 0; iter < 5; iter++) {
       const bool pExceeded = (prev != NULL) && (tdn->h1[0] < prev->end);
       const bool nExceeded = (next != NULL) && (tdn->h2[0] > next->start);
 
@@ -404,50 +393,6 @@ void recalcData_nla(TransInfo *t)
       }
       else { /* all is fine and well */
         break;
-      }
-    }
-
-    /* handle auto-snapping
-     * NOTE: only do this when transform is still running, or we can't restore
-     */
-    if (t->state != TRANS_CANCEL) {
-      switch (snla->autosnap) {
-        case SACTSNAP_FRAME: /* snap to nearest frame */
-        case SACTSNAP_STEP:  /* frame step - this is basically the same,
-                              * since we don't have any remapping going on */
-        {
-          tdn->h1[0] = floorf(tdn->h1[0] + 0.5f);
-          tdn->h2[0] = floorf(tdn->h2[0] + 0.5f);
-          break;
-        }
-
-        case SACTSNAP_SECOND: /* snap to nearest second */
-        case SACTSNAP_TSTEP:  /* second step - this is basically the same,
-                               * since we don't have any remapping going on */
-        {
-          /* This case behaves differently from the rest, since lengths of strips
-           * may not be multiples of a second. If we just naively resize adjust
-           * the handles, things may not work correctly. Instead, we only snap
-           * the first handle, and move the other to fit.
-           *
-           * FIXME: we do run into problems here when user attempts to negatively
-           *        scale the strip, as it then just compresses down and refuses
-           *        to expand out the other end.
-           */
-          float h1_new = (float)(floor(((double)tdn->h1[0] / secf) + 0.5) * secf);
-          float delta = h1_new - tdn->h1[0];
-
-          tdn->h1[0] = h1_new;
-          tdn->h2[0] += delta;
-          break;
-        }
-
-        case SACTSNAP_MARKER: /* snap to nearest marker */
-        {
-          tdn->h1[0] = (float)ED_markers_find_nearest_marker_time(&t->scene->markers, tdn->h1[0]);
-          tdn->h2[0] = (float)ED_markers_find_nearest_marker_time(&t->scene->markers, tdn->h2[0]);
-          break;
-        }
       }
     }
 

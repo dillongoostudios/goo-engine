@@ -26,56 +26,74 @@ namespace blender::compositor {
 
 class GaussianBokehBlurOperation : public BlurBaseOperation {
  private:
-  float *m_gausstab;
-  int m_radx, m_rady;
-  void updateGauss();
+  float *gausstab_;
+  int radx_, rady_;
+  float radxf_;
+  float radyf_;
+  void update_gauss();
 
  public:
   GaussianBokehBlurOperation();
-  void initExecution() override;
-  void *initializeTileData(rcti *rect) override;
+  void init_data() override;
+  void init_execution() override;
+  void *initialize_tile_data(rcti *rect) override;
   /**
    * The inner loop of this operation.
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+
+  void get_area_of_interest(const int input_idx,
+                            const rcti &output_area,
+                            rcti &r_input_area) override;
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 class GaussianBlurReferenceOperation : public BlurBaseOperation {
  private:
-  float **m_maintabs;
+  float **maintabs_;
 
-  void updateGauss();
-  int m_filtersizex;
-  int m_filtersizey;
-  float m_radx;
-  float m_rady;
+  void update_gauss();
+  int filtersizex_;
+  int filtersizey_;
+  float radx_;
+  float rady_;
 
  public:
   GaussianBlurReferenceOperation();
-  void initExecution() override;
-  void *initializeTileData(rcti *rect) override;
+  void init_data() override;
+  void init_execution() override;
+  void *initialize_tile_data(rcti *rect) override;
   /**
    * The inner loop of this operation.
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+
+  void get_area_of_interest(const int input_idx,
+                            const rcti &output_area,
+                            rcti &r_input_area) override;
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

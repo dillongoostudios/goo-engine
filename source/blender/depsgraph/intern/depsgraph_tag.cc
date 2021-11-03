@@ -230,9 +230,10 @@ void depsgraph_tag_to_component_opcode(const ID *id,
     case ID_RECALC_SOURCE:
       *component_type = NodeType::PARAMETERS;
       break;
+    case ID_RECALC_GEOMETRY_ALL_MODES:
     case ID_RECALC_ALL:
     case ID_RECALC_PSYS_ALL:
-      BLI_assert(!"Should not happen");
+      BLI_assert_msg(0, "Should not happen");
       break;
     case ID_RECALC_TAG_FOR_UNDO:
       break; /* Must be ignored by depsgraph. */
@@ -451,7 +452,7 @@ const char *update_source_as_string(eUpdateSource source)
     case DEG_UPDATE_SOURCE_VISIBILITY:
       return "VISIBILITY";
   }
-  BLI_assert(!"Should never happen.");
+  BLI_assert_msg(0, "Should never happen.");
   return "UNKNOWN";
 }
 
@@ -500,8 +501,23 @@ void deg_graph_node_tag_zero(Main *bmain,
   deg_graph_id_tag_legacy_compat(bmain, graph, id, (IDRecalcFlag)0, update_source);
 }
 
-void deg_graph_on_visible_update(Main *bmain, Depsgraph *graph, const bool do_time)
+void graph_tag_on_visible_update(Depsgraph *graph, const bool do_time)
 {
+  graph->need_visibility_update = true;
+  graph->need_visibility_time_update |= do_time;
+}
+
+} /* namespace */
+
+void graph_tag_ids_for_visible_update(Depsgraph *graph)
+{
+  if (!graph->need_visibility_update) {
+    return;
+  }
+
+  const bool do_time = graph->need_visibility_time_update;
+  Main *bmain = graph->bmain;
+
   /* NOTE: It is possible to have this function called with `do_time=false` first and later (prior
    * to evaluation though) with `do_time=true`. This means early output checks should be aware of
    * this. */
@@ -559,9 +575,10 @@ void deg_graph_on_visible_update(Main *bmain, Depsgraph *graph, const bool do_ti
      * dependency graph. */
     id_node->previously_visible_components_mask = id_node->visible_components_mask;
   }
-}
 
-} /* namespace */
+  graph->need_visibility_update = false;
+  graph->need_visibility_time_update = false;
+}
 
 NodeType geometry_tag_to_component(const ID *id)
 {
@@ -629,8 +646,8 @@ void graph_id_tag_update(
 {
   const int debug_flags = (graph != nullptr) ? DEG_debug_flags_get((::Depsgraph *)graph) : G.debug;
   if (graph != nullptr && graph->is_evaluating) {
-    if (debug_flags & G_DEBUG_DEPSGRAPH) {
-      printf("ID tagged for update during dependency graph evaluation.");
+    if (debug_flags & G_DEBUG_DEPSGRAPH_TAG) {
+      printf("ID tagged for update during dependency graph evaluation.\n");
     }
     return;
   }
@@ -689,6 +706,8 @@ const char *DEG_update_tag_as_string(IDRecalcFlag flag)
       return "TRANSFORM";
     case ID_RECALC_GEOMETRY:
       return "GEOMETRY";
+    case ID_RECALC_GEOMETRY_ALL_MODES:
+      return "GEOMETRY_ALL_MODES";
     case ID_RECALC_ANIMATION:
       return "ANIMATION";
     case ID_RECALC_PSYS_REDO:
@@ -739,7 +758,7 @@ const char *DEG_update_tag_as_string(IDRecalcFlag flag)
   return nullptr;
 }
 
-/* Data-Based Tagging  */
+/* Data-Based Tagging. */
 
 /* Tag given ID for an update in all the dependency graphs. */
 void DEG_id_tag_update(ID *id, int flag)
@@ -804,16 +823,16 @@ void DEG_id_type_tag(Main *bmain, short id_type)
 }
 
 /* Update dependency graph when visible scenes/layers changes. */
-void DEG_graph_on_visible_update(Main *bmain, Depsgraph *depsgraph, const bool do_time)
+void DEG_graph_tag_on_visible_update(Depsgraph *depsgraph, const bool do_time)
 {
   deg::Depsgraph *graph = (deg::Depsgraph *)depsgraph;
-  deg::deg_graph_on_visible_update(bmain, graph, do_time);
+  deg::graph_tag_on_visible_update(graph, do_time);
 }
 
-void DEG_on_visible_update(Main *bmain, const bool do_time)
+void DEG_tag_on_visible_update(Main *bmain, const bool do_time)
 {
   for (deg::Depsgraph *depsgraph : deg::get_all_registered_graphs(bmain)) {
-    DEG_graph_on_visible_update(bmain, reinterpret_cast<::Depsgraph *>(depsgraph), do_time);
+    deg::graph_tag_on_visible_update(depsgraph, do_time);
   }
 }
 

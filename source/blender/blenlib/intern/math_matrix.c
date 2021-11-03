@@ -180,6 +180,21 @@ void copy_m4_m2(float m1[4][4], const float m2[2][2])
   m1[3][3] = 1.0f;
 }
 
+void copy_m3d_m3(double m1[3][3], const float m2[3][3])
+{
+  m1[0][0] = m2[0][0];
+  m1[0][1] = m2[0][1];
+  m1[0][2] = m2[0][2];
+
+  m1[1][0] = m2[1][0];
+  m1[1][1] = m2[1][1];
+  m1[1][2] = m2[1][2];
+
+  m1[2][0] = m2[2][0];
+  m1[2][1] = m2[2][1];
+  m1[2][2] = m2[2][2];
+}
+
 void copy_m4d_m4(double m1[4][4], const float m2[4][4])
 {
   m1[0][0] = m2[0][0];
@@ -276,7 +291,7 @@ void mul_m4_m4m4_uniq(float R[4][4], const float A[4][4], const float B[4][4])
 {
   BLI_assert(!ELEM(R, A, B));
 
-  /* matrix product: R[j][k] = A[j][i] . B[i][k] */
+  /* Matrix product: `R[j][k] = A[j][i] . B[i][k]`. */
 #ifdef BLI_HAVE_SSE2
   __m128 A0 = _mm_loadu_ps(A[0]);
   __m128 A1 = _mm_loadu_ps(A[1]);
@@ -321,7 +336,7 @@ void mul_m4_m4m4_db_uniq(double R[4][4], const double A[4][4], const double B[4]
 {
   BLI_assert(!ELEM(R, A, B));
 
-  /* matrix product: R[j][k] = A[j][i] . B[i][k] */
+  /* Matrix product: `R[j][k] = A[j][i] . B[i][k]`. */
 
   R[0][0] = B[0][0] * A[0][0] + B[0][1] * A[1][0] + B[0][2] * A[2][0] + B[0][3] * A[3][0];
   R[0][1] = B[0][0] * A[0][1] + B[0][1] * A[1][1] + B[0][2] * A[2][1] + B[0][3] * A[3][1];
@@ -349,7 +364,7 @@ void mul_m4db_m4db_m4fl_uniq(double R[4][4], const double A[4][4], const float B
   /* Remove second check since types don't match. */
   BLI_assert(!ELEM(R, A /*, B */));
 
-  /* matrix product: R[j][k] = A[j][i] . B[i][k] */
+  /* Matrix product: `R[j][k] = A[j][i] . B[i][k]`. */
 
   R[0][0] = B[0][0] * A[0][0] + B[0][1] * A[1][0] + B[0][2] * A[2][0] + B[0][3] * A[3][0];
   R[0][1] = B[0][0] * A[0][1] + B[0][1] * A[1][1] + B[0][2] * A[2][1] + B[0][3] * A[3][1];
@@ -1113,6 +1128,13 @@ float determinant_m4_mat3_array(const float m[4][4])
           m[2][0] * (m[0][1] * m[1][2] - m[0][2] * m[1][1]));
 }
 
+double determinant_m3_array_db(const double m[3][3])
+{
+  return (m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+          m[1][0] * (m[0][1] * m[2][2] - m[0][2] * m[2][1]) +
+          m[2][0] * (m[0][1] * m[1][2] - m[0][2] * m[1][1]));
+}
+
 bool invert_m3_ex(float m[3][3], const float epsilon)
 {
   float tmp[3][3];
@@ -1290,6 +1312,9 @@ bool invert_m4_m4(float inverse[4][4], const float mat[4][4])
  * Combines transformations, handling scale separately in a manner equivalent
  * to the Aligned Inherit Scale mode, in order to avoid creating shear.
  * If A scale is uniform, the result is equivalent to ordinary multiplication.
+ *
+ * NOTE: this effectively takes output location from simple multiplication,
+ *       and uses mul_m4_m4m4_split_channels for rotation and scale.
  */
 void mul_m4_m4m4_aligned_scale(float R[4][4], const float A[4][4], const float B[4][4])
 {
@@ -1301,6 +1326,25 @@ void mul_m4_m4m4_aligned_scale(float R[4][4], const float A[4][4], const float B
   mat4_to_loc_rot_size(loc_b, rot_b, size_b, B);
 
   mul_v3_m4v3(loc_r, A, loc_b);
+  mul_m3_m3m3_uniq(rot_r, rot_a, rot_b);
+  mul_v3_v3v3(size_r, size_a, size_b);
+
+  loc_rot_size_to_mat4(R, loc_r, rot_r, size_r);
+}
+
+/**
+ * Separately combines location, rotation and scale of the input matrices.
+ */
+void mul_m4_m4m4_split_channels(float R[4][4], const float A[4][4], const float B[4][4])
+{
+  float loc_a[3], rot_a[3][3], size_a[3];
+  float loc_b[3], rot_b[3][3], size_b[3];
+  float loc_r[3], rot_r[3][3], size_r[3];
+
+  mat4_to_loc_rot_size(loc_a, rot_a, size_a, A);
+  mat4_to_loc_rot_size(loc_b, rot_b, size_b, B);
+
+  add_v3_v3v3(loc_r, loc_a, loc_b);
   mul_m3_m3m3_uniq(rot_r, rot_a, rot_b);
   mul_v3_v3v3(size_r, size_a, size_b);
 
@@ -2252,8 +2296,8 @@ void mat4_to_loc_quat(float loc[3], float quat[4], const float wmat[4][4])
   copy_m3_m4(mat3, wmat);
   normalize_m3_m3(mat3_n, mat3);
 
-  /* so scale doesn't interfere with rotation T24291. */
-  /* note: this is a workaround for negative matrix not working for rotation conversion, FIXME */
+  /* So scale doesn't interfere with rotation T24291. */
+  /* FIXME: this is a workaround for negative matrix not working for rotation conversion. */
   if (is_negative_m3(mat3)) {
     negate_m3(mat3_n);
   }
@@ -2316,29 +2360,11 @@ void scale_m4_fl(float R[4][4], float scale)
   R[3][0] = R[3][1] = R[3][2] = 0.0;
 }
 
-void translate_m3(float mat[3][3], float tx, float ty)
-{
-  mat[2][0] += (tx * mat[0][0] + ty * mat[1][0]);
-  mat[2][1] += (tx * mat[0][1] + ty * mat[1][1]);
-}
-
 void translate_m4(float mat[4][4], float Tx, float Ty, float Tz)
 {
   mat[3][0] += (Tx * mat[0][0] + Ty * mat[1][0] + Tz * mat[2][0]);
   mat[3][1] += (Tx * mat[0][1] + Ty * mat[1][1] + Tz * mat[2][1]);
   mat[3][2] += (Tx * mat[0][2] + Ty * mat[1][2] + Tz * mat[2][2]);
-}
-
-void rotate_m3(float mat[3][3], const float angle)
-{
-  const float angle_cos = cosf(angle);
-  const float angle_sin = sinf(angle);
-
-  for (int col = 0; col < 3; col++) {
-    float temp = angle_cos * mat[0][col] + angle_sin * mat[1][col];
-    mat[1][col] = -angle_sin * mat[0][col] + angle_cos * mat[1][col];
-    mat[0][col] = temp;
-  }
 }
 
 /* TODO: enum for axis? */
@@ -2386,12 +2412,6 @@ void rotate_m4(float mat[4][4], const char axis, const float angle)
   }
 }
 
-void rescale_m3(float mat[3][3], const float scale[2])
-{
-  mul_v3_fl(mat[0], scale[0]);
-  mul_v3_fl(mat[1], scale[1]);
-}
-
 /** Scale a matrix in-place. */
 void rescale_m4(float mat[4][4], const float scale[3])
 {
@@ -2420,20 +2440,6 @@ void transform_pivot_set_m4(float mat[4][4], const float pivot[3])
   /* invert the matrix */
   negate_v3(tmat[3]);
   mul_m4_m4m4(mat, mat, tmat);
-}
-
-void transform_pivot_set_m3(float mat[3][3], const float pivot[2])
-{
-  float tmat[3][3];
-
-  unit_m3(tmat);
-
-  copy_v2_v2(tmat[2], pivot);
-  mul_m3_m3m3(mat, tmat, mat);
-
-  /* invert the matrix */
-  negate_v2(tmat[2]);
-  mul_m3_m3m3(mat, mat, tmat);
 }
 
 void blend_m3_m3m3(float out[3][3],
@@ -2616,21 +2622,6 @@ bool equals_m4m4(const float mat1[4][4], const float mat2[4][4])
 }
 
 /**
- * Make a 3x3 matrix out of 3 transform components.
- * Matrices are made in the order: `loc * rot * scale`
- */
-void loc_rot_size_to_mat3(float R[3][3],
-                          const float loc[2],
-                          const float angle,
-                          const float size[2])
-{
-  unit_m3(R);
-  translate_m3(R, loc[0], loc[1]);
-  rotate_m3(R, angle);
-  rescale_m3(R, size);
-}
-
-/**
  * Make a 4x4 matrix out of 3 transform components.
  * Matrices are made in the order: `scale * rot * loc`
  */
@@ -2665,7 +2656,7 @@ void loc_eul_size_to_mat4(float R[4][4],
   size_to_mat3(smat, size);
   mul_m3_m3m3(tmat, rmat, smat);
 
-  /* copy rot/scale part to output matrix*/
+  /* Copy rot/scale part to output matrix. */
   copy_m4_m3(R, tmat);
 
   /* copy location to matrix */
@@ -2686,18 +2677,18 @@ void loc_eulO_size_to_mat4(float R[4][4],
 {
   float rmat[3][3], smat[3][3], tmat[3][3];
 
-  /* initialize new matrix */
+  /* Initialize new matrix. */
   unit_m4(R);
 
-  /* make rotation + scaling part */
+  /* Make rotation + scaling part. */
   eulO_to_mat3(rmat, eul, rotOrder);
   size_to_mat3(smat, size);
   mul_m3_m3m3(tmat, rmat, smat);
 
-  /* copy rot/scale part to output matrix*/
+  /* Copy rot/scale part to output matrix. */
   copy_m4_m3(R, tmat);
 
-  /* copy location to matrix */
+  /* Copy location to matrix. */
   R[3][0] = loc[0];
   R[3][1] = loc[1];
   R[3][2] = loc[2];
@@ -2722,7 +2713,7 @@ void loc_quat_size_to_mat4(float R[4][4],
   size_to_mat3(smat, size);
   mul_m3_m3m3(tmat, rmat, smat);
 
-  /* copy rot/scale part to output matrix*/
+  /* Copy rot/scale part to output matrix. */
   copy_m4_m3(R, tmat);
 
   /* copy location to matrix */

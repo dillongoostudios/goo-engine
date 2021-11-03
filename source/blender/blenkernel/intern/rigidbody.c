@@ -18,7 +18,7 @@
  */
 
 /** \file
- * \ingroup blenkernel
+ * \ingroup bke
  * \brief Blender-side interface and methods for dealing with Rigid Body simulations
  */
 
@@ -302,7 +302,7 @@ void BKE_rigidbody_object_copy(Main *bmain, Object *ob_dst, const Object *ob_src
   ob_dst->rigidbody_object = rigidbody_copy_object(ob_src, flag);
   ob_dst->rigidbody_constraint = rigidbody_copy_constraint(ob_src, flag);
 
-  if (flag & LIB_ID_CREATE_NO_MAIN) {
+  if ((flag & (LIB_ID_CREATE_NO_MAIN | LIB_ID_COPY_RIGID_BODY_NO_COLLECTION_HANDLING)) != 0) {
     return;
   }
 
@@ -367,7 +367,7 @@ static Mesh *rigidbody_get_mesh(Object *ob)
   }
 
   /* Just return something sensible so that at least Blender won't crash. */
-  BLI_assert(!"Unknown mesh source");
+  BLI_assert_msg(0, "Unknown mesh source");
   return BKE_object_get_evaluated_mesh(ob);
 }
 
@@ -668,7 +668,7 @@ void BKE_rigidbody_calc_volume(Object *ob, float *r_vol)
     radius = max_fff(size[0], size[1], size[2]) * 0.5f;
   }
 
-  /* calculate volume as appropriate  */
+  /* Calculate volume as appropriate. */
   switch (rbo->shape) {
     case RB_SHAPE_BOX:
       volume = size[0] * size[1] * size[2];
@@ -744,10 +744,10 @@ void BKE_rigidbody_calc_center_of_mass(Object *ob, float r_center[3])
    *   (i.e. Object pivot is centralized in boundbox)
    * - boundbox gives full width
    */
-  /* XXX: all dimensions are auto-determined now... later can add stored settings for this */
+  /* XXX: all dimensions are auto-determined now... later can add stored settings for this. */
   BKE_object_dimensions_get(ob, size);
 
-  /* calculate volume as appropriate  */
+  /* Calculate volume as appropriate. */
   switch (rbo->shape) {
     case RB_SHAPE_BOX:
     case RB_SHAPE_SPHERE:
@@ -1211,8 +1211,8 @@ RigidBodyWorld *BKE_rigidbody_world_copy(RigidBodyWorld *rbw, const int flag)
     id_us_plus((ID *)rbw_copy->constraints);
   }
 
-  if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
-    /* This is a regular copy, and not a CoW copy for depsgraph evaluation */
+  if ((flag & LIB_ID_COPY_SET_COPIED_ON_WRITE) == 0) {
+    /* This is a regular copy, and not a CoW copy for depsgraph evaluation. */
     rbw_copy->shared = MEM_callocN(sizeof(*rbw_copy->shared), "RigidBodyWorld_Shared");
     BKE_ptcache_copy_list(&rbw_copy->shared->ptcaches, &rbw->shared->ptcaches, LIB_ID_COPY_CACHES);
     rbw_copy->shared->pointcache = rbw_copy->shared->ptcaches.first;
@@ -1473,16 +1473,51 @@ static bool rigidbody_add_object_to_scene(Main *bmain, Scene *scene, Object *ob)
   return true;
 }
 
-void BKE_rigidbody_ensure_local_object(Main *bmain, Object *ob)
+static bool rigidbody_add_constraint_to_scene(Main *bmain, Scene *scene, Object *ob)
 {
-  if (ob->rigidbody_object == NULL) {
-    return;
+  /* Add rigid body world and group if they don't exist for convenience */
+  RigidBodyWorld *rbw = BKE_rigidbody_get_world(scene);
+  if (rbw == NULL) {
+    rbw = BKE_rigidbody_create_world(scene);
+    if (rbw == NULL) {
+      return false;
+    }
+
+    BKE_rigidbody_validate_sim_world(scene, rbw, false);
+    scene->rigidbody_world = rbw;
   }
 
-  /* Add newly local object to scene. */
-  for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
-    if (BKE_scene_object_find(scene, ob)) {
-      rigidbody_add_object_to_scene(bmain, scene, ob);
+  if (rbw->constraints == NULL) {
+    rbw->constraints = BKE_collection_add(bmain, NULL, "RigidBodyConstraints");
+    id_fake_user_set(&rbw->constraints->id);
+  }
+
+  /* Add object to rigid body group. */
+  BKE_collection_object_add(bmain, rbw->constraints, ob);
+  BKE_rigidbody_cache_reset(rbw);
+
+  DEG_relations_tag_update(bmain);
+  DEG_id_tag_update(&rbw->constraints->id, ID_RECALC_COPY_ON_WRITE);
+
+  return true;
+}
+
+void BKE_rigidbody_ensure_local_object(Main *bmain, Object *ob)
+{
+  if (ob->rigidbody_object != NULL) {
+    /* Add newly local object to scene. */
+    for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+      if (BKE_scene_object_find(scene, ob)) {
+        rigidbody_add_object_to_scene(bmain, scene, ob);
+      }
+    }
+  }
+  if (ob->rigidbody_constraint != NULL) {
+    /* Add newly local object to scene. */
+    for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
+      if (BKE_scene_object_find(scene, ob)) {
+        rigidbody_add_constraint_to_scene(bmain, scene, ob);
+      }
     }
   }
 }
@@ -1522,7 +1557,7 @@ void BKE_rigidbody_remove_object(Main *bmain, Scene *scene, Object *ob, const bo
   if (rbw) {
 
     /* remove object from array */
-    if (rbw && rbw->objects) {
+    if (rbw->objects) {
       for (i = 0; i < rbw->numbodies; i++) {
         if (rbw->objects[i] == ob) {
           rbw->objects[i] = NULL;
@@ -1787,7 +1822,7 @@ static void rigidbody_update_simulation(Depsgraph *depsgraph,
 
   rigidbody_update_sim_world(scene, rbw);
 
-  /* XXX TODO For rebuild: remove all constraints first.
+  /* XXX TODO: For rebuild: remove all constraints first.
    * Otherwise we can end up deleting objects that are still
    * referenced by constraints, corrupting bullet's internal list.
    *
@@ -1811,11 +1846,12 @@ static void rigidbody_update_simulation(Depsgraph *depsgraph,
       /* validate that we've got valid object set up here... */
       RigidBodyOb *rbo = ob->rigidbody_object;
 
-      /* TODO remove this whole block once we are sure we never get NULL rbo here anymore. */
+      /* TODO: remove this whole block once we are sure we never get NULL rbo here anymore. */
       /* This cannot be done in CoW evaluation context anymore... */
       if (rbo == NULL) {
-        BLI_assert(!"CoW object part of RBW object collection without RB object data, "
-                   "should not happen.\n");
+        BLI_assert_msg(0,
+                       "CoW object part of RBW object collection without RB object data, "
+                       "should not happen.\n");
         /* Since this object is included in the sim group but doesn't have
          * rigid body settings (perhaps it was added manually), add!
          * - assume object to be active? That is the default for newly added settings...
@@ -1868,11 +1904,12 @@ static void rigidbody_update_simulation(Depsgraph *depsgraph,
     /* validate that we've got valid object set up here... */
     RigidBodyCon *rbc = ob->rigidbody_constraint;
 
-    /* TODO remove this whole block once we are sure we never get NULL rbo here anymore. */
+    /* TODO: remove this whole block once we are sure we never get NULL rbo here anymore. */
     /* This cannot be done in CoW evaluation context anymore... */
     if (rbc == NULL) {
-      BLI_assert(!"CoW object part of RBW constraints collection without RB constraint data, "
-                 "should not happen.\n");
+      BLI_assert_msg(0,
+                     "CoW object part of RBW constraints collection without RB constraint data, "
+                     "should not happen.\n");
       /* Since this object is included in the group but doesn't have
        * constraint settings (perhaps it was added manually), add!
        */

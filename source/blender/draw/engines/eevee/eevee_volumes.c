@@ -129,7 +129,7 @@ void EEVEE_volumes_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
   common_data->vol_coord_scale[2] = 1.0f / viewport_size[0];
   common_data->vol_coord_scale[3] = 1.0f / viewport_size[1];
 
-  /* TODO compute snap to maxZBuffer for clustered rendering */
+  /* TODO: compute snap to maxZBuffer for clustered rendering. */
   if ((common_data->vol_tex_size[0] != tex_size[0]) ||
       (common_data->vol_tex_size[1] != tex_size[1]) ||
       (common_data->vol_tex_size[2] != tex_size[2])) {
@@ -394,10 +394,9 @@ static bool eevee_volume_object_grids_init(Object *ob, ListBase *gpu_grids, DRWS
      * - Grid exists and texture was loaded -> use texture.
      * - Grid exists but has zero size or failed to load -> use zero.
      * - Grid does not exist -> use default value. */
-    GPUTexture *grid_tex = (drw_grid) ? drw_grid->texture :
-                                        (volume_grid) ?
-                                        e_data.dummy_zero :
-                                        eevee_volume_default_texture(gpu_grid->default_value);
+    GPUTexture *grid_tex = (drw_grid)    ? drw_grid->texture :
+                           (volume_grid) ? e_data.dummy_zero :
+                                           eevee_volume_default_texture(gpu_grid->default_value);
 
     DRW_shgroup_uniform_texture(grp, gpu_grid->sampler_name, grid_tex);
 
@@ -501,7 +500,7 @@ void EEVEE_volumes_cache_object_add(EEVEE_ViewLayerData *sldata,
                                     Scene *scene,
                                     Object *ob)
 {
-  Material *ma = BKE_object_material_get(ob, 1);
+  Material *ma = BKE_object_material_get_eval(ob, 1);
 
   if (ma == NULL) {
     if (ob->type == OB_VOLUME) {
@@ -554,8 +553,8 @@ void EEVEE_volumes_cache_object_add(EEVEE_ViewLayerData *sldata,
     }
   }
 
-  /* TODO Reduce to number of slices intersecting. */
-  /* TODO Preemptive culling. */
+  /* TODO: Reduce to number of slices intersecting. */
+  /* TODO: Preemptive culling. */
   DRW_shgroup_call_procedural_triangles(grp, ob, sldata->common_data.vol_tex_size[2]);
 
   vedata->stl->effects->enabled_effects |= (EFFECT_VOLUMETRIC | EFFECT_POST_BUFFER);
@@ -711,7 +710,7 @@ void EEVEE_volumes_compute(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     DRW_stats_group_start("Volumetrics");
 
     /* We sample the shadow-maps using shadow sampler. We need to enable Comparison mode.
-     * TODO(fclem): avoid this by using sampler objects.*/
+     * TODO(fclem): avoid this by using sampler objects. */
     GPU_texture_compare_mode(sldata->shadow_cube_pool, true);
     GPU_texture_compare_mode(sldata->shadow_cascade_pool, true);
 

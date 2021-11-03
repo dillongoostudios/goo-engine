@@ -105,31 +105,35 @@ static void shapekey_foreach_id(ID *id, LibraryForeachIDData *data)
   BKE_LIB_FOREACHID_PROCESS_ID(data, key->from, IDWALK_CB_LOOPBACK);
 }
 
+static ID *shapekey_owner_get(Main *UNUSED(bmain), ID *id)
+{
+  return ((Key *)id)->from;
+}
+
 static void shapekey_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Key *key = (Key *)id;
   const bool is_undo = BLO_write_is_undo(writer);
-  if (key->id.us > 0 || is_undo) {
-    /* write LibData */
-    BLO_write_id_struct(writer, Key, id_address, &key->id);
-    BKE_id_blend_write(writer, &key->id);
 
-    if (key->adt) {
-      BKE_animdata_blend_write(writer, key->adt);
+  /* write LibData */
+  BLO_write_id_struct(writer, Key, id_address, &key->id);
+  BKE_id_blend_write(writer, &key->id);
+
+  if (key->adt) {
+    BKE_animdata_blend_write(writer, key->adt);
+  }
+
+  /* direct data */
+  LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
+    KeyBlock tmp_kb = *kb;
+    /* Do not store actual geometry data in case this is a library override ID. */
+    if (ID_IS_OVERRIDE_LIBRARY(key) && !is_undo) {
+      tmp_kb.totelem = 0;
+      tmp_kb.data = NULL;
     }
-
-    /* direct data */
-    LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-      KeyBlock tmp_kb = *kb;
-      /* Do not store actual geometry data in case this is a library override ID. */
-      if (ID_IS_OVERRIDE_LIBRARY(key) && !is_undo) {
-        tmp_kb.totelem = 0;
-        tmp_kb.data = NULL;
-      }
-      BLO_write_struct_at_address(writer, KeyBlock, kb, &tmp_kb);
-      if (tmp_kb.data != NULL) {
-        BLO_write_raw(writer, tmp_kb.totelem * key->elemsize, tmp_kb.data);
-      }
+    BLO_write_struct_at_address(writer, KeyBlock, kb, &tmp_kb);
+    if (tmp_kb.data != NULL) {
+      BLO_write_raw(writer, tmp_kb.totelem * key->elemsize, tmp_kb.data);
     }
   }
 }
@@ -208,7 +212,7 @@ IDTypeInfo IDType_ID_KE = {
     .name = "Key",
     .name_plural = "shape_keys",
     .translation_context = BLT_I18NCONTEXT_ID_SHAPEKEY,
-    .flags = IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_MAKELOCAL,
+    .flags = IDTYPE_FLAGS_NO_LIBLINKING,
 
     .init_data = NULL,
     .copy_data = shapekey_copy_data,
@@ -216,7 +220,9 @@ IDTypeInfo IDType_ID_KE = {
     .make_local = NULL,
     .foreach_id = shapekey_foreach_id,
     .foreach_cache = NULL,
-    .owner_get = NULL, /* Could have one actually? */
+    /* A bit weird, due to shapekeys not being strictly speaking embedded data... But they also
+     * share a lot with those (non linkable, only ever used by one owner ID, etc.). */
+    .owner_get = shapekey_owner_get,
 
     .blend_write = shapekey_blend_write,
     .blend_read_data = shapekey_blend_read_data,
@@ -239,7 +245,7 @@ typedef struct WeightsArrayCache {
 } WeightsArrayCache;
 
 /** Free (or release) any data used by this shapekey (does not free the key itself). */
-void BKE_key_free(Key *key)
+void BKE_key_free_data(Key *key)
 {
   shapekey_free_data(&key->id);
 }
@@ -308,11 +314,11 @@ Key *BKE_key_add(Main *bmain, ID *id) /* common function */
   return key;
 }
 
-/* Sort shape keys and Ipo curves after a change.  This assumes that at most
- * one key was moved, which is a valid assumption for the places it's
- * currently being called.
+/**
+ * Sort shape keys after a change.
+ * This assumes that at most one key was moved,
+ * which is a valid assumption for the places it's currently being called.
  */
-
 void BKE_key_sort(Key *key)
 {
   KeyBlock *kb;
@@ -687,7 +693,7 @@ static bool key_pointer_size(const Key *key, const int mode, int *poinsize, int 
       *poinsize = sizeof(float[KEYELEM_ELEM_SIZE_CURVE]);
       break;
     default:
-      BLI_assert(!"invalid 'key->from' ID type");
+      BLI_assert_msg(0, "invalid 'key->from' ID type");
       return false;
   }
 
@@ -799,7 +805,7 @@ static void cp_key(const int start,
           if (freekref) {
             MEM_freeN(freekref);
           }
-          BLI_assert(!"invalid 'cp[1]'");
+          BLI_assert_msg(0, "invalid 'cp[1]'");
           return;
       }
 
@@ -977,7 +983,7 @@ static void key_evaluate_relative(const int start,
                 if (freefrom) {
                   MEM_freeN(freefrom);
                 }
-                BLI_assert(!"invalid 'cp[1]'");
+                BLI_assert_msg(0, "invalid 'cp[1]'");
                 return;
             }
 
@@ -1197,7 +1203,7 @@ static void do_key(const int start,
           if (freek4) {
             MEM_freeN(freek4);
           }
-          BLI_assert(!"invalid 'cp[1]'");
+          BLI_assert_msg(0, "invalid 'cp[1]'");
           return;
       }
 
@@ -1310,7 +1316,7 @@ static float *get_weights_array(Object *ob, char *vgroup, WeightsArrayCache *cac
 
     if (cache) {
       if (cache->defgroup_weights == NULL) {
-        int num_defgroup = BLI_listbase_count(&ob->defbase);
+        int num_defgroup = BKE_object_defgroup_count(ob);
         cache->defgroup_weights = MEM_callocN(sizeof(*cache->defgroup_weights) * num_defgroup,
                                               "cached defgroup weights");
         cache->num_defgroup_weights = num_defgroup;
@@ -1688,7 +1694,7 @@ void BKE_keyblock_data_set_with_mat4(Key *key,
                                      const float mat[4][4])
 {
   if (key->elemsize != sizeof(float[3])) {
-    BLI_assert(!"Invalid elemsize");
+    BLI_assert_msg(0, "Invalid elemsize");
     return;
   }
 
@@ -1898,7 +1904,7 @@ KeyBlock *BKE_keyblock_add_ctime(Key *key, const char *name, const bool do_force
   return kb;
 }
 
-/* only the active keyblock */
+/* Only the active key-block. */
 KeyBlock *BKE_keyblock_from_object(Object *ob)
 {
   Key *key = BKE_key_from_object(ob);
@@ -2041,9 +2047,9 @@ void BKE_keyblock_convert_to_lattice(KeyBlock *kb, Lattice *lt)
 
 /************************* Curve ************************/
 
-int BKE_keyblock_curve_element_count(ListBase *nurb)
+int BKE_keyblock_curve_element_count(const ListBase *nurb)
 {
-  Nurb *nu;
+  const Nurb *nu;
   int tot = 0;
 
   nu = nurb->first;
@@ -2241,7 +2247,7 @@ void BKE_keyblock_convert_to_mesh(KeyBlock *kb, Mesh *me)
  * Computes normals (vertices, polygons and/or loops ones) of given mesh for given shape key.
  *
  * \param kb: the KeyBlock to use to compute normals.
- * \param mesh: the Mesh to apply keyblock to.
+ * \param mesh: the Mesh to apply key-block to.
  * \param r_vertnors: if non-NULL, an array of vectors, same length as number of vertices.
  * \param r_polynors: if non-NULL, an array of vectors, same length as number of polygons.
  * \param r_loopnors: if non-NULL, an array of vectors, same length as number of loops.
@@ -2274,15 +2280,8 @@ void BKE_keyblock_mesh_calc_normals(struct KeyBlock *kb,
     r_polynors = MEM_mallocN(sizeof(float[3]) * me.totpoly, __func__);
     free_polynors = true;
   }
-  BKE_mesh_calc_normals_poly(me.mvert,
-                             r_vertnors,
-                             me.totvert,
-                             me.mloop,
-                             me.mpoly,
-                             me.totloop,
-                             me.totpoly,
-                             r_polynors,
-                             false);
+  BKE_mesh_calc_normals_poly_and_vertex(
+      me.mvert, me.totvert, me.mloop, me.totloop, me.mpoly, me.totpoly, r_polynors, r_vertnors);
 
   if (r_loopnors) {
     short(*clnors)[2] = CustomData_get_layer(&mesh->ldata, CD_CUSTOMLOOPNORMAL); /* May be NULL. */
@@ -2346,7 +2345,7 @@ void BKE_keyblock_update_from_vertcos(Object *ob, KeyBlock *kb, const float (*ve
     return;
   }
 
-  /* Copy coords to keyblock */
+  /* Copy coords to key-block. */
   if (ELEM(ob->type, OB_MESH, OB_LATTICE)) {
     for (a = 0; a < tot; a++, fp += 3, co++) {
       copy_v3_v3(fp, *co);
@@ -2406,7 +2405,7 @@ void BKE_keyblock_convert_from_vertcos(Object *ob, KeyBlock *kb, const float (*v
 
   kb->data = MEM_mallocN(tot * elemsize, __func__);
 
-  /* Copy coords to keyblock */
+  /* Copy coords to key-block. */
   BKE_keyblock_update_from_vertcos(ob, kb, vertCos);
 }
 
@@ -2595,7 +2594,7 @@ bool BKE_keyblock_move(Object *ob, int org_index, int new_index)
 }
 
 /**
- * Check if given keyblock (as index) is used as basis by others in given key.
+ * Check if given key-block (as index) is used as basis by others in given key.
  */
 bool BKE_keyblock_is_basis(Key *key, const int index)
 {

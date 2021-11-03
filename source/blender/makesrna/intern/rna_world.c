@@ -128,6 +128,7 @@ static void rna_def_lighting(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "distance", PROP_FLOAT, PROP_DISTANCE);
   RNA_def_property_float_sdna(prop, NULL, "aodist");
+  RNA_def_property_range(prop, 0, FLT_MAX);
   RNA_def_property_ui_text(
       prop, "Distance", "Length of rays, defines how far away other faces give occlusion effect");
   RNA_def_property_update(prop, 0, "rna_World_update");
@@ -216,7 +217,7 @@ void RNA_def_world(BlenderRNA *brna)
   RNA_def_property_array(prop, 3);
   RNA_def_property_float_array_default(prop, default_world_color);
   RNA_def_property_ui_text(prop, "Color", "Color of the background");
-  /* RNA_def_property_update(prop, 0, "rna_World_update"); */
+  // RNA_def_property_update(prop, 0, "rna_World_update");
   /* render-only uses this */
   RNA_def_property_update(prop, 0, "rna_World_draw_update");
 
@@ -237,6 +238,7 @@ void RNA_def_world(BlenderRNA *brna)
   prop = RNA_def_property(srna, "node_tree", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, NULL, "nodetree");
   RNA_def_property_clear_flag(prop, PROP_PTR_NO_OWNERSHIP);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(prop, "Node Tree", "Node tree for node based worlds");
 
   prop = RNA_def_property(srna, "use_nodes", PROP_BOOLEAN, PROP_NONE);

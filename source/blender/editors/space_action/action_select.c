@@ -51,8 +51,8 @@
 
 #include "ED_anim_api.h"
 #include "ED_gpencil.h"
-#include "ED_keyframes_draw.h"
 #include "ED_keyframes_edit.h"
+#include "ED_keyframes_keylist.h"
 #include "ED_markers.h"
 #include "ED_mask.h"
 #include "ED_screen.h"
@@ -93,7 +93,7 @@ static bAnimListElem *actkeys_find_list_element_at_position(bAnimContext *ac,
 }
 
 static void actkeys_list_element_to_keylist(bAnimContext *ac,
-                                            DLRBT_Tree *anim_keys,
+                                            struct AnimKeylist *keylist,
                                             bAnimListElem *ale)
 {
   AnimData *adt = ANIM_nla_mapping_get(ac, ale);
@@ -107,44 +107,44 @@ static void actkeys_list_element_to_keylist(bAnimContext *ac,
     switch (ale->datatype) {
       case ALE_SCE: {
         Scene *scene = (Scene *)ale->key_data;
-        scene_to_keylist(ads, scene, anim_keys, 0);
+        scene_to_keylist(ads, scene, keylist, 0);
         break;
       }
       case ALE_OB: {
         Object *ob = (Object *)ale->key_data;
-        ob_to_keylist(ads, ob, anim_keys, 0);
+        ob_to_keylist(ads, ob, keylist, 0);
         break;
       }
       case ALE_ACT: {
         bAction *act = (bAction *)ale->key_data;
-        action_to_keylist(adt, act, anim_keys, 0);
+        action_to_keylist(adt, act, keylist, 0);
         break;
       }
       case ALE_FCURVE: {
         FCurve *fcu = (FCurve *)ale->key_data;
-        fcurve_to_keylist(adt, fcu, anim_keys, 0);
+        fcurve_to_keylist(adt, fcu, keylist, 0);
         break;
       }
     }
   }
   else if (ale->type == ANIMTYPE_SUMMARY) {
     /* dopesheet summary covers everything */
-    summary_to_keylist(ac, anim_keys, 0);
+    summary_to_keylist(ac, keylist, 0);
   }
   else if (ale->type == ANIMTYPE_GROUP) {
     /* TODO: why don't we just give groups key_data too? */
     bActionGroup *agrp = (bActionGroup *)ale->data;
-    agroup_to_keylist(adt, agrp, anim_keys, 0);
+    agroup_to_keylist(adt, agrp, keylist, 0);
   }
   else if (ale->type == ANIMTYPE_GPLAYER) {
     /* TODO: why don't we just give gplayers key_data too? */
     bGPDlayer *gpl = (bGPDlayer *)ale->data;
-    gpl_to_keylist(ads, gpl, anim_keys);
+    gpl_to_keylist(ads, gpl, keylist);
   }
   else if (ale->type == ANIMTYPE_MASKLAYER) {
     /* TODO: why don't we just give masklayers key_data too? */
     MaskLayer *masklay = (MaskLayer *)ale->data;
-    mask_to_keylist(ads, masklay, anim_keys);
+    mask_to_keylist(ads, masklay, keylist);
   }
 }
 
@@ -160,9 +160,9 @@ static void actkeys_find_key_in_list_element(bAnimContext *ac,
 
   View2D *v2d = &ac->region->v2d;
 
-  DLRBT_Tree anim_keys;
-  BLI_dlrbTree_init(&anim_keys);
-  actkeys_list_element_to_keylist(ac, &anim_keys, ale);
+  struct AnimKeylist *keylist = ED_keylist_create();
+  actkeys_list_element_to_keylist(ac, keylist, ale);
+  ED_keylist_prepare_for_direct_access(keylist);
 
   AnimData *adt = ANIM_nla_mapping_get(ac, ale);
 
@@ -171,25 +171,23 @@ static void actkeys_find_key_in_list_element(bAnimContext *ac,
   /* half-size (for either side), but rounded up to nearest int (for easier targeting) */
   key_hsize = roundf(key_hsize / 2.0f);
 
-  float xmin = UI_view2d_region_to_view_x(v2d, region_x - (int)key_hsize);
-  float xmax = UI_view2d_region_to_view_x(v2d, region_x + (int)key_hsize);
+  const Range2f range = {UI_view2d_region_to_view_x(v2d, region_x - (int)key_hsize),
+                         UI_view2d_region_to_view_x(v2d, region_x + (int)key_hsize)};
+  const ActKeyColumn *ak = ED_keylist_find_any_between(keylist, range);
+  if (ak) {
 
-  for (ActKeyColumn *ak = anim_keys.root; ak; ak = (ak->cfra < xmin) ? ak->right : ak->left) {
-    if (IN_RANGE(ak->cfra, xmin, xmax)) {
-      /* set the frame to use, and apply inverse-correction for NLA-mapping
-       * so that the frame will get selected by the selection functions without
-       * requiring to map each frame once again...
-       */
-      *r_selx = BKE_nla_tweakedit_remap(adt, ak->cfra, NLATIME_CONVERT_UNMAP);
-      *r_frame = ak->cfra;
-      *r_found = true;
-      *r_is_selected = (ak->sel & SELECT) != 0;
-      break;
-    }
+    /* set the frame to use, and apply inverse-correction for NLA-mapping
+     * so that the frame will get selected by the selection functions without
+     * requiring to map each frame once again...
+     */
+    *r_selx = BKE_nla_tweakedit_remap(adt, ak->cfra, NLATIME_CONVERT_UNMAP);
+    *r_frame = ak->cfra;
+    *r_found = true;
+    *r_is_selected = (ak->sel & SELECT) != 0;
   }
 
   /* cleanup temporary lists */
-  BLI_dlrbTree_free(&anim_keys);
+  ED_keylist_free(keylist);
 }
 
 static void actkeys_find_key_at_position(bAnimContext *ac,
@@ -470,7 +468,7 @@ static void box_select_action(bAnimContext *ac, const rcti rect, short mode, sho
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_LIST_CHANNELS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
-  /* get beztriple editing/validation funcs  */
+  /* Get beztriple editing/validation funcs. */
   sel_data.select_cb = ANIM_editkeyframes_select(selectmode);
 
   if (ELEM(mode, ACTKEYS_BORDERSEL_FRAMERANGE, ACTKEYS_BORDERSEL_ALLKEYS)) {
@@ -708,7 +706,7 @@ static void region_select_action_keys(
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_LIST_VISIBLE | ANIMFILTER_LIST_CHANNELS);
   ANIM_animdata_filter(ac, &anim_data, filter, ac->data, ac->datatype);
 
-  /* get beztriple editing/validation funcs  */
+  /* Get beztriple editing/validation funcs. */
   sel_data.select_cb = ANIM_editkeyframes_select(selectmode);
   sel_data.ok_cb = ANIM_editkeyframes_ok(mode);
 
@@ -836,7 +834,7 @@ void ACTION_OT_select_lasso(wmOperatorType *ot)
   ot->cancel = WM_gesture_lasso_cancel;
 
   /* flags */
-  ot->flag = OPTYPE_UNDO;
+  ot->flag = OPTYPE_UNDO | OPTYPE_DEPENDS_ON_CURSOR;
 
   /* properties */
   WM_operator_properties_gesture_lasso(ot);
@@ -933,8 +931,8 @@ static const EnumPropertyItem prop_column_select_types[] = {
 /* ------------------- */
 
 /* Selects all visible keyframes between the specified markers */
-/* TODO, this is almost an _exact_ duplicate of a function of the same name in graph_select.c
- * should de-duplicate - campbell */
+/* TODO(campbell): this is almost an _exact_ duplicate of a function of the same name in
+ * graph_select.c should de-duplicate. */
 static void markers_selectkeys_between(bAnimContext *ac)
 {
   ListBase anim_data = {NULL, NULL};
@@ -1497,7 +1495,7 @@ void ACTION_OT_select_leftright(wmOperatorType *ot)
   ot->idname = "ACTION_OT_select_leftright";
   ot->description = "Select keyframes to the left or the right of the current frame";
 
-  /* api callbacks  */
+  /* api callbacks */
   ot->invoke = actkeys_select_leftright_invoke;
   ot->exec = actkeys_select_leftright_exec;
   ot->poll = ED_operator_action_active;
@@ -1840,7 +1838,7 @@ static int actkeys_clickselect_exec(bContext *C, wmOperator *op)
   mval[0] = RNA_int_get(op->ptr, "mouse_x");
   mval[1] = RNA_int_get(op->ptr, "mouse_y");
 
-  /* select keyframe(s) based upon mouse position*/
+  /* Select keyframe(s) based upon mouse position. */
   ret_value = mouse_action_keys(
       &ac, mval, selectmode, deselect_all, column, channel, wait_to_deselect_others);
 
@@ -1872,12 +1870,13 @@ void ACTION_OT_clickselect(wmOperatorType *ot)
 
   /* properties */
   WM_operator_properties_generic_select(ot);
+  /* Key-map: Enable with `Shift`. */
   prop = RNA_def_boolean(
       ot->srna,
       "extend",
       0,
       "Extend Select",
-      "Toggle keyframe selection instead of leaving newly selected keyframes only"); /* SHIFTKEY */
+      "Toggle keyframe selection instead of leaving newly selected keyframes only");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_boolean(ot->srna,
@@ -1887,20 +1886,21 @@ void ACTION_OT_clickselect(wmOperatorType *ot)
                          "Deselect all when nothing under the cursor");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
+  /* Key-map: Enable with `Alt`. */
   prop = RNA_def_boolean(
       ot->srna,
       "column",
       0,
       "Column Select",
-      "Select all keyframes that occur on the same frame as the one under the mouse"); /* ALTKEY */
+      "Select all keyframes that occur on the same frame as the one under the mouse");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
-  prop = RNA_def_boolean(
-      ot->srna,
-      "channel",
-      0,
-      "Only Channel",
-      "Select all the keyframes in the channel under the mouse"); /* CTRLKEY + ALTKEY */
+  /* Key-map: Enable with `Ctrl-Alt`. */
+  prop = RNA_def_boolean(ot->srna,
+                         "channel",
+                         0,
+                         "Only Channel",
+                         "Select all the keyframes in the channel under the mouse");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 

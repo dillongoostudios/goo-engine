@@ -63,7 +63,7 @@ static char SmoothingShader___doc__[] =
     "\n"
     ".. method:: shade(stroke)\n"
     "\n"
-    "   Smoothes the stroke by moving the vertices to make the stroke\n"
+    "   Smooths the stroke by moving the vertices to make the stroke\n"
     "   smoother.  Uses curvature flow to converge towards a curve of\n"
     "   constant curvature.  The diffusion method we use is anisotropic to\n"
     "   prevent the diffusion across corners.\n"
@@ -110,7 +110,7 @@ PyTypeObject SmoothingShader_Type = {
     nullptr,                                             /* tp_as_number */
     nullptr,                                             /* tp_as_sequence */
     nullptr,                                             /* tp_as_mapping */
-    nullptr,                                             /* tp_hash  */
+    nullptr,                                             /* tp_hash */
     nullptr,                                             /* tp_call */
     nullptr,                                             /* tp_str */
     nullptr,                                             /* tp_getattro */

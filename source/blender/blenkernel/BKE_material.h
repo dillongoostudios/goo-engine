@@ -51,6 +51,9 @@ void BKE_object_material_remap(struct Object *ob, const unsigned int *remap);
 void BKE_object_material_remap_calc(struct Object *ob_dst,
                                     struct Object *ob_src,
                                     short *remap_src_to_dst);
+void BKE_object_material_from_eval_data(struct Main *bmain,
+                                        struct Object *ob_orig,
+                                        struct ID *data_eval);
 struct Material *BKE_material_add(struct Main *bmain, const char *name);
 struct Material *BKE_gpencil_material_add(struct Main *bmain, const char *name);
 void BKE_gpencil_material_attr_init(struct Material *ma);
@@ -88,7 +91,7 @@ void BKE_object_material_array_assign(struct Main *bmain,
 short BKE_object_material_slot_find_index(struct Object *ob, struct Material *ma);
 bool BKE_object_material_slot_add(struct Main *bmain, struct Object *ob);
 bool BKE_object_material_slot_remove(struct Main *bmain, struct Object *ob);
-bool BKE_object_material_slot_used(struct ID *id, short actcol);
+bool BKE_object_material_slot_used(struct Object *object, short actcol);
 
 struct Material *BKE_gpencil_material(struct Object *ob, short act);
 struct MaterialGPencilStyle *BKE_gpencil_material_settings(struct Object *ob, short act);
@@ -106,6 +109,13 @@ struct Material *BKE_id_material_pop(struct Main *bmain,
                                      /* index is an int because of RNA. */
                                      int index);
 void BKE_id_material_clear(struct Main *bmain, struct ID *id);
+
+/* eval api */
+struct Material *BKE_object_material_get_eval(struct Object *ob, short act);
+int BKE_object_material_count_eval(struct Object *ob);
+void BKE_id_material_eval_assign(struct ID *id, int slot, struct Material *material);
+void BKE_id_material_eval_ensure_default_slot(struct ID *id);
+
 /* rendering */
 
 void ramp_blend(int type, float r_col[3], const float fac, const float col[3]);

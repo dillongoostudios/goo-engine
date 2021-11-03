@@ -13,7 +13,7 @@
 # limitations under the License.
 
 function(cycles_set_solution_folder target)
-  if(WINDOWS_USE_VISUAL_STUDIO_FOLDERS)
+  if(IDE_GROUP_PROJECTS_IN_FOLDERS)
     get_filename_component(folderdir ${CMAKE_CURRENT_SOURCE_DIR} DIRECTORY)
     string(REPLACE ${CMAKE_SOURCE_DIR} "" folderdir ${folderdir})
     set_target_properties(${target} PROPERTIES FOLDER ${folderdir})
@@ -156,10 +156,16 @@ macro(cycles_target_link_libraries target)
     ${PLATFORM_LINKLIBS}
   )
 
-  if(WITH_CUDA_DYNLOAD)
-    target_link_libraries(${target} extern_cuew)
-  else()
-    target_link_libraries(${target} ${CUDA_CUDA_LIBRARY})
+  if(WITH_CYCLES_DEVICE_CUDA OR WITH_CYCLES_DEVICE_OPTIX)
+    if(WITH_CUDA_DYNLOAD)
+      target_link_libraries(${target} extern_cuew)
+    else()
+      target_link_libraries(${target} ${CUDA_CUDA_LIBRARY})
+    endif()
+  endif()
+
+  if(WITH_CYCLES_DEVICE_HIP AND WITH_HIP_DYNLOAD)
+    target_link_libraries(${target} extern_hipew)
   endif()
 
   if(CYCLES_STANDALONE_REPOSITORY)

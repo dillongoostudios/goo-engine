@@ -18,18 +18,18 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 #include "DNA_texture_types.h"
 
 namespace blender::compositor {
 
-class ColorRampOperation : public NodeOperation {
+class ColorRampOperation : public MultiThreadedOperation {
  private:
   /**
-   * Cached reference to the inputProgram
+   * Cached reference to the input_program
    */
-  SocketReader *m_inputProgram;
-  ColorBand *m_colorBand;
+  SocketReader *input_program_;
+  ColorBand *color_band_;
 
  public:
   ColorRampOperation();
@@ -37,22 +37,26 @@ class ColorRampOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  void setColorBand(ColorBand *colorBand)
+  void set_color_band(ColorBand *color_band)
   {
-    this->m_colorBand = colorBand;
+    color_band_ = color_band;
   }
+
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

@@ -22,7 +22,7 @@
 
 #include "DRW_render.h"
 
-#include "draw_color_management.h" /* TODO remove dependency */
+#include "draw_color_management.h" /* TODO: remove dependency. */
 
 #include "BLI_rand.h"
 
@@ -178,19 +178,19 @@ static void eevee_cache_finish(void *vedata)
   }
   EEVEE_renderpasses_output_init(sldata, vedata, tot_samples);
 
-  /* Restart taa if a shader has finish compiling. */
-  /* HACK We should use notification of some sort from the compilation job instead. */
+  /* Restart TAA if a shader has finish compiling. */
+  /* HACK: We should use notification of some sort from the compilation job instead. */
   if (g_data->queued_shaders_count != g_data->queued_shaders_count_prev) {
     g_data->queued_shaders_count_prev = g_data->queued_shaders_count;
     EEVEE_temporal_sampling_reset(vedata);
   }
 }
 
-/* As renders in an HDR offscreen buffer, we need draw everything once
+/* As renders in an HDR off-screen buffer, we need draw everything once
  * during the background pass. This way the other drawing callback between
  * the background and the scene pass are visible.
- * Note: we could break it up in two passes using some depth test
- * to reduce the fillrate */
+ * NOTE: we could break it up in two passes using some depth test
+ * to reduce the fill-rate. */
 static void eevee_draw_scene(void *vedata)
 {
   EEVEE_PassList *psl = ((EEVEE_Data *)vedata)->psl;
@@ -468,6 +468,9 @@ static void eevee_render_to_image(void *vedata,
   g_data->render_sample_count_per_timestep = EEVEE_temporal_sampling_sample_count_get(scene,
                                                                                       ved->stl);
 
+  /* Reset in case the same engine is used on multiple views. */
+  EEVEE_temporal_sampling_reset(vedata);
+
   /* Compute start time. The motion blur will cover `[time ...time + shuttertime]`. */
   float time = initial_frame + initial_subframe;
   switch (scene->eevee.motion_blur_position) {
@@ -481,7 +484,7 @@ static void eevee_render_to_image(void *vedata,
       time -= shuttertime;
       break;
     default:
-      BLI_assert(!"Invalid motion blur position enum!");
+      BLI_assert_msg(0, "Invalid motion blur position enum!");
       break;
   }
 
@@ -644,6 +647,8 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     RE_INTERNAL | RE_USE_PREVIEW | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
     NULL,
     &DRW_render_to_image,
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,

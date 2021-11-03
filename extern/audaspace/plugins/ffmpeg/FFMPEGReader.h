@@ -29,9 +29,11 @@
 #include "respec/ConverterFunctions.h"
 #include "IReader.h"
 #include "util/Buffer.h"
+#include "file/FileInfo.h"
 
 #include <string>
 #include <memory>
+#include <vector>
 
 struct AVCodecContext;
 extern "C" {
@@ -120,6 +122,13 @@ private:
 	bool m_tointerleave;
 
 	/**
+	 * Converts an ffmpeg sample format to an audaspace one.
+	 * \param format The AVSampleFormat sample format.
+	 * \return The sample format as SampleFormat.
+	 */
+	AUD_LOCAL static SampleFormat convertSampleFormat(AVSampleFormat format);
+
+	/**
 	 * Decodes a packet into the given buffer.
 	 * \param packet The AVPacket to decode.
 	 * \param buffer The target buffer.
@@ -129,8 +138,9 @@ private:
 
 	/**
 	 * Initializes the object.
+	 * \param stream The index of the audio stream within the file if it contains multiple audio streams.
 	 */
-	AUD_LOCAL void init();
+	AUD_LOCAL void init(int stream);
 
 	// delete copy constructor and operator=
 	FFMPEGReader(const FFMPEGReader&) = delete;
@@ -140,23 +150,32 @@ public:
 	/**
 	 * Creates a new reader.
 	 * \param filename The path to the file to be read.
+	 * \param stream The index of the audio stream within the file if it contains multiple audio streams.
 	 * \exception Exception Thrown if the file specified does not exist or
 	 *            cannot be read with ffmpeg.
 	 */
-	FFMPEGReader(std::string filename);
+	FFMPEGReader(std::string filename, int stream = 0);
 
 	/**
 	 * Creates a new reader.
 	 * \param buffer The buffer to read from.
+	 * \param stream The index of the audio stream within the file if it contains multiple audio streams.
 	 * \exception Exception Thrown if the buffer specified cannot be read
 	 *                          with ffmpeg.
 	 */
-	FFMPEGReader(std::shared_ptr<Buffer> buffer);
+	FFMPEGReader(std::shared_ptr<Buffer> buffer, int stream = 0);
 
 	/**
 	 * Destroys the reader and closes the file.
 	 */
 	virtual ~FFMPEGReader();
+
+	/**
+	 * Queries the streams of a sound file.
+	 * \return A vector with as many streams as there are in the file.
+	 * \exception Exception Thrown if the file specified cannot be read.
+	 */
+	virtual std::vector<StreamInfo> queryStreams();
 
 	/**
 	 * Reads data to a memory buffer.

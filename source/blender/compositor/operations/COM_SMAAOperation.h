@@ -20,20 +20,20 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedOperation.h"
 
 namespace blender::compositor {
 
 /*-----------------------------------------------------------------------------*/
 /* Edge Detection (First Pass) */
 
-class SMAAEdgeDetectionOperation : public NodeOperation {
+class SMAAEdgeDetectionOperation : public MultiThreadedOperation {
  protected:
-  SocketReader *m_imageReader;
-  SocketReader *m_valueReader;
+  SocketReader *image_reader_;
+  SocketReader *value_reader_;
 
-  float m_threshold;
-  float m_contrast_limit;
+  float threshold_;
+  float contrast_limit_;
 
  public:
   SMAAEdgeDetectionOperation();
@@ -41,35 +41,40 @@ class SMAAEdgeDetectionOperation : public NodeOperation {
   /**
    * the inner loop of this program
    */
-  virtual void executePixel(float output[4], int x, int y, void *data) override;
+  virtual void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  void setThreshold(float threshold);
+  void set_threshold(float threshold);
 
-  void setLocalContrastAdaptationFactor(float factor);
+  void set_local_contrast_adaptation_factor(float factor);
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+
+  void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 /*-----------------------------------------------------------------------------*/
 /*  Blending Weight Calculation (Second Pass) */
 
-class SMAABlendingWeightCalculationOperation : public NodeOperation {
+class SMAABlendingWeightCalculationOperation : public MultiThreadedOperation {
  private:
-  SocketReader *m_imageReader;
-
-  int m_corner_rounding;
+  SocketReader *image_reader_;
+  std::function<void(int x, int y, float *out)> sample_image_fn_;
+  int corner_rounding_;
 
  public:
   SMAABlendingWeightCalculationOperation();
@@ -77,50 +82,60 @@ class SMAABlendingWeightCalculationOperation : public NodeOperation {
   /**
    * the inner loop of this program
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
-  void *initializeTileData(rcti *rect) override;
+  void init_execution() override;
+  void *initialize_tile_data(rcti *rect) override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  void setCornerRounding(float rounding);
+  void set_corner_rounding(float rounding);
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+
+  void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
+  void update_memory_buffer_started(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 
  private:
   /* Diagonal Search Functions */
-  int searchDiag1(int x, int y, int dir, bool *found);
-  int searchDiag2(int x, int y, int dir, bool *found);
-  void calculateDiagWeights(int x, int y, const float edges[2], float weights[2]);
-  bool isVerticalSearchUnneeded(int x, int y);
+  int search_diag1(int x, int y, int dir, bool *found);
+  int search_diag2(int x, int y, int dir, bool *found);
+  void calculate_diag_weights(int x, int y, const float edges[2], float weights[2]);
+  bool is_vertical_search_unneeded(int x, int y);
 
   /* Horizontal/Vertical Search Functions */
-  int searchXLeft(int x, int y);
-  int searchXRight(int x, int y);
-  int searchYUp(int x, int y);
-  int searchYDown(int x, int y);
+  int search_xleft(int x, int y);
+  int search_xright(int x, int y);
+  int search_yup(int x, int y);
+  int search_ydown(int x, int y);
 
   /*  Corner Detection Functions */
-  void detectHorizontalCornerPattern(float weights[2], int left, int right, int y, int d1, int d2);
-  void detectVerticalCornerPattern(float weights[2], int x, int top, int bottom, int d1, int d2);
+  void detect_horizontal_corner_pattern(
+      float weights[2], int left, int right, int y, int d1, int d2);
+  void detect_vertical_corner_pattern(
+      float weights[2], int x, int top, int bottom, int d1, int d2);
 };
 
 /*-----------------------------------------------------------------------------*/
 /* Neighborhood Blending (Third Pass) */
 
-class SMAANeighborhoodBlendingOperation : public NodeOperation {
+class SMAANeighborhoodBlendingOperation : public MultiThreadedOperation {
  private:
-  SocketReader *m_image1Reader;
-  SocketReader *m_image2Reader;
+  SocketReader *image1Reader_;
+  SocketReader *image2Reader_;
 
  public:
   SMAANeighborhoodBlendingOperation();
@@ -128,22 +143,27 @@ class SMAANeighborhoodBlendingOperation : public NodeOperation {
   /**
    * the inner loop of this program
    */
-  void executePixel(float output[4], int x, int y, void *data) override;
+  void execute_pixel(float output[4], int x, int y, void *data) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
-  void *initializeTileData(rcti *rect) override;
+  void init_execution() override;
+  void *initialize_tile_data(rcti *rect) override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  bool determineDependingAreaOfInterest(rcti *input,
-                                        ReadBufferOperation *readOperation,
-                                        rcti *output) override;
+  bool determine_depending_area_of_interest(rcti *input,
+                                            ReadBufferOperation *read_operation,
+                                            rcti *output) override;
+
+  void get_area_of_interest(int input_idx, const rcti &output_area, rcti &r_input_area) override;
+  void update_memory_buffer_partial(MemoryBuffer *output,
+                                    const rcti &area,
+                                    Span<MemoryBuffer *> inputs) override;
 };
 
 }  // namespace blender::compositor

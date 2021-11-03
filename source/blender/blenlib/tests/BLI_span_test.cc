@@ -235,7 +235,7 @@ TEST(span, FillIndices)
 
 TEST(span, SizeInBytes)
 {
-  std::array<int, 10> a;
+  std::array<int, 10> a{};
   Span<int> a_span(a);
   EXPECT_EQ(a_span.size_in_bytes(), static_cast<int64_t>(sizeof(a)));
   EXPECT_EQ(a_span.size_in_bytes(), 40);
@@ -360,6 +360,29 @@ TEST(span, ReverseIterator)
   }
   EXPECT_EQ(reversed_vec.size(), 4);
   EXPECT_EQ_ARRAY(reversed_vec.data(), Span({7, 6, 5, 4}).data(), 4);
+}
+
+TEST(span, ReverseMutableSpan)
+{
+  std::array<int, 0> src0 = {};
+  MutableSpan<int> span0 = src0;
+  span0.reverse();
+  EXPECT_EQ_ARRAY(span0.data(), Span<int>({}).data(), 0);
+
+  std::array<int, 1> src1 = {4};
+  MutableSpan<int> span1 = src1;
+  span1.reverse();
+  EXPECT_EQ_ARRAY(span1.data(), Span<int>({4}).data(), 1);
+
+  std::array<int, 2> src2 = {4, 5};
+  MutableSpan<int> span2 = src2;
+  span2.reverse();
+  EXPECT_EQ_ARRAY(span2.data(), Span<int>({5, 4}).data(), 2);
+
+  std::array<int, 5> src5 = {4, 5, 6, 7, 8};
+  MutableSpan<int> span5 = src5;
+  span5.reverse();
+  EXPECT_EQ_ARRAY(span5.data(), Span<int>({8, 7, 6, 5, 4}).data(), 5);
 }
 
 TEST(span, MutableReverseIterator)

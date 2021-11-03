@@ -48,8 +48,8 @@
 UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
                                        const MLoop *mloop,
                                        const MLoopUV *mloopuv,
-                                       unsigned int totpoly,
-                                       unsigned int totvert,
+                                       uint totpoly,
+                                       uint totvert,
                                        const float limit[2],
                                        const bool selected,
                                        const bool use_winding)
@@ -57,7 +57,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
   UvVertMap *vmap;
   UvMapVert *buf;
   const MPoly *mp;
-  unsigned int a;
+  uint a;
   int i, totuv, nverts;
 
   bool *winding = NULL;
@@ -115,7 +115,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
       }
 
       if (use_winding) {
-        winding[a] = cross_poly_v2(tf_uv, (unsigned int)nverts) > 0;
+        winding[a] = cross_poly_v2(tf_uv, (uint)nverts) > 0;
       }
     }
   }
@@ -176,7 +176,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const MPoly *mpoly,
   return vmap;
 }
 
-UvMapVert *BKE_mesh_uv_vert_map_get_vert(UvVertMap *vmap, unsigned int v)
+UvMapVert *BKE_mesh_uv_vert_map_get_vert(UvVertMap *vmap, uint v)
 {
   return vmap->vert[v];
 }
@@ -239,7 +239,7 @@ static void mesh_vert_poly_or_loop_map_create(MeshElemMap **r_map,
     const MPoly *p = &mpoly[i];
 
     for (j = 0; j < p->totloop; j++) {
-      unsigned int v = mloop[p->loopstart + j].v;
+      uint v = mloop[p->loopstart + j].v;
 
       map[v].indices[map[v].count] = do_loops ? p->loopstart + j : i;
       map[v].count++;
@@ -362,7 +362,7 @@ void BKE_mesh_vert_edge_map_create(
 
   /* Find the users */
   for (i = 0; i < totedge; i++) {
-    const unsigned int v[2] = {medge[i].v1, medge[i].v2};
+    const uint v[2] = {medge[i].v1, medge[i].v2};
 
     map[v[0]].indices[map[v[0]].count] = i;
     map[v[1]].indices[map[v[1]].count] = i;
@@ -405,7 +405,7 @@ void BKE_mesh_vert_edge_vert_map_create(
 
   /* Find the users */
   for (i = 0; i < totedge; i++) {
-    const unsigned int v[2] = {medge[i].v1, medge[i].v2};
+    const uint v[2] = {medge[i].v1, medge[i].v2};
 
     map[v[0]].indices[map[v[0]].count] = (int)v[1];
     map[v[1]].indices[map[v[1]].count] = (int)v[0];
@@ -535,12 +535,12 @@ void BKE_mesh_edge_poly_map_create(MeshElemMap **r_map,
  *
  * This has the advantage that it can operate on any data-types.
  *
- * \param totsource: The total number of elements the that \a final_origindex points to.
+ * \param totsource: The total number of elements that \a final_origindex points to.
  * \param totfinal: The size of \a final_origindex
  * \param final_origindex: The size of the final array.
  *
- * \note ``totsource`` could be ``totpoly``,
- *       ``totfinal`` could be ``tottessface`` and ``final_origindex`` its ORIGINDEX customdata.
+ * \note `totsource` could be `totpoly`,
+ *       `totfinal` could be `tottessface` and `final_origindex` its ORIGINDEX custom-data.
  *       This would allow an MPoly to loop over its tessfaces.
  */
 void BKE_mesh_origindex_map_create(MeshElemMap **r_map,
@@ -776,7 +776,7 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
       }
       if (UNLIKELY(gid_bit > 31)) {
         /* All bits used in contiguous smooth groups, we can't do much!
-         * Note: this is *very* unlikely - theoretically, four groups are enough,
+         * NOTE: this is *very* unlikely - theoretically, four groups are enough,
          *       I don't think we can reach this goal with such a simple algorithm,
          *       but I don't think either we'll never need all 32 groups!
          */
@@ -998,7 +998,7 @@ void BKE_mesh_loop_islands_add(MeshIslandStore *island_store,
 }
 
 /* TODO: I'm not sure edge seam flag is enough to define UV islands?
- *       Maybe we should also consider UVmaps values
+ *       Maybe we should also consider UV-maps values
  *       themselves (i.e. different UV-edges for a same mesh-edge => boundary edge too?).
  *       Would make things much more complex though,
  *       and each UVMap would then need its own mesh mapping, not sure we want that at all!
@@ -1025,8 +1025,8 @@ static bool mesh_check_island_boundary_uv(const MPoly *UNUSED(mp),
 
     BLI_assert(edge_to_loops->count >= 2 && (edge_to_loops->count % 2) == 0);
 
-    const unsigned int v1 = loops[edge_to_loops->indices[0]].v;
-    const unsigned int v2 = loops[edge_to_loops->indices[1]].v;
+    const uint v1 = loops[edge_to_loops->indices[0]].v;
+    const uint v2 = loops[edge_to_loops->indices[1]].v;
     const float *uvco_v1 = luvs[edge_to_loops->indices[0]].uv;
     const float *uvco_v2 = luvs[edge_to_loops->indices[1]].uv;
     for (int i = 2; i < edge_to_loops->count; i += 2) {
@@ -1140,7 +1140,7 @@ static bool mesh_calc_islands_loop_poly_uv(MVert *UNUSED(verts),
   poly_indices = MEM_mallocN(sizeof(*poly_indices) * (size_t)totpoly, __func__);
   loop_indices = MEM_mallocN(sizeof(*loop_indices) * (size_t)totloop, __func__);
 
-  /* Note: here we ignore '0' invalid group - this should *never* happen in this case anyway? */
+  /* NOTE: here we ignore '0' invalid group - this should *never* happen in this case anyway? */
   for (grp_idx = 1; grp_idx <= num_poly_groups; grp_idx++) {
     num_pidx = num_lidx = 0;
     if (num_edge_borders) {

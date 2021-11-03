@@ -15,7 +15,7 @@
  */
 
 /** \file
- * \ingroup bli
+ * \ingroup bke
  */
 
 #include "MEM_guardedalloc.h"
@@ -180,7 +180,7 @@ static BMVert *bm_vert_hash_lookup_chain(GHash *deleted_verts, BMVert *v)
   while (true) {
     BMVert **v_next_p = (BMVert **)BLI_ghash_lookup_p(deleted_verts, v);
     if (v_next_p == NULL) {
-      /* not remapped*/
+      /* Not remapped. */
       return v;
     }
     if (*v_next_p == NULL) {
@@ -914,7 +914,7 @@ static void long_edge_queue_edge_add_recursive(
       for (int i = 0; i < ARRAY_SIZE(l_adjacent); i++) {
         float len_sq_other = BM_edge_calc_length_squared(l_adjacent[i]->e);
         if (len_sq_other > max_ff(len_sq_cmp, limit_len_sq)) {
-          //                  edge_queue_insert(eq_ctx, l_adjacent[i]->e, -len_sq_other);
+          // edge_queue_insert(eq_ctx, l_adjacent[i]->e, -len_sq_other);
           long_edge_queue_edge_add_recursive(
               eq_ctx, l_adjacent[i]->radial_next, l_adjacent[i], len_sq_other, limit_len);
         }
@@ -1168,12 +1168,12 @@ static void pbvh_bmesh_split_edge(EdgeQueueContext *eq_ctx,
     }
 
     /**
-     * The 2 new faces created and assigned to ``f_new`` have their
+     * The 2 new faces created and assigned to `f_new` have their
      * verts & edges shuffled around.
      *
      * - faces wind anticlockwise in this example.
-     * - original edge is ``(v1, v2)``
-     * - original face is ``(v1, v2, v3)``
+     * - original edge is `(v1, v2)`
+     * - original face is `(v1, v2, v3)`
      *
      * <pre>
      *         + v3(v_opp)
@@ -1189,8 +1189,8 @@ static void pbvh_bmesh_split_edge(EdgeQueueContext *eq_ctx,
      *  (first) (second)
      * </pre>
      *
-     * - f_new (first):  ``v_tri=(v1, v4, v3), e_tri=(e1, e5, e4)``
-     * - f_new (second): ``v_tri=(v4, v2, v3), e_tri=(e2, e3, e5)``
+     * - f_new (first):  `v_tri=(v1, v4, v3), e_tri=(e1, e5, e4)`
+     * - f_new (second): `v_tri=(v4, v2, v3), e_tri=(e2, e3, e5)`
      */
 
     /* Create two new faces */
@@ -1324,7 +1324,7 @@ static void pbvh_bmesh_collapse_edge(PBVH *pbvh,
 
   /* For all remaining faces of v_del, create a new face that is the
    * same except it uses v_conn instead of v_del */
-  /* Note: this could be done with BM_vert_splice(), but that
+  /* NOTE: this could be done with BM_vert_splice(), but that
    * requires handling other issues like duplicate edges, so doesn't
    * really buy anything. */
   BLI_buffer_clear(deleted_faces);
@@ -2316,7 +2316,7 @@ static void pbvh_bmesh_verify(PBVH *pbvh)
     vert_count++;
   }
 
-  /* if totvert differs from number of verts inside the hash. hash-totvert is checked above  */
+  /* If totvert differs from number of verts inside the hash. hash-totvert is checked above. */
   BLI_assert(vert_count == pbvh->bm->totvert);
 #  endif
 

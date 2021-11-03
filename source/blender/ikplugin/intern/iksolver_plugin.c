@@ -47,7 +47,7 @@
 /* ********************** THE IK SOLVER ******************* */
 
 /* allocates PoseTree, and links that to root bone/channel */
-/* Note: detecting the IK chain is duplicate code...
+/* NOTE: detecting the IK chain is duplicate code...
  * in drawarmature.c and in transform_conversions.c */
 static void initialize_posetree(struct Object *UNUSED(ob), bPoseChannel *pchan_tip)
 {
@@ -149,7 +149,7 @@ static void initialize_posetree(struct Object *UNUSED(ob), bPoseChannel *pchan_t
     tree->iterations = MAX2(data->iterations, tree->iterations);
     tree->stretch = tree->stretch && !(data->flag & CONSTRAINT_IK_STRETCH);
 
-    /* skip common pose channels and add remaining*/
+    /* Skip common pose channels and add remaining. */
     size = MIN2(segcount, tree->totchannel);
     a = t = 0;
     while (a < size && t < tree->totchannel) {

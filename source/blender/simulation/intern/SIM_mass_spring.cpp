@@ -203,7 +203,7 @@ int SIM_cloth_solver_init(Object *UNUSED(ob), ClothModifierData *clmd)
   cloth->implicit = id = SIM_mass_spring_solver_create(cloth->mvert_num, nondiag);
 
   for (i = 0; i < cloth->mvert_num; i++) {
-    SIM_mass_spring_set_vertex_mass(id, i, verts[i].mass);
+    SIM_mass_spring_set_implicit_vertex_mass(id, i, verts[i].mass);
   }
 
   for (i = 0; i < cloth->mvert_num; i++) {
@@ -211,6 +211,11 @@ int SIM_cloth_solver_init(Object *UNUSED(ob), ClothModifierData *clmd)
   }
 
   return 1;
+}
+
+void SIM_mass_spring_set_implicit_vertex_mass(Implicit_Data *data, int index, float mass)
+{
+  SIM_mass_spring_set_vertex_mass(data, index, mass);
 }
 
 void SIM_cloth_solver_free(ClothModifierData *clmd)
@@ -277,10 +282,12 @@ static void cloth_setup_constraints(ClothModifierData *clmd)
   }
 }
 
-/* computes where the cloth would be if it were subject to perfectly stiff edges
+/**
+ * Computes where the cloth would be if it were subject to perfectly stiff edges
  * (edge distance constraints) in a lagrangian solver.  then add forces to help
  * guide the implicit solver to that state.  this function is called after
- * collisions*/
+ * collisions.
+ */
 static int UNUSED_FUNCTION(cloth_calc_helper_forces)(Object *UNUSED(ob),
                                                      ClothModifierData *clmd,
                                                      float (*initial_cos)[3],
@@ -352,7 +359,7 @@ static int UNUSED_FUNCTION(cloth_calc_helper_forces)(Object *UNUSED(ob),
   for (i = 0; i < cloth->mvert_num; i++, cv++) {
     float vec[3];
 
-    /*compute forces*/
+    /* Compute forces. */
     sub_v3_v3v3(vec, cos[i], cv->tx);
     mul_v3_fl(vec, cv->mass * dt * 20.0f);
     add_v3_v3(cv->tv, vec);
@@ -625,7 +632,7 @@ static void cloth_calc_force(
 #endif
   /* handle pressure forces (making sure that this never gets computed for hair). */
   if ((parms->flags & CLOTH_SIMSETTINGS_FLAG_PRESSURE) && (clmd->hairdata == nullptr)) {
-    /* The difference in pressure between the inside and outside of the mesh.*/
+    /* The difference in pressure between the inside and outside of the mesh. */
     float pressure_difference = 0.0f;
     float volume_factor = 1.0f;
 
@@ -1045,18 +1052,22 @@ static void cloth_continuum_step(ClothModifierData *clmd, float dt)
 
           SIM_hair_volume_grid_interpolate(grid, x, &gdensity, gvel, gvel_smooth, NULL, NULL);
 
-          // BKE_sim_debug_data_add_circle(
-          //     clmd->debug_data, x, gdensity, 0.7, 0.3, 1,
-          //     "grid density", i, j, 3111);
+#  if 0
+          BKE_sim_debug_data_add_circle(
+              clmd->debug_data, x, gdensity, 0.7, 0.3, 1,
+              "grid density", i, j, 3111);
+#  endif
           if (!is_zero_v3(gvel) || !is_zero_v3(gvel_smooth)) {
             float dvel[3];
             sub_v3_v3v3(dvel, gvel_smooth, gvel);
-            // BKE_sim_debug_data_add_vector(
-            //     clmd->debug_data, x, gvel, 0.4, 0, 1,
-            //     "grid velocity", i, j, 3112);
-            // BKE_sim_debug_data_add_vector(
-            //     clmd->debug_data, x, gvel_smooth, 0.6, 1, 1,
-            //     "grid velocity", i, j, 3113);
+#  if 0
+            BKE_sim_debug_data_add_vector(
+                clmd->debug_data, x, gvel, 0.4, 0, 1,
+                "grid velocity", i, j, 3112);
+            BKE_sim_debug_data_add_vector(
+                clmd->debug_data, x, gvel_smooth, 0.6, 1, 1,
+                "grid velocity", i, j, 3113);
+#  endif
             BKE_sim_debug_data_add_vector(
                 clmd->debug_data, x, dvel, 0.4, 1, 0.7, "grid velocity", i, j, 3114);
 #  if 0
@@ -1067,12 +1078,14 @@ static void cloth_continuum_step(ClothModifierData *clmd, float dt)
 
               interp_v3_v3v3(col, col0, col1,
                              CLAMPIS(gdensity * clmd->sim_parms->density_strength, 0.0, 1.0));
-              // BKE_sim_debug_data_add_circle(
-              //     clmd->debug_data, x, gdensity * clmd->sim_parms->density_strength, 0, 1, 0.4,
-              //     "grid velocity", i, j, 3115);
-              // BKE_sim_debug_data_add_dot(
-              //     clmd->debug_data, x, col[0], col[1], col[2],
-              //     "grid velocity", i, j, 3115);
+#    if 0
+              BKE_sim_debug_data_add_circle(
+                  clmd->debug_data, x, gdensity * clmd->sim_parms->density_strength, 0, 1, 0.4,
+                  "grid velocity", i, j, 3115);
+              BKE_sim_debug_data_add_dot(
+                  clmd->debug_data, x, col[0], col[1], col[2],
+                  "grid velocity", i, j, 3115);
+#    endif
               BKE_sim_debug_data_add_circle(
                   clmd->debug_data, x, 0.01f, col[0], col[1], col[2], "grid velocity", i, j, 3115);
             }

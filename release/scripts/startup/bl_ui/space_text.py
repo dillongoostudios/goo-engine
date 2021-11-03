@@ -268,10 +268,7 @@ class TEXT_MT_text(Menu):
                 layout.operator("text.make_internal")
 
             layout.separator()
-            row = layout.row()
-            row.active = text.name.endswith(".py")
-            row.prop(text, "use_module")
-            row = layout.row()
+            layout.prop(text, "use_module")
 
             layout.prop(st, "use_live_edit")
 
@@ -284,7 +281,7 @@ class TEXT_MT_templates_py(Menu):
 
     def draw(self, _context):
         self.path_menu(
-            bpy.utils.script_paths("templates_py"),
+            bpy.utils.script_paths(subdir="templates_py"),
             "text.open",
             props_default={"internal": True},
             filter_ext=lambda ext: (ext.lower() == ".py")
@@ -296,7 +293,7 @@ class TEXT_MT_templates_osl(Menu):
 
     def draw(self, _context):
         self.path_menu(
-            bpy.utils.script_paths("templates_osl"),
+            bpy.utils.script_paths(subdir="templates_osl"),
             "text.open",
             props_default={"internal": True},
             filter_ext=lambda ext: (ext.lower() == ".osl")

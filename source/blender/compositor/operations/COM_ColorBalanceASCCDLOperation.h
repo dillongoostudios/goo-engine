@@ -18,7 +18,7 @@
 
 #pragma once
 
-#include "COM_NodeOperation.h"
+#include "COM_MultiThreadedRowOperation.h"
 
 namespace blender::compositor {
 
@@ -26,17 +26,17 @@ namespace blender::compositor {
  * this program converts an input color to an output value.
  * it assumes we are in sRGB color space.
  */
-class ColorBalanceASCCDLOperation : public NodeOperation {
+class ColorBalanceASCCDLOperation : public MultiThreadedRowOperation {
  protected:
   /**
-   * Prefetched reference to the inputProgram
+   * Prefetched reference to the input_program
    */
-  SocketReader *m_inputValueOperation;
-  SocketReader *m_inputColorOperation;
+  SocketReader *input_value_operation_;
+  SocketReader *input_color_operation_;
 
-  float m_offset[3];
-  float m_power[3];
-  float m_slope[3];
+  float offset_[3];
+  float power_[3];
+  float slope_[3];
 
  public:
   /**
@@ -47,30 +47,32 @@ class ColorBalanceASCCDLOperation : public NodeOperation {
   /**
    * The inner loop of this operation.
    */
-  void executePixelSampled(float output[4], float x, float y, PixelSampler sampler) override;
+  void execute_pixel_sampled(float output[4], float x, float y, PixelSampler sampler) override;
 
   /**
    * Initialize the execution
    */
-  void initExecution() override;
+  void init_execution() override;
 
   /**
    * Deinitialize the execution
    */
-  void deinitExecution() override;
+  void deinit_execution() override;
 
-  void setOffset(float offset[3])
+  void set_offset(float offset[3])
   {
-    copy_v3_v3(this->m_offset, offset);
+    copy_v3_v3(offset_, offset);
   }
-  void setPower(float power[3])
+  void set_power(float power[3])
   {
-    copy_v3_v3(this->m_power, power);
+    copy_v3_v3(power_, power);
   }
-  void setSlope(float slope[3])
+  void set_slope(float slope[3])
   {
-    copy_v3_v3(this->m_slope, slope);
+    copy_v3_v3(slope_, slope);
   }
+
+  void update_memory_buffer_row(PixelCursor &p) override;
 };
 
 }  // namespace blender::compositor

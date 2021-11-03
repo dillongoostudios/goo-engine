@@ -24,6 +24,7 @@
 
 #pragma once
 
+#include "DNA_asset_types.h"
 #include "DNA_color_types.h" /* for Histogram */
 #include "DNA_defs.h"
 #include "DNA_image_types.h" /* ImageUser */
@@ -338,8 +339,9 @@ typedef enum eSpaceOutliner_Filter {
   SO_FILTER_OB_STATE_SELECTED = (1 << 15), /* Not set via DNA. */
   SO_FILTER_OB_STATE_ACTIVE = (1 << 16),   /* Not set via DNA. */
   SO_FILTER_NO_COLLECTION = (1 << 17),
+  SO_FILTER_NO_VIEW_LAYERS = (1 << 18),
 
-  SO_FILTER_ID_TYPE = (1 << 18),
+  SO_FILTER_ID_TYPE = (1 << 19),
 } eSpaceOutliner_Filter;
 
 #define SO_FILTER_OB_TYPE \
@@ -352,7 +354,7 @@ typedef enum eSpaceOutliner_Filter {
 
 #define SO_FILTER_ANY \
   (SO_FILTER_NO_OB_CONTENT | SO_FILTER_NO_CHILDREN | SO_FILTER_OB_TYPE | SO_FILTER_OB_STATE | \
-   SO_FILTER_NO_COLLECTION | SO_FILTER_NO_LIB_OVERRIDE)
+   SO_FILTER_NO_COLLECTION | SO_FILTER_NO_VIEW_LAYERS | SO_FILTER_NO_LIB_OVERRIDE)
 
 /* SpaceOutliner.filter_state */
 typedef enum eSpaceOutliner_StateFilter {
@@ -447,7 +449,7 @@ typedef struct SpaceGraph {
   /** Mode for the Graph editor (eGraphEdit_Mode). */
   short mode;
   /**
-   * Time-transform autosnapping settings for Graph editor
+   * Time-transform auto-snapping settings for Graph editor
    * (eAnimEdit_AutoSnap in DNA_action_types.h).
    */
   short autosnap;
@@ -574,6 +576,47 @@ typedef enum eSpaceNla_Flag {
 /** \name Sequence Editor
  * \{ */
 
+typedef struct SequencerPreviewOverlay {
+  int flag;
+  char _pad0[4];
+} SequencerPreviewOverlay;
+
+/* SequencerPreviewOverlay.flag */
+typedef enum eSpaceSeq_SequencerPreviewOverlay_Flag {
+  SEQ_PREVIEW_SHOW_2D_CURSOR = (1 << 1),
+  SEQ_PREVIEW_SHOW_OUTLINE_SELECTED = (1 << 2),
+  SEQ_PREVIEW_SHOW_SAFE_MARGINS = (1 << 3),
+  SEQ_PREVIEW_SHOW_GPENCIL = (1 << 4),
+  SEQ_PREVIEW_SHOW_SAFE_CENTER = (1 << 9),
+  SEQ_PREVIEW_SHOW_METADATA = (1 << 10),
+} eSpaceSeq_SequencerPreviewOverlay_Flag;
+
+typedef struct SequencerTimelineOverlay {
+  int flag;
+  char _pad0[4];
+} SequencerTimelineOverlay;
+
+/* SequencerTimelineOverlay.flag */
+typedef enum eSpaceSeq_SequencerTimelineOverlay_Flag {
+  SEQ_TIMELINE_SHOW_STRIP_OFFSETS = (1 << 1),
+  SEQ_TIMELINE_SHOW_THUMBNAILS = (1 << 2),
+  SEQ_TIMELINE_SHOW_STRIP_COLOR_TAG = (1 << 3), /* use Sequence->color_tag */
+  SEQ_TIMELINE_SHOW_FCURVES = (1 << 5),
+  SEQ_TIMELINE_ALL_WAVEFORMS = (1 << 7), /* draw all waveforms */
+  SEQ_TIMELINE_NO_WAVEFORMS = (1 << 8),  /* draw no waveforms */
+  SEQ_TIMELINE_SHOW_STRIP_NAME = (1 << 14),
+  SEQ_TIMELINE_SHOW_STRIP_SOURCE = (1 << 15),
+  SEQ_TIMELINE_SHOW_STRIP_DURATION = (1 << 16),
+  SEQ_TIMELINE_SHOW_GRID = (1 << 18),
+} eSpaceSeq_SequencerTimelineOverlay_Flag;
+
+typedef struct SpaceSeqRuntime {
+  /** Required for Thumbnail job start condition. */
+  struct rctf last_thumbnail_area;
+  /** Stores lists of most recently displayed thumbnails. */
+  struct GHash *last_displayed_thumbnails;
+} SpaceSeqRuntime;
+
 /* Sequencer */
 typedef struct SpaceSeq {
   SpaceLink *next, *prev;
@@ -599,26 +642,33 @@ typedef struct SpaceSeq {
   /** Deprecated, handled by View2D now. */
   float zoom DNA_DEPRECATED;
   /** See SEQ_VIEW_* below. */
-  int view;
-  int overlay_type;
+  char view;
+  char overlay_frame_type;
   /** Overlay an image of the editing on below the strips. */
-  int draw_flag;
+  char draw_flag;
+  char gizmo_flag;
   char _pad[4];
+
+  /** 2D cursor for transform. */
+  float cursor[2];
 
   /** Grease-pencil data. */
   struct bGPdata *gpd;
 
   /** Different scoped displayed in space. */
   struct SequencerScopes scopes;
+  struct SequencerPreviewOverlay preview_overlay;
+  struct SequencerTimelineOverlay timeline_overlay;
 
   /** Multiview current eye - for internal use. */
   char multiview_eye;
   char _pad2[7];
+
+  SpaceSeqRuntime runtime;
 } SpaceSeq;
 
 /* SpaceSeq.mainb */
 typedef enum eSpaceSeq_RegionType {
-  SEQ_DRAW_SEQUENCE = 0,
   SEQ_DRAW_IMG_IMBUF = 1,
   SEQ_DRAW_IMG_WAVEFORM = 2,
   SEQ_DRAW_IMG_VECTORSCOPE = 3,
@@ -628,7 +678,7 @@ typedef enum eSpaceSeq_RegionType {
 /* SpaceSeq.draw_flag */
 typedef enum eSpaceSeq_DrawFlag {
   SEQ_DRAW_BACKDROP = (1 << 0),
-  SEQ_DRAW_OFFSET_EXT = (1 << 1),
+  SEQ_DRAW_UNUSED_1 = (1 << 1),
   SEQ_DRAW_TRANSFORM_PREVIEW = (1 << 2),
 } eSpaceSeq_DrawFlag;
 
@@ -637,21 +687,20 @@ typedef enum eSpaceSeq_Flag {
   SEQ_DRAWFRAMES = (1 << 0),
   SEQ_MARKER_TRANS = (1 << 1),
   SEQ_DRAW_COLOR_SEPARATED = (1 << 2),
-  SEQ_SHOW_SAFE_MARGINS = (1 << 3),
-  SEQ_SHOW_GPENCIL = (1 << 4),
-  SEQ_SHOW_FCURVES = (1 << 5),
-  SEQ_USE_ALPHA = (1 << 6),     /* use RGBA display mode for preview */
-  SEQ_ALL_WAVEFORMS = (1 << 7), /* draw all waveforms */
-  SEQ_NO_WAVEFORMS = (1 << 8),  /* draw no waveforms */
-  SEQ_SHOW_SAFE_CENTER = (1 << 9),
-  SEQ_SHOW_METADATA = (1 << 10),
+  SPACE_SEQ_FLAG_UNUSED_3 = (1 << 3),
+  SPACE_SEQ_FLAG_UNUSED_4 = (1 << 4),
+  SPACE_SEQ_FLAG_UNUSED_5 = (1 << 5),
+  SEQ_USE_ALPHA = (1 << 6), /* use RGBA display mode for preview */
+  SPACE_SEQ_FLAG_UNUSED_9 = (1 << 9),
+  SPACE_SEQ_FLAG_UNUSED_10 = (1 << 10),
   SEQ_SHOW_MARKERS = (1 << 11), /* show markers region */
   SEQ_ZOOM_TO_FIT = (1 << 12),
-  SEQ_SHOW_STRIP_OVERLAY = (1 << 13),
-  SEQ_SHOW_STRIP_NAME = (1 << 14),
-  SEQ_SHOW_STRIP_SOURCE = (1 << 15),
-  SEQ_SHOW_STRIP_DURATION = (1 << 16),
+  SEQ_SHOW_OVERLAY = (1 << 13),
+  SPACE_SEQ_FLAG_UNUSED_14 = (1 << 14),
+  SPACE_SEQ_FLAG_UNUSED_15 = (1 << 15),
+  SPACE_SEQ_FLAG_UNUSED_16 = (1 << 16),
   SEQ_USE_PROXIES = (1 << 17),
+  SEQ_SHOW_GRID = (1 << 18),
 } eSpaceSeq_Flag;
 
 /* SpaceSeq.view */
@@ -682,36 +731,27 @@ typedef struct MaskSpaceInfo {
   char _pad3[5];
 } MaskSpaceInfo;
 
+/** #SpaceSeq.gizmo_flag */
+enum {
+  /** All gizmos. */
+  SEQ_GIZMO_HIDE = (1 << 0),
+  SEQ_GIZMO_HIDE_NAVIGATE = (1 << 1),
+  SEQ_GIZMO_HIDE_CONTEXT = (1 << 2),
+  SEQ_GIZMO_HIDE_TOOL = (1 << 3),
+};
+
 /* SpaceSeq.mainb */
-typedef enum eSpaceSeq_OverlayType {
-  SEQ_DRAW_OVERLAY_RECT = 0,
-  SEQ_DRAW_OVERLAY_REFERENCE = 1,
-  SEQ_DRAW_OVERLAY_CURRENT = 2,
-} eSpaceSeq_OverlayType;
+typedef enum eSpaceSeq_OverlayFrameType {
+  SEQ_OVERLAY_FRAME_TYPE_RECT = 0,
+  SEQ_OVERLAY_FRAME_TYPE_REFERENCE = 1,
+  SEQ_OVERLAY_FRAME_TYPE_CURRENT = 2,
+} eSpaceSeq_OverlayFrameType;
 
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name File Selector
  * \{ */
-
-/**
- * Information to identify a asset library. May be either one of the predefined types (current
- * 'Main', builtin library, project library), or a custom type as defined in the Preferences.
- *
- * If the type is set to #FILE_ASSET_LIBRARY_CUSTOM, idname must have the name to identify the
- * custom library. Otherwise idname is not used.
- */
-typedef struct FileSelectAssetLibraryUID {
-  short type; /* eFileAssetLibrary_Type */
-  char _pad[2];
-  /**
-   * If showing a custom asset library (#FILE_ASSET_LIBRARY_CUSTOM), this is the index of the
-   * #bUserAssetLibrary within #UserDef.asset_libraries.
-   * Should be ignored otherwise (but better set to -1 then, for sanity and debugging).
-   */
-  int custom_library_index;
-} FileSelectAssetLibraryUID;
 
 /* Config and Input for File Selector */
 typedef struct FileSelectParams {
@@ -726,14 +766,19 @@ typedef struct FileSelectParams {
 
   char renamefile[256];
   short rename_flag;
+  char _pad[4];
+  /** An ID that was just renamed. Used to identify a renamed asset file over re-reads, similar to
+   * `renamefile` but for local IDs (takes precedence). Don't keep this stored across handlers!
+   * Would break on undo. */
+  const ID *rename_id;
+  void *_pad3;
 
-  /** List of filetypes to filter (FILE_MAXFILE). */
+  /** List of file-types to filter (#FILE_MAXFILE). */
   char filter_glob[256];
 
   /** Text items name must match to be shown. */
   char filter_search[64];
   /** Same as filter, but for ID types (aka library groups). */
-  int _pad0;
   uint64_t filter_id;
 
   /** Active file used for keyboard navigation. */
@@ -764,13 +809,7 @@ typedef struct FileSelectParams {
   /** Max number of levels in dirtree to show at once, 0 to disable recursion. */
   short recursion_level;
 
-  /* XXX --- still unused -- */
-  /** Show font preview. */
-  short f_fp;
-  /** String to use for font preview. */
-  char fp_str[8];
-
-  /* XXX --- end unused -- */
+  char _pad4[2];
 } FileSelectParams;
 
 /**
@@ -779,8 +818,27 @@ typedef struct FileSelectParams {
 typedef struct FileAssetSelectParams {
   FileSelectParams base_params;
 
-  FileSelectAssetLibraryUID asset_library;
+  AssetLibraryReference asset_library_ref;
+  short asset_catalog_visibility; /* eFileSel_Params_AssetCatalogVisibility */
+  char _pad[6];
+  /** If #asset_catalog_visibility is #FILE_SHOW_ASSETS_FROM_CATALOG, this sets the ID of the
+   * catalog to show. */
+  bUUID catalog_id;
+
+  short import_type; /* eFileAssetImportType */
+  char _pad2[6];
 } FileAssetSelectParams;
+
+typedef enum eFileAssetImportType {
+  /** Regular data-block linking. */
+  FILE_ASSET_IMPORT_LINK = 0,
+  /** Regular data-block appending (basically linking + "Make Local"). */
+  FILE_ASSET_IMPORT_APPEND = 1,
+  /** Append data-block with the #BLO_LIBLINK_APPEND_LOCAL_ID_REUSE flag enabled. Some typically
+   * heavy data dependencies (e.g. the image data-blocks of a material, the mesh of an object) may
+   * be reused from an earlier append. */
+  FILE_ASSET_IMPORT_APPEND_REUSE = 2,
+} eFileAssetImportType;
 
 /**
  * A wrapper to store previous and next folder lists (#FolderList) for a specific browse mode
@@ -871,22 +929,6 @@ typedef enum eFileBrowse_Mode {
   FILE_BROWSE_MODE_ASSETS = 1,
 } eFileBrowse_Mode;
 
-typedef enum eFileAssetLibrary_Type {
-  /* For the future. Display assets bundled with Blender by default. */
-  // FILE_ASSET_LIBRARY_BUNDLED = 0,
-  /** Display assets from the current session (current "Main"). */
-  FILE_ASSET_LIBRARY_LOCAL = 1,
-  /* For the future. Display assets for the current project. */
-  // FILE_ASSET_LIBRARY_PROJECT = 2,
-
-  /** Display assets from custom asset libraries, as defined in the preferences
-   * (#bUserAssetLibrary). The name will be taken from #FileSelectParams.asset_library.idname
-   * then.
-   * In RNA, we add the index of the custom library to this to identify it by index. So keep
-   * this last! */
-  FILE_ASSET_LIBRARY_CUSTOM = 100,
-} eFileAssetLibrary_Type;
-
 /* FileSelectParams.display */
 enum eFileDisplayType {
   /** Internal (not exposed to users): Keep whatever display type was used during the last File
@@ -937,11 +979,21 @@ enum eFileDetails {
 
 #define FILE_MAX_LIBEXTRA (FILE_MAX + MAX_ID_NAME)
 
+/**
+ * Maximum level of recursions accepted for #FileSelectParams.recursion_level. Rather than a
+ * completely arbitrary limit or none at all, make it just enough to support the most extreme case
+ * where the maximal path length is used with single letter directory/file names only.
+ */
+#define FILE_SELECT_MAX_RECURSIONS (FILE_MAX_LIBEXTRA / 2)
+
 /* filesel types */
 typedef enum eFileSelectType {
   FILE_LOADLIB = 1,
   FILE_MAIN = 2,
+  /** Load assets from #Main. */
   FILE_MAIN_ASSET = 3,
+  /** Load assets of an asset library containing external files. */
+  FILE_ASSET_LIBRARY = 4,
 
   FILE_UNIX = 8,
   FILE_BLENDER = 8, /* don't display relative paths */
@@ -960,25 +1012,33 @@ typedef enum eFileSel_Action {
  * (WM and BLO code area, see #eBLOLibLinkFlags in BLO_readfile.h).
  */
 typedef enum eFileSel_Params_Flag {
-  FILE_PARAMS_FLAG_UNUSED_1 = (1 << 0), /* cleared */
+  FILE_PARAMS_FLAG_UNUSED_1 = (1 << 0),
   FILE_RELPATH = (1 << 1),
   FILE_LINK = (1 << 2),
   FILE_HIDE_DOT = (1 << 3),
   FILE_AUTOSELECT = (1 << 4),
   FILE_ACTIVE_COLLECTION = (1 << 5),
-  FILE_PARAMS_FLAG_UNUSED_6 = (1 << 6), /* cleared */
+  FILE_PARAMS_FLAG_UNUSED_2 = (1 << 6),
   FILE_DIRSEL_ONLY = (1 << 7),
   FILE_FILTER = (1 << 8),
-  FILE_OBDATA_INSTANCE = (1 << 9),
-  FILE_COLLECTION_INSTANCE = (1 << 10),
+  FILE_PARAMS_FLAG_UNUSED_3 = (1 << 9),
+  FILE_PARAMS_FLAG_UNUSED_4 = (1 << 10),
   FILE_SORT_INVERT = (1 << 11),
   FILE_HIDE_TOOL_PROPS = (1 << 12),
   FILE_CHECK_EXISTING = (1 << 13),
   FILE_ASSETS_ONLY = (1 << 14),
+  /** Enables filtering by asset catalog. */
+  FILE_FILTER_ASSET_CATALOG = (1 << 15),
 } eFileSel_Params_Flag;
 
+typedef enum eFileSel_Params_AssetCatalogVisibility {
+  FILE_SHOW_ASSETS_ALL_CATALOGS,
+  FILE_SHOW_ASSETS_FROM_CATALOG,
+  FILE_SHOW_ASSETS_WITHOUT_CATALOG,
+} eFileSel_Params_AssetCatalogVisibility;
+
 /* sfile->params->rename_flag */
-/* Note: short flag. Defined as bitflags, but currently only used as exclusive status markers... */
+/* NOTE: short flag. Defined as bitflags, but currently only used as exclusive status markers... */
 typedef enum eFileSel_Params_RenameFlag {
   /** Used when we only have the name of the entry we want to rename,
    * but not yet access to its matching file entry. */
@@ -1011,7 +1071,7 @@ typedef enum eFileSel_File_Types {
   FILE_TYPE_COLLADA = (1 << 13),
   /** from filter_glob operator property */
   FILE_TYPE_OPERATOR = (1 << 14),
-  FILE_TYPE_APPLICATIONBUNDLE = (1 << 15),
+  FILE_TYPE_BUNDLE = (1 << 15),
   FILE_TYPE_ALEMBIC = (1 << 16),
   /** For all kinds of recognized import/export formats. No need for specialized types. */
   FILE_TYPE_OBJECT_IO = (1 << 17),
@@ -1034,82 +1094,24 @@ typedef enum eDirEntry_SelectFlag {
 
 /* ***** Related to file browser, but never saved in DNA, only here to help with RNA. ***** */
 
-/**
- * About Unique identifier.
- *
- * Stored in a CustomProps once imported.
- * Each engine is free to use it as it likes - it will be the only thing passed to it by blender to
- * identify asset/variant/version (concatenating the three into a single 48 bytes one).
- * Assumed to be 128bits, handled as four integers due to lack of real bytes proptype in RNA :|.
- */
-#define ASSET_UUID_LENGTH 16
-
-/* Used to communicate with asset engines outside of 'import' context. */
-#
-#
-typedef struct AssetUUID {
-  int uuid_asset[4];
-  int uuid_variant[4];
-  int uuid_revision[4];
-} AssetUUID;
-
-#
-#
-typedef struct AssetUUIDList {
-  AssetUUID *uuids;
-  int nbr_uuids;
-  char _pad[4];
-} AssetUUIDList;
-
-/* Container for a revision, only relevant in asset context. */
-#
-#
-typedef struct FileDirEntryRevision {
-  struct FileDirEntryRevision *next, *prev;
-
-  char *comment;
-  void *_pad;
-
-  int uuid[4];
-
-  uint64_t size;
-  int64_t time;
-  /* Temp caching of UI-generated strings... */
-  char size_str[16];
-  char datetime_str[16 + 8];
-} FileDirEntryRevision;
-
-/* Container for a variant, only relevant in asset context.
- * In case there are no variants, a single one shall exist, with NULL name/description. */
-#
-#
-typedef struct FileDirEntryVariant {
-  struct FileDirEntryVariant *next, *prev;
-
-  int uuid[4];
-  char *name;
-  char *description;
-
-  ListBase revisions;
-  int nbr_revisions;
-  int act_revision;
-} FileDirEntryVariant;
-
-/* Container for mere direntry, with additional asset-related data. */
 #
 #
 typedef struct FileDirEntry {
   struct FileDirEntry *next, *prev;
 
-  int uuid[4];
+  uint32_t uid; /* FileUID */
   /* Name needs freeing if FILE_ENTRY_NAME_FREE is set. Otherwise this is a direct pointer to a
    * name buffer. */
   char *name;
-  char *description;
 
-  /* Either point to active variant/revision if available, or own entry
-   * (in mere filebrowser case). */
-  FileDirEntryRevision *entry;
+  uint64_t size;
+  int64_t time;
+
+  struct {
+    /* Temp caching of UI-generated strings. */
+    char size_str[16];
+    char datetime_str[16 + 8];
+  } draw_data;
 
   /** #eFileSel_File_Types. */
   int typeflag;
@@ -1132,32 +1134,16 @@ typedef struct FileDirEntry {
   /* The icon_id for the preview image. */
   int preview_icon_id;
 
-  /* Tags are for info only, most of filtering is done in asset engine. */
-  char **tags;
-  int nbr_tags;
-
-  short status;
   short flags;
   /* eFileAttributes defined in BLI_fileops.h */
   int attributes;
-
-  ListBase variants;
-  int nbr_variants;
-  int act_variant;
 } FileDirEntry;
 
 /**
- * Array of direntries.
+ * Array of directory entries.
  *
- * This struct is used in various, different contexts.
- *
- * In Filebrowser UI, it stores the total number of available entries, the number of visible
- * (filtered) entries, and a subset of those in 'entries' ListBase, from idx_start (included)
- * to idx_end (excluded).
- *
- * In AssetEngine context (i.e. outside of 'browsing' context), entries contain all needed data,
- * there is no filtering, so nbr_entries_filtered, entry_idx_start and entry_idx_end
- * should all be set to -1.
+ * Stores the total number of available entries, the number of visible (filtered) entries, and a
+ * subset of those in 'entries' ListBase, from idx_start (included) to idx_end (excluded).
  */
 #
 #
@@ -1165,19 +1151,10 @@ typedef struct FileDirEntryArr {
   ListBase entries;
   int nbr_entries;
   int nbr_entries_filtered;
-  int entry_idx_start, entry_idx_end;
 
   /** FILE_MAX. */
   char root[1024];
 } FileDirEntryArr;
-
-#if 0 /* UNUSED */
-/* FileDirEntry.status */
-enum {
-  ASSET_STATUS_LOCAL = 1 << 0,  /* If active uuid is available locally/immediately. */
-  ASSET_STATUS_LATEST = 1 << 1, /* If active uuid is latest available version. */
-};
-#endif
 
 /* FileDirEntry.flags */
 enum {
@@ -1233,13 +1210,10 @@ typedef struct SpaceImage {
   char mode_prev;
 
   char pin;
-  char _pad1;
-  /**
-   * The currently active tile of the image when tile is enabled,
-   * is kept in sync with the active faces tile.
-   */
-  short curtile;
-  short lock;
+
+  char pixel_snap_mode;
+
+  char lock;
   /** UV draw type. */
   char dt_uv;
   /** Sticky selection type. */
@@ -1247,14 +1221,19 @@ typedef struct SpaceImage {
   char dt_uvstretch;
   char around;
 
-  int flag;
+  char _pad1[3];
 
-  char pixel_snap_mode;
-  char _pad2[7];
+  int flag;
 
   float uv_opacity;
 
   int tile_grid_shape[2];
+  /**
+   * UV editor custom-grid. Value of `N` will produce `NxN` grid.
+   * Use when #SI_CUSTOM_GRID is set.
+   */
+  int custom_grid_subdiv;
+  char _pad3[4];
 
   MaskSpaceInfo mask_info;
   SpaceImageOverlay overlay;
@@ -1310,6 +1289,7 @@ typedef enum eSpaceImage_Flag {
   SI_FLAG_UNUSED_7 = (1 << 7), /* cleared */
   SI_FLAG_UNUSED_8 = (1 << 8), /* cleared */
   SI_COORDFLOATS = (1 << 9),
+
   SI_FLAG_UNUSED_10 = (1 << 10),
   SI_LIVE_UNWRAP = (1 << 11),
   SI_USE_ALPHA = (1 << 12),
@@ -1321,7 +1301,7 @@ typedef enum eSpaceImage_Flag {
   SI_FULLWINDOW = (1 << 16),
 
   SI_FLAG_UNUSED_17 = (1 << 17),
-  SI_FLAG_UNUSED_18 = (1 << 18), /* cleared */
+  SI_CUSTOM_GRID = (1 << 18),
 
   /**
    * This means that the image is drawn until it reaches the view edge,
@@ -1346,6 +1326,9 @@ typedef enum eSpaceImage_Flag {
 typedef enum eSpaceImageOverlay_Flag {
   SI_OVERLAY_SHOW_OVERLAYS = (1 << 0),
 } eSpaceImageOverlay_Flag;
+
+/** Keep in sync with `STEPS_LEN` in `grid_frag.glsl`. */
+#define SI_GRID_STEPS_LEN 8
 
 /** \} */
 
@@ -1443,7 +1426,7 @@ typedef enum eSpaceText_Flags {
   /* scrollable */
   ST_SCROLL_SELECT = (1 << 0),
 
-  ST_FLAG_UNUSED_4 = (1 << 4), /* dirty */
+  ST_FLAG_UNUSED_4 = (1 << 4), /* Cleared. */
 
   ST_FIND_WRAP = (1 << 5),
   ST_FIND_ALL = (1 << 6),
@@ -1526,6 +1509,15 @@ typedef struct bNodeTreePath {
   char display_name[64];
 } bNodeTreePath;
 
+typedef struct SpaceNodeOverlay {
+  int flag;
+} SpaceNodeOverlay;
+
+typedef enum eSpaceNodeOverlay_Flag {
+  SN_OVERLAY_SHOW_OVERLAYS = (1 << 1),
+  SN_OVERLAY_SHOW_WIRE_COLORS = (1 << 2),
+} eSpaceNodeOverlay_Flag;
+
 typedef struct SpaceNode {
   SpaceLink *next, *prev;
   /** Storage of regions for inactive spaces. */
@@ -1578,6 +1570,9 @@ typedef struct SpaceNode {
 
   /** Grease-pencil data. */
   struct bGPdata *gpd;
+
+  SpaceNodeOverlay overlay;
+  char _pad2[4];
 
   SpaceNode_Runtime *runtime;
 } SpaceNode;
@@ -1798,8 +1793,8 @@ typedef enum eSpaceClip_Flag {
 /* SpaceClip.mode */
 typedef enum eSpaceClip_Mode {
   SC_MODE_TRACKING = 0,
-  /*SC_MODE_RECONSTRUCTION = 1,*/ /* DEPRECATED */
-  /*SC_MODE_DISTORTION = 2,*/     /* DEPRECATED */
+  // SC_MODE_RECONSTRUCTION = 1, /* DEPRECATED */
+  // SC_MODE_DISTORTION = 2,     /* DEPRECATED */
   SC_MODE_MASKEDIT = 3,
 } eSpaceClip_Mode;
 
@@ -1866,6 +1861,19 @@ typedef struct SpreadsheetColumn {
    * #SpreadsheetColumnID in the future for different kinds of ids.
    */
   SpreadsheetColumnID *id;
+
+  /**
+   * An indicator of the type of values in the column, set at runtime.
+   * #eSpreadsheetColumnValueType.
+   */
+  uint8_t data_type;
+  char _pad0[7];
+
+  /**
+   * The final column name generated by the data source, also just
+   * cached at runtime when the data source columns are generated.
+   */
+  char *display_name;
 } SpreadsheetColumn;
 
 /**
@@ -1906,10 +1914,13 @@ typedef struct SpaceSpreadsheet {
   /* List of #SpreadsheetColumn. */
   ListBase columns;
 
+  /* SpreadsheetRowFilter. */
+  ListBase row_filters;
+
   /**
    * List of #SpreadsheetContext.
    * This is a path to the data that is displayed in the spreadsheet.
-   * It can be set explicitely by an action of the user (e.g. clicking the preview icon in a
+   * It can be set explicitly by an action of the user (e.g. clicking the preview icon in a
    * geometry node) or it can be derived from context automatically based on some heuristic.
    */
   ListBase context_path;
@@ -1937,11 +1948,48 @@ typedef enum eSpaceSpreadsheet_Flag {
 
 typedef enum eSpaceSpreadsheet_FilterFlag {
   SPREADSHEET_FILTER_SELECTED_ONLY = (1 << 0),
+  SPREADSHEET_FILTER_ENABLE = (1 << 1),
 } eSpaceSpreadsheet_FilterFlag;
+
+typedef struct SpreadsheetRowFilter {
+  struct SpreadsheetRowFilter *next, *prev;
+
+  char column_name[64]; /* MAX_NAME. */
+
+  /* eSpreadsheetFilterOperation. */
+  uint8_t operation;
+  /* eSpaceSpreadsheet_RowFilterFlag. */
+  uint8_t flag;
+
+  char _pad0[2];
+
+  int value_int;
+  char *value_string;
+  float value_float;
+  float threshold;
+  float value_float2[2];
+  float value_float3[3];
+  float value_color[4];
+
+  char _pad1[4];
+} SpreadsheetRowFilter;
+
+typedef enum eSpaceSpreadsheet_RowFilterFlag {
+  SPREADSHEET_ROW_FILTER_UI_EXPAND = (1 << 0),
+  SPREADSHEET_ROW_FILTER_BOOL_VALUE = (1 << 1),
+  SPREADSHEET_ROW_FILTER_ENABLED = (1 << 2),
+} eSpaceSpreadsheet_RowFilterFlag;
+
+typedef enum eSpreadsheetFilterOperation {
+  SPREADSHEET_ROW_FILTER_EQUAL = 0,
+  SPREADSHEET_ROW_FILTER_GREATER = 1,
+  SPREADSHEET_ROW_FILTER_LESS = 2,
+} eSpreadsheetFilterOperation;
 
 typedef enum eSpaceSpreadsheet_ObjectEvalState {
   SPREADSHEET_OBJECT_EVAL_STATE_EVALUATED = 0,
   SPREADSHEET_OBJECT_EVAL_STATE_ORIGINAL = 1,
+  SPREADSHEET_OBJECT_EVAL_STATE_VIEWER_NODE = 2,
 } eSpaceSpreadsheet_Context;
 
 typedef enum eSpaceSpreadsheet_ContextType {
@@ -1949,6 +1997,16 @@ typedef enum eSpaceSpreadsheet_ContextType {
   SPREADSHEET_CONTEXT_MODIFIER = 1,
   SPREADSHEET_CONTEXT_NODE = 2,
 } eSpaceSpreadsheet_ContextType;
+
+typedef enum eSpreadsheetColumnValueType {
+  SPREADSHEET_VALUE_TYPE_BOOL = 0,
+  SPREADSHEET_VALUE_TYPE_INT32 = 1,
+  SPREADSHEET_VALUE_TYPE_FLOAT = 2,
+  SPREADSHEET_VALUE_TYPE_FLOAT2 = 3,
+  SPREADSHEET_VALUE_TYPE_FLOAT3 = 4,
+  SPREADSHEET_VALUE_TYPE_COLOR = 5,
+  SPREADSHEET_VALUE_TYPE_INSTANCES = 6,
+} eSpreadsheetColumnValueType;
 
 /**
  * We can't just use UI_UNIT_X, because it does not take `widget.points` into account, which

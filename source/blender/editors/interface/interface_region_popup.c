@@ -184,10 +184,10 @@ static void ui_popup_block_position(wmWindow *window,
       dir1 &= (UI_DIR_UP | UI_DIR_DOWN);
     }
 
-    if ((dir2 == 0) && (dir1 == UI_DIR_LEFT || dir1 == UI_DIR_RIGHT)) {
+    if ((dir2 == 0) && (ELEM(dir1, UI_DIR_LEFT, UI_DIR_RIGHT))) {
       dir2 = UI_DIR_DOWN;
     }
-    if ((dir2 == 0) && (dir1 == UI_DIR_UP || dir1 == UI_DIR_DOWN)) {
+    if ((dir2 == 0) && (ELEM(dir1, UI_DIR_UP, UI_DIR_DOWN))) {
       dir2 = UI_DIR_LEFT;
     }
 
@@ -341,7 +341,7 @@ static void ui_popup_block_position(wmWindow *window,
       block->safety.ymax = block->rect.ymax + s1;
     }
 
-    /* exception for switched pulldowns... */
+    /* Exception for switched pull-downs. */
     if (dir1 && (dir1 & block->direction) == 0) {
       if (dir2 == UI_DIR_RIGHT) {
         block->safety.xmax = block->rect.xmax + s2;
@@ -773,7 +773,7 @@ uiPopupBlockHandle *ui_popup_block_create(bContext *C,
                                           uiBlockCreateFunc create_func,
                                           uiBlockHandleCreateFunc handle_create_func,
                                           void *arg,
-                                          void (*arg_free)(void *arg))
+                                          uiFreeArgFunc arg_free)
 {
   wmWindow *window = CTX_wm_window(C);
   uiBut *activebut = UI_context_active_but_get(C);
@@ -803,7 +803,7 @@ uiPopupBlockHandle *ui_popup_block_create(bContext *C,
   handle->popup_create_vars.arg_free = arg_free;
   handle->popup_create_vars.but = but;
   handle->popup_create_vars.butregion = but ? butregion : NULL;
-  copy_v2_v2_int(handle->popup_create_vars.event_xy, &window->eventstate->x);
+  copy_v2_v2_int(handle->popup_create_vars.event_xy, window->eventstate->xy);
 
   /* don't allow by default, only if popup type explicitly supports it */
   handle->can_refresh = false;

@@ -19,8 +19,8 @@
  *
  * This file defines the uniform buffer functionalities of the 'gpu' module
  *
- * - Use ``bpygpu_`` for local API.
- * - Use ``BPyGPU`` for public API.
+ * - Use `bpygpu_` for local API.
+ * - Use `BPyGPU` for public API.
  */
 
 #include <Python.h>
@@ -104,7 +104,7 @@ static PyObject *pygpu_uniformbuffer__tp_new(PyTypeObject *UNUSED(self),
 }
 
 PyDoc_STRVAR(pygpu_uniformbuffer_update_doc,
-             ".. method::update(data)\n"
+             ".. method:: update(data)\n"
              "\n"
              "   Update the data of the uniform buffer object.\n");
 static PyObject *pygpu_uniformbuffer_update(BPyGPUUniformBuf *self, PyObject *obj)

@@ -39,6 +39,7 @@
 
 #include "BLI_index_range.hh"
 #include "BLI_span.hh"
+#include "BLI_vector.hh"
 
 namespace blender {
 
@@ -58,11 +59,7 @@ class IndexMask {
    */
   IndexMask(Span<int64_t> indices) : indices_(indices)
   {
-#ifdef DEBUG
-    for (int64_t i = 1; i < indices.size(); i++) {
-      BLI_assert(indices[i - 1] < indices[i]);
-    }
-#endif
+    BLI_assert(IndexMask::indices_are_valid_index_mask(indices));
   }
 
   /**
@@ -94,6 +91,22 @@ class IndexMask {
   {
   }
 
+  /** Checks that the indices are non-negative and in ascending order. */
+  static bool indices_are_valid_index_mask(Span<int64_t> indices)
+  {
+    if (!indices.is_empty()) {
+      if (indices.first() < 0) {
+        return false;
+      }
+    }
+    for (int64_t i = 1; i < indices.size(); i++) {
+      if (indices[i - 1] >= indices[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   operator Span<int64_t>() const
   {
     return indices_;
@@ -110,7 +123,7 @@ class IndexMask {
   }
 
   /**
-   * Returns the n-th index referenced by this IndexMask. The `index_mask` method returns an
+   * Returns the n-th index referenced by this IndexMask. The `index_range` method returns an
    * IndexRange containing all indices that can be used as parameter here.
    */
   int64_t operator[](int64_t n) const
@@ -204,6 +217,13 @@ class IndexMask {
   {
     return indices_.size();
   }
+
+  bool is_empty() const
+  {
+    return indices_.is_empty();
+  }
+
+  IndexMask slice_and_offset(IndexRange slice, Vector<int64_t> &r_new_indices) const;
 };
 
 }  // namespace blender

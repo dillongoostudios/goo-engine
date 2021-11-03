@@ -44,10 +44,10 @@ BLI_STATIC_ASSERT(sizeof(PyC_FlagSet) == sizeof(BMO_FlagSet), "size mismatch");
 
 static int bpy_bm_op_as_py_error(BMesh *bm)
 {
-  if (BMO_error_occurred(bm)) {
-    /* note: we could have multiple errors */
+  if (BMO_error_occurred_at_level(bm, BMO_ERROR_FATAL)) {
+    /* NOTE: we could have multiple errors. */
     const char *errmsg;
-    if (BMO_error_get(bm, &errmsg, NULL)) {
+    if (BMO_error_get(bm, &errmsg, NULL, NULL)) {
       PyErr_Format(PyExc_RuntimeError, "bmesh operator: %.200s", errmsg);
       BMO_error_clear(bm);
       return -1;
@@ -243,7 +243,7 @@ static int bpy_slot_from_py(BMesh *bm,
       break;
     }
     case BMO_OP_SLOT_MAT: {
-      /* XXX - BMesh operator design is crappy here, operator slot should define matrix size,
+      /* XXX: BMesh operator design is crappy here, operator slot should define matrix size,
        * not the caller! */
       MatrixObject *pymat;
       if (!Matrix_ParseAny(value, &pymat)) {
@@ -252,7 +252,7 @@ static int bpy_slot_from_py(BMesh *bm,
       const ushort size = pymat->num_col;
       if ((size != pymat->num_row) || (!ELEM(size, 3, 4))) {
         PyErr_Format(PyExc_TypeError,
-                     "%.200s: keyword \"%.200s\" expected a 3x3 or 4x4 matrix Matrix",
+                     "%.200s: keyword \"%.200s\" expected a 3x3 or 4x4 matrix",
                      opname,
                      slot_name);
         return -1;
@@ -583,7 +583,7 @@ static int bpy_slot_from_py(BMesh *bm,
       break;
     }
     default:
-      /* TODO --- many others */
+      /* TODO: many others. */
       PyErr_Format(PyExc_NotImplementedError,
                    "%.200s: keyword \"%.200s\" type %d not working yet!",
                    opname,
@@ -608,7 +608,7 @@ static PyObject *bpy_slot_to_py(BMesh *bm, BMOpSlot *slot)
   /* keep switch in same order as above */
   switch (slot->slot_type) {
     case BMO_OP_SLOT_BOOL:
-      item = PyBool_FromLong((BMO_SLOT_AS_BOOL(slot)));
+      item = PyBool_FromLong(BMO_SLOT_AS_BOOL(slot));
       break;
     case BMO_OP_SLOT_INT:
       item = PyLong_FromLong(BMO_SLOT_AS_INT(slot));
@@ -776,8 +776,8 @@ PyObject *BPy_BMO_call(BPy_BMeshOpFunc *self, PyObject *args, PyObject *kw)
     return NULL;
   }
 
-  /* TODO - error check this!, though we do the error check on attribute access */
-  /* TODO - make flags optional */
+  /* TODO: error check this!, though we do the error check on attribute access. */
+  /* TODO: make flags optional. */
   BMO_op_init(bm, &bmop, BMO_FLAG_DEFAULTS, self->opname);
 
   if (kw && PyDict_Size(kw) > 0) {

@@ -80,6 +80,7 @@ void VIEW3D_OT_view_persportho(struct wmOperatorType *ot);
 void VIEW3D_OT_navigate(struct wmOperatorType *ot);
 void VIEW3D_OT_background_image_add(struct wmOperatorType *ot);
 void VIEW3D_OT_background_image_remove(struct wmOperatorType *ot);
+void VIEW3D_OT_drop_world(struct wmOperatorType *ot);
 void VIEW3D_OT_view_orbit(struct wmOperatorType *ot);
 void VIEW3D_OT_view_roll(struct wmOperatorType *ot);
 void VIEW3D_OT_clip_border(struct wmOperatorType *ot);
@@ -111,11 +112,11 @@ void view3d_ndof_fly(const struct wmNDOFMotionData *ndof,
                      bool *r_has_rotate);
 #endif /* WITH_INPUT_NDOF */
 
-/* view3d_fly.c */
+/* view3d_navigate_fly.c */
 void view3d_keymap(struct wmKeyConfig *keyconf);
 void VIEW3D_OT_fly(struct wmOperatorType *ot);
 
-/* view3d_walk.c */
+/* view3d_navigate_walk.c */
 void VIEW3D_OT_walk(struct wmOperatorType *ot);
 
 /* view3d_draw.c */
@@ -137,7 +138,7 @@ void ED_view3d_draw_depth_loop(struct Depsgraph *depsgraph,
                                struct ARegion *region,
                                View3D *v3d);
 
-void view3d_update_depths_rect(struct ARegion *region, struct ViewDepths *d, struct rcti *rect);
+void view3d_depths_rect_create(struct ARegion *region, struct rcti *rect, struct ViewDepths *r_d);
 float view3d_depth_near(struct ViewDepths *d);
 
 /* view3d_select.c */

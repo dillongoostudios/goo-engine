@@ -17,7 +17,6 @@
  */
 
 #include "COM_GlareFogGlowOperation.h"
-#include "MEM_guardedalloc.h"
 
 namespace blender::compositor {
 
@@ -27,8 +26,8 @@ namespace blender::compositor {
 
 using fREAL = float;
 
-// returns next highest power of 2 of x, as well its log2 in L2
-static unsigned int nextPow2(unsigned int x, unsigned int *L2)
+/* Returns next highest power of 2 of x, as well its log2 in L2. */
+static unsigned int next_pow2(unsigned int x, unsigned int *L2)
 {
   unsigned int pw, x_notpow2 = x & (x - 1);
   *L2 = 0;
@@ -45,8 +44,8 @@ static unsigned int nextPow2(unsigned int x, unsigned int *L2)
 
 //------------------------------------------------------------------------------
 
-// from FXT library by Joerg Arndt, faster in order bitreversal
-// use: r = revbin_upd(r, h) where h = N>>1
+/* From FXT library by Joerg Arndt, faster in order bit-reversal
+ * use: `r = revbin_upd(r, h)` where `h = N>>1`. */
 static unsigned int revbin_upd(unsigned int r, unsigned int h)
 {
   while (!((r ^= h) & h)) {
@@ -127,7 +126,7 @@ static void FHT(fREAL *data, unsigned int M, unsigned int inverse)
 //------------------------------------------------------------------------------
 /* 2D Fast Hartley Transform, Mx/My -> log2 of width/height,
  * nzp -> the row where zero pad data starts,
- * inverse -> see above */
+ * inverse -> see above. */
 static void FHT2D(
     fREAL *data, unsigned int Mx, unsigned int My, unsigned int nzp, unsigned int inverse)
 {
@@ -136,14 +135,14 @@ static void FHT2D(
   Nx = 1 << Mx;
   Ny = 1 << My;
 
-  // rows (forward transform skips 0 pad data)
+  /* Rows (forward transform skips 0 pad data). */
   maxy = inverse ? Ny : nzp;
   for (j = 0; j < maxy; j++) {
     FHT(&data[Nx * j], Mx, inverse);
   }
 
-  // transpose data
-  if (Nx == Ny) {  // square
+  /* Transpose data. */
+  if (Nx == Ny) { /* Square. */
     for (j = 0; j < Ny; j++) {
       for (i = j + 1; i < Nx; i++) {
         unsigned int op = i + (j << Mx), np = j + (i << My);
@@ -151,12 +150,12 @@ static void FHT2D(
       }
     }
   }
-  else {  // rectangular
+  else { /* Rectangular. */
     unsigned int k, Nym = Ny - 1, stm = 1 << (Mx + My);
     for (i = 0; stm > 0; i++) {
 #define PRED(k) (((k & Nym) << Mx) + (k >> My))
       for (j = PRED(i); j > i; j = PRED(j)) {
-        /* pass */
+        /* Pass. */
       }
       if (j < i) {
         continue;
@@ -172,12 +171,12 @@ static void FHT2D(
   SWAP(unsigned int, Nx, Ny);
   SWAP(unsigned int, Mx, My);
 
-  // now columns == transposed rows
+  /* Now columns == transposed rows. */
   for (j = 0; j < Ny; j++) {
     FHT(&data[Nx * j], Mx, inverse);
   }
 
-  // finalize
+  /* Finalize. */
   for (j = 0; j <= (Ny >> 1); j++) {
     unsigned int jm = (Ny - j) & (Ny - 1);
     unsigned int ji = j << Mx;
@@ -199,7 +198,7 @@ static void FHT2D(
 
 //------------------------------------------------------------------------------
 
-/* 2D convolution calc, d1 *= d2, M/N - > log2 of width/height */
+/* 2D convolution calc, d1 *= d2, M/N - > log2 of width/height. */
 static void fht_convolve(fREAL *d1, const fREAL *d2, unsigned int M, unsigned int N)
 {
   fREAL a, b;
@@ -263,34 +262,34 @@ static void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
   int x, y, ch;
   int xbl, ybl, nxb, nyb, xbsz, ybsz;
   bool in2done = false;
-  const unsigned int kernelWidth = in2->getWidth();
-  const unsigned int kernelHeight = in2->getHeight();
-  const unsigned int imageWidth = in1->getWidth();
-  const unsigned int imageHeight = in1->getHeight();
-  float *kernelBuffer = in2->getBuffer();
-  float *imageBuffer = in1->getBuffer();
+  const unsigned int kernel_width = in2->get_width();
+  const unsigned int kernel_height = in2->get_height();
+  const unsigned int image_width = in1->get_width();
+  const unsigned int image_height = in1->get_height();
+  float *kernel_buffer = in2->get_buffer();
+  float *image_buffer = in1->get_buffer();
 
   MemoryBuffer *rdst = new MemoryBuffer(DataType::Color, in1->get_rect());
-  memset(rdst->getBuffer(),
+  memset(rdst->get_buffer(),
          0,
-         rdst->getWidth() * rdst->getHeight() * COM_DATA_TYPE_COLOR_CHANNELS * sizeof(float));
+         rdst->get_width() * rdst->get_height() * COM_DATA_TYPE_COLOR_CHANNELS * sizeof(float));
 
-  // convolution result width & height
-  w2 = 2 * kernelWidth - 1;
-  h2 = 2 * kernelHeight - 1;
-  // FFT pow2 required size & log2
-  w2 = nextPow2(w2, &log2_w);
-  h2 = nextPow2(h2, &log2_h);
+  /* Convolution result width & height. */
+  w2 = 2 * kernel_width - 1;
+  h2 = 2 * kernel_height - 1;
+  /* FFT pow2 required size & log2. */
+  w2 = next_pow2(w2, &log2_w);
+  h2 = next_pow2(h2, &log2_h);
 
-  // alloc space
+  /* Allocate space. */
   data1 = (fREAL *)MEM_callocN(3 * w2 * h2 * sizeof(fREAL), "convolve_fast FHT data1");
   data2 = (fREAL *)MEM_callocN(w2 * h2 * sizeof(fREAL), "convolve_fast FHT data2");
 
-  // normalize convolutor
+  /* Normalize convolutor. */
   wt[0] = wt[1] = wt[2] = 0.0f;
-  for (y = 0; y < kernelHeight; y++) {
-    colp = (fRGB *)&kernelBuffer[y * kernelWidth * COM_DATA_TYPE_COLOR_CHANNELS];
-    for (x = 0; x < kernelWidth; x++) {
+  for (y = 0; y < kernel_height; y++) {
+    colp = (fRGB *)&kernel_buffer[y * kernel_width * COM_DATA_TYPE_COLOR_CHANNELS];
+    for (x = 0; x < kernel_width; x++) {
       add_v3_v3(wt, colp[x]);
     }
   }
@@ -303,90 +302,90 @@ static void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
   if (wt[2] != 0.0f) {
     wt[2] = 1.0f / wt[2];
   }
-  for (y = 0; y < kernelHeight; y++) {
-    colp = (fRGB *)&kernelBuffer[y * kernelWidth * COM_DATA_TYPE_COLOR_CHANNELS];
-    for (x = 0; x < kernelWidth; x++) {
+  for (y = 0; y < kernel_height; y++) {
+    colp = (fRGB *)&kernel_buffer[y * kernel_width * COM_DATA_TYPE_COLOR_CHANNELS];
+    for (x = 0; x < kernel_width; x++) {
       mul_v3_v3(colp[x], wt);
     }
   }
 
-  // copy image data, unpacking interleaved RGBA into separate channels
-  // only need to calc data1 once
+  /* Copy image data, unpacking interleaved RGBA into separate channels
+   * only need to calc data1 once. */
 
-  // block add-overlap
-  hw = kernelWidth >> 1;
-  hh = kernelHeight >> 1;
-  xbsz = (w2 + 1) - kernelWidth;
-  ybsz = (h2 + 1) - kernelHeight;
-  nxb = imageWidth / xbsz;
-  if (imageWidth % xbsz) {
+  /* Block add-overlap. */
+  hw = kernel_width >> 1;
+  hh = kernel_height >> 1;
+  xbsz = (w2 + 1) - kernel_width;
+  ybsz = (h2 + 1) - kernel_height;
+  nxb = image_width / xbsz;
+  if (image_width % xbsz) {
     nxb++;
   }
-  nyb = imageHeight / ybsz;
-  if (imageHeight % ybsz) {
+  nyb = image_height / ybsz;
+  if (image_height % ybsz) {
     nyb++;
   }
   for (ybl = 0; ybl < nyb; ybl++) {
     for (xbl = 0; xbl < nxb; xbl++) {
 
-      // each channel one by one
+      /* Each channel one by one. */
       for (ch = 0; ch < 3; ch++) {
         fREAL *data1ch = &data1[ch * w2 * h2];
 
-        // only need to calc fht data from in2 once, can re-use for every block
+        /* Only need to calc fht data from in2 once, can re-use for every block. */
         if (!in2done) {
-          // in2, channel ch -> data1
-          for (y = 0; y < kernelHeight; y++) {
+          /* in2, channel ch -> data1 */
+          for (y = 0; y < kernel_height; y++) {
             fp = &data1ch[y * w2];
-            colp = (fRGB *)&kernelBuffer[y * kernelWidth * COM_DATA_TYPE_COLOR_CHANNELS];
-            for (x = 0; x < kernelWidth; x++) {
+            colp = (fRGB *)&kernel_buffer[y * kernel_width * COM_DATA_TYPE_COLOR_CHANNELS];
+            for (x = 0; x < kernel_width; x++) {
               fp[x] = colp[x][ch];
             }
           }
         }
 
-        // in1, channel ch -> data2
+        /* in1, channel ch -> data2 */
         memset(data2, 0, w2 * h2 * sizeof(fREAL));
         for (y = 0; y < ybsz; y++) {
           int yy = ybl * ybsz + y;
-          if (yy >= imageHeight) {
+          if (yy >= image_height) {
             continue;
           }
           fp = &data2[y * w2];
-          colp = (fRGB *)&imageBuffer[yy * imageWidth * COM_DATA_TYPE_COLOR_CHANNELS];
+          colp = (fRGB *)&image_buffer[yy * image_width * COM_DATA_TYPE_COLOR_CHANNELS];
           for (x = 0; x < xbsz; x++) {
             int xx = xbl * xbsz + x;
-            if (xx >= imageWidth) {
+            if (xx >= image_width) {
               continue;
             }
             fp[x] = colp[xx][ch];
           }
         }
 
-        // forward FHT
-        // zero pad data start is different for each == height+1
+        /* Forward FHT
+         * zero pad data start is different for each == height+1. */
         if (!in2done) {
-          FHT2D(data1ch, log2_w, log2_h, kernelHeight + 1, 0);
+          FHT2D(data1ch, log2_w, log2_h, kernel_height + 1, 0);
         }
-        FHT2D(data2, log2_w, log2_h, kernelHeight + 1, 0);
+        FHT2D(data2, log2_w, log2_h, kernel_height + 1, 0);
 
-        // FHT2D transposed data, row/col now swapped
-        // convolve & inverse FHT
+        /* FHT2D transposed data, row/col now swapped
+         * convolve & inverse FHT. */
         fht_convolve(data2, data1ch, log2_h, log2_w);
         FHT2D(data2, log2_h, log2_w, 0, 1);
-        // data again transposed, so in order again
+        /* Data again transposed, so in order again. */
 
-        // overlap-add result
+        /* Overlap-add result. */
         for (y = 0; y < (int)h2; y++) {
           const int yy = ybl * ybsz + y - hh;
-          if ((yy < 0) || (yy >= imageHeight)) {
+          if ((yy < 0) || (yy >= image_height)) {
             continue;
           }
           fp = &data2[y * w2];
-          colp = (fRGB *)&rdst->getBuffer()[yy * imageWidth * COM_DATA_TYPE_COLOR_CHANNELS];
+          colp = (fRGB *)&rdst->get_buffer()[yy * image_width * COM_DATA_TYPE_COLOR_CHANNELS];
           for (x = 0; x < (int)w2; x++) {
             const int xx = xbl * xbsz + x - hw;
-            if ((xx < 0) || (xx >= imageWidth)) {
+            if ((xx < 0) || (xx >= image_width)) {
               continue;
             }
             colp[xx][ch] += fp[x];
@@ -400,14 +399,14 @@ static void convolve(float *dst, MemoryBuffer *in1, MemoryBuffer *in2)
   MEM_freeN(data2);
   MEM_freeN(data1);
   memcpy(dst,
-         rdst->getBuffer(),
-         sizeof(float) * imageWidth * imageHeight * COM_DATA_TYPE_COLOR_CHANNELS);
+         rdst->get_buffer(),
+         sizeof(float) * image_width * image_height * COM_DATA_TYPE_COLOR_CHANNELS);
   delete (rdst);
 }
 
-void GlareFogGlowOperation::generateGlare(float *data,
-                                          MemoryBuffer *inputTile,
-                                          NodeGlare *settings)
+void GlareFogGlowOperation::generate_glare(float *data,
+                                           MemoryBuffer *input_tile,
+                                           NodeGlare *settings)
 {
   int x, y;
   float scale, u, v, r, w, d;
@@ -416,11 +415,11 @@ void GlareFogGlowOperation::generateGlare(float *data,
   unsigned int sz = 1 << settings->size;
   const float cs_r = 1.0f, cs_g = 1.0f, cs_b = 1.0f;
 
-  // temp. src image
-  // make the convolution kernel
-  rcti kernelRect;
-  BLI_rcti_init(&kernelRect, 0, sz, 0, sz);
-  ckrn = new MemoryBuffer(DataType::Color, kernelRect);
+  /* Temp. src image
+   * make the convolution kernel. */
+  rcti kernel_rect;
+  BLI_rcti_init(&kernel_rect, 0, sz, 0, sz);
+  ckrn = new MemoryBuffer(DataType::Color, kernel_rect);
 
   scale = 0.25f * sqrtf((float)(sz * sz));
 
@@ -433,16 +432,16 @@ void GlareFogGlowOperation::generateGlare(float *data,
       fcol[0] = expf(d * cs_r);
       fcol[1] = expf(d * cs_g);
       fcol[2] = expf(d * cs_b);
-      // linear window good enough here, visual result counts, not scientific analysis
-      // w = (1.0f-fabs(u))*(1.0f-fabs(v));
-      // actually, Hanning window is ok, cos^2 for some reason is slower
+      /* Linear window good enough here, visual result counts, not scientific analysis:
+       * `w = (1.0f-fabs(u))*(1.0f-fabs(v));`
+       * actually, Hanning window is ok, `cos^2` for some reason is slower. */
       w = (0.5f + 0.5f * cosf(u * (float)M_PI)) * (0.5f + 0.5f * cosf(v * (float)M_PI));
       mul_v3_fl(fcol, w);
-      ckrn->writePixel(x, y, fcol);
+      ckrn->write_pixel(x, y, fcol);
     }
   }
 
-  convolve(data, inputTile, ckrn);
+  convolve(data, input_tile, ckrn);
   delete ckrn;
 }
 

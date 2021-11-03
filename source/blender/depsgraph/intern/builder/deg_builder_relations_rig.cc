@@ -397,7 +397,7 @@ void DepsgraphRelationBuilder::build_rig(Object *object)
       add_relation(bone_local_key, constraints_key, "Local -> Constraints Stack");
       /* Constraints -> ready/ */
       /* TODO(sergey): When constraint stack is exploded, this step should
-       * occur before the first IK solver.  */
+       * occur before the first IK solver. */
       add_relation(constraints_key, bone_ready_key, "Constraints -> Ready");
     }
     else {
@@ -421,7 +421,7 @@ void DepsgraphRelationBuilder::build_rig(Object *object)
       if (prev) {
         OperationCode opcode = OperationCode::BONE_DONE;
         /* Inheriting parent roll requires access to prev handle's B-Bone properties. */
-        if ((pchan->bone->flag & BONE_ADD_PARENT_END_ROLL) != 0 &&
+        if ((pchan->bone->bbone_flag & BBONE_ADD_PARENT_END_ROLL) != 0 &&
             check_pchan_has_bbone_segments(object, prev)) {
           opcode = OperationCode::BONE_SEGMENTS;
         }

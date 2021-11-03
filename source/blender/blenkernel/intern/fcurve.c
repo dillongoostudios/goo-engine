@@ -203,7 +203,7 @@ void BKE_fcurve_foreach_id(FCurve *fcu, LibraryForeachIDData *data)
     switch (fcm->type) {
       case FMODIFIER_TYPE_PYTHON: {
         FMod_Python *fcm_py = (FMod_Python *)fcm->data;
-        BKE_LIB_FOREACHID_PROCESS(data, fcm_py->script, IDWALK_CB_NOP);
+        BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, fcm_py->script, IDWALK_CB_NOP);
 
         IDP_foreach_property(fcm_py->prop,
                              IDP_TYPE_FILTER_ID,
@@ -346,30 +346,30 @@ int BKE_fcurves_filter(ListBase *dst, ListBase *src, const char *dataPrefix, con
     return 0;
   }
 
+  const size_t quotedName_size = strlen(dataName) + 1;
+  char *quotedName = alloca(quotedName_size);
+
   /* Search each F-Curve one by one. */
   for (fcu = src->first; fcu; fcu = fcu->next) {
     /* Check if quoted string matches the path. */
-    if (fcu->rna_path == NULL || !strstr(fcu->rna_path, dataPrefix)) {
+    if (fcu->rna_path == NULL) {
       continue;
     }
-
-    char *quotedName = BLI_str_quoted_substrN(fcu->rna_path, dataPrefix);
-    if (quotedName == NULL) {
+    /* Skipping names longer than `quotedName_size` is OK since we're after an exact match. */
+    if (!BLI_str_quoted_substr(fcu->rna_path, dataPrefix, quotedName, quotedName_size)) {
+      continue;
+    }
+    if (!STREQ(quotedName, dataName)) {
       continue;
     }
 
     /* Check if the quoted name matches the required name. */
-    if (STREQ(quotedName, dataName)) {
-      LinkData *ld = MEM_callocN(sizeof(LinkData), __func__);
+    LinkData *ld = MEM_callocN(sizeof(LinkData), __func__);
 
-      ld->data = fcu;
-      BLI_addtail(dst, ld);
+    ld->data = fcu;
+    BLI_addtail(dst, ld);
 
-      matches++;
-    }
-
-    /* Always free the quoted string, since it needs freeing. */
-    MEM_freeN(quotedName);
+    matches++;
   }
   /* Return the number of matches. */
   return matches;
@@ -510,8 +510,11 @@ FCurve *BKE_fcurve_find_by_rna_context_ui(bContext *C,
  * with optional argument for precision required.
  * Returns the index to insert at (data already at that index will be offset if replace is 0)
  */
-static int BKE_fcurve_bezt_binarysearch_index_ex(
-    BezTriple array[], float frame, int arraylen, float threshold, bool *r_replace)
+static int BKE_fcurve_bezt_binarysearch_index_ex(const BezTriple array[],
+                                                 const float frame,
+                                                 const int arraylen,
+                                                 const float threshold,
+                                                 bool *r_replace)
 {
   int start = 0, end = arraylen;
   int loopbreaker = 0, maxloop = arraylen * 2;
@@ -597,9 +600,9 @@ static int BKE_fcurve_bezt_binarysearch_index_ex(
 /* Binary search algorithm for finding where to insert BezTriple. (for use by insert_bezt_fcurve)
  * Returns the index to insert at (data already at that index will be offset if replace is 0)
  */
-int BKE_fcurve_bezt_binarysearch_index(BezTriple array[],
-                                       float frame,
-                                       int arraylen,
+int BKE_fcurve_bezt_binarysearch_index(const BezTriple array[],
+                                       const float frame,
+                                       const int arraylen,
                                        bool *r_replace)
 {
   /* This is just a wrapper which uses the default threshold. */
@@ -915,7 +918,7 @@ void BKE_fcurve_active_keyframe_set(FCurve *fcu, const BezTriple *active_bezt)
   }
 
   /* The active keyframe should always be selected. */
-  BLI_assert(BEZT_ISSEL_ANY(active_bezt) || !"active keyframe must be selected");
+  BLI_assert_msg(BEZT_ISSEL_ANY(active_bezt), "active keyframe must be selected");
 
   fcu->active_keyframe_index = (int)offset;
 }
@@ -1309,7 +1312,7 @@ void calchandles_fcurve_ex(FCurve *fcu, eBezTriple_Flag handle_sel_flag)
    * - Need bezier keys.
    * - Only bezier-interpolation has handles (for now).
    */
-  if (ELEM(NULL, fcu, fcu->bezt) || (a < 2) /*|| ELEM(fcu->ipo, BEZT_IPO_CONST, BEZT_IPO_LIN)*/) {
+  if (ELEM(NULL, fcu, fcu->bezt) || (a < 2) /*|| ELEM(fcu->ipo, BEZT_IPO_CONST, BEZT_IPO_LIN) */) {
     return;
   }
 
@@ -1559,8 +1562,7 @@ void BKE_fcurve_correct_bezpart(const float v1[2], float v2[2], float v3[2], con
 }
 
 /**
-   .
- * Find roots of cubic equation (c0 x³ + c1 x² + c2 x + c3)
+ * Find roots of cubic equation (c0 x^3 + c1 x^2 + c2 x + c3)
  * \return number of roots in `o`.
  *
  * \note it is up to the caller to allocate enough memory for `o`.
@@ -2145,7 +2147,7 @@ static float fcurve_eval_samples(FCurve *fcu, FPoint *fpts, float evaltime)
  * \{ */
 
 /* Evaluate and return the value of the given F-Curve at the specified frame ("evaltime")
- * Note: this is also used for drivers.
+ * NOTE: this is also used for drivers.
  */
 static float evaluate_fcurve_ex(FCurve *fcu, float evaltime, float cvalue)
 {
@@ -2192,9 +2194,9 @@ float evaluate_fcurve(FCurve *fcu, float evaltime)
 
 float evaluate_fcurve_only_curve(FCurve *fcu, float evaltime)
 {
-  /* Can be used to evaluate the (keyframed) fcurve only.
-   * Also works for driver-fcurves when the driver itself is not relevant.
-   * E.g. when inserting a keyframe in a driver fcurve. */
+  /* Can be used to evaluate the (key-framed) f-curve only.
+   * Also works for driver-f-curves when the driver itself is not relevant.
+   * E.g. when inserting a keyframe in a driver f-curve. */
   return evaluate_fcurve_ex(fcu, evaltime, 0.0);
 }
 
@@ -2323,7 +2325,7 @@ void BKE_fmodifiers_blend_write(BlendWriter *writer, ListBase *fmodifiers)
           FMod_Python *data = fcm->data;
 
           /* Write ID Properties -- and copy this comment EXACTLY for easy finding
-           * of library blocks that implement this.*/
+           * of library blocks that implement this. */
           IDP_BlendWrite(writer, data->prop);
 
           break;

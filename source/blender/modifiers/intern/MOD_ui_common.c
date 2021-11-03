@@ -9,7 +9,7 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software  Foundation,
+ * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
@@ -108,7 +108,7 @@ void modifier_panel_end(uiLayout *layout, PointerRNA *ptr)
   ModifierData *md = ptr->data;
   if (md->error) {
     uiLayout *row = uiLayoutRow(layout, false);
-    uiItemL(row, IFACE_(md->error), ICON_ERROR);
+    uiItemL(row, TIP_(md->error), ICON_ERROR);
   }
 }
 
@@ -163,7 +163,7 @@ void modifier_vgroup_ui(uiLayout *layout,
  * Check whether Modifier is a simulation or not. Used for switching to the
  * physics/particles context tab.
  */
-static int modifier_is_simulation(ModifierData *md)
+static int modifier_is_simulation(const ModifierData *md)
 {
   /* Physic Tab */
   if (ELEM(md->type,
@@ -346,7 +346,7 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
   else if (ELEM(ob->type, OB_CURVE, OB_SURF, OB_FONT)) {
     /* Some modifiers can work with pre-tessellated curves only. */
     if (ELEM(md->type, eModifierType_Hook, eModifierType_Softbody, eModifierType_MeshDeform)) {
-      /* Add button (appearing to be ON) and add tip why this cant be changed. */
+      /* Add button (appearing to be ON) and add tip why this can't be changed. */
       sub = uiLayoutRow(row, true);
       uiBlock *block = uiLayoutGetBlock(sub);
       static int apply_on_spline_always_on_hack = eModifierMode_ApplyOnSpline;
@@ -448,7 +448,7 @@ PanelType *modifier_panel_register(ARegionType *region_type, ModifierType type, 
 
   /* Give the panel the special flag that says it was built here and corresponds to a
    * modifier rather than a #PanelType. */
-  panel_type->flag = PANEL_TYPE_HEADER_EXPAND | PANEL_TYPE_DRAW_BOX | PANEL_TYPE_INSTANCED;
+  panel_type->flag = PANEL_TYPE_HEADER_EXPAND | PANEL_TYPE_INSTANCED;
   panel_type->reorder = modifier_reorder;
   panel_type->get_list_data_expand_flag = get_modifier_expand_flag;
   panel_type->set_list_data_expand_flag = set_modifier_expand_flag;
@@ -482,7 +482,7 @@ PanelType *modifier_subpanel_register(ARegionType *region_type,
   panel_type->draw_header = draw_header;
   panel_type->draw = draw;
   panel_type->poll = modifier_ui_poll;
-  panel_type->flag = (PANEL_TYPE_DEFAULT_CLOSED | PANEL_TYPE_DRAW_BOX);
+  panel_type->flag = PANEL_TYPE_DEFAULT_CLOSED;
 
   BLI_assert(parent != NULL);
   BLI_strncpy(panel_type->parent_id, parent->idname, BKE_ST_MAXNAME);

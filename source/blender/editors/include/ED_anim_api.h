@@ -34,9 +34,9 @@ struct ListBase;
 
 struct ARegion;
 struct ARegionType;
+struct FModifier;
 struct Main;
 struct NlaStrip;
-struct FModifier;
 struct PanelType;
 struct ReportList;
 struct ScrArea;
@@ -177,9 +177,9 @@ typedef struct bAnimListElem {
    * action's ID. But if this is a f-curve which is a driver, then the owner
    * is set to, for example, object.
    *
-   * Note, that this is different from id above. The id above will be set to
-   * an object if the f-curve is coming from action associated with that
-   * object. */
+   * NOTE: this is different from id above. The id above will be set to
+   * an object if the f-curve is coming from action associated with that object.
+   */
   struct ID *fcurve_owner_id;
 
   /**
@@ -290,7 +290,7 @@ typedef enum eAnimFilter_Flags {
    * (i.e. scene visibility criteria).
    *
    * XXX: it's hard to think of any examples where this *ISN'T* the case...
-   * perhaps becomes implicit?.
+   * perhaps becomes implicit?
    */
   ANIMFILTER_DATA_VISIBLE = (1 << 0),
   /** channel is visible within the channel-list hierarchy
@@ -678,6 +678,10 @@ void ANIM_draw_framerange(struct Scene *scene, struct View2D *v2d);
 
 /* ------------- UI Panel Drawing -------------- */
 
+bool ANIM_nla_context_track_ptr(const struct bContext *C, struct PointerRNA *r_ptr);
+bool ANIM_nla_context_strip_ptr(const struct bContext *C, struct PointerRNA *r_ptr);
+
+struct NlaTrack *ANIM_nla_context_track(const struct bContext *C);
 struct NlaStrip *ANIM_nla_context_strip(const struct bContext *C);
 struct FCurve *ANIM_graph_context_fcurve(const struct bContext *C);
 
@@ -857,7 +861,7 @@ void ED_operatormacros_action(void);
 /* XXX: Should we be doing these here, or at all? */
 
 /* Action Editor - Action Management */
-struct AnimData *ED_actedit_animdata_from_context(struct bContext *C);
+struct AnimData *ED_actedit_animdata_from_context(struct bContext *C, struct ID **r_adt_id_owner);
 void ED_animedit_unlink_action(struct bContext *C,
                                struct ID *id,
                                struct AnimData *adt,

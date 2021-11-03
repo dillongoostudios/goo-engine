@@ -42,19 +42,25 @@ struct bContext;
 
 typedef struct IDProperty IDProperty;
 
-/* store local properties here */
-#define RNA_IDP_UI "_RNA_UI"
-
 /* Function Callbacks */
 
-typedef void (*UpdateFunc)(struct Main *main, struct Scene *scene, struct PointerRNA *ptr);
+/** Update callback for an RNA property.
+ *
+ *  \note This is NOT called automatically when writing into the property, it needs to be called
+ * manually (through #RNA_property_update or #RNA_property_update_main) when needed.
+ *
+ *  \param bmain: the Main data-base to which `ptr` data belongs.
+ *  \param active_scene: The current active scene (may be NULL in some cases).
+ *  \param ptr: The RNA pointer data to update. */
+typedef void (*UpdateFunc)(struct Main *bmain, struct Scene *active_scene, struct PointerRNA *ptr);
 typedef void (*ContextPropUpdateFunc)(struct bContext *C,
                                       struct PointerRNA *ptr,
                                       struct PropertyRNA *prop);
 typedef void (*ContextUpdateFunc)(struct bContext *C, struct PointerRNA *ptr);
+
 typedef int (*EditableFunc)(struct PointerRNA *ptr, const char **r_info);
 typedef int (*ItemEditableFunc)(struct PointerRNA *ptr, int index);
-typedef struct IDProperty *(*IDPropertiesFunc)(struct PointerRNA *ptr, bool create);
+typedef struct IDProperty **(*IDPropertiesFunc)(struct PointerRNA *ptr);
 typedef struct StructRNA *(*StructRefineFunc)(struct PointerRNA *ptr);
 typedef char *(*StructPathFunc)(struct PointerRNA *ptr);
 
@@ -280,7 +286,7 @@ struct FunctionRNA {
   CallFunc call;
 
   /* parameter for the return value
-   * note: this is only the C return value, rna functions can have multiple return values */
+   * NOTE: this is only the C return value, rna functions can have multiple return values. */
   PropertyRNA *c_ret;
 };
 
@@ -320,7 +326,7 @@ struct PropertyRNA {
   PropArrayLengthGetFunc getlength;
   /* dimension of array */
   unsigned int arraydimension;
-  /* array lengths lengths for all dimensions (when arraydimension > 0) */
+  /* Array lengths for all dimensions (when `arraydimension > 0`). */
   unsigned int arraylength[RNA_MAX_ARRAY_DIMENSION];
   unsigned int totarraylength;
 
@@ -400,6 +406,7 @@ typedef struct IntPropertyRNA {
   PropIntArraySetFuncEx setarray_ex;
   PropIntRangeFuncEx range_ex;
 
+  PropertyScaleType ui_scale_type;
   int softmin, softmax;
   int hardmin, hardmax;
   int step;
@@ -423,6 +430,7 @@ typedef struct FloatPropertyRNA {
   PropFloatArraySetFuncEx setarray_ex;
   PropFloatRangeFuncEx range_ex;
 
+  PropertyScaleType ui_scale_type;
   float softmin, softmax;
   float hardmin, hardmax;
   float step;
@@ -557,7 +565,7 @@ struct StructRNA {
    */
   StructInstanceFunc instance;
 
-  /* callback to get id properties */
+  /** Return the location of the struct's pointer to the root group IDProperty. */
   IDPropertiesFunc idproperties;
 
   /* functions of this struct */

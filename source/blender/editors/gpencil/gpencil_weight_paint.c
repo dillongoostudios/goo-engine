@@ -29,15 +29,18 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_armature_types.h"
 #include "DNA_brush_types.h"
 #include "DNA_gpencil_types.h"
 
+#include "BKE_action.h"
 #include "BKE_brush.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_gpencil.h"
 #include "BKE_main.h"
+#include "BKE_modifier.h"
 #include "BKE_object_deform.h"
 #include "BKE_report.h"
 #include "DNA_meshdata_types.h"
@@ -246,13 +249,28 @@ static bool brush_draw_apply(tGP_BrushWeightpaintData *gso,
   /* need a vertex group */
   if (gso->vrgroup == -1) {
     if (gso->object) {
-      BKE_object_defgroup_add(gso->object);
+      Object *ob_armature = BKE_modifiers_is_deformed_by_armature(gso->object);
+      if ((ob_armature != NULL)) {
+        Bone *actbone = ((bArmature *)ob_armature->data)->act_bone;
+        if (actbone != NULL) {
+          bPoseChannel *pchan = BKE_pose_channel_find_name(ob_armature->pose, actbone->name);
+          if (pchan != NULL) {
+            bDeformGroup *dg = BKE_object_defgroup_find_name(gso->object, pchan->name);
+            if (dg == NULL) {
+              dg = BKE_object_defgroup_add_name(gso->object, pchan->name);
+            }
+          }
+        }
+      }
+      else {
+        BKE_object_defgroup_add(gso->object);
+      }
       DEG_relations_tag_update(gso->bmain);
       gso->vrgroup = 0;
     }
   }
   else {
-    bDeformGroup *defgroup = BLI_findlink(&gso->object->defbase, gso->vrgroup);
+    bDeformGroup *defgroup = BLI_findlink(&gso->gpd->vertex_group_names, gso->vrgroup);
     if (defgroup->flag & DG_LOCK_WEIGHT) {
       return false;
     }
@@ -308,8 +326,8 @@ static bool gpencil_weightpaint_brush_init(bContext *C, wmOperator *op)
   gso->scene = scene;
   gso->object = ob;
   if (ob) {
-    gso->vrgroup = ob->actdef - 1;
-    if (!BLI_findlink(&ob->defbase, gso->vrgroup)) {
+    gso->vrgroup = gso->gpd->vertex_group_active_index - 1;
+    if (!BLI_findlink(&gso->gpd->vertex_group_names, gso->vrgroup)) {
       gso->vrgroup = -1;
     }
   }
@@ -448,7 +466,7 @@ static void gpencil_weightpaint_select_stroke(tGP_BrushWeightpaintData *gso,
           ((!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1])) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
         /* Check if point segment of stroke had anything to do with
          * brush region  (either within stroke painted, or on its lines)
-         * - this assumes that linewidth is irrelevant
+         * - this assumes that line-width is irrelevant.
          */
         if (gpencil_stroke_inside_circle(gso->mval, radius, pc1[0], pc1[1], pc2[0], pc2[1])) {
 
@@ -555,7 +573,7 @@ static bool gpencil_weightpaint_brush_do_frame(bContext *C,
         break;
     }
   }
-  /* Clear the selected array, but keep the memory allocation.*/
+  /* Clear the selected array, but keep the memory allocation. */
   gso->pbuffer = gpencil_select_buffer_ensure(
       gso->pbuffer, &gso->pbuffer_size, &gso->pbuffer_used, true);
 
@@ -774,7 +792,7 @@ static int gpencil_weightpaint_brush_modal(bContext *C, wmOperator *op, const wm
 
   /* The operator can be in 2 states: Painting and Idling */
   if (gso->is_painting) {
-    /* Painting  */
+    /* Painting. */
     switch (event->type) {
       /* Mouse Move = Apply somewhere else */
       case MOUSEMOVE:

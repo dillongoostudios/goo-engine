@@ -34,6 +34,7 @@ struct Tex;
 struct bContext;
 struct bContextDataResult;
 struct bNode;
+struct bNodeSocket;
 struct bNodeTree;
 struct wmOperatorType;
 
@@ -66,6 +67,7 @@ typedef struct ButsTextureUser {
 
   struct bNodeTree *ntree;
   struct bNode *node;
+  struct bNodeSocket *socket;
 
   const char *category;
   int icon;

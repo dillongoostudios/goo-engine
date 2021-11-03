@@ -199,10 +199,12 @@ def draw_kmi(display_keymaps, kc, km, kmi, layout, level):
             subrow = sub.row()
             subrow.scale_x = 0.75
             subrow.prop(kmi, "any", toggle=True)
-            subrow.prop(kmi, "shift", toggle=True)
-            subrow.prop(kmi, "ctrl", toggle=True)
-            subrow.prop(kmi, "alt", toggle=True)
-            subrow.prop(kmi, "oskey", text="Cmd", toggle=True)
+            # Use `*_ui` properties as integers aren't practical.
+            subrow.prop(kmi, "shift_ui", toggle=True)
+            subrow.prop(kmi, "ctrl_ui", toggle=True)
+            subrow.prop(kmi, "alt_ui", toggle=True)
+            subrow.prop(kmi, "oskey_ui", text="Cmd", toggle=True)
+
             subrow.prop(kmi, "key_modifier", text="", event=True)
 
         # Operator properties
@@ -271,7 +273,7 @@ def draw_filtered(display_keymaps, filter_type, filter_text, layout):
         # keymap items must match against all.
         kmi_test_type = []
 
-        # initialize? - so if a if a kmi has a MOD assigned it wont show up.
+        # initialize? - so if a kmi has a MOD assigned it won't show up.
         # for kv in key_mod.values():
         #     kmi_test_dict[kv] = {False}
 
@@ -421,7 +423,7 @@ def draw_keymaps(context, layout):
     rowsubsub.prop(spref, "filter_text", text="", icon='VIEWZOOM')
 
     if not filter_text:
-        # When the keyconfig defines it's own preferences.
+        # When the keyconfig defines its own preferences.
         kc_prefs = kc_active.preferences
         if kc_prefs is not None:
             box = col.box()

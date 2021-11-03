@@ -36,9 +36,12 @@
 #include "BLI_math.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_string_ref.hh"
+#include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_anim_data.h"
+#include "BKE_geometry_set.hh"
 #include "BKE_global.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
@@ -69,6 +72,7 @@ static CLG_LogRef LOG = {"bke.volume"};
 using blender::float3;
 using blender::float4x4;
 using blender::IndexRange;
+using blender::StringRef;
 
 #ifdef WITH_OPENVDB
 #  include <atomic>
@@ -195,7 +199,7 @@ static struct VolumeFileCache {
     Entry &entry = (Entry &)*it;
     entry.num_metadata_users++;
 
-    /* Note: pointers to unordered_set values are not invalidated when adding
+    /* NOTE: pointers to unordered_set values are not invalidated when adding
      * or removing other values. */
     return &entry;
   }
@@ -323,15 +327,19 @@ struct VolumeGrid {
 
     openvdb::io::File file(filepath);
 
-    try {
-      file.setCopyMaxBytes(0);
-      file.open();
-      openvdb::GridBase::Ptr vdb_grid = file.readGrid(name());
-      entry->grid->setTree(vdb_grid->baseTreePtr());
-    }
-    catch (const openvdb::IoError &e) {
-      entry->error_msg = e.what();
-    }
+    /* Isolate file loading since that's potentially multithreaded and we are
+     * holding a mutex lock. */
+    blender::threading::isolate_task([&] {
+      try {
+        file.setCopyMaxBytes(0);
+        file.open();
+        openvdb::GridBase::Ptr vdb_grid = file.readGrid(name());
+        entry->grid->setTree(vdb_grid->baseTreePtr());
+      }
+      catch (const openvdb::IoError &e) {
+        entry->error_msg = e.what();
+      }
+    });
 
     std::atomic_thread_fence(std::memory_order_release);
     entry->is_loaded = true;
@@ -550,7 +558,7 @@ static void volume_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   Volume *volume = (Volume *)id;
   for (int i = 0; i < volume->totcol; i++) {
-    BKE_LIB_FOREACHID_PROCESS(data, volume->mat[i], IDWALK_CB_USER);
+    BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, volume->mat[i], IDWALK_CB_USER);
   }
 }
 
@@ -572,27 +580,26 @@ static void volume_blend_write(BlendWriter *writer, ID *id, const void *id_addre
 {
   Volume *volume = (Volume *)id;
   const bool is_undo = BLO_write_is_undo(writer);
-  if (volume->id.us > 0 || is_undo) {
-    /* Clean up, important in undo case to reduce false detection of changed datablocks. */
-    volume->runtime.grids = nullptr;
 
-    /* Do not store packed files in case this is a library override ID. */
-    if (ID_IS_OVERRIDE_LIBRARY(volume) && !is_undo) {
-      volume->packedfile = nullptr;
-    }
+  /* Clean up, important in undo case to reduce false detection of changed datablocks. */
+  volume->runtime.grids = nullptr;
 
-    /* write LibData */
-    BLO_write_id_struct(writer, Volume, id_address, &volume->id);
-    BKE_id_blend_write(writer, &volume->id);
-
-    /* direct data */
-    BLO_write_pointer_array(writer, volume->totcol, volume->mat);
-    if (volume->adt) {
-      BKE_animdata_blend_write(writer, volume->adt);
-    }
-
-    BKE_packedfile_blend_write(writer, volume->packedfile);
+  /* Do not store packed files in case this is a library override ID. */
+  if (ID_IS_OVERRIDE_LIBRARY(volume) && !is_undo) {
+    volume->packedfile = nullptr;
   }
+
+  /* write LibData */
+  BLO_write_id_struct(writer, Volume, id_address, &volume->id);
+  BKE_id_blend_write(writer, &volume->id);
+
+  /* direct data */
+  BLO_write_pointer_array(writer, volume->totcol, volume->mat);
+  if (volume->adt) {
+    BKE_animdata_blend_write(writer, volume->adt);
+  }
+
+  BKE_packedfile_blend_write(writer, volume->packedfile);
 }
 
 static void volume_blend_read_data(BlendDataReader *reader, ID *id)
@@ -637,7 +644,7 @@ IDTypeInfo IDType_ID_VO = {
     /* name */ "Volume",
     /* name_plural */ "volumes",
     /* translation_context */ BLT_I18NCONTEXT_ID_VOLUME,
-    /* flags */ 0,
+    /* flags */ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
 
     /* init_data */ volume_init_data,
     /* copy_data */ volume_copy_data,
@@ -739,7 +746,7 @@ static int volume_sequence_frame(const Depsgraph *depsgraph, const Volume *volum
     }
   }
 
-  /* Important to apply after, else we cant loop on e.g. frames 100 - 110. */
+  /* Important to apply after, else we can't loop on e.g. frames 100 - 110. */
   frame += frame_offset;
 
   return frame;
@@ -1003,13 +1010,11 @@ static void volume_update_simplify_level(Volume *volume, const Depsgraph *depsgr
 #endif
 }
 
-static Volume *volume_evaluate_modifiers(struct Depsgraph *depsgraph,
-                                         struct Scene *scene,
-                                         Object *object,
-                                         Volume *volume_input)
+static void volume_evaluate_modifiers(struct Depsgraph *depsgraph,
+                                      struct Scene *scene,
+                                      Object *object,
+                                      GeometrySet &geometry_set)
 {
-  Volume *volume = volume_input;
-
   /* Modifier evaluation modes. */
   const bool use_render = (DEG_get_mode(depsgraph) == DAG_EVAL_RENDER);
   const int required_mode = use_render ? eModifierMode_Render : eModifierMode_Realtime;
@@ -1030,25 +1035,10 @@ static Volume *volume_evaluate_modifiers(struct Depsgraph *depsgraph,
       continue;
     }
 
-    if (mti->modifyVolume) {
-      /* Ensure we are not modifying the input. */
-      if (volume == volume_input) {
-        volume = BKE_volume_copy_for_eval(volume, true);
-      }
-
-      Volume *volume_next = mti->modifyVolume(md, &mectx, volume);
-
-      if (volume_next && volume_next != volume) {
-        /* If the modifier returned a new volume, release the old one. */
-        if (volume != volume_input) {
-          BKE_id_free(nullptr, volume);
-        }
-        volume = volume_next;
-      }
+    if (mti->modifyGeometrySet) {
+      mti->modifyGeometrySet(md, &mectx, &geometry_set);
     }
   }
-
-  return volume;
 }
 
 void BKE_volume_eval_geometry(struct Depsgraph *depsgraph, Volume *volume)
@@ -1072,6 +1062,24 @@ void BKE_volume_eval_geometry(struct Depsgraph *depsgraph, Volume *volume)
   }
 }
 
+static Volume *take_volume_ownership_from_geometry_set(GeometrySet &geometry_set)
+{
+  if (!geometry_set.has<VolumeComponent>()) {
+    return nullptr;
+  }
+  VolumeComponent &volume_component = geometry_set.get_component_for_write<VolumeComponent>();
+  Volume *volume = volume_component.release();
+  if (volume != nullptr) {
+    /* Add back, but only as read-only non-owning component. */
+    volume_component.replace(volume, GeometryOwnershipType::ReadOnly);
+  }
+  else {
+    /* The component was empty, we can remove it. */
+    geometry_set.remove<VolumeComponent>();
+  }
+  return volume;
+}
+
 void BKE_volume_data_update(struct Depsgraph *depsgraph, struct Scene *scene, Object *object)
 {
   /* Free any evaluated data and restore original data. */
@@ -1079,11 +1087,21 @@ void BKE_volume_data_update(struct Depsgraph *depsgraph, struct Scene *scene, Ob
 
   /* Evaluate modifiers. */
   Volume *volume = (Volume *)object->data;
-  Volume *volume_eval = volume_evaluate_modifiers(depsgraph, scene, object, volume);
+  GeometrySet geometry_set;
+  geometry_set.replace_volume(volume, GeometryOwnershipType::ReadOnly);
+  volume_evaluate_modifiers(depsgraph, scene, object, geometry_set);
+
+  Volume *volume_eval = take_volume_ownership_from_geometry_set(geometry_set);
+
+  /* If the geometry set did not contain a volume, we still create an empty one. */
+  if (volume_eval == nullptr) {
+    volume_eval = BKE_volume_new_for_eval(volume);
+  }
 
   /* Assign evaluated object. */
-  const bool is_owned = (volume != volume_eval);
-  BKE_object_eval_assign_data(object, &volume_eval->id, is_owned);
+  const bool eval_is_owned = (volume != volume_eval);
+  BKE_object_eval_assign_data(object, &volume_eval->id, eval_is_owned);
+  object->runtime.geometry_set_eval = new GeometrySet(std::move(geometry_set));
 }
 
 void BKE_volume_grids_backup_restore(Volume *volume, VolumeGridVector *grids, const char *filepath)
@@ -1207,7 +1225,7 @@ const VolumeGrid *BKE_volume_grid_active_get_for_read(const Volume *volume)
   return BKE_volume_grid_get_for_read(volume, index);
 }
 
-/* Tries to find a grid with the given name. Make sure that that the volume has been loaded. */
+/* Tries to find a grid with the given name. Make sure that the volume has been loaded. */
 const VolumeGrid *BKE_volume_grid_find_for_read(const Volume *volume, const char *name)
 {
   int num_grids = BKE_volume_num_grids(volume);
@@ -1434,6 +1452,21 @@ VolumeGrid *BKE_volume_grid_add(Volume *volume, const char *name, VolumeGridType
   return nullptr;
 #endif
 }
+
+#ifdef WITH_OPENVDB
+VolumeGrid *BKE_volume_grid_add_vdb(Volume &volume,
+                                    const StringRef name,
+                                    openvdb::GridBase::Ptr vdb_grid)
+{
+  VolumeGridVector &grids = *volume.runtime.grids;
+  BLI_assert(BKE_volume_grid_find_for_read(&volume, name.data()) == nullptr);
+  BLI_assert(BKE_volume_grid_type_openvdb(*vdb_grid) != VOLUME_GRID_UNKNOWN);
+
+  vdb_grid->setName(name);
+  grids.emplace_back(vdb_grid);
+  return &grids.back();
+}
+#endif
 
 void BKE_volume_grid_remove(Volume *volume, VolumeGrid *grid)
 {

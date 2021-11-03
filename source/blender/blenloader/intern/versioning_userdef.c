@@ -27,9 +27,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#ifdef WITH_INTERNATIONAL
-#  include "BLT_translation.h"
-#endif
+#include "BLT_translation.h"
 
 #include "DNA_anim_types.h"
 #include "DNA_collection_types.h"
@@ -60,10 +58,6 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
 {
 
 #define USER_VERSION_ATLEAST(ver, subver) MAIN_VERSION_ATLEAST(userdef, ver, subver)
-  if (!USER_VERSION_ATLEAST(280, 20)) {
-    memcpy(btheme, &U_theme_default, sizeof(*btheme));
-  }
-
 #define FROM_DEFAULT_V4_UCHAR(member) copy_v4_v4_uchar(btheme->member, U_theme_default.member)
 
   if (!USER_VERSION_ATLEAST(280, 25)) {
@@ -275,6 +269,52 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_info.info_operator);
 
     btheme->space_spreadsheet = btheme->space_outliner;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 5)) {
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.active);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.list);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.list_text);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.list_text_hi);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.hilite);
+    FROM_DEFAULT_V4_UCHAR(space_spreadsheet.selected_highlight);
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 15)) {
+    copy_v4_uchar(btheme->space_sequencer.grid, 33);
+    btheme->space_sequencer.grid[3] = 255;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 30)) {
+    FROM_DEFAULT_V4_UCHAR(space_node.wire);
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 31)) {
+    for (int i = 0; i < SEQUENCE_COLOR_TOT; ++i) {
+      FROM_DEFAULT_V4_UCHAR(strip_color[i].color);
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 33)) {
+    /* Adjust the frame node alpha now that it is used differently. */
+    btheme->space_node.movie[3] = U_theme_default.space_node.movie[3];
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 34)) {
+    btheme->tui.panel_roundness = 0.4f;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 37)) {
+    btheme->space_node.dash_alpha = 0.5f;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 39)) {
+    FROM_DEFAULT_V4_UCHAR(space_node.grid);
+    btheme->space_node.grid_levels = 7;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 40)) {
+    memcpy(btheme, &U_theme_default, sizeof(*btheme));
   }
 
   /**
@@ -714,7 +754,7 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
-  /* patch to set Dupli Lightprobes and Grease Pencil */
+  /* Patch to set dupli light-probes and grease-pencil. */
   if (!USER_VERSION_ATLEAST(280, 58)) {
     userdef->dupflag |= USER_DUP_LIGHTPROBE;
     userdef->dupflag |= USER_DUP_GPENCIL;
@@ -859,19 +899,49 @@ void blo_do_versions_userdef(UserDef *userdef)
     }
   }
 
-  if (!USER_VERSION_ATLEAST(293, 2)) {
-    /* Enable asset browser features by default for alpha testing.
-     * BLO_sanitize_experimental_features_userpref_blend() will disable it again for non-alpha
-     * builds. */
-    userdef->experimental.use_asset_browser = true;
-  }
-
   if (!USER_VERSION_ATLEAST(293, 12)) {
     if (userdef->gizmo_size_navigate_v3d == 0) {
       userdef->gizmo_size_navigate_v3d = 80;
     }
 
     userdef->sequencer_proxy_setup = USER_SEQ_PROXY_SETUP_AUTOMATIC;
+  }
+
+  if (!USER_VERSION_ATLEAST(293, 13)) {
+    BKE_addon_ensure(&userdef->addons, "pose_library");
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 21)) {
+    /* Deprecated userdef->flag USER_SAVE_PREVIEWS */
+    userdef->file_preview_type = (userdef->flag & USER_FLAG_UNUSED_5) ? USER_FILE_PREVIEW_AUTO :
+                                                                        USER_FILE_PREVIEW_NONE;
+    /* Clear for reuse. */
+    userdef->flag &= ~USER_FLAG_UNUSED_5;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 38)) {
+    /* Patch to set Dupli Lattice/Camera/Speaker. */
+    userdef->dupflag |= USER_DUP_LATTICE;
+    userdef->dupflag |= USER_DUP_CAMERA;
+    userdef->dupflag |= USER_DUP_SPEAKER;
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 40)) {
+    /* Rename the default asset library from "Default" to "User Library" */
+    LISTBASE_FOREACH (bUserAssetLibrary *, asset_library, &userdef->asset_libraries) {
+      if (STREQ(asset_library->name, DATA_("Default"))) {
+        BKE_preferences_asset_library_name_set(
+            userdef, asset_library, BKE_PREFS_ASSET_LIBRARY_DEFAULT_NAME);
+      }
+    }
+  }
+
+  if (!USER_VERSION_ATLEAST(300, 40)) {
+    LISTBASE_FOREACH (uiStyle *, style, &userdef->uistyles) {
+      const int default_title_points = 11; /* UI_DEFAULT_TITLE_POINTS */
+      style->paneltitle.points = default_title_points;
+      style->grouplabel.points = default_title_points;
+    }
   }
 
   /**

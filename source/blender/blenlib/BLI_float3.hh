@@ -62,6 +62,11 @@ struct float3 {
     return {a.x + b.x, a.y + b.y, a.z + b.z};
   }
 
+  friend float3 operator+(const float3 &a, const float &b)
+  {
+    return {a.x + b, a.y + b, a.z + b};
+  }
+
   float3 &operator+=(const float3 &b)
   {
     this->x += b.x;
@@ -78,6 +83,11 @@ struct float3 {
   friend float3 operator-(const float3 &a)
   {
     return {-a.x, -a.y, -a.z};
+  }
+
+  friend float3 operator-(const float3 &a, const float &b)
+  {
+    return {a.x - b, a.y - b, a.z - b};
   }
 
   float3 &operator-=(const float3 &b)
@@ -218,6 +228,16 @@ struct float3 {
     return result;
   }
 
+  static float3 safe_divide(const float3 &a, const float b)
+  {
+    return (b != 0.0f) ? a / b : float3(0.0f);
+  }
+
+  static float3 floor(const float3 &a)
+  {
+    return float3(floorf(a.x), floorf(a.y), floorf(a.z));
+  }
+
   void invert()
   {
     x = -x;
@@ -242,6 +262,13 @@ struct float3 {
   {
     float3 result;
     cross_v3_v3v3_hi_prec(result, a, b);
+    return result;
+  }
+
+  static float3 cross(const float3 &a, const float3 &b)
+  {
+    float3 result;
+    cross_v3_v3v3(result, a, b);
     return result;
   }
 

@@ -60,6 +60,7 @@ set(SRC
   transform_convert_particle.c
   transform_convert_sculpt.c
   transform_convert_sequencer.c
+  transform_convert_sequencer_image.c
   transform_convert_tracking.c
   transform_draw_cursors.c
   transform_generics.c
@@ -101,7 +102,9 @@ set(SRC
   transform_ops.c
   transform_orientations.c
   transform_snap.c
+  transform_snap_animation.c
   transform_snap_object.c
+  transform_snap_sequencer.c
 
   transform.h
   transform_constraints.h

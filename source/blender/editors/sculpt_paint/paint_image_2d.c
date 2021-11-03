@@ -745,7 +745,7 @@ static void brush_painter_2d_tex_mapping(ImagePaintState *s,
     mapping->ymax = (ymax - ymin) / (float)diameter;
   }
   else if (mapmode == MTEX_MAP_MODE_3D) {
-    /* 3D mapping, just mapping to canvas 0..1  */
+    /* 3D mapping, just mapping to canvas 0..1. */
     mapping->xmin = 2.0f * (ipos[0] * invw - 0.5f);
     mapping->ymin = 2.0f * (ipos[1] * invh - 0.5f);
     mapping->xmax = 2.0f * invw;
@@ -784,11 +784,10 @@ static void brush_painter_2d_refresh_cache(ImagePaintState *s,
 
   bool do_random = false;
   bool do_partial_update = false;
-  bool update_color = ((brush->flag & BRUSH_USE_GRADIENT) &&
-                       ((ELEM(brush->gradient_stroke_mode,
-                              BRUSH_GRADIENT_SPACING_REPEAT,
-                              BRUSH_GRADIENT_SPACING_CLAMP)) ||
-                        (cache->last_pressure != pressure)));
+  bool update_color = ((brush->flag & BRUSH_USE_GRADIENT) && (ELEM(brush->gradient_stroke_mode,
+                                                                   BRUSH_GRADIENT_SPACING_REPEAT,
+                                                                   BRUSH_GRADIENT_SPACING_CLAMP) ||
+                                                              (cache->last_pressure != pressure)));
   float tex_rotation = -brush->mtex.rot;
   float mask_rotation = -brush->mask_mtex.rot;
 
@@ -838,10 +837,7 @@ static void brush_painter_2d_refresh_cache(ImagePaintState *s,
 
     if (diameter != cache->lastdiameter || (mask_rotation != cache->last_mask_rotation) ||
         renew_maxmask) {
-      if (cache->tex_mask) {
-        MEM_freeN(cache->tex_mask);
-        cache->tex_mask = NULL;
-      }
+      MEM_SAFE_FREE(cache->tex_mask);
 
       brush_painter_2d_tex_mapping(s,
                                    tile->canvas,
@@ -863,10 +859,7 @@ static void brush_painter_2d_refresh_cache(ImagePaintState *s,
   }
 
   /* curve mask can only change if the size changes */
-  if (cache->curve_mask) {
-    MEM_freeN(cache->curve_mask);
-    cache->curve_mask = NULL;
-  }
+  MEM_SAFE_FREE(cache->curve_mask);
 
   cache->curve_mask = brush_painter_curve_mask_new(painter, diameter, size, pos);
 
@@ -922,8 +915,6 @@ static bool paint_2d_ensure_tile_canvas(ImagePaintState *s, int i)
   }
 
   s->tiles[i].cache.lastdiameter = -1;
-
-  s->tiles[i].iuser.ok = true;
 
   ImBuf *ibuf = BKE_image_acquire_ibuf(s->image, &s->tiles[i].iuser, NULL);
   if (ibuf != NULL) {
@@ -1248,7 +1239,7 @@ static void paint_2d_lift_smear(ImBuf *ibuf, ImBuf *ibufb, int *pos, short paint
 
 static ImBuf *paint_2d_lift_clone(ImBuf *ibuf, ImBuf *ibufb, const int *pos)
 {
-  /* note: allocImbuf returns zero'd memory, so regions outside image will
+  /* NOTE: allocImbuf returns zero'd memory, so regions outside image will
    * have zero alpha, and hence not be blended onto the image */
   int w = ibufb->x, h = ibufb->y, destx = 0, desty = 0, srcx = pos[0], srcy = pos[1];
   ImBuf *clonebuf = IMB_allocImBuf(w, h, ibufb->planes, ibufb->flags);
@@ -1690,7 +1681,6 @@ void *paint_2d_new_stroke(bContext *C, wmOperator *op, int mode)
   for (int i = 0; i < s->num_tiles; i++) {
     s->tiles[i].iuser = sima->iuser;
   }
-  s->tiles[0].iuser.ok = true;
 
   zero_v2(s->tiles[0].uv_origin);
 

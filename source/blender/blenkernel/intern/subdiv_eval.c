@@ -137,7 +137,7 @@ bool BKE_subdiv_eval_refine_from_mesh(Subdiv *subdiv,
 {
   if (subdiv->evaluator == NULL) {
     /* NOTE: This situation is supposed to be handled by begin(). */
-    BLI_assert(!"Is not supposed to happen");
+    BLI_assert_msg(0, "Is not supposed to happen");
     return false;
   }
   /* Set coordinates of base mesh vertices. */
@@ -282,7 +282,7 @@ static void buffer_apply_offset(void **buffer, const int offset)
   *buffer = ((unsigned char *)*buffer) + offset;
 }
 
-/* Write given number of floats to the beginning of given buffer.  */
+/* Write given number of floats to the beginning of given buffer. */
 static void buffer_write_float_value(void **buffer, const float *values_buffer, int num_values)
 {
   memcpy(*buffer, values_buffer, sizeof(float) * num_values);

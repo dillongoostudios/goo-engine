@@ -18,43 +18,43 @@
 
 #include "COM_Debug.h"
 
-#include <map>
-#include <typeinfo>
-#include <vector>
-
 extern "C" {
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
-#include "BLI_string.h"
-#include "BLI_sys_types.h"
 
 #include "BKE_appdir.h"
-#include "BKE_node.h"
-#include "DNA_node_types.h"
+#include "IMB_imbuf.h"
+#include "IMB_imbuf_types.h"
 }
 
-#include "COM_ExecutionSystem.h"
-#include "COM_Node.h"
-
+#include "COM_ExecutionGroup.h"
 #include "COM_ReadBufferOperation.h"
+#include "COM_SetValueOperation.h"
 #include "COM_ViewerOperation.h"
 #include "COM_WriteBufferOperation.h"
 
 namespace blender::compositor {
 
-#ifdef COM_DEBUG
+int DebugInfo::file_index_ = 0;
+DebugInfo::NodeNameMap DebugInfo::node_names_;
+DebugInfo::OpNameMap DebugInfo::op_names_;
+std::string DebugInfo::current_node_name_;
+std::string DebugInfo::current_op_name_;
+DebugInfo::GroupStateMap DebugInfo::group_states_;
 
-int DebugInfo::m_file_index = 0;
-DebugInfo::NodeNameMap DebugInfo::m_node_names;
-DebugInfo::OpNameMap DebugInfo::m_op_names;
-std::string DebugInfo::m_current_node_name;
-std::string DebugInfo::m_current_op_name;
-DebugInfo::GroupStateMap DebugInfo::m_group_states;
+static std::string operation_class_name(const NodeOperation *op)
+{
+  std::string full_name = typeid(*op).name();
+  /* Remove name-spaces. */
+  size_t pos = full_name.find_last_of(':');
+  BLI_assert(pos != std::string::npos);
+  return full_name.substr(pos + 1);
+}
 
 std::string DebugInfo::node_name(const Node *node)
 {
-  NodeNameMap::const_iterator it = m_node_names.find(node);
-  if (it != m_node_names.end()) {
+  NodeNameMap::const_iterator it = node_names_.find(node);
+  if (it != node_names_.end()) {
     return it->second;
   }
   return "";
@@ -62,55 +62,11 @@ std::string DebugInfo::node_name(const Node *node)
 
 std::string DebugInfo::operation_name(const NodeOperation *op)
 {
-  OpNameMap::const_iterator it = m_op_names.find(op);
-  if (it != m_op_names.end()) {
+  OpNameMap::const_iterator it = op_names_.find(op);
+  if (it != op_names_.end()) {
     return it->second;
   }
   return "";
-}
-
-void DebugInfo::convert_started()
-{
-  m_op_names.clear();
-}
-
-void DebugInfo::execute_started(const ExecutionSystem *system)
-{
-  m_file_index = 1;
-  m_group_states.clear();
-  for (ExecutionGroup *execution_group : system->m_groups) {
-    m_group_states[execution_group] = EG_WAIT;
-  }
-}
-
-void DebugInfo::node_added(const Node *node)
-{
-  m_node_names[node] = std::string(node->getbNode() ? node->getbNode()->name : "");
-}
-
-void DebugInfo::node_to_operations(const Node *node)
-{
-  m_current_node_name = m_node_names[node];
-}
-
-void DebugInfo::operation_added(const NodeOperation *operation)
-{
-  m_op_names[operation] = m_current_node_name;
-}
-
-void DebugInfo::operation_read_write_buffer(const NodeOperation *operation)
-{
-  m_current_op_name = m_op_names[operation];
-}
-
-void DebugInfo::execution_group_started(const ExecutionGroup *group)
-{
-  m_group_states[group] = EG_RUNNING;
-}
-
-void DebugInfo::execution_group_finished(const ExecutionGroup *group)
-{
-  m_group_states[group] = EG_FINISHED;
 }
 
 int DebugInfo::graphviz_operation(const ExecutionSystem *system,
@@ -124,14 +80,14 @@ int DebugInfo::graphviz_operation(const ExecutionSystem *system,
   std::string fillcolor = "gainsboro";
   if (operation->get_flags().is_viewer_operation) {
     const ViewerOperation *viewer = (const ViewerOperation *)operation;
-    if (viewer->isActiveViewerOutput()) {
+    if (viewer->is_active_viewer_output()) {
       fillcolor = "lightskyblue1";
     }
     else {
       fillcolor = "lightskyblue3";
     }
   }
-  else if (operation->isOutputOperation(system->getContext().isRendering())) {
+  else if (operation->is_output_operation(system->get_context().is_rendering())) {
     fillcolor = "dodgerblue1";
   }
   else if (operation->get_flags().is_set_operation) {
@@ -156,16 +112,16 @@ int DebugInfo::graphviz_operation(const ExecutionSystem *system,
                   " [fillcolor=%s,style=filled,shape=record,label=\"{",
                   fillcolor.c_str());
 
-  int totinputs = operation->getNumberOfInputSockets();
+  int totinputs = operation->get_number_of_input_sockets();
   if (totinputs != 0) {
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "{");
     for (int k = 0; k < totinputs; k++) {
-      NodeOperationInput *socket = operation->getInputSocket(k);
+      NodeOperationInput *socket = operation->get_input_socket(k);
       if (k != 0) {
         len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "|");
       }
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "<IN_%p>", socket);
-      switch (socket->getDataType()) {
+      switch (socket->get_data_type()) {
         case DataType::Value:
           len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "Value");
           break;
@@ -181,38 +137,60 @@ int DebugInfo::graphviz_operation(const ExecutionSystem *system,
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "|");
   }
 
-  len += snprintf(str + len,
-                  maxlen > len ? maxlen - len : 0,
-                  "%s\\n(%s)",
-                  m_op_names[operation].c_str(),
-                  typeid(*operation).name());
+  if (COM_GRAPHVIZ_SHOW_NODE_NAME) {
+    std::string op_node_name = operation->get_name();
+    if (!op_node_name.empty()) {
+      len += snprintf(
+          str + len, maxlen > len ? maxlen - len : 0, "%s\\n", (op_node_name + " Node").c_str());
+    }
+  }
 
   len += snprintf(str + len,
                   maxlen > len ? maxlen - len : 0,
-                  " (%u,%u)",
-                  operation->getWidth(),
-                  operation->getHeight());
+                  "%s\\n",
+                  operation_class_name(operation).c_str());
 
-  int totoutputs = operation->getNumberOfOutputSockets();
+  len += snprintf(str + len,
+                  maxlen > len ? maxlen - len : 0,
+                  "#%d (%i,%i) (%u,%u)",
+                  operation->get_id(),
+                  operation->get_canvas().xmin,
+                  operation->get_canvas().ymin,
+                  operation->get_width(),
+                  operation->get_height());
+
+  int totoutputs = operation->get_number_of_output_sockets();
   if (totoutputs != 0) {
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "|");
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "{");
     for (int k = 0; k < totoutputs; k++) {
-      NodeOperationOutput *socket = operation->getOutputSocket(k);
+      NodeOperationOutput *socket = operation->get_output_socket(k);
       if (k != 0) {
         len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "|");
       }
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "<OUT_%p>", socket);
-      switch (socket->getDataType()) {
-        case DataType::Value:
-          len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "Value");
+      switch (socket->get_data_type()) {
+        case DataType::Value: {
+          ConstantOperation *constant = operation->get_flags().is_constant_operation ?
+                                            static_cast<ConstantOperation *>(operation) :
+                                            nullptr;
+          if (constant && constant->can_get_constant_elem()) {
+            const float value = *constant->get_constant_elem();
+            len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "Value\\n%12.4g", value);
+          }
+          else {
+            len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "Value");
+          }
           break;
-        case DataType::Vector:
+        }
+        case DataType::Vector: {
           len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "Vector");
           break;
-        case DataType::Color:
+        }
+        case DataType::Color: {
           len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "Color");
           break;
+        }
       }
     }
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "}");
@@ -257,12 +235,14 @@ int DebugInfo::graphviz_legend_group(
   return len;
 }
 
-int DebugInfo::graphviz_legend(char *str, int maxlen)
+int DebugInfo::graphviz_legend(char *str, int maxlen, const bool has_execution_groups)
 {
   int len = 0;
 
   len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "{\r\n");
-  len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "rank = sink;\r\n");
+  if (has_execution_groups) {
+    len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "rank = sink;\r\n");
+  }
   len += snprintf(
       str + len, maxlen > len ? maxlen - len : 0, "Legend [shape=none, margin=0, label=<\r\n");
 
@@ -282,21 +262,24 @@ int DebugInfo::graphviz_legend(char *str, int maxlen)
       "Viewer", "lightskyblue3", str + len, maxlen > len ? maxlen - len : 0);
   len += graphviz_legend_color(
       "Active Viewer", "lightskyblue1", str + len, maxlen > len ? maxlen - len : 0);
-  len += graphviz_legend_color(
-      "Write Buffer", "darkorange", str + len, maxlen > len ? maxlen - len : 0);
-  len += graphviz_legend_color(
-      "Read Buffer", "darkolivegreen3", str + len, maxlen > len ? maxlen - len : 0);
+  if (has_execution_groups) {
+    len += graphviz_legend_color(
+        "Write Buffer", "darkorange", str + len, maxlen > len ? maxlen - len : 0);
+    len += graphviz_legend_color(
+        "Read Buffer", "darkolivegreen3", str + len, maxlen > len ? maxlen - len : 0);
+  }
   len += graphviz_legend_color(
       "Input Value", "khaki1", str + len, maxlen > len ? maxlen - len : 0);
 
-  len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "<TR><TD></TD></TR>\r\n");
-
-  len += graphviz_legend_group(
-      "Group Waiting", "white", "dashed", str + len, maxlen > len ? maxlen - len : 0);
-  len += graphviz_legend_group(
-      "Group Running", "firebrick1", "solid", str + len, maxlen > len ? maxlen - len : 0);
-  len += graphviz_legend_group(
-      "Group Finished", "chartreuse4", "solid", str + len, maxlen > len ? maxlen - len : 0);
+  if (has_execution_groups) {
+    len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "<TR><TD></TD></TR>\r\n");
+    len += graphviz_legend_group(
+        "Group Waiting", "white", "dashed", str + len, maxlen > len ? maxlen - len : 0);
+    len += graphviz_legend_group(
+        "Group Running", "firebrick1", "solid", str + len, maxlen > len ? maxlen - len : 0);
+    len += graphviz_legend_group(
+        "Group Finished", "chartreuse4", "solid", str + len, maxlen > len ? maxlen - len : 0);
+  }
 
   len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "</TABLE>\r\n");
   len += snprintf(str + len, maxlen > len ? maxlen - len : 0, ">];\r\n");
@@ -317,25 +300,25 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
 
   std::map<NodeOperation *, std::vector<std::string>> op_groups;
   int index = 0;
-  for (const ExecutionGroup *group : system->m_groups) {
+  for (const ExecutionGroup *group : system->groups_) {
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "// GROUP: %d\r\n", index);
     len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "subgraph cluster_%d{\r\n", index);
     /* used as a check for executing group */
-    if (m_group_states[group] == EG_WAIT) {
+    if (group_states_[group] == EG_WAIT) {
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "style=dashed\r\n");
     }
-    else if (m_group_states[group] == EG_RUNNING) {
+    else if (group_states_[group] == EG_RUNNING) {
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "style=filled\r\n");
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "color=black\r\n");
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "fillcolor=firebrick1\r\n");
     }
-    else if (m_group_states[group] == EG_FINISHED) {
+    else if (group_states_[group] == EG_FINISHED) {
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "style=filled\r\n");
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "color=black\r\n");
       len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "fillcolor=chartreuse4\r\n");
     }
 
-    for (NodeOperation *operation : group->m_operations) {
+    for (NodeOperation *operation : group->operations_) {
 
       sprintf(strbuf, "_%p", group);
       op_groups[operation].push_back(std::string(strbuf));
@@ -349,7 +332,7 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
   }
 
   /* operations not included in any group */
-  for (NodeOperation *operation : system->m_operations) {
+  for (NodeOperation *operation : system->operations_) {
     if (op_groups.find(operation) != op_groups.end()) {
       continue;
     }
@@ -360,10 +343,10 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
         system, operation, nullptr, str + len, maxlen > len ? maxlen - len : 0);
   }
 
-  for (NodeOperation *operation : system->m_operations) {
+  for (NodeOperation *operation : system->operations_) {
     if (operation->get_flags().is_read_buffer_operation) {
       ReadBufferOperation *read = (ReadBufferOperation *)operation;
-      WriteBufferOperation *write = read->getMemoryProxy()->getWriteBufferOperation();
+      WriteBufferOperation *write = read->get_memory_proxy()->get_write_buffer_operation();
       std::vector<std::string> &read_groups = op_groups[read];
       std::vector<std::string> &write_groups = op_groups[write];
 
@@ -381,16 +364,16 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
     }
   }
 
-  for (NodeOperation *op : system->m_operations) {
-    for (NodeOperationInput &to : op->m_inputs) {
-      NodeOperationOutput *from = to.getLink();
+  for (NodeOperation *op : system->operations_) {
+    for (NodeOperationInput &to : op->inputs_) {
+      NodeOperationOutput *from = to.get_link();
 
       if (!from) {
         continue;
       }
 
       std::string color;
-      switch (from->getDataType()) {
+      switch (from->get_data_type()) {
         case DataType::Value:
           color = "gray";
           break;
@@ -402,8 +385,8 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
           break;
       }
 
-      NodeOperation *to_op = &to.getOperation();
-      NodeOperation *from_op = &from->getOperation();
+      NodeOperation *to_op = &to.get_operation();
+      NodeOperation *from_op = &from->get_operation();
       std::vector<std::string> &from_groups = op_groups[from_op];
       std::vector<std::string> &to_groups = op_groups[to_op];
 
@@ -433,23 +416,34 @@ bool DebugInfo::graphviz_system(const ExecutionSystem *system, char *str, int ma
     }
   }
 
-  len += graphviz_legend(str + len, maxlen > len ? maxlen - len : 0);
+  const bool has_execution_groups = system->get_context().get_execution_model() ==
+                                        eExecutionModel::Tiled &&
+                                    system->groups_.size() > 0;
+  len += graphviz_legend(str + len, maxlen > len ? maxlen - len : 0, has_execution_groups);
 
   len += snprintf(str + len, maxlen > len ? maxlen - len : 0, "}\r\n");
 
   return (len < maxlen);
 }
 
-void DebugInfo::graphviz(const ExecutionSystem *system)
+void DebugInfo::graphviz(const ExecutionSystem *system, StringRefNull name)
 {
+  if (!COM_EXPORT_GRAPHVIZ) {
+    return;
+  }
   char str[1000000];
   if (graphviz_system(system, str, sizeof(str) - 1)) {
     char basename[FILE_MAX];
     char filename[FILE_MAX];
 
-    BLI_snprintf(basename, sizeof(basename), "compositor_%d.dot", m_file_index);
+    if (name.is_empty()) {
+      BLI_snprintf(basename, sizeof(basename), "compositor_%d.dot", file_index_);
+    }
+    else {
+      BLI_strncpy(basename, (name + ".dot").c_str(), sizeof(basename));
+    }
     BLI_join_dirfile(filename, sizeof(filename), BKE_tempdir_session(), basename);
-    m_file_index++;
+    file_index_++;
 
     std::cout << "Writing compositor debug to: " << filename << "\n";
 
@@ -459,44 +453,48 @@ void DebugInfo::graphviz(const ExecutionSystem *system)
   }
 }
 
-#else
-
-std::string DebugInfo::node_name(const Node * /*node*/)
+static std::string get_operations_export_dir()
 {
-  return "";
-}
-std::string DebugInfo::operation_name(const NodeOperation * /*op*/)
-{
-  return "";
-}
-void DebugInfo::convert_started()
-{
-}
-void DebugInfo::execute_started(const ExecutionSystem * /*system*/)
-{
-}
-void DebugInfo::node_added(const Node * /*node*/)
-{
-}
-void DebugInfo::node_to_operations(const Node * /*node*/)
-{
-}
-void DebugInfo::operation_added(const NodeOperation * /*operation*/)
-{
-}
-void DebugInfo::operation_read_write_buffer(const NodeOperation * /*operation*/)
-{
-}
-void DebugInfo::execution_group_started(const ExecutionGroup * /*group*/)
-{
-}
-void DebugInfo::execution_group_finished(const ExecutionGroup * /*group*/)
-{
-}
-void DebugInfo::graphviz(const ExecutionSystem * /*system*/)
-{
+  return std::string(BKE_tempdir_session()) + "COM_operations" + SEP_STR;
 }
 
-#endif
+void DebugInfo::export_operation(const NodeOperation *op, MemoryBuffer *render)
+{
+  const int width = render->get_width();
+  const int height = render->get_height();
+  const int num_channels = render->get_num_channels();
+
+  ImBuf *ibuf = IMB_allocImBuf(width, height, 8 * num_channels, IB_rectfloat);
+  MemoryBuffer mem_ibuf(ibuf->rect_float, 4, width, height);
+  mem_ibuf.copy_from(render, render->get_rect(), 0, num_channels, 0);
+
+  const std::string file_name = operation_class_name(op) + "_" + std::to_string(op->get_id()) +
+                                ".png";
+  const std::string path = get_operations_export_dir() + file_name;
+  BLI_make_existing_file(path.c_str());
+  IMB_saveiff(ibuf, path.c_str(), ibuf->flags);
+  IMB_freeImBuf(ibuf);
+}
+
+void DebugInfo::delete_operation_exports()
+{
+  const std::string dir = get_operations_export_dir();
+  if (BLI_exists(dir.c_str())) {
+    struct direntry *file_list;
+    int num_files = BLI_filelist_dir_contents(dir.c_str(), &file_list);
+    for (int i = 0; i < num_files; i++) {
+      direntry *file = &file_list[i];
+      const eFileAttributes file_attrs = BLI_file_attributes(file->path);
+      if (file_attrs & FILE_ATTR_ANY_LINK) {
+        continue;
+      }
+
+      if (BLI_is_file(file->path) && BLI_path_extension_check(file->path, ".png")) {
+        BLI_delete(file->path, false, false);
+      }
+    }
+    BLI_filelist_free(file_list, num_files);
+  }
+}
 
 }  // namespace blender::compositor

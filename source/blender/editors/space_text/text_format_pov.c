@@ -644,7 +644,7 @@ static int txtfmt_pov_find_specialvar(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "ratio",              len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "open",               len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "ior",                len)) { i = len;
-  /* Light Types and options*/
+  /* Light Types and options. */
   } else if (STR_LITERAL_STARTSWITH(string, "area_light",         len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "looks_like",         len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "fade_power",         len)) { i = len;
@@ -654,7 +654,7 @@ static int txtfmt_pov_find_specialvar(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "point_at",           len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "falloff",            len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "radius",             len)) { i = len;
-  /* Camera Types and options*/
+  /* Camera Types and options. */
   } else if (STR_LITERAL_STARTSWITH(string, "omni_directional_stereo",  len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "lambert_cylindrical",      len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "miller_cylindrical",       len)) { i = len;
@@ -709,7 +709,7 @@ static int txtfmt_pov_find_bool(const char *string)
   /* Keep aligned args for readability. */
   /* clang-format off */
 
-  /* Built-in Constants */
+  /* Built-in Constants. */
   if        (STR_LITERAL_STARTSWITH(string, "unofficial",          len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "false",               len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "no",                  len)) { i = len;
@@ -719,7 +719,7 @@ static int txtfmt_pov_find_bool(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "on",                  len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "pi",                  len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "tau",                 len)) { i = len;
-  /* Encodings */
+  /* Encodings. */
   } else if (STR_LITERAL_STARTSWITH(string, "sint16be",            len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "sint16le",            len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "sint32be",            len)) { i = len;
@@ -732,7 +732,7 @@ static int txtfmt_pov_find_bool(const char *string)
   } else if (STR_LITERAL_STARTSWITH(string, "uint8",               len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "ascii",               len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "utf8",                len)) { i = len;
-  /* Filetypes */
+  /* File-types. */
   } else if (STR_LITERAL_STARTSWITH(string, "tiff",                len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "df3",                 len)) { i = len;
   } else if (STR_LITERAL_STARTSWITH(string, "exr",                 len)) { i = len;
@@ -762,11 +762,11 @@ static char txtfmt_pov_format_identifier(const char *str)
   /* Keep aligned args for readability. */
   /* clang-format off */
 
-  if        ((txtfmt_pov_find_specialvar(str))        != -1) { fmt = FMT_TYPE_SPECIAL;
-  } else if ((txtfmt_pov_find_keyword(str))           != -1) { fmt = FMT_TYPE_KEYWORD;
-  } else if ((txtfmt_pov_find_reserved_keywords(str)) != -1) { fmt = FMT_TYPE_RESERVED;
-  } else if ((txtfmt_pov_find_reserved_builtins(str)) != -1) { fmt = FMT_TYPE_DIRECTIVE;
-  } else                                                     { fmt = FMT_TYPE_DEFAULT;
+  if        (txtfmt_pov_find_specialvar(str)        != -1) { fmt = FMT_TYPE_SPECIAL;
+  } else if (txtfmt_pov_find_keyword(str)           != -1) { fmt = FMT_TYPE_KEYWORD;
+  } else if (txtfmt_pov_find_reserved_keywords(str) != -1) { fmt = FMT_TYPE_RESERVED;
+  } else if (txtfmt_pov_find_reserved_builtins(str) != -1) { fmt = FMT_TYPE_DIRECTIVE;
+  } else                                                   { fmt = FMT_TYPE_DEFAULT;
   }
 
   /* clang-format on */
@@ -870,7 +870,7 @@ static void txtfmt_pov_format_line(SpaceText *st, TextLine *line, const bool do_
         cont = (*str == '"') ? FMT_CONT_QUOTEDOUBLE : FMT_CONT_QUOTESINGLE;
         *fmt = FMT_TYPE_STRING;
       }
-      /* Whitespace (all ws. has been converted to spaces) */
+      /* White-space (all ws. has been converted to spaces). */
       else if (*str == ' ') {
         *fmt = FMT_TYPE_WHITESPACE;
       }

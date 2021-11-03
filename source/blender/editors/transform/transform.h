@@ -46,6 +46,7 @@
  * \{ */
 
 struct ARegion;
+struct BMPartialUpdate;
 struct Depsgraph;
 struct NumInput;
 struct Object;
@@ -86,14 +87,16 @@ typedef enum {
   CTX_PAINT_CURVE = (1 << 7),
   CTX_POSE_BONE = (1 << 8),
   CTX_TEXTURE_SPACE = (1 << 9),
+  CTX_SEQUENCER_IMAGE = (1 << 10),
 
-  CTX_NO_PET = (1 << 10),
-  CTX_NO_MIRROR = (1 << 11),
+  CTX_NO_PET = (1 << 11),
   CTX_AUTOCONFIRM = (1 << 12),
   /** When transforming object's, adjust the object data so it stays in the same place. */
   CTX_OBMODE_XFORM_OBDATA = (1 << 13),
   /** Transform object parents without moving their children. */
   CTX_OBMODE_XFORM_SKIP_CHILDREN = (1 << 14),
+  /** Enable edge scrolling in 2D views */
+  CTX_VIEW2D_EDGE_PAN = (1 << 15),
 } eTContext;
 
 /** #TransInfo.flag */
@@ -105,51 +108,53 @@ typedef enum {
   /** restrictions flags */
   T_NO_CONSTRAINT = 1 << 2,
   T_NULL_ONE = 1 << 3,
-  T_NO_ZERO = 1 << 4,
-  T_ALL_RESTRICTIONS = T_NO_CONSTRAINT | T_NULL_ONE | T_NO_ZERO,
+  T_ALL_RESTRICTIONS = T_NO_CONSTRAINT | T_NULL_ONE,
 
-  T_PROP_EDIT = 1 << 5,
-  T_PROP_CONNECTED = 1 << 6,
-  T_PROP_PROJECTED = 1 << 7,
+  T_PROP_EDIT = 1 << 4,
+  T_PROP_CONNECTED = 1 << 5,
+  T_PROP_PROJECTED = 1 << 6,
   T_PROP_EDIT_ALL = T_PROP_EDIT | T_PROP_CONNECTED | T_PROP_PROJECTED,
 
-  T_V3D_ALIGN = 1 << 8,
+  T_V3D_ALIGN = 1 << 7,
   /** For 2D views such as UV or f-curve. */
-  T_2D_EDIT = 1 << 9,
-  T_CLIP_UV = 1 << 10,
+  T_2D_EDIT = 1 << 8,
+  T_CLIP_UV = 1 << 9,
 
   /** Auto-IK is on. */
-  T_AUTOIK = 1 << 11,
+  T_AUTOIK = 1 << 10,
 
   /** Don't use mirror even if the data-block option is set. */
-  T_NO_MIRROR = 1 << 12,
+  T_NO_MIRROR = 1 << 11,
 
   /** To indicate that the value set in the `value` parameter is the final
    * value of the transformation, modified only by the constrain. */
-  T_INPUT_IS_VALUES_FINAL = 1 << 13,
+  T_INPUT_IS_VALUES_FINAL = 1 << 12,
 
   /** To specify if we save back settings at the end. */
-  T_MODAL = 1 << 14,
+  T_MODAL = 1 << 13,
 
   /** No re-topology (projection). */
-  T_NO_PROJECT = 1 << 15,
+  T_NO_PROJECT = 1 << 14,
 
-  T_RELEASE_CONFIRM = 1 << 16,
+  T_RELEASE_CONFIRM = 1 << 15,
 
   /** Alternative transformation. used to add offset to tracking markers. */
-  T_ALT_TRANSFORM = 1 << 17,
+  T_ALT_TRANSFORM = 1 << 16,
 
   /** #TransInfo.center has been set, don't change it. */
-  T_OVERRIDE_CENTER = 1 << 18,
+  T_OVERRIDE_CENTER = 1 << 17,
 
-  T_MODAL_CURSOR_SET = 1 << 19,
+  T_MODAL_CURSOR_SET = 1 << 18,
 
-  T_CLNOR_REBUILD = 1 << 20,
+  T_CLNOR_REBUILD = 1 << 19,
 
   /** Merges unselected into selected after transforming (runs after transforming). */
-  T_AUTOMERGE = 1 << 21,
+  T_AUTOMERGE = 1 << 20,
   /** Runs auto-merge & splits. */
-  T_AUTOSPLIT = 1 << 22,
+  T_AUTOSPLIT = 1 << 21,
+
+  /** No cursor wrapping on region bounds */
+  T_NO_CURSOR_WRAP = 1 << 23,
 } eTFlag;
 
 /** #TransInfo.modifiers */
@@ -217,6 +222,7 @@ typedef enum {
   TC_POSE,
   TC_ARMATURE_VERTS,
   TC_CURSOR_IMAGE,
+  TC_CURSOR_SEQUENCER,
   TC_CURSOR_VIEW3D,
   TC_CURVE_VERTS,
   TC_GRAPH_EDIT_DATA,
@@ -236,6 +242,7 @@ typedef enum {
   TC_PARTICLE_VERTS,
   TC_SCULPT,
   TC_SEQ_DATA,
+  TC_SEQ_IMAGE_DATA,
   TC_TRACKING_DATA,
 } eTConvertType;
 
@@ -333,7 +340,10 @@ typedef struct TransSnap {
   /**
    * Re-usable snap context data.
    */
-  struct SnapObjectContext *object_context;
+  union {
+    struct SnapObjectContext *object_context;
+    struct TransSeqSnapData *seq_context;
+  };
 } TransSnap;
 
 typedef struct TransCon {
@@ -348,28 +358,28 @@ typedef struct TransCon {
   eTConstraint mode;
   void (*drawExtra)(struct TransInfo *t);
 
-  /* Note: if 'tc' is NULL, 'td' must also be NULL.
+  /* NOTE: if 'tc' is NULL, 'td' must also be NULL.
    * For constraints that needs to draw differently from the other
    * uses this instead of the generic draw function. */
 
   /** Apply function pointer for linear vectorial transformation
    * The last three parameters are pointers to the in/out/printable vectors. */
-  void (*applyVec)(struct TransInfo *t,
-                   struct TransDataContainer *tc,
-                   struct TransData *td,
+  void (*applyVec)(const struct TransInfo *t,
+                   const struct TransDataContainer *tc,
+                   const struct TransData *td,
                    const float in[3],
-                   float out[3]);
+                   float r_out[3]);
   /** Apply function pointer for size transformation. */
-  void (*applySize)(struct TransInfo *t,
-                    struct TransDataContainer *tc,
-                    struct TransData *td,
-                    float smat[3][3]);
+  void (*applySize)(const struct TransInfo *t,
+                    const struct TransDataContainer *tc,
+                    const struct TransData *td,
+                    float r_smat[3][3]);
   /** Apply function pointer for rotation transformation */
-  void (*applyRot)(struct TransInfo *t,
-                   struct TransDataContainer *tc,
-                   struct TransData *td,
-                   float vec[3],
-                   float *angle);
+  void (*applyRot)(const struct TransInfo *t,
+                   const struct TransDataContainer *tc,
+                   const struct TransData *td,
+                   float r_axis[3],
+                   float *r_angle);
 } TransCon;
 
 typedef struct MouseInput {
@@ -421,7 +431,7 @@ typedef struct TransCenterData {
  *   (typically in transform_conversion.c).
  */
 typedef struct TransCustomDataContainer {
-  /** Owned by the mode (grab, scale, bend... ).*/
+  /** Owned by the mode (grab, scale, bend... ). */
   union {
     TransCustomData mode, first_elem;
   };
@@ -432,14 +442,14 @@ typedef struct TransCustomDataContainer {
 /**
  * Container for Transform Data
  *
- * Used to implement multi-object modes, so each object can have it's
+ * Used to implement multi-object modes, so each object can have its
  * own data array as well as object matrix, local center etc.
  *
  * Anything that can't be shared between all objects
  * and doesn't make sense to store for every vertex (in the #TransDataContainer.data).
  *
  * \note at some point this could be used to store non object containers
- * although this only makes sense if each container has it's own matrices,
+ * although this only makes sense if each container has its own matrices,
  * otherwise all elements may as well be stored in one array (#TransDataContainer.data),
  * as is already done for curve-objects, f-curves. etc.
  */
@@ -577,7 +587,7 @@ typedef struct TransInfo {
   short around;
   /** space-type where transforming is. */
   char spacetype;
-  /** Avoid looking inside #TransDataContainer.obedit. */
+  /** Type of active object being edited. */
   short obedit_type;
 
   /** translation, to show for widget. */
@@ -610,9 +620,6 @@ typedef struct TransInfo {
     O_SCENE,
     O_SET,
   } orient_curr;
-
-  /** backup from view3d, to restore on end. */
-  short gizmo_flag;
 
   short prop_mode;
 
@@ -774,7 +781,6 @@ void drawLine(TransInfo *t, const float center[3], const float dir[3], char axis
 
 void applyTransObjects(TransInfo *t);
 void restoreTransObjects(TransInfo *t);
-void recalcData(TransInfo *t);
 
 void calculateCenter2D(TransInfo *t);
 void calculateCenterLocal(TransInfo *t, const float center_global[3]);
@@ -797,7 +803,7 @@ struct Object *transform_object_deform_pose_armature_get(const TransInfo *t, str
 
 void freeCustomNormalArray(TransInfo *t, TransDataContainer *tc, TransCustomData *custom_data);
 
-/* TODO. transform_query.c */
+/* TODO: `transform_query.c`. */
 bool checkUseAxisMatrix(TransInfo *t);
 
 #define TRANSFORM_SNAP_MAX_PX 100.0f

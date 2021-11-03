@@ -31,6 +31,7 @@
 #include "DNA_camera_types.h"
 #include "DNA_screen_types.h"
 
+#include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
 #include "ED_image.h"
@@ -106,38 +107,55 @@ static void space_image_gpu_texture_get(Image *image,
 {
   const DRWContextState *draw_ctx = DRW_context_state_get();
   SpaceImage *sima = (SpaceImage *)draw_ctx->space_data;
-  if (BKE_image_is_multilayer(image)) {
-    /* update multiindex and pass for the current eye */
+  if (image->rr != NULL) {
+    /* Update multi-index and pass for the current eye. */
     BKE_image_multilayer_index(image->rr, &sima->iuser);
   }
-  BKE_image_multiview_index(image, &sima->iuser);
+  else {
+    BKE_image_multiview_index(image, &sima->iuser);
+  }
 
-  if (ibuf) {
-    const int sima_flag = sima->flag & ED_space_image_get_display_channel_mask(ibuf);
-    if (sima_flag & SI_SHOW_ZBUF && (ibuf->zbuf || ibuf->zbuf_float || (ibuf->channels == 1))) {
-      if (ibuf->zbuf) {
-        BLI_assert(!"Integer based depth buffers not supported");
-      }
-      else if (ibuf->zbuf_float) {
-        *r_gpu_texture = GPU_texture_create_2d(
-            __func__, ibuf->x, ibuf->y, 0, GPU_R16F, ibuf->zbuf_float);
-        *r_owns_texture = true;
-      }
-      else if (ibuf->rect_float && ibuf->channels == 1) {
-        *r_gpu_texture = GPU_texture_create_2d(
-            __func__, ibuf->x, ibuf->y, 0, GPU_R16F, ibuf->rect_float);
-        *r_owns_texture = true;
-      }
+  if (ibuf == NULL) {
+    return;
+  }
+
+  if (ibuf->rect == NULL && ibuf->rect_float == NULL) {
+    /* This code-path is only supposed to happen when drawing a lazily-allocatable render result.
+     * In all the other cases the `ED_space_image_acquire_buffer()` is expected to return NULL as
+     * an image buffer when it has no pixels. */
+
+    BLI_assert(image->type == IMA_TYPE_R_RESULT);
+
+    float zero[4] = {0, 0, 0, 0};
+    *r_gpu_texture = GPU_texture_create_2d(__func__, 1, 1, 0, GPU_RGBA16F, zero);
+    *r_owns_texture = true;
+    return;
+  }
+
+  const int sima_flag = sima->flag & ED_space_image_get_display_channel_mask(ibuf);
+  if (sima_flag & SI_SHOW_ZBUF && (ibuf->zbuf || ibuf->zbuf_float || (ibuf->channels == 1))) {
+    if (ibuf->zbuf) {
+      BLI_assert_msg(0, "Integer based depth buffers not supported");
     }
-    else if (image->source == IMA_SRC_TILED) {
-      *r_gpu_texture = BKE_image_get_gpu_tiles(image, iuser, ibuf);
-      *r_tex_tile_data = BKE_image_get_gpu_tilemap(image, iuser, NULL);
-      *r_owns_texture = false;
+    else if (ibuf->zbuf_float) {
+      *r_gpu_texture = GPU_texture_create_2d(
+          __func__, ibuf->x, ibuf->y, 0, GPU_R16F, ibuf->zbuf_float);
+      *r_owns_texture = true;
     }
-    else {
-      *r_gpu_texture = BKE_image_get_gpu_texture(image, iuser, ibuf);
-      *r_owns_texture = false;
+    else if (ibuf->rect_float && ibuf->channels == 1) {
+      *r_gpu_texture = GPU_texture_create_2d(
+          __func__, ibuf->x, ibuf->y, 0, GPU_R16F, ibuf->rect_float);
+      *r_owns_texture = true;
     }
+  }
+  else if (image->source == IMA_SRC_TILED) {
+    *r_gpu_texture = BKE_image_get_gpu_tiles(image, iuser, ibuf);
+    *r_tex_tile_data = BKE_image_get_gpu_tilemap(image, iuser, NULL);
+    *r_owns_texture = false;
+  }
+  else {
+    *r_gpu_texture = BKE_image_get_gpu_texture(image, iuser, ibuf);
+    *r_owns_texture = false;
   }
 }
 
@@ -222,19 +240,30 @@ static void image_cache_image(IMAGE_Data *vedata, Image *image, ImageUser *iuser
         copy_v4_fl4(shuffle, 1.0f, 0.0f, 0.0f, 0.0f);
       }
       else if ((sima_flag & SI_SHOW_R) != 0) {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA | IMAGE_DRAW_FLAG_SHUFFLING;
+        draw_flags |= IMAGE_DRAW_FLAG_SHUFFLING;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
         copy_v4_fl4(shuffle, 1.0f, 0.0f, 0.0f, 0.0f);
       }
       else if ((sima_flag & SI_SHOW_G) != 0) {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA | IMAGE_DRAW_FLAG_SHUFFLING;
+        draw_flags |= IMAGE_DRAW_FLAG_SHUFFLING;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
         copy_v4_fl4(shuffle, 0.0f, 1.0f, 0.0f, 0.0f);
       }
       else if ((sima_flag & SI_SHOW_B) != 0) {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA | IMAGE_DRAW_FLAG_SHUFFLING;
+        draw_flags |= IMAGE_DRAW_FLAG_SHUFFLING;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
         copy_v4_fl4(shuffle, 0.0f, 0.0f, 1.0f, 0.0f);
       }
       else /* RGB */ {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
       }
     }
     if (space_type == SPACE_NODE) {
@@ -248,19 +277,30 @@ static void image_cache_image(IMAGE_Data *vedata, Image *image, ImageUser *iuser
         copy_v4_fl4(shuffle, 0.0f, 0.0f, 0.0f, 1.0f);
       }
       else if ((snode->flag & SNODE_SHOW_R) != 0) {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA | IMAGE_DRAW_FLAG_SHUFFLING;
+        draw_flags |= IMAGE_DRAW_FLAG_SHUFFLING;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
         copy_v4_fl4(shuffle, 1.0f, 0.0f, 0.0f, 0.0f);
       }
       else if ((snode->flag & SNODE_SHOW_G) != 0) {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA | IMAGE_DRAW_FLAG_SHUFFLING;
+        draw_flags |= IMAGE_DRAW_FLAG_SHUFFLING;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
         copy_v4_fl4(shuffle, 0.0f, 1.0f, 0.0f, 0.0f);
       }
       else if ((snode->flag & SNODE_SHOW_B) != 0) {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA | IMAGE_DRAW_FLAG_SHUFFLING;
+        draw_flags |= IMAGE_DRAW_FLAG_SHUFFLING;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
         copy_v4_fl4(shuffle, 0.0f, 0.0f, 1.0f, 0.0f);
       }
       else /* RGB */ {
-        draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        if (IMB_alpha_affects_rgb(ibuf)) {
+          draw_flags |= IMAGE_DRAW_FLAG_APPLY_ALPHA;
+        }
       }
     }
 

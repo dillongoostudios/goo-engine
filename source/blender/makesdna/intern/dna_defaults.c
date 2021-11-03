@@ -68,6 +68,8 @@
  *   #BLO_update_defaults_startup_blend & #blo_do_versions_userdef.
  */
 
+#define DNA_DEPRECATED_ALLOW
+
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -152,6 +154,7 @@
 
 /* DNA_asset_defaults.h */
 SDNA_DEFAULT_DECL_STRUCT(AssetMetaData);
+SDNA_DEFAULT_DECL_STRUCT(AssetLibraryReference);
 
 /* DNA_armature_defaults.h */
 SDNA_DEFAULT_DECL_STRUCT(bArmature);
@@ -315,7 +318,12 @@ SDNA_DEFAULT_DECL_STRUCT(TextureGpencilModifierData);
 SDNA_DEFAULT_DECL_STRUCT(ThickGpencilModifierData);
 SDNA_DEFAULT_DECL_STRUCT(TimeGpencilModifierData);
 SDNA_DEFAULT_DECL_STRUCT(TintGpencilModifierData);
+SDNA_DEFAULT_DECL_STRUCT(WeightProxGpencilModifierData);
+SDNA_DEFAULT_DECL_STRUCT(WeightAngleGpencilModifierData);
 SDNA_DEFAULT_DECL_STRUCT(LineartGpencilModifierData);
+SDNA_DEFAULT_DECL_STRUCT(LengthGpencilModifierData);
+SDNA_DEFAULT_DECL_STRUCT(DashGpencilModifierData);
+SDNA_DEFAULT_DECL_STRUCT(DashGpencilModifierSegment);
 
 #undef SDNA_DEFAULT_DECL_STRUCT
 
@@ -346,6 +354,7 @@ const void *DNA_default_table[SDNA_TYPE_MAX] = {
 
     /* DNA_asset_defaults.h */
     SDNA_DEFAULT_DECL(AssetMetaData),
+    SDNA_DEFAULT_DECL(AssetLibraryReference),
 
     /* DNA_armature_defaults.h */
     SDNA_DEFAULT_DECL(bArmature),
@@ -540,7 +549,12 @@ const void *DNA_default_table[SDNA_TYPE_MAX] = {
     SDNA_DEFAULT_DECL(ThickGpencilModifierData),
     SDNA_DEFAULT_DECL(TimeGpencilModifierData),
     SDNA_DEFAULT_DECL(TintGpencilModifierData),
+    SDNA_DEFAULT_DECL(WeightAngleGpencilModifierData),
+    SDNA_DEFAULT_DECL(WeightProxGpencilModifierData),
     SDNA_DEFAULT_DECL(LineartGpencilModifierData),
+    SDNA_DEFAULT_DECL(LengthGpencilModifierData),
+    SDNA_DEFAULT_DECL(DashGpencilModifierData),
+    SDNA_DEFAULT_DECL(DashGpencilModifierSegment),
 };
 #undef SDNA_DEFAULT_DECL
 #undef SDNA_DEFAULT_DECL_EX

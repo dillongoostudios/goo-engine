@@ -69,7 +69,7 @@
 
 /* ***************** Pose Select Utilities ********************* */
 
-/* Note: SEL_TOGGLE is assumed to have already been handled! */
+/* NOTE: SEL_TOGGLE is assumed to have already been handled! */
 static void pose_do_bone_select(bPoseChannel *pchan, const int select_mode)
 {
   /* select pchan only if selectable, but deselect works always */
@@ -161,9 +161,9 @@ void ED_armature_pose_select_pick_bone(ViewLayer *view_layer,
 
   /* Since we do unified select, we don't shift+select a bone if the
    * armature object was not active yet.
-   * Note, special exception for armature mode so we can do multi-select
+   * NOTE(campbell): special exception for armature mode so we can do multi-select
    * we could check for multi-select explicitly but think its fine to
-   * always give predictable behavior in weight paint mode - campbell */
+   * always give predictable behavior in weight paint mode. */
   if ((ob_act == NULL) || ((ob_act != ob) && (ob_act->mode & OB_MODE_ALL_WEIGHT_PAINT) == 0)) {
     /* When we are entering into posemode via toggle-select,
      * from another active object - always select the bone. */
@@ -503,6 +503,8 @@ static bool pose_select_linked_pick_poll(bContext *C)
 
 void POSE_OT_select_linked_pick(wmOperatorType *ot)
 {
+  PropertyRNA *prop;
+
   /* identifiers */
   ot->name = "Select Connected";
   ot->idname = "POSE_OT_select_linked_pick";
@@ -517,11 +519,12 @@ void POSE_OT_select_linked_pick(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* props */
-  RNA_def_boolean(ot->srna,
-                  "extend",
-                  false,
-                  "Extend",
-                  "Extend selection instead of deselecting everything first");
+  prop = RNA_def_boolean(ot->srna,
+                         "extend",
+                         false,
+                         "Extend",
+                         "Extend selection instead of deselecting everything first");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 
 static int pose_select_linked_exec(bContext *C, wmOperator *UNUSED(op))
@@ -1103,20 +1106,18 @@ static bool pose_select_same_keyingset(bContext *C, ReportList *reports, bool ex
     for (ksp = ks->paths.first; ksp; ksp = ksp->next) {
       /* only items related to this object will be relevant */
       if ((ksp->id == &ob->id) && (ksp->rna_path != NULL)) {
-        if (strstr(ksp->rna_path, "bones")) {
-          char *boneName = BLI_str_quoted_substrN(ksp->rna_path, "bones[");
+        bPoseChannel *pchan = NULL;
+        char boneName[sizeof(pchan->name)];
+        if (!BLI_str_quoted_substr(ksp->rna_path, "bones[", boneName, sizeof(boneName))) {
+          continue;
+        }
+        pchan = BKE_pose_channel_find_name(pose, boneName);
 
-          if (boneName) {
-            bPoseChannel *pchan = BKE_pose_channel_find_name(pose, boneName);
-            MEM_freeN(boneName);
-
-            if (pchan) {
-              /* select if bone is visible and can be affected */
-              if (PBONE_SELECTABLE(arm, pchan->bone)) {
-                pchan->bone->flag |= BONE_SELECTED;
-                changed = true;
-              }
-            }
+        if (pchan) {
+          /* select if bone is visible and can be affected */
+          if (PBONE_SELECTABLE(arm, pchan->bone)) {
+            pchan->bone->flag |= BONE_SELECTED;
+            changed = true;
           }
         }
       }

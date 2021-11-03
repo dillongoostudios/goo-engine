@@ -86,7 +86,7 @@ class TreeDisplayViewLayer final : public AbstractTreeDisplay {
   ListBase buildTree(const TreeSourceData &source_data) override;
 
  private:
-  void add_view_layer(ListBase &, TreeElement &);
+  void add_view_layer(Scene &, ListBase &, TreeElement *);
   void add_layer_collections_recursive(ListBase &, ListBase &, TreeElement &);
   void add_layer_collection_objects(ListBase &, LayerCollection &, TreeElement &);
   void add_layer_collection_objects_children(TreeElement &);
@@ -106,7 +106,7 @@ class TreeDisplayLibraries final : public AbstractTreeDisplay {
 
  private:
   TreeElement *add_library_contents(Main &, ListBase &, Library *) const;
-  bool library_id_filter_poll(Library *lib, ID *id) const;
+  bool library_id_filter_poll(const Library *lib, ID *id) const;
   short id_filter_get() const;
 };
 
@@ -124,7 +124,7 @@ class TreeDisplayOverrideLibrary final : public AbstractTreeDisplay {
 
  private:
   TreeElement *add_library_contents(Main &, ListBase &, Library *) const;
-  bool override_library_id_filter_poll(Library *lib, ID *id) const;
+  bool override_library_id_filter_poll(const Library *lib, ID *id) const;
   short id_filter_get() const;
 };
 

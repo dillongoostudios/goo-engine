@@ -90,7 +90,7 @@ class PREFERENCES_OT_copy_prev(Operator):
 
     @classmethod
     def _old_version_path(cls, version):
-        return bpy.utils.resource_path('USER', version[0], version[1])
+        return bpy.utils.resource_path('USER', major=version[0], minor=version[1])
 
     @classmethod
     def previous_version(cls):
@@ -99,6 +99,15 @@ class PREFERENCES_OT_copy_prev(Operator):
         version = bpy.app.version
         version_new = ((version[0] * 100) + version[1])
         version_old = ((version[0] * 100) + version[1]) - 1
+
+        # Special case, remove when the version is > 3.0.
+        if version_new == 300:
+            version_new = 294
+            version_old = 293
+        else:
+            print("TODO: remove exception!")
+        # End special case.
+
         # Ensure we only try to copy files from a point release.
         # The check below ensures the second numbers match.
         while (version_new % 100) // 10 == (version_old % 100) // 10:
@@ -217,7 +226,11 @@ class PREFERENCES_OT_keyconfig_import(Operator):
 
         config_name = basename(self.filepath)
 
-        path = bpy.utils.user_resource('SCRIPTS', os.path.join("presets", "keyconfig"), create=True)
+        path = bpy.utils.user_resource(
+            'SCRIPTS',
+            path=os.path.join("presets", "keyconfig"),
+            create=True,
+        )
         path = os.path.join(path, config_name)
 
         try:
@@ -255,7 +268,7 @@ class PREFERENCES_OT_keyconfig_export(Operator):
     )
     filepath: StringProperty(
         subtype='FILE_PATH',
-        default="keymap.py",
+        default="",
     )
     filter_folder: BoolProperty(
         name="Filter folders",
@@ -294,7 +307,13 @@ class PREFERENCES_OT_keyconfig_export(Operator):
         return {'FINISHED'}
 
     def invoke(self, context, _event):
+        import os
         wm = context.window_manager
+        if not self.filepath:
+            self.filepath = os.path.join(
+                os.path.expanduser("~"),
+                bpy.path.display_name_to_filepath(wm.keyconfigs.active.name) + ".py",
+            )
         wm.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
@@ -520,7 +539,11 @@ class PREFERENCES_OT_theme_install(Operator):
 
         xmlfile = self.filepath
 
-        path_themes = bpy.utils.user_resource('SCRIPTS', "presets/interface_theme", create=True)
+        path_themes = bpy.utils.user_resource(
+            'SCRIPTS',
+            path=os.path.join("presets", "interface_theme"),
+            create=True,
+        )
 
         if not path_themes:
             self.report({'ERROR'}, "Failed to get themes path")
@@ -581,7 +604,7 @@ class PREFERENCES_OT_addon_install(Operator):
         name="Target Path",
         items=(
             ('DEFAULT', "Default", ""),
-            ('PREFS', "User Prefs", ""),
+            ('PREFS', "Preferences", ""),
         ),
     )
 
@@ -613,8 +636,8 @@ class PREFERENCES_OT_addon_install(Operator):
         pyfile = self.filepath
 
         if self.target == 'DEFAULT':
-            # don't use bpy.utils.script_paths("addons") because we may not be able to write to it.
-            path_addons = bpy.utils.user_resource('SCRIPTS', "addons", create=True)
+            # Don't use `bpy.utils.script_paths(path="addons")` because we may not be able to write to it.
+            path_addons = bpy.utils.user_resource('SCRIPTS', path="addons", create=True)
         else:
             path_addons = context.preferences.filepaths.script_directory
             if path_addons:
@@ -873,7 +896,8 @@ class PREFERENCES_OT_app_template_install(Operator):
         filepath = self.filepath
 
         path_app_templates = bpy.utils.user_resource(
-            'SCRIPTS', os.path.join("startup", "bl_app_templates_user"),
+            'SCRIPTS',
+            path=os.path.join("startup", "bl_app_templates_user"),
             create=True,
         )
 
@@ -979,7 +1003,7 @@ class PREFERENCES_OT_studiolight_install(Operator):
         prefs = context.preferences
 
         path_studiolights = os.path.join("studiolights", self.type.lower())
-        path_studiolights = bpy.utils.user_resource('DATAFILES', path_studiolights, create=True)
+        path_studiolights = bpy.utils.user_resource('DATAFILES', path=path_studiolights, create=True)
         if not path_studiolights:
             self.report({'ERROR'}, "Failed to create Studio Light path")
             return {'CANCELLED'}
@@ -1025,7 +1049,11 @@ class PREFERENCES_OT_studiolight_new(Operator):
         wm = context.window_manager
         filename = bpy.path.ensure_ext(self.filename, ".sl")
 
-        path_studiolights = bpy.utils.user_resource('DATAFILES', os.path.join("studiolights", "studio"), create=True)
+        path_studiolights = bpy.utils.user_resource(
+            'DATAFILES',
+            path=os.path.join("studiolights", "studio"),
+            create=True,
+        )
         if not path_studiolights:
             self.report({'ERROR'}, "Failed to get Studio Light path")
             return {'CANCELLED'}

@@ -57,7 +57,7 @@ static void library_free_data(ID *id)
 static void library_foreach_id(ID *id, LibraryForeachIDData *data)
 {
   Library *lib = (Library *)id;
-  BKE_LIB_FOREACHID_PROCESS(data, lib->parent, IDWALK_CB_NEVER_SELF);
+  BKE_LIB_FOREACHID_PROCESS_IDSUPER(data, lib->parent, IDWALK_CB_NEVER_SELF);
 }
 
 IDTypeInfo IDType_ID_LI = {
@@ -68,8 +68,7 @@ IDTypeInfo IDType_ID_LI = {
     .name = "Library",
     .name_plural = "libraries",
     .translation_context = BLT_I18NCONTEXT_ID_LIBRARY,
-    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_MAKELOCAL |
-             IDTYPE_FLAGS_NO_ANIMDATA,
+    .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA,
 
     .init_data = NULL,
     .copy_data = NULL,
@@ -102,10 +101,10 @@ void BKE_library_filepath_set(Main *bmain, Library *lib, const char *filepath)
   /* Not essential but set `filepath_abs` is an absolute copy of value which
    * is more useful if its kept in sync. */
   if (BLI_path_is_rel(lib->filepath_abs)) {
-    /* note that the file may be unsaved, in this case, setting the
+    /* NOTE(campbell): the file may be unsaved, in this case, setting the
      * `filepath_abs` on an indirectly linked path is not allowed from the
      * outliner, and its not really supported but allow from here for now
-     * since making local could cause this to be directly linked - campbell
+     * since making local could cause this to be directly linked.
      */
     /* Never make paths relative to parent lib - reading code (blenloader) always set *all*
      * `lib->filepath` relative to current main, not to their parent for indirectly linked ones. */

@@ -108,14 +108,13 @@ static void palette_free_data(ID *id)
 static void palette_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Palette *palette = (Palette *)id;
-  if (palette->id.us > 0 || BLO_write_is_undo(writer)) {
-    PaletteColor *color;
-    BLO_write_id_struct(writer, Palette, id_address, &palette->id);
-    BKE_id_blend_write(writer, &palette->id);
 
-    for (color = palette->colors.first; color; color = color->next) {
-      BLO_write_struct(writer, PaletteColor, color);
-    }
+  PaletteColor *color;
+  BLO_write_id_struct(writer, Palette, id_address, &palette->id);
+  BKE_id_blend_write(writer, &palette->id);
+
+  for (color = palette->colors.first; color; color = color->next) {
+    BLO_write_struct(writer, PaletteColor, color);
   }
 }
 
@@ -128,8 +127,8 @@ static void palette_blend_read_data(BlendDataReader *reader, ID *id)
 static void palette_undo_preserve(BlendLibReader *UNUSED(reader), ID *id_new, ID *id_old)
 {
   /* Whole Palette is preserved across undo-steps, and it has no extra pointer, simple. */
-  /* Note: We do not care about potential internal references to self here, Palette has none. */
-  /* Note: We do not swap IDProperties, as dealing with potential ID pointers in those would be
+  /* NOTE: We do not care about potential internal references to self here, Palette has none. */
+  /* NOTE: We do not swap IDProperties, as dealing with potential ID pointers in those would be
    *       fairly delicate. */
   BKE_lib_id_swap(NULL, id_new, id_old);
   SWAP(IDProperty *, id_new->properties, id_old->properties);
@@ -187,12 +186,11 @@ static void paint_curve_free_data(ID *id)
 static void paint_curve_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   PaintCurve *pc = (PaintCurve *)id;
-  if (pc->id.us > 0 || BLO_write_is_undo(writer)) {
-    BLO_write_id_struct(writer, PaintCurve, id_address, &pc->id);
-    BKE_id_blend_write(writer, &pc->id);
 
-    BLO_write_struct_array(writer, PaintCurvePoint, pc->tot_points, pc->points);
-  }
+  BLO_write_id_struct(writer, PaintCurve, id_address, &pc->id);
+  BKE_id_blend_write(writer, &pc->id);
+
+  BLO_write_struct_array(writer, PaintCurvePoint, pc->tot_points, pc->points);
 }
 
 static void paint_curve_blend_read_data(BlendDataReader *reader, ID *id)
@@ -880,7 +878,7 @@ static int palettecolor_compare_luminance(const void *a1, const void *a2)
 
 void BKE_palette_sort_hsv(tPaletteColorHSV *color_array, const int totcol)
 {
-  /* Sort by Hue , Saturation and Value. */
+  /* Sort by Hue, Saturation and Value. */
   qsort(color_array, totcol, sizeof(tPaletteColorHSV), palettecolor_compare_hsv);
 }
 
@@ -1810,7 +1808,7 @@ void BKE_sculpt_color_layer_create_if_needed(struct Object *object)
 
   CustomData_add_layer(&orig_me->vdata, CD_PROP_COLOR, CD_DEFAULT, NULL, orig_me->totvert);
   BKE_mesh_update_customdata_pointers(orig_me, true);
-  DEG_id_tag_update(&orig_me->id, ID_RECALC_GEOMETRY);
+  DEG_id_tag_update(&orig_me->id, ID_RECALC_GEOMETRY_ALL_MODES);
 }
 
 /** \warning Expects a fully evaluated depsgraph. */
@@ -2067,7 +2065,7 @@ void BKE_sculpt_ensure_orig_mesh_data(Scene *scene, Object *object)
     /* If a sculpt session is active, ensure we have its faceset data porperly up-to-date. */
     object->sculpt->face_sets = CustomData_get_layer(&mesh->pdata, CD_SCULPT_FACE_SETS);
 
-    /* Note: In theory we could add that on the fly when required by sculpt code.
+    /* NOTE: In theory we could add that on the fly when required by sculpt code.
      * But this then requires proper update of depsgraph etc. For now we play safe, optimization is
      * always possible later if it's worth it. */
     BKE_sculpt_mask_layers_ensure(object, mmd);

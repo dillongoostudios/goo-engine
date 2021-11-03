@@ -315,7 +315,7 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
     tree->iterations = MAX2(data->iterations, tree->iterations);
     tree->stretch = tree->stretch && !(data->flag & CONSTRAINT_IK_STRETCH);
 
-    /* skip common pose channels and add remaining*/
+    /* Skip common pose channels and add remaining. */
     size = MIN2(segcount, tree->totchannel);
     a = t = 0;
     while (a < size && t < tree->totchannel) {
@@ -644,7 +644,7 @@ static bool base_callback(const iTaSC::Timestamp &timestamp,
     ikscene->baseFrame = iTaSC::F_identity;
   }
   next.setValue(&rootmat[0][0]);
-  /* if there is a polar target (only during solving otherwise we don't have end efffector) */
+  /* If there is a polar target (only during solving otherwise we don't have end effector). */
   if (ikscene->polarConstraint && timestamp.update) {
     /* compute additional rotation of base frame so that armature follows the polar target */
     float imat[4][4];    /* IK tree base inverse matrix */

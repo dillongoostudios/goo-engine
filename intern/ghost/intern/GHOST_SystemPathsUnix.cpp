@@ -55,18 +55,18 @@ GHOST_SystemPathsUnix::~GHOST_SystemPathsUnix()
 {
 }
 
-const GHOST_TUns8 *GHOST_SystemPathsUnix::getSystemDir(int, const char *versionstr) const
+const char *GHOST_SystemPathsUnix::getSystemDir(int, const char *versionstr) const
 {
   /* no prefix assumes a portable build which only uses bundled scripts */
   if (static_path) {
     static string system_path = string(static_path) + "/blender/" + versionstr;
-    return (GHOST_TUns8 *)system_path.c_str();
+    return system_path.c_str();
   }
 
   return NULL;
 }
 
-const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserDir(int version, const char *versionstr) const
+const char *GHOST_SystemPathsUnix::getUserDir(int version, const char *versionstr) const
 {
   static string user_path = "";
   static int last_version = 0;
@@ -86,7 +86,7 @@ const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserDir(int version, const char *ve
         return NULL;
       }
     }
-    return (GHOST_TUns8 *)user_path.c_str();
+    return user_path.c_str();
   }
   else {
     if (user_path.empty() || last_version != version) {
@@ -107,13 +107,14 @@ const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserDir(int version, const char *ve
       }
     }
 
-    return (const GHOST_TUns8 *)user_path.c_str();
+    return user_path.c_str();
   }
 }
 
-const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const
+const char *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDirTypes type) const
 {
   const char *type_str;
+  std::string add_path = "";
 
   switch (type) {
     case GHOST_kUserSpecialDirDesktop:
@@ -134,6 +135,18 @@ const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDi
     case GHOST_kUserSpecialDirVideos:
       type_str = "VIDEOS";
       break;
+    case GHOST_kUserSpecialDirCaches: {
+      const char *cache_dir = getenv("XDG_CACHE_HOME");
+      if (cache_dir) {
+        return cache_dir;
+      }
+      /* Fallback to ~home/.cache/.
+       * When invoking `xdg-user-dir` without parameters the user folder
+       * will be read. `.cache` will be appended. */
+      type_str = "";
+      add_path = ".cache";
+      break;
+    }
     default:
       GHOST_ASSERT(
           false,
@@ -142,7 +155,7 @@ const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDi
   }
 
   static string path = "";
-  /* Pipe stderr to /dev/null to avoid error prints. We will fail gracefully still. */
+  /* Pipe `stderr` to `/dev/null` to avoid error prints. We will fail gracefully still. */
   string command = string("xdg-user-dir ") + type_str + " 2> /dev/null";
 
   FILE *fstream = popen(command.c_str(), "r");
@@ -152,7 +165,7 @@ const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDi
   std::stringstream path_stream;
   while (!feof(fstream)) {
     char c = fgetc(fstream);
-    /* xdg-user-dir ends the path with '\n'. */
+    /* `xdg-user-dir` ends the path with '\n'. */
     if (c == '\n') {
       break;
     }
@@ -163,11 +176,15 @@ const GHOST_TUns8 *GHOST_SystemPathsUnix::getUserSpecialDir(GHOST_TUserSpecialDi
     return NULL;
   }
 
+  if (!add_path.empty()) {
+    path_stream << '/' << add_path;
+  }
+
   path = path_stream.str();
-  return path[0] ? (const GHOST_TUns8 *)path.c_str() : NULL;
+  return path[0] ? path.c_str() : NULL;
 }
 
-const GHOST_TUns8 *GHOST_SystemPathsUnix::getBinaryDir() const
+const char *GHOST_SystemPathsUnix::getBinaryDir() const
 {
   return NULL;
 }

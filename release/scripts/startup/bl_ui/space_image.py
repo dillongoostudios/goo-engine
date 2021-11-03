@@ -257,8 +257,9 @@ class IMAGE_MT_image_flip(Menu):
 
     def draw(self, _context):
         layout = self.layout
-        layout.operator("image.flip", text="Horizontally").use_flip_horizontal = True
-        layout.operator("image.flip", text="Vertically").use_flip_vertical = True
+        layout.operator("image.flip", text="Horizontally").use_flip_x = True
+        layout.operator("image.flip", text="Vertically").use_flip_y = True
+
 
 class IMAGE_MT_image_invert(Menu):
     bl_label = "Invert"
@@ -597,13 +598,7 @@ class IMAGE_HT_tool_header(Header):
     def draw(self, context):
         layout = self.layout
 
-        layout.template_header()
-
         self.draw_tool_settings(context)
-
-        layout.separator_spacer()
-
-        IMAGE_HT_header.draw_xform_template(layout, context)
 
         layout.separator_spacer()
 
@@ -761,8 +756,7 @@ class IMAGE_HT_header(Header):
         show_uvedit = sima.show_uvedit
         show_maskedit = sima.show_maskedit
 
-        if not show_region_tool_header:
-            layout.template_header()
+        layout.template_header()
 
         if sima.mode != 'UV':
             layout.prop(sima, "ui_mode", text="")
@@ -783,8 +777,7 @@ class IMAGE_HT_header(Header):
 
         layout.separator_spacer()
 
-        if not show_region_tool_header:
-            IMAGE_HT_header.draw_xform_template(layout, context)
+        IMAGE_HT_header.draw_xform_template(layout, context)
 
         layout.template_ID(sima, "image", new="image.new", open="image.open")
 
@@ -816,7 +809,7 @@ class IMAGE_HT_header(Header):
                 row.prop(sima, "show_stereo_3d", text="")
             if show_maskedit:
                 row = layout.row()
-                row.popover(panel='CLIP_PT_mask_display')
+                row.popover(panel='IMAGE_PT_mask_display')
 
             # layers.
             layout.template_image_layers(ima, iuser)
@@ -824,12 +817,6 @@ class IMAGE_HT_header(Header):
             # draw options.
             row = layout.row()
             row.prop(sima, "display_channels", icon_only=True)
-
-            row = layout.row(align=True)
-            if ima.type == 'COMPOSITE':
-                row.operator("image.record_composite", icon='REC')
-            if ima.type == 'COMPOSITE' and ima.source in {'MOVIE', 'SEQUENCE'}:
-                row.operator("image.play_composite", icon='PLAY')
 
 
 class IMAGE_MT_editor_menus(Menu):
@@ -914,6 +901,11 @@ class IMAGE_PT_active_mask_point(MASK_PT_point, Panel):
     bl_category = "Mask"
 
 
+class IMAGE_PT_mask_display(MASK_PT_display, Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'HEADER'
+
+
 # --- end mask ---
 
 class IMAGE_PT_snapping(Panel):
@@ -933,6 +925,10 @@ class IMAGE_PT_snapping(Panel):
             col.label(text="Target")
             row = col.row(align=True)
             row.prop(tool_settings, "snap_target", expand=True)
+
+        col.separator()
+        if 'INCREMENT' in tool_settings.snap_uv_element:
+            col.prop(tool_settings, "use_snap_uv_grid_absolute")
 
         col.label(text="Affect")
         row = col.row(align=True)
@@ -1453,7 +1449,7 @@ class IMAGE_PT_udim_grid(Panel):
     def poll(cls, context):
         sima = context.space_data
 
-        return sima.show_uvedit and sima.image is None
+        return sima.show_uvedit
 
     def draw(self, context):
         layout = self.layout
@@ -1467,6 +1463,33 @@ class IMAGE_PT_udim_grid(Panel):
         col = layout.column()
         col.prop(uvedit, "tile_grid_shape", text="Grid Shape")
 
+class IMAGE_PT_custom_grid(Panel):
+    bl_space_type = 'IMAGE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = "View"
+    bl_label = "Custom Grid"
+
+    @classmethod
+    def poll(cls, context):
+        sima = context.space_data
+        return sima.show_uvedit
+
+    def draw_header(self, context):
+        sima = context.space_data
+        uvedit = sima.uv_editor
+        self.layout.prop(uvedit, "use_custom_grid", text="")
+
+    def draw(self, context):
+        layout = self.layout
+
+        sima = context.space_data
+        uvedit = sima.uv_editor
+
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        col = layout.column()
+        col.prop(uvedit, "custom_grid_subdivisions", text="Subdivisions")
 
 class IMAGE_PT_overlay(Panel):
     bl_space_type = 'IMAGE_EDITOR'
@@ -1616,6 +1639,7 @@ classes = (
     IMAGE_PT_active_tool,
     IMAGE_PT_mask,
     IMAGE_PT_mask_layers,
+    IMAGE_PT_mask_display,
     IMAGE_PT_active_mask_spline,
     IMAGE_PT_active_mask_point,
     IMAGE_PT_snapping,
@@ -1651,6 +1675,7 @@ classes = (
     IMAGE_PT_uv_cursor,
     IMAGE_PT_annotation,
     IMAGE_PT_udim_grid,
+    IMAGE_PT_custom_grid,
     IMAGE_PT_overlay,
     IMAGE_PT_overlay_uv_edit,
     IMAGE_PT_overlay_uv_edit_geometry,

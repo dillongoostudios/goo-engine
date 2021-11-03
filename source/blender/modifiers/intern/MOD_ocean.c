@@ -95,8 +95,9 @@ static void initData(ModifierData *md)
   BKE_modifier_path_init(omd->cachepath, sizeof(omd->cachepath), "cache_ocean");
 
   omd->ocean = BKE_ocean_add();
-  BKE_ocean_init_from_modifier(omd->ocean, omd, omd->viewport_resolution);
-  simulate_ocean_modifier(omd);
+  if (BKE_ocean_init_from_modifier(omd->ocean, omd, omd->viewport_resolution)) {
+    simulate_ocean_modifier(omd);
+  }
 #else  /* WITH_OCEANSIM */
   UNUSED_VARS(md);
 #endif /* WITH_OCEANSIM */
@@ -132,8 +133,9 @@ static void copyData(const ModifierData *md, ModifierData *target, const int fla
   tomd->oceancache = NULL;
 
   tomd->ocean = BKE_ocean_add();
-  BKE_ocean_init_from_modifier(tomd->ocean, tomd, tomd->viewport_resolution);
-  simulate_ocean_modifier(tomd);
+  if (BKE_ocean_init_from_modifier(tomd->ocean, tomd, tomd->viewport_resolution)) {
+    simulate_ocean_modifier(tomd);
+  }
 #else  /* WITH_OCEANSIM */
   /* unused */
   (void)md;
@@ -284,7 +286,7 @@ static Mesh *generate_ocean_geometry(OceanModifierData *omd, Mesh *mesh_orig, co
   gogd.sy /= gogd.ry;
 
   result = BKE_mesh_new_nomain(num_verts, 0, 0, num_polys * 4, num_polys);
-  BKE_mesh_copy_settings(result, mesh_orig);
+  BKE_mesh_copy_parameters_for_eval(result, mesh_orig);
 
   gogd.mverts = result->mvert;
   gogd.mpolys = result->mpoly;
@@ -315,7 +317,7 @@ static Mesh *generate_ocean_geometry(OceanModifierData *omd, Mesh *mesh_orig, co
     }
   }
 
-  result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+  BKE_mesh_normals_tag_dirty(result);
 
   return result;
 }
@@ -323,6 +325,10 @@ static Mesh *generate_ocean_geometry(OceanModifierData *omd, Mesh *mesh_orig, co
 static Mesh *doOcean(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
   OceanModifierData *omd = (OceanModifierData *)md;
+  if (omd->ocean && !BKE_ocean_is_valid(omd->ocean)) {
+    BKE_modifier_set_error(ctx->object, md, "Failed to allocate memory");
+    return mesh;
+  }
   int cfra_scene = (int)DEG_get_ctime(ctx->depsgraph);
   Object *ob = ctx->object;
   bool allocated_ocean = false;
@@ -455,7 +461,7 @@ static Mesh *doOcean(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mes
 
   /* displace the geometry */
 
-  /* Note: tried to parallelized that one and previous foam loop,
+  /* NOTE: tried to parallelized that one and previous foam loop,
    * but gives 20% slower results... odd. */
   {
     const int num_verts = result->totvert;
@@ -504,7 +510,7 @@ static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *
   result = doOcean(md, ctx, mesh);
 
   if (result != mesh) {
-    result->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
+    BKE_mesh_normals_tag_dirty(result);
   }
 
   return result;
@@ -546,7 +552,7 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   modifier_panel_end(layout, ptr);
 
 #else  /* WITH_OCEANSIM */
-  uiItemL(layout, IFACE_("Built without Ocean modifier"), ICON_NONE);
+  uiItemL(layout, TIP_("Built without Ocean modifier"), ICON_NONE);
 #endif /* WITH_OCEANSIM */
 }
 
@@ -737,7 +743,6 @@ ModifierTypeInfo modifierType_Ocean = {
     /* modifyMesh */ modifyMesh,
     /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
-    /* modifyVolume */ NULL,
 
     /* initData */ initData,
     /* requiredDataMask */ requiredDataMask,
