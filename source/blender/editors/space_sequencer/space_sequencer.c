@@ -184,7 +184,7 @@ static SpaceLink *sequencer_create(const ScrArea *UNUSED(area), const Scene *sce
   region->v2d.cur = region->v2d.tot;
 
   region->v2d.min[0] = 10.0f;
-  region->v2d.min[1] = 4.0f;
+  region->v2d.min[1] = 1.0f;
 
   region->v2d.max[0] = MAXFRAMEF;
   region->v2d.max[1] = MAXSEQ;
@@ -997,7 +997,7 @@ void ED_spacetype_sequencer(void)
   art->draw_overlay = sequencer_main_region_draw_overlay;
   art->listener = sequencer_main_region_listener;
   art->message_subscribe = sequencer_main_region_message_subscribe;
-  /* NOTE: inclusion of #ED_KEYMAP_GIZMO is currenlty for scripts and isn't used by default. */
+  /* NOTE: inclusion of #ED_KEYMAP_GIZMO is currently for scripts and isn't used by default. */
   art->keymapflag = ED_KEYMAP_TOOL | ED_KEYMAP_GIZMO | ED_KEYMAP_VIEW2D | ED_KEYMAP_FRAMES |
                     ED_KEYMAP_ANIMATION;
   BLI_addhead(&st->regiontypes, art);

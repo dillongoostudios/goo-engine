@@ -68,6 +68,7 @@
 
 #include "SEQ_iterator.h"
 #include "SEQ_sequencer.h"
+#include "SEQ_time.h"
 
 #include "RNA_access.h"
 
@@ -645,6 +646,10 @@ void do_versions_after_linking_300(Main *bmain, ReportList *UNUSED(reports))
     }
   }
 
+  if (!MAIN_VERSION_ATLEAST(bmain, 300, 25)) {
+    version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 4, 2, 25);
+  }
+
   if (!MAIN_VERSION_ATLEAST(bmain, 300, 26)) {
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       ToolSettings *tool_settings = scene->toolsettings;
@@ -779,8 +784,6 @@ void do_versions_after_linking_300(Main *bmain, ReportList *UNUSED(reports))
    */
   {
     /* Keep this block, even when empty. */
-
-    version_node_socket_index_animdata(bmain, NTREE_SHADER, SH_NODE_BSDF_PRINCIPLED, 4, 2, 25);
   }
 }
 
@@ -1268,6 +1271,15 @@ static void version_geometry_nodes_set_position_node_offset(bNodeTree *ntree)
     bNodeSocket *old_offset_socket = BLI_findlink(&node->inputs, 3);
     nodeRemoveSocket(ntree, node, old_offset_socket);
   }
+}
+
+static bool version_fix_seq_meta_range(Sequence *seq, void *user_data)
+{
+  Scene *scene = (Scene *)user_data;
+  if (seq->type == SEQ_TYPE_META) {
+    SEQ_time_update_meta_strip_range(scene, seq);
+  }
+  return true;
 }
 
 /* NOLINTNEXTLINE: readability-function-size */
@@ -2156,6 +2168,51 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
    * \note Keep this message at the bottom of the function.
    */
   {
-    /* Keep this block, even when empty. */
+    /* Use consistent socket identifiers for the math node.
+     * The code to make unique identifiers from the names was inconsistent. */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      if (ELEM(ntree->type, NTREE_SHADER, NTREE_GEOMETRY)) {
+        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+          if (node->type == SH_NODE_MATH) {
+            bNodeSocket *value1 = ((bNodeSocket *)node->inputs.first)->next;
+            bNodeSocket *value2 = value1->next;
+            strcpy(value1->identifier, "Value_001");
+            if (value2 != NULL) {
+              /* This can be null when file is quite old so that the socket did not exist
+               * (before 0406eb110332a8). */
+              strcpy(value2->identifier, "Value_002");
+            }
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_SEQ) {
+            ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
+                                                                   &sl->regionbase;
+            LISTBASE_FOREACH (ARegion *, region, regionbase) {
+              if (region->regiontype == RGN_TYPE_WINDOW) {
+                region->v2d.min[1] = 1.0f;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
+      Editing *ed = SEQ_editing_get(scene);
+      /* Make sure range of meta strips is correct.
+       * It was possible to save .blend file with incorrect state of meta strip
+       * range. The root cause is expected to be fixed, but need to ensure files
+       * with invalid meta strip range are corrected. */
+      if (ed != NULL) {
+        SEQ_for_each_callback(&ed->seqbase, version_fix_seq_meta_range, scene);
+      }
+    }
   }
 }

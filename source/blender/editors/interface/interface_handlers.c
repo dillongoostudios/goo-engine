@@ -397,8 +397,8 @@ typedef struct uiHandleButtonData {
   float vec[3], origvec[3];
   ColorBand *coba;
 
-  /* Tool-tip. */
-  uint tooltip_force : 1;
+  /* True when alt is held and the preference for displaying tooltips should be ignored. */
+  bool tooltip_force;
 
   /* auto open */
   bool used_mouse;
@@ -10312,7 +10312,7 @@ static int ui_handle_menu_event(bContext *C,
           retval = WM_UI_HANDLER_BREAK;
           break;
 
-        /* Smooth scrolling for pocopy_v2_v2_int(&povers. */
+        /* Smooth scrolling for popovers. */
         case MOUSEPAN: {
           if (IS_EVENT_MOD(event, shift, ctrl, alt, oskey)) {
             /* pass */

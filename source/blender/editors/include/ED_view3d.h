@@ -277,7 +277,7 @@ typedef struct V3DSnapCursorState {
   uchar color_line[4];
   uchar color_point[4];
   uchar color_box[4];
-  struct ARegion *region; /* Forces the cursor to be drawn only in this specific region. */
+  struct wmGizmoGroupType *gzgrp_type; /* Force cursor to be drawn only when gizmo is available. */
   float *prevpoint;
   float box_dimensions[3];
   short snap_elem_force; /* If zero, use scene settings. */
@@ -844,6 +844,7 @@ void ED_view3d_gizmo_mesh_preselect_get_active(struct bContext *C,
                                                struct wmGizmo *gz,
                                                struct Base **r_base,
                                                struct BMElem **r_ele);
+void ED_view3d_gizmo_mesh_preselect_clear(struct wmGizmo *gz);
 
 /* space_view3d.c */
 void ED_view3d_buttons_region_layout_ex(const struct bContext *C,

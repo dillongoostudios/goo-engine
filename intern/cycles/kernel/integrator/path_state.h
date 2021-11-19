@@ -185,7 +185,7 @@ ccl_device_inline void path_state_next(KernelGlobals kg, IntegratorState state, 
 
     /* Render pass categories. */
     if (bounce == 1) {
-      flag |= (label & LABEL_TRANSMIT) ? PATH_RAY_TRANSMISSION_PASS : PATH_RAY_REFLECT_PASS;
+      flag |= PATH_RAY_SURFACE_PASS;
     }
   }
 
@@ -208,9 +208,7 @@ ccl_device_inline bool path_state_volume_next(IntegratorState state)
   }
 
   /* Random number generator next bounce. */
-  if (volume_bounds_bounce > 1) {
-    INTEGRATOR_STATE_WRITE(state, path, rng_offset) += PRNG_BOUNCE_NUM;
-  }
+  INTEGRATOR_STATE_WRITE(state, path, rng_offset) += PRNG_BOUNCE_NUM;
 
   return true;
 }
