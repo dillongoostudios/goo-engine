@@ -2,7 +2,7 @@
 
 void view_z_get(out float z)
 {
-    z = viewPosition.z;
+    z = abs(viewPosition.z);
 }
 
 void node_set_depth(in Closure _in, in float z_in, out Closure _out)
