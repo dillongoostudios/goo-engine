@@ -1351,7 +1351,7 @@ static int filelist_geticon_ex(const FileDirEntry *file,
   }
 
   if (typeflag & FILE_TYPE_BLENDER) {
-    return ICON_FILE_BLEND;
+    return (is_main || file->preview_icon_id) ? ICON_FILE_BLEND : ICON_BLENDER;
   }
   if (typeflag & FILE_TYPE_BLENDER_BACKUP) {
     return ICON_FILE_BACKUP;
@@ -3696,7 +3696,7 @@ static void filelist_readjob_main_assets_add_items(FileListReadJob *job_params,
   BKE_main_lock(job_params->current_main);
 
   FOREACH_MAIN_ID_BEGIN (job_params->current_main, id_iter) {
-    if (!id_iter->asset_data) {
+    if (!id_iter->asset_data || ID_IS_LINKED(id_iter)) {
       continue;
     }
 
