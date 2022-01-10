@@ -23,12 +23,16 @@
 
 static bNodeSocketTemplate sh_node_screenspace_in[] = {
     {SOCK_VECTOR, N_("View Position"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE, SOCK_HIDE_VALUE},
+    {SOCK_FLOAT, N_("ClampRange"), 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Iterations"), 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 64.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Iter_Fac"), 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
     {-1, ""},
 };
 
 static bNodeSocketTemplate sh_node_screenspace_out[] = {
     {SOCK_RGBA, N_("Scene Color")},
     {SOCK_FLOAT, N_("Scene Depth")},
+    {SOCK_FLOAT, N_("Scene Curvature")},
     {-1, ""},
 };
 
@@ -44,7 +48,11 @@ static int node_shader_gpu_screenspace_info(GPUMaterial *mat,
       GPU_link(mat, "view_position_get", &in[0].link);
   }
 
-  return GPU_stack_link(mat, node, "node_screenspace_info", in, out);
+  if (out[2].link || 1) {
+    return GPU_stack_link(mat, node, "node_screenspace_curvature", in, out);
+  } else {
+    return GPU_stack_link(mat, node, "node_screenspace_info", in, out);
+  }
 }
 
 /* node type definition */
