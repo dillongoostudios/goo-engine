@@ -23,9 +23,9 @@
 
 static bNodeSocketTemplate sh_node_screenspace_in[] = {
     {SOCK_VECTOR, N_("View Position"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE, SOCK_HIDE_VALUE},
-    {SOCK_FLOAT, N_("ClampRange"), 0.1f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("Iterations"), 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 64.0f, PROP_NONE},
-    {SOCK_FLOAT, N_("Iter_Fac"), 0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Samples"), 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 64.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Sample Radius"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Thickness"), 1.0f, 0.0f, 0.0f, 0.0f, 0.01f, 1000.0f, PROP_NONE},
     {-1, ""},
 };
 
