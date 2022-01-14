@@ -21,43 +21,38 @@
 
 /* **************** OUTPUT ******************** */
 
-static bNodeSocketTemplate sh_node_screenspace_in[] = {
-    {SOCK_VECTOR, N_("View Position"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE, SOCK_HIDE_VALUE},
+static bNodeSocketTemplate sh_node_curvature_in[] = {
+    {SOCK_FLOAT, N_("Samples"), 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 64.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Sample Radius"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
+    {SOCK_FLOAT, N_("Thickness"), 1.0f, 0.0f, 0.0f, 0.0f, 0.01f, 1000.0f, PROP_NONE},
     {-1, ""},
 };
 
-static bNodeSocketTemplate sh_node_screenspace_out[] = {
-    {SOCK_RGBA, N_("Scene Color")},
-    {SOCK_FLOAT, N_("Scene Depth")},
+static bNodeSocketTemplate sh_node_curvature_out[] = {
+    {SOCK_FLOAT, N_("Scene Curvature")},
     {-1, ""},
 };
 
-static int node_shader_gpu_screenspace_info(GPUMaterial *mat,
+static int node_shader_gpu_curvature(GPUMaterial *mat,
                                         bNode *node,
                                         bNodeExecData *UNUSED(execdata),
                                         GPUNodeStack *in,
                                         GPUNodeStack *out)
 {
-  GPU_material_flag_set(mat, GPU_MATFLAG_REFRACT);
-
-  if (!in[0].link) {
-      GPU_link(mat, "view_position_get", &in[0].link);
-  }
-
-  return GPU_stack_link(mat, node, "node_screenspace_info", in, out);
+  return GPU_stack_link(mat, node, "node_screenspace_curvature", in, out);
 }
 
 /* node type definition */
-void register_node_type_sh_screenspace_info(void)
+void register_node_type_sh_curvature(void)
 {
   static bNodeType ntype;
 
-  sh_node_type_base(&ntype, SH_NODE_SCREENSPACE_INFO, "Screenspace Info", NODE_CLASS_INPUT, 0);
-  node_type_socket_templates(&ntype, sh_node_screenspace_in, sh_node_screenspace_out);
+  sh_node_type_base(&ntype, SH_NODE_CURVATURE, "Curvature", NODE_CLASS_INPUT, 0);
+  node_type_socket_templates(&ntype, sh_node_curvature_in, sh_node_curvature_out);
   node_type_size_preset(&ntype, NODE_SIZE_MIDDLE);
   node_type_init(&ntype, NULL);
   node_type_storage(&ntype, "", NULL, NULL);
-  node_type_gpu(&ntype, node_shader_gpu_screenspace_info);
+  node_type_gpu(&ntype, node_shader_gpu_curvature);
 
   nodeRegisterType(&ntype);
 }

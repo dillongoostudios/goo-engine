@@ -1118,6 +1118,9 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree,
 /* TODO(Late): New upstream shader nodes added will have conflicts. Better to retain our nodes for now though */
 #define SH_NODE_CURVE_FLOAT 716
 
+/* TODO(Late): Custom nodes should start at 800 */
+#define SH_NODE_CURVATURE 807
+
 /* custom defines options for Material node */
 // #define SH_NODE_MAT_DIFF 1
 // #define SH_NODE_MAT_SPEC 2

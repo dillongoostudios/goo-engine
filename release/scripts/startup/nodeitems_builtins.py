@@ -373,6 +373,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeTangent"),
         NodeItem("ShaderNodeNewGeometry"),
         NodeItem("ShaderNodeScreenspaceInfo"),
+        NodeItem("ShaderNodeCurvature"),
         NodeItem("ShaderNodeShaderInfo"),
         NodeItem("ShaderNodeWireframe"),
         NodeItem("ShaderNodeBevel"),

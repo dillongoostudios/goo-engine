@@ -45,6 +45,7 @@ DefNode(ShaderNode,     SH_NODE_RGBTOBW,         0,                      "RGBTOB
 DefNode(ShaderNode,     SH_NODE_SHADERTORGB,     0,                      "SHADERTORGB",    ShaderToRGB,      "Shader to RGB",     ""              )
 DefNode(ShaderNode,     SH_NODE_SCREENSPACE_INFO,0,                      "SCREENSPACEINFO",ScreenspaceInfo,  "Screenspace Info",  ""              )
 DefNode(ShaderNode,     SH_NODE_SHADER_INFO,     0,                      "SHADERINFO",     ShaderInfo,       "Shader Info",       ""              )
+DefNode(ShaderNode,     SH_NODE_CURVATURE,       0,                      "CURVATURE",      Curvature,        "Curvature",         ""              )
 DefNode(ShaderNode,     SH_NODE_NORMAL,          0,                      "NORMAL",         Normal,           "Normal",            ""              )
 DefNode(ShaderNode,     SH_NODE_GAMMA,           0,                      "GAMMA",          Gamma,            "Gamma",             ""              )
 DefNode(ShaderNode,     SH_NODE_BRIGHTCONTRAST,  0,                      "BRIGHTCONTRAST", BrightContrast,   "Bright Contrast",   ""              )

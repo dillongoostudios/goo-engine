@@ -5627,6 +5627,7 @@ static void registerShaderNodes()
   register_node_type_sh_valtorgb();
   register_node_type_sh_rgbtobw();
   register_node_type_sh_screenspace_info();
+  register_node_type_sh_curvature();
   register_node_type_sh_shader_info();
   register_node_type_sh_shadertorgb();
   register_node_type_sh_normal();
