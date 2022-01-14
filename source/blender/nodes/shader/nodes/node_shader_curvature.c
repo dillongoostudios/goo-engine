@@ -39,6 +39,10 @@ static int node_shader_gpu_curvature(GPUMaterial *mat,
                                         GPUNodeStack *in,
                                         GPUNodeStack *out)
 {
+
+  // Set this to not break things.
+  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+
   return GPU_stack_link(mat, node, "node_screenspace_curvature", in, out);
 }
 
