@@ -14,7 +14,7 @@ vec2 rotate(vec2 v, float a) {
  * 
  * Curvature is determined as the sum of curvature of each pair of samples (+ve and -ve along the line), with samples weighted 
  * inversely by distance from center. */
-void node_screenspace_curvature(float iiterations, float sample_scale, float clamp_dist, out float scene_curvature) {
+void node_screenspace_curvature(float iiterations, float sample_scale, float clamp_dist, out float scene_curvature, out float scene_rim) {
     vec2 uvs = get_uvs_from_view(viewPosition) * hizUvScale.xy;
 
     // Use a fixed texel size rather than adjusting to pixel space. Less accurate, wastes some samples, but gives more intuitive results.
@@ -32,6 +32,7 @@ void node_screenspace_curvature(float iiterations, float sample_scale, float cla
 
     // Curvature accumulation
     float accum = 0.0;
+    float rim_accum = 0.0;
 
     // Rotate in 8x 22.5° increments, sample lines
     for (int r = 0; r < 8; r++) {
@@ -43,13 +44,17 @@ void node_screenspace_curvature(float iiterations, float sample_scale, float cla
             float right = get_view_z_from_depth(textureLod(maxzBuffer, uvs - offset * i * i_samples, 0.0).r);
 
             float curve = clamp(left - mid_depth, -clamp_range, clamp_range) + clamp(right - mid_depth, -clamp_range, clamp_range);
+            float afac = (1 - float(i-1) / n_samples);
+
 
             // Absolute distance between both samples. If greater than the clamp range, then reduce the influence.
             float ad = max(abs(max(left, mid_depth) - max(right, mid_depth)) - clamp_dist, 0.0);
 
-            accum += curve * (1 - float(i-1) / n_samples) * 0.001 * (max((clamp_dist - ad), 0.0) / clamp_dist);
+            accum += curve * afac * 0.001;// * (max((clamp_dist - ad), 0.0) / clamp_dist);
+            rim_accum += min(mid_depth - min(left, right), clamp_dist) * afac; 
         }
     }
 
     scene_curvature = - accum / length(texel_size) * i_samples;
+    scene_rim = rim_accum / sample_scale * clamp_range;
 }

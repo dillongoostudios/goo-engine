@@ -30,6 +30,7 @@ static bNodeSocketTemplate sh_node_curvature_in[] = {
 
 static bNodeSocketTemplate sh_node_curvature_out[] = {
     {SOCK_FLOAT, N_("Scene Curvature")},
+    {SOCK_FLOAT, N_("Scene Rim")},
     {-1, ""},
 };
 
