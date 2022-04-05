@@ -56,6 +56,7 @@ typedef struct {
   /* these point to data in the DerivedMesh custom data layers,
    * they are only here for efficiency and convenience */
   MVert *mvert;
+  const float (*vert_normals)[3];
   MEdge *medge;
   MFace *mface;
   MLoop *mloop;
@@ -143,7 +144,7 @@ static void cdDM_getVertCo(DerivedMesh *dm, int index, float r_co[3])
 static void cdDM_getVertNo(DerivedMesh *dm, int index, float r_no[3])
 {
   CDDerivedMesh *cddm = (CDDerivedMesh *)dm;
-  normal_short_to_float_v3(r_no, cddm->mvert[index].no);
+  copy_v3_v3(r_no, cddm->vert_normals[index]);
 }
 
 static const MeshElemMap *cdDM_getPolyMap(Object *ob, DerivedMesh *dm)
@@ -264,7 +265,7 @@ static DerivedMesh *cdDM_from_mesh_ex(Mesh *mesh,
   dm->deformedOnly = 1;
   dm->cd_flag = mesh->cd_flag;
 
-  if (mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) {
+  if (BKE_mesh_vertex_normals_are_dirty(mesh)) {
     dm->dirty |= DM_DIRTY_NORMALS;
   }
   /* TODO: DM_DIRTY_TESS_CDLAYERS ? Maybe not though,
@@ -281,6 +282,7 @@ static DerivedMesh *cdDM_from_mesh_ex(Mesh *mesh,
   CustomData_merge(&mesh->pdata, &dm->polyData, cddata_masks.pmask, alloctype, mesh->totpoly);
 
   cddm->mvert = CustomData_get_layer(&dm->vertData, CD_MVERT);
+  cddm->vert_normals = CustomData_get_layer(&dm->vertData, CD_NORMAL);
   cddm->medge = CustomData_get_layer(&dm->edgeData, CD_MEDGE);
   cddm->mloop = CustomData_get_layer(&dm->loopData, CD_MLOOP);
   cddm->mpoly = CustomData_get_layer(&dm->polyData, CD_MPOLY);

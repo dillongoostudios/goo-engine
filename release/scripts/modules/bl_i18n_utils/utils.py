@@ -778,7 +778,7 @@ class I18nMessages:
         try:
             import bpy
         except ModuleNotFoundError:
-            print("Could not import bpy, find_best_messages_matches must be run from whithin Blender.")
+            print("Could not import bpy, find_best_messages_matches must be run from within Blender.")
             return
 
         # Build helper mappings.
@@ -1135,6 +1135,7 @@ class I18nMessages:
         # XXX Temp solution, until I can make own mo generator working...
         import subprocess
         with tempfile.NamedTemporaryFile(mode='w+', encoding="utf-8") as tmp_po_f:
+            os.makedirs(os.path.dirname(fname), exist_ok=True)
             self.write_messages_to_po(tmp_po_f)
             cmd = (
                 self.settings.GETTEXT_MSGFMT_EXECUTABLE,

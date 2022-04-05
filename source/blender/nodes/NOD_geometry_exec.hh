@@ -28,6 +28,8 @@
 #include "NOD_derived_node_tree.hh"
 #include "NOD_geometry_nodes_eval_log.hh"
 
+#include "GEO_realize_instances.hh"
+
 struct Depsgraph;
 struct ModifierData;
 
@@ -36,8 +38,8 @@ namespace blender::nodes {
 using bke::AnonymousAttributeFieldInput;
 using bke::AttributeFieldInput;
 using bke::AttributeIDRef;
-using bke::geometry_set_realize_instances;
 using bke::GeometryComponentFieldContext;
+using bke::GeometryFieldInput;
 using bke::OutputAttribute;
 using bke::OutputAttribute_Typed;
 using bke::ReadAttributeLookup;
@@ -57,13 +59,9 @@ using fn::GPointer;
 using fn::GSpan;
 using fn::GVArray;
 using fn::GVArray_GSpan;
-using fn::GVArray_Span;
-using fn::GVArray_Typed;
-using fn::GVArrayPtr;
 using fn::GVMutableArray;
 using fn::GVMutableArray_GSpan;
-using fn::GVMutableArray_Typed;
-using fn::GVMutableArrayPtr;
+using fn::ValueOrField;
 using geometry_nodes_eval_log::NodeWarningType;
 
 /**
@@ -122,6 +120,8 @@ class GeoNodeExecParamsProvider {
   virtual bool output_is_required(StringRef identifier) const = 0;
   virtual bool lazy_require_input(StringRef identifier) = 0;
   virtual bool lazy_output_is_required(StringRef identifier) const = 0;
+
+  virtual void set_default_remaining_outputs() = 0;
 };
 
 class GeoNodeExecParams {
@@ -134,12 +134,8 @@ class GeoNodeExecParams {
   }
 
   template<typename T>
-  static inline constexpr bool is_stored_as_field_v = std::is_same_v<T, float> ||
-                                                      std::is_same_v<T, int> ||
-                                                      std::is_same_v<T, bool> ||
-                                                      std::is_same_v<T, ColorGeometry4f> ||
-                                                      std::is_same_v<T, float3> ||
-                                                      std::is_same_v<T, std::string>;
+  static inline constexpr bool is_field_base_type_v =
+      is_same_any_v<T, float, int, bool, ColorGeometry4f, float3, std::string>;
 
   /**
    * Get the input value for the input socket with the given identifier.
@@ -162,9 +158,15 @@ class GeoNodeExecParams {
    */
   template<typename T> T extract_input(StringRef identifier)
   {
-    if constexpr (is_stored_as_field_v<T>) {
-      Field<T> field = this->extract_input<Field<T>>(identifier);
-      return fn::evaluate_constant_field(field);
+    if constexpr (is_field_base_type_v<T>) {
+      ValueOrField<T> value_or_field = this->extract_input<ValueOrField<T>>(identifier);
+      return value_or_field.as_value();
+    }
+    else if constexpr (fn::is_field_v<T>) {
+      using BaseType = typename T::base_type;
+      ValueOrField<BaseType> value_or_field = this->extract_input<ValueOrField<BaseType>>(
+          identifier);
+      return value_or_field.as_field();
     }
     else {
 #ifdef DEBUG
@@ -191,9 +193,9 @@ class GeoNodeExecParams {
     Vector<GMutablePointer> gvalues = provider_->extract_multi_input(identifier);
     Vector<T> values;
     for (GMutablePointer gvalue : gvalues) {
-      if constexpr (is_stored_as_field_v<T>) {
-        const Field<T> field = gvalue.relocate_out<Field<T>>();
-        values.append(fn::evaluate_constant_field(field));
+      if constexpr (is_field_base_type_v<T>) {
+        const ValueOrField<T> value_or_field = gvalue.relocate_out<ValueOrField<T>>();
+        values.append(value_or_field.as_value());
       }
       else {
         values.append(gvalue.relocate_out<T>());
@@ -205,11 +207,16 @@ class GeoNodeExecParams {
   /**
    * Get the input value for the input socket with the given identifier.
    */
-  template<typename T> const T get_input(StringRef identifier) const
+  template<typename T> T get_input(StringRef identifier) const
   {
-    if constexpr (is_stored_as_field_v<T>) {
-      const Field<T> &field = this->get_input<Field<T>>(identifier);
-      return fn::evaluate_constant_field(field);
+    if constexpr (is_field_base_type_v<T>) {
+      ValueOrField<T> value_or_field = this->get_input<ValueOrField<T>>(identifier);
+      return value_or_field.as_value();
+    }
+    else if constexpr (fn::is_field_v<T>) {
+      using BaseType = typename T::base_type;
+      ValueOrField<BaseType> value_or_field = this->get_input<ValueOrField<BaseType>>(identifier);
+      return value_or_field.as_field();
     }
     else {
 #ifdef DEBUG
@@ -231,9 +238,12 @@ class GeoNodeExecParams {
   template<typename T> void set_output(StringRef identifier, T &&value)
   {
     using StoredT = std::decay_t<T>;
-    if constexpr (is_stored_as_field_v<StoredT>) {
-      this->set_output<Field<StoredT>>(identifier,
-                                       fn::make_constant_field<StoredT>(std::forward<T>(value)));
+    if constexpr (is_field_base_type_v<StoredT>) {
+      this->set_output(identifier, ValueOrField<StoredT>(std::forward<T>(value)));
+    }
+    else if constexpr (fn::is_field_v<StoredT>) {
+      using BaseType = typename StoredT::base_type;
+      this->set_output(identifier, ValueOrField<BaseType>(std::forward<T>(value)));
     }
     else {
       const CPPType &type = CPPType::get<StoredT>();
@@ -316,21 +326,21 @@ class GeoNodeExecParams {
    * \note This will add an error message if the string socket is active and
    * the input attribute does not exist.
    */
-  GVArrayPtr get_input_attribute(const StringRef name,
-                                 const GeometryComponent &component,
-                                 const AttributeDomain domain,
-                                 const CustomDataType type,
-                                 const void *default_value) const;
+  GVArray get_input_attribute(const StringRef name,
+                              const GeometryComponent &component,
+                              AttributeDomain domain,
+                              const CustomDataType type,
+                              const void *default_value) const;
 
   template<typename T>
-  GVArray_Typed<T> get_input_attribute(const StringRef name,
-                                       const GeometryComponent &component,
-                                       const AttributeDomain domain,
-                                       const T &default_value) const
+  VArray<T> get_input_attribute(const StringRef name,
+                                const GeometryComponent &component,
+                                const AttributeDomain domain,
+                                const T &default_value) const
   {
     const CustomDataType type = bke::cpp_type_to_custom_data_type(CPPType::get<T>());
-    GVArrayPtr varray = this->get_input_attribute(name, component, domain, type, &default_value);
-    return GVArray_Typed<T>(std::move(varray));
+    GVArray varray = this->get_input_attribute(name, component, domain, type, &default_value);
+    return varray.typed<T>();
   }
 
   /**
@@ -341,11 +351,18 @@ class GeoNodeExecParams {
                                                const GeometryComponent &component,
                                                const CustomDataType default_type) const;
 
+  /**
+   * If any of the corresponding input sockets are attributes instead of single values,
+   * use the highest priority attribute domain from among them.
+   * Otherwise return the default domain.
+   */
   AttributeDomain get_highest_priority_input_domain(Span<std::string> names,
                                                     const GeometryComponent &component,
-                                                    const AttributeDomain default_domain) const;
+                                                    AttributeDomain default_domain) const;
 
   std::string attribute_producer_name() const;
+
+  void set_default_remaining_outputs();
 
  private:
   /* Utilities for detecting common errors at when using this class. */

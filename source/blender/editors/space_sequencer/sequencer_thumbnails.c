@@ -66,7 +66,7 @@ typedef struct ThumbDataItem {
 static void thumbnail_hash_data_free(void *val)
 {
   ThumbDataItem *item = val;
-  SEQ_sequence_free(item->scene, item->seq_dupli, 0);
+  SEQ_sequence_free(item->scene, item->seq_dupli);
   MEM_freeN(val);
 }
 
@@ -452,7 +452,7 @@ void draw_seq_strip_thumbnail(View2D *v2d,
   rcti crop;
 
   /* If width of the strip too small ignore drawing thumbnails. */
-  if ((y2 - y1) / pixely <= 40 * U.dpi_fac) {
+  if ((y2 - y1) / pixely <= 20 * U.dpi_fac) {
     return;
   }
 

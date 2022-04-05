@@ -123,6 +123,7 @@ static void applyBoneSize(TransInfo *t, const int UNUSED(mval[2]))
     float ratio = t->values[0];
 
     copy_v3_fl(t->values_final, ratio);
+    add_v3_v3(t->values_final, t->values_modal_offset);
 
     transform_snap_increment(t, t->values_final);
 
@@ -184,4 +185,5 @@ void initBoneSize(TransInfo *t)
   t->num.unit_type[1] = B_UNIT_NONE;
   t->num.unit_type[2] = B_UNIT_NONE;
 }
+
 /** \} */

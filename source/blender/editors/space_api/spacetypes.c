@@ -70,10 +70,9 @@
 
 #include "io_ops.h"
 
-/* Only called once on startup. storage is global in BKE kernel listbase. */
 void ED_spacetypes_init(void)
 {
-  /* UI unit is a variable, may be used in some space type inits. */
+  /* UI unit is a variable, may be used in some space type initialization. */
   U.widget_unit = 20;
 
   /* Create space types. */
@@ -186,10 +185,6 @@ void ED_spacemacros_init(void)
   }
 }
 
-/**
- * \note Keymap definitions are registered only once per WM initialize,
- * usually on file read, using the keymap the actual areas/regions add the handlers.
- * \note Called in wm.c. */
 void ED_spacetypes_keymap(wmKeyConfig *keyconf)
 {
   ED_keymap_screen(keyconf);
@@ -253,15 +248,16 @@ void *ED_region_draw_cb_activate(ARegionType *art,
   return rdc;
 }
 
-void ED_region_draw_cb_exit(ARegionType *art, void *handle)
+bool ED_region_draw_cb_exit(ARegionType *art, void *handle)
 {
   LISTBASE_FOREACH (RegionDrawCB *, rdc, &art->drawcalls) {
     if (rdc == (RegionDrawCB *)handle) {
       BLI_remlink(&art->drawcalls, rdc);
       MEM_freeN(rdc);
-      return;
+      return true;
     }
   }
+  return false;
 }
 
 static void ed_region_draw_cb_draw(const bContext *C, ARegion *region, ARegionType *art, int type)

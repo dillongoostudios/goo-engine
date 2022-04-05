@@ -38,17 +38,14 @@ struct ID;
 struct ReportList;
 
 /* Attribute.domain */
-/**
- * \warning Careful when changing existing items.
- * Arrays may be initialized from this (e.g. #DATASET_layout_hierarchy).
- */
 typedef enum AttributeDomain {
-  ATTR_DOMAIN_AUTO = -1,  /* Use for nodes to choose automatically based on other data. */
-  ATTR_DOMAIN_POINT = 0,  /* Mesh, Hair or PointCloud Point */
-  ATTR_DOMAIN_EDGE = 1,   /* Mesh Edge */
-  ATTR_DOMAIN_FACE = 2,   /* Mesh Face */
-  ATTR_DOMAIN_CORNER = 3, /* Mesh Corner */
-  ATTR_DOMAIN_CURVE = 4,  /* Hair Curve */
+  ATTR_DOMAIN_AUTO = -1,    /* Use for nodes to choose automatically based on other data. */
+  ATTR_DOMAIN_POINT = 0,    /* Mesh, Hair or PointCloud Point */
+  ATTR_DOMAIN_EDGE = 1,     /* Mesh Edge */
+  ATTR_DOMAIN_FACE = 2,     /* Mesh Face */
+  ATTR_DOMAIN_CORNER = 3,   /* Mesh Corner */
+  ATTR_DOMAIN_CURVE = 4,    /* Hair Curve */
+  ATTR_DOMAIN_INSTANCE = 5, /* Instance */
 
   ATTR_DOMAIN_NUM
 } AttributeDomain;
@@ -57,19 +54,16 @@ typedef enum AttributeDomain {
 
 bool BKE_id_attributes_supported(struct ID *id);
 
-struct CustomDataLayer *BKE_id_attribute_new(struct ID *id,
-                                             const char *name,
-                                             const int type,
-                                             const AttributeDomain domain,
-                                             struct ReportList *reports);
+struct CustomDataLayer *BKE_id_attribute_new(
+    struct ID *id, const char *name, int type, AttributeDomain domain, struct ReportList *reports);
 bool BKE_id_attribute_remove(struct ID *id,
                              struct CustomDataLayer *layer,
                              struct ReportList *reports);
 
 struct CustomDataLayer *BKE_id_attribute_find(const struct ID *id,
                                               const char *name,
-                                              const int type,
-                                              const AttributeDomain domain);
+                                              int type,
+                                              AttributeDomain domain);
 
 AttributeDomain BKE_id_attribute_domain(struct ID *id, struct CustomDataLayer *layer);
 int BKE_id_attribute_data_length(struct ID *id, struct CustomDataLayer *layer);
@@ -79,7 +73,7 @@ bool BKE_id_attribute_rename(struct ID *id,
                              const char *new_name,
                              struct ReportList *reports);
 
-int BKE_id_attributes_length(struct ID *id, const CustomDataMask mask);
+int BKE_id_attributes_length(struct ID *id, CustomDataMask mask);
 
 struct CustomDataLayer *BKE_id_attributes_active_get(struct ID *id);
 void BKE_id_attributes_active_set(struct ID *id, struct CustomDataLayer *layer);

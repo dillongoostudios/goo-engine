@@ -60,7 +60,6 @@ static void deg_flush_updates_and_refresh(deg::Depsgraph *deg_graph)
   deg::deg_evaluate_on_refresh(deg_graph);
 }
 
-/* Evaluate all nodes tagged for updating. */
 void DEG_evaluate_on_refresh(Depsgraph *graph)
 {
   deg::Depsgraph *deg_graph = reinterpret_cast<deg::Depsgraph *>(graph);
@@ -73,11 +72,18 @@ void DEG_evaluate_on_refresh(Depsgraph *graph)
     deg_graph->frame = frame;
     deg_graph->ctime = ctime;
   }
+  else if (scene->id.recalc & ID_RECALC_FRAME_CHANGE) {
+    /* Comparing depsgraph & scene frame fails in the case of undo,
+     * since the undo state is stored before updates from the frame change have been applied.
+     * In this case reading back the undo state will behave as if no updates on frame change
+     * is needed as the #Depsgraph.ctime & frame will match the values in the input scene.
+     * Use #ID_RECALC_FRAME_CHANGE to detect that recalculation is necessary. see: T66913. */
+    deg_graph->tag_time_source();
+  }
 
   deg_flush_updates_and_refresh(deg_graph);
 }
 
-/* Frame-change happened for root scene that graph belongs to. */
 void DEG_evaluate_on_framechange(Depsgraph *graph, float frame)
 {
   deg::Depsgraph *deg_graph = reinterpret_cast<deg::Depsgraph *>(graph);

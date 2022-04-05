@@ -32,7 +32,11 @@ extern "C" {
 void imb_initopenexr(void);
 void imb_exitopenexr(void);
 
-bool imb_is_a_openexr(const unsigned char *mem, const size_t size);
+/**
+ * Test presence of OpenEXR file.
+ * \param mem: pointer to loaded OpenEXR bit-stream.
+ */
+bool imb_is_a_openexr(const unsigned char *mem, size_t size);
 
 bool imb_save_openexr(struct ImBuf *ibuf, const char *name, int flags);
 

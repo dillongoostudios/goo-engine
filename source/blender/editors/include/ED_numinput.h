@@ -94,8 +94,14 @@ struct UnitSettings;
  */
 
 void initNumInput(NumInput *n);
+/**
+ * \param str: Must be NUM_STR_REP_LEN * (idx_max + 1) length.
+ */
 void outputNumInput(NumInput *n, char *str, struct UnitSettings *unit_settings);
 bool hasNumInput(const NumInput *n);
+/**
+ * \warning \a vec must be set beforehand otherwise we risk uninitialized vars.
+ */
 bool applyNumInput(NumInput *n, float *vec);
 bool handleNumInput(struct bContext *C, NumInput *n, const struct wmEvent *event);
 
@@ -108,7 +114,7 @@ bool user_string_to_number(bContext *C,
                            const struct UnitSettings *unit,
                            int type,
                            double *r_value,
-                           const bool use_single_line_error,
+                           bool use_single_line_error,
                            char **r_error);
 
 /** \} */

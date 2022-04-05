@@ -14,6 +14,8 @@
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  */
 
+#include "BLI_task.hh"
+
 #include "DNA_ID_enums.h"
 #include "DNA_curve_types.h"
 
@@ -28,10 +30,8 @@
 
 using blender::fn::GMutableSpan;
 using blender::fn::GSpan;
-using blender::fn::GVArray_For_GSpan;
+using blender::fn::GVArray;
 using blender::fn::GVArray_GSpan;
-using blender::fn::GVArrayPtr;
-using blender::fn::GVMutableArray_For_GMutableSpan;
 
 /* -------------------------------------------------------------------- */
 /** \name Geometry Component Implementation
@@ -79,7 +79,6 @@ bool CurveComponent::has_curve() const
   return curve_ != nullptr;
 }
 
-/* Clear the component and replace it with the new curve. */
 void CurveComponent::replace(CurveEval *curve, GeometryOwnershipType ownership)
 {
   BLI_assert(this->is_mutable());
@@ -130,10 +129,6 @@ void CurveComponent::ensure_owns_direct_data()
   }
 }
 
-/**
- * Create empty curve data used for rendering the spline's wire edges.
- * \note See comment on #curve_for_render_ for further explanation.
- */
 const Curve *CurveComponent::get_curve_for_render() const
 {
   if (curve_ == nullptr) {
@@ -253,15 +248,15 @@ void adapt_curve_domain_point_to_spline_impl(const CurveEval &curve,
   }
 }
 
-static GVArrayPtr adapt_curve_domain_point_to_spline(const CurveEval &curve, GVArrayPtr varray)
+static GVArray adapt_curve_domain_point_to_spline(const CurveEval &curve, GVArray varray)
 {
-  GVArrayPtr new_varray;
-  attribute_math::convert_to_static_type(varray->type(), [&](auto dummy) {
+  GVArray new_varray;
+  attribute_math::convert_to_static_type(varray.type(), [&](auto dummy) {
     using T = decltype(dummy);
     if constexpr (!std::is_void_v<attribute_math::DefaultMixer<T>>) {
       Array<T> values(curve.splines().size());
-      adapt_curve_domain_point_to_spline_impl<T>(curve, varray->typed<T>(), values);
-      new_varray = std::make_unique<fn::GVArray_For_ArrayContainer<Array<T>>>(std::move(values));
+      adapt_curve_domain_point_to_spline_impl<T>(curve, varray.typed<T>(), values);
+      new_varray = VArray<T>::ForContainer(std::move(values));
     }
   });
   return new_varray;
@@ -272,29 +267,29 @@ static GVArrayPtr adapt_curve_domain_point_to_spline(const CurveEval &curve, GVA
  * attributes. The goal is to avoid copying the spline value for every one of its control points
  * unless it is necessary (in that case the materialize functions will be called).
  */
-template<typename T> class VArray_For_SplineToPoint final : public VArray<T> {
-  GVArrayPtr original_varray_;
+template<typename T> class VArray_For_SplineToPoint final : public VArrayImpl<T> {
+  GVArray original_varray_;
   /* Store existing data materialized if it was not already a span. This is expected
    * to be worth it because a single spline's value will likely be accessed many times. */
-  fn::GVArray_Span<T> original_data_;
+  VArray_Span<T> original_data_;
   Array<int> offsets_;
 
  public:
-  VArray_For_SplineToPoint(GVArrayPtr original_varray, Array<int> offsets)
-      : VArray<T>(offsets.last()),
+  VArray_For_SplineToPoint(GVArray original_varray, Array<int> offsets)
+      : VArrayImpl<T>(offsets.last()),
         original_varray_(std::move(original_varray)),
-        original_data_(*original_varray_),
+        original_data_(original_varray_.typed<T>()),
         offsets_(std::move(offsets))
   {
   }
 
-  T get_impl(const int64_t index) const final
+  T get(const int64_t index) const final
   {
     const PointIndices indices = lookup_point_indices(offsets_, index);
     return original_data_[indices.spline_index];
   }
 
-  void materialize_impl(const IndexMask mask, MutableSpan<T> r_span) const final
+  void materialize(const IndexMask mask, MutableSpan<T> r_span) const final
   {
     const int total_size = offsets_.last();
     if (mask.is_range() && mask.as_range() == IndexRange(total_size)) {
@@ -315,7 +310,7 @@ template<typename T> class VArray_For_SplineToPoint final : public VArray<T> {
     }
   }
 
-  void materialize_to_uninitialized_impl(const IndexMask mask, MutableSpan<T> r_span) const final
+  void materialize_to_uninitialized(const IndexMask mask, MutableSpan<T> r_span) const final
   {
     T *dst = r_span.data();
     const int total_size = offsets_.last();
@@ -338,29 +333,29 @@ template<typename T> class VArray_For_SplineToPoint final : public VArray<T> {
   }
 };
 
-static GVArrayPtr adapt_curve_domain_spline_to_point(const CurveEval &curve, GVArrayPtr varray)
+static GVArray adapt_curve_domain_spline_to_point(const CurveEval &curve, GVArray varray)
 {
-  GVArrayPtr new_varray;
-  attribute_math::convert_to_static_type(varray->type(), [&](auto dummy) {
+  GVArray new_varray;
+  attribute_math::convert_to_static_type(varray.type(), [&](auto dummy) {
     using T = decltype(dummy);
 
     Array<int> offsets = curve.control_point_offsets();
-    new_varray = std::make_unique<fn::GVArray_For_EmbeddedVArray<T, VArray_For_SplineToPoint<T>>>(
-        offsets.last(), std::move(varray), std::move(offsets));
+    new_varray = VArray<T>::template For<VArray_For_SplineToPoint<T>>(std::move(varray),
+                                                                      std::move(offsets));
   });
   return new_varray;
 }
 
 }  // namespace blender::bke
 
-GVArrayPtr CurveComponent::attribute_try_adapt_domain(GVArrayPtr varray,
-                                                      const AttributeDomain from_domain,
-                                                      const AttributeDomain to_domain) const
+GVArray CurveComponent::attribute_try_adapt_domain_impl(const GVArray &varray,
+                                                        const AttributeDomain from_domain,
+                                                        const AttributeDomain to_domain) const
 {
   if (!varray) {
     return {};
   }
-  if (varray->size() == 0) {
+  if (varray.is_empty()) {
     return {};
   }
   if (from_domain == to_domain) {
@@ -393,17 +388,109 @@ static const CurveEval *get_curve_from_component_for_read(const GeometryComponen
 
 /** \} */
 
+namespace blender::bke {
+
+/* -------------------------------------------------------------------- */
+/** \name Curve Normals Access
+ * \{ */
+
+static void calculate_bezier_normals(const BezierSpline &spline, MutableSpan<float3> normals)
+{
+  Span<int> offsets = spline.control_point_offsets();
+  Span<float3> evaluated_normals = spline.evaluated_normals();
+  for (const int i : IndexRange(spline.size())) {
+    normals[i] = evaluated_normals[offsets[i]];
+  }
+}
+
+static void calculate_poly_normals(const PolySpline &spline, MutableSpan<float3> normals)
+{
+  normals.copy_from(spline.evaluated_normals());
+}
+
+/**
+ * Because NURBS control points are not necessarily on the path, the normal at the control points
+ * is not well defined, so create a temporary poly spline to find the normals. This requires extra
+ * copying currently, but may be more efficient in the future if attributes have some form of CoW.
+ */
+static void calculate_nurbs_normals(const NURBSpline &spline, MutableSpan<float3> normals)
+{
+  PolySpline poly_spline;
+  poly_spline.resize(spline.size());
+  poly_spline.positions().copy_from(spline.positions());
+  poly_spline.tilts().copy_from(spline.tilts());
+  normals.copy_from(poly_spline.evaluated_normals());
+}
+
+static Array<float3> curve_normal_point_domain(const CurveEval &curve)
+{
+  Span<SplinePtr> splines = curve.splines();
+  Array<int> offsets = curve.control_point_offsets();
+  const int total_size = offsets.last();
+  Array<float3> normals(total_size);
+
+  threading::parallel_for(splines.index_range(), 128, [&](IndexRange range) {
+    for (const int i : range) {
+      const Spline &spline = *splines[i];
+      MutableSpan spline_normals{normals.as_mutable_span().slice(offsets[i], spline.size())};
+      switch (splines[i]->type()) {
+        case Spline::Type::Bezier:
+          calculate_bezier_normals(static_cast<const BezierSpline &>(spline), spline_normals);
+          break;
+        case Spline::Type::Poly:
+          calculate_poly_normals(static_cast<const PolySpline &>(spline), spline_normals);
+          break;
+        case Spline::Type::NURBS:
+          calculate_nurbs_normals(static_cast<const NURBSpline &>(spline), spline_normals);
+          break;
+      }
+    }
+  });
+  return normals;
+}
+
+VArray<float3> curve_normals_varray(const CurveComponent &component, const AttributeDomain domain)
+{
+  const CurveEval *curve = component.get_for_read();
+  if (curve == nullptr) {
+    return nullptr;
+  }
+
+  if (domain == ATTR_DOMAIN_POINT) {
+    const Span<SplinePtr> splines = curve->splines();
+
+    /* Use a reference to evaluated normals if possible to avoid an allocation and a copy.
+     * This is only possible when there is only one poly spline. */
+    if (splines.size() == 1 && splines.first()->type() == Spline::Type::Poly) {
+      const PolySpline &spline = static_cast<PolySpline &>(*splines.first());
+      return VArray<float3>::ForSpan(spline.evaluated_normals());
+    }
+
+    Array<float3> normals = curve_normal_point_domain(*curve);
+    return VArray<float3>::ForContainer(std::move(normals));
+  }
+
+  if (domain == ATTR_DOMAIN_CURVE) {
+    Array<float3> point_normals = curve_normal_point_domain(*curve);
+    VArray<float3> varray = VArray<float3>::ForContainer(std::move(point_normals));
+    return component.attribute_try_adapt_domain<float3>(
+        std::move(varray), ATTR_DOMAIN_POINT, ATTR_DOMAIN_CURVE);
+  }
+
+  return nullptr;
+}
+
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Builtin Spline Attributes
  *
  * Attributes with a value for every spline, stored contiguously or in every spline separately.
  * \{ */
 
-namespace blender::bke {
-
 class BuiltinSplineAttributeProvider final : public BuiltinAttributeProvider {
-  using AsReadAttribute = GVArrayPtr (*)(const CurveEval &data);
-  using AsWriteAttribute = GVMutableArrayPtr (*)(CurveEval &data);
+  using AsReadAttribute = GVArray (*)(const CurveEval &data);
+  using AsWriteAttribute = GVMutableArray (*)(CurveEval &data);
   const AsReadAttribute as_read_attribute_;
   const AsWriteAttribute as_write_attribute_;
 
@@ -424,7 +511,7 @@ class BuiltinSplineAttributeProvider final : public BuiltinAttributeProvider {
   {
   }
 
-  GVArrayPtr try_get_for_read(const GeometryComponent &component) const final
+  GVArray try_get_for_read(const GeometryComponent &component) const final
   {
     const CurveEval *curve = get_curve_from_component_for_read(component);
     if (curve == nullptr) {
@@ -483,19 +570,15 @@ static void set_spline_resolution(SplinePtr &spline, const int resolution)
   }
 }
 
-static GVArrayPtr make_resolution_read_attribute(const CurveEval &curve)
+static GVArray make_resolution_read_attribute(const CurveEval &curve)
 {
-  return std::make_unique<fn::GVArray_For_DerivedSpan<SplinePtr, int, get_spline_resolution>>(
-      curve.splines());
+  return VArray<int>::ForDerivedSpan<SplinePtr, get_spline_resolution>(curve.splines());
 }
 
-static GVMutableArrayPtr make_resolution_write_attribute(CurveEval &curve)
+static GVMutableArray make_resolution_write_attribute(CurveEval &curve)
 {
-  return std::make_unique<fn::GVMutableArray_For_DerivedSpan<SplinePtr,
-                                                             int,
-                                                             get_spline_resolution,
-                                                             set_spline_resolution>>(
-      curve.splines());
+  return VMutableArray<int>::
+      ForDerivedSpan<SplinePtr, get_spline_resolution, set_spline_resolution>(curve.splines());
 }
 
 static bool get_cyclic_value(const SplinePtr &spline)
@@ -511,16 +594,14 @@ static void set_cyclic_value(SplinePtr &spline, const bool value)
   }
 }
 
-static GVArrayPtr make_cyclic_read_attribute(const CurveEval &curve)
+static GVArray make_cyclic_read_attribute(const CurveEval &curve)
 {
-  return std::make_unique<fn::GVArray_For_DerivedSpan<SplinePtr, bool, get_cyclic_value>>(
-      curve.splines());
+  return VArray<bool>::ForDerivedSpan<SplinePtr, get_cyclic_value>(curve.splines());
 }
 
-static GVMutableArrayPtr make_cyclic_write_attribute(CurveEval &curve)
+static GVMutableArray make_cyclic_write_attribute(CurveEval &curve)
 {
-  return std::make_unique<
-      fn::GVMutableArray_For_DerivedSpan<SplinePtr, bool, get_cyclic_value, set_cyclic_value>>(
+  return VMutableArray<bool>::ForDerivedSpan<SplinePtr, get_cyclic_value, set_cyclic_value>(
       curve.splines());
 }
 
@@ -625,9 +706,9 @@ static void point_attribute_materialize_to_uninitialized(Span<Span<T>> data,
   }
 }
 
-static GVArrayPtr varray_from_initializer(const AttributeInit &initializer,
-                                          const CustomDataType data_type,
-                                          const Span<SplinePtr> splines)
+static GVArray varray_from_initializer(const AttributeInit &initializer,
+                                       const CustomDataType data_type,
+                                       const Span<SplinePtr> splines)
 {
   switch (initializer.type) {
     case AttributeInit::Type::Default:
@@ -636,16 +717,15 @@ static GVArrayPtr varray_from_initializer(const AttributeInit &initializer,
       BLI_assert_unreachable();
       return {};
     case AttributeInit::Type::VArray:
-      return static_cast<const AttributeInitVArray &>(initializer).varray->shallow_copy();
+      return static_cast<const AttributeInitVArray &>(initializer).varray;
     case AttributeInit::Type::MoveArray:
       int total_size = 0;
       for (const SplinePtr &spline : splines) {
         total_size += spline->size();
       }
-      return std::make_unique<fn::GVArray_For_GSpan>(
-          GSpan(*bke::custom_data_type_to_cpp_type(data_type),
-                static_cast<const AttributeInitMove &>(initializer).data,
-                total_size));
+      return GVArray::ForSpan(GSpan(*bke::custom_data_type_to_cpp_type(data_type),
+                                    static_cast<const AttributeInitMove &>(initializer).data,
+                                    total_size));
   }
   BLI_assert_unreachable();
   return {};
@@ -693,11 +773,11 @@ static bool create_point_attribute(GeometryComponent &component,
   /* We just created the attribute, it should exist. */
   BLI_assert(write_attribute);
 
-  GVArrayPtr source_varray = varray_from_initializer(initializer, data_type, splines);
+  GVArray source_varray = varray_from_initializer(initializer, data_type, splines);
   /* TODO: When we can call a variant of #set_all with a virtual array argument,
    * this theoretically unnecessary materialize step could be removed. */
-  GVArray_GSpan source_varray_span{*source_varray};
-  write_attribute.varray->set_all(source_varray_span.data());
+  GVArray_GSpan source_varray_span{source_varray};
+  write_attribute.varray.set_all(source_varray_span.data());
 
   if (initializer.type == AttributeInit::Type::MoveArray) {
     MEM_freeN(static_cast<const AttributeInitMove &>(initializer).data);
@@ -723,63 +803,32 @@ static bool remove_point_attribute(GeometryComponent &component,
 }
 
 /**
- * Virtual array for any control point data accessed with spans and an offset array.
- */
-template<typename T> class VArray_For_SplinePoints : public VArray<T> {
- private:
-  const Array<Span<T>> data_;
-  Array<int> offsets_;
-
- public:
-  VArray_For_SplinePoints(Array<Span<T>> data, Array<int> offsets)
-      : VArray<T>(offsets.last()), data_(std::move(data)), offsets_(std::move(offsets))
-  {
-  }
-
-  T get_impl(const int64_t index) const final
-  {
-    const PointIndices indices = lookup_point_indices(offsets_, index);
-    return data_[indices.spline_index][indices.point_index];
-  }
-
-  void materialize_impl(const IndexMask mask, MutableSpan<T> r_span) const final
-  {
-    point_attribute_materialize(data_.as_span(), offsets_, mask, r_span);
-  }
-
-  void materialize_to_uninitialized_impl(const IndexMask mask, MutableSpan<T> r_span) const final
-  {
-    point_attribute_materialize_to_uninitialized(data_.as_span(), offsets_, mask, r_span);
-  }
-};
-
-/**
  * Mutable virtual array for any control point data accessed with spans and an offset array.
  */
-template<typename T> class VMutableArray_For_SplinePoints final : public VMutableArray<T> {
+template<typename T> class VArrayImpl_For_SplinePoints final : public VMutableArrayImpl<T> {
  private:
   Array<MutableSpan<T>> data_;
   Array<int> offsets_;
 
  public:
-  VMutableArray_For_SplinePoints(Array<MutableSpan<T>> data, Array<int> offsets)
-      : VMutableArray<T>(offsets.last()), data_(std::move(data)), offsets_(std::move(offsets))
+  VArrayImpl_For_SplinePoints(Array<MutableSpan<T>> data, Array<int> offsets)
+      : VMutableArrayImpl<T>(offsets.last()), data_(std::move(data)), offsets_(std::move(offsets))
   {
   }
 
-  T get_impl(const int64_t index) const final
+  T get(const int64_t index) const final
   {
     const PointIndices indices = lookup_point_indices(offsets_, index);
     return data_[indices.spline_index][indices.point_index];
   }
 
-  void set_impl(const int64_t index, T value) final
+  void set(const int64_t index, T value) final
   {
     const PointIndices indices = lookup_point_indices(offsets_, index);
     data_[indices.spline_index][indices.point_index] = value;
   }
 
-  void set_all_impl(Span<T> src) final
+  void set_all(Span<T> src) final
   {
     for (const int spline_index : data_.index_range()) {
       const int offset = offsets_[spline_index];
@@ -788,30 +837,29 @@ template<typename T> class VMutableArray_For_SplinePoints final : public VMutabl
     }
   }
 
-  void materialize_impl(const IndexMask mask, MutableSpan<T> r_span) const final
+  void materialize(const IndexMask mask, MutableSpan<T> r_span) const final
   {
     point_attribute_materialize({(Span<T> *)data_.data(), data_.size()}, offsets_, mask, r_span);
   }
 
-  void materialize_to_uninitialized_impl(const IndexMask mask, MutableSpan<T> r_span) const final
+  void materialize_to_uninitialized(const IndexMask mask, MutableSpan<T> r_span) const final
   {
     point_attribute_materialize_to_uninitialized(
         {(Span<T> *)data_.data(), data_.size()}, offsets_, mask, r_span);
   }
 };
 
-template<typename T> GVArrayPtr point_data_gvarray(Array<Span<T>> spans, Array<int> offsets)
+template<typename T> VArray<T> point_data_varray(Array<MutableSpan<T>> spans, Array<int> offsets)
 {
-  return std::make_unique<fn::GVArray_For_EmbeddedVArray<T, VArray_For_SplinePoints<T>>>(
-      offsets.last(), std::move(spans), std::move(offsets));
+  return VArray<T>::template For<VArrayImpl_For_SplinePoints<T>>(std::move(spans),
+                                                                 std::move(offsets));
 }
 
 template<typename T>
-GVMutableArrayPtr point_data_gvarray(Array<MutableSpan<T>> spans, Array<int> offsets)
+VMutableArray<T> point_data_varray_mutable(Array<MutableSpan<T>> spans, Array<int> offsets)
 {
-  return std::make_unique<
-      fn::GVMutableArray_For_EmbeddedVMutableArray<T, VMutableArray_For_SplinePoints<T>>>(
-      offsets.last(), std::move(spans), std::move(offsets));
+  return VMutableArray<T>::template For<VArrayImpl_For_SplinePoints<T>>(std::move(spans),
+                                                                        std::move(offsets));
 }
 
 /**
@@ -822,24 +870,24 @@ GVMutableArrayPtr point_data_gvarray(Array<MutableSpan<T>> spans, Array<int> off
  * \note There is no need to check the handle type to avoid changing auto handles, since
  * retrieving write access to the position data will mark them for recomputation anyway.
  */
-class VMutableArray_For_SplinePosition final : public VMutableArray<float3> {
+class VArrayImpl_For_SplinePosition final : public VMutableArrayImpl<float3> {
  private:
   MutableSpan<SplinePtr> splines_;
   Array<int> offsets_;
 
  public:
-  VMutableArray_For_SplinePosition(MutableSpan<SplinePtr> splines, Array<int> offsets)
-      : VMutableArray<float3>(offsets.last()), splines_(splines), offsets_(std::move(offsets))
+  VArrayImpl_For_SplinePosition(MutableSpan<SplinePtr> splines, Array<int> offsets)
+      : VMutableArrayImpl<float3>(offsets.last()), splines_(splines), offsets_(std::move(offsets))
   {
   }
 
-  float3 get_impl(const int64_t index) const final
+  float3 get(const int64_t index) const final
   {
     const PointIndices indices = lookup_point_indices(offsets_, index);
     return splines_[indices.spline_index]->positions()[indices.point_index];
   }
 
-  void set_impl(const int64_t index, float3 value) final
+  void set(const int64_t index, float3 value) final
   {
     const PointIndices indices = lookup_point_indices(offsets_, index);
     Spline &spline = *splines_[indices.spline_index];
@@ -854,7 +902,7 @@ class VMutableArray_For_SplinePosition final : public VMutableArray<float3> {
     }
   }
 
-  void set_all_impl(Span<float3> src) final
+  void set_all(Span<float3> src) final
   {
     for (const int spline_index : splines_.index_range()) {
       Spline &spline = *splines_[spline_index];
@@ -887,132 +935,49 @@ class VMutableArray_For_SplinePosition final : public VMutableArray<float3> {
     return spans;
   }
 
-  void materialize_impl(const IndexMask mask, MutableSpan<float3> r_span) const final
+  void materialize(const IndexMask mask, MutableSpan<float3> r_span) const final
   {
     Array<Span<float3>> spans = this->get_position_spans();
     point_attribute_materialize(spans.as_span(), offsets_, mask, r_span);
   }
 
-  void materialize_to_uninitialized_impl(const IndexMask mask,
-                                         MutableSpan<float3> r_span) const final
+  void materialize_to_uninitialized(const IndexMask mask, MutableSpan<float3> r_span) const final
   {
     Array<Span<float3>> spans = this->get_position_spans();
     point_attribute_materialize_to_uninitialized(spans.as_span(), offsets_, mask, r_span);
   }
 };
 
-class VArray_For_BezierHandle final : public VArray<float3> {
- private:
-  Span<SplinePtr> splines_;
-  Array<int> offsets_;
-  bool is_right_;
-
- public:
-  VArray_For_BezierHandle(Span<SplinePtr> splines, Array<int> offsets, const bool is_right)
-      : VArray<float3>(offsets.last()),
-        splines_(std::move(splines)),
-        offsets_(std::move(offsets)),
-        is_right_(is_right)
-  {
-  }
-
-  static float3 get_internal(const int64_t index,
-                             Span<SplinePtr> splines,
-                             Span<int> offsets,
-                             const bool is_right)
-  {
-    const PointIndices indices = lookup_point_indices(offsets, index);
-    const Spline &spline = *splines[indices.spline_index];
-    if (spline.type() == Spline::Type::Bezier) {
-      const BezierSpline &bezier_spline = static_cast<const BezierSpline &>(spline);
-      return is_right ? bezier_spline.handle_positions_right()[indices.point_index] :
-                        bezier_spline.handle_positions_left()[indices.point_index];
-    }
-    return float3(0);
-  }
-
-  float3 get_impl(const int64_t index) const final
-  {
-    return get_internal(index, splines_, offsets_, is_right_);
-  }
-
-  /**
-   * Utility so we can pass handle positions to the materialize functions above.
-   *
-   * \note This relies on the ability of the materialize implementations to
-   * handle empty spans, since only Bezier splines have handles.
-   */
-  static Array<Span<float3>> get_handle_spans(Span<SplinePtr> splines, const bool is_right)
-  {
-    Array<Span<float3>> spans(splines.size());
-    for (const int i : spans.index_range()) {
-      if (splines[i]->type() == Spline::Type::Bezier) {
-        BezierSpline &bezier_spline = static_cast<BezierSpline &>(*splines[i]);
-        spans[i] = is_right ? bezier_spline.handle_positions_right() :
-                              bezier_spline.handle_positions_left();
-      }
-      else {
-        spans[i] = {};
-      }
-    }
-    return spans;
-  }
-
-  static void materialize_internal(const IndexMask mask,
-                                   Span<SplinePtr> splines,
-                                   Span<int> offsets,
-                                   const bool is_right,
-                                   MutableSpan<float3> r_span)
-  {
-    Array<Span<float3>> spans = get_handle_spans(splines, is_right);
-    point_attribute_materialize(spans.as_span(), offsets, mask, r_span);
-  }
-
-  static void materialize_to_uninitialized_internal(const IndexMask mask,
-                                                    Span<SplinePtr> splines,
-                                                    Span<int> offsets,
-                                                    const bool is_right,
-                                                    MutableSpan<float3> r_span)
-  {
-    Array<Span<float3>> spans = get_handle_spans(splines, is_right);
-    point_attribute_materialize_to_uninitialized(spans.as_span(), offsets, mask, r_span);
-  }
-
-  void materialize_impl(const IndexMask mask, MutableSpan<float3> r_span) const final
-  {
-    materialize_internal(mask, splines_, offsets_, is_right_, r_span);
-  }
-
-  void materialize_to_uninitialized_impl(const IndexMask mask,
-                                         MutableSpan<float3> r_span) const final
-  {
-    materialize_to_uninitialized_internal(mask, splines_, offsets_, is_right_, r_span);
-  }
-};
-
-class VMutableArray_For_BezierHandles final : public VMutableArray<float3> {
+class VArrayImpl_For_BezierHandles final : public VMutableArrayImpl<float3> {
  private:
   MutableSpan<SplinePtr> splines_;
   Array<int> offsets_;
   bool is_right_;
 
  public:
-  VMutableArray_For_BezierHandles(MutableSpan<SplinePtr> splines,
-                                  Array<int> offsets,
-                                  const bool is_right)
-      : VMutableArray<float3>(offsets.last()),
+  VArrayImpl_For_BezierHandles(MutableSpan<SplinePtr> splines,
+                               Array<int> offsets,
+                               const bool is_right)
+      : VMutableArrayImpl<float3>(offsets.last()),
         splines_(splines),
         offsets_(std::move(offsets)),
         is_right_(is_right)
   {
   }
 
-  float3 get_impl(const int64_t index) const final
+  float3 get(const int64_t index) const final
   {
-    return VArray_For_BezierHandle::get_internal(index, splines_, offsets_, is_right_);
+    const PointIndices indices = lookup_point_indices(offsets_, index);
+    const Spline &spline = *splines_[indices.spline_index];
+    if (spline.type() == Spline::Type::Bezier) {
+      const BezierSpline &bezier_spline = static_cast<const BezierSpline &>(spline);
+      return is_right_ ? bezier_spline.handle_positions_right()[indices.point_index] :
+                         bezier_spline.handle_positions_left()[indices.point_index];
+    }
+    return float3(0);
   }
 
-  void set_impl(const int64_t index, float3 value) final
+  void set(const int64_t index, float3 value) final
   {
     const PointIndices indices = lookup_point_indices(offsets_, index);
     Spline &spline = *splines_[indices.spline_index];
@@ -1028,7 +993,7 @@ class VMutableArray_For_BezierHandles final : public VMutableArray<float3> {
     }
   }
 
-  void set_all_impl(Span<float3> src) final
+  void set_all(Span<float3> src) final
   {
     for (const int spline_index : splines_.index_range()) {
       Spline &spline = *splines_[spline_index];
@@ -1051,16 +1016,38 @@ class VMutableArray_For_BezierHandles final : public VMutableArray<float3> {
     }
   }
 
-  void materialize_impl(const IndexMask mask, MutableSpan<float3> r_span) const final
+  void materialize(const IndexMask mask, MutableSpan<float3> r_span) const final
   {
-    VArray_For_BezierHandle::materialize_internal(mask, splines_, offsets_, is_right_, r_span);
+    Array<Span<float3>> spans = get_handle_spans(splines_, is_right_);
+    point_attribute_materialize(spans.as_span(), offsets_, mask, r_span);
   }
 
-  void materialize_to_uninitialized_impl(const IndexMask mask,
-                                         MutableSpan<float3> r_span) const final
+  void materialize_to_uninitialized(const IndexMask mask, MutableSpan<float3> r_span) const final
   {
-    VArray_For_BezierHandle::materialize_to_uninitialized_internal(
-        mask, splines_, offsets_, is_right_, r_span);
+    Array<Span<float3>> spans = get_handle_spans(splines_, is_right_);
+    point_attribute_materialize_to_uninitialized(spans.as_span(), offsets_, mask, r_span);
+  }
+
+  /**
+   * Utility so we can pass handle positions to the materialize functions above.
+   *
+   * \note This relies on the ability of the materialize implementations to
+   * handle empty spans, since only Bezier splines have handles.
+   */
+  static Array<Span<float3>> get_handle_spans(Span<SplinePtr> splines, const bool is_right)
+  {
+    Array<Span<float3>> spans(splines.size());
+    for (const int i : spans.index_range()) {
+      if (splines[i]->type() == Spline::Type::Bezier) {
+        BezierSpline &bezier_spline = static_cast<BezierSpline &>(*splines[i]);
+        spans[i] = is_right ? bezier_spline.handle_positions_right() :
+                              bezier_spline.handle_positions_left();
+      }
+      else {
+        spans[i] = {};
+      }
+    }
+    return spans;
   }
 };
 
@@ -1099,7 +1086,7 @@ template<typename T> class BuiltinPointAttributeProvider : public BuiltinAttribu
   {
   }
 
-  GVArrayPtr try_get_for_read(const GeometryComponent &component) const override
+  GVArray try_get_for_read(const GeometryComponent &component) const override
   {
     const CurveEval *curve = get_curve_from_component_for_read(component);
     if (curve == nullptr) {
@@ -1112,16 +1099,19 @@ template<typename T> class BuiltinPointAttributeProvider : public BuiltinAttribu
 
     Span<SplinePtr> splines = curve->splines();
     if (splines.size() == 1) {
-      return std::make_unique<fn::GVArray_For_GSpan>(get_span_(*splines.first()));
+      return GVArray::ForSpan(get_span_(*splines.first()));
     }
 
     Array<int> offsets = curve->control_point_offsets();
-    Array<Span<T>> spans(splines.size());
+    Array<MutableSpan<T>> spans(splines.size());
     for (const int i : splines.index_range()) {
-      spans[i] = get_span_(*splines[i]);
+      Span<T> span = get_span_(*splines[i]);
+      /* Use const-cast because the underlying virtual array implementation is shared between const
+       * and non const data. */
+      spans[i] = MutableSpan<T>(const_cast<T *>(span.data()), span.size());
     }
 
-    return point_data_gvarray(spans, offsets);
+    return point_data_varray(spans, offsets);
   }
 
   WriteAttributeLookup try_get_for_write(GeometryComponent &component) const override
@@ -1146,8 +1136,7 @@ template<typename T> class BuiltinPointAttributeProvider : public BuiltinAttribu
 
     MutableSpan<SplinePtr> splines = curve->splines();
     if (splines.size() == 1) {
-      return {std::make_unique<fn::GVMutableArray_For_GMutableSpan>(
-                  get_mutable_span_(*splines.first())),
+      return {GVMutableArray::ForSpan(get_mutable_span_(*splines.first())),
               domain_,
               std::move(tag_modified_fn)};
     }
@@ -1158,7 +1147,7 @@ template<typename T> class BuiltinPointAttributeProvider : public BuiltinAttribu
       spans[i] = get_mutable_span_(*splines[i]);
     }
 
-    return {point_data_gvarray(spans, offsets), domain_, tag_modified_fn};
+    return {point_data_varray_mutable(spans, offsets), domain_, tag_modified_fn};
   }
 
   bool try_delete(GeometryComponent &component) const final
@@ -1250,10 +1239,8 @@ class PositionAttributeProvider final : public BuiltinPointAttributeProvider<flo
     };
 
     Array<int> offsets = curve->control_point_offsets();
-    return {std::make_unique<
-                fn::GVMutableArray_For_EmbeddedVMutableArray<float3,
-                                                             VMutableArray_For_SplinePosition>>(
-                offsets.last(), curve->splines(), std::move(offsets)),
+    return {VMutableArray<float3>::For<VArrayImpl_For_SplinePosition>(curve->splines(),
+                                                                      std::move(offsets)),
             domain_,
             tag_modified_fn};
   }
@@ -1275,7 +1262,7 @@ class BezierHandleAttributeProvider : public BuiltinAttributeProvider {
   {
   }
 
-  GVArrayPtr try_get_for_read(const GeometryComponent &component) const override
+  GVArray try_get_for_read(const GeometryComponent &component) const override
   {
     const CurveEval *curve = get_curve_from_component_for_read(component);
     if (curve == nullptr) {
@@ -1287,8 +1274,10 @@ class BezierHandleAttributeProvider : public BuiltinAttributeProvider {
     }
 
     Array<int> offsets = curve->control_point_offsets();
-    return std::make_unique<fn::GVArray_For_EmbeddedVArray<float3, VArray_For_BezierHandle>>(
-        offsets.last(), curve->splines(), std::move(offsets), is_right_);
+    /* Use const-cast because the underlying virtual array implementation is shared between const
+     * and non const data. */
+    return VArray<float3>::For<VArrayImpl_For_BezierHandles>(
+        const_cast<CurveEval *>(curve)->splines(), std::move(offsets), is_right_);
   }
 
   WriteAttributeLookup try_get_for_write(GeometryComponent &component) const override
@@ -1305,12 +1294,10 @@ class BezierHandleAttributeProvider : public BuiltinAttributeProvider {
     auto tag_modified_fn = [curve]() { curve->mark_cache_invalid(); };
 
     Array<int> offsets = curve->control_point_offsets();
-    return {
-        std::make_unique<
-            fn::GVMutableArray_For_EmbeddedVMutableArray<float3, VMutableArray_For_BezierHandles>>(
-            offsets.last(), curve->splines(), std::move(offsets), is_right_),
-        domain_,
-        tag_modified_fn};
+    return {VMutableArray<float3>::For<VArrayImpl_For_BezierHandles>(
+                curve->splines(), std::move(offsets), is_right_),
+            domain_,
+            tag_modified_fn};
   }
 
   bool try_delete(GeometryComponent &UNUSED(component)) const final
@@ -1389,19 +1376,22 @@ class DynamicPointAttributeProvider final : public DynamicAttributesProvider {
 
     /* First check for the simpler situation when we can return a simpler span virtual array. */
     if (spans.size() == 1) {
-      return {std::make_unique<GVArray_For_GSpan>(spans.first()), ATTR_DOMAIN_POINT};
+      return {GVArray::ForSpan(spans.first()), ATTR_DOMAIN_POINT};
     }
 
     ReadAttributeLookup attribute = {};
     Array<int> offsets = curve->control_point_offsets();
     attribute_math::convert_to_static_type(spans[0].type(), [&](auto dummy) {
       using T = decltype(dummy);
-      Array<Span<T>> data(splines.size());
+      Array<MutableSpan<T>> data(splines.size());
       for (const int i : splines.index_range()) {
-        data[i] = spans[i].typed<T>();
+        Span<T> span = spans[i].typed<T>();
+        /* Use const-cast because the underlying virtual array implementation is shared between
+         * const and non const data. */
+        data[i] = MutableSpan<T>(const_cast<T *>(span.data()), span.size());
         BLI_assert(data[i].data() != nullptr);
       }
-      attribute = {point_data_gvarray(data, offsets), ATTR_DOMAIN_POINT};
+      attribute = {point_data_varray(data, offsets), ATTR_DOMAIN_POINT};
     });
     return attribute;
   }
@@ -1442,7 +1432,7 @@ class DynamicPointAttributeProvider final : public DynamicAttributesProvider {
 
     /* First check for the simpler situation when we can return a simpler span virtual array. */
     if (spans.size() == 1) {
-      return {std::make_unique<GVMutableArray_For_GMutableSpan>(spans.first()), ATTR_DOMAIN_POINT};
+      return {GVMutableArray::ForSpan(spans.first()), ATTR_DOMAIN_POINT};
     }
 
     WriteAttributeLookup attribute = {};
@@ -1454,7 +1444,7 @@ class DynamicPointAttributeProvider final : public DynamicAttributesProvider {
         data[i] = spans[i].typed<T>();
         BLI_assert(data[i].data() != nullptr);
       }
-      attribute = {point_data_gvarray(data, offsets), ATTR_DOMAIN_POINT};
+      attribute = {point_data_varray_mutable(data, offsets), ATTR_DOMAIN_POINT};
     });
     return attribute;
   }
@@ -1589,6 +1579,8 @@ static ComponentAttributeProviders create_attribute_providers_for_curve()
       {&spline_custom_data, &point_custom_data});
 }
 
+/** \} */
+
 }  // namespace blender::bke
 
 const blender::bke::ComponentAttributeProviders *CurveComponent::get_attribute_providers() const
@@ -1597,5 +1589,3 @@ const blender::bke::ComponentAttributeProviders *CurveComponent::get_attribute_p
       blender::bke::create_attribute_providers_for_curve();
   return &providers;
 }
-
-/** \} */

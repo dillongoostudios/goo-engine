@@ -18,6 +18,7 @@
 #include "scene/hair.h"
 #include "scene/image.h"
 #include "scene/mesh.h"
+#include "scene/pointcloud.h"
 
 #include "util/foreach.h"
 #include "util/log.h"
@@ -205,6 +206,10 @@ size_t Attribute::element_size(Geometry *geom, AttributePrimitive prim) const
           size -= mesh->get_num_subd_verts();
         }
       }
+      else if (geom->geometry_type == Geometry::POINTCLOUD) {
+        PointCloud *pointcloud = static_cast<PointCloud *>(geom);
+        size = pointcloud->num_points();
+      }
       break;
     case ATTR_ELEMENT_VERTEX_MOTION:
       if (geom->geometry_type == Geometry::MESH) {
@@ -214,6 +219,10 @@ size_t Attribute::element_size(Geometry *geom, AttributePrimitive prim) const
         if (prim == ATTR_PRIM_SUBD) {
           size -= mesh->get_num_subd_verts() * (mesh->get_motion_steps() - 1);
         }
+      }
+      else if (geom->geometry_type == Geometry::POINTCLOUD) {
+        PointCloud *pointcloud = static_cast<PointCloud *>(geom);
+        size = pointcloud->num_points() * (pointcloud->get_motion_steps() - 1);
       }
       break;
     case ATTR_ELEMENT_FACE:
@@ -346,6 +355,8 @@ const char *Attribute::standard_name(AttributeStandard std)
       return "curve_length";
     case ATTR_STD_CURVE_RANDOM:
       return "curve_random";
+    case ATTR_STD_POINT_RANDOM:
+      return "point_random";
     case ATTR_STD_PTEX_FACE_ID:
       return "ptex_face_id";
     case ATTR_STD_PTEX_UV:
@@ -402,6 +413,10 @@ AttrKernelDataType Attribute::kernel_type(const Attribute &attr)
 
   if (attr.type == TypeFloat2) {
     return AttrKernelDataType::FLOAT2;
+  }
+
+  if (attr.type == TypeFloat4 || attr.type == TypeRGBA || attr.type == TypeDesc::TypeMatrix) {
+    return AttrKernelDataType::FLOAT4;
   }
 
   return AttrKernelDataType::FLOAT3;
@@ -551,6 +566,28 @@ Attribute *AttributeSet::add(AttributeStandard std, ustring name)
         break;
     }
   }
+  else if (geometry->geometry_type == Geometry::POINTCLOUD) {
+    switch (std) {
+      case ATTR_STD_UV:
+        attr = add(name, TypeFloat2, ATTR_ELEMENT_VERTEX);
+        break;
+      case ATTR_STD_GENERATED:
+        attr = add(name, TypeDesc::TypePoint, ATTR_ELEMENT_VERTEX);
+        break;
+      case ATTR_STD_MOTION_VERTEX_POSITION:
+        attr = add(name, TypeDesc::TypeFloat4, ATTR_ELEMENT_VERTEX_MOTION);
+        break;
+      case ATTR_STD_POINT_RANDOM:
+        attr = add(name, TypeDesc::TypeFloat, ATTR_ELEMENT_VERTEX);
+        break;
+      case ATTR_STD_GENERATED_TRANSFORM:
+        attr = add(name, TypeDesc::TypeMatrix, ATTR_ELEMENT_MESH);
+        break;
+      default:
+        assert(0);
+        break;
+    }
+  }
   else if (geometry->geometry_type == Geometry::VOLUME) {
     switch (std) {
       case ATTR_STD_VERTEX_NORMAL:
@@ -585,7 +622,7 @@ Attribute *AttributeSet::add(AttributeStandard std, ustring name)
         attr = add(name, TypeDesc::TypePoint, ATTR_ELEMENT_CURVE);
         break;
       case ATTR_STD_MOTION_VERTEX_POSITION:
-        attr = add(name, TypeDesc::TypePoint, ATTR_ELEMENT_CURVE_KEY_MOTION);
+        attr = add(name, TypeDesc::TypeFloat4, ATTR_ELEMENT_CURVE_KEY_MOTION);
         break;
       case ATTR_STD_CURVE_INTERCEPT:
         attr = add(name, TypeDesc::TypeFloat, ATTR_ELEMENT_CURVE_KEY);

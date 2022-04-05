@@ -1465,7 +1465,7 @@ static int view2d_ndof_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   /* tune these until it feels right */
   const float zoom_sensitivity = 0.5f;
   const float speed = 10.0f; /* match view3d ortho */
-  const bool has_translate = (ndof->tvec[0] && ndof->tvec[1]) && view_pan_poll(C);
+  const bool has_translate = !is_zero_v2(ndof->tvec) && view_pan_poll(C);
   const bool has_zoom = (ndof->tvec[2] != 0.0f) && view_zoom_poll(C);
 
   if (has_translate) {
@@ -1570,8 +1570,6 @@ static float smooth_view_rect_to_fac(const rctf *rect_a, const rctf *rect_b)
   return min_ff(fac_max, 1.0f);
 }
 
-/* will start timer if appropriate */
-/* the arguments are the desired situation */
 void UI_view2d_smooth_view(bContext *C, ARegion *region, const rctf *cur, const int smooth_viewtx)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -1761,7 +1759,6 @@ typedef struct v2dScrollerMove {
  * For now, we don't need to have a separate (internal) header for structs like this...
  */
 struct View2DScrollers {
-  /* focus bubbles */
   int vert_min, vert_max; /* vertical scrollbar */
   int hor_min, hor_max;   /* horizontal scrollbar */
 

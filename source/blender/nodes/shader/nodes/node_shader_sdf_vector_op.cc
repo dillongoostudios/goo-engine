@@ -26,7 +26,7 @@
 #include "UI_interface.h"
 #include "UI_resources.h"
 
-#include "../node_shader_util.h"
+#include "../node_shader_util.hh"
 
 #define TEST_SDF 255
 
@@ -77,7 +77,7 @@ static bNodeSocketTemplate sh_node_sdf_vector_op_out[] = {
     {SOCK_FLOAT, N_("Value"), 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, PROP_NONE},
     {-1, ""}};
 
-static const char *gpu_shader_get_name(int mode)
+static const char *gpu_shader_sdf_vector_op_get_name(int mode)
 {
   switch (mode) {
     case SHD_SDF_VEC_OP_SPIN:
@@ -147,7 +147,7 @@ static int node_shader_gpu_sdf_vector_op(GPUMaterial *mat,
 {
   NodeSdfVectorOp *sdf = (NodeSdfVectorOp *)node->storage;
 
-  const char *name = gpu_shader_get_name(sdf->operation);
+  const char *name = gpu_shader_sdf_vector_op_get_name(sdf->operation);
 
   if (name != nullptr) {
     float axis = (int)sdf->axis;
@@ -158,8 +158,8 @@ static int node_shader_gpu_sdf_vector_op(GPUMaterial *mat,
   }
 }
 
-static void node_shader_label_sdf_vector_op(bNodeTree *UNUSED(ntree),
-                                            bNode *node,
+static void node_shader_label_sdf_vector_op(const bNodeTree *ntree,
+                                            const bNode *node,
                                             char *label,
                                             int maxlen)
 {
@@ -173,7 +173,7 @@ static void node_shader_label_sdf_vector_op(bNodeTree *UNUSED(ntree),
   BLI_strncpy(label, IFACE_(name), maxlen);
 }
 
-static void node_shader_update_sdf_vector_op(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_update_sdf_vector_op(bNodeTree *ntree, bNode *node)
 {
   NodeSdfVectorOp *sdf = (NodeSdfVectorOp *)node->storage;
 
@@ -192,18 +192,18 @@ static void node_shader_update_sdf_vector_op(bNodeTree *UNUSED(ntree), bNode *no
   bNodeSocket *sockValueOut = (bNodeSocket *)BLI_findlink(&node->outputs, 2);
 
   /* Out sockets. */
-  nodeSetSocketAvailability(sockValueOut,
+  nodeSetSocketAvailability(ntree, sockValueOut,
                             ELEM(sdf->operation,
                                  SHD_SDF_VEC_OP_MIRROR,
                                  SHD_SDF_VEC_OP_REFLECT,
                                  SHD_SDF_VEC_OP_POLAR,
                                  SHD_SDF_VEC_OP_EXTRUDE));
 
-  nodeSetSocketAvailability(sockPositionOut,
+  nodeSetSocketAvailability(ntree, sockPositionOut,
                             ELEM(sdf->operation, SHD_SDF_VEC_OP_MIRROR, SHD_SDF_VEC_OP_GRID));
 
   /* In sockets. */
-  nodeSetSocketAvailability(sockVector2,
+  nodeSetSocketAvailability(ntree, sockVector2,
                             ELEM(sdf->operation,
                                  TEST_SDF,
                                  SHD_SDF_VEC_OP_SWIRL,
@@ -220,7 +220,7 @@ static void node_shader_update_sdf_vector_op(bNodeTree *UNUSED(ntree), bNode *no
                                  SHD_SDF_VEC_OP_REPEAT_INF,
                                  SHD_SDF_VEC_OP_REPEAT_INF_MIRROR));
 
-  nodeSetSocketAvailability(sockVector3,
+  nodeSetSocketAvailability(ntree, sockVector3,
                             ELEM(sdf->operation,
                                  SHD_SDF_VEC_OP_SWIRL,
                                  SHD_SDF_VEC_OP_RADIAL_SHEAR,
@@ -228,10 +228,10 @@ static void node_shader_update_sdf_vector_op(bNodeTree *UNUSED(ntree), bNode *no
                                  TEST_SDF));
 
   /* Values */
-  nodeSetSocketAvailability(
+  nodeSetSocketAvailability(ntree,
       sockScale, ELEM(sdf->operation, SHD_SDF_VEC_OP_SCALE_UV, SHD_SDF_VEC_OP_TILESET, TEST_SDF));
 
-  nodeSetSocketAvailability(sockValue,
+  nodeSetSocketAvailability(ntree, sockValue,
                             !ELEM(sdf->operation,
                                   SHD_SDF_VEC_OP_MAP_11,
                                   SHD_SDF_VEC_OP_MAP_05,
@@ -250,22 +250,22 @@ static void node_shader_update_sdf_vector_op(bNodeTree *UNUSED(ntree), bNode *no
                                   SHD_SDF_VEC_OP_REPEAT_INF,
                                   SHD_SDF_VEC_OP_REPEAT_INF_MIRROR));
 
-  nodeSetSocketAvailability(sockValue2,
+  nodeSetSocketAvailability(ntree, sockValue2,
                             ELEM(sdf->operation,
                                  SHD_SDF_VEC_OP_SCALE_UV,
                                  SHD_SDF_VEC_OP_TILESET,
                                  SHD_SDF_VEC_OP_PINCH_INFLATE,
                                  TEST_SDF));
 
-  nodeSetSocketAvailability(sockAngle,
+  nodeSetSocketAvailability(ntree, sockAngle,
                             ELEM(sdf->operation,
                                  SHD_SDF_VEC_OP_BEND,
                                  SHD_SDF_VEC_OP_TWIST,
                                  SHD_SDF_VEC_OP_ROTATE,
                                  SHD_SDF_VEC_OP_ROTATE_UV,
                                  TEST_SDF));
-  nodeSetSocketAvailability(sockCount, ELEM(sdf->operation, TEST_SDF, SHD_SDF_VEC_OP_TILESET));
-  nodeSetSocketAvailability(sockCount2, ELEM(sdf->operation, TEST_SDF, SHD_SDF_VEC_OP_TILESET));
+  nodeSetSocketAvailability(ntree, sockCount, ELEM(sdf->operation, TEST_SDF, SHD_SDF_VEC_OP_TILESET));
+  nodeSetSocketAvailability(ntree, sockCount2, ELEM(sdf->operation, TEST_SDF, SHD_SDF_VEC_OP_TILESET));
 
   node_sock_label_clear(sockValue);
   node_sock_label_clear(sockValue2);
@@ -383,13 +383,13 @@ static void node_shader_buts_sdf_vector_op(uiLayout *layout, bContext *UNUSED(C)
 void register_node_type_sh_sdf_vector_op(void)
 {
   static bNodeType ntype;
-  sh_node_type_base(&ntype, SH_NODE_SDF_VECTOR_OP, "Sdf Vector Operator", NODE_CLASS_OP_VECTOR, 0);
+  sh_node_type_base(&ntype, SH_NODE_SDF_VECTOR_OP, "Sdf Vector Operator", NODE_CLASS_OP_VECTOR);
   node_type_socket_templates(&ntype, sh_node_sdf_vector_op_in, sh_node_sdf_vector_op_out);
   node_type_storage(
       &ntype, "NodeSdfVectorOp", node_free_standard_storage, node_copy_standard_storage);
   node_type_gpu(&ntype, node_shader_gpu_sdf_vector_op);
   node_type_init(&ntype, node_shader_init_sdf_vector_op);
-  node_type_label(&ntype, node_shader_label_sdf_vector_op);
+  ntype.labelfunc = node_shader_label_sdf_vector_op;
   node_type_update(&ntype, node_shader_update_sdf_vector_op);
   ntype.draw_buttons = node_shader_buts_sdf_vector_op;
   nodeRegisterType(&ntype);

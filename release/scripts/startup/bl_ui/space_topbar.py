@@ -497,6 +497,8 @@ class TOPBAR_MT_file_export(Menu):
         if bpy.app.build_options.haru:
             self.layout.operator("wm.gpencil_export_pdf", text="Grease Pencil as PDF")
 
+        self.layout.operator("wm.obj_export", text="Wavefront (.obj) (experimental)")
+
 
 class TOPBAR_MT_file_external_data(Menu):
     bl_label = "External Data"
@@ -588,7 +590,7 @@ class TOPBAR_MT_edit(Menu):
 
         layout.separator()
 
-        layout.operator("ed.undo_history", text="Undo History...")
+        layout.menu("TOPBAR_MT_undo_history")
 
         layout.separator()
 

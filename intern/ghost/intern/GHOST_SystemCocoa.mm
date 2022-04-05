@@ -323,6 +323,7 @@ static GHOST_TKey convertKey(int rawCode, unichar recvChar, UInt16 keyAction)
           case ']':
             return GHOST_kKeyRightBracket;
           case '`':
+          case '<': /* The position of '`' is equivalent to this symbol in the French layout. */
             return GHOST_kKeyAccentGrave;
           default:
             return GHOST_kKeyUnknown;
@@ -787,6 +788,20 @@ GHOST_TSuccess GHOST_SystemCocoa::disposeContext(GHOST_IContext *context)
   return GHOST_kSuccess;
 }
 
+GHOST_IWindow *GHOST_SystemCocoa::getWindowUnderCursor(int32_t x, int32_t y)
+{
+  NSPoint scr_co = NSMakePoint(x, y);
+
+  int windowNumberAtPoint = [NSWindow windowNumberAtPoint:scr_co belowWindowWithWindowNumber:0];
+  NSWindow *nswindow = [NSApp windowWithWindowNumber:windowNumberAtPoint];
+
+  if (nswindow == nil) {
+    return nil;
+  }
+
+  return m_windowManager->getWindowAssociatedWithOSWindow((void *)nswindow);
+}
+
 /**
  * \note : returns coordinates in Cocoa screen coordinates
  */
@@ -1245,7 +1260,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
 
             /* Convert the image in a RGBA 32bit format */
             /* As Core Graphics does not support contexts with non premutliplied alpha,
-             we need to get alpha key values in a separate batch */
+             * we need to get alpha key values in a separate batch */
 
             /* First get RGB values w/o Alpha to avoid pre-multiplication,
              * 32bit but last byte is unused */
@@ -1479,8 +1494,8 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
   CocoaWindow *cocoawindow;
 
   /* [event window] returns other windows if mouse-over, that's OSX input standard
-     however, if mouse exits window(s), the windows become inactive, until you click.
-     We then fall back to the active window from ghost */
+   * however, if mouse exits window(s), the windows become inactive, until you click.
+   * We then fall back to the active window from ghost. */
   window = (GHOST_WindowCocoa *)m_windowManager->getWindowAssociatedWithOSWindow(
       (void *)[event window]);
   if (!window) {

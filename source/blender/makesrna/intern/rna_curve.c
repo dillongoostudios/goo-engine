@@ -141,8 +141,6 @@ const EnumPropertyItem rna_enum_beztriple_interpolation_mode_items[] = {
 static const EnumPropertyItem curve_type_items[] = {
     {CU_POLY, "POLY", 0, "Poly", ""},
     {CU_BEZIER, "BEZIER", 0, "Bezier", ""},
-    {CU_BSPLINE, "BSPLINE", 0, "BSpline", ""},
-    {CU_CARDINAL, "CARDINAL", 0, "Cardinal", ""},
     {CU_NURBS, "NURBS", 0, "Ease", ""},
     {0, NULL, 0, NULL, NULL},
 };
@@ -455,8 +453,8 @@ static void rna_Curve_bevelObject_set(PointerRNA *ptr,
   Object *ob = (Object *)value.data;
 
   if (ob) {
-    /* if bevel object has got the save curve, as object, for which it's */
-    /* set as bevobj, there could be infinity loop in displist calculation */
+    /* If bevel object has got the save curve, as object, for which it's set as bevobj,
+     * there could be infinity loop in #DispList calculation. */
     if (ob->type == OB_CURVE && ob->data != cu) {
       cu->bevobj = ob;
       id_lib_extern((ID *)ob);
@@ -530,8 +528,8 @@ static void rna_Curve_taperObject_set(PointerRNA *ptr,
   Object *ob = (Object *)value.data;
 
   if (ob) {
-    /* if taper object has got the save curve, as object, for which it's */
-    /* set as bevobj, there could be infinity loop in displist calculation */
+    /* If taper object has got the save curve, as object, for which it's set as bevobj,
+     * there could be infinity loop in #DispList calculation. */
     if (ob->type == OB_CURVE && ob->data != cu) {
       cu->taperobj = ob;
       id_lib_extern((ID *)ob);
@@ -569,13 +567,13 @@ static void rna_Curve_resolution_v_update_data(Main *bmain, Scene *scene, Pointe
 static float rna_Curve_offset_get(PointerRNA *ptr)
 {
   Curve *cu = (Curve *)ptr->owner_id;
-  return cu->width - 1.0f;
+  return cu->offset - 1.0f;
 }
 
 static void rna_Curve_offset_set(PointerRNA *ptr, float value)
 {
   Curve *cu = (Curve *)ptr->owner_id;
-  cu->width = 1.0f + value;
+  cu->offset = 1.0f + value;
 }
 
 static int rna_Curve_body_length(PointerRNA *ptr);
@@ -1656,14 +1654,14 @@ static void rna_def_curve(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Curve_bevel_resolution_update");
 
   prop = RNA_def_property(srna, "offset", PROP_FLOAT, PROP_NONE | PROP_UNIT_LENGTH);
-  RNA_def_property_float_sdna(prop, NULL, "width");
+  RNA_def_property_float_sdna(prop, NULL, "offset");
   RNA_def_property_ui_range(prop, -1.0, 1.0, 0.1, 3);
   RNA_def_property_float_funcs(prop, "rna_Curve_offset_get", "rna_Curve_offset_set", NULL);
   RNA_def_property_ui_text(prop, "Offset", "Distance to move the curve parallel to its normals");
   RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 
   prop = RNA_def_property(srna, "extrude", PROP_FLOAT, PROP_NONE | PROP_UNIT_LENGTH);
-  RNA_def_property_float_sdna(prop, NULL, "ext1");
+  RNA_def_property_float_sdna(prop, NULL, "extrude");
   RNA_def_property_ui_range(prop, 0, 100.0, 0.1, 3);
   RNA_def_property_range(prop, 0.0, FLT_MAX);
   RNA_def_property_ui_text(prop,
@@ -1673,7 +1671,7 @@ static void rna_def_curve(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_Curve_update_data");
 
   prop = RNA_def_property(srna, "bevel_depth", PROP_FLOAT, PROP_NONE | PROP_UNIT_LENGTH);
-  RNA_def_property_float_sdna(prop, NULL, "ext2");
+  RNA_def_property_float_sdna(prop, NULL, "bevel_radius");
   RNA_def_property_ui_range(prop, 0, 100.0, 0.1, 3);
   RNA_def_property_ui_text(
       prop, "Bevel Depth", "Radius of the bevel geometry, not including extrusion");

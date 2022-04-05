@@ -133,9 +133,6 @@ const ModifierTypeInfo *BKE_modifier_get_info(ModifierType type)
   return NULL;
 }
 
-/**
- * Get the idname of the modifier type's panel, which was defined in the #panelRegister callback.
- */
 void BKE_modifier_type_panel_id(ModifierType type, char *r_idname)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(type);
@@ -213,9 +210,6 @@ void BKE_modifier_free(ModifierData *md)
   BKE_modifier_free_ex(md, 0);
 }
 
-/**
- * Use instead of `BLI_remlink` when the object's active modifier should change.
- */
 void BKE_modifier_remove_from_list(Object *ob, ModifierData *md)
 {
   BLI_assert(BLI_findindex(&ob->modifiers, md) != -1);
@@ -296,6 +290,16 @@ ModifierData *BKE_modifiers_findby_name(const Object *ob, const char *name)
   return BLI_findstring(&(ob->modifiers), name, offsetof(ModifierData, name));
 }
 
+ModifierData *BKE_modifiers_findby_session_uuid(const Object *ob, const SessionUUID *session_uuid)
+{
+  LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+    if (BLI_session_uuid_is_equal(&md->session_uuid, session_uuid)) {
+      return md;
+    }
+  }
+  return NULL;
+}
+
 void BKE_modifiers_clear_errors(Object *ob)
 {
   LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
@@ -328,9 +332,6 @@ void BKE_modifiers_foreach_tex_link(Object *ob, TexWalkFunc walk, void *userData
   }
 }
 
-/* callback's can use this
- * to avoid copying every member.
- */
 void BKE_modifier_copydata_generic(const ModifierData *md_src,
                                    ModifierData *md_dst,
                                    const int UNUSED(flag))
@@ -390,7 +391,7 @@ void BKE_modifier_copydata_ex(ModifierData *md, ModifierData *target, const int 
   }
   else {
     /* In the case copyData made full byte copy force UUID to be re-generated. */
-    BKE_modifier_session_uuid_generate(md);
+    BKE_modifier_session_uuid_generate(target);
   }
 }
 
@@ -448,22 +449,13 @@ void BKE_modifier_set_error(const Object *ob, ModifierData *md, const char *_for
 #ifndef NDEBUG
   if ((md->mode & eModifierMode_Virtual) == 0) {
     /* Ensure correct object is passed in. */
-    const Object *ob_orig = (Object *)DEG_get_original_id((ID *)&ob->id);
-    const ModifierData *md_orig = md->orig_modifier_data ? md->orig_modifier_data : md;
-    BLI_assert(BLI_findindex(&ob_orig->modifiers, md_orig) != -1);
+    BLI_assert(BKE_modifier_get_original(ob, md) != NULL);
   }
 #endif
 
   CLOG_ERROR(&LOG, "Object: \"%s\", Modifier: \"%s\", %s", ob->id.name + 2, md->name, md->error);
 }
 
-/* used for buttons, to find out if the 'draw deformed in editmode' option is
- * there
- *
- * also used in transform_conversion.c, to detect CrazySpace [tm] (2nd arg
- * then is NULL)
- * also used for some mesh tools to give warnings
- */
 int BKE_modifiers_get_cage_index(const Scene *scene,
                                  Object *ob,
                                  int *r_lastPossibleCageIndex,
@@ -547,12 +539,6 @@ bool BKE_modifiers_is_particle_enabled(Object *ob)
   return (md && md->mode & (eModifierMode_Realtime | eModifierMode_Render));
 }
 
-/**
- * Check whether is enabled.
- *
- * \param scene: Current scene, may be NULL,
- * in which case isDisabled callback of the modifier is never called.
- */
 bool BKE_modifier_is_enabled(const struct Scene *scene, ModifierData *md, int required_mode)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
@@ -575,12 +561,6 @@ bool BKE_modifier_is_enabled(const struct Scene *scene, ModifierData *md, int re
   return true;
 }
 
-/**
- * Check whether given modifier is not local (i.e. from linked data) when the object is a library
- * override.
- *
- * \param md: May be NULL, in which case we consider it as a non-local modifier case.
- */
 bool BKE_modifier_is_nonlocal_in_liboverride(const Object *ob, const ModifierData *md)
 {
   return (ID_IS_OVERRIDE_LIBRARY(ob) &&
@@ -674,8 +654,6 @@ ModifierData *BKE_modifier_get_last_preview(const struct Scene *scene,
   return tmp_md;
 }
 
-/* This is to include things that are not modifiers in the evaluation of the modifier stack, for
- * example parenting to an armature. */
 ModifierData *BKE_modifiers_get_virtual_modifierlist(const Object *ob,
                                                      VirtualModifierData *virtualModifierData)
 {
@@ -719,9 +697,6 @@ ModifierData *BKE_modifiers_get_virtual_modifierlist(const Object *ob,
   return md;
 }
 
-/* Takes an object and returns its first selected armature, else just its armature
- * This should work for multiple armatures per object
- */
 Object *BKE_modifiers_is_deformed_by_armature(Object *ob)
 {
   if (ob->type == OB_GPENCIL) {
@@ -790,9 +765,6 @@ Object *BKE_modifiers_is_deformed_by_meshdeform(Object *ob)
   return NULL;
 }
 
-/* Takes an object and returns its first selected lattice, else just its lattice
- * This should work for multiple lattices per object
- */
 Object *BKE_modifiers_is_deformed_by_lattice(Object *ob)
 {
   VirtualModifierData virtualModifierData;
@@ -816,9 +788,6 @@ Object *BKE_modifiers_is_deformed_by_lattice(Object *ob)
   return NULL;
 }
 
-/* Takes an object and returns its first selected curve, else just its curve
- * This should work for multiple curves per object
- */
 Object *BKE_modifiers_is_deformed_by_curve(Object *ob)
 {
   VirtualModifierData virtualModifierData;
@@ -946,7 +915,6 @@ void BKE_modifier_free_temporary_data(ModifierData *md)
   }
 }
 
-/* ensure modifier correctness when changing ob->data */
 void BKE_modifiers_test_object(Object *ob)
 {
   ModifierData *md;
@@ -967,45 +935,29 @@ void BKE_modifiers_test_object(Object *ob)
   }
 }
 
-/* where should this go?, it doesn't fit well anywhere :S - campbell */
-
-/* elubie: changed this to default to the same dir as the render output
- * to prevent saving to C:\ on Windows */
-
-/* campbell: logic behind this...
- *
- * - if the ID is from a library, return library path
- * - else if the file has been saved return the blend file path.
- * - else if the file isn't saved and the ID isn't from a library, return the temp dir.
- */
 const char *BKE_modifier_path_relbase(Main *bmain, Object *ob)
 {
-  if (G.relbase_valid || ID_IS_LINKED(ob)) {
+  /* - If the ID is from a library, return library path.
+   * - Else if the file has been saved return the blend file path.
+   * - Else if the file isn't saved and the ID isn't from a library, return the temp dir.
+   */
+  if ((bmain->filepath[0] != '\0') || ID_IS_LINKED(ob)) {
     return ID_BLEND_PATH(bmain, &ob->id);
   }
 
-  /* last resort, better than using "" which resolves to the current
-   * working directory */
+  /* Last resort, better than using "" which resolves to the current working directory. */
   return BKE_tempdir_session();
 }
 
 const char *BKE_modifier_path_relbase_from_global(Object *ob)
 {
-  if (G.relbase_valid || ID_IS_LINKED(ob)) {
-    return ID_BLEND_PATH_FROM_GLOBAL(&ob->id);
-  }
-
-  /* last resort, better than using "" which resolves to the current
-   * working directory */
-  return BKE_tempdir_session();
+  return BKE_modifier_path_relbase(G_MAIN, ob);
 }
 
-/* initializes the path with either */
 void BKE_modifier_path_init(char *path, int path_maxlen, const char *name)
 {
-  /* elubie: changed this to default to the same dir as the render output
-   * to prevent saving to C:\ on Windows */
-  BLI_join_dirfile(path, path_maxlen, G.relbase_valid ? "//" : BKE_tempdir_session(), name);
+  const char *blendfile_path = BKE_main_blendfile_path_from_global();
+  BLI_join_dirfile(path, path_maxlen, blendfile_path[0] ? "//" : BKE_tempdir_session(), name);
 }
 
 /**
@@ -1026,6 +978,7 @@ static void modwrap_dependsOnNormals(Mesh *me)
       }
       break;
     }
+    case ME_WRAPPER_TYPE_SUBD:
     case ME_WRAPPER_TYPE_MDATA:
       BKE_mesh_calc_normals(me);
       break;
@@ -1039,7 +992,6 @@ struct Mesh *BKE_modifier_modify_mesh(ModifierData *md,
                                       struct Mesh *me)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
-  BLI_assert(CustomData_has_layer(&me->pdata, CD_NORMAL) == false);
 
   if (me->runtime.wrapper_type == ME_WRAPPER_TYPE_BMESH) {
     if ((mti->flags & eModifierTypeFlag_AcceptsBMesh) == 0) {
@@ -1060,8 +1012,6 @@ void BKE_modifier_deform_verts(ModifierData *md,
                                int numVerts)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
-  BLI_assert(!me || CustomData_has_layer(&me->pdata, CD_NORMAL) == false);
-
   if (me && mti->dependsOnNormals && mti->dependsOnNormals(md)) {
     modwrap_dependsOnNormals(me);
   }
@@ -1076,8 +1026,6 @@ void BKE_modifier_deform_vertsEM(ModifierData *md,
                                  int numVerts)
 {
   const ModifierTypeInfo *mti = BKE_modifier_get_info(md->type);
-  BLI_assert(!me || CustomData_has_layer(&me->pdata, CD_NORMAL) == false);
-
   if (me && mti->dependsOnNormals && mti->dependsOnNormals(md)) {
     BKE_mesh_calc_normals(me);
   }
@@ -1086,15 +1034,6 @@ void BKE_modifier_deform_vertsEM(ModifierData *md,
 
 /* end modifier callback wrappers */
 
-/**
- * Get evaluated mesh for other evaluated object, which is used as an operand for the modifier,
- * e.g. second operand for boolean modifier.
- * Note that modifiers in stack always get fully evaluated COW ID pointers,
- * never original ones. Makes things simpler.
- *
- * \param get_cage_mesh: Return evaluated mesh with only deforming modifiers applied
- * (i.e. mesh topology remains the same as original one, a.k.a. 'cage' mesh).
- */
 Mesh *BKE_modifier_get_evaluated_mesh_from_evaluated_object(Object *ob_eval,
                                                             const bool get_cage_mesh)
 {
@@ -1105,8 +1044,11 @@ Mesh *BKE_modifier_get_evaluated_mesh_from_evaluated_object(Object *ob_eval,
     BMEditMesh *em = BKE_editmesh_from_object(ob_eval);
     /* 'em' might not exist yet in some cases, just after loading a .blend file, see T57878. */
     if (em != NULL) {
-      me = (get_cage_mesh && em->mesh_eval_cage != NULL) ? em->mesh_eval_cage :
-                                                           em->mesh_eval_final;
+      Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(ob_eval);
+      Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob_eval);
+
+      me = (get_cage_mesh && editmesh_eval_cage != NULL) ? editmesh_eval_cage :
+                                                           editmesh_eval_final;
     }
   }
   if (me == NULL) {
@@ -1118,12 +1060,10 @@ Mesh *BKE_modifier_get_evaluated_mesh_from_evaluated_object(Object *ob_eval,
   return me;
 }
 
-ModifierData *BKE_modifier_get_original(ModifierData *md)
+ModifierData *BKE_modifier_get_original(const Object *object, ModifierData *md)
 {
-  if (md->orig_modifier_data == NULL) {
-    return md;
-  }
-  return md->orig_modifier_data;
+  const Object *object_orig = DEG_get_original_object((Object *)object);
+  return BKE_modifiers_findby_session_uuid(object_orig, &md->session_uuid);
 }
 
 struct ModifierData *BKE_modifier_get_evaluated(Depsgraph *depsgraph,
@@ -1134,7 +1074,7 @@ struct ModifierData *BKE_modifier_get_evaluated(Depsgraph *depsgraph,
   if (object_eval == object) {
     return md;
   }
-  return BKE_modifiers_findby_name(object_eval, md->name);
+  return BKE_modifiers_findby_session_uuid(object_eval, &md->session_uuid);
 }
 
 void BKE_modifier_check_uuids_unique_and_report(const Object *object)

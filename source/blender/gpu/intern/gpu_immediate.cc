@@ -89,7 +89,6 @@ void immUnbindProgram()
   imm->shader = nullptr;
 }
 
-/* XXX do not use it. Special hack to use OCIO with batch API. */
 GPUShader *immGetShader()
 {
   return imm->shader;
@@ -603,7 +602,6 @@ void immUniform4fv(const char *name, const float data[4])
   GPU_shader_uniform_4fv(imm->shader, name, data);
 }
 
-/* Note array index is not supported for name (i.e: "array[0]"). */
 void immUniformArray4fv(const char *name, const float *data, int count)
 {
   GPU_shader_uniform_4fv_array(imm->shader, name, count, (const float(*)[4])data);
@@ -629,6 +627,12 @@ void immBindTextureSampler(const char *name, GPUTexture *tex, eGPUSamplerState s
 {
   int binding = GPU_shader_get_texture_binding(imm->shader, name);
   GPU_texture_bind_ex(tex, state, binding, true);
+}
+
+void immBindUniformBuf(const char *name, GPUUniformBuf *ubo)
+{
+  int binding = GPU_shader_get_uniform_block_binding(imm->shader, name);
+  GPU_uniformbuf_bind(ubo, binding);
 }
 
 /* --- convenience functions for setting "uniform vec4 color" --- */

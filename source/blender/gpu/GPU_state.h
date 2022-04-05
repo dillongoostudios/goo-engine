@@ -40,21 +40,23 @@ typedef enum eGPUBarrier {
   GPU_BARRIER_SHADER_IMAGE_ACCESS = (1 << 0),
   GPU_BARRIER_TEXTURE_FETCH = (1 << 1),
   GPU_BARRIER_SHADER_STORAGE = (1 << 2),
+  GPU_BARRIER_VERTEX_ATTRIB_ARRAY = (1 << 3),
+  GPU_BARRIER_ELEMENT_ARRAY = (1 << 4),
 } eGPUBarrier;
 
-ENUM_OPERATORS(eGPUBarrier, GPU_BARRIER_SHADER_STORAGE)
+ENUM_OPERATORS(eGPUBarrier, GPU_BARRIER_ELEMENT_ARRAY)
 
 /**
  * Defines the fixed pipeline blending equation.
  * SRC is the output color from the shader.
  * DST is the color from the frame-buffer.
- * The blending equation is :
- *  (SRC * A) + (DST * B).
+ * The blending equation is:
+ * `(SRC * A) + (DST * B)`.
  * The blend mode will modify the A and B parameters.
  */
 typedef enum eGPUBlend {
   GPU_BLEND_NONE = 0,
-  /** Premult variants will _NOT_ multiply rgb output by alpha. */
+  /** Pre-multiply variants will _NOT_ multiply rgb output by alpha. */
   GPU_BLEND_ALPHA,
   GPU_BLEND_ALPHA_PREMULT,
   GPU_BLEND_ADDITIVE,
@@ -124,10 +126,23 @@ void GPU_front_facing(bool invert);
 void GPU_depth_range(float near, float far);
 void GPU_scissor_test(bool enable);
 void GPU_line_smooth(bool enable);
+/**
+ * \note By convention, this is set as needed and not reset back to 1.0.
+ * This means code that draws lines must always set the line width beforehand,
+ * but is not expected to restore it's previous value.
+ */
 void GPU_line_width(float width);
 void GPU_logic_op_xor_set(bool enable);
 void GPU_point_size(float size);
 void GPU_polygon_smooth(bool enable);
+
+/**
+ * Programmable point size:
+ * - Shaders set their own point size when enabled
+ * - Use GPU_point_size when disabled.
+ *
+ * TODO: remove and use program point size everywhere.
+ */
 void GPU_program_point_size(bool enable);
 void GPU_scissor(int x, int y, int width, int height);
 void GPU_scissor_get(int coords[4]);
@@ -158,6 +173,9 @@ eGPUDepthTest GPU_depth_test_get(void);
 eGPUWriteMask GPU_write_mask_get(void);
 uint GPU_stencil_mask_get(void);
 eGPUStencilTest GPU_stencil_test_get(void);
+/**
+ * \note Already pre-multiplied by `U.pixelsize`.
+ */
 float GPU_line_width_get(void);
 
 void GPU_flush(void);
@@ -165,6 +183,10 @@ void GPU_finish(void);
 void GPU_apply_state(void);
 
 void GPU_bgl_start(void);
+
+/**
+ * Just turn off the `bgl` safeguard system. Can be called even without #GPU_bgl_start.
+ */
 void GPU_bgl_end(void);
 bool GPU_bgl_get(void);
 

@@ -106,10 +106,10 @@ typedef struct RenderEngineType {
   void (*bake)(struct RenderEngine *engine,
                struct Depsgraph *depsgraph,
                struct Object *object,
-               const int pass_type,
-               const int pass_filter,
-               const int width,
-               const int height);
+               int pass_type,
+               int pass_filter,
+               int width,
+               int height);
 
   void (*view_update)(struct RenderEngine *engine,
                       const struct bContext *context,
@@ -180,6 +180,10 @@ typedef struct RenderEngine {
 RenderEngine *RE_engine_create(RenderEngineType *type);
 void RE_engine_free(RenderEngine *engine);
 
+/**
+ * Loads in image into a result, size must match
+ * x/y offsets are only used on a partial copy when dimensions don't match.
+ */
 void RE_layer_load_from_file(
     struct RenderLayer *layer, struct ReportList *reports, const char *filename, int x, int y);
 void RE_result_load_from_file(struct RenderResult *result,

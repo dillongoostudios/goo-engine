@@ -21,18 +21,26 @@
  * \ingroup cmpnodes
  */
 
+#include "RNA_access.h"
+
+#include "UI_interface.h"
+#include "UI_resources.h"
+
 #include "node_composite_util.hh"
 
 /* **************** Scale  ******************** */
 
-static bNodeSocketTemplate cmp_node_scale_in[] = {
-    {SOCK_RGBA, N_("Image"), 1.0f, 1.0f, 1.0f, 1.0f},
-    {SOCK_FLOAT, N_("X"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0001f, CMP_SCALE_MAX, PROP_NONE},
-    {SOCK_FLOAT, N_("Y"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0001f, CMP_SCALE_MAX, PROP_NONE},
-    {-1, ""}};
-static bNodeSocketTemplate cmp_node_scale_out[] = {{SOCK_RGBA, N_("Image")}, {-1, ""}};
+namespace blender::nodes::node_composite_scale_cc {
 
-static void node_composite_update_scale(bNodeTree *UNUSED(ntree), bNode *node)
+static void cmp_node_scale_declare(NodeDeclarationBuilder &b)
+{
+  b.add_input<decl::Color>(N_("Image")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Float>(N_("X")).default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+  b.add_input<decl::Float>(N_("Y")).default_value(1.0f).min(0.0001f).max(CMP_SCALE_MAX);
+  b.add_output<decl::Color>(N_("Image"));
+}
+
+static void node_composite_update_scale(bNodeTree *ntree, bNode *node)
 {
   bNodeSocket *sock;
   bool use_xy_scale = ELEM(node->custom1, CMP_SCALE_RELATIVE, CMP_SCALE_ABSOLUTE);
@@ -40,23 +48,41 @@ static void node_composite_update_scale(bNodeTree *UNUSED(ntree), bNode *node)
   /* Only show X/Y scale factor inputs for modes using them! */
   for (sock = (bNodeSocket *)node->inputs.first; sock; sock = sock->next) {
     if (STR_ELEM(sock->name, "X", "Y")) {
-      if (use_xy_scale) {
-        sock->flag &= ~SOCK_UNAVAIL;
-      }
-      else {
-        sock->flag |= SOCK_UNAVAIL;
-      }
+      nodeSetSocketAvailability(ntree, sock, use_xy_scale);
     }
   }
 }
 
-void register_node_type_cmp_scale(void)
+static void node_composit_buts_scale(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
+  uiItemR(layout, ptr, "space", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
+
+  if (RNA_enum_get(ptr, "space") == CMP_SCALE_RENDERPERCENT) {
+    uiLayout *row;
+    uiItemR(layout,
+            ptr,
+            "frame_method",
+            UI_ITEM_R_SPLIT_EMPTY_NAME | UI_ITEM_R_EXPAND,
+            nullptr,
+            ICON_NONE);
+    row = uiLayoutRow(layout, true);
+    uiItemR(row, ptr, "offset_x", UI_ITEM_R_SPLIT_EMPTY_NAME, "X", ICON_NONE);
+    uiItemR(row, ptr, "offset_y", UI_ITEM_R_SPLIT_EMPTY_NAME, "Y", ICON_NONE);
+  }
+}
+
+}  // namespace blender::nodes::node_composite_scale_cc
+
+void register_node_type_cmp_scale()
+{
+  namespace file_ns = blender::nodes::node_composite_scale_cc;
+
   static bNodeType ntype;
 
-  cmp_node_type_base(&ntype, CMP_NODE_SCALE, "Scale", NODE_CLASS_DISTORT, 0);
-  node_type_socket_templates(&ntype, cmp_node_scale_in, cmp_node_scale_out);
-  node_type_update(&ntype, node_composite_update_scale);
+  cmp_node_type_base(&ntype, CMP_NODE_SCALE, "Scale", NODE_CLASS_DISTORT);
+  ntype.declare = file_ns::cmp_node_scale_declare;
+  ntype.draw_buttons = file_ns::node_composit_buts_scale;
+  node_type_update(&ntype, file_ns::node_composite_update_scale);
 
   nodeRegisterType(&ntype);
 }

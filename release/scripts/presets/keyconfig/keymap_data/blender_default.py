@@ -16,6 +16,16 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
+# ------------------------------------------------------------------------------
+# Developer Notes
+#
+# - This script should run without Blender (no references to the `bpy` module for example).
+# - All configuration must be passed into the `generate_keymaps` function (via `Params`).
+# - Supporting some combinations of options is becoming increasingly complex,
+#   especially `Params.select_mouse` & `Params.use_fallback_tool_rmb`.
+#   To ensure changes don't unintentionally break other configurations, see:
+#   `source/tools/utils/blender_keyconfig_export_permutations.py --help`
+#
 
 # ------------------------------------------------------------------------------
 # Configurable Parameters
@@ -48,6 +58,8 @@ class Params:
         "use_gizmo_drag",
         # Use the fallback tool instead of tweak for RMB select.
         "use_fallback_tool",
+        # Only set for RMB select.
+        "use_fallback_tool_rmb",
         # Use pie menu for tab by default (swap 'Tab/Ctrl-Tab').
         "use_v3d_tab_menu",
         # Use extended pie menu for shading.
@@ -65,15 +77,16 @@ class Params:
         "v3d_tilde_action",
         # Alt-MMB axis switching 'RELATIVE' or 'ABSOLUTE' axis switching.
         "v3d_alt_mmb_drag_action",
-
+        # File selector actions on single click.
         "use_file_single_click",
+
         # Convenience variables:
         # (derived from other settings).
         #
-        # This case needs to be checked often,
-        # Shorthand for: `(params.use_fallback_tool if params.select_mouse == 'RIGHTMOUSE' else False)`.
-        "use_fallback_tool_rmb",
-        # Shorthand for: `('CLICK' if params.use_fallback_tool_rmb else params.select_mouse_value)`.
+        # The fallback tool is activated on the same button as selection.
+        # Shorthand for: `(True if (select_mouse == 'LEFT') else self.use_fallback_tool_rmb)`
+        "use_fallback_tool_select_mouse",
+        # Shorthand for: `('CLICK' if self.use_fallback_tool_rmb else self.select_mouse_value)`.
         "select_mouse_value_fallback",
         # Shorthand for: `{"type": params.select_tweak, "value": 'ANY'}`.
         "select_tweak_event",
@@ -103,6 +116,7 @@ class Params:
             use_select_all_toggle=False,
             use_gizmo_drag=True,
             use_fallback_tool=False,
+            use_fallback_tool_rmb=False,
             use_v3d_tab_menu=False,
             use_v3d_shade_ex_pie=False,
             use_v3d_mmb_pan=False,
@@ -146,7 +160,6 @@ class Params:
                 self.cursor_set_event = {"type": 'LEFTMOUSE', "value": 'CLICK'}
                 self.cursor_tweak_event = None
 
-            self.use_fallback_tool = use_fallback_tool
             self.tool_modifier = {}
         else:
             # Left mouse select uses Click event for selection. This is a little
@@ -169,7 +182,6 @@ class Params:
 
             self.cursor_set_event = {"type": 'RIGHTMOUSE', "value": 'PRESS', "shift": True}
             self.cursor_tweak_event = {"type": 'EVT_TWEAK_R', "value": 'ANY', "shift": True}
-            self.use_fallback_tool = True
 
             # Use the "tool" functionality for LMB select.
             if use_alt_tool_or_cursor:
@@ -197,8 +209,11 @@ class Params:
 
         self.use_file_single_click = use_file_single_click
 
+        self.use_fallback_tool = use_fallback_tool
+        self.use_fallback_tool_rmb = use_fallback_tool_rmb
+
         # Convenience variables:
-        self.use_fallback_tool_rmb = self.use_fallback_tool if select_mouse == 'RIGHT' else False
+        self.use_fallback_tool_select_mouse = True if (select_mouse == 'LEFT') else self.use_fallback_tool_rmb
         self.select_mouse_value_fallback = 'CLICK' if self.use_fallback_tool_rmb else self.select_mouse_value
         self.select_tweak_event = {"type": self.select_tweak, "value": 'ANY'}
         self.pie_value = 'CLICK_DRAG' if use_pie_click_drag else 'PRESS'
@@ -427,13 +442,18 @@ def _template_items_change_frame(params):
 
 # Tool System Templates
 
-def _template_items_tool_select(params, operator, cursor_operator, *, extend):
+def _template_items_tool_select(params, operator, cursor_operator, fallback, *, extend):
     if params.select_mouse == 'LEFTMOUSE':
-        # Immediate select without quick delay.
+        # By default use 'PRESS' for immediate select without quick delay.
+        # Fallback key-maps 'CLICK' since 'PRESS' events passes through (allowing either click or drag).
+        #
+        # NOTE: When the active (non-fallback) tool uses a key-map that activates it's primary tool on drag,
+        # it's important that this key-map uses click and not press. Otherwise it becomes impossible to use
+        # the tool without selecting elements under the cursor.
         return [
-            (operator, {"type": 'LEFTMOUSE', "value": 'PRESS'},
+            (operator, {"type": 'LEFTMOUSE', "value": 'CLICK' if fallback else 'PRESS'},
              {"properties": [("deselect_all", True)]}),
-            (operator, {"type": 'LEFTMOUSE', "value": 'PRESS', "shift": True},
+            (operator, {"type": 'LEFTMOUSE', "value": 'CLICK' if fallback else 'PRESS', "shift": True},
              {"properties": [(extend, True)]}),
         ]
     else:
@@ -1097,6 +1117,7 @@ def km_outliner(params):
         # Fall through to generic context menu if the item(s) selected have no type specific actions.
         ("outliner.operation", {"type": 'RIGHTMOUSE', "value": 'PRESS'}, None),
         op_menu("OUTLINER_MT_context_menu", {"type": 'RIGHTMOUSE', "value": 'PRESS'}),
+        op_menu_pie("OUTLINER_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("outliner.item_drag_drop", {"type": 'EVT_TWEAK_L', "value": 'ANY'}, None),
         ("outliner.item_drag_drop", {"type": 'EVT_TWEAK_L', "value": 'ANY', "shift": True}, None),
         ("outliner.show_hierarchy", {"type": 'HOME', "value": 'PRESS'}, None),
@@ -1148,11 +1169,7 @@ def km_uv_editor(params):
     items.extend([
         # Selection modes.
         *_template_items_uv_select_mode(params),
-        *_template_uv_select(
-            type=params.select_mouse,
-            value=('CLICK' if params.use_fallback_tool_rmb else params.select_mouse_value),
-            legacy=params.legacy,
-        ),
+        *_template_uv_select(type=params.select_mouse, value=params.select_mouse_value_fallback, legacy=params.legacy),
         ("uv.mark_seam", {"type": 'E', "value": 'PRESS', "ctrl": True}, None),
         ("uv.select_loop",
          {"type": params.select_mouse, "value": params.select_mouse_value, "alt": True}, None),
@@ -1455,7 +1472,7 @@ def km_view3d(params):
         ("view3d.ndof_all", {"type": 'NDOF_MOTION', "value": 'ANY', "shift": True, "ctrl": True}, None),
         ("view3d.view_selected", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'},
          {"properties": [("use_all_regions", False)]}),
-        ("view3d.view_roll", {"type": 'NDOF_BUTTON_ROLL_CCW', "value": 'PRESS'},
+        ("view3d.view_roll", {"type": 'NDOF_BUTTON_ROLL_CW', "value": 'PRESS'},
          {"properties": [("type", 'LEFT')]}),
         ("view3d.view_roll", {"type": 'NDOF_BUTTON_ROLL_CCW', "value": 'PRESS'},
          {"properties": [("type", 'RIGHT')]}),
@@ -1748,6 +1765,7 @@ def km_graph_editor(params):
         ("graph.view_all", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'}, None),
         ("graph.view_selected", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
         ("graph.view_frame", {"type": 'NUMPAD_0', "value": 'PRESS'}, None),
+        op_menu_pie("GRAPH_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("graph.fmodifier_add", {"type": 'M', "value": 'PRESS', "shift": True, "ctrl": True},
          {"properties": [("only_active", False)]}),
         ("anim.channels_editable_toggle", {"type": 'TAB', "value": 'PRESS'}, None),
@@ -1815,6 +1833,7 @@ def km_image_generic(params):
         ("image.cycle_render_slot", {"type": 'J', "value": 'PRESS', "repeat": True}, None),
         ("image.cycle_render_slot", {"type": 'J', "value": 'PRESS', "alt": True, "repeat": True},
          {"properties": [("reverse", True)]}),
+        op_menu_pie("IMAGE_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
     ])
 
     if not params.legacy:
@@ -2015,8 +2034,10 @@ def km_node_editor(params):
         ("node.link_make", {"type": 'F', "value": 'PRESS', "shift": True},
          {"properties": [("replace", True)]}),
         op_menu("NODE_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
-        ("node.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True}, None),
-        ("node.duplicate_move_keep_inputs", {"type": 'D', "value": 'PRESS', "shift": True, "ctrl": True}, None),
+        ("node.duplicate_move", {"type": 'D', "value": 'PRESS', "shift": True},
+         {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
+        ("node.duplicate_move_keep_inputs", {"type": 'D', "value": 'PRESS', "shift": True, "ctrl": True},
+         {"properties": [("NODE_OT_translate_attach", [("TRANSFORM_OT_translate", [("view2d_edge_pan", True)])])]}),
         ("node.parent_set", {"type": 'P', "value": 'PRESS', "ctrl": True}, None),
         ("node.detach", {"type": 'P', "value": 'PRESS', "alt": True}, None),
         ("node.join", {"type": 'J', "value": 'PRESS', "ctrl": True}, None),
@@ -2027,6 +2048,7 @@ def km_node_editor(params):
         ("node.view_all", {"type": 'HOME', "value": 'PRESS'}, None),
         ("node.view_all", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'}, None),
         ("node.view_selected", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
+        op_menu_pie("NODE_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("node.delete", {"type": 'X', "value": 'PRESS'}, None),
         ("node.delete", {"type": 'DEL', "value": 'PRESS'}, None),
         ("node.delete_reconnect", {"type": 'X', "value": 'PRESS', "ctrl": True}, None),
@@ -2389,6 +2411,7 @@ def km_dopesheet(params):
         ("action.view_all", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'}, None),
         ("action.view_selected", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
         ("action.view_frame", {"type": 'NUMPAD_0', "value": 'PRESS'}, None),
+        op_menu_pie("DOPESHEET_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("anim.channels_editable_toggle", {"type": 'TAB', "value": 'PRESS'}, None),
         ("anim.channels_select_filter", {"type": 'F', "value": 'PRESS', "ctrl": True}, None),
         ("transform.transform", {"type": 'G', "value": 'PRESS'},
@@ -2503,6 +2526,7 @@ def km_nla_editor(params):
         ("nla.view_all", {"type": 'NDOF_BUTTON_FIT', "value": 'PRESS'}, None),
         ("nla.view_selected", {"type": 'NUMPAD_PERIOD', "value": 'PRESS'}, None),
         ("nla.view_frame", {"type": 'NUMPAD_0', "value": 'PRESS'}, None),
+        op_menu_pie("NLA_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("nla.actionclip_add", {"type": 'A', "value": 'PRESS', "shift": True}, None),
         ("nla.transition_add", {"type": 'T', "value": 'PRESS', "shift": True}, None),
         ("nla.soundclip_add", {"type": 'K', "value": 'PRESS', "shift": True}, None),
@@ -2835,6 +2859,7 @@ def km_sequencer(params):
         ("sequencer.select_grouped", {"type": 'G', "value": 'PRESS', "shift": True}, None),
         op_menu("SEQUENCER_MT_add", {"type": 'A', "value": 'PRESS', "shift": True}),
         op_menu("SEQUENCER_MT_change", {"type": 'C', "value": 'PRESS'}),
+        op_menu_pie("SEQUENCER_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
         ("sequencer.slip", {"type": 'S', "value": 'PRESS'}, None),
         ("wm.context_set_int", {"type": 'O', "value": 'PRESS'},
          {"properties": [("data_path", 'scene.sequence_editor.overlay_frame'), ("value", 0)]}),
@@ -2892,6 +2917,7 @@ def km_sequencerpreview(params):
          {"properties": [("ratio", 0.25)]}),
         ("sequencer.view_zoom_ratio", {"type": 'NUMPAD_8', "value": 'PRESS'},
          {"properties": [("ratio", 0.125)]}),
+        op_menu_pie("SEQUENCER_MT_preview_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
 
         # Edit.
         ("transform.translate", {"type": params.select_tweak, "value": 'ANY'}, None),
@@ -3042,6 +3068,7 @@ def km_clip(_params):
         op_menu_pie("CLIP_MT_solving_pie", {"type": 'S', "value": 'PRESS', "shift": True}),
         op_menu_pie("CLIP_MT_marker_pie", {"type": 'E', "value": 'PRESS', "shift": True}),
         op_menu_pie("CLIP_MT_reconstruction_pie", {"type": 'W', "value": 'PRESS', "shift": True}),
+        op_menu_pie("CLIP_MT_view_pie", {"type": 'ACCENT_GRAVE', "value": 'PRESS'}),
     ])
 
     return keymap
@@ -4646,7 +4673,9 @@ def _template_paint_radial_control(paint, rotation=False, secondary_rotation=Fal
     return items
 
 
-def _template_view3d_select(*, type, value, legacy):
+def _template_view3d_select(*, type, value, legacy, exclude_mod=None):
+    # NOTE: `exclude_mod` is needed since we don't want this tool to exclude Control-RMB actions when this is used
+    # as a tool key-map with RMB-select and `use_fallback_tool_rmb` is enabled. See T92467.
     return [(
         "view3d.select",
         {"type": type, "value": value, **{m: True for m in mods}},
@@ -4660,7 +4689,7 @@ def _template_view3d_select(*, type, value, legacy):
         (("center", "enumerate"), ("ctrl", "alt")),
         (("toggle", "enumerate"), ("shift", "alt")),
         (("toggle", "center", "enumerate"), ("shift", "ctrl", "alt")),
-    )]
+    ) if exclude_mod is None or exclude_mod not in mods]
 
 
 def _template_view3d_gpencil_select(*, type, value, legacy, use_select_mouse=True):
@@ -6258,7 +6287,8 @@ def km_image_editor_tool_uv_select(params, *, fallback):
         _fallback_id("Image Editor Tool: Uv, Tweak", fallback),
         {"space_type": 'IMAGE_EDITOR', "region_type": 'WINDOW'},
         {"items": [
-            *([] if fallback else _template_items_tool_select(params, "uv.select", "uv.cursor_set", extend="extend")),
+            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else _template_items_tool_select(
+                params, "uv.select", "uv.cursor_set", fallback, extend="extend")),
             *([] if (not params.use_fallback_tool_rmb) else _template_uv_select(
                 type=params.select_mouse, value=params.select_mouse_value, legacy=params.legacy)),
         ]},
@@ -6273,7 +6303,8 @@ def km_image_editor_tool_uv_select_box(params, *, fallback):
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
                 "uv.select_box",
                 # Don't use `tool_maybe_tweak_event`, see comment for this slot.
-                **(params.select_tweak_event if fallback else params.tool_tweak_event))),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event))),
         ]},
     )
 
@@ -6285,7 +6316,8 @@ def km_image_editor_tool_uv_select_circle(params, *, fallback):
         {"items": [
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
                 "uv.select_circle",
-                **(params.select_tweak_event if fallback else {"type": params.tool_mouse, "value": 'PRESS'}),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   {"type": params.tool_mouse, "value": 'PRESS'}),
                 properties=[("wait_for_input", False)])),
             # No selection fallback since this operates on press.
         ]},
@@ -6300,7 +6332,8 @@ def km_image_editor_tool_uv_select_lasso(params, *, fallback):
         {"items": [
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
                 "uv.select_lasso",
-                **(params.select_tweak_event if fallback else params.tool_tweak_event))),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event))),
         ]},
     )
 
@@ -6376,7 +6409,7 @@ def km_node_editor_tool_select(params, *, fallback):
         _fallback_id("Node Tool: Tweak", fallback),
         {"space_type": 'NODE_EDITOR', "region_type": 'WINDOW'},
         {"items": [
-            *([] if fallback else [
+            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else [
                 ("node.select", {"type": params.select_mouse, "value": 'PRESS'},
                  {"properties": [("deselect_all", not params.legacy)]}),
             ]),
@@ -6392,7 +6425,8 @@ def km_node_editor_tool_select_box(params, *, fallback):
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
                 "node.select_box",
                 # Don't use `tool_maybe_tweak_event`, see comment for this slot.
-                **(params.select_tweak_event if fallback else params.tool_tweak_event),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event),
                 properties=[("tweak", True)],
             )),
         ]},
@@ -6405,7 +6439,9 @@ def km_node_editor_tool_select_lasso(params, *, fallback):
         {"space_type": 'NODE_EDITOR', "region_type": 'WINDOW'},
         {"items": [
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
-                "node.select_lasso", **(params.select_tweak_event if fallback else params.tool_tweak_event),
+                "node.select_lasso",
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event),
                 properties=[("tweak", True)]))
         ]},
     )
@@ -6420,8 +6456,8 @@ def km_node_editor_tool_select_circle(params, *, fallback):
                 "node.select_circle",
                 # Why circle select should be used on tweak?
                 # So that RMB or Shift-RMB is still able to set an element as active.
-                type=params.select_tweak if fallback else params.tool_mouse,
-                value='ANY' if fallback else 'PRESS',
+                type=params.select_tweak if (fallback and params.use_fallback_tool_select_mouse) else params.tool_mouse,
+                value='ANY' if (fallback and params.use_fallback_tool_select_mouse) else 'PRESS',
                 properties=[("wait_for_input", False)])),
         ]},
     )
@@ -6458,10 +6494,10 @@ def km_3d_view_tool_select(params, *, fallback):
         _fallback_id("3D View Tool: Tweak", fallback),
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
         {"items": [
-            *([] if fallback else _template_items_tool_select(
-                params, "view3d.select", "view3d.cursor3d", extend="toggle")),
+            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else _template_items_tool_select(
+                params, "view3d.select", "view3d.cursor3d", fallback, extend="toggle")),
             *([] if (not params.use_fallback_tool_rmb) else _template_view3d_select(
-                type=params.select_mouse, value=params.select_mouse_value, legacy=params.legacy)),
+                type=params.select_mouse, value=params.select_mouse_value, legacy=params.legacy, exclude_mod="ctrl")),
         ]},
     )
 
@@ -6474,7 +6510,8 @@ def km_3d_view_tool_select_box(params, *, fallback):
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions(
                 "view3d.select_box",
                 # Don't use `tool_maybe_tweak_event`, see comment for this slot.
-                **(params.select_tweak_event if fallback else params.tool_tweak_event))),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event))),
         ]},
     )
 
@@ -6488,8 +6525,8 @@ def km_3d_view_tool_select_circle(params, *, fallback):
                 "view3d.select_circle",
                 # Why circle select should be used on tweak?
                 # So that RMB or Shift-RMB is still able to set an element as active.
-                type=params.select_tweak if fallback else params.tool_mouse,
-                value='ANY' if fallback else 'PRESS',
+                type=params.select_tweak if (fallback and params.use_fallback_tool_select_mouse) else params.tool_mouse,
+                value='ANY' if (fallback and params.use_fallback_tool_select_mouse) else 'PRESS',
                 properties=[("wait_for_input", False)])),
         ]},
     )
@@ -6502,7 +6539,8 @@ def km_3d_view_tool_select_lasso(params, *, fallback):
         {"items": [
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions(
                 "view3d.select_lasso",
-                **(params.select_tweak_event if fallback else params.tool_tweak_event))),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event))),
         ]}
     )
 
@@ -7368,8 +7406,8 @@ def km_3d_view_tool_edit_gpencil_select(params, *, fallback):
         _fallback_id("3D View Tool: Edit Gpencil, Tweak", fallback),
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
         {"items": [
-            *([] if fallback else _template_items_tool_select(
-                params, "gpencil.select", "view3d.cursor3d", extend="toggle")),
+            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else _template_items_tool_select(
+                params, "gpencil.select", "view3d.cursor3d", fallback, extend="toggle")),
             *([] if (not params.use_fallback_tool_rmb) else _template_view3d_gpencil_select(
                 type=params.select_mouse, value=params.select_mouse_value, legacy=params.legacy)),
         ]},
@@ -7384,7 +7422,8 @@ def km_3d_view_tool_edit_gpencil_select_box(params, *, fallback):
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions(
                 "gpencil.select_box",
                 # Don't use `tool_maybe_tweak_event`, see comment for this slot.
-                **(params.select_tweak_event if fallback else params.tool_tweak_event))),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event))),
         ]},
     )
 
@@ -7398,7 +7437,7 @@ def km_3d_view_tool_edit_gpencil_select_circle(params, *, fallback):
                 "gpencil.select_circle",
                 # Why circle select should be used on tweak?
                 # So that RMB or Shift-RMB is still able to set an element as active.
-                type=params.select_tweak if fallback else params.tool_mouse,
+                type=params.select_tweak if (fallback and params.use_fallback_tool_select_mouse) else params.tool_mouse,
                 value='ANY' if fallback else 'PRESS',
                 properties=[("wait_for_input", False)])),
         ]},
@@ -7412,7 +7451,8 @@ def km_3d_view_tool_edit_gpencil_select_lasso(params, *, fallback):
         {"items": [
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions(
                 "gpencil.select_lasso",
-                **(params.select_tweak_event if fallback else params.tool_tweak_event))),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event))),
         ]}
     )
 
@@ -7505,7 +7545,7 @@ def km_3d_view_tool_sculpt_gpencil_select(params):
     return (
         "3D View Tool: Sculpt Gpencil, Tweak",
         {"space_type": 'VIEW_3D', "region_type": 'WINDOW'},
-        {"items": _template_items_tool_select(params, "gpencil.select", "view3d.cursor3d", extend="toggle")},
+        {"items": _template_items_tool_select(params, "gpencil.select", "view3d.cursor3d", False, extend="toggle")},
     )
 
 
@@ -7544,8 +7584,8 @@ def km_sequencer_editor_tool_generic_select(params, *, fallback):
         _fallback_id("Sequencer Tool: Tweak", fallback),
         {"space_type": 'SEQUENCE_EDITOR', "region_type": 'WINDOW'},
         {"items": [
-            *([] if fallback else _template_items_tool_select(
-                params, "sequencer.select", "sequencer.cursor_set", extend="toggle")),
+            *([] if (fallback and (params.select_mouse == 'RIGHTMOUSE')) else _template_items_tool_select(
+                params, "sequencer.select", "sequencer.cursor_set", fallback, extend="toggle")),
 
             *([] if (not params.use_fallback_tool_rmb) else _template_sequencer_preview_select(
                 type=params.select_mouse, value=params.select_mouse_value, legacy=params.legacy)),
@@ -7563,7 +7603,8 @@ def km_sequencer_editor_tool_generic_select_box(params, *, fallback):
             # Don't use `tool_maybe_tweak_event`, see comment for this slot.
             *([] if (fallback and not params.use_fallback_tool) else _template_items_tool_select_actions_simple(
                 "sequencer.select_box",
-                **(params.select_tweak_event if fallback else params.tool_tweak_event),
+                **(params.select_tweak_event if (fallback and params.use_fallback_tool_select_mouse) else
+                   params.tool_tweak_event),
                 properties=[("tweak", params.select_mouse == 'LEFTMOUSE')])),
 
             # RMB select can already set the frame, match the tweak tool.

@@ -94,8 +94,6 @@ const char *nodeTypeAsString(NodeType type)
       return "PARTICLE_SETTINGS";
     case NodeType::SHADING:
       return "SHADING";
-    case NodeType::SHADING_PARAMETERS:
-      return "SHADING_PARAMETERS";
     case NodeType::CACHE:
       return "CACHE";
     case NodeType::POINT_CACHE:
@@ -118,6 +116,8 @@ const char *nodeTypeAsString(NodeType type)
       return "VISIBILITY";
     case NodeType::SIMULATION:
       return "SIMULATION";
+    case NodeType::NTREE_OUTPUT:
+      return "NTREE_OUTPUT";
 
     /* Total number of meaningful node types. */
     case NodeType::NUM_TYPES:
@@ -161,7 +161,6 @@ eDepsSceneComponentType nodeTypeToSceneComponent(NodeType type)
     case NodeType::GENERIC_DATABLOCK:
     case NodeType::PARTICLE_SYSTEM:
     case NodeType::PARTICLE_SETTINGS:
-    case NodeType::SHADING_PARAMETERS:
     case NodeType::POINT_CACHE:
     case NodeType::IMAGE_ANIMATION:
     case NodeType::BATCH_CACHE:
@@ -177,6 +176,7 @@ eDepsSceneComponentType nodeTypeToSceneComponent(NodeType type)
     case NodeType::CACHE:
     case NodeType::PROXY:
     case NodeType::SIMULATION:
+    case NodeType::NTREE_OUTPUT:
       return DEG_SCENE_COMP_PARAMETERS;
 
     case NodeType::VISIBILITY:
@@ -248,13 +248,13 @@ eDepsObjectComponentType nodeTypeToObjectComponent(NodeType type)
     case NodeType::GENERIC_DATABLOCK:
     case NodeType::PARTICLE_SYSTEM:
     case NodeType::PARTICLE_SETTINGS:
-    case NodeType::SHADING_PARAMETERS:
     case NodeType::POINT_CACHE:
     case NodeType::IMAGE_ANIMATION:
     case NodeType::BATCH_CACHE:
     case NodeType::DUPLI:
     case NodeType::SYNCHRONIZATION:
     case NodeType::SIMULATION:
+    case NodeType::NTREE_OUTPUT:
     case NodeType::UNDEFINED:
     case NodeType::NUM_TYPES:
       return DEG_OB_COMP_PARAMETERS;
@@ -315,7 +315,6 @@ Node::~Node()
   }
 }
 
-/* Generic identifier for Depsgraph Nodes. */
 string Node::identifier() const
 {
   return string(nodeTypeAsString(type)) + " : " + name;

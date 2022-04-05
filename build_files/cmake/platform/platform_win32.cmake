@@ -55,6 +55,10 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
     message(WARNING "stripped pdb not supported with clang, disabling..")
     set(WITH_WINDOWS_STRIPPED_PDB OFF)
   endif()
+else()
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 19.28.29921) # MSVC 2019 16.9.16
+    message(FATAL_ERROR "Compiler is unsupported, MSVC 2019 16.9.16 or newer is required for building blender.")
+  endif()
 endif()
 
 if(NOT WITH_PYTHON_MODULE)
@@ -265,12 +269,6 @@ if(NOT DEFINED LIBDIR)
   elseif(MSVC_VERSION GREATER 1919)
     message(STATUS "Visual Studio 2019 detected.")
     set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
-  elseif(MSVC_VERSION GREATER 1909)
-    message(STATUS "Visual Studio 2017 detected.")
-    set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
-  elseif(MSVC_VERSION EQUAL 1900)
-    message(STATUS "Visual Studio 2015 detected.")
-    set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
   endif()
 else()
   message(STATUS "Using pre-compiled LIBDIR: ${LIBDIR}")
@@ -347,7 +345,11 @@ set(FREETYPE_INCLUDE_DIRS
   ${LIBDIR}/freetype/include
   ${LIBDIR}/freetype/include/freetype2
 )
-set(FREETYPE_LIBRARY ${LIBDIR}/freetype/lib/freetype2ST.lib)
+set(FREETYPE_LIBRARIES
+  ${LIBDIR}/freetype/lib/freetype2ST.lib
+  ${LIBDIR}/brotli/lib/brotlidec-static.lib
+  ${LIBDIR}/brotli/lib/brotlicommon-static.lib
+)
 windows_find_package(freetype REQUIRED)
 
 if(WITH_FFTW3)
@@ -461,7 +463,7 @@ if(WITH_JACK)
 endif()
 
 if(WITH_PYTHON)
-  set(PYTHON_VERSION 3.9) # CACHE STRING)
+  set(PYTHON_VERSION 3.10) # CACHE STRING)
 
   string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
   set(PYTHON_LIBRARY ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}.lib)
@@ -477,7 +479,7 @@ if(WITH_PYTHON)
 endif()
 
 if(WITH_BOOST)
-  if(WITH_CYCLES_OSL)
+  if(WITH_CYCLES AND WITH_CYCLES_OSL)
     set(boost_extra_libs wave)
   endif()
   if(WITH_INTERNATIONAL)
@@ -520,7 +522,7 @@ if(WITH_BOOST)
       debug ${BOOST_LIBPATH}/libboost_thread-${BOOST_DEBUG_POSTFIX}
       debug ${BOOST_LIBPATH}/libboost_chrono-${BOOST_DEBUG_POSTFIX}
     )
-    if(WITH_CYCLES_OSL)
+    if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
         optimized ${BOOST_LIBPATH}/libboost_wave-${BOOST_POSTFIX}
         debug ${BOOST_LIBPATH}/libboost_wave-${BOOST_DEBUG_POSTFIX})
@@ -708,7 +710,7 @@ if(WITH_CODEC_SNDFILE)
   set(LIBSNDFILE_LIBRARIES ${LIBSNDFILE_LIBPATH}/libsndfile-1.lib)
 endif()
 
-if(WITH_CYCLES_OSL)
+if(WITH_CYCLES AND WITH_CYCLES_OSL)
   set(CYCLES_OSL ${LIBDIR}/osl CACHE PATH "Path to OpenShadingLanguage installation")
   set(OSL_SHADER_DIR ${CYCLES_OSL}/shaders)
   # Shaders have moved around a bit between OSL versions, check multiple locations
@@ -741,7 +743,7 @@ if(WITH_CYCLES_OSL)
   endif()
 endif()
 
-if(WITH_CYCLES_EMBREE)
+if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
   windows_find_package(Embree)
   if(NOT EMBREE_FOUND)
     set(EMBREE_INCLUDE_DIRS ${LIBDIR}/embree/include)

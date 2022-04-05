@@ -49,6 +49,7 @@ set(SRC_OSL
   node_glossy_bsdf.osl
   node_gradient_texture.osl
   node_hair_info.osl
+  node_point_info.osl
   node_scatter_volume.osl
   node_absorption_volume.osl
   node_principled_volume.osl
@@ -92,6 +93,7 @@ set(SRC_OSL
   node_value.osl
   node_vector_curves.osl
   node_vector_math.osl
+  node_vector_map_range.osl
   node_vector_rotate.osl
   node_vector_transform.osl
   node_velvet_bsdf.osl

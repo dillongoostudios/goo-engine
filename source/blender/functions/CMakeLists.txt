@@ -34,10 +34,11 @@ set(SRC
   intern/generic_virtual_vector_array.cc
   intern/multi_function.cc
   intern/multi_function_builder.cc
-  intern/multi_function_parallel.cc
+  intern/multi_function_params.cc
   intern/multi_function_procedure.cc
   intern/multi_function_procedure_builder.cc
   intern/multi_function_procedure_executor.cc
+  intern/multi_function_procedure_optimization.cc
 
   FN_cpp_type.hh
   FN_cpp_type_make.hh
@@ -54,12 +55,12 @@ set(SRC
   FN_multi_function_builder.hh
   FN_multi_function_context.hh
   FN_multi_function_data_type.hh
-  FN_multi_function_parallel.hh
   FN_multi_function_param_type.hh
   FN_multi_function_params.hh
   FN_multi_function_procedure.hh
   FN_multi_function_procedure_builder.hh
   FN_multi_function_procedure_executor.hh
+  FN_multi_function_procedure_optimization.hh
   FN_multi_function_signature.hh
 )
 

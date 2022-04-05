@@ -66,7 +66,8 @@
 /* Font array. */
 static FontBLF *global_font[BLF_MAX_FONT] = {NULL};
 
-/* XXX, should these be made into global_font_'s too? */
+/* XXX: should these be made into global_font_'s too? */
+
 int blf_mono_font = -1;
 int blf_mono_font_render = -1;
 
@@ -363,7 +364,7 @@ void BLF_position(int fontid, float x, float y, float z)
   }
 }
 
-void BLF_size(int fontid, int size, int dpi)
+void BLF_size(int fontid, float size, int dpi)
 {
   FontBLF *font = blf_get(fontid);
 
@@ -568,14 +569,6 @@ int BLF_draw_mono(int fontid, const char *str, const size_t str_len, int cwidth)
   return columns;
 }
 
-/**
- * Run \a user_fn for each character, with the bound-box that would be used for drawing.
- *
- * \param user_fn: Callback that runs on each glyph, returning false early exits.
- * \param user_data: User argument passed to \a user_fn.
- *
- * \note The font position, clipping, matrix and rotation are not applied.
- */
 void BLF_boundbox_foreach_glyph_ex(int fontid,
                                    const char *str,
                                    size_t str_len,
@@ -910,7 +903,7 @@ void BLF_state_print(int fontid)
   if (font) {
     printf("fontid %d %p\n", fontid, (void *)font);
     printf("  name:    '%s'\n", font->name);
-    printf("  size:     %u\n", font->size);
+    printf("  size:     %f\n", font->size);
     printf("  dpi:      %u\n", font->dpi);
     printf("  pos:      %.6f %.6f %.6f\n", UNPACK3(font->pos));
     printf("  aspect:   (%d) %.6f %.6f %.6f\n",

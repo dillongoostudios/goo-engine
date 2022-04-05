@@ -81,6 +81,7 @@ typedef enum ShaderNodeType {
   NODE_OBJECT_INFO,
   NODE_PARTICLE_INFO,
   NODE_HAIR_INFO,
+  NODE_POINT_INFO,
   NODE_TEXTURE_MAPPING,
   NODE_MAPPING,
   NODE_MIN_MAX,
@@ -114,6 +115,7 @@ typedef enum ShaderNodeType {
   NODE_WAVELENGTH,
   NODE_BLACKBODY,
   NODE_MAP_RANGE,
+  NODE_VECTOR_MAP_RANGE,
   NODE_CLAMP,
   NODE_BEVEL,
   NODE_AMBIENT_OCCLUSION,
@@ -123,7 +125,7 @@ typedef enum ShaderNodeType {
   NODE_AOV_VALUE,
   NODE_FLOAT_CURVE,
   /* NOTE: for best OpenCL performance, item definition in the enum must
-   * match the switch case order in svm.h. */
+   * match the switch case order in `svm.h`. */
 } ShaderNodeType;
 
 typedef enum NodeAttributeOutputType {
@@ -175,11 +177,15 @@ typedef enum NodeHairInfo {
   NODE_INFO_CURVE_INTERCEPT,
   NODE_INFO_CURVE_LENGTH,
   NODE_INFO_CURVE_THICKNESS,
-  /* Fade for minimum hair width transiency. */
-  // NODE_INFO_CURVE_FADE,
   NODE_INFO_CURVE_TANGENT_NORMAL,
   NODE_INFO_CURVE_RANDOM,
 } NodeHairInfo;
+
+typedef enum NodePointInfo {
+  NODE_INFO_POINT_POSITION,
+  NODE_INFO_POINT_RADIUS,
+  NODE_INFO_POINT_RANDOM,
+} NodePointInfo;
 
 typedef enum NodeLightPath {
   NODE_LP_camera = 0,

@@ -23,7 +23,7 @@
 
 #include "RNA_enum_types.h"
 
-#include "../node_shader_util.h"
+#include "../node_shader_util.hh"
 
 #define TEST_SDF 255
 
@@ -107,7 +107,7 @@ static void node_shader_init_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *node
   node->storage = sdf;
 }
 
-static const char *gpu_shader_get_name(int mode)
+static const char *gpu_shader_sdf_primitive_get_name(int mode)
 {
   switch (mode) {
     case SHD_SDF_3D_SPHERE:
@@ -218,7 +218,7 @@ static int node_shader_gpu_sdf_primitive(GPUMaterial *mat,
   node_shader_gpu_tex_mapping(mat, node, in, out);
   NodeSdfPrimitive *sdf = (NodeSdfPrimitive *)node->storage;
 
-  const char *name = gpu_shader_get_name(sdf->mode);
+  const char *name = gpu_shader_sdf_primitive_get_name(sdf->mode);
 
   if (name != nullptr) {
     float invert = (sdf->invert) ? 1.0f : -1.0f;
@@ -229,8 +229,8 @@ static int node_shader_gpu_sdf_primitive(GPUMaterial *mat,
   }
 }
 
-static void node_shader_label_sdf_primitive(bNodeTree *UNUSED(ntree),
-                                            bNode *node,
+static void node_shader_label_sdf_primitive(const bNodeTree *ntree,
+                                            const bNode *node,
                                             char *label,
                                             int maxlen)
 {
@@ -244,7 +244,7 @@ static void node_shader_label_sdf_primitive(bNodeTree *UNUSED(ntree),
   BLI_strncpy(label, IFACE_(name), maxlen);
 }
 
-static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_update_sdf_primitive(bNodeTree *ntree, bNode *node)
 {
   NodeSdfPrimitive *sdf = (NodeSdfPrimitive *)node->storage;
 
@@ -261,7 +261,8 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
   bNodeSocket *sockRound = (bNodeSocket *)BLI_findlink(&node->inputs, 12);
   bNodeSocket *sockLinewidth = (bNodeSocket *)BLI_findlink(&node->inputs, 13);
 
-  nodeSetSocketAvailability(sockRound,
+  nodeSetSocketAvailability(ntree,
+                            sockRound,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_3D_BOX,
@@ -292,10 +293,11 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                      SHD_SDF_2D_TRIANGLE,
                                      SHD_SDF_2D_UNEVEN_CAPSULE,
                                      SHD_SDF_2D_HORSESHOE));
-  nodeSetSocketAvailability(sockLinewidth, true);
+  nodeSetSocketAvailability(ntree, sockLinewidth, true);
 
   /* Points */
-  nodeSetSocketAvailability(sockPoint1,
+  nodeSetSocketAvailability(ntree,
+                            sockPoint1,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_3D_PLANE,
@@ -307,7 +309,8 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                  SHD_SDF_2D_BEZIER,
                                  SHD_SDF_2D_POINT_TRIANGLE,
                                  SHD_SDF_2D_QUAD));
-  nodeSetSocketAvailability(sockPoint2,
+  nodeSetSocketAvailability(ntree,
+                            sockPoint2,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_3D_POINT_CONE,
@@ -319,12 +322,15 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                  SHD_SDF_2D_POINT_TRIANGLE,
                                  SHD_SDF_2D_QUAD));
   nodeSetSocketAvailability(
+      ntree,
       sockPoint3,
       ELEM(sdf->mode, TEST_SDF, SHD_SDF_2D_BEZIER, SHD_SDF_2D_POINT_TRIANGLE, SHD_SDF_2D_QUAD));
-  nodeSetSocketAvailability(sockPoint4, ELEM(sdf->mode, TEST_SDF, SHD_SDF_2D_QUAD));
+  nodeSetSocketAvailability(ntree,
+                            sockPoint4, ELEM(sdf->mode, TEST_SDF, SHD_SDF_2D_QUAD));
 
   /* Radius */
-  nodeSetSocketAvailability(sockRadius,
+  nodeSetSocketAvailability(ntree,
+                            sockRadius,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_2D_CIRCLE,
@@ -355,7 +361,8 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                      SHD_SDF_3D_POINT_CONE));
 
   /* Values */
-  nodeSetSocketAvailability(sockValue1,
+  nodeSetSocketAvailability(ntree,
+                            sockValue1,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_3D_PYRAMID,
@@ -381,7 +388,8 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                      SHD_SDF_2D_STAR,
                                      SHD_SDF_2D_UNEVEN_CAPSULE,
                                      SHD_SDF_2D_ELLIPSE));
-  nodeSetSocketAvailability(sockValue2,
+  nodeSetSocketAvailability(ntree,
+                            sockValue2,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_2D_PARABOLA_SEGMENT,
@@ -392,7 +400,8 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                  SHD_SDF_2D_RECTANGLE,
                                  SHD_SDF_2D_RHOMBUS) ||
                                 ELEM(sdf->mode, SHD_SDF_3D_BOX));
-  nodeSetSocketAvailability(sockValue3,
+  nodeSetSocketAvailability(ntree,
+                            sockValue3,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_2D_ISOSCELES,
@@ -404,10 +413,12 @@ static void node_shader_update_sdf_primitive(bNodeTree *UNUSED(ntree), bNode *no
                                  SHD_SDF_3D_HEX_PRISM,
                                  SHD_SDF_3D_HEX_PRISM_INCIRCLE,
                                  SHD_SDF_3D_BOX));
-  nodeSetSocketAvailability(sockValue4, ELEM(sdf->mode, TEST_SDF));
+  nodeSetSocketAvailability(ntree,
+                            sockValue4, ELEM(sdf->mode, TEST_SDF));
 
   /* Angles */
-  nodeSetSocketAvailability(sockAngle1,
+  nodeSetSocketAvailability(ntree,
+                            sockAngle1,
                             ELEM(sdf->mode,
                                  TEST_SDF,
                                  SHD_SDF_3D_SOLID_ANGLE,
@@ -506,14 +517,14 @@ void register_node_type_sh_sdf_primitive(void)
 {
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_SDF_PRIMITIVE, "Sdf Primitive", NODE_CLASS_TEXTURE, 0);
+  sh_fn_node_type_base(&ntype, SH_NODE_SDF_PRIMITIVE, "Sdf Primitive", NODE_CLASS_TEXTURE);
   node_type_socket_templates(&ntype, sh_node_sdf_primitive_in, sh_node_sdf_primitive_out);
   node_type_size_preset(&ntype, NODE_SIZE_MIDDLE);
   node_type_init(&ntype, node_shader_init_sdf_primitive);
   node_type_storage(
       &ntype, "NodeSdfPrimitive", node_free_standard_storage, node_copy_standard_storage);
   node_type_gpu(&ntype, node_shader_gpu_sdf_primitive);
-  node_type_label(&ntype, node_shader_label_sdf_primitive);
+  ntype.labelfunc = &node_shader_label_sdf_primitive;
   node_type_update(&ntype, node_shader_update_sdf_primitive);
 
   nodeRegisterType(&ntype);

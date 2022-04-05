@@ -315,11 +315,6 @@ bool createSpaceNormal(float mat[3][3], const float normal[3])
   return true;
 }
 
-/**
- * \note To recreate an orientation from the matrix:
- * - (plane  == mat[1])
- * - (normal == mat[2])
- */
 bool createSpaceNormalTangent(float mat[3][3], const float normal[3], const float tangent[3])
 {
   if (normalize_v3_v3(mat[2], normal) == 0.0f) {
@@ -503,15 +498,6 @@ void ED_transform_calc_orientation_from_type(const bContext *C, float r_mat[3][3
       scene, view_layer, v3d, rv3d, ob, obedit, orient_index, pivot_point, r_mat);
 }
 
-/**
- * \note The resulting matrix may not be orthogonal,
- * callers that depend on `r_mat` to be orthogonal should use #orthogonalize_m3.
- *
- * A non orthogonal matrix may be returned when:
- * - #V3D_ORIENT_GIMBAL the result won't be orthogonal unless the object has no rotation.
- * - #V3D_ORIENT_LOCAL may contain shear from non-uniform scale in parent/child relationships.
- * - #V3D_ORIENT_CUSTOM may have been created from #V3D_ORIENT_LOCAL.
- */
 short ED_transform_calc_orientation_from_type_ex(const Scene *scene,
                                                  ViewLayer *view_layer,
                                                  const View3D *v3d,
@@ -527,7 +513,7 @@ short ED_transform_calc_orientation_from_type_ex(const Scene *scene,
 
       if (ob) {
         if (ob->mode & OB_MODE_POSE) {
-          const bPoseChannel *pchan = BKE_pose_channel_active(ob);
+          const bPoseChannel *pchan = BKE_pose_channel_active_if_layer_visible(ob);
           if (pchan && gimbal_axis_pose(ob, pchan, r_mat)) {
             break;
           }
@@ -602,9 +588,6 @@ short ED_transform_calc_orientation_from_type_ex(const Scene *scene,
   return orientation_index;
 }
 
-/* Sets the matrix of the specified space orientation.
- * If the matrix cannot be obtained, an orientation different from the one
- * informed is returned */
 short transform_orientation_matrix_get(bContext *C,
                                        TransInfo *t,
                                        short orient_index,
@@ -1241,7 +1224,7 @@ int getTransformOrientation_ex(ViewLayer *view_layer,
     float imat[3][3], mat[3][3];
     bool ok = false;
 
-    if (activeOnly && (pchan = BKE_pose_channel_active(ob))) {
+    if (activeOnly && (pchan = BKE_pose_channel_active_if_layer_visible(ob))) {
       add_v3_v3(normal, pchan->pose_mat[2]);
       add_v3_v3(plane, pchan->pose_mat[1]);
       ok = true;

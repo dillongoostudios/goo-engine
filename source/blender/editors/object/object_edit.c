@@ -134,8 +134,6 @@ Object *ED_object_context(const bContext *C)
   return CTX_data_pointer_get_type(C, "object", &RNA_Object).data;
 }
 
-/* Find the correct active object per context.
- * NOTE: context can be NULL when called from a enum with #PROP_ENUM_NO_CONTEXT. */
 Object *ED_object_active_context(const bContext *C)
 {
   Object *ob = NULL;
@@ -148,14 +146,6 @@ Object *ED_object_active_context(const bContext *C)
   return ob;
 }
 
-/**
- * Return an array of objects:
- * - When in the property space, return the pinned or active object.
- * - When in edit-mode/pose-mode, return an array of objects in the mode.
- * - Otherwise return selected objects,
- *   the callers \a filter_fn needs to check of they are editable
- *   (assuming they need to be modified).
- */
 Object **ED_object_array_in_mode_or_selected(bContext *C,
                                              bool (*filter_fn)(const Object *ob, void *user_data),
                                              void *filter_user_data,
@@ -669,10 +659,6 @@ bool ED_object_editmode_load(Main *bmain, Object *obedit)
   return ED_object_editmode_load_free_ex(bmain, obedit, true, false);
 }
 
-/**
- * \param flag:
- * - If #EM_FREEDATA isn't in the flag, use ED_object_editmode_load directly.
- */
 bool ED_object_editmode_exit_ex(Main *bmain, Scene *scene, Object *obedit, int flag)
 {
   const bool free_data = (flag & EM_FREEDATA) != 0;
@@ -723,11 +709,6 @@ bool ED_object_editmode_exit(bContext *C, int flag)
   return ED_object_editmode_exit_ex(bmain, scene, obedit, flag);
 }
 
-/**
- * Support freeing edit-mode data without flushing it back to the object.
- *
- * \return true if data was freed.
- */
 bool ED_object_editmode_free_ex(Main *bmain, Object *obedit)
 {
   return ED_object_editmode_load_free_ex(bmain, obedit, false, true);
@@ -1161,11 +1142,6 @@ static bool has_pose_motion_paths(Object *ob)
   return ob->pose && (ob->pose->avs.path_bakeflag & MOTIONPATH_BAKE_HAS_PATHS) != 0;
 }
 
-/* For the objects with animation: update paths for those that have got them
- * This should selectively update paths that exist...
- *
- * To be called from various tools that do incremental updates
- */
 void ED_objects_recalculate_paths(bContext *C,
                                   Scene *scene,
                                   eObjectPathCalcRange range,
@@ -1428,7 +1404,6 @@ static void object_clear_mpath(Object *ob)
   }
 }
 
-/* Clear motion paths for all objects */
 void ED_objects_clear_paths(bContext *C, bool only_selected)
 {
   if (only_selected) {
@@ -1663,10 +1638,10 @@ void OBJECT_OT_shade_smooth(wmOperatorType *ot)
 /** \name Object Mode Set Operator
  * \{ */
 
-static const EnumPropertyItem *object_mode_set_itemsf(bContext *C,
-                                                      PointerRNA *UNUSED(ptr),
-                                                      PropertyRNA *UNUSED(prop),
-                                                      bool *r_free)
+static const EnumPropertyItem *object_mode_set_itemf(bContext *C,
+                                                     PointerRNA *UNUSED(ptr),
+                                                     PropertyRNA *UNUSED(prop),
+                                                     bool *r_free)
 {
   const EnumPropertyItem *input = rna_enum_object_mode_items;
   EnumPropertyItem *item = NULL;
@@ -1815,7 +1790,7 @@ void OBJECT_OT_mode_set(wmOperatorType *ot)
 
   ot->prop = RNA_def_enum(
       ot->srna, "mode", rna_enum_object_mode_items, OB_MODE_OBJECT, "Mode", "");
-  RNA_def_enum_funcs(ot->prop, object_mode_set_itemsf);
+  RNA_def_enum_funcs(ot->prop, object_mode_set_itemf);
   RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_boolean(ot->srna, "toggle", 0, "Toggle", "");
@@ -2001,8 +1976,14 @@ static void move_to_collection_menu_create(bContext *C, uiLayout *layout, void *
   RNA_int_set(&menu->ptr, "collection_index", menu->index);
   RNA_boolean_set(&menu->ptr, "is_new", true);
 
-  uiItemFullO_ptr(
-      layout, menu->ot, "New Collection", ICON_ADD, menu->ptr.data, WM_OP_INVOKE_DEFAULT, 0, NULL);
+  uiItemFullO_ptr(layout,
+                  menu->ot,
+                  CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "New Collection"),
+                  ICON_ADD,
+                  menu->ptr.data,
+                  WM_OP_INVOKE_DEFAULT,
+                  0,
+                  NULL);
 
   uiItemS(layout);
 

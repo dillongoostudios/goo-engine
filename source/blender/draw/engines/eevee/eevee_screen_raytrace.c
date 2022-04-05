@@ -154,7 +154,7 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *v
     GPU_texture_get_mipmap_size(effects->ssgi_hit_output, 0, hitbuf_size);
     GPU_texture_get_mipmap_size(effects->ssgi_filter_input, 0, hitbuf_size); /* TODO - bilateral filter input at full res due only*/
 
-    /** Screen space raytracing overview
+    /** Screen space ray-tracing overview
      *
      * Following Frostbite stochastic SSR.
      *

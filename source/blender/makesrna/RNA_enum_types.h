@@ -35,7 +35,9 @@ struct bNodeType;
 #define DEF_ENUM(id) extern const EnumPropertyItem id[];
 #include "RNA_enum_items.h"
 
-extern const EnumPropertyItem *rna_enum_attribute_domain_itemf(struct ID *id, bool *r_free);
+extern const EnumPropertyItem *rna_enum_attribute_domain_itemf(struct ID *id,
+                                                               bool include_instances,
+                                                               bool *r_free);
 
 extern const EnumPropertyItem rna_enum_node_sdf_primitive_items[];
 extern const EnumPropertyItem rna_enum_node_sdf_op_items[];
@@ -87,8 +89,10 @@ const EnumPropertyItem *rna_TransformOrientation_itemf(struct bContext *C,
                                                        struct PropertyRNA *prop,
                                                        bool *r_free);
 
-/* Generic functions, return an enum from library data, index is the position
- * in the linked list can add more for different types as needed */
+/**
+ * Generic functions, return an enum from library data, index is the position
+ * in the linked list can add more for different types as needed.
+ */
 const EnumPropertyItem *RNA_action_itemf(struct bContext *C,
                                          struct PointerRNA *ptr,
                                          struct PropertyRNA *prop,

@@ -27,8 +27,6 @@
 #include "kernel/light/light.h"
 #include "kernel/light/sample.h"
 
-#include "kernel/sample/mis.h"
-
 CCL_NAMESPACE_BEGIN
 
 #ifdef __VOLUME__
@@ -78,9 +76,8 @@ ccl_device_inline bool shadow_volume_shader_sample(KernelGlobals kg,
                                                    ccl_private ShaderData *ccl_restrict sd,
                                                    ccl_private float3 *ccl_restrict extinction)
 {
-  shader_eval_volume<true>(kg, state, sd, PATH_RAY_SHADOW, [=](const int i) {
-    return integrator_state_read_shadow_volume_stack(state, i);
-  });
+  VOLUME_READ_LAMBDA(integrator_state_read_shadow_volume_stack(state, i))
+  shader_eval_volume<true>(kg, state, sd, PATH_RAY_SHADOW, volume_read_lambda_pass);
 
   if (!(sd->flag & SD_EXTINCTION)) {
     return false;
@@ -98,9 +95,8 @@ ccl_device_inline bool volume_shader_sample(KernelGlobals kg,
                                             ccl_private VolumeShaderCoefficients *coeff)
 {
   const uint32_t path_flag = INTEGRATOR_STATE(state, path, flag);
-  shader_eval_volume<false>(kg, state, sd, path_flag, [=](const int i) {
-    return integrator_state_read_volume_stack(state, i);
-  });
+  VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
+  shader_eval_volume<false>(kg, state, sd, path_flag, volume_read_lambda_pass);
 
   if (!(sd->flag & (SD_EXTINCTION | SD_SCATTER | SD_EMISSION))) {
     return false;
@@ -772,7 +768,7 @@ ccl_device_forceinline void integrate_volume_direct_light(
   const float phase_pdf = shader_volume_phase_eval(kg, sd, phases, ls->D, &phase_eval);
 
   if (ls->shader & SHADER_USE_MIS) {
-    float mis_weight = power_heuristic(ls->pdf, phase_pdf);
+    float mis_weight = light_sample_mis_weight_nee(kg, ls->pdf, phase_pdf);
     bsdf_eval_mul(&phase_eval, mis_weight);
   }
 
@@ -795,21 +791,36 @@ ccl_device_forceinline void integrate_volume_direct_light(
 
   /* Write shadow ray and associated state to global memory. */
   integrator_state_write_shadow_ray(kg, shadow_state, &ray);
+  INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 0, object) = ray.self.object;
+  INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 0, prim) = ray.self.prim;
+  INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, object) = ray.self.light_object;
+  INTEGRATOR_STATE_ARRAY_WRITE(shadow_state, shadow_isect, 1, prim) = ray.self.light_prim;
 
   /* Copy state from main path to shadow path. */
   const uint16_t bounce = INTEGRATOR_STATE(state, path, bounce);
   const uint16_t transparent_bounce = INTEGRATOR_STATE(state, path, transparent_bounce);
   uint32_t shadow_flag = INTEGRATOR_STATE(state, path, flag);
   shadow_flag |= (is_light) ? PATH_RAY_SHADOW_FOR_LIGHT : 0;
-  shadow_flag |= PATH_RAY_VOLUME_PASS;
   const float3 throughput_phase = throughput * bsdf_eval_sum(&phase_eval);
 
   if (kernel_data.kernel_features & KERNEL_FEATURE_LIGHT_PASSES) {
-    const float3 pass_diffuse_weight = (bounce == 0) ?
-                                           one_float3() :
-                                           INTEGRATOR_STATE(state, path, pass_diffuse_weight);
+    packed_float3 pass_diffuse_weight;
+    packed_float3 pass_glossy_weight;
+
+    if (shadow_flag & PATH_RAY_ANY_PASS) {
+      /* Indirect bounce, use weights from earlier surface or volume bounce. */
+      pass_diffuse_weight = INTEGRATOR_STATE(state, path, pass_diffuse_weight);
+      pass_glossy_weight = INTEGRATOR_STATE(state, path, pass_glossy_weight);
+    }
+    else {
+      /* Direct light, no diffuse/glossy distinction needed for volumes. */
+      shadow_flag |= PATH_RAY_VOLUME_PASS;
+      pass_diffuse_weight = packed_float3(one_float3());
+      pass_glossy_weight = packed_float3(zero_float3());
+    }
+
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_diffuse_weight) = pass_diffuse_weight;
-    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_glossy_weight) = zero_float3();
+    INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, pass_glossy_weight) = pass_glossy_weight;
   }
 
   INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, render_pixel_index) = INTEGRATOR_STATE(
@@ -876,11 +887,13 @@ ccl_device_forceinline bool integrate_volume_phase_scatter(
   INTEGRATOR_STATE_WRITE(state, ray, P) = sd->P;
   INTEGRATOR_STATE_WRITE(state, ray, D) = normalize(phase_omega_in);
   INTEGRATOR_STATE_WRITE(state, ray, t) = FLT_MAX;
-
 #  ifdef __RAY_DIFFERENTIALS__
   INTEGRATOR_STATE_WRITE(state, ray, dP) = differential_make_compact(sd->dP);
   INTEGRATOR_STATE_WRITE(state, ray, dD) = differential_make_compact(phase_domega_in);
 #  endif
+  // Save memory by storing last hit prim and object in isect
+  INTEGRATOR_STATE_WRITE(state, isect, prim) = sd->prim;
+  INTEGRATOR_STATE_WRITE(state, isect, object) = sd->object;
 
   /* Update throughput. */
   const float3 throughput = INTEGRATOR_STATE(state, path, throughput);
@@ -932,8 +945,8 @@ ccl_device VolumeIntegrateEvent volume_integrate(KernelGlobals kg,
                                                 VOLUME_SAMPLE_DISTANCE;
 
   /* Step through volume. */
-  const float step_size = volume_stack_step_size(
-      kg, [=](const int i) { return integrator_state_read_volume_stack(state, i); });
+  VOLUME_READ_LAMBDA(integrator_state_read_volume_stack(state, i))
+  const float step_size = volume_stack_step_size(kg, volume_read_lambda_pass);
 
   /* TODO: expensive to zero closures? */
   VolumeIntegrateResult result = {};

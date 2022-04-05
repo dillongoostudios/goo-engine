@@ -95,6 +95,11 @@ void BlenderSync::reset(BL::BlendData &b_data, BL::Scene &b_scene)
   this->b_scene = b_scene;
 }
 
+void BlenderSync::tag_update()
+{
+  has_updates_ = true;
+}
+
 /* Sync */
 
 void BlenderSync::sync_recalc(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d)
@@ -254,7 +259,12 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
                             int height,
                             void **python_thread_state)
 {
-  if (!has_updates_) {
+  /* For auto refresh images. */
+  ImageManager *image_manager = scene->image_manager;
+  const int frame = b_scene.frame_current();
+  const bool auto_refresh_update = image_manager->set_animation_frame_update(frame);
+
+  if (!has_updates_ && !auto_refresh_update) {
     return;
   }
 
@@ -269,7 +279,7 @@ void BlenderSync::sync_data(BL::RenderSettings &b_render,
   sync_view_layer(b_view_layer);
   sync_integrator(b_view_layer, background);
   sync_film(b_view_layer, b_v3d);
-  sync_shaders(b_depsgraph, b_v3d);
+  sync_shaders(b_depsgraph, b_v3d, auto_refresh_update);
   sync_images();
 
   geometry_synced.clear(); /* use for objects and motion sync */
@@ -391,6 +401,12 @@ void BlenderSync::sync_integrator(BL::ViewLayer &b_view_layer, bool background)
   else {
     integrator->set_ao_bounces(0);
   }
+
+#ifdef WITH_CYCLES_DEBUG
+  DirectLightSamplingType direct_light_sampling_type = (DirectLightSamplingType)get_enum(
+      cscene, "direct_light_sampling_type", DIRECT_LIGHT_SAMPLING_NUM, DIRECT_LIGHT_SAMPLING_MIS);
+  integrator->set_direct_light_sampling_type(direct_light_sampling_type);
+#endif
 
   const DenoiseParams denoise_params = get_denoise_params(b_scene, b_view_layer, background);
   integrator->set_use_denoise(denoise_params.use);
@@ -776,6 +792,7 @@ SceneParams BlenderSync::get_scene_params(BL::Scene &b_scene, bool background)
     params.bvh_type = BVH_TYPE_DYNAMIC;
 
   params.use_bvh_spatial_split = RNA_boolean_get(&cscene, "debug_use_spatial_splits");
+  params.use_bvh_compact_structure = RNA_boolean_get(&cscene, "debug_use_compact_bvh");
   params.use_bvh_unaligned_nodes = RNA_boolean_get(&cscene, "debug_use_hair_bvh");
   params.num_bvh_time_steps = RNA_int_get(&cscene, "debug_bvh_time_steps");
 
@@ -821,6 +838,14 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   SessionParams params;
   PointerRNA cscene = RNA_pointer_get(&b_scene.ptr, "cycles");
 
+  if (background && !b_engine.is_preview()) {
+    /* Viewport and preview renders do not require temp directory and do request session
+     * parameters more often than the background render.
+     * Optimize RNA-C++ usage and memory allocation a bit by saving string access which we know is
+     * not needed for viewport render. */
+    params.temp_dir = b_engine.temporary_directory();
+  }
+
   /* feature set */
   params.experimental = (get_enum(cscene, "feature_set") != 0);
 
@@ -835,18 +860,25 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
   /* samples */
   int samples = get_int(cscene, "samples");
   int preview_samples = get_int(cscene, "preview_samples");
+  int sample_offset = get_int(cscene, "sample_offset");
 
   if (background) {
     params.samples = samples;
+    params.sample_offset = sample_offset;
   }
   else {
     params.samples = preview_samples;
-    if (params.samples == 0)
+    if (params.samples == 0) {
       params.samples = INT_MAX;
+    }
+    params.sample_offset = 0;
   }
 
+  /* Clamp sample offset. */
+  params.sample_offset = clamp(params.sample_offset, 0, Integrator::MAX_SAMPLES);
+
   /* Clamp samples. */
-  params.samples = min(params.samples, Integrator::MAX_SAMPLES);
+  params.samples = clamp(params.samples, 0, Integrator::MAX_SAMPLES - params.sample_offset);
 
   /* Viewport Performance */
   params.pixel_size = b_engine.get_preview_pixel_size(b_scene);
@@ -865,7 +897,7 @@ SessionParams BlenderSync::get_session_params(BL::RenderEngine &b_engine,
 
   /* Time limit. */
   if (background) {
-    params.time_limit = get_float(cscene, "time_limit");
+    params.time_limit = (double)get_float(cscene, "time_limit");
   }
   else {
     /* For the viewport it kind of makes more sense to think in terms of the noise floor, which is

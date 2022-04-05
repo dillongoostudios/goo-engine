@@ -64,7 +64,7 @@ from collections import namedtuple
 ToolDef = namedtuple(
     "ToolDef",
     (
-        # Unique tool name (withing space & mode context).
+        # Unique tool name (within space & mode context).
         "idname",
         # The name to display in the interface.
         "label",
@@ -106,7 +106,7 @@ ToolDef = namedtuple(
         #   Keep this functionality since it's likely useful for add-on key-maps.
         #
         # Warning: currently 'from_dict' this is a list of one item,
-        # so internally we can swap the key-map function for the key-map it's self.
+        # so internally we can swap the key-map function for the key-map itself.
         # This isn't very nice and may change, tool definitions shouldn't care about this.
         "keymap",
         # Optional data-block associated with this tool.
@@ -1054,9 +1054,6 @@ def _activate_by_item(context, space_type, item, index, *, as_fallback=False):
         if props is None:
             print("Error:", gizmo_group, "could not access properties!")
         else:
-            for key in props.bl_rna.properties.keys():
-                props.property_unset(key)
-
             gizmo_properties = item.widget_properties
             if gizmo_properties is not None:
                 if not isinstance(gizmo_properties, list):

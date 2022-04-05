@@ -78,6 +78,8 @@
 /* ******************************************* */
 /* 'Globals' and Defines */
 
+#define DEPTH_INVALID 1.0f
+
 /* values for tGPsdata->status */
 typedef enum eGPencil_PaintStatus {
   GP_STATUS_IDLING = 0, /* stroke isn't in progress yet */
@@ -123,6 +125,8 @@ typedef struct tGPsdata {
   ARegion *region;
   /** needed for GP_STROKE_2DSPACE. */
   View2D *v2d;
+  /** For operations that require occlusion testing. */
+  ViewDepths *depths;
   /** for using the camera rect within the 3d view. */
   rctf *subrect;
   rctf subrect_data;
@@ -322,6 +326,9 @@ static void annotation_stroke_convertcoords(tGPsdata *p,
                                             float *depth)
 {
   bGPdata *gpd = p->gpd;
+  if (depth && (*depth == DEPTH_INVALID)) {
+    depth = NULL;
+  }
 
   /* in 3d-space - pt->x/y/z are 3 side-by-side floats */
   if (gpd->runtime.sbuffer_sflag & GP_STROKE_3DSPACE) {
@@ -419,25 +426,25 @@ static void annotation_smooth_buffer(tGPsdata *p, float inf, int idx)
 
   /* Compute smoothed coordinate by taking the ones nearby */
   if (pta) {
-    copy_v2_v2(a, &pta->x);
+    copy_v2_v2(a, pta->m_xy);
     madd_v2_v2fl(sco, a, average_fac);
   }
   if (ptb) {
-    copy_v2_v2(b, &ptb->x);
+    copy_v2_v2(b, ptb->m_xy);
     madd_v2_v2fl(sco, b, average_fac);
   }
   if (ptc) {
-    copy_v2_v2(c, &ptc->x);
+    copy_v2_v2(c, ptc->m_xy);
     madd_v2_v2fl(sco, c, average_fac);
   }
   if (ptd) {
-    copy_v2_v2(d, &ptd->x);
+    copy_v2_v2(d, ptd->m_xy);
     madd_v2_v2fl(sco, d, average_fac);
   }
 
   /* Based on influence factor, blend between original and optimal smoothed coordinate */
   interp_v2_v2v2(c, c, sco, inf);
-  copy_v2_v2(&ptc->x, c);
+  copy_v2_v2(ptc->m_xy, c);
 }
 
 static void annotation_stroke_arrow_calc_points_segment(float stroke_points[8],
@@ -485,8 +492,8 @@ static void annotation_stroke_arrow_calc_points(tGPspoint *point,
     case GP_STROKE_ARROWSTYLE_CLOSED:
       mul_v2_fl(norm_dir, arrow_length);
       if (point != NULL) {
-        add_v2_v2(&point->x, norm_dir);
-        copy_v2_v2(corner, &point->x);
+        add_v2_v2(point->m_xy, norm_dir);
+        copy_v2_v2(corner, point->m_xy);
       }
       annotation_stroke_arrow_calc_points_segment(stroke_points,
                                                   corner,
@@ -500,8 +507,8 @@ static void annotation_stroke_arrow_calc_points(tGPspoint *point,
     case GP_STROKE_ARROWSTYLE_SQUARE:
       mul_v2_fl(norm_dir, arrow_length * 1.5f);
       if (point != NULL) {
-        add_v2_v2(&point->x, norm_dir);
-        copy_v2_v2(corner, &point->x);
+        add_v2_v2(point->m_xy, norm_dir);
+        copy_v2_v2(corner, point->m_xy);
       }
       annotation_stroke_arrow_calc_points_segment(stroke_points,
                                                   corner,
@@ -537,7 +544,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
       pt = (tGPspoint *)(gpd->runtime.sbuffer);
 
       /* store settings */
-      copy_v2_v2(&pt->x, mval);
+      copy_v2_v2(pt->m_xy, mval);
       /* T44932 - Pressure vals are unreliable, so ignore for now */
       pt->pressure = 1.0f;
       pt->strength = 1.0f;
@@ -553,7 +560,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
       pt = ((tGPspoint *)(gpd->runtime.sbuffer) + 1);
 
       /* store settings */
-      copy_v2_v2(&pt->x, mval);
+      copy_v2_v2(pt->m_xy, mval);
       /* T44932 - Pressure vals are unreliable, so ignore for now */
       pt->pressure = 1.0f;
       pt->strength = 1.0f;
@@ -566,10 +573,10 @@ static short annotation_stroke_addpoint(tGPsdata *p,
       if (gpd->runtime.sbuffer_sflag & (GP_STROKE_USE_ARROW_START | GP_STROKE_USE_ARROW_END)) {
         /* Store start and end point coords for arrows. */
         float end[2];
-        copy_v2_v2(end, &pt->x);
+        copy_v2_v2(end, pt->m_xy);
         pt = ((tGPspoint *)(gpd->runtime.sbuffer));
         float start[2];
-        copy_v2_v2(start, &pt->x);
+        copy_v2_v2(start, pt->m_xy);
 
         /* Arrow end corner. */
         if (gpd->runtime.sbuffer_sflag & GP_STROKE_USE_ARROW_END) {
@@ -602,7 +609,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
     pt = ((tGPspoint *)(gpd->runtime.sbuffer) + gpd->runtime.sbuffer_used);
 
     /* store settings */
-    copy_v2_v2(&pt->x, mval);
+    copy_v2_v2(pt->m_xy, mval);
     pt->pressure = pressure;
     /* Unused for annotations, but initialize for easier conversions to GP Object. */
     pt->strength = 1.0f;
@@ -629,7 +636,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
     pt = (tGPspoint *)gpd->runtime.sbuffer;
 
     /* store settings */
-    copy_v2_v2(&pt->x, mval);
+    copy_v2_v2(pt->m_xy, mval);
     /* T44932 - Pressure vals are unreliable, so ignore for now */
     pt->pressure = 1.0f;
     pt->strength = 1.0f;
@@ -671,7 +678,7 @@ static short annotation_stroke_addpoint(tGPsdata *p,
       }
 
       /* convert screen-coordinates to appropriate coordinates (and store them) */
-      annotation_stroke_convertcoords(p, &pt->x, &pts->x, NULL);
+      annotation_stroke_convertcoords(p, pt->m_xy, &pts->x, NULL);
 
       /* copy pressure and time */
       pts->pressure = pt->pressure;
@@ -710,8 +717,8 @@ static void annotation_stroke_arrow_init_point(
 {
   /* NOTE: provided co_idx should be always pair number as it's [x1, y1, x2, y2, x3, y3]. */
   const float real_co[2] = {co[co_idx], co[co_idx + 1]};
-  copy_v2_v2(&ptc->x, real_co);
-  annotation_stroke_convertcoords(p, &ptc->x, &pt->x, NULL);
+  copy_v2_v2(ptc->m_xy, real_co);
+  annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, NULL);
   annotation_stroke_arrow_init_point_default(pt);
 }
 
@@ -878,7 +885,7 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
       ptc = gpd->runtime.sbuffer;
 
       /* convert screen-coordinates to appropriate coordinates (and store them) */
-      annotation_stroke_convertcoords(p, &ptc->x, &pt->x, NULL);
+      annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, NULL);
 
       /* copy pressure and time */
       pt->pressure = ptc->pressure;
@@ -896,7 +903,7 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
       ptc = ((tGPspoint *)runtime.sbuffer) + (runtime.sbuffer_used - 1);
 
       /* Convert screen-coordinates to appropriate coordinates (and store them). */
-      annotation_stroke_convertcoords(p, &ptc->x, &pt->x, NULL);
+      annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, NULL);
 
       /* Copy pressure and time. */
       pt->pressure = ptc->pressure;
@@ -919,7 +926,7 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
 
         /* End point. */
         ptc = ((tGPspoint *)runtime.sbuffer) + (runtime.sbuffer_used - 1);
-        annotation_stroke_convertcoords(p, &ptc->x, &pt->x, NULL);
+        annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, NULL);
         annotation_stroke_arrow_init_point_default(pt);
 
         /* Fill and convert arrow points to create arrow shape. */
@@ -940,7 +947,7 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
 
         /* Start point. */
         ptc = runtime.sbuffer;
-        annotation_stroke_convertcoords(p, &ptc->x, &pt->x, NULL);
+        annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, NULL);
         annotation_stroke_arrow_init_point_default(pt);
 
         /* Fill and convert arrow points to create arrow shape. */
@@ -954,7 +961,7 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
     ptc = gpd->runtime.sbuffer;
 
     /* convert screen-coordinates to appropriate coordinates (and store them) */
-    annotation_stroke_convertcoords(p, &ptc->x, &pt->x, NULL);
+    annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, NULL);
 
     /* copy pressure and time */
     pt->pressure = ptc->pressure;
@@ -972,12 +979,13 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
 
       depth_arr = MEM_mallocN(sizeof(float) * gpd->runtime.sbuffer_used, "depth_points");
 
+      const ViewDepths *depths = p->depths;
       for (i = 0, ptc = gpd->runtime.sbuffer; i < gpd->runtime.sbuffer_used; i++, ptc++, pt++) {
-        round_v2i_v2fl(mval_i, &ptc->x);
+        round_v2i_v2fl(mval_i, ptc->m_xy);
 
-        if ((ED_view3d_autodist_depth(p->region, mval_i, depth_margin, depth_arr + i) == 0) &&
-            (i && (ED_view3d_autodist_depth_seg(
-                       p->region, mval_i, mval_prev, depth_margin + 1, depth_arr + i) == 0))) {
+        if ((ED_view3d_depth_read_cached(depths, mval_i, depth_margin, depth_arr + i) == 0) &&
+            (i && (ED_view3d_depth_read_cached_seg(
+                       depths, mval_i, mval_prev, depth_margin + 1, depth_arr + i) == 0))) {
           interp_depth = true;
         }
         else {
@@ -1000,14 +1008,14 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
           int last_valid = 0;
 
           for (i = 0; i < gpd->runtime.sbuffer_used; i++) {
-            if (depth_arr[i] != FLT_MAX) {
+            if (depth_arr[i] != DEPTH_INVALID) {
               break;
             }
           }
           first_valid = i;
 
           for (i = gpd->runtime.sbuffer_used - 1; i >= 0; i--) {
-            if (depth_arr[i] != FLT_MAX) {
+            if (depth_arr[i] != DEPTH_INVALID) {
               break;
             }
           }
@@ -1015,14 +1023,14 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
 
           /* invalidate non-endpoints, so only blend between first and last */
           for (i = first_valid + 1; i < last_valid; i++) {
-            depth_arr[i] = FLT_MAX;
+            depth_arr[i] = DEPTH_INVALID;
           }
 
           interp_depth = true;
         }
 
         if (interp_depth) {
-          interp_sparse_array(depth_arr, gpd->runtime.sbuffer_used, FLT_MAX);
+          interp_sparse_array(depth_arr, gpd->runtime.sbuffer_used, DEPTH_INVALID);
         }
       }
     }
@@ -1033,7 +1041,7 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
     for (i = 0, ptc = gpd->runtime.sbuffer; i < gpd->runtime.sbuffer_used && ptc;
          i++, ptc++, pt++) {
       /* convert screen-coordinates to appropriate coordinates (and store them) */
-      annotation_stroke_convertcoords(p, &ptc->x, &pt->x, depth_arr ? depth_arr + i : NULL);
+      annotation_stroke_convertcoords(p, ptc->m_xy, &pt->x, depth_arr ? depth_arr + i : NULL);
 
       /* copy pressure and time */
       pt->pressure = ptc->pressure;
@@ -1086,7 +1094,10 @@ static bool annotation_stroke_eraser_is_occluded(tGPsdata *p,
     const int mval_i[2] = {x, y};
     float mval_3d[3];
 
-    if (ED_view3d_autodist_simple(p->region, mval_i, mval_3d, 0, NULL)) {
+    float p_depth;
+    if (ED_view3d_depth_read_cached(p->depths, mval_i, 0, &p_depth)) {
+      ED_view3d_depth_unproject_v3(p->region, mval_i, (double)p_depth, mval_3d);
+
       const float depth_mval = ED_view3d_calc_depth_for_comparison(rv3d, mval_3d);
       const float depth_pt = ED_view3d_calc_depth_for_comparison(rv3d, &pt->x);
 
@@ -1121,7 +1132,7 @@ static void annotation_stroke_eraser_dostroke(tGPsdata *p,
     if (!(p->flags & GP_PAINTFLAG_SELECTMASK) || (gps->points->flag & GP_SPOINT_SELECT)) {
       gpencil_point_to_xy(&p->gsc, gps, gps->points, &pc1[0], &pc1[1]);
 
-      /* do boundbox check first */
+      /* Do bound-box check first. */
       if ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
         /* only check if point is inside */
         if (len_v2v2_int(mval_i, pc1) <= radius) {
@@ -1163,7 +1174,7 @@ static void annotation_stroke_eraser_dostroke(tGPsdata *p,
       gpencil_point_to_xy(&p->gsc, gps, pt1, &pc1[0], &pc1[1]);
       gpencil_point_to_xy(&p->gsc, gps, pt2, &pc2[0], &pc2[1]);
 
-      /* Check that point segment of the boundbox of the eraser stroke */
+      /* Check that point segment of the bound-box of the eraser stroke. */
       if (((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) ||
           ((!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1])) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
         /* Check if point segment of stroke had anything to do with
@@ -1189,7 +1200,7 @@ static void annotation_stroke_eraser_dostroke(tGPsdata *p,
     /* Second Pass: Remove any points that are tagged */
     if (do_cull) {
       BKE_gpencil_stroke_delete_tagged_points(
-          p->gpd, gpf, gps, gps->next, GP_SPOINT_TAG, false, 0);
+          p->gpd, gpf, gps, gps->next, GP_SPOINT_TAG, false, false, 0);
     }
   }
 }
@@ -1211,7 +1222,8 @@ static void annotation_stroke_doeraser(tGPsdata *p)
     if (p->flags & GP_PAINTFLAG_V3D_ERASER_DEPTH) {
       View3D *v3d = p->area->spacedata.first;
       view3d_region_operator_needs_opengl(p->win, p->region);
-      ED_view3d_depth_override(p->depsgraph, p->region, v3d, NULL, V3D_DEPTH_NO_GPENCIL, NULL);
+      ED_view3d_depth_override(
+          p->depsgraph, p->region, v3d, NULL, V3D_DEPTH_NO_GPENCIL, &p->depths);
     }
   }
 
@@ -1461,7 +1473,7 @@ static tGPsdata *annotation_session_initpaint(bContext *C)
     return NULL;
   }
 
-  /* Radius for eraser circle is defined in userprefs */
+  /* Radius for eraser circle is defined in user-preferences. */
   /* NOTE: we do this here, so that if we exit immediately,
    *       erase size won't get lost
    */
@@ -1499,6 +1511,9 @@ static void annotation_session_cleanup(tGPsdata *p)
 
 static void annotation_session_free(tGPsdata *p)
 {
+  if (p->depths) {
+    ED_view3d_depths_free(p->depths);
+  }
   MEM_freeN(p);
 }
 
@@ -1651,6 +1666,7 @@ static void annotation_paint_initstroke(tGPsdata *p,
 static void annotation_paint_strokeend(tGPsdata *p)
 {
   ToolSettings *ts = p->scene->toolsettings;
+  const bool is_eraser = (p->gpd->runtime.sbuffer_sflag & GP_STROKE_ERASER) != 0;
   /* for surface sketching, need to set the right OpenGL context stuff so that
    * the conversions will project the values correctly...
    */
@@ -1666,11 +1682,11 @@ static void annotation_paint_strokeend(tGPsdata *p)
                              (ts->annotate_v3d_align & GP_PROJECT_DEPTH_STROKE) ?
                                  V3D_DEPTH_GPENCIL_ONLY :
                                  V3D_DEPTH_NO_GPENCIL,
-                             NULL);
+                             is_eraser ? NULL : &p->depths);
   }
 
   /* check if doing eraser or not */
-  if ((p->gpd->runtime.sbuffer_sflag & GP_STROKE_ERASER) == 0) {
+  if (!is_eraser) {
     /* transfer stroke to frame */
     annotation_stroke_newfrombuffer(p);
   }
@@ -1795,7 +1811,7 @@ static void annotation_draw_stabilizer(bContext *C, int x, int y, void *p_ptr)
   /* Rope Simple. */
   immUniformColor4f(color[0], color[1], color[2], 0.8f);
   immBegin(GPU_PRIM_LINES, 2);
-  immVertex2f(pos, pt->x + region->winrct.xmin, pt->y + region->winrct.ymin);
+  immVertex2f(pos, pt->m_xy[0] + region->winrct.xmin, pt->m_xy[1] + region->winrct.ymin);
   immVertex2f(pos, x, y);
   immEnd();
 
@@ -2559,8 +2575,7 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
        */
       if ((p->region) && (p->region->regiontype == RGN_TYPE_TOOLS)) {
         /* Change to whatever region is now under the mouse */
-        ARegion *current_region = BKE_area_find_region_xy(
-            p->area, RGN_TYPE_ANY, event->xy[0], event->xy[1]);
+        ARegion *current_region = BKE_area_find_region_xy(p->area, RGN_TYPE_ANY, event->xy);
 
         if (current_region) {
           /* Assume that since we found the cursor in here, it is in bounds

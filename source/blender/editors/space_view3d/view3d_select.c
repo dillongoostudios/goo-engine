@@ -119,9 +119,10 @@ float ED_view3d_select_dist_px(void)
   return 75.0f * U.pixelsize;
 }
 
-/* TODO: should return whether there is valid context to continue */
 void ED_view3d_viewcontext_init(bContext *C, ViewContext *vc, Depsgraph *depsgraph)
 {
+  /* TODO: should return whether there is valid context to continue. */
+
   memset(vc, 0, sizeof(ViewContext));
   vc->C = C;
   vc->region = CTX_wm_region(C);
@@ -1279,40 +1280,6 @@ static bool do_lasso_select_paintface(ViewContext *vc,
   return changed;
 }
 
-#if 0
-static void do_lasso_select_node(int mcoords[][2], const int mcoords_len, const eSelectOp sel_op)
-{
-  SpaceNode *snode = area->spacedata.first;
-
-  bNode *node;
-  rcti rect;
-  int node_cent[2];
-  float node_centf[2];
-  bool changed = false;
-
-  BLI_lasso_boundbox(&rect, mcoords, mcoords_len);
-
-  /* store selection in temp test flag */
-  for (node = snode->edittree->nodes.first; node; node = node->next) {
-    node_centf[0] = BLI_RCT_CENTER_X(&node->totr);
-    node_centf[1] = BLI_RCT_CENTER_Y(&node->totr);
-
-    ipoco_to_areaco_noclip(G.v2d, node_centf, node_cent);
-    const bool is_select = node->flag & SELECT;
-    const bool is_inside = (BLI_rcti_isect_pt_v(&rect, node_cent) &&
-                            BLI_lasso_is_point_inside(mcoords, mcoords_len, node_cent[0], node_cent[1]));
-    const int sel_op_result = ED_select_op_action_deselected(sel_op, is_select, is_inside);
-    if (sel_op_result != -1) {
-      SET_FLAG_FROM_TEST(node->flag, sel_op_result, SELECT);
-      changed = true;
-    }
-  }
-  if (changed) {
-    BIF_undo_push("Lasso select nodes");
-  }
-}
-#endif
-
 static bool view3d_lasso_select(bContext *C,
                                 ViewContext *vc,
                                 const int mcoords[][2],
@@ -2229,7 +2196,6 @@ static Base *ed_view3d_give_base_under_cursor_ex(bContext *C,
   return basact;
 }
 
-/* mval comes from event->mval, only use within region handlers */
 Base *ED_view3d_give_base_under_cursor(bContext *C, const int mval[2])
 {
   return ed_view3d_give_base_under_cursor_ex(C, mval, NULL);
@@ -4074,7 +4040,9 @@ static bool lattice_circle_select(ViewContext *vc,
   return data.is_changed;
 }
 
-/* NOTE: pose-bone case is copied from editbone case... */
+/**
+ * \note logic is shared with the edit-bone case, see #armature_circle_doSelectJoint.
+ */
 static bool pchan_circle_doSelectJoint(void *userData,
                                        bPoseChannel *pchan,
                                        const float screen_co[2])
@@ -4171,6 +4139,9 @@ static bool pose_circle_select(ViewContext *vc,
   return data.is_changed;
 }
 
+/**
+ * \note logic is shared with the pose-bone case, see #pchan_circle_doSelectJoint.
+ */
 static bool armature_circle_doSelectJoint(void *userData,
                                           EditBone *ebone,
                                           const float screen_co[2],

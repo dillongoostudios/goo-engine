@@ -26,7 +26,7 @@
 #include "UI_interface.h"
 #include "UI_resources.h"
 
-#include "../node_shader_util.h"
+#include "../node_shader_util.hh"
 
 #define TEST_SDF 255
 
@@ -42,7 +42,7 @@ static bNodeSocketTemplate sh_node_sdf_op_in[] = {
 
 static bNodeSocketTemplate sh_node_sdf_op_out[] = {{SOCK_FLOAT, N_("Distance")}, {-1, ""}};
 
-static const char *gpu_shader_get_name(int mode)
+static const char *gpu_shader_sdf_op_get_name(int mode)
 {
   switch (mode) {
     case SHD_SDF_OP_DILATE:
@@ -126,7 +126,7 @@ static int node_shader_gpu_sdf_op(GPUMaterial *mat,
 {
   NodeSdfOp *sdf = (NodeSdfOp *)node->storage;
 
-  const char *name = gpu_shader_get_name(sdf->operation);
+  const char *name = gpu_shader_sdf_op_get_name(sdf->operation);
 
   if (name != nullptr) {
     float invert = (sdf->invert) ? 1.0f : -1.0f;
@@ -137,8 +137,8 @@ static int node_shader_gpu_sdf_op(GPUMaterial *mat,
   }
 }
 
-static void node_shader_label_sdf_op(bNodeTree *UNUSED(ntree),
-                                     bNode *node,
+static void node_shader_label_sdf_op(const bNodeTree *ntree,
+                                     const bNode *node,
                                      char *label,
                                      int maxlen)
 {
@@ -151,7 +151,7 @@ static void node_shader_label_sdf_op(bNodeTree *UNUSED(ntree),
   BLI_strncpy(label, IFACE_(name), maxlen);
 }
 
-static void node_shader_update_sdf_op(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_update_sdf_op(bNodeTree *ntree, bNode *node)
 {
   NodeSdfOp *sdf = (NodeSdfOp *)node->storage;
 
@@ -164,9 +164,9 @@ static void node_shader_update_sdf_op(bNodeTree *UNUSED(ntree), bNode *node)
   bNodeSocket *sockDistanceOut = (bNodeSocket *)BLI_findlink(&node->outputs, 0);
 
   /* Distance */
-  nodeSetSocketAvailability(sockInputA, true);
+  nodeSetSocketAvailability(ntree, sockInputA, true);
 
-  nodeSetSocketAvailability(sockInputB,
+  nodeSetSocketAvailability(ntree, sockInputB,
                             !ELEM(sdf->operation,
                                   SHD_SDF_OP_MASK,
                                   SHD_SDF_OP_INVERT,
@@ -177,14 +177,14 @@ static void node_shader_update_sdf_op(bNodeTree *UNUSED(ntree), bNode *node)
                                   SHD_SDF_OP_FLATTEN));
 
   /* Values */
-  nodeSetSocketAvailability(sockValue,
+  nodeSetSocketAvailability(ntree, sockValue,
                             !ELEM(sdf->operation,
                                   SHD_SDF_OP_UNION,
                                   SHD_SDF_OP_INTERSECT,
                                   SHD_SDF_OP_DIFF,
                                   SHD_SDF_OP_INVERT));
 
-  nodeSetSocketAvailability(sockValue2,
+  nodeSetSocketAvailability(ntree, sockValue2,
                             ELEM(sdf->operation,
                                  TEST_SDF,
                                  SHD_SDF_OP_DIVIDE,
@@ -200,7 +200,7 @@ static void node_shader_update_sdf_op(bNodeTree *UNUSED(ntree), bNode *node)
                                  SHD_SDF_OP_INTERSECT_STAIRS,
                                  SHD_SDF_OP_DIFF_STAIRS));
 
-  nodeSetSocketAvailability(sockCount, ELEM(sdf->operation, SHD_SDF_OP_ONION, TEST_SDF));
+  nodeSetSocketAvailability(ntree, sockCount, ELEM(sdf->operation, SHD_SDF_OP_ONION, TEST_SDF));
 
   node_sock_label_clear(sockValue);
   node_sock_label_clear(sockValue2);
@@ -263,12 +263,12 @@ static void node_shader_buts_sdf_op(uiLayout *layout, bContext *UNUSED(C), Point
 void register_node_type_sh_sdf_op(void)
 {
   static bNodeType ntype;
-  sh_node_type_base(&ntype, SH_NODE_SDF_OP, "Sdf Operator", NODE_CLASS_CONVERTER, 0);
+  sh_node_type_base(&ntype, SH_NODE_SDF_OP, "Sdf Operator", NODE_CLASS_CONVERTER);
   node_type_socket_templates(&ntype, sh_node_sdf_op_in, sh_node_sdf_op_out);
   node_type_storage(&ntype, "NodeSdfOp", node_free_standard_storage, node_copy_standard_storage);
   node_type_gpu(&ntype, node_shader_gpu_sdf_op);
   node_type_init(&ntype, node_shader_init_sdf_op);
-  node_type_label(&ntype, node_shader_label_sdf_op);
+  ntype.labelfunc = node_shader_label_sdf_op;
   node_type_update(&ntype, node_shader_update_sdf_op);
   ntype.draw_buttons = node_shader_buts_sdf_op;
   nodeRegisterType(&ntype);

@@ -18,35 +18,29 @@
  * \ingroup bke
  */
 
+#include <fstream>
+#include <set>
+
 #include "BKE_asset_catalog.hh"
 #include "BKE_asset_library.h"
-#include "BKE_preferences.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.hh"
 #include "BLI_path_util.h"
-#include "BLI_set.hh"
-#include "BLI_string_ref.hh"
-
-#include "DNA_userdef_types.h"
 
 /* For S_ISREG() and S_ISDIR() on Windows. */
 #ifdef WIN32
 #  include "BLI_winstuff.h"
 #endif
 
-#include <fstream>
-#include <set>
+#include "CLG_log.h"
+
+static CLG_LogRef LOG = {"bke.asset_service"};
 
 namespace blender::bke {
 
 const CatalogFilePath AssetCatalogService::DEFAULT_CATALOG_FILENAME = "blender_assets.cats.txt";
 
-/* For now this is the only version of the catalog definition files that is supported.
- * Later versioning code may be added to handle older files. */
 const int AssetCatalogDefinitionFile::SUPPORTED_VERSION = 1;
-/* String that's matched in the catalog definition file to know that the line is the version
- * declaration. It has to start with a space to ensure it won't match any hypothetical future field
- * that starts with "VERSION". */
 const std::string AssetCatalogDefinitionFile::VERSION_MARKER = "VERSION ";
 
 const std::string AssetCatalogDefinitionFile::HEADER =
@@ -321,6 +315,7 @@ void AssetCatalogService::load_from_disk(const CatalogFilePath &file_or_director
   BLI_stat_t status;
   if (BLI_stat(file_or_directory_path.data(), &status) == -1) {
     /* TODO(@sybren): throw an appropriate exception. */
+    CLOG_WARN(&LOG, "path not found: %s", file_or_directory_path.data());
     return;
   }
 
@@ -347,6 +342,7 @@ void AssetCatalogService::load_directory_recursive(const CatalogFilePath &direct
 
   if (!BLI_exists(file_path.data())) {
     /* No file to be loaded is perfectly fine. */
+    CLOG_INFO(&LOG, 2, "path not found: %s", file_path.data());
     return;
   }
 
@@ -524,7 +520,7 @@ CatalogFilePath AssetCatalogService::find_suitable_cdf_path_for_writing(
                  "A non-empty .blend file path is required to be able to determine where the "
                  "catalog definition file should be put");
 
-  /* Ask the asset library API for an appropriate location.  */
+  /* Ask the asset library API for an appropriate location. */
   char suitable_root_path[PATH_MAX];
   const bool asset_lib_root_found = BKE_asset_library_find_suitable_root_path_from_path(
       blend_file_path.c_str(), suitable_root_path);
@@ -834,8 +830,12 @@ void AssetCatalogDefinitionFile::parse_catalog_file(
     const CatalogFilePath &catalog_definition_file_path,
     AssetCatalogParsedFn catalog_loaded_callback)
 {
-  std::fstream infile(catalog_definition_file_path);
+  fstream infile(catalog_definition_file_path, std::ios::in);
 
+  if (!infile.is_open()) {
+    CLOG_ERROR(&LOG, "%s: unable to open file", catalog_definition_file_path.c_str());
+    return;
+  }
   bool seen_version_number = false;
   std::string line;
   while (std::getline(infile, line)) {
@@ -966,7 +966,7 @@ bool AssetCatalogDefinitionFile::write_to_disk_unsafe(const CatalogFilePath &des
     return false;
   }
 
-  std::ofstream output(dest_file_path);
+  fstream output(dest_file_path, std::ios::out);
 
   /* TODO(@sybren): remember the line ending style that was originally read, then use that to write
    * the file again. */

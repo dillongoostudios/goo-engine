@@ -21,25 +21,24 @@
 
 #include "node_geometry_util.hh"
 
-namespace blender::nodes {
+namespace blender::nodes::node_geo_curve_handle_type_selection_cc {
 
-static void geo_node_curve_handle_type_selection_declare(NodeDeclarationBuilder &b)
+NODE_STORAGE_FUNCS(NodeGeometryCurveSelectHandles)
+
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Bool>(N_("Selection")).field_source();
 }
 
-static void geo_node_curve_handle_type_selection_layout(uiLayout *layout,
-                                                        bContext *UNUSED(C),
-                                                        PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "mode", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "handle_type", 0, "", ICON_NONE);
 }
 
-static void geo_node_curve_handle_type_selection_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree *UNUSED(tree), bNode *node)
 {
-  NodeGeometryCurveSelectHandles *data = (NodeGeometryCurveSelectHandles *)MEM_callocN(
-      sizeof(NodeGeometryCurveSelectHandles), __func__);
+  NodeGeometryCurveSelectHandles *data = MEM_cnew<NodeGeometryCurveSelectHandles>(__func__);
 
   data->handle_type = GEO_NODE_CURVE_HANDLE_AUTO;
   data->mode = GEO_NODE_CURVE_HANDLE_LEFT | GEO_NODE_CURVE_HANDLE_RIGHT;
@@ -85,44 +84,40 @@ static void select_by_handle_type(const CurveEval &curve,
   }
 }
 
-class HandleTypeFieldInput final : public fn::FieldInput {
+class HandleTypeFieldInput final : public GeometryFieldInput {
   BezierSpline::HandleType type_;
   GeometryNodeCurveHandleMode mode_;
 
  public:
   HandleTypeFieldInput(BezierSpline::HandleType type, GeometryNodeCurveHandleMode mode)
-      : FieldInput(CPPType::get<bool>(), "Handle Type Selection node"), type_(type), mode_(mode)
+      : GeometryFieldInput(CPPType::get<bool>(), "Handle Type Selection node"),
+        type_(type),
+        mode_(mode)
   {
     category_ = Category::Generated;
   }
 
-  const GVArray *get_varray_for_context(const fn::FieldContext &context,
-                                        IndexMask mask,
-                                        ResourceScope &scope) const final
+  GVArray get_varray_for_context(const GeometryComponent &component,
+                                 const AttributeDomain domain,
+                                 IndexMask mask) const final
   {
-    if (const GeometryComponentFieldContext *geometry_context =
-            dynamic_cast<const GeometryComponentFieldContext *>(&context)) {
-
-      const GeometryComponent &component = geometry_context->geometry_component();
-      const AttributeDomain domain = geometry_context->domain();
-      if (component.type() != GEO_COMPONENT_TYPE_CURVE) {
-        return nullptr;
-      }
-
-      const CurveComponent &curve_component = static_cast<const CurveComponent &>(component);
-      const CurveEval *curve = curve_component.get_for_read();
-      if (curve == nullptr) {
-        return nullptr;
-      }
-
-      if (domain == ATTR_DOMAIN_POINT) {
-        Array<bool> selection(mask.min_array_size());
-        select_by_handle_type(*curve, type_, mode_, selection);
-        return &scope.construct<fn::GVArray_For_ArrayContainer<Array<bool>>>(std::move(selection));
-      }
+    if (component.type() != GEO_COMPONENT_TYPE_CURVE) {
+      return {};
     }
-    return nullptr;
-  };
+
+    const CurveComponent &curve_component = static_cast<const CurveComponent &>(component);
+    const CurveEval *curve = curve_component.get_for_read();
+    if (curve == nullptr) {
+      return {};
+    }
+
+    if (domain == ATTR_DOMAIN_POINT) {
+      Array<bool> selection(mask.min_array_size());
+      select_by_handle_type(*curve, type_, mode_, selection);
+      return VArray<bool>::ForContainer(std::move(selection));
+    }
+    return {};
+  }
 
   uint64_t hash() const override
   {
@@ -131,7 +126,6 @@ class HandleTypeFieldInput final : public fn::FieldInput {
 
   bool is_equal_to(const fn::FieldNode &other) const override
   {
-    return dynamic_cast<const HandleTypeFieldInput *>(&other) != nullptr;
     if (const HandleTypeFieldInput *other_handle_selection =
             dynamic_cast<const HandleTypeFieldInput *>(&other)) {
       return mode_ == other_handle_selection->mode_ && type_ == other_handle_selection->type_;
@@ -140,34 +134,35 @@ class HandleTypeFieldInput final : public fn::FieldInput {
   }
 };
 
-static void geo_node_curve_handle_type_selection_exec(GeoNodeExecParams params)
+static void node_geo_exec(GeoNodeExecParams params)
 {
-  const NodeGeometryCurveSelectHandles *storage =
-      (const NodeGeometryCurveSelectHandles *)params.node().storage;
+  const NodeGeometryCurveSelectHandles &storage = node_storage(params.node());
   const BezierSpline::HandleType handle_type = handle_type_from_input_type(
-      (GeometryNodeCurveHandleType)storage->handle_type);
-  const GeometryNodeCurveHandleMode mode = (GeometryNodeCurveHandleMode)storage->mode;
+      (GeometryNodeCurveHandleType)storage.handle_type);
+  const GeometryNodeCurveHandleMode mode = (GeometryNodeCurveHandleMode)storage.mode;
 
   Field<bool> selection_field{std::make_shared<HandleTypeFieldInput>(handle_type, mode)};
   params.set_output("Selection", std::move(selection_field));
 }
 
-}  // namespace blender::nodes
+}  // namespace blender::nodes::node_geo_curve_handle_type_selection_cc
 
 void register_node_type_geo_curve_handle_type_selection()
 {
+  namespace file_ns = blender::nodes::node_geo_curve_handle_type_selection_cc;
+
   static bNodeType ntype;
 
   geo_node_type_base(
-      &ntype, GEO_NODE_CURVE_HANDLE_TYPE_SELECTION, "Handle Type Selection", NODE_CLASS_INPUT, 0);
-  ntype.declare = blender::nodes::geo_node_curve_handle_type_selection_declare;
-  ntype.geometry_node_execute = blender::nodes::geo_node_curve_handle_type_selection_exec;
-  node_type_init(&ntype, blender::nodes::geo_node_curve_handle_type_selection_init);
+      &ntype, GEO_NODE_CURVE_HANDLE_TYPE_SELECTION, "Handle Type Selection", NODE_CLASS_INPUT);
+  ntype.declare = file_ns::node_declare;
+  ntype.geometry_node_execute = file_ns::node_geo_exec;
+  node_type_init(&ntype, file_ns::node_init);
   node_type_storage(&ntype,
                     "NodeGeometryCurveSelectHandles",
                     node_free_standard_storage,
                     node_copy_standard_storage);
-  ntype.draw_buttons = blender::nodes::geo_node_curve_handle_type_selection_layout;
+  ntype.draw_buttons = file_ns::node_layout;
 
   nodeRegisterType(&ntype);
 }

@@ -143,10 +143,9 @@ typedef struct ImbFormatOptions {
   char quality;
 } ImbFormatOptions;
 
-/**
- * \name Imbuf Component flags
+/* -------------------------------------------------------------------- */
+/** \name Imbuf Component flags
  * \brief These flags determine the components of an ImBuf struct.
- *
  * \{ */
 
 typedef enum eImBufFlags {
@@ -175,6 +174,11 @@ typedef enum eImBufFlags {
 } eImBufFlags;
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Image Buffer
+ * \{ */
+
 typedef struct ImBuf {
   struct ImBuf *next, *prev; /** < allow lists of #ImBufs, for caches or flip-books. */
 
@@ -301,11 +305,14 @@ enum {
   IB_PERSISTENT = (1 << 5),
 };
 
-/**
- * \name Imbuf preset profile tags
- * \brief Some predefined color space profiles that 8 bit imbufs can represent
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Imbuf Preset Profile Tags
  *
+ * \brief Some predefined color space profiles that 8 bit imbufs can represent.
  * \{ */
+
 #define IB_PROFILE_NONE 0
 #define IB_PROFILE_LINEAR_RGB 1
 #define IB_PROFILE_SRGB 2
@@ -322,7 +329,7 @@ enum {
 #  endif /* DDS_MAKEFOURCC */
 
 /*
- * FOURCC codes for DX compressed-texture pixel formats
+ * FOURCC codes for DX compressed-texture pixel formats.
  */
 
 #  define FOURCC_DDS (DDS_MAKEFOURCC('D', 'D', 'S', ' '))
@@ -337,13 +344,13 @@ extern const char *imb_ext_image[];
 extern const char *imb_ext_movie[];
 extern const char *imb_ext_audio[];
 
-/* image formats that can only be loaded via filepath */
+/** Image formats that can only be loaded via filepath. */
 extern const char *imb_ext_image_filepath_only[];
 
-/**
- * \name Imbuf Color Management Flag
- * \brief Used with #ImBuf.colormanage_flag
+/* -------------------------------------------------------------------- */
+/** \name Imbuf Color Management Flag
  *
+ * \brief Used with #ImBuf.colormanage_flag
  * \{ */
 
 enum {

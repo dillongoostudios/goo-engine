@@ -27,15 +27,18 @@ extern "C" {
 #endif
 
 struct Depsgraph;
+struct ID;
 struct ListBase;
 struct Object;
 struct ParticleSystem;
 struct Scene;
-struct ID;
 
 /* ---------------------------------------------------- */
 /* Dupli-Geometry */
 
+/**
+ * \return a #ListBase of #DupliObject.
+ */
 struct ListBase *object_duplilist(struct Depsgraph *depsgraph,
                                   struct Scene *sce,
                                   struct Object *ob);

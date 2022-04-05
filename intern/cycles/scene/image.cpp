@@ -303,7 +303,6 @@ ImageManager::ImageManager(const DeviceInfo &info)
   animation_frame = 0;
 
   /* Set image limits */
-  features.has_half_float = info.has_half_images;
   features.has_nanovdb = info.has_nanovdb;
 }
 
@@ -357,8 +356,6 @@ void ImageManager::load_image_metadata(Image *img)
 
   metadata.detect_colorspace();
 
-  assert(features.has_half_float ||
-         (metadata.type != IMAGE_DATA_TYPE_HALF4 && metadata.type != IMAGE_DATA_TYPE_HALF));
   assert(features.has_nanovdb || (metadata.type != IMAGE_DATA_TYPE_NANOVDB_FLOAT ||
                                   metadata.type != IMAGE_DATA_TYPE_NANOVDB_FLOAT3));
 
@@ -384,8 +381,15 @@ ImageHandle ImageManager::add_image(const string &filename,
 
   foreach (int tile, tiles) {
     string tile_filename = filename;
+
+    /* Since we don't have information about the exact tile format used in this code location,
+     * just attempt all replacement patterns that Blender supports. */
     if (tile != 0) {
       string_replace(tile_filename, "<UDIM>", string_printf("%04d", tile));
+
+      int u = ((tile - 1001) % 10);
+      int v = ((tile - 1001) / 10);
+      string_replace(tile_filename, "<UVTILE>", string_printf("u%d_v%d", u + 1, v + 1));
     }
     const int slot = add_image_slot(new OIIOImageLoader(tile_filename), params, false);
     handle.tile_slots.push_back(slot);
@@ -572,13 +576,13 @@ bool ImageManager::file_load_image(Image *img, int texture_limit)
         pixels[i * 4 + 3] = one;
       }
     }
+  }
 
-    if (img->metadata.colorspace != u_colorspace_raw &&
-        img->metadata.colorspace != u_colorspace_srgb) {
-      /* Convert to scene linear. */
-      ColorSpaceManager::to_scene_linear(
-          img->metadata.colorspace, pixels, num_pixels, img->metadata.compress_as_srgb);
-    }
+  if (img->metadata.colorspace != u_colorspace_raw &&
+      img->metadata.colorspace != u_colorspace_srgb) {
+    /* Convert to scene linear. */
+    ColorSpaceManager::to_scene_linear(
+        img->metadata.colorspace, pixels, num_pixels, is_rgba, img->metadata.compress_as_srgb);
   }
 
   /* Make sure we don't have buggy values. */
@@ -887,6 +891,10 @@ void ImageManager::device_free(Device *device)
 void ImageManager::collect_statistics(RenderStats *stats)
 {
   foreach (const Image *image, images) {
+    if (!image) {
+      /* Image may have been freed due to lack of users. */
+      continue;
+    }
     stats->image.textures.add_entry(
         NamedSizeEntry(image->loader->name(), image->mem->memory_size()));
   }

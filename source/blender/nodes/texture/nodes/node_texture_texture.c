@@ -71,7 +71,7 @@ static void colorfn(float *out, TexParams *p, bNode *node, bNodeStack **in, shor
     textype = multitex_nodes(nodetex, co, dxt, dyt, p->osatex, &texres, thread, 0, p->mtex, NULL);
 
     if (textype & TEX_RGB) {
-      copy_v4_v4(out, &texres.tr);
+      copy_v4_v4(out, texres.trgba);
     }
     else {
       copy_v4_v4(out, col1);
@@ -94,9 +94,10 @@ void register_node_type_tex_texture(void)
 {
   static bNodeType ntype;
 
-  tex_node_type_base(&ntype, TEX_NODE_TEXTURE, "Texture", NODE_CLASS_INPUT, NODE_PREVIEW);
+  tex_node_type_base(&ntype, TEX_NODE_TEXTURE, "Texture", NODE_CLASS_INPUT);
   node_type_socket_templates(&ntype, inputs, outputs);
   node_type_exec(&ntype, NULL, NULL, exec);
+  ntype.flag |= NODE_PREVIEW;
 
   nodeRegisterType(&ntype);
 }

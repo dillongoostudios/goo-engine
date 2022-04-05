@@ -379,6 +379,18 @@ class DOPESHEET_MT_view(Menu):
         layout.menu("INFO_MT_area")
 
 
+class DOPESHEET_MT_view_pie(Menu):
+    bl_label = "View"
+
+    def draw(self, _context):
+        layout = self.layout
+
+        pie = layout.menu_pie()
+        pie.operator("action.view_all")
+        pie.operator("action.view_selected", icon='ZOOM_SELECTED')
+        pie.operator("action.view_frame")
+
+
 class DOPESHEET_MT_select(Menu):
     bl_label = "Select"
 
@@ -525,6 +537,39 @@ class DOPESHEET_MT_key_transform(Menu):
         layout.operator("transform.transform", text="Extend").mode = 'TIME_EXTEND'
         layout.operator("transform.transform", text="Slide").mode = 'TIME_SLIDE'
         layout.operator("transform.transform", text="Scale").mode = 'TIME_SCALE'
+
+
+class DopesheetActionPanelBase:
+    bl_region_type = 'UI'
+    bl_label = "Action"
+
+    @classmethod
+    def draw_generic_panel(cls, _context, layout, action):
+        layout.label(text=action.name, icon='ACTION')
+
+        layout.prop(action, "use_frame_range")
+
+        col = layout.column()
+        col.active = action.use_frame_range
+
+        row = col.row(align=True)
+        row.prop(action, "frame_start", text="Start")
+        row.prop(action, "frame_end", text="End")
+
+        col.prop(action, "use_cyclic")
+
+
+class DOPESHEET_PT_action(DopesheetActionPanelBase, Panel):
+    bl_space_type = 'DOPESHEET_EDITOR'
+    bl_category = "Item"
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.selected_visible_actions)
+
+    def draw(self, context):
+        action = context.selected_visible_actions[0]
+        self.draw_generic_panel(context, self.layout, action)
 
 
 #######################################
@@ -778,7 +823,9 @@ classes = (
     DOPESHEET_MT_context_menu,
     DOPESHEET_MT_channel_context_menu,
     DOPESHEET_MT_snap_pie,
+    DOPESHEET_MT_view_pie,
     DOPESHEET_PT_filters,
+    DOPESHEET_PT_action,
     DOPESHEET_PT_gpencil_mode,
     DOPESHEET_PT_gpencil_layer_masks,
     DOPESHEET_PT_gpencil_layer_transform,

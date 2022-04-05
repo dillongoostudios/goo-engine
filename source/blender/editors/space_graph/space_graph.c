@@ -36,6 +36,7 @@
 
 #include "BKE_context.h"
 #include "BKE_fcurve.h"
+#include "BKE_lib_remap.h"
 #include "BKE_screen.h"
 
 #include "ED_anim_api.h"
@@ -310,16 +311,14 @@ static void graph_main_region_draw_overlay(const bContext *C, ARegion *region)
   /* draw entirely, view changes should be handled here */
   const SpaceGraph *sipo = CTX_wm_space_graph(C);
 
-  /* Driver Editor's X axis is not time. */
-  if (sipo->mode == SIPO_MODE_DRIVERS) {
-    return;
-  }
-
   const Scene *scene = CTX_data_scene(C);
   View2D *v2d = &region->v2d;
 
-  /* scrubbing region */
-  ED_time_scrub_draw_current_frame(region, scene, sipo->flag & SIPO_DRAWTIME);
+  /* Driver Editor's X axis is not time. */
+  if (sipo->mode != SIPO_MODE_DRIVERS) {
+    /* scrubbing region */
+    ED_time_scrub_draw_current_frame(region, scene, sipo->flag & SIPO_DRAWTIME);
+  }
 
   /* scrollers */
   /* FIXME: args for scrollers depend on the type of data being shown. */
@@ -796,18 +795,17 @@ static void graph_refresh(const bContext *C, ScrArea *area)
   graph_refresh_fcurve_colors(C);
 }
 
-static void graph_id_remap(ScrArea *UNUSED(area), SpaceLink *slink, ID *old_id, ID *new_id)
+static void graph_id_remap(ScrArea *UNUSED(area),
+                           SpaceLink *slink,
+                           const struct IDRemapper *mappings)
 {
   SpaceGraph *sgraph = (SpaceGraph *)slink;
-
-  if (sgraph->ads) {
-    if ((ID *)sgraph->ads->filter_grp == old_id) {
-      sgraph->ads->filter_grp = (Collection *)new_id;
-    }
-    if ((ID *)sgraph->ads->source == old_id) {
-      sgraph->ads->source = new_id;
-    }
+  if (!sgraph->ads) {
+    return;
   }
+
+  BKE_id_remapper_apply(mappings, (ID **)&sgraph->ads->filter_grp, ID_REMAP_APPLY_DEFAULT);
+  BKE_id_remapper_apply(mappings, (ID **)&sgraph->ads->source, ID_REMAP_APPLY_DEFAULT);
 }
 
 static int graph_space_subtype_get(ScrArea *area)
@@ -829,7 +827,6 @@ static void graph_space_subtype_item_extend(bContext *UNUSED(C),
   RNA_enum_items_add(item, totitem, rna_enum_space_graph_mode_items);
 }
 
-/* only called once, from space/spacetypes.c */
 void ED_spacetype_ipo(void)
 {
   SpaceType *st = MEM_callocN(sizeof(SpaceType), "spacetype ipo");

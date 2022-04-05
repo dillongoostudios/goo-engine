@@ -388,6 +388,7 @@ void rna_DriverVariable_name_set(PointerRNA *ptr, const char *value)
 
   BLI_strncpy_utf8(data->name, value, 64);
   driver_variable_name_validate(data);
+  driver_variable_unique_name(data);
 }
 
 /* ----------- */
@@ -1013,7 +1014,7 @@ static void rna_FKeyframe_points_add(ID *id, FCurve *fcu, Main *bmain, int tot)
     fcu->totvert += tot;
 
     while (tot--) {
-      /* defaults, no userprefs gives predictable results for API */
+      /* Defaults, ignoring user-preference gives predictable results for API. */
       bezt->f1 = bezt->f2 = bezt->f3 = SELECT;
       bezt->ipo = BEZT_IPO_BEZ;
       bezt->h1 = bezt->h2 = HD_AUTO_ANIM;

@@ -82,8 +82,12 @@ class GeometryDataSource : public DataSource {
     return object_eval_;
   }
 
+  /**
+   * Only data sets corresponding to mesh objects in edit mode currently support selection
+   * filtering.
+   */
   bool has_selection_filter() const override;
-  void apply_selection_filter(MutableSpan<bool> rows_included) const;
+  IndexMask apply_selection_filter(Vector<int64_t> &indices) const;
 
   void foreach_default_column_ids(
       FunctionRef<void(const SpreadsheetColumnID &, bool is_extra)> fn) const override;
@@ -94,16 +98,14 @@ class GeometryDataSource : public DataSource {
   int tot_rows() const override;
 };
 
-class InstancesDataSource : public DataSource {
+class VolumeDataSource : public DataSource {
   const GeometrySet geometry_set_;
-  const InstancesComponent *component_;
-  ExtraColumns extra_columns_;
+  const VolumeComponent *component_;
 
  public:
-  InstancesDataSource(GeometrySet geometry_set, ExtraColumns extra_columns)
+  VolumeDataSource(GeometrySet geometry_set)
       : geometry_set_(std::move(geometry_set)),
-        component_(geometry_set_.get_component_for_read<InstancesComponent>()),
-        extra_columns_(std::move(extra_columns))
+        component_(geometry_set_.get_component_for_read<VolumeComponent>())
   {
   }
 

@@ -588,7 +588,7 @@ static void correctivesmooth_modifier_do(ModifierData *md,
   CorrectiveSmoothModifierData *csmd = (CorrectiveSmoothModifierData *)md;
 
   const bool force_delta_cache_update =
-      /* XXX, take care! if mesh data its self changes we need to forcefully recalculate deltas */
+      /* XXX, take care! if mesh data itself changes we need to forcefully recalculate deltas */
       !cache_settings_equal(csmd) ||
       ((csmd->rest_source == MOD_CORRECTIVESMOOTH_RESTSOURCE_ORCO) &&
        (((ID *)ob->data)->recalc & ID_RECALC_ALL));
@@ -610,7 +610,7 @@ static void correctivesmooth_modifier_do(ModifierData *md,
       BLI_assert(csmd->bind_coords != NULL);
       /* Copy bound data to the original modifier. */
       CorrectiveSmoothModifierData *csmd_orig = (CorrectiveSmoothModifierData *)
-          BKE_modifier_get_original(&csmd->modifier);
+          BKE_modifier_get_original(ob, &csmd->modifier);
       csmd_orig->bind_coords = MEM_dupallocN(csmd->bind_coords);
       csmd_orig->bind_coords_num = csmd->bind_coords_num;
     }

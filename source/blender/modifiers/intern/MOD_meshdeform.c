@@ -390,7 +390,7 @@ static void meshdeformModifier_do(ModifierData *md,
     }
     if (!recursive_bind_sentinel) {
       recursive_bind_sentinel = 1;
-      mmd->bindfunc(mmd, cagemesh, (float *)vertexCos, numVerts, cagemat);
+      mmd->bindfunc(ob, mmd, cagemesh, (float *)vertexCos, numVerts, cagemat);
       recursive_bind_sentinel = 0;
     }
 
@@ -426,7 +426,7 @@ static void meshdeformModifier_do(ModifierData *md,
   bindcagecos = (float(*)[3])mmd->bindcagecos;
 
   for (a = 0; a < totcagevert; a++) {
-    /* get cage vertex in world space with binding transform */
+    /* Get cage vertex in world-space with binding transform. */
     float co[3];
     mul_v3_m4v3(co, mmd->bindmat, dco[a]);
     /* compute difference with world space bind coord */

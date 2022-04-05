@@ -41,11 +41,10 @@ class GHOST_Window : public GHOST_IWindow {
    * Constructor.
    * Creates a new window and opens it.
    * To check if the window was created properly, use the getValid() method.
-   * \param width: The width the window.
-   * \param heigh: The height the window.
+   * \param width: The width of the window.
+   * \param height: The height of the window.
    * \param state: The state the window is initially opened with.
-   * \param type: The type of drawing context installed in this window.
-   * \param stereoVisual: Stereo visual for quad buffered stereo.
+   * \param wantStereoVisual: Stereo visual for quad buffered stereo.
    * \param exclusive: Use to show the window ontop and ignore others (used full-screen).
    */
   GHOST_Window(uint32_t width,

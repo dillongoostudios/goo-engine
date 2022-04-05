@@ -75,6 +75,7 @@ class USDMeshReader : public USDGeomReader {
  private:
   void process_normals_vertex_varying(Mesh *mesh);
   void process_normals_face_varying(Mesh *mesh);
+  /** Set USD uniform (per-face) normals as Blender loop normals. */
   void process_normals_uniform(Mesh *mesh);
   void readFaceSetsSample(Main *bmain, Mesh *mesh, double motionSampleTime);
   void assign_facesets_to_mpoly(double motionSampleTime,
@@ -85,6 +86,7 @@ class USDMeshReader : public USDGeomReader {
   void read_mpolys(Mesh *mesh);
   void read_uvs(Mesh *mesh, double motionSampleTime, bool load_uvs = false);
   void read_colors(Mesh *mesh, double motionSampleTime);
+  void read_vertex_creases(Mesh *mesh, double motionSampleTime);
 
   void read_mesh_sample(ImportSettings *settings,
                         Mesh *mesh,

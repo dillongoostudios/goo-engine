@@ -122,7 +122,12 @@ static void moviecache_valfree(void *val)
 
   PRINT("%s: cache '%s' free item %p buffer %p\n", __func__, cache->name, item, item->ibuf);
 
-  MEM_CacheLimiter_unmanage(item->c_handle);
+  if (item->c_handle) {
+    BLI_mutex_lock(&limitor_lock);
+    MEM_CacheLimiter_unmanage(item->c_handle);
+    BLI_mutex_unlock(&limitor_lock);
+  }
+
   if (item->ibuf) {
     IMB_freeImBuf(item->ibuf);
   }
@@ -263,6 +268,7 @@ void IMB_moviecache_destruct(void)
 {
   if (limitor) {
     delete_MEM_CacheLimiter(limitor);
+    limitor = NULL;
   }
 }
 
@@ -490,7 +496,6 @@ void IMB_moviecache_cleanup(MovieCache *cache,
   }
 }
 
-/* get segments of cached frames. useful for debugging cache policies */
 void IMB_moviecache_get_cache_segments(
     MovieCache *cache, int proxy, int render_flags, int *r_totseg, int **r_points)
 {

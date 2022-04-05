@@ -41,12 +41,8 @@ extern "C" {
  */
 typedef struct MVert {
   float co[3];
-  /**
-   * Cache the normal, can always be recalculated from surrounding faces.
-   * See #CD_CUSTOMLOOPNORMAL for custom normals.
-   */
-  short no[3];
   char flag, bweight;
+  char _pad[2];
 } MVert;
 
 /** #MVert.flag */
@@ -106,19 +102,15 @@ enum {
 };
 
 /**
- * Mesh Loops.
- * Each loop represents the corner of a polygon (#MPoly).
+ * Mesh Face Corners.
+ * "Loop" is an internal name for the corner of a polygon (#MPoly).
  *
  * Typically accessed from #Mesh.mloop.
  */
 typedef struct MLoop {
-  /** Vertex index. */
+  /** Vertex index into an #MVert array. */
   unsigned int v;
-  /**
-   * Edge index.
-   *
-   * \note The e here is because we want to move away from relying on edge hashes.
-   */
+  /** Edge index into an #MEdge array. */
   unsigned int e;
 } MLoop;
 
@@ -291,8 +283,22 @@ typedef struct MDeformWeight {
   float weight;
 } MDeformWeight;
 
+/**
+ * Stores all of an element's vertex groups, and their weight values.
+ */
 typedef struct MDeformVert {
+  /**
+   * Array of weight indices and values.
+   * - There must not be any duplicate #def_nr indices.
+   * - Groups in the array are unordered.
+   * - Indices outside the usable range of groups are ignored.
+   */
   struct MDeformWeight *dw;
+  /**
+   * The length of the #dw array.
+   * \note This is not necessarily the same length as the total number of vertex groups.
+   * However, generally it isn't larger.
+   */
   int totweight;
   /** Flag is only in use as a run-time tag at the moment. */
   int flag;

@@ -26,7 +26,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
-#include "DNA_object_types.h" /* for OB_DATA_SUPPORT_ID */
+#include "DNA_modifier_types.h" /* for handling geometry nodes properties */
+#include "DNA_object_types.h"   /* for OB_DATA_SUPPORT_ID */
 #include "DNA_screen_types.h"
 #include "DNA_text_types.h"
 
@@ -329,7 +330,7 @@ static int operator_button_property_finish(bContext *C, PointerRNA *ptr, Propert
   RNA_property_update(C, ptr, prop);
 
   /* as if we pressed the button */
-  UI_context_active_but_prop_handle(C);
+  UI_context_active_but_prop_handle(C, false);
 
   /* Since we don't want to undo _all_ edits to settings, eg window
    * edits on the screen or on operator settings.
@@ -339,6 +340,19 @@ static int operator_button_property_finish(bContext *C, PointerRNA *ptr, Propert
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
+}
+
+static int operator_button_property_finish_with_undo(bContext *C,
+                                                     PointerRNA *ptr,
+                                                     PropertyRNA *prop)
+{
+  /* Perform updates required for this property. */
+  RNA_property_update(C, ptr, prop);
+
+  /* As if we pressed the button. */
+  UI_context_active_but_prop_handle(C, true);
+
+  return OPERATOR_FINISHED;
 }
 
 static bool reset_default_button_poll(bContext *C)
@@ -365,7 +379,7 @@ static int reset_default_button_exec(bContext *C, wmOperator *op)
   /* if there is a valid property that is editable... */
   if (ptr.data && prop && RNA_property_editable(&ptr, prop)) {
     if (RNA_property_reset(&ptr, prop, (all) ? -1 : index)) {
-      return operator_button_property_finish(C, &ptr, prop);
+      return operator_button_property_finish_with_undo(C, &ptr, prop);
     }
   }
 
@@ -384,7 +398,9 @@ static void UI_OT_reset_default_button(wmOperatorType *ot)
   ot->exec = reset_default_button_exec;
 
   /* flags */
-  ot->flag = OPTYPE_UNDO;
+  /* Don't set #OPTYPE_UNDO because #operator_button_property_finish_with_undo
+   * is responsible for the undo push. */
+  ot->flag = 0;
 
   /* properties */
   RNA_def_boolean(ot->srna, "all", 1, "All", "Reset to default values all elements of the array");
@@ -596,6 +612,9 @@ static int override_type_set_button_exec(bContext *C, wmOperator *op)
     opop->operation = operation;
   }
 
+  /* Outliner e.g. has to be aware of this change. */
+  WM_main_add_notifier(NC_WM | ND_LIB_OVERRIDE_CHANGED, NULL);
+
   return operator_button_property_finish(C, &ptr, prop);
 }
 
@@ -712,6 +731,9 @@ static int override_remove_button_exec(bContext *C, wmOperator *op)
       RNA_property_copy(bmain, &ptr, &src, prop, -1);
     }
   }
+
+  /* Outliner e.g. has to be aware of this change. */
+  WM_main_add_notifier(NC_WM | ND_LIB_OVERRIDE_CHANGED, NULL);
 
   return operator_button_property_finish(C, &ptr, prop);
 }
@@ -845,6 +867,9 @@ bool UI_context_copy_to_selected_list(bContext *C,
   }
   else if (RNA_struct_is_a(ptr->type, &RNA_Keyframe)) {
     *r_lb = CTX_data_collection_get(C, "selected_editable_keyframes");
+  }
+  else if (RNA_struct_is_a(ptr->type, &RNA_Action)) {
+    *r_lb = CTX_data_collection_get(C, "selected_editable_actions");
   }
   else if (RNA_struct_is_a(ptr->type, &RNA_NlaStrip)) {
     *r_lb = CTX_data_collection_get(C, "selected_nla_strips");
@@ -982,6 +1007,97 @@ bool UI_context_copy_to_selected_list(bContext *C,
   return true;
 }
 
+bool UI_context_copy_to_selected_check(PointerRNA *ptr,
+                                       PointerRNA *ptr_link,
+                                       PropertyRNA *prop,
+                                       const char *path,
+                                       bool use_path_from_id,
+                                       PointerRNA *r_ptr,
+                                       PropertyRNA **r_prop)
+{
+  PointerRNA idptr;
+  PropertyRNA *lprop;
+  PointerRNA lptr;
+
+  if (ptr_link->data == ptr->data) {
+    return false;
+  }
+
+  if (use_path_from_id) {
+    /* Path relative to ID. */
+    lprop = NULL;
+    RNA_id_pointer_create(ptr_link->owner_id, &idptr);
+    RNA_path_resolve_property(&idptr, path, &lptr, &lprop);
+  }
+  else if (path) {
+    /* Path relative to elements from list. */
+    lprop = NULL;
+    RNA_path_resolve_property(ptr_link, path, &lptr, &lprop);
+  }
+  else {
+    lptr = *ptr_link;
+    lprop = prop;
+  }
+
+  if (lptr.data == ptr->data) {
+    /* temp_ptr might not be the same as ptr_link! */
+    return false;
+  }
+
+  /* Skip non-existing properties on link. This was previously covered with the `lprop != prop`
+   * check but we are now more permissive when it comes to ID properties, see below. */
+  if (lprop == NULL) {
+    return false;
+  }
+
+  if (RNA_property_type(lprop) != RNA_property_type(prop)) {
+    return false;
+  }
+
+  /* Check property pointers matching.
+   * For ID properties, these pointers match:
+   * - If the property is API defined on an existing class (and they are equally named).
+   * - Never for ID properties on specific ID (even if they are equally named).
+   * - Never for NodesModifierSettings properties (even if they are equally named).
+   *
+   * Be permissive on ID properties in the following cases:
+   * - #NodesModifierSettings properties
+   *   - (special check: only if the node-group matches, since the 'Input_n' properties are name
+   *      based and similar on potentially very different node-groups).
+   * - ID properties on specific ID
+   *   - (no special check, copying seems OK [even if type does not match -- does not do anything
+   *      then])
+   */
+  bool ignore_prop_eq = RNA_property_is_idprop(lprop) && RNA_property_is_idprop(prop);
+  if (RNA_struct_is_a(lptr.type, &RNA_NodesModifier) &&
+      RNA_struct_is_a(ptr->type, &RNA_NodesModifier)) {
+    ignore_prop_eq = false;
+
+    NodesModifierData *nmd_link = (NodesModifierData *)lptr.data;
+    NodesModifierData *nmd_src = (NodesModifierData *)ptr->data;
+    if (nmd_link->node_group == nmd_src->node_group) {
+      ignore_prop_eq = true;
+    }
+  }
+
+  if ((lprop != prop) && !ignore_prop_eq) {
+    return false;
+  }
+
+  if (!RNA_property_editable(&lptr, lprop)) {
+    return false;
+  }
+
+  if (r_ptr) {
+    *r_ptr = lptr;
+  }
+  if (r_prop) {
+    *r_prop = lprop;
+  }
+
+  return true;
+}
+
 /**
  * Called from both exec & poll.
  *
@@ -992,7 +1108,7 @@ bool UI_context_copy_to_selected_list(bContext *C,
 static bool copy_to_selected_button(bContext *C, bool all, bool poll)
 {
   Main *bmain = CTX_data_main(C);
-  PointerRNA ptr, lptr, idptr;
+  PointerRNA ptr, lptr;
   PropertyRNA *prop, *lprop;
   bool success = false;
   int index;
@@ -1022,32 +1138,8 @@ static bool copy_to_selected_button(bContext *C, bool all, bool poll)
       continue;
     }
 
-    if (use_path_from_id) {
-      /* Path relative to ID. */
-      lprop = NULL;
-      RNA_id_pointer_create(link->ptr.owner_id, &idptr);
-      RNA_path_resolve_property(&idptr, path, &lptr, &lprop);
-    }
-    else if (path) {
-      /* Path relative to elements from list. */
-      lprop = NULL;
-      RNA_path_resolve_property(&link->ptr, path, &lptr, &lprop);
-    }
-    else {
-      lptr = link->ptr;
-      lprop = prop;
-    }
-
-    if (lptr.data == ptr.data) {
-      /* lptr might not be the same as link->ptr! */
-      continue;
-    }
-
-    if (lprop != prop) {
-      continue;
-    }
-
-    if (!RNA_property_editable(&lptr, lprop)) {
+    if (!UI_context_copy_to_selected_check(
+            &ptr, &link->ptr, prop, path, use_path_from_id, &lptr, &lprop)) {
       continue;
     }
 
@@ -1340,10 +1432,6 @@ void UI_editsource_active_but_test(uiBut *but)
   BLI_ghash_insert(ui_editsource_info->hash, but, but_store);
 }
 
-/**
- * Remove the editsource data for \a old_but and reinsert it for \a new_but. Use when the button
- * was reallocated, e.g. to have a new type (#ui_but_change_type()).
- */
 void UI_editsource_but_replace(const uiBut *old_but, uiBut *new_but)
 {
   uiEditSourceButStore *but_store = BLI_ghash_lookup(ui_editsource_info->hash, old_but);
@@ -1405,7 +1493,7 @@ static int editsource_exec(bContext *C, wmOperator *op)
     int ret;
 
     /* needed else the active button does not get tested */
-    UI_screen_free_active_but(C, CTX_wm_screen(C));
+    UI_screen_free_active_but_highlight(C, CTX_wm_screen(C));
 
     // printf("%s: begin\n", __func__);
 
@@ -1686,9 +1774,7 @@ static int ui_button_press_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   bScreen *screen = CTX_wm_screen(C);
   const bool skip_depressed = RNA_boolean_get(op->ptr, "skip_depressed");
   ARegion *region_prev = CTX_wm_region(C);
-  ARegion *region = screen ? BKE_screen_find_region_xy(
-                                 screen, RGN_TYPE_ANY, event->xy[0], event->xy[1]) :
-                             NULL;
+  ARegion *region = screen ? BKE_screen_find_region_xy(screen, RGN_TYPE_ANY, event->xy) : NULL;
 
   if (region == NULL) {
     region = region_prev;
@@ -1903,6 +1989,9 @@ static void UI_OT_drop_name(wmOperatorType *ot)
 static bool ui_list_focused_poll(bContext *C)
 {
   const ARegion *region = CTX_wm_region(C);
+  if (!region) {
+    return false;
+  }
   const wmWindow *win = CTX_wm_window(C);
   const uiList *list = UI_list_find_mouse_over(region, win->eventstate);
 
@@ -2082,9 +2171,6 @@ void ED_operatortypes_ui(void)
   WM_operatortype_append(UI_OT_eyedropper_gpencil_color);
 }
 
-/**
- * \brief User Interface Keymap
- */
 void ED_keymap_ui(wmKeyConfig *keyconf)
 {
   WM_keymap_ensure(keyconf, "User Interface", 0, 0);

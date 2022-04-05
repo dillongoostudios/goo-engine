@@ -39,6 +39,10 @@ set(SRC_KERNEL_DEVICE_HIP
   device/hip/kernel.cpp
 )
 
+set(SRC_KERNEL_DEVICE_METAL
+  device/metal/kernel.metal
+)
+
 set(SRC_KERNEL_DEVICE_OPTIX
   device/optix/kernel.cu
   device/optix/kernel_shader_raytrace.cu
@@ -77,6 +81,13 @@ set(SRC_KERNEL_DEVICE_HIP_HEADERS
 set(SRC_KERNEL_DEVICE_OPTIX_HEADERS
   device/optix/compat.h
   device/optix/globals.h
+)
+
+set(SRC_KERNEL_DEVICE_METAL_HEADERS
+  device/metal/compat.h
+  device/metal/context_begin.h
+  device/metal/context_end.h
+  device/metal/globals.h
 )
 
 set(SRC_KERNEL_CLOSURE_HEADERS
@@ -168,11 +179,14 @@ set(SRC_KERNEL_GEOM_HEADERS
   geom/curve.h
   geom/curve_intersect.h
   geom/motion_curve.h
+  geom/motion_point.h
   geom/motion_triangle.h
   geom/motion_triangle_intersect.h
   geom/motion_triangle_shader.h
   geom/object.h
   geom/patch.h
+  geom/point.h
+  geom/point_intersect.h
   geom/primitive.h
   geom/shader_data.h
   geom/subd_triangle.h
@@ -196,6 +210,7 @@ set(SRC_KERNEL_BVH_HEADERS
   bvh/volume.h
   bvh/volume_all.h
   bvh/embree.h
+  bvh/metal.h
 )
 
 set(SRC_KERNEL_CAMERA_HEADERS
@@ -262,6 +277,7 @@ set(SRC_KERNEL_UTIL_HEADERS
 )
 
 set(SRC_KERNEL_TYPES_HEADERS
+  tables.h
   textures.h
   types.h
 )
@@ -399,17 +415,17 @@ if(WITH_CYCLES_CUDA_BINARIES)
       -I ${CMAKE_CURRENT_SOURCE_DIR}/..
       -I ${CMAKE_CURRENT_SOURCE_DIR}/device/cuda
       --use_fast_math
-      -o ${CMAKE_CURRENT_BINARY_DIR}/${cuda_file})
-
-    if(${experimental})
-      set(cuda_flags ${cuda_flags} -D __KERNEL_EXPERIMENTAL__)
-      set(name ${name}_experimental)
-    endif()
+      -o ${CMAKE_CURRENT_BINARY_DIR}/${cuda_file}
+      -Wno-deprecated-gpu-targets)
 
     if(WITH_NANOVDB)
       set(cuda_flags ${cuda_flags}
         -D WITH_NANOVDB
         -I "${NANOVDB_INCLUDE_DIR}")
+    endif()
+
+    if(WITH_CYCLES_DEBUG)
+      set(cuda_flags ${cuda_flags} -D WITH_CYCLES_DEBUG)
     endif()
 
     if(WITH_CYCLES_CUBIN_COMPILER)
@@ -560,11 +576,6 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
       -ffast-math
       -o ${CMAKE_CURRENT_BINARY_DIR}/${hip_file})
 
-    if(${experimental})
-      set(hip_flags ${hip_flags} -D __KERNEL_EXPERIMENTAL__)
-      set(name ${name}_experimental)
-    endif()
-
     if(WITH_NANOVDB)
       set(hip_flags ${hip_flags}
         -D WITH_NANOVDB
@@ -572,7 +583,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
     endif()
 
     if(WITH_CYCLES_DEBUG)
-      set(hip_flags ${hip_flags} -D __KERNEL_DEBUG__)
+      set(hip_flags ${hip_flags} -D WITH_CYCLES_DEBUG)
     endif()
 
     add_custom_command(
@@ -611,6 +622,10 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
       set(cuda_flags ${cuda_flags}
         -D WITH_NANOVDB
         -I "${NANOVDB_INCLUDE_DIR}")
+    endif()
+
+    if(WITH_CYCLES_DEBUG)
+      set(cuda_flags ${cuda_flags} -D WITH_CYCLES_DEBUG)
     endif()
 
     if(WITH_CYCLES_CUBIN_COMPILER)
@@ -701,7 +716,7 @@ if(WITH_COMPILER_ASAN)
     string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -fno-sanitize=all")
     string(APPEND CMAKE_CXX_FLAGS_DEBUG " -fno-sanitize=vptr")
   elseif(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    # With OSL, Cycles disables rtti in some modules, wich then breaks at linking
+    # With OSL, Cycles disables rtti in some modules, which then breaks at linking
     # when trying to use vptr sanitizer (included into 'undefined' general option).
     string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -fno-sanitize=vptr")
     string(APPEND CMAKE_CXX_FLAGS_DEBUG " -fno-sanitize=vptr")
@@ -729,12 +744,14 @@ cycles_add_library(cycles_kernel "${LIB}"
   ${SRC_KERNEL_DEVICE_CUDA}
   ${SRC_KERNEL_DEVICE_HIP}
   ${SRC_KERNEL_DEVICE_OPTIX}
+  ${SRC_KERNEL_DEVICE_METAL}
   ${SRC_KERNEL_HEADERS}
   ${SRC_KERNEL_DEVICE_CPU_HEADERS}
   ${SRC_KERNEL_DEVICE_GPU_HEADERS}
   ${SRC_KERNEL_DEVICE_CUDA_HEADERS}
   ${SRC_KERNEL_DEVICE_HIP_HEADERS}
   ${SRC_KERNEL_DEVICE_OPTIX_HEADERS}
+  ${SRC_KERNEL_DEVICE_METAL_HEADERS}
 )
 
 source_group("bake" FILES ${SRC_KERNEL_BAKE_HEADERS})
@@ -746,6 +763,7 @@ source_group("device\\cuda" FILES ${SRC_KERNEL_DEVICE_CUDA} ${SRC_KERNEL_DEVICE_
 source_group("device\\gpu" FILES ${SRC_KERNEL_DEVICE_GPU_HEADERS})
 source_group("device\\hip" FILES ${SRC_KERNEL_DEVICE_HIP} ${SRC_KERNEL_DEVICE_HIP_HEADERS})
 source_group("device\\optix" FILES ${SRC_KERNEL_DEVICE_OPTIX} ${SRC_KERNEL_DEVICE_OPTIX_HEADERS})
+source_group("device\\metal" FILES ${SRC_KERNEL_DEVICE_METAL} ${SRC_KERNEL_DEVICE_METAL_HEADERS})
 source_group("film" FILES ${SRC_KERNEL_FILM_HEADERS})
 source_group("geom" FILES ${SRC_KERNEL_GEOM_HEADERS})
 source_group("integrator" FILES ${SRC_KERNEL_INTEGRATOR_HEADERS})
@@ -778,6 +796,8 @@ delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_DEVICE_HIP}" ${CYCLES_
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_DEVICE_HIP_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/device/hip)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_DEVICE_OPTIX}" ${CYCLES_INSTALL_PATH}/source/kernel/device/optix)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_DEVICE_OPTIX_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/device/optix)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_DEVICE_METAL}" ${CYCLES_INSTALL_PATH}/source/kernel/device/metal)
+delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_DEVICE_METAL_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/device/metal)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_FILM_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/film)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_GEOM_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/geom)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_INTEGRATOR_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/integrator)

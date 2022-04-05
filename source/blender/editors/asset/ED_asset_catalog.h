@@ -16,6 +16,8 @@
 
 /** \file
  * \ingroup edasset
+ *
+ * Supplement for `ED_asset_catalog.hh`. Part of the same API but usable in C.
  */
 
 #pragma once
@@ -26,8 +28,8 @@
 extern "C" {
 #endif
 
-struct Main;
 struct AssetLibrary;
+struct Main;
 
 void ED_asset_catalogs_save_from_main_path(struct AssetLibrary *library, const struct Main *bmain);
 

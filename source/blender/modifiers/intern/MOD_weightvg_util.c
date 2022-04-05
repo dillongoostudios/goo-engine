@@ -57,12 +57,6 @@
 #include "MOD_weightvg_util.h"
 #include "RE_texture.h" /* Texture masking. */
 
-/* Maps new_w weights in place, using either one of the predefined functions, or a custom curve.
- * Return values are in new_w.
- * If indices is not NULL, it must be a table of same length as org_w and new_w,
- * mapping to the real vertex index (in case the weight tables do not cover the whole vertices...).
- * cmap might be NULL, in which case curve mapping mode will return unmodified data.
- */
 void weightvg_do_map(
     int num, float *new_w, short falloff_type, const bool do_invert, CurveMapping *cmap, RNG *rng)
 {
@@ -125,13 +119,6 @@ void weightvg_do_map(
   }
 }
 
-/* Applies new_w weights to org_w ones, using either a texture, vgroup or constant value as factor.
- * Return values are in org_w.
- * If indices is not NULL, it must be a table of same length as org_w and new_w,
- * mapping to the real vertex index (in case the weight tables do not cover the whole vertices...).
- * XXX The standard "factor" value is assumed in [0.0, 1.0] range.
- * Else, weird results might appear.
- */
 void weightvg_do_mask(const ModifierEvalContext *ctx,
                       const int num,
                       const int *indices,
@@ -199,28 +186,32 @@ void weightvg_do_mask(const ModifierEvalContext *ctx,
           org_w[i] = (new_w[i] * texres.tin * fact) + (org_w[i] * (1.0f - (texres.tin * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_RED:
-          org_w[i] = (new_w[i] * texres.tr * fact) + (org_w[i] * (1.0f - (texres.tr * fact)));
+          org_w[i] = (new_w[i] * texres.trgba[0] * fact) +
+                     (org_w[i] * (1.0f - (texres.trgba[0] * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_GREEN:
-          org_w[i] = (new_w[i] * texres.tg * fact) + (org_w[i] * (1.0f - (texres.tg * fact)));
+          org_w[i] = (new_w[i] * texres.trgba[1] * fact) +
+                     (org_w[i] * (1.0f - (texres.trgba[1] * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_BLUE:
-          org_w[i] = (new_w[i] * texres.tb * fact) + (org_w[i] * (1.0f - (texres.tb * fact)));
+          org_w[i] = (new_w[i] * texres.trgba[2] * fact) +
+                     (org_w[i] * (1.0f - (texres.trgba[2] * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_HUE:
-          rgb_to_hsv_v(&texres.tr, hsv);
+          rgb_to_hsv_v(texres.trgba, hsv);
           org_w[i] = (new_w[i] * hsv[0] * fact) + (org_w[i] * (1.0f - (hsv[0] * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_SAT:
-          rgb_to_hsv_v(&texres.tr, hsv);
+          rgb_to_hsv_v(texres.trgba, hsv);
           org_w[i] = (new_w[i] * hsv[1] * fact) + (org_w[i] * (1.0f - (hsv[1] * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_VAL:
-          rgb_to_hsv_v(&texres.tr, hsv);
+          rgb_to_hsv_v(texres.trgba, hsv);
           org_w[i] = (new_w[i] * hsv[2] * fact) + (org_w[i] * (1.0f - (hsv[2] * fact)));
           break;
         case MOD_WVG_MASK_TEX_USE_ALPHA:
-          org_w[i] = (new_w[i] * texres.ta * fact) + (org_w[i] * (1.0f - (texres.ta * fact)));
+          org_w[i] = (new_w[i] * texres.trgba[3] * fact) +
+                     (org_w[i] * (1.0f - (texres.trgba[3] * fact)));
           break;
         default:
           org_w[i] = (new_w[i] * texres.tin * fact) + (org_w[i] * (1.0f - (texres.tin * fact)));
@@ -267,12 +258,6 @@ void weightvg_do_mask(const ModifierEvalContext *ctx,
   }
 }
 
-/* Applies weights to given vgroup (defgroup), and optionally add/remove vertices from the group.
- * If dws is not NULL, it must be an array of MDeformWeight pointers of same length as weights (and
- * defgrp_idx can then have any value).
- * If indices is not NULL, it must be an array of same length as weights, mapping to the real
- * vertex index (in case the weight array does not cover the whole vertices...).
- */
 void weightvg_update_vg(MDeformVert *dvert,
                         int defgrp_idx,
                         MDeformWeight **dws,
@@ -340,8 +325,6 @@ void weightvg_update_vg(MDeformVert *dvert,
   }
 }
 
-/* Common vertex weight mask interface elements for the modifier panels.
- */
 void weightvg_ui_common(const bContext *C, PointerRNA *ob_ptr, PointerRNA *ptr, uiLayout *layout)
 {
   PointerRNA mask_texture_ptr = RNA_pointer_get(ptr, "mask_texture");

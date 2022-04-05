@@ -177,6 +177,9 @@ enum class OperationCode {
   LIGHT_UPDATE,
   WORLD_UPDATE,
 
+  /* Node Tree. ----------------------------------------------------------- */
+  NTREE_OUTPUT,
+
   /* Batch caches. -------------------------------------------------------- */
   GEOMETRY_SELECT_UPDATE,
 
@@ -233,6 +236,10 @@ struct OperationNode : public Node {
   OperationNode();
 
   virtual string identifier() const override;
+  /**
+   * Full node identifier, including owner name.
+   * used for logging and debug prints.
+   */
   string full_identifier() const;
 
   virtual void tag_update(Depsgraph *graph, eUpdateSource source) override;

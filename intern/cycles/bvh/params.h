@@ -83,6 +83,8 @@ class BVHParams {
   int max_motion_triangle_leaf_size;
   int max_curve_leaf_size;
   int max_motion_curve_leaf_size;
+  int max_point_leaf_size;
+  int max_motion_point_leaf_size;
 
   /* object or mesh level bvh */
   bool top_level;
@@ -95,16 +97,19 @@ class BVHParams {
    */
   bool use_unaligned_nodes;
 
+  /* Use compact acceleration structure (Embree)*/
+  bool use_compact_structure;
+
   /* Split time range to this number of steps and create leaf node for each
    * of this time steps.
    *
-   * Speeds up rendering of motion curve primitives in the cost of higher
-   * memory usage.
+   * Speeds up rendering of motion primitives in the cost of higher memory usage.
    */
-  int num_motion_curve_steps;
 
   /* Same as above, but for triangle primitives. */
   int num_motion_triangle_steps;
+  int num_motion_curve_steps;
+  int num_motion_point_steps;
 
   /* Same as in SceneParams. */
   int bvh_type;
@@ -132,13 +137,17 @@ class BVHParams {
     max_motion_triangle_leaf_size = 8;
     max_curve_leaf_size = 1;
     max_motion_curve_leaf_size = 4;
+    max_point_leaf_size = 8;
+    max_motion_point_leaf_size = 8;
 
     top_level = false;
     bvh_layout = BVH_LAYOUT_BVH2;
+    use_compact_structure = true;
     use_unaligned_nodes = false;
 
     num_motion_curve_steps = 0;
     num_motion_triangle_steps = 0;
+    num_motion_point_steps = 0;
 
     bvh_type = 0;
 
@@ -164,6 +173,12 @@ class BVHParams {
   __forceinline bool small_enough_for_leaf(int size, int level)
   {
     return (size <= min_leaf_size || level >= MAX_DEPTH);
+  }
+
+  bool use_motion_steps()
+  {
+    return num_motion_curve_steps > 0 || num_motion_triangle_steps > 0 ||
+           num_motion_point_steps > 0;
   }
 
   /* Gets best matching BVH.

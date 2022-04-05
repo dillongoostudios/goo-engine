@@ -118,6 +118,7 @@ struct wmOperator;
 struct wmWindowManager;
 
 #include "BLI_compiler_attrs.h"
+#include "BLI_utildefines.h"
 #include "DNA_listBase.h"
 #include "DNA_uuid_types.h"
 #include "DNA_vec_types.h"
@@ -211,7 +212,7 @@ enum {
  * Context to call operator in for #WM_operator_name_call.
  * rna_ui.c contains EnumPropertyItem's of these, keep in sync.
  */
-enum {
+typedef enum wmOperatorCallContext {
   /* if there's invoke, call it, otherwise exec */
   WM_OP_INVOKE_DEFAULT,
   WM_OP_INVOKE_REGION_WIN,
@@ -226,9 +227,11 @@ enum {
   WM_OP_EXEC_REGION_PREVIEW,
   WM_OP_EXEC_AREA,
   WM_OP_EXEC_SCREEN,
-};
+} wmOperatorCallContext;
 
-#define WM_OP_CONTEXT_HAS_AREA(type) (!ELEM(type, WM_OP_INVOKE_SCREEN, WM_OP_EXEC_SCREEN))
+#define WM_OP_CONTEXT_HAS_AREA(type) \
+  (CHECK_TYPE_INLINE(type, wmOperatorCallContext), \
+   !ELEM(type, WM_OP_INVOKE_SCREEN, WM_OP_EXEC_SCREEN))
 #define WM_OP_CONTEXT_HAS_REGION(type) \
   (WM_OP_CONTEXT_HAS_AREA(type) && !ELEM(type, WM_OP_INVOKE_AREA, WM_OP_EXEC_AREA))
 
@@ -923,7 +926,7 @@ typedef struct wmOperatorType {
 typedef struct wmOperatorCallParams {
   struct wmOperatorType *optype;
   struct PointerRNA *opptr;
-  short opcontext;
+  wmOperatorCallContext opcontext;
 } wmOperatorCallParams;
 
 #ifdef WITH_INPUT_IME
@@ -970,10 +973,11 @@ typedef void (*wmPaintCursorDraw)(struct bContext *C, int, int, void *customdata
 #define WM_DRAG_DATASTACK 8
 #define WM_DRAG_ASSET_CATALOG 9
 
-typedef enum wmDragFlags {
+typedef enum eWM_DragFlags {
   WM_DRAG_NOP = 0,
   WM_DRAG_FREE_DATA = 1,
-} wmDragFlags;
+} eWM_DragFlags;
+ENUM_OPERATORS(eWM_DragFlags, WM_DRAG_FREE_DATA)
 
 /* NOTE: structs need not exported? */
 
@@ -1068,7 +1072,7 @@ typedef struct wmDrag {
 
   wmDragActiveDropState drop_state;
 
-  unsigned int flags;
+  eWM_DragFlags flags;
 
   /** List of wmDragIDs, all are guaranteed to have the same ID type. */
   ListBase ids;
@@ -1079,6 +1083,10 @@ typedef struct wmDrag {
 /**
  * Dropboxes are like keymaps, part of the screen/area/region definition.
  * Allocation and free is on startup and exit.
+ *
+ * The operator is polled and invoked with the current context (#WM_OP_INVOKE_DEFAULT), there is no
+ * way to override that (by design, since dropboxes should act on the exact mouse position). So the
+ * drop-boxes are supposed to check the required area and region context in their poll.
  */
 typedef struct wmDropBox {
   struct wmDropBox *next, *prev;
@@ -1120,10 +1128,6 @@ typedef struct wmDropBox {
   struct IDProperty *properties;
   /** RNA pointer to access properties. */
   struct PointerRNA *ptr;
-
-  /** Default invoke. */
-  short opcontext;
-
 } wmDropBox;
 
 /**

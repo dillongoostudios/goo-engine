@@ -21,27 +21,38 @@
  * \ingroup cmpnodes
  */
 
-#include "../node_composite_util.hh"
+#include "UI_interface.h"
+#include "UI_resources.h"
 
-/* **************** MIX RGB ******************** */
-static bNodeSocketTemplate cmp_node_switch_in[] = {
-    {SOCK_RGBA, N_("Off"), 0.8f, 0.8f, 0.8f, 1.0f, 0.0f, 1.0f},
-    {SOCK_RGBA, N_("On"), 0.8f, 0.8f, 0.8f, 1.0f, 0.0f, 1.0f},
-    {-1, ""},
-};
+#include "node_composite_util.hh"
 
-static bNodeSocketTemplate cmp_node_switch_out[] = {
-    {SOCK_RGBA, N_("Image"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f},
-    {-1, ""},
-};
+/* **************** Switch ******************** */
 
-/* custom1 = mix type */
-void register_node_type_cmp_switch(void)
+namespace blender::nodes::node_composite_switch_cc {
+
+static void cmp_node_switch_declare(NodeDeclarationBuilder &b)
 {
+  b.add_input<decl::Color>(N_("Off")).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_input<decl::Color>(N_("On")).default_value({0.8f, 0.8f, 0.8f, 1.0f});
+  b.add_output<decl::Color>(N_("Image"));
+}
+
+static void node_composit_buts_switch(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "check", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+}
+
+}  // namespace blender::nodes::node_composite_switch_cc
+
+void register_node_type_cmp_switch()
+{
+  namespace file_ns = blender::nodes::node_composite_switch_cc;
+
   static bNodeType ntype;
 
-  cmp_node_type_base(&ntype, CMP_NODE_SWITCH, "Switch", NODE_CLASS_LAYOUT, 0);
-  node_type_socket_templates(&ntype, cmp_node_switch_in, cmp_node_switch_out);
+  cmp_node_type_base(&ntype, CMP_NODE_SWITCH, "Switch", NODE_CLASS_LAYOUT);
+  ntype.declare = file_ns::cmp_node_switch_declare;
+  ntype.draw_buttons = file_ns::node_composit_buts_switch;
   node_type_size_preset(&ntype, NODE_SIZE_SMALL);
   nodeRegisterType(&ntype);
 }

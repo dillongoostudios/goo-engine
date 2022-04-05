@@ -25,6 +25,7 @@
 
 #include "BKE_deform.h"
 
+#include "draw_subdivision.h"
 #include "extract_mesh.h"
 
 namespace blender::draw {
@@ -167,10 +168,49 @@ static void extract_weights_iter_poly_mesh(const MeshRenderData *mr,
   }
 }
 
+static void extract_weights_init_subdiv(const DRWSubdivCache *subdiv_cache,
+                                        const MeshRenderData *mr,
+                                        struct MeshBatchCache *cache,
+                                        void *buffer,
+                                        void *_data)
+{
+  Mesh *coarse_mesh = subdiv_cache->mesh;
+  GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buffer);
+
+  static GPUVertFormat format = {0};
+  if (format.attr_len == 0) {
+    GPU_vertformat_attr_add(&format, "weight", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+  }
+  GPU_vertbuf_init_build_on_device(vbo, &format, subdiv_cache->num_subdiv_loops);
+
+  GPUVertBuf *coarse_weights = GPU_vertbuf_calloc();
+  extract_weights_init(mr, cache, coarse_weights, _data);
+
+  if (mr->extract_type != MR_EXTRACT_BMESH) {
+    for (int i = 0; i < coarse_mesh->totpoly; i++) {
+      const MPoly *mpoly = &coarse_mesh->mpoly[i];
+      extract_weights_iter_poly_mesh(mr, mpoly, i, _data);
+    }
+  }
+  else {
+    BMIter f_iter;
+    BMFace *efa;
+    int face_index = 0;
+    BM_ITER_MESH_INDEX (efa, &f_iter, mr->bm, BM_FACES_OF_MESH, face_index) {
+      extract_weights_iter_poly_bm(mr, efa, face_index, _data);
+    }
+  }
+
+  draw_subdiv_interp_custom_data(subdiv_cache, coarse_weights, vbo, 1, 0, false);
+
+  GPU_vertbuf_discard(coarse_weights);
+}
+
 constexpr MeshExtract create_extractor_weights()
 {
   MeshExtract extractor = {nullptr};
   extractor.init = extract_weights_init;
+  extractor.init_subdiv = extract_weights_init_subdiv;
   extractor.iter_poly_bm = extract_weights_iter_poly_bm;
   extractor.iter_poly_mesh = extract_weights_iter_poly_mesh;
   extractor.data_type = MR_DATA_NONE;

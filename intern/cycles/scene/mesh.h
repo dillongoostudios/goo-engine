@@ -160,6 +160,9 @@ class Mesh : public Geometry {
   NODE_SOCKET_API_ARRAY(array<int>, subd_creases_edge)
   NODE_SOCKET_API_ARRAY(array<float>, subd_creases_weight)
 
+  NODE_SOCKET_API_ARRAY(array<int>, subd_vert_creases)
+  NODE_SOCKET_API_ARRAY(array<float>, subd_vert_creases_weight)
+
   /* Subdivisions parameters */
   NODE_SOCKET_API(float, subd_dicing_rate)
   NODE_SOCKET_API(int, subd_max_level)
@@ -210,7 +213,8 @@ class Mesh : public Geometry {
   void add_vertex_slow(float3 P);
   void add_triangle(int v0, int v1, int v2, int shader, bool smooth);
   void add_subd_face(int *corners, int num_corners, int shader_, bool smooth_);
-  void add_crease(int v0, int v1, float weight);
+  void add_edge_crease(int v0, int v1, float weight);
+  void add_vertex_crease(int v, float weight);
 
   void copy_center_to_motion_step(const int motion_step);
 
@@ -223,8 +227,11 @@ class Mesh : public Geometry {
   void get_uv_tiles(ustring map, unordered_set<int> &tiles) override;
 
   void pack_shaders(Scene *scene, uint *shader);
-  void pack_normals(float4 *vnormal);
-  void pack_verts(float4 *tri_verts, uint4 *tri_vindex, uint *tri_patch, float2 *tri_patch_uv);
+  void pack_normals(packed_float3 *vnormal);
+  void pack_verts(packed_float3 *tri_verts,
+                  uint4 *tri_vindex,
+                  uint *tri_patch,
+                  float2 *tri_patch_uv);
   void pack_patches(uint *patch_data);
 
   PrimitiveType primitive_type() const override;

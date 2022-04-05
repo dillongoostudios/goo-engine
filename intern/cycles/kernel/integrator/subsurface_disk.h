@@ -99,6 +99,10 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
   ray.dP = ray_dP;
   ray.dD = differential_zero_compact();
   ray.time = time;
+  ray.self.object = OBJECT_NONE;
+  ray.self.prim = PRIM_NONE;
+  ray.self.light_object = OBJECT_NONE;
+  ray.self.light_prim = OBJECT_NONE;
 
   /* Intersect with the same object. if multiple intersections are found it
    * will use at most BSSRDF_MAX_HITS hits, a random subset of all hits. */
@@ -137,8 +141,8 @@ ccl_device_inline bool subsurface_disk(KernelGlobals kg,
       Transform tfm = object_fetch_transform_motion_test(kg, object, time, &itfm);
       hit_Ng = normalize(transform_direction_transposed(&itfm, hit_Ng));
 
-      /* Transform t to world space, except for OptiX where it already is. */
-#ifdef __KERNEL_OPTIX__
+      /* Transform t to world space, except for OptiX and MetalRT where it already is. */
+#ifdef __KERNEL_GPU_RAYTRACING__
       (void)tfm;
 #else
       float3 D = transform_direction(&itfm, ray.D);

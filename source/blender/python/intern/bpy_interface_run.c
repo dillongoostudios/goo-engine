@@ -49,11 +49,11 @@
 /** \name Private Utilities
  * \{ */
 
-static void python_script_error_jump_text(Text *text)
+static void python_script_error_jump_text(Text *text, const char *filepath)
 {
   int lineno;
   int offset;
-  python_script_error_jump(text->id.name + 2, &lineno, &offset);
+  python_script_error_jump(filepath, &lineno, &offset);
   if (lineno != -1) {
     /* select the line with the error */
     txt_move_to(text, lineno - 1, INT_MAX, false);
@@ -80,6 +80,14 @@ typedef struct {
 } PyModuleObject;
 #endif
 
+/**
+ * Execute a file-path or text-block.
+ *
+ * \param reports: Report exceptions as errors (may be NULL).
+ * \param do_jump: See #BPY_run_text.
+ *
+ * \note Share a function for this since setup/cleanup logic is the same.
+ */
 static bool python_script_exec(
     bContext *C, const char *fn, struct Text *text, struct ReportList *reports, const bool do_jump)
 {
@@ -87,6 +95,10 @@ static bool python_script_exec(
   PyObject *main_mod = NULL;
   PyObject *py_dict = NULL, *py_result = NULL;
   PyGILState_STATE gilstate;
+
+  char fn_dummy[FILE_MAX];
+  /** The `__file__` added into the name-space. */
+  const char *fn_namespace = NULL;
 
   BLI_assert(fn || text);
 
@@ -99,8 +111,8 @@ static bool python_script_exec(
   PyC_MainModule_Backup(&main_mod);
 
   if (text) {
-    char fn_dummy[FILE_MAXDIR];
     bpy_text_filename_get(fn_dummy, bmain_old, sizeof(fn_dummy), text);
+    fn_namespace = fn_dummy;
 
     if (text->compiled == NULL) { /* if it wasn't already compiled, do it now */
       char *buf;
@@ -116,7 +128,7 @@ static bool python_script_exec(
 
       if (PyErr_Occurred()) {
         if (do_jump) {
-          python_script_error_jump_text(text);
+          python_script_error_jump_text(text, fn_namespace);
         }
         BPY_text_free_code(text);
       }
@@ -129,6 +141,7 @@ static bool python_script_exec(
   }
   else {
     FILE *fp = BLI_fopen(fn, "r");
+    fn_namespace = fn;
 
     if (fp) {
       py_dict = PyC_DefaultNameSpace(fn);
@@ -172,10 +185,10 @@ static bool python_script_exec(
   if (!py_result) {
     if (text) {
       if (do_jump) {
-        /* ensure text is valid before use, the script may have freed its self */
+        /* ensure text is valid before use, the script may have freed itself */
         Main *bmain_new = CTX_data_main(C);
         if ((bmain_old == bmain_new) && (BLI_findindex(&bmain_new->texts, text) != -1)) {
-          python_script_error_jump_text(text);
+          python_script_error_jump_text(text, fn_namespace);
         }
       }
     }
@@ -212,7 +225,6 @@ static bool python_script_exec(
 /** \name Run Text / Filename / String
  * \{ */
 
-/* Can run a file or text block */
 bool BPY_run_filepath(bContext *C, const char *filepath, struct ReportList *reports)
 {
   return python_script_exec(C, filepath, NULL, reports, false);
@@ -271,17 +283,11 @@ static bool bpy_run_string_impl(bContext *C,
   return ok;
 }
 
-/**
- * Run an expression, matches: `exec(compile(..., "eval"))`
- */
 bool BPY_run_string_eval(bContext *C, const char *imports[], const char *expr)
 {
   return bpy_run_string_impl(C, imports, expr, Py_eval_input);
 }
 
-/**
- * Run an entire script, matches: `exec(compile(..., "exec"))`
- */
 bool BPY_run_string_exec(bContext *C, const char *imports[], const char *expr)
 {
   return bpy_run_string_impl(C, imports, expr, Py_file_input);
@@ -330,9 +336,6 @@ static void run_string_handle_error(struct BPy_RunErrInfo *err_info)
   Py_XDECREF(py_err_str);
 }
 
-/**
- * \return success
- */
 bool BPY_run_string_as_number(bContext *C,
                               const char *imports[],
                               const char *expr,
@@ -341,10 +344,6 @@ bool BPY_run_string_as_number(bContext *C,
 {
   PyGILState_STATE gilstate;
   bool ok = true;
-
-  if (!r_value || !expr) {
-    return -1;
-  }
 
   if (expr[0] == '\0') {
     *r_value = 0.0;
@@ -364,9 +363,6 @@ bool BPY_run_string_as_number(bContext *C,
   return ok;
 }
 
-/**
- * \return success
- */
 bool BPY_run_string_as_string_and_size(bContext *C,
                                        const char *imports[],
                                        const char *expr,
@@ -374,7 +370,6 @@ bool BPY_run_string_as_string_and_size(bContext *C,
                                        char **r_value,
                                        size_t *r_value_size)
 {
-  BLI_assert(r_value && expr);
   PyGILState_STATE gilstate;
   bool ok = true;
 
@@ -406,18 +401,12 @@ bool BPY_run_string_as_string(bContext *C,
   return BPY_run_string_as_string_and_size(C, imports, expr, err_info, r_value, &value_dummy_size);
 }
 
-/**
- * Support both int and pointers.
- *
- * \return success
- */
 bool BPY_run_string_as_intptr(bContext *C,
                               const char *imports[],
                               const char *expr,
                               struct BPy_RunErrInfo *err_info,
                               intptr_t *r_value)
 {
-  BLI_assert(r_value && expr);
   PyGILState_STATE gilstate;
   bool ok = true;
 

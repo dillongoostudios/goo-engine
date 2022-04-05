@@ -23,26 +23,38 @@
 struct CurveProfile;
 struct MDeformVert;
 
+/**
+ * - Currently only bevels BM_ELEM_TAG'd verts and edges.
+ *
+ * - Newly created faces, edges, and verts are BM_ELEM_TAG'd too,
+ *   the caller needs to ensure these are cleared before calling
+ *   if its going to use this tag.
+ *
+ * - If limit_offset is set, adjusts offset down if necessary
+ *   to avoid geometry collisions.
+ *
+ * \warning all tagged edges _must_ be manifold.
+ */
 void BM_mesh_bevel(BMesh *bm,
-                   const float offset,
-                   const int offset_type,
-                   const int profile_type,
-                   const int segments,
-                   const float profile,
-                   const bool affect_type,
-                   const bool use_weights,
-                   const bool limit_offset,
+                   float offset,
+                   int offset_type,
+                   int profile_type,
+                   int segments,
+                   float profile,
+                   bool affect_type,
+                   bool use_weights,
+                   bool limit_offset,
                    const struct MDeformVert *dvert,
-                   const int vertex_group,
-                   const int mat,
-                   const bool loop_slide,
-                   const bool mark_seam,
-                   const bool mark_sharp,
-                   const bool harden_normals,
-                   const int face_strength_mode,
-                   const int miter_outer,
-                   const int miter_inner,
-                   const float spread,
-                   const float smoothresh,
+                   int vertex_group,
+                   int mat,
+                   bool loop_slide,
+                   bool mark_seam,
+                   bool mark_sharp,
+                   bool harden_normals,
+                   int face_strength_mode,
+                   int miter_outer,
+                   int miter_inner,
+                   float spread,
+                   float smoothresh,
                    const struct CurveProfile *custom_profile,
-                   const int vmesh_method);
+                   int vmesh_method);

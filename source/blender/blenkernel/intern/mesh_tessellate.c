@@ -154,25 +154,13 @@ static void mesh_loops_to_tessdata(CustomData *fdata,
   }
 }
 
-/**
- * Recreate #MFace Tessellation.
- *
- * \param do_face_nor_copy: Controls whether the normals from the poly
- * are copied to the tessellated faces.
- *
- * \return number of tessellation faces.
- *
- * \note This doesn't use multi-threading like #BKE_mesh_recalc_looptri since
- * it's not used in many places and #MFace should be phased out.
- */
 int BKE_mesh_tessface_calc_ex(CustomData *fdata,
                               CustomData *ldata,
                               CustomData *pdata,
                               MVert *mvert,
                               int totface,
                               int totloop,
-                              int totpoly,
-                              const bool do_face_nor_copy)
+                              int totpoly)
 {
 #define USE_TESSFACE_SPEEDUP
 #define USE_TESSFACE_QUADS
@@ -374,18 +362,6 @@ int BKE_mesh_tessface_calc_ex(CustomData *fdata,
   CustomData_add_layer(fdata, CD_ORIGINDEX, CD_ASSIGN, mface_to_poly_map, totface);
   CustomData_from_bmeshpoly(fdata, ldata, totface);
 
-  if (do_face_nor_copy) {
-    /* If polys have a normals layer, copying that to faces can help
-     * avoid the need to recalculate normals later. */
-    if (CustomData_has_layer(pdata, CD_NORMAL)) {
-      float(*pnors)[3] = CustomData_get_layer(pdata, CD_NORMAL);
-      float(*fnors)[3] = CustomData_add_layer(fdata, CD_NORMAL, CD_CALLOC, NULL, totface);
-      for (mface_index = 0; mface_index < totface; mface_index++) {
-        copy_v3_v3(fnors[mface_index], pnors[mface_to_poly_map[mface_index]]);
-      }
-    }
-  }
-
   /* NOTE: quad detection issue - fourth vertidx vs fourth loopidx:
    * Polygons take care of their loops ordering, hence not of their vertices ordering.
    * Currently, our tfaces' fourth vertex index might be 0 even for a quad.
@@ -422,16 +398,13 @@ int BKE_mesh_tessface_calc_ex(CustomData *fdata,
 
 void BKE_mesh_tessface_calc(Mesh *mesh)
 {
-  mesh->totface = BKE_mesh_tessface_calc_ex(
-      &mesh->fdata,
-      &mesh->ldata,
-      &mesh->pdata,
-      mesh->mvert,
-      mesh->totface,
-      mesh->totloop,
-      mesh->totpoly,
-      /* Calculate normals right after, don't copy from polys here. */
-      false);
+  mesh->totface = BKE_mesh_tessface_calc_ex(&mesh->fdata,
+                                            &mesh->ldata,
+                                            &mesh->pdata,
+                                            mesh->mvert,
+                                            mesh->totface,
+                                            mesh->totloop,
+                                            mesh->totpoly);
 
   BKE_mesh_update_customdata_pointers(mesh, true);
 }
@@ -712,9 +685,6 @@ static void mesh_recalc_looptri__multi_threaded(const MLoop *mloop,
                           &settings);
 }
 
-/**
- * Calculate tessellation into #MLoopTri which exist only for this purpose.
- */
 void BKE_mesh_recalc_looptri(const MLoop *mloop,
                              const MPoly *mpoly,
                              const MVert *mvert,
@@ -730,14 +700,6 @@ void BKE_mesh_recalc_looptri(const MLoop *mloop,
   }
 }
 
-/**
- * A version of #BKE_mesh_recalc_looptri which takes pre-calculated polygon normals
- * (used to avoid having to calculate the face normal for NGON tessellation).
- *
- * \note Only use this function if normals have already been calculated, there is no need
- * to calculate normals just to use this function as it will cause the normals for triangles
- * to be calculated which aren't needed for tessellation.
- */
 void BKE_mesh_recalc_looptri_with_normals(const MLoop *mloop,
                                           const MPoly *mpoly,
                                           const MVert *mvert,

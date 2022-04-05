@@ -28,12 +28,6 @@
 
 namespace blender::compositor {
 
-using Link = NodeOperationBuilder::Link;
-
-/**
- * \param operations_builder: Contains all operations to fold.
- * \param exec_system: Execution system.
- */
 ConstantFolder::ConstantFolder(NodeOperationBuilder &operations_builder)
     : operations_builder_(operations_builder)
 {
@@ -135,7 +129,6 @@ Vector<MemoryBuffer *> ConstantFolder::get_constant_input_buffers(NodeOperation 
   return inputs_bufs;
 }
 
-/** Returns constant operations resulted from folded operations. */
 Vector<ConstantOperation *> ConstantFolder::try_fold_operations(Span<NodeOperation *> operations)
 {
   Set<NodeOperation *> foldable_ops = find_constant_foldable_operations(operations);
@@ -151,9 +144,6 @@ Vector<ConstantOperation *> ConstantFolder::try_fold_operations(Span<NodeOperati
   return new_folds;
 }
 
-/**
- * Evaluate operations with constant elements into primitive constant operations.
- */
 int ConstantFolder::fold_operations()
 {
   WorkScheduler::start(operations_builder_.context());
@@ -186,8 +176,8 @@ void ConstantFolder::delete_constant_buffers()
 void ConstantFolder::get_operation_output_operations(NodeOperation *operation,
                                                      Vector<NodeOperation *> &r_outputs)
 {
-  const Vector<Link> &links = operations_builder_.get_links();
-  for (const Link &link : links) {
+  const Vector<NodeOperationBuilder::Link> &links = operations_builder_.get_links();
+  for (const NodeOperationBuilder::Link &link : links) {
     if (&link.from()->get_operation() == operation) {
       r_outputs.append(&link.to()->get_operation());
     }

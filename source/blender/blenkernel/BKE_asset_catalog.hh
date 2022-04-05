@@ -141,7 +141,7 @@ class AssetCatalogService {
   AssetCatalogFilter create_catalog_filter(CatalogID active_catalog_id) const;
 
   /** Create a catalog with some sensible auto-generated catalog ID.
-   * The catalog will be saved to the default catalog file.*/
+   * The catalog will be saved to the default catalog file. */
   AssetCatalog *create_catalog(const AssetCatalogPath &catalog_path);
 
   /**
@@ -377,6 +377,9 @@ class AssetCatalogDefinitionFile {
   /* For now this is the only version of the catalog definition files that is supported.
    * Later versioning code may be added to handle older files. */
   const static int SUPPORTED_VERSION;
+  /* String that's matched in the catalog definition file to know that the line is the version
+   * declaration. It has to start with a space to ensure it won't match any hypothetical future
+   * field that starts with "VERSION". */
   const static std::string VERSION_MARKER;
   const static std::string HEADER;
 
@@ -443,7 +446,9 @@ class AssetCatalog {
    * Simple, human-readable name for the asset catalog. This is stored on assets alongside the
    * catalog ID; the catalog ID is a UUID that is not human-readable,
    * so to avoid complete data-loss when the catalog definition file gets lost,
-   * we also store a human-readable simple name for the catalog. */
+   * we also store a human-readable simple name for the catalog.
+   *
+   * It should fit in sizeof(AssetMetaData::catalog_simple_name) bytes. */
   std::string simple_name;
 
   struct Flags {

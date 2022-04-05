@@ -34,6 +34,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_kdopbvh.h"
+#include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_string_utils.h"
 #include "BLI_utildefines.h"
@@ -71,6 +72,7 @@
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_lib_id.h"
+#include "BKE_mesh.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_movieclip.h"
 #include "BKE_object.h"
@@ -123,7 +125,6 @@ static bConstraint *constraint_find_original_for_update(bConstraintOb *cob, bCon
 
 /* -------------- Naming -------------- */
 
-/* Find the first available, non-duplicate name for a given constraint */
 void BKE_constraint_unique_name(bConstraint *con, ListBase *list)
 {
   BLI_uniquename(list, con, DATA_("Const"), '.', offsetof(bConstraint, name), sizeof(con->name));
@@ -132,8 +133,6 @@ void BKE_constraint_unique_name(bConstraint *con, ListBase *list)
 /* ----------------- Evaluation Loop Preparation --------------- */
 
 /* package an object/bone for use in constraint evaluation */
-/* This function MEM_calloc's a bConstraintOb struct,
- * that will need to be freed after evaluation */
 bConstraintOb *BKE_constraints_make_evalob(
     Depsgraph *depsgraph, Scene *scene, Object *ob, void *subdata, short datatype)
 {
@@ -211,7 +210,6 @@ bConstraintOb *BKE_constraints_make_evalob(
   return cob;
 }
 
-/* cleanup after constraint evaluation */
 void BKE_constraints_clear_evalob(bConstraintOb *cob)
 {
   float delta[4][4], imat[4][4];
@@ -261,10 +259,6 @@ void BKE_constraints_clear_evalob(bConstraintOb *cob)
 
 /* -------------- Space-Conversion API -------------- */
 
-/* This function is responsible for the correct transformations/conversions
- * of a matrix from one space to another for constraint evaluation.
- * For now, this is only implemented for Objects and PoseChannels.
- */
 void BKE_constraint_mat_convertspace(Object *ob,
                                      bPoseChannel *pchan,
                                      bConstraintOb *cob,
@@ -552,6 +546,7 @@ static void contarget_get_mesh_mat(Object *ob, const char *substring, float mat[
   float normal[3] = {0.0f, 0.0f, 0.0f};
   float weightsum = 0.0f;
   if (me_eval) {
+    const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(me_eval);
     const MDeformVert *dvert = CustomData_get_layer(&me_eval->vdata, CD_MDEFORMVERT);
     int numVerts = me_eval->totvert;
 
@@ -565,10 +560,8 @@ static void contarget_get_mesh_mat(Object *ob, const char *substring, float mat[
         const MDeformWeight *dw = BKE_defvert_find_index(dv, defgroup);
 
         if (dw && dw->weight > 0.0f) {
-          float nor[3];
-          normal_short_to_float_v3(nor, mv->no);
           madd_v3_v3fl(vec, mv->co, dw->weight);
-          madd_v3_v3fl(normal, nor, dw->weight);
+          madd_v3_v3fl(normal, vert_normals[i], dw->weight);
           weightsum += dw->weight;
         }
       }
@@ -2010,7 +2003,7 @@ static void rotlike_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *tar
     /* We must get compatible eulers from the beginning because
      * some of them can be modified below (see bug T21875).
      * Additionally, since this constraint is based on euler rotation math, it doesn't work well
-     * with shear. The Y axis is chosen as the main axis when we orthoganalize the matrix because
+     * with shear. The Y axis is chosen as the main axis when we orthogonalize the matrix because
      * constraints are used most commonly on bones. */
     float mat[4][4];
     copy_m4_m4(mat, ct->matrix);
@@ -3768,7 +3761,7 @@ static void minmax_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targ
     copy_m4_m4(tarmat, ct->matrix);
 
     if (data->flag & MINMAX_USEROT) {
-      /* take rotation of target into account by doing the transaction in target's localspace */
+      /* Take rotation of target into account by doing the transaction in target's local-space. */
       invert_m4_m4(imat, tarmat);
       mul_m4_m4m4(tmat, imat, obmat);
       copy_m4_m4(obmat, tmat);
@@ -3813,7 +3806,7 @@ static void minmax_evaluate(bConstraint *con, bConstraintOb *cob, ListBase *targ
     if (val1 > val2) {
       obmat[3][index] = tarmat[3][index] + data->offset;
       if (data->flag & MINMAX_USEROT) {
-        /* get out of localspace */
+        /* Get out of local-space. */
         mul_m4_m4m4(tmat, ct->matrix, obmat);
         copy_m4_m4(cob->matrix, tmat);
       }
@@ -5561,9 +5554,6 @@ static void constraints_init_typeinfo(void)
   constraintsTypeInfo[30] = &CTI_ARMATURE;             /* Armature Constraint */
 }
 
-/* This function should be used for getting the appropriate type-info when only
- * a constraint type is known
- */
 const bConstraintTypeInfo *BKE_constraint_typeinfo_from_type(int type)
 {
   /* initialize the type-info list? */
@@ -5583,9 +5573,6 @@ const bConstraintTypeInfo *BKE_constraint_typeinfo_from_type(int type)
   return NULL;
 }
 
-/* This function should always be used to get the appropriate type-info, as it
- * has checks which prevent segfaults in some weird cases.
- */
 const bConstraintTypeInfo *BKE_constraint_typeinfo_get(bConstraint *con)
 {
   /* only return typeinfo for valid constraints */
@@ -5616,11 +5603,6 @@ static void con_unlink_refs_cb(bConstraint *UNUSED(con),
   }
 }
 
-/**
- * Free data of a specific constraint if it has any info.
- * be sure to run #BIK_clear_data() when freeing an IK constraint,
- * unless DAG_relations_tag_update is called.
- */
 void BKE_constraint_free_data_ex(bConstraint *con, bool do_id_user)
 {
   if (con->data) {
@@ -5648,7 +5630,6 @@ void BKE_constraint_free_data(bConstraint *con)
   BKE_constraint_free_data_ex(con, true);
 }
 
-/* Free all constraints from a constraint-stack */
 void BKE_constraints_free_ex(ListBase *list, bool do_id_user)
 {
   /* Free constraint data and also any extra data */
@@ -5665,7 +5646,6 @@ void BKE_constraints_free(ListBase *list)
   BKE_constraints_free_ex(list, true);
 }
 
-/* Remove the specified constraint from the given constraint stack */
 bool BKE_constraint_remove(ListBase *list, bConstraint *con)
 {
   if (con) {
@@ -5691,7 +5671,6 @@ bool BKE_constraint_remove_ex(ListBase *list, Object *ob, bConstraint *con, bool
   return false;
 }
 
-/* Apply the specified constraint in the given constraint stack */
 bool BKE_constraint_apply_for_object(Depsgraph *depsgraph,
                                      Scene *scene,
                                      Object *ob,
@@ -5703,13 +5682,19 @@ bool BKE_constraint_apply_for_object(Depsgraph *depsgraph,
 
   const float ctime = BKE_scene_frame_get(scene);
 
-  bConstraint *new_con = BKE_constraint_duplicate_ex(con, 0, !ID_IS_LINKED(ob));
+  /* Do this all in the evaluated domain (e.g. shrinkwrap needs to access evaluated constraint
+   * target mesh). */
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+  bConstraint *con_eval = BKE_constraints_find_name(&ob_eval->constraints, con->name);
+
+  bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, !ID_IS_LINKED(ob));
   ListBase single_con = {new_con, new_con};
 
   bConstraintOb *cob = BKE_constraints_make_evalob(
-      depsgraph, scene, ob, NULL, CONSTRAINT_OBTYPE_OBJECT);
+      depsgraph, scene_eval, ob_eval, NULL, CONSTRAINT_OBTYPE_OBJECT);
   /* Undo the effect of the current constraint stack evaluation. */
-  mul_m4_m4m4(cob->matrix, ob->constinv, cob->matrix);
+  mul_m4_m4m4(cob->matrix, ob_eval->constinv, cob->matrix);
 
   /* Evaluate single constraint. */
   BKE_constraints_solve(depsgraph, &single_con, cob, ctime);
@@ -5722,7 +5707,7 @@ bool BKE_constraint_apply_for_object(Depsgraph *depsgraph,
   BLI_freelinkN(&single_con, new_con);
 
   /* Apply transform from matrix. */
-  BKE_object_apply_mat4(ob, ob->obmat, true, true);
+  BKE_object_apply_mat4(ob, ob_eval->obmat, true, true);
 
   return true;
 }
@@ -5749,18 +5734,25 @@ bool BKE_constraint_apply_for_pose(
 
   const float ctime = BKE_scene_frame_get(scene);
 
-  bConstraint *new_con = BKE_constraint_duplicate_ex(con, 0, !ID_IS_LINKED(ob));
+  /* Do this all in the evaluated domain (e.g. shrinkwrap needs to access evaluated constraint
+   * target mesh). */
+  Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
+  Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
+  bPoseChannel *pchan_eval = BKE_pose_channel_find_name(ob_eval->pose, pchan->name);
+  bConstraint *con_eval = BKE_constraints_find_name(&pchan_eval->constraints, con->name);
+
+  bConstraint *new_con = BKE_constraint_duplicate_ex(con_eval, 0, !ID_IS_LINKED(ob));
   ListBase single_con;
   single_con.first = new_con;
   single_con.last = new_con;
 
   float vec[3];
-  copy_v3_v3(vec, pchan->pose_mat[3]);
+  copy_v3_v3(vec, pchan_eval->pose_mat[3]);
 
   bConstraintOb *cob = BKE_constraints_make_evalob(
-      depsgraph, scene, ob, pchan, CONSTRAINT_OBTYPE_BONE);
+      depsgraph, scene_eval, ob_eval, pchan_eval, CONSTRAINT_OBTYPE_BONE);
   /* Undo the effects of currently applied constraints. */
-  mul_m4_m4m4(cob->matrix, pchan->constinv, cob->matrix);
+  mul_m4_m4m4(cob->matrix, pchan_eval->constinv, cob->matrix);
   /* Evaluate single constraint. */
   BKE_constraints_solve(depsgraph, &single_con, cob, ctime);
   BKE_constraints_clear_evalob(cob);
@@ -5771,12 +5763,12 @@ bool BKE_constraint_apply_for_pose(
 
   /* Prevent constraints breaking a chain. */
   if (pchan->bone->flag & BONE_CONNECTED) {
-    copy_v3_v3(pchan->pose_mat[3], vec);
+    copy_v3_v3(pchan_eval->pose_mat[3], vec);
   }
 
   /* Apply transform from matrix. */
   float mat[4][4];
-  BKE_armature_mat_pose_to_bone(pchan, pchan->pose_mat, mat);
+  BKE_armature_mat_pose_to_bone(pchan, pchan_eval->pose_mat, mat);
   BKE_pchan_apply_mat4(pchan, mat, true);
 
   return true;
@@ -5925,7 +5917,6 @@ bool BKE_constraint_target_uses_bbone(struct bConstraint *con,
 
 /* ......... */
 
-/* Add new constraint for the given bone */
 bConstraint *BKE_constraint_add_for_pose(Object *ob,
                                          bPoseChannel *pchan,
                                          const char *name,
@@ -5938,7 +5929,6 @@ bConstraint *BKE_constraint_add_for_pose(Object *ob,
   return add_new_constraint(ob, pchan, name, type);
 }
 
-/* Add new constraint for the given object */
 bConstraint *BKE_constraint_add_for_object(Object *ob, const char *name, short type)
 {
   return add_new_constraint(ob, NULL, name, type);
@@ -5946,7 +5936,6 @@ bConstraint *BKE_constraint_add_for_object(Object *ob, const char *name, short t
 
 /* ......... */
 
-/* Run the given callback on all ID-blocks in list of constraints */
 void BKE_constraints_id_loop(ListBase *conlist, ConstraintIDFunc func, void *userdata)
 {
   LISTBASE_FOREACH (bConstraint *, con, conlist) {
@@ -6021,7 +6010,6 @@ static void constraint_copy_data_ex(bConstraint *dst,
   }
 }
 
-/** Allocate and duplicate a single constraint, outside of any object/pose context. */
 bConstraint *BKE_constraint_duplicate_ex(bConstraint *src, const int flag, const bool do_extern)
 {
   bConstraint *dst = MEM_dupallocN(src);
@@ -6030,7 +6018,6 @@ bConstraint *BKE_constraint_duplicate_ex(bConstraint *src, const int flag, const
   return dst;
 }
 
-/* Add a copy of the given constraint for the given bone */
 bConstraint *BKE_constraint_copy_for_pose(Object *ob, bPoseChannel *pchan, bConstraint *src)
 {
   if (pchan == NULL) {
@@ -6042,7 +6029,6 @@ bConstraint *BKE_constraint_copy_for_pose(Object *ob, bPoseChannel *pchan, bCons
   return new_con;
 }
 
-/* Add a copy of the given constraint for the given object */
 bConstraint *BKE_constraint_copy_for_object(Object *ob, bConstraint *src)
 {
   bConstraint *new_con = BKE_constraint_duplicate_ex(src, 0, !ID_IS_LINKED(ob));
@@ -6050,7 +6036,6 @@ bConstraint *BKE_constraint_copy_for_object(Object *ob, bConstraint *src)
   return new_con;
 }
 
-/* duplicate all of the constraints in a constraint stack */
 void BKE_constraints_copy_ex(ListBase *dst, const ListBase *src, const int flag, bool do_extern)
 {
   bConstraint *con, *srccon;
@@ -6079,7 +6064,6 @@ bConstraint *BKE_constraints_find_name(ListBase *list, const char *name)
   return BLI_findstring(list, name, offsetof(bConstraint, name));
 }
 
-/* finds the 'active' constraint in a constraint stack */
 bConstraint *BKE_constraints_active_get(ListBase *list)
 {
 
@@ -6096,7 +6080,6 @@ bConstraint *BKE_constraints_active_get(ListBase *list)
   return NULL;
 }
 
-/* Set the given constraint as the active one (clearing all the others) */
 void BKE_constraints_active_set(ListBase *list, bConstraint *con)
 {
 
@@ -6132,7 +6115,6 @@ static bConstraint *constraint_list_find_from_target(ListBase *constraints, bCon
   return NULL;
 }
 
-/* Finds the constraint that owns the given target within the object. */
 bConstraint *BKE_constraint_find_from_target(Object *ob,
                                              bConstraintTarget *tgt,
                                              bPoseChannel **r_pchan)
@@ -6230,12 +6212,6 @@ static bConstraint *constraint_find_original_for_update(bConstraintOb *cob, bCon
   return orig_con;
 }
 
-/**
- * Check whether given constraint is not local (i.e. from linked data) when the object is a library
- * override.
- *
- * \param con: May be NULL, in which case we consider it as a non-local constraint case.
- */
 bool BKE_constraint_is_nonlocal_in_liboverride(const Object *ob, const bConstraint *con)
 {
   return (ID_IS_OVERRIDE_LIBRARY(ob) &&
@@ -6244,8 +6220,6 @@ bool BKE_constraint_is_nonlocal_in_liboverride(const Object *ob, const bConstrai
 
 /* -------- Constraints and Proxies ------- */
 
-/* Rescue all constraints tagged as being CONSTRAINT_PROXY_LOCAL
- * (i.e. added to bone that's proxy-synced in this file) */
 void BKE_constraints_proxylocal_extract(ListBase *dst, ListBase *src)
 {
   bConstraint *con, *next;
@@ -6262,7 +6236,6 @@ void BKE_constraints_proxylocal_extract(ListBase *dst, ListBase *src)
   }
 }
 
-/* Returns if the owner of the constraint is proxy-protected */
 bool BKE_constraints_proxylocked_owner(Object *ob, bPoseChannel *pchan)
 {
   /* Currently, constraints can only be on object or bone level */
@@ -6286,13 +6259,6 @@ bool BKE_constraints_proxylocked_owner(Object *ob, bPoseChannel *pchan)
 
 /* -------- Target-Matrix Stuff ------- */
 
-/* This function is a relic from the prior implementations of the constraints system, when all
- * constraints either had one or no targets. It used to be called during the main constraint
- * solving loop, but is now only used for the remaining cases for a few constraints.
- *
- * None of the actual calculations of the matrices should be done here! Also, this function is
- * not to be used by any new constraints, particularly any that have multiple targets.
- */
 void BKE_constraint_target_matrix_get(struct Depsgraph *depsgraph,
                                       Scene *scene,
                                       bConstraint *con,
@@ -6369,7 +6335,6 @@ void BKE_constraint_target_matrix_get(struct Depsgraph *depsgraph,
   }
 }
 
-/* Get the list of targets required for solving a constraint */
 void BKE_constraint_targets_for_solving_get(struct Depsgraph *depsgraph,
                                             bConstraint *con,
                                             bConstraintOb *cob,
@@ -6439,12 +6404,6 @@ void BKE_constraint_custom_object_space_get(float r_mat[4][4], bConstraint *con)
 
 /* ---------- Evaluation ----------- */
 
-/* This function is called whenever constraints need to be evaluated. Currently, all
- * constraints that can be evaluated are every time this gets run.
- *
- * BKE_constraints_make_evalob and BKE_constraints_clear_evalob should be called before and
- * after running this function, to sort out cob
- */
 void BKE_constraints_solve(struct Depsgraph *depsgraph,
                            ListBase *conlist,
                            bConstraintOb *cob,

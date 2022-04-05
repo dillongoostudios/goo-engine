@@ -40,34 +40,38 @@ extern "C" {
   ((void)0)
 
 #define BRICONTRGB \
-  texres->tr = tex->rfac * ((texres->tr - 0.5f) * tex->contrast + tex->bright - 0.5f); \
-  texres->tg = tex->gfac * ((texres->tg - 0.5f) * tex->contrast + tex->bright - 0.5f); \
-  texres->tb = tex->bfac * ((texres->tb - 0.5f) * tex->contrast + tex->bright - 0.5f); \
+  texres->trgba[0] = tex->rfac * \
+                     ((texres->trgba[0] - 0.5f) * tex->contrast + tex->bright - 0.5f); \
+  texres->trgba[1] = tex->gfac * \
+                     ((texres->trgba[1] - 0.5f) * tex->contrast + tex->bright - 0.5f); \
+  texres->trgba[2] = tex->bfac * \
+                     ((texres->trgba[2] - 0.5f) * tex->contrast + tex->bright - 0.5f); \
   if (!(tex->flag & TEX_NO_CLAMP)) { \
-    if (texres->tr < 0.0f) { \
-      texres->tr = 0.0f; \
+    if (texres->trgba[0] < 0.0f) { \
+      texres->trgba[0] = 0.0f; \
     } \
-    if (texres->tg < 0.0f) { \
-      texres->tg = 0.0f; \
+    if (texres->trgba[1] < 0.0f) { \
+      texres->trgba[1] = 0.0f; \
     } \
-    if (texres->tb < 0.0f) { \
-      texres->tb = 0.0f; \
+    if (texres->trgba[2] < 0.0f) { \
+      texres->trgba[2] = 0.0f; \
     } \
   } \
   if (tex->saturation != 1.0f) { \
     float _hsv[3]; \
-    rgb_to_hsv(texres->tr, texres->tg, texres->tb, _hsv, _hsv + 1, _hsv + 2); \
+    rgb_to_hsv(texres->trgba[0], texres->trgba[1], texres->trgba[2], _hsv, _hsv + 1, _hsv + 2); \
     _hsv[1] *= tex->saturation; \
-    hsv_to_rgb(_hsv[0], _hsv[1], _hsv[2], &texres->tr, &texres->tg, &texres->tb); \
+    hsv_to_rgb( \
+        _hsv[0], _hsv[1], _hsv[2], &texres->trgba[0], &texres->trgba[1], &texres->trgba[2]); \
     if ((tex->saturation > 1.0f) && !(tex->flag & TEX_NO_CLAMP)) { \
-      if (texres->tr < 0.0f) { \
-        texres->tr = 0.0f; \
+      if (texres->trgba[0] < 0.0f) { \
+        texres->trgba[0] = 0.0f; \
       } \
-      if (texres->tg < 0.0f) { \
-        texres->tg = 0.0f; \
+      if (texres->trgba[1] < 0.0f) { \
+        texres->trgba[1] = 0.0f; \
       } \
-      if (texres->tb < 0.0f) { \
-        texres->tb = 0.0f; \
+      if (texres->trgba[2] < 0.0f) { \
+        texres->trgba[2] = 0.0f; \
       } \
     } \
   } \
@@ -89,13 +93,13 @@ int imagewraposa(struct Tex *tex,
                  const float dyt[2],
                  struct TexResult *texres,
                  struct ImagePool *pool,
-                 const bool skip_load_image);
+                 bool skip_load_image);
 int imagewrap(struct Tex *tex,
               struct Image *ima,
               const float texvec[3],
               struct TexResult *texres,
               struct ImagePool *pool,
-              const bool skip_load_image);
+              bool skip_load_image);
 void image_sample(struct Image *ima,
                   float fx,
                   float fy,

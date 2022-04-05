@@ -109,7 +109,7 @@ struct BMLog {
 
 typedef struct {
   float co[3];
-  short no[3];
+  float no[3];
   char hflag;
   float mask;
 } BMLogVert;
@@ -200,7 +200,7 @@ static void vert_mask_set(BMVert *v, const float new_mask, const int cd_vert_mas
 static void bm_log_vert_bmvert_copy(BMLogVert *lv, BMVert *v, const int cd_vert_mask_offset)
 {
   copy_v3_v3(lv->co, v->co);
-  normal_float_to_short_v3(lv->no, v->no);
+  copy_v3_v3(lv->no, v->no);
   lv->mask = vert_mask_get(v, cd_vert_mask_offset);
   lv->hflag = v->head.hflag;
 }
@@ -294,7 +294,7 @@ static void bm_log_verts_restore(BMesh *bm, BMLog *log, GHash *verts)
     BMVert *v = BM_vert_create(bm, lv->co, NULL, BM_CREATE_NOP);
     vert_mask_set(v, lv->mask, cd_vert_mask_offset);
     v->head.hflag = lv->hflag;
-    normal_short_to_float_v3(v->no, lv->no);
+    copy_v3_v3(v->no, lv->no);
     bm_log_vert_id_set(log, v, POINTER_AS_UINT(key));
   }
 }
@@ -329,12 +329,9 @@ static void bm_log_vert_values_swap(BMesh *bm, BMLog *log, GHash *verts)
     uint id = POINTER_AS_UINT(key);
     BMVert *v = bm_log_vert_from_id(log, id);
     float mask;
-    short normal[3];
 
     swap_v3_v3(v->co, lv->co);
-    copy_v3_v3_short(normal, lv->no);
-    normal_float_to_short_v3(lv->no, v->no);
-    normal_short_to_float_v3(v->no, normal);
+    swap_v3_v3(v->no, lv->no);
     SWAP(char, v->head.hflag, lv->hflag);
     mask = lv->mask;
     lv->mask = vert_mask_get(v, cd_vert_mask_offset);
@@ -468,7 +465,6 @@ static void bm_log_id_ghash_release(BMLog *log, GHash *id_ghash)
 
 /***************************** Public API *****************************/
 
-/* Allocate, initialize, and assign a new BMLog */
 BMLog *BM_log_create(BMesh *bm)
 {
   BMLog *log = MEM_callocN(sizeof(*log), __func__);
@@ -506,14 +502,6 @@ void BM_log_cleanup_entry(BMLogEntry *entry)
   }
 }
 
-/* Allocate and initialize a new BMLog using existing BMLogEntries
- *
- * The 'entry' should be the last entry in the BMLog. Its prev pointer
- * will be followed back to find the first entry.
- *
- * The unused IDs field of the log will be initialized by taking all
- * keys from all GHashes in the log entry.
- */
 BMLog *BM_log_from_existing_entries_create(BMesh *bm, BMLogEntry *entry)
 {
   BMLog *log = BM_log_create(bm);
@@ -555,7 +543,6 @@ BMLog *BM_log_from_existing_entries_create(BMesh *bm, BMLogEntry *entry)
   return log;
 }
 
-/* Free all the data in a BMLog including the log itself */
 void BM_log_free(BMLog *log)
 {
   BMLogEntry *entry;
@@ -581,13 +568,11 @@ void BM_log_free(BMLog *log)
   MEM_freeN(log);
 }
 
-/* Get the number of log entries */
 int BM_log_length(const BMLog *log)
 {
   return BLI_listbase_count(&log->entries);
 }
 
-/* Apply a consistent ordering to BMesh vertices */
 void BM_log_mesh_elems_reorder(BMesh *bm, BMLog *log)
 {
   uint *varr;
@@ -639,16 +624,6 @@ void BM_log_mesh_elems_reorder(BMesh *bm, BMLog *log)
   MEM_freeN(farr);
 }
 
-/* Start a new log entry and update the log entry list
- *
- * If the log entry list is empty, or if the current log entry is the
- * last entry, the new entry is simply appended to the end.
- *
- * Otherwise, the new entry is added after the current entry and all
- * following entries are deleted.
- *
- * In either case, the new entry is set as the current log entry.
- */
 BMLogEntry *BM_log_entry_add(BMLog *log)
 {
   /* WARNING: this is now handled by the UndoSystem: BKE_UNDOSYS_TYPE_SCULPT
@@ -676,15 +651,6 @@ BMLogEntry *BM_log_entry_add(BMLog *log)
   return entry;
 }
 
-/* Remove an entry from the log
- *
- * Uses entry->log as the log. If the log is NULL, the entry will be
- * free'd but not removed from any list, nor shall its IDs be
- * released.
- *
- * This operation is only valid on the first and last entries in the
- * log. Deleting from the middle will assert.
- */
 void BM_log_entry_drop(BMLogEntry *entry)
 {
   BMLog *log = entry->log;
@@ -751,9 +717,6 @@ void BM_log_entry_drop(BMLogEntry *entry)
   BLI_freelinkN(&log->entries, entry);
 }
 
-/* Undo one BMLogEntry
- *
- * Has no effect if there's nothing left to undo */
 void BM_log_undo(BMesh *bm, BMLog *log)
 {
   BMLogEntry *entry = log->current_entry;
@@ -775,9 +738,6 @@ void BM_log_undo(BMesh *bm, BMLog *log)
   }
 }
 
-/* Redo one BMLogEntry
- *
- * Has no effect if there's nothing left to redo */
 void BM_log_redo(BMesh *bm, BMLog *log)
 {
   BMLogEntry *entry = log->current_entry;
@@ -812,29 +772,6 @@ void BM_log_redo(BMesh *bm, BMLog *log)
   }
 }
 
-/* Log a vertex before it is modified
- *
- * Before modifying vertex coordinates, masks, or hflags, call this
- * function to log its current values. This is better than logging
- * after the coordinates have been modified, because only those
- * vertices that are modified need to have their original values
- * stored.
- *
- * Handles two separate cases:
- *
- * If the vertex was added in the current log entry, update the
- * vertex in the map of added vertices.
- *
- * If the vertex already existed prior to the current log entry, a
- * separate key/value map of modified vertices is used (using the
- * vertex's ID as the key). The values stored in that case are
- * the vertex's original state so that an undo can restore the
- * previous state.
- *
- * On undo, the current vertex state will be swapped with the stored
- * state so that a subsequent redo operation will restore the newer
- * vertex state.
- */
 void BM_log_vert_before_modified(BMLog *log, BMVert *v, const int cd_vert_mask_offset)
 {
   BMLogEntry *entry = log->current_entry;
@@ -853,12 +790,6 @@ void BM_log_vert_before_modified(BMLog *log, BMVert *v, const int cd_vert_mask_o
   }
 }
 
-/* Log a new vertex as added to the BMesh
- *
- * The new vertex gets a unique ID assigned. It is then added to a map
- * of added vertices, with the key being its ID and the value
- * containing everything needed to reconstruct that vertex.
- */
 void BM_log_vert_added(BMLog *log, BMVert *v, const int cd_vert_mask_offset)
 {
   BMLogVert *lv;
@@ -870,11 +801,6 @@ void BM_log_vert_added(BMLog *log, BMVert *v, const int cd_vert_mask_offset)
   BLI_ghash_insert(log->current_entry->added_verts, key, lv);
 }
 
-/* Log a face before it is modified
- *
- * This is intended to handle only header flags and we always
- * assume face has been added before
- */
 void BM_log_face_modified(BMLog *log, BMFace *f)
 {
   BMLogFace *lf;
@@ -885,12 +811,6 @@ void BM_log_face_modified(BMLog *log, BMFace *f)
   BLI_ghash_insert(log->current_entry->modified_faces, key, lf);
 }
 
-/* Log a new face as added to the BMesh
- *
- * The new face gets a unique ID assigned. It is then added to a map
- * of added faces, with the key being its ID and the value containing
- * everything needed to reconstruct that face.
- */
 void BM_log_face_added(BMLog *log, BMFace *f)
 {
   BMLogFace *lf;
@@ -905,22 +825,6 @@ void BM_log_face_added(BMLog *log, BMFace *f)
   BLI_ghash_insert(log->current_entry->added_faces, key, lf);
 }
 
-/* Log a vertex as removed from the BMesh
- *
- * A couple things can happen here:
- *
- * If the vertex was added as part of the current log entry, then it's
- * deleted and forgotten about entirely. Its unique ID is returned to
- * the unused pool.
- *
- * If the vertex was already part of the BMesh before the current log
- * entry, it is added to a map of deleted vertices, with the key being
- * its ID and the value containing everything needed to reconstruct
- * that vertex.
- *
- * If there's a move record for the vertex, that's used as the
- * vertices original location, then the move record is deleted.
- */
 void BM_log_vert_removed(BMLog *log, BMVert *v, const int cd_vert_mask_offset)
 {
   BMLogEntry *entry = log->current_entry;
@@ -949,19 +853,6 @@ void BM_log_vert_removed(BMLog *log, BMVert *v, const int cd_vert_mask_offset)
   }
 }
 
-/* Log a face as removed from the BMesh
- *
- * A couple things can happen here:
- *
- * If the face was added as part of the current log entry, then it's
- * deleted and forgotten about entirely. Its unique ID is returned to
- * the unused pool.
- *
- * If the face was already part of the BMesh before the current log
- * entry, it is added to a map of deleted faces, with the key being
- * its ID and the value containing everything needed to reconstruct
- * that face.
- */
 void BM_log_face_removed(BMLog *log, BMFace *f)
 {
   BMLogEntry *entry = log->current_entry;
@@ -983,7 +874,6 @@ void BM_log_face_removed(BMLog *log, BMFace *f)
   }
 }
 
-/* Log all vertices/faces in the BMesh as added */
 void BM_log_all_added(BMesh *bm, BMLog *log)
 {
   const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
@@ -1011,7 +901,6 @@ void BM_log_all_added(BMesh *bm, BMLog *log)
   }
 }
 
-/* Log all vertices/faces in the BMesh as removed */
 void BM_log_before_all_removed(BMesh *bm, BMLog *log)
 {
   const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
@@ -1030,9 +919,6 @@ void BM_log_before_all_removed(BMesh *bm, BMLog *log)
   }
 }
 
-/* Get the logged coordinates of a vertex
- *
- * Does not modify the log or the vertex */
 const float *BM_log_original_vert_co(BMLog *log, BMVert *v)
 {
   BMLogEntry *entry = log->current_entry;
@@ -1048,10 +934,7 @@ const float *BM_log_original_vert_co(BMLog *log, BMVert *v)
   return lv->co;
 }
 
-/* Get the logged normal of a vertex
- *
- * Does not modify the log or the vertex */
-const short *BM_log_original_vert_no(BMLog *log, BMVert *v)
+const float *BM_log_original_vert_no(BMLog *log, BMVert *v)
 {
   BMLogEntry *entry = log->current_entry;
   const BMLogVert *lv;
@@ -1066,9 +949,6 @@ const short *BM_log_original_vert_no(BMLog *log, BMVert *v)
   return lv->no;
 }
 
-/* Get the logged mask of a vertex
- *
- * Does not modify the log or the vertex */
 float BM_log_original_mask(BMLog *log, BMVert *v)
 {
   BMLogEntry *entry = log->current_entry;
@@ -1084,7 +964,7 @@ float BM_log_original_mask(BMLog *log, BMVert *v)
   return lv->mask;
 }
 
-void BM_log_original_vert_data(BMLog *log, BMVert *v, const float **r_co, const short **r_no)
+void BM_log_original_vert_data(BMLog *log, BMVert *v, const float **r_co, const float **r_no)
 {
   BMLogEntry *entry = log->current_entry;
   const BMLogVert *lv;
@@ -1102,13 +982,11 @@ void BM_log_original_vert_data(BMLog *log, BMVert *v, const float **r_co, const 
 
 /************************ Debugging and Testing ***********************/
 
-/* For internal use only (unit testing) */
 BMLogEntry *BM_log_current_entry(BMLog *log)
 {
   return log->current_entry;
 }
 
-/* For internal use only (unit testing) */
 RangeTreeUInt *BM_log_unused_ids(BMLog *log)
 {
   return log->unused_ids;

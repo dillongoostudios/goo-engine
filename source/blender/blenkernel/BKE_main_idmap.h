@@ -44,10 +44,21 @@ enum {
   MAIN_IDMAP_TYPE_UUID = 1 << 1,
 };
 
+/**
+ * Generate mapping from ID type/name to ID pointer for given \a bmain.
+ *
+ * \note When used during undo/redo, there is no guaranty that ID pointers from UI area are not
+ * pointing to freed memory (when some IDs have been deleted). To avoid crashes in those cases, one
+ * can provide the 'old' (aka current) Main database as reference. #BKE_main_idmap_lookup_id will
+ * then check that given ID does exist in \a old_bmain before trying to use it.
+ *
+ * \param create_valid_ids_set: If \a true, generate a reference to prevent freed memory accesses.
+ * \param old_bmain: If not NULL, its IDs will be added the valid references set.
+ */
 struct IDNameLib_Map *BKE_main_idmap_create(struct Main *bmain,
-                                            const bool create_valid_ids_set,
+                                            bool create_valid_ids_set,
                                             struct Main *old_bmain,
-                                            const int idmap_types) ATTR_WARN_UNUSED_RESULT
+                                            int idmap_types) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL(1);
 void BKE_main_idmap_destroy(struct IDNameLib_Map *id_map) ATTR_NONNULL();
 
@@ -67,8 +78,7 @@ struct ID *BKE_main_idmap_lookup_id(struct IDNameLib_Map *id_map,
     ATTR_NONNULL(1, 2);
 
 struct ID *BKE_main_idmap_lookup_uuid(struct IDNameLib_Map *id_map,
-                                      const uint session_uuid) ATTR_WARN_UNUSED_RESULT
-    ATTR_NONNULL(1);
+                                      uint session_uuid) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);
 
 #ifdef __cplusplus
 }

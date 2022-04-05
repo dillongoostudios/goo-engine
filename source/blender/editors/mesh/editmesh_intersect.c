@@ -57,7 +57,7 @@
 #define USE_NET_ISLAND_CONNECT
 
 /**
- * Compare selected with its self.
+ * Compare selected with itself.
  */
 static int bm_face_isect_self(BMFace *f, void *UNUSED(user_data))
 {
@@ -114,6 +114,7 @@ static void edbm_intersect_select(BMEditMesh *em, struct Mesh *me, bool do_selec
         }
       }
     }
+    EDBM_select_flush(em);
   }
 
   EDBM_update(me,

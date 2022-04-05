@@ -284,7 +284,7 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
 
   /* setup the chain data */
   /* create a target */
-  target = (PoseTarget *)MEM_callocN(sizeof(PoseTarget), "posetarget");
+  target = MEM_cnew<PoseTarget>("posetarget");
   target->con = con;
   /* by construction there can be only one tree per channel
    * and each channel can be part of at most one tree. */
@@ -292,7 +292,7 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
 
   if (tree == nullptr) {
     /* make new tree */
-    tree = (PoseTree *)MEM_callocN(sizeof(PoseTree), "posetree");
+    tree = MEM_cnew<PoseTree>("posetree");
 
     tree->iterations = data->iterations;
     tree->totchannel = segcount;
@@ -1876,9 +1876,10 @@ static void execute_scene(struct Depsgraph *depsgraph,
   }
 }
 
-/*---------------------------------------------------
- * plugin interface
- */
+/* -------------------------------------------------------------------- */
+/** \name Plugin Interface
+ * \{ */
+
 void itasc_initialize_tree(struct Depsgraph *depsgraph,
                            struct Scene *scene,
                            Object *ob,
@@ -2012,3 +2013,5 @@ void itasc_test_constraint(struct Object *ob, struct bConstraint *cons)
       break;
   }
 }
+
+/** \} */

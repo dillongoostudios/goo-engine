@@ -24,6 +24,7 @@ set(INC
   ../../makesdna
   ../../makesrna
   ../../windowmanager
+  ../../../../intern/clog
   ../../../../intern/guardedalloc
 )
 
@@ -34,6 +35,7 @@ set(SRC
   intern/asset_catalog.cc
   intern/asset_filter.cc
   intern/asset_handle.cc
+  intern/asset_indexer.cc
   intern/asset_library_reference.cc
   intern/asset_library_reference_enum.cc
   intern/asset_list.cc
@@ -46,6 +48,7 @@ set(SRC
   ED_asset_catalog.hh
   ED_asset_filter.h
   ED_asset_handle.h
+  ED_asset_indexer.h
   ED_asset_library.h
   ED_asset_list.h
   ED_asset_list.hh

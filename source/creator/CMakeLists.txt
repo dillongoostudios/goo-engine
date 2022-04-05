@@ -18,8 +18,6 @@
 # All rights reserved.
 # ***** END GPL LICENSE BLOCK *****
 
-setup_libdirs()
-
 blender_include_dirs(
   ../../intern/clog
   ../../intern/glew-mx
@@ -73,8 +71,8 @@ endif()
 
 if(WITH_TBB)
   blender_include_dirs(${TBB_INCLUDE_DIRS})
-  if(NOT APPLE)
-    # APPLE platform uses full paths for linking libraries.
+  if(WIN32)
+    # For pragma that links tbbmalloc_proxy.lib
     link_directories(${LIBDIR}/tbb/lib)
   endif()
 endif()
@@ -658,11 +656,11 @@ if(UNIX AND NOT APPLE)
         # Install to the same directory as the source, so debian-like
         # distros are happy with their policy.
         set(_suffix "site-packages")
-        if(${PYTHON_NUMPY_PATH} MATCHES "dist-packages")
+        if(${PYTHON_ZSTANDARD_PATH} MATCHES "dist-packages")
           set(_suffix "dist-packages")
         endif()
         install(
-          DIRECTORY ${PYTHON_NUMPY_PATH}/zstandard
+          DIRECTORY ${PYTHON_ZSTANDARD_PATH}/zstandard
           DESTINATION ${TARGETDIR_VER}/python/${_target_LIB}/python${PYTHON_VERSION}/${_suffix}
           PATTERN ".svn" EXCLUDE
           PATTERN "__pycache__" EXCLUDE           # * any cache *
@@ -687,7 +685,11 @@ if(UNIX AND NOT APPLE)
           PATTERN "*.pyo" EXCLUDE                 # * any cache *
         )
         # On some platforms requests does have extra dependencies.
-        set(_requests_deps "certifi" "chardet" "idna" "urllib3")
+        #
+        # Either 'chardet' or 'charset_normalizer" is used, depending on the
+        # version of Python. The code below silently skips the one that's not
+        # available, so we can just list both here.
+        set(_requests_deps "certifi" "chardet" "charset_normalizer" "idna" "urllib3")
         foreach(_requests_dep ${_requests_deps})
           if(EXISTS ${PYTHON_REQUESTS_PATH}/${_requests_dep})
             install(
@@ -1102,9 +1104,9 @@ elseif(APPLE)
       ${TARGETDIR_VER}/python/lib
     )
 
-    install(DIRECTORY ${LIBDIR}/python/bin
-      DESTINATION ${TARGETDIR_VER}/python
-      USE_SOURCE_PERMISSIONS
+    install(
+      PROGRAMS ${PYTHON_EXECUTABLE}
+      DESTINATION ${TARGETDIR_VER}/python/bin
     )
 
     # Needed for distutils/pip

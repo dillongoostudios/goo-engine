@@ -67,14 +67,6 @@
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
 
-/**
- * Restore the object->data to a non-modifier evaluated state.
- *
- * Some changes done directly in evaluated object require them to be reset
- * before being re-evaluated.
- * For example, we need to call this before #BKE_mesh_new_from_object(),
- * in case we removed/added modifiers in the evaluated object.
- */
 void BKE_object_eval_reset(Object *ob_eval)
 {
   BKE_object_free_derived_caches(ob_eval);
@@ -88,10 +80,10 @@ void BKE_object_eval_local_transform(Depsgraph *depsgraph, Object *ob)
   BKE_object_to_mat4(ob, ob->obmat);
 }
 
-/* Evaluate parent */
-/* NOTE: based on solve_parenting(), but with the cruft stripped out */
 void BKE_object_eval_parent(Depsgraph *depsgraph, Object *ob)
 {
+  /* NOTE: based on `solve_parenting()`, but with the cruft stripped out. */
+
   Object *par = ob->parent;
 
   float totmat[4][4];
@@ -168,12 +160,6 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
   /* includes all keys and modifiers */
   switch (ob->type) {
     case OB_MESH: {
-#if 0
-      BMEditMesh *em = (ob->mode & OB_MODE_EDIT) ? BKE_editmesh_from_object(ob) : NULL;
-#else
-      BMEditMesh *em = (ob->mode & OB_MODE_EDIT) ? ((Mesh *)ob->data)->edit_mesh : NULL;
-#endif
-
       CustomData_MeshMasks cddata_masks = scene->customdata_mask;
       CustomData_MeshMasks_update(&cddata_masks, &CD_MASK_BAREMESH);
       /* Custom attributes should not be removed automatically. They might be used by the render
@@ -183,6 +169,11 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
       cddata_masks.fmask |= CD_MASK_PROP_ALL;
       cddata_masks.pmask |= CD_MASK_PROP_ALL;
       cddata_masks.lmask |= CD_MASK_PROP_ALL;
+
+      /* Also copy over normal layers to avoid recomputation. */
+      cddata_masks.pmask |= CD_MASK_NORMAL;
+      cddata_masks.vmask |= CD_MASK_NORMAL;
+
       /* Make sure Freestyle edge/face marks appear in DM for render (see T40315).
        * Due to Line Art implementation, edge marks should also be shown in viewport. */
 #ifdef WITH_FREESTYLE
@@ -195,12 +186,7 @@ void BKE_object_handle_data_update(Depsgraph *depsgraph, Scene *scene, Object *o
         cddata_masks.lmask |= CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL;
         cddata_masks.vmask |= CD_MASK_ORCO | CD_MASK_PROP_COLOR;
       }
-      if (em) {
-        makeDerivedMesh(depsgraph, scene, ob, em, &cddata_masks); /* was CD_MASK_BAREMESH */
-      }
-      else {
-        makeDerivedMesh(depsgraph, scene, ob, NULL, &cddata_masks);
-      }
+      makeDerivedMesh(depsgraph, scene, ob, &cddata_masks); /* was CD_MASK_BAREMESH */
       break;
     }
     case OB_ARMATURE:

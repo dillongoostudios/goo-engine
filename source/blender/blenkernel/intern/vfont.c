@@ -49,6 +49,7 @@
 #include "DNA_vfont_types.h"
 
 #include "BKE_anim_path.h"
+#include "BKE_bpath.h"
 #include "BKE_curve.h"
 #include "BKE_global.h"
 #include "BKE_idtype.h"
@@ -123,6 +124,21 @@ static void vfont_free_data(ID *id)
   }
 }
 
+static void vfont_foreach_path(ID *id, BPathForeachPathData *bpath_data)
+{
+  VFont *vfont = (VFont *)id;
+
+  if (vfont->packedfile != NULL && (bpath_data->flag & BKE_BPATH_FOREACH_PATH_SKIP_PACKED) != 0) {
+    return;
+  }
+
+  if (BKE_vfont_is_builtin(vfont)) {
+    return;
+  }
+
+  BKE_bpath_foreach_path_fixed_process(bpath_data, vfont->filepath);
+}
+
 static void vfont_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   VFont *vf = (VFont *)id;
@@ -162,6 +178,7 @@ IDTypeInfo IDType_ID_VF = {
     .name_plural = "fonts",
     .translation_context = BLT_I18NCONTEXT_ID_VFONT,
     .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = NULL,
 
     .init_data = vfont_init_data,
     .copy_data = vfont_copy_data,
@@ -169,6 +186,7 @@ IDTypeInfo IDType_ID_VF = {
     .make_local = NULL,
     .foreach_id = NULL,
     .foreach_cache = NULL,
+    .foreach_path = vfont_foreach_path,
     .owner_get = NULL,
 
     .blend_write = vfont_blend_write,
@@ -183,7 +201,6 @@ IDTypeInfo IDType_ID_VF = {
 
 /***************************** VFont *******************************/
 
-/* The vfont code */
 void BKE_vfont_free_data(struct VFont *vfont)
 {
   if (vfont->data) {
@@ -984,7 +1001,22 @@ static bool vfont_to_curve(Object *ob,
       }
       else if (x_used > x_available) {
         // CLOG_WARN(&LOG, "linewidth exceeded: %c%c%c...", mem[i], mem[i+1], mem[i+2]);
-        for (j = i; j && (mem[j] != '\n') && (chartransdata[j].dobreak == 0); j--) {
+        for (j = i; (mem[j] != '\n') && (chartransdata[j].dobreak == 0); j--) {
+
+          /* Special case when there are no breaks possible. */
+          if (UNLIKELY(j == 0)) {
+            if (i == slen) {
+              /* Use the behavior of zero a height text-box when a break cannot be inserted.
+               *
+               * Typically when a text-box has any height and overflow is set to scale
+               * the text will wrap to fit the width as necessary. When wrapping isn't
+               * possible it's important to use the same code-path as zero-height lines.
+               * Without this exception a single word will not scale-to-fit (see: T95116). */
+              tb_scale.h = 0.0f;
+            }
+            break;
+          }
+
           bool dobreak = false;
           if (ELEM(mem[j], ' ', '-')) {
             ct -= (i - (j - 1));
@@ -1743,10 +1775,6 @@ bool BKE_vfont_to_curve_nubase(Object *ob, int mode, ListBase *r_nubase)
   return BKE_vfont_to_curve_ex(ob, ob->data, mode, r_nubase, NULL, NULL, NULL, NULL);
 }
 
-/**
- * Warning: expects to have access to evaluated data
- * (i.e. passed object should be evaluated one...).
- */
 bool BKE_vfont_to_curve(Object *ob, int mode)
 {
   Curve *cu = ob->data;

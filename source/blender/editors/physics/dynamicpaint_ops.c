@@ -92,7 +92,6 @@ static int surface_slot_add_exec(bContext *C, wmOperator *UNUSED(op))
   return OPERATOR_FINISHED;
 }
 
-/* add surface slot */
 void DPAINT_OT_surface_slot_add(wmOperatorType *ot)
 {
   /* identifiers */
@@ -141,7 +140,6 @@ static int surface_slot_remove_exec(bContext *C, wmOperator *UNUSED(op))
   return OPERATOR_FINISHED;
 }
 
-/* remove surface slot */
 void DPAINT_OT_surface_slot_remove(wmOperatorType *ot)
 {
   /* identifiers */
@@ -375,7 +373,7 @@ static void dynamicPaint_bakeImageSequence(DynamicPaintBakeJob *job)
   /* Show progress bar. */
   *(job->do_update) = true;
 
-  /* Set frame to start point (also inits modifier data) */
+  /* Set frame to start point (also initializes modifier data). */
   frame = surface->start_frame;
   orig_frame = input_scene->r.cfra;
   input_scene->r.cfra = (int)frame;

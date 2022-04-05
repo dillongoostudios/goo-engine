@@ -72,9 +72,10 @@
 #  include "PIL_time_utildefines.h"
 #endif
 
-/* matches logic with ED_operator_posemode_context() */
 Object *ED_pose_object_from_context(bContext *C)
 {
+  /* NOTE: matches logic with #ED_operator_posemode_context(). */
+
   ScrArea *area = CTX_wm_area(C);
   Object *ob;
 
@@ -90,7 +91,6 @@ Object *ED_pose_object_from_context(bContext *C)
   return ob;
 }
 
-/* This function is used to process the necessary updates for */
 bool ED_object_posemode_enter_ex(struct Main *bmain, Object *ob)
 {
   BLI_assert(!ID_IS_LINKED(ob));
@@ -160,7 +160,7 @@ static bool pose_has_protected_selected(Object *ob, short warn)
     bArmature *arm = ob->data;
 
     for (pchan = ob->pose->chanbase.first; pchan; pchan = pchan->next) {
-      if (pchan->bone && (pchan->bone->layer & arm->layer)) {
+      if (pchan->bone && BKE_pose_is_layer_visible(arm, pchan)) {
         if (pchan->bone->layer & arm->layer_protected) {
           if (pchan->bone->flag & BONE_SELECTED) {
             break;
@@ -195,11 +195,6 @@ static eAnimvizCalcRange pose_path_convert_range(ePosePathCalcRange range)
   return ANIMVIZ_CALC_RANGE_FULL;
 }
 
-/* For the object with pose/action: update paths for those that have got them
- * This should selectively update paths that exist...
- *
- * To be called from various tools that do incremental updates
- */
 void ED_pose_recalculate_paths(bContext *C, Scene *scene, Object *ob, ePosePathCalcRange range)
 {
   /* Transform doesn't always have context available to do update. */

@@ -34,18 +34,18 @@ set(INC
 
 
 set(SRC
-  outliner_collections.c
-  outliner_context.c
-  outliner_dragdrop.c
-  outliner_draw.c
-  outliner_edit.c
-  outliner_ops.c
-  outliner_select.c
-  outliner_sync.c
-  outliner_tools.c
-  outliner_tree.c
-  outliner_utils.c
-  space_outliner.c
+  outliner_collections.cc
+  outliner_context.cc
+  outliner_dragdrop.cc
+  outliner_draw.cc
+  outliner_edit.cc
+  outliner_ops.cc
+  outliner_select.cc
+  outliner_sync.cc
+  outliner_tools.cc
+  outliner_tree.cc
+  outliner_utils.cc
+  space_outliner.cc
   tree/common.cc
   tree/tree_display.cc
   tree/tree_display_data.cc
@@ -65,13 +65,14 @@ set(SRC
   tree/tree_element_id_scene.cc
   tree/tree_element_nla.cc
   tree/tree_element_overrides.cc
+  tree/tree_element_rna.cc
   tree/tree_element_scene_objects.cc
+  tree/tree_element_seq.cc
   tree/tree_element_view_layer.cc
 
-  outliner_intern.h
-  tree/tree_display.h
+  outliner_intern.hh
+  tree/common.hh
   tree/tree_display.hh
-  tree/tree_element.h
   tree/tree_element.hh
   tree/tree_element_anim_data.hh
   tree/tree_element_collection.hh
@@ -82,7 +83,9 @@ set(SRC
   tree/tree_element_id_scene.hh
   tree/tree_element_nla.hh
   tree/tree_element_overrides.hh
+  tree/tree_element_rna.hh
   tree/tree_element_scene_objects.hh
+  tree/tree_element_seq.hh
   tree/tree_element_view_layer.hh
 )
 

@@ -102,8 +102,6 @@ void SCULPT_neighbor_coords_average_interior(SculptSession *ss, float result[3],
   mul_v3_v3fl(result, avg, 1.0f / total);
 }
 
-/* For bmesh: Average surrounding verts based on an orthogonality measure.
- * Naturally converges to a quad-like structure. */
 void SCULPT_bmesh_four_neighbor_average(float avg[3], float direction[3], BMVert *v)
 {
 
@@ -540,13 +538,6 @@ static void SCULPT_do_surface_smooth_brush_displace_task_cb_ex(
 void SCULPT_do_surface_smooth_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 {
   Brush *brush = BKE_paint_brush(&sd->paint);
-  SculptSession *ss = ob->sculpt;
-
-  if (SCULPT_stroke_is_first_brush_step(ss->cache)) {
-    BLI_assert(ss->cache->surface_smooth_laplacian_disp == NULL);
-    ss->cache->surface_smooth_laplacian_disp = MEM_callocN(
-        sizeof(float[3]) * SCULPT_vertex_count_get(ss), "HC smooth laplacian b");
-  }
 
   /* Threaded loop over nodes. */
   SculptThreadedTaskData data = {

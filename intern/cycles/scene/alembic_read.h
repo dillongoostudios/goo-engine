@@ -76,9 +76,10 @@ struct SubDSchemaData {
 
   vector<FaceSetShaderIndexPair> shader_face_sets;
 
-  // Those are unsupported for now.
   Alembic::AbcGeom::IInt32ArrayProperty corner_indices;
   Alembic::AbcGeom::IFloatArrayProperty corner_sharpnesses;
+
+  // Those are unsupported for now.
   Alembic::AbcGeom::IInt32Property face_varying_interpolate_boundary;
   Alembic::AbcGeom::IInt32Property face_varying_propagate_corners;
   Alembic::AbcGeom::IInt32Property interpolate_boundary;
@@ -120,6 +121,26 @@ struct CurvesSchemaData {
 void read_geometry_data(AlembicProcedural *proc,
                         CachedData &cached_data,
                         const CurvesSchemaData &data,
+                        Progress &progress);
+
+/* Data of a ICurvesSchema that we need to read. */
+struct PointsSchemaData {
+  Alembic::AbcGeom::TimeSamplingPtr time_sampling;
+  size_t num_samples;
+
+  float default_radius;
+  float radius_scale;
+
+  Alembic::AbcGeom::IP3fArrayProperty positions;
+  Alembic::AbcGeom::IInt32ArrayProperty num_points;
+  Alembic::AbcGeom::IFloatGeomParam radiuses;
+  // Those are unsupported for now.
+  Alembic::AbcGeom::IV3fArrayProperty velocities;
+};
+
+void read_geometry_data(AlembicProcedural *proc,
+                        CachedData &cached_data,
+                        const PointsSchemaData &data,
                         Progress &progress);
 
 void read_attributes(AlembicProcedural *proc,

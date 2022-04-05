@@ -16,17 +16,10 @@
 
 /** \file
  * \ingroup edasset
- *
- * Asset-handle is a temporary design, not part of the core asset system design.
- *
- * Currently asset-list items are just file directory items (#FileDirEntry). So an asset-handle is
- * just wraps a pointer to this. We try to abstract away the fact that it's just a file entry,
- * although that doesn't always work (see #rna_def_asset_handle()).
  */
 
 #include <string>
 
-#include "DNA_asset_types.h"
 #include "DNA_space_types.h"
 
 #include "BLO_readfile.h"

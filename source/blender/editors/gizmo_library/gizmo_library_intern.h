@@ -52,22 +52,19 @@ typedef struct GizmoInteraction {
   float precision_offset;
 } GizmoInteraction;
 
-float gizmo_offset_from_value(GizmoCommonData *data,
-                              const float value,
-                              const bool constrained,
-                              const bool inverted);
+float gizmo_offset_from_value(GizmoCommonData *data, float value, bool constrained, bool inverted);
 float gizmo_value_from_offset(GizmoCommonData *data,
                               GizmoInteraction *inter,
-                              const float offset,
-                              const bool constrained,
-                              const bool inverted,
-                              const bool use_precision);
+                              float offset,
+                              bool constrained,
+                              bool inverted,
+                              bool use_precision);
 
 void gizmo_property_data_update(struct wmGizmo *gz,
                                 GizmoCommonData *data,
                                 wmGizmoProperty *gz_prop,
-                                const bool constrained,
-                                const bool inverted);
+                                bool constrained,
+                                bool inverted);
 
 void gizmo_property_value_reset(bContext *C,
                                 const struct wmGizmo *gz,
@@ -76,8 +73,12 @@ void gizmo_property_value_reset(bContext *C,
 
 /* -------------------------------------------------------------------- */
 
-void gizmo_color_get(const struct wmGizmo *gz, const bool highlight, float r_color[4]);
+void gizmo_color_get(const struct wmGizmo *gz, bool highlight, float r_color[4]);
 
+/**
+ * Takes mouse coordinates and returns them in relation to the gizmo.
+ * Both 2D & 3D supported, use so we can use 2D gizmos in the 3D view.
+ */
 bool gizmo_window_project_2d(bContext *C,
                              const struct wmGizmo *gz,
                              const float mval[2],
@@ -93,8 +94,11 @@ bool gizmo_window_project_3d(
 
 #include "gizmo_geometry.h"
 
+/**
+ * Main draw call for #GizmoGeomInfo data
+ */
 void wm_gizmo_geometryinfo_draw(const struct GizmoGeomInfo *info,
-                                const bool select,
+                                bool select,
                                 const float color[4]);
 void wm_gizmo_vec_draw(
     const float color[4], const float (*verts)[3], uint vert_count, uint pos, uint primitive_type);

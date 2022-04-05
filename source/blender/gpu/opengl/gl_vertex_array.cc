@@ -70,7 +70,7 @@ static uint16_t vbo_bind(const ShaderInterface *interface,
       const char *name = GPU_vertformat_attr_name_get(format, a, n_idx);
       const ShaderInput *input = interface->attr_get(name);
 
-      if (input == nullptr) {
+      if (input == nullptr || input->location == -1) {
         continue;
       }
 
@@ -108,7 +108,6 @@ static uint16_t vbo_bind(const ShaderInterface *interface,
   return enabled_attrib;
 }
 
-/* Update the Attribute Binding of the currently bound VAO. */
 void GLVertArray::update_bindings(const GLuint vao,
                                   const GPUBatch *batch_, /* Should be GLBatch. */
                                   const ShaderInterface *interface,
@@ -156,7 +155,6 @@ void GLVertArray::update_bindings(const GLuint vao,
   }
 }
 
-/* Another version of update_bindings for Immediate mode. */
 void GLVertArray::update_bindings(const GLuint vao,
                                   const uint v_first,
                                   const GPUVertFormat *format,

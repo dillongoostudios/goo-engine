@@ -811,8 +811,8 @@ static int apply_objects_internal(bContext *C,
       /* adjust data */
       BKE_mesh_transform(me, mat, true);
 
-      /* update normals */
-      BKE_mesh_calc_normals(me);
+      /* If normal layers exist, they are now dirty. */
+      BKE_mesh_normals_tag_dirty(me);
     }
     else if (ob->type == OB_ARMATURE) {
       bArmature *arm = ob->data;
@@ -1407,6 +1407,19 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
                   mul_v3_m4v3(mpt, inverse_diff_mat, &pt->x);
                   sub_v3_v3(mpt, offset_local);
                   mul_v3_m4v3(&pt->x, diff_mat, mpt);
+                }
+
+                /* Apply transform to edit-curve. */
+                if (gps->editcurve != NULL) {
+                  for (i = 0; i < gps->editcurve->tot_curve_points; i++) {
+                    BezTriple *bezt = &gps->editcurve->curve_points[i].bezt;
+                    for (int j = 0; j < 3; j++) {
+                      float mpt[3];
+                      mul_v3_m4v3(mpt, inverse_diff_mat, bezt->vec[j]);
+                      sub_v3_v3(mpt, offset_local);
+                      mul_v3_m4v3(bezt->vec[j], diff_mat, mpt);
+                    }
+                  }
                 }
               }
             }

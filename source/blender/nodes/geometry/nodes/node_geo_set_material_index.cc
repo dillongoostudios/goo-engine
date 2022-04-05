@@ -16,9 +16,9 @@
 
 #include "node_geometry_util.hh"
 
-namespace blender::nodes {
+namespace blender::nodes::node_geo_set_material_index_cc {
 
-static void geo_node_set_material_index_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry")).supported_type(GEO_COMPONENT_TYPE_MESH);
   b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
@@ -36,20 +36,17 @@ static void set_material_index_in_component(GeometryComponent &component,
     return;
   }
 
-  fn::FieldEvaluator selection_evaluator{field_context, domain_size};
-  selection_evaluator.add(selection_field);
-  selection_evaluator.evaluate();
-  const IndexMask selection = selection_evaluator.get_evaluated_as_mask(0);
-
   OutputAttribute_Typed<int> indices = component.attribute_try_get_for_output_only<int>(
       "material_index", ATTR_DOMAIN_FACE);
-  fn::FieldEvaluator material_evaluator{field_context, &selection};
-  material_evaluator.add_with_destination(index_field, indices.varray());
-  material_evaluator.evaluate();
+
+  fn::FieldEvaluator evaluator{field_context, domain_size};
+  evaluator.set_selection(selection_field);
+  evaluator.add_with_destination(index_field, indices.varray());
+  evaluator.evaluate();
   indices.save();
 }
 
-static void geo_node_set_material_index_exec(GeoNodeExecParams params)
+static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
@@ -64,15 +61,17 @@ static void geo_node_set_material_index_exec(GeoNodeExecParams params)
   params.set_output("Geometry", std::move(geometry_set));
 }
 
-}  // namespace blender::nodes
+}  // namespace blender::nodes::node_geo_set_material_index_cc
 
 void register_node_type_geo_set_material_index()
 {
+  namespace file_ns = blender::nodes::node_geo_set_material_index_cc;
+
   static bNodeType ntype;
 
   geo_node_type_base(
-      &ntype, GEO_NODE_SET_MATERIAL_INDEX, "Set Material Index", NODE_CLASS_GEOMETRY, 0);
-  ntype.geometry_node_execute = blender::nodes::geo_node_set_material_index_exec;
-  ntype.declare = blender::nodes::geo_node_set_material_index_declare;
+      &ntype, GEO_NODE_SET_MATERIAL_INDEX, "Set Material Index", NODE_CLASS_GEOMETRY);
+  ntype.geometry_node_execute = file_ns::node_geo_exec;
+  ntype.declare = file_ns::node_declare;
   nodeRegisterType(&ntype);
 }

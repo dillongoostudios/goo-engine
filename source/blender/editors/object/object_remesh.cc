@@ -168,8 +168,6 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
     new_mesh = mesh_fixed_poles;
   }
 
-  BKE_mesh_calc_normals(new_mesh);
-
   if (mesh->flag & ME_REMESH_REPROJECT_VOLUME || mesh->flag & ME_REMESH_REPROJECT_PAINT_MASK ||
       mesh->flag & ME_REMESH_REPROJECT_SCULPT_FACE_SETS) {
     BKE_mesh_runtime_clear_geometry(mesh);
@@ -463,8 +461,8 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   Object *active_object = CTX_data_active_object(C);
   Mesh *mesh = (Mesh *)active_object->data;
 
-  VoxelSizeEditCustomData *cd = (VoxelSizeEditCustomData *)MEM_callocN(
-      sizeof(VoxelSizeEditCustomData), "Voxel Size Edit OP Custom Data");
+  VoxelSizeEditCustomData *cd = MEM_cnew<VoxelSizeEditCustomData>(
+      "Voxel Size Edit OP Custom Data");
 
   /* Initial operator Custom Data setup. */
   cd->draw_handle = ED_region_draw_cb_activate(

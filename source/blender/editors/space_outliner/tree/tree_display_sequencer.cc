@@ -24,14 +24,17 @@
 #include "BLI_listbase_wrapper.hh"
 #include "BLI_utildefines.h"
 
+#include "DNA_sequence_types.h"
+#include "DNA_space_types.h"
+
 #include "SEQ_sequencer.h"
 
-#include "../outliner_intern.h"
+#include "../outliner_intern.hh"
 #include "tree_display.hh"
+#include "tree_element.hh"
 
 namespace blender::ed::outliner {
 
-/* Convenience/readability. */
 template<typename T> using List = ListBaseWrapper<T>;
 
 TreeDisplaySequencer::TreeDisplaySequencer(SpaceOutliner &space_outliner)
@@ -63,7 +66,6 @@ ListBase TreeDisplaySequencer::buildTree(const TreeSourceData &source_data)
   return tree;
 }
 
-/* Helped function to put duplicate sequence in the same tree. */
 SequenceAddOp TreeDisplaySequencer::need_add_seq_dup(Sequence *seq) const
 {
   if ((!seq->strip) || (!seq->strip->stripdata)) {

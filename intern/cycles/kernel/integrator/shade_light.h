@@ -37,8 +37,9 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
 
   /* Advance ray beyond light. */
   /* TODO: can we make this more numerically robust to avoid reintersecting the
-   * same light in some cases? */
-  const float3 new_ray_P = ray_offset(ray_P + ray_D * isect.t, ray_D);
+   * same light in some cases? Ray should not intersect surface anymore as the
+   * object and prim ids will prevent self intersection. */
+  const float3 new_ray_P = ray_P + ray_D * isect.t;
   INTEGRATOR_STATE_WRITE(state, ray, P) = new_ray_P;
   INTEGRATOR_STATE_WRITE(state, ray, t) -= isect.t;
 
@@ -46,7 +47,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
   const float mis_ray_t = INTEGRATOR_STATE(state, path, mis_ray_t);
   ray_P -= ray_D * mis_ray_t;
   isect.t += mis_ray_t;
-  INTEGRATOR_STATE_WRITE(state, path, mis_ray_t) = mis_ray_t + isect.t;
+  INTEGRATOR_STATE_WRITE(state, path, mis_ray_t) = isect.t;
 
   LightSample ls ccl_optional_struct_init;
   const bool use_light_sample = light_sample_from_intersection(kg, &isect, ray_P, ray_D, &ls);
@@ -84,7 +85,7 @@ ccl_device_inline void integrate_light(KernelGlobals kg,
     /* multiple importance sampling, get regular light pdf,
      * and compute weight with respect to BSDF pdf */
     const float mis_ray_pdf = INTEGRATOR_STATE(state, path, mis_ray_pdf);
-    const float mis_weight = power_heuristic(mis_ray_pdf, ls.pdf);
+    const float mis_weight = light_sample_mis_weight_forward(kg, mis_ray_pdf, ls.pdf);
     light_eval *= mis_weight;
   }
 

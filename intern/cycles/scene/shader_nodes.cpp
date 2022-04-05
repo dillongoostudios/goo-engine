@@ -32,7 +32,10 @@
 #include "util/color.h"
 #include "util/foreach.h"
 #include "util/log.h"
+#include "util/string.h"
 #include "util/transform.h"
+
+#include "kernel/tables.h"
 
 #include "kernel/svm/color_util.h"
 #include "kernel/svm/mapping_util.h"
@@ -460,8 +463,12 @@ void ImageTextureNode::compile(OSLCompiler &compiler)
   const ustring known_colorspace = metadata.colorspace;
 
   if (handle.svm_slot() == -1) {
+    /* OIIO currently does not support <UVTILE> substitutions natively. Replace with a format they
+     * understand. */
+    std::string osl_filename = filename.string();
+    string_replace(osl_filename, "<UVTILE>", "<U>_<V>");
     compiler.parameter_texture(
-        "filename", filename, compress_as_srgb ? u_colorspace_raw : known_colorspace);
+        "filename", ustring(osl_filename), compress_as_srgb ? u_colorspace_raw : known_colorspace);
   }
   else {
     compiler.parameter_texture("filename", handle.svm_slot());
@@ -470,7 +477,8 @@ void ImageTextureNode::compile(OSLCompiler &compiler)
   const bool unassociate_alpha = !(ColorSpaceManager::colorspace_is_data(colorspace) ||
                                    alpha_type == IMAGE_ALPHA_CHANNEL_PACKED ||
                                    alpha_type == IMAGE_ALPHA_IGNORE);
-  const bool is_tiled = (filename.find("<UDIM>") != string::npos);
+  const bool is_tiled = (filename.find("<UDIM>") != string::npos ||
+                         filename.find("<UVTILE>") != string::npos);
 
   compiler.parameter(this, "projection");
   compiler.parameter(this, "projection_blend");
@@ -2397,7 +2405,7 @@ void GlossyBsdfNode::simplify_settings(Scene *scene)
   ShaderInput *roughness_input = input("Roughness");
   if (integrator->get_filter_glossy() == 0.0f) {
     /* Fallback to Sharp closure for Roughness close to 0.
-     * Note: Keep the epsilon in sync with kernel!
+     * NOTE: Keep the epsilon in sync with kernel!
      */
     if (!roughness_input->link && roughness <= 1e-4f) {
       VLOG(3) << "Using sharp glossy BSDF.";
@@ -2490,7 +2498,7 @@ void GlassBsdfNode::simplify_settings(Scene *scene)
   ShaderInput *roughness_input = input("Roughness");
   if (integrator->get_filter_glossy() == 0.0f) {
     /* Fallback to Sharp closure for Roughness close to 0.
-     * Note: Keep the epsilon in sync with kernel!
+     * NOTE: Keep the epsilon in sync with kernel!
      */
     if (!roughness_input->link && roughness <= 1e-4f) {
       VLOG(3) << "Using sharp glass BSDF.";
@@ -2583,7 +2591,7 @@ void RefractionBsdfNode::simplify_settings(Scene *scene)
   ShaderInput *roughness_input = input("Roughness");
   if (integrator->get_filter_glossy() == 0.0f) {
     /* Fallback to Sharp closure for Roughness close to 0.
-     * Note: Keep the epsilon in sync with kernel!
+     * NOTE: Keep the epsilon in sync with kernel!
      */
     if (!roughness_input->link && roughness <= 1e-4f) {
       VLOG(3) << "Using sharp refraction BSDF.";
@@ -4386,9 +4394,6 @@ NODE_DEFINE(HairInfoNode)
   SOCKET_OUT_FLOAT(size, "Length");
   SOCKET_OUT_FLOAT(thickness, "Thickness");
   SOCKET_OUT_NORMAL(tangent_normal, "Tangent Normal");
-#if 0 /* Output for minimum hair width transparency - deactivated. */
-  SOCKET_OUT_FLOAT(fade, "Fade");
-#endif
   SOCKET_OUT_FLOAT(index, "Random");
 
   return type;
@@ -4446,12 +4451,7 @@ void HairInfoNode::compile(SVMCompiler &compiler)
   if (!out->links.empty()) {
     compiler.add_node(NODE_HAIR_INFO, NODE_INFO_CURVE_TANGENT_NORMAL, compiler.stack_assign(out));
   }
-#if 0
-  out = output("Fade");
-  if(!out->links.empty()) {
-    compiler.add_node(NODE_HAIR_INFO, NODE_INFO_CURVE_FADE, compiler.stack_assign(out));
-  }
-#endif
+
   out = output("Random");
   if (!out->links.empty()) {
     int attr = compiler.attribute(ATTR_STD_CURVE_RANDOM);
@@ -4462,6 +4462,59 @@ void HairInfoNode::compile(SVMCompiler &compiler)
 void HairInfoNode::compile(OSLCompiler &compiler)
 {
   compiler.add(this, "node_hair_info");
+}
+
+/* Point Info */
+
+NODE_DEFINE(PointInfoNode)
+{
+  NodeType *type = NodeType::add("point_info", create, NodeType::SHADER);
+
+  SOCKET_OUT_POINT(position, "Position");
+  SOCKET_OUT_FLOAT(radius, "Radius");
+  SOCKET_OUT_FLOAT(random, "Random");
+
+  return type;
+}
+
+PointInfoNode::PointInfoNode() : ShaderNode(get_node_type())
+{
+}
+
+void PointInfoNode::attributes(Shader *shader, AttributeRequestSet *attributes)
+{
+  if (shader->has_surface_link()) {
+    if (!output("Random")->links.empty())
+      attributes->add(ATTR_STD_POINT_RANDOM);
+  }
+
+  ShaderNode::attributes(shader, attributes);
+}
+
+void PointInfoNode::compile(SVMCompiler &compiler)
+{
+  ShaderOutput *out;
+
+  out = output("Position");
+  if (!out->links.empty()) {
+    compiler.add_node(NODE_POINT_INFO, NODE_INFO_POINT_POSITION, compiler.stack_assign(out));
+  }
+
+  out = output("Radius");
+  if (!out->links.empty()) {
+    compiler.add_node(NODE_POINT_INFO, NODE_INFO_POINT_RADIUS, compiler.stack_assign(out));
+  }
+
+  out = output("Random");
+  if (!out->links.empty()) {
+    int attr = compiler.attribute(ATTR_STD_POINT_RANDOM);
+    compiler.add_node(NODE_ATTR, attr, compiler.stack_assign(out), NODE_ATTR_OUTPUT_FLOAT);
+  }
+}
+
+void PointInfoNode::compile(OSLCompiler &compiler)
+{
+  compiler.add(this, "node_point_info");
 }
 
 /* Volume Info */
@@ -5867,6 +5920,73 @@ void MapRangeNode::compile(OSLCompiler &compiler)
 {
   compiler.parameter(this, "range_type");
   compiler.add(this, "node_map_range");
+}
+
+/* Vector Map Range Node */
+
+NODE_DEFINE(VectorMapRangeNode)
+{
+  NodeType *type = NodeType::add("vector_map_range", create, NodeType::SHADER);
+
+  static NodeEnum type_enum;
+  type_enum.insert("linear", NODE_MAP_RANGE_LINEAR);
+  type_enum.insert("stepped", NODE_MAP_RANGE_STEPPED);
+  type_enum.insert("smoothstep", NODE_MAP_RANGE_SMOOTHSTEP);
+  type_enum.insert("smootherstep", NODE_MAP_RANGE_SMOOTHERSTEP);
+  SOCKET_ENUM(range_type, "Type", type_enum, NODE_MAP_RANGE_LINEAR);
+
+  SOCKET_IN_VECTOR(vector, "Vector", zero_float3());
+  SOCKET_IN_VECTOR(from_min, "From_Min_FLOAT3", zero_float3());
+  SOCKET_IN_VECTOR(from_max, "From_Max_FLOAT3", one_float3());
+  SOCKET_IN_VECTOR(to_min, "To_Min_FLOAT3", zero_float3());
+  SOCKET_IN_VECTOR(to_max, "To_Max_FLOAT3", one_float3());
+  SOCKET_IN_VECTOR(steps, "Steps_FLOAT3", make_float3(4.0f));
+  SOCKET_BOOLEAN(use_clamp, "Use Clamp", false);
+
+  SOCKET_OUT_VECTOR(vector, "Vector");
+
+  return type;
+}
+
+VectorMapRangeNode::VectorMapRangeNode() : ShaderNode(get_node_type())
+{
+}
+
+void VectorMapRangeNode::expand(ShaderGraph * /*graph*/)
+{
+}
+
+void VectorMapRangeNode::compile(SVMCompiler &compiler)
+{
+  ShaderInput *vector_in = input("Vector");
+  ShaderInput *from_min_in = input("From_Min_FLOAT3");
+  ShaderInput *from_max_in = input("From_Max_FLOAT3");
+  ShaderInput *to_min_in = input("To_Min_FLOAT3");
+  ShaderInput *to_max_in = input("To_Max_FLOAT3");
+  ShaderInput *steps_in = input("Steps_FLOAT3");
+  ShaderOutput *vector_out = output("Vector");
+
+  int value_stack_offset = compiler.stack_assign(vector_in);
+  int from_min_stack_offset = compiler.stack_assign(from_min_in);
+  int from_max_stack_offset = compiler.stack_assign(from_max_in);
+  int to_min_stack_offset = compiler.stack_assign(to_min_in);
+  int to_max_stack_offset = compiler.stack_assign(to_max_in);
+  int steps_stack_offset = compiler.stack_assign(steps_in);
+  int result_stack_offset = compiler.stack_assign(vector_out);
+
+  compiler.add_node(
+      NODE_VECTOR_MAP_RANGE,
+      value_stack_offset,
+      compiler.encode_uchar4(
+          from_min_stack_offset, from_max_stack_offset, to_min_stack_offset, to_max_stack_offset),
+      compiler.encode_uchar4(steps_stack_offset, use_clamp, range_type, result_stack_offset));
+}
+
+void VectorMapRangeNode::compile(OSLCompiler &compiler)
+{
+  compiler.parameter(this, "range_type");
+  compiler.parameter(this, "use_clamp");
+  compiler.add(this, "node_vector_map_range");
 }
 
 /* Clamp Node */

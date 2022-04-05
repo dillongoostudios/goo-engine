@@ -59,19 +59,19 @@ struct SeqEffectHandle {
   void (*load)(struct Sequence *seqconst);
 
   /* duplicate */
-  void (*copy)(struct Sequence *dst, struct Sequence *src, const int flag);
+  void (*copy)(struct Sequence *dst, struct Sequence *src, int flag);
 
   /* destruct */
-  void (*free)(struct Sequence *seq, const bool do_id_user);
+  void (*free)(struct Sequence *seq, bool do_id_user);
 
   /* returns: -1: no input needed,
    * 0: no early out,
    * 1: out = ibuf1,
    * 2: out = ibuf2 */
-  int (*early_out)(struct Sequence *seq, float facf0, float facf1);
+  int (*early_out)(struct Sequence *seq, float fac);
 
-  /* stores the default facf0 and facf1 if no IPO is present */
-  void (*get_default_fac)(struct Sequence *seq, float timeline_frame, float *facf0, float *facf1);
+  /* sets the default `fac` value */
+  void (*get_default_fac)(struct Sequence *seq, float timeline_frame, float *fac);
 
   /* execute the effect
    * sequence effects are only required to either support
@@ -81,8 +81,7 @@ struct SeqEffectHandle {
   struct ImBuf *(*execute)(const struct SeqRenderData *context,
                            struct Sequence *seq,
                            float timeline_frame,
-                           float facf0,
-                           float facf1,
+                           float fac,
                            struct ImBuf *ibuf1,
                            struct ImBuf *ibuf2,
                            struct ImBuf *ibuf3);
@@ -95,8 +94,7 @@ struct SeqEffectHandle {
   void (*execute_slice)(const struct SeqRenderData *context,
                         struct Sequence *seq,
                         float timeline_frame,
-                        float facf0,
-                        float facf1,
+                        float fac,
                         struct ImBuf *ibuf1,
                         struct ImBuf *ibuf2,
                         struct ImBuf *ibuf3,
@@ -107,8 +105,8 @@ struct SeqEffectHandle {
 
 struct SeqEffectHandle SEQ_effect_handle_get(struct Sequence *seq);
 int SEQ_effect_get_num_inputs(int seq_type);
-void SEQ_effect_text_font_unload(struct TextVars *data, const bool do_id_user);
-void SEQ_effect_text_font_load(struct TextVars *data, const bool do_id_user);
+void SEQ_effect_text_font_unload(struct TextVars *data, bool do_id_user);
+void SEQ_effect_text_font_load(struct TextVars *data, bool do_id_user);
 
 #ifdef __cplusplus
 }

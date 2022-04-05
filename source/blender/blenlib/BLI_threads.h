@@ -31,19 +31,31 @@
 extern "C" {
 #endif
 
-/* for tables, button in UI, etc */
+/** For tables, button in UI, etc. */
 #define BLENDER_MAX_THREADS 1024
 
 struct ListBase;
 
 /* Threading API */
 
-/* This is run once at startup. */
+/**
+ * This is run once at startup.
+ */
 void BLI_threadapi_init(void);
 void BLI_threadapi_exit(void);
 
+/**
+ * \param tot: When 0 only initializes malloc mutex in a safe way (see sequence.c)
+ * problem otherwise: scene render will kill of the mutex!
+ */
 void BLI_threadpool_init(struct ListBase *threadbase, void *(*do_thread)(void *), int tot);
+/**
+ * Amount of available threads.
+ */
 int BLI_available_threads(struct ListBase *threadbase);
+/**
+ * Returns thread number, for sample patterns or threadsafe tables.
+ */
 int BLI_threadpool_available_thread_index(struct ListBase *threadbase);
 void BLI_threadpool_insert(struct ListBase *threadbase, void *callerdata);
 void BLI_threadpool_remove(struct ListBase *threadbase, void *callerdata);
@@ -54,7 +66,10 @@ int BLI_thread_is_main(void);
 
 /* System Information */
 
-int BLI_system_thread_count(void); /* gets the number of threads the system can make use of */
+/**
+ * \return the number of threads the system can make use of.
+ */
+int BLI_system_thread_count(void);
 void BLI_system_num_threads_override_set(int num);
 int BLI_system_num_threads_override_get(void);
 
@@ -152,7 +167,7 @@ typedef pthread_cond_t ThreadCondition;
 
 void BLI_condition_init(ThreadCondition *cond);
 void BLI_condition_wait(ThreadCondition *cond, ThreadMutex *mutex);
-void BLI_condition_wait_global_mutex(ThreadCondition *cond, const int type);
+void BLI_condition_wait_global_mutex(ThreadCondition *cond, int type);
 void BLI_condition_notify_one(ThreadCondition *cond);
 void BLI_condition_notify_all(ThreadCondition *cond);
 void BLI_condition_end(ThreadCondition *cond);
@@ -194,12 +209,6 @@ void BLI_thread_queue_nowait(ThreadQueue *queue);
 #  define BLI_thread_local_get(name) name
 #  define BLI_thread_local_set(name, value) name = value
 #endif /* defined(__APPLE__) */
-
-/* **** Special functions to help performance on crazy NUMA setups. **** */
-
-/* Make sure process/thread is using NUMA node with fast memory access. */
-void BLI_thread_put_process_on_fast_node(void);
-void BLI_thread_put_thread_on_fast_node(void);
 
 #ifdef __cplusplus
 }

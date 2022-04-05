@@ -432,10 +432,10 @@ static bool wm_xr_navigation_grab_can_do_bimanual(const wmXrActionData *actionda
                                                   const XrGrabData *data)
 {
   /* Returns true if: 1) Bimanual interaction is currently occurring (i.e. inputs on both
-     controllers are pressed) and 2) bimanual interaction occurred on the last update. This second
-     part is needed to avoid "jumpy" navigation changes when transitioning from one-handed to
-     two-handed interaction (see #wm_xr_grab_compute/compute_bimanual() for how navigation deltas
-     are calculated). */
+   * controllers are pressed) and 2) bimanual interaction occurred on the last update. This second
+   * part is needed to avoid "jumpy" navigation changes when transitioning from one-handed to
+   * two-handed interaction (see #wm_xr_grab_compute/compute_bimanual() for how navigation deltas
+   * are calculated). */
   return (actiondata->bimanual && data->bimanual_prev);
 }
 
@@ -545,7 +545,7 @@ static int wm_xr_navigation_grab_modal(bContext *C, wmOperator *op, const wmEven
   /* Check if navigation is locked. */
   if (!wm_xr_navigation_grab_is_locked(data, do_bimanual)) {
     /* Prevent unwanted snapping (i.e. "jumpy" navigation changes when transitioning from
-       two-handed to one-handed interaction) at the end of a bimanual interaction. */
+     * two-handed to one-handed interaction) at the end of a bimanual interaction. */
     if (!wm_xr_navigation_grab_is_bimanual_ending(actiondata, data)) {
       wm_xr_navigation_grab_apply(xr, actiondata, data, do_bimanual);
     }
@@ -553,10 +553,10 @@ static int wm_xr_navigation_grab_modal(bContext *C, wmOperator *op, const wmEven
 
   wm_xr_navigation_grab_bimanual_state_update(actiondata, data);
 
-  /* Note: KM_PRESS and KM_RELEASE are the only two values supported by XR events during event
-   dispatching (see #wm_xr_session_action_states_interpret()). For modal XR operators, modal
-   handling starts when an input is "pressed" (action state exceeds the action threshold) and
-   ends when the input is "released" (state falls below the threshold). */
+  /* NOTE: #KM_PRESS and #KM_RELEASE are the only two values supported by XR events during event
+   * dispatching (see #wm_xr_session_action_states_interpret()). For modal XR operators, modal
+   * handling starts when an input is "pressed" (action state exceeds the action threshold) and
+   * ends when the input is "released" (state falls below the threshold). */
   switch (event->val) {
     case KM_PRESS:
       return OPERATOR_RUNNING_MODAL;
@@ -956,7 +956,7 @@ static int wm_xr_navigation_fly_modal(bContext *C, wmOperator *op, const wmEvent
   const double time_now = PIL_check_seconds_timer();
 
   mode = (eXrFlyMode)RNA_enum_get(op->ptr, "mode");
-  turn = (mode == XR_FLY_TURNLEFT || mode == XR_FLY_TURNRIGHT);
+  turn = (ELEM(mode, XR_FLY_TURNLEFT, XR_FLY_TURNRIGHT));
 
   locz_lock = RNA_boolean_get(op->ptr, "lock_location_z");
   dir_lock = RNA_boolean_get(op->ptr, "lock_direction");

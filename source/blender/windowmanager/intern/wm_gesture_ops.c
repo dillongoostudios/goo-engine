@@ -124,6 +124,7 @@ static int UNUSED_FUNCTION(gesture_modal_state_from_operator)(wmOperator *op)
   }
   return GESTURE_MODAL_NOP;
 }
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -569,7 +570,6 @@ static void gesture_tweak_modal(bContext *C, const wmEvent *event)
   }
 }
 
-/* standard tweak, called after window handlers passed on event */
 void wm_tweakevent_test(bContext *C, const wmEvent *event, int action)
 {
   wmWindow *win = CTX_wm_window(C);
@@ -750,11 +750,6 @@ void WM_gesture_lines_cancel(bContext *C, wmOperator *op)
   gesture_modal_end(C, op);
 }
 
-/**
- * helper function, we may want to add options for conversion to view space
- *
- * caller must free.
- */
 const int (*WM_gesture_lasso_path_to_array(bContext *UNUSED(C),
                                            wmOperator *op,
                                            int *r_mcoords_len))[2]
@@ -889,10 +884,6 @@ int WM_gesture_straightline_invoke(bContext *C, wmOperator *op, const wmEvent *e
 
   return OPERATOR_RUNNING_MODAL;
 }
-/**
- * This invoke callback starts the straightline gesture with a viewport preview to the right side
- * of the line.
- */
 int WM_gesture_straightline_active_side_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   WM_gesture_straightline_invoke(C, op, event);
@@ -928,11 +919,6 @@ static void wm_gesture_straightline_do_angle_snap(rcti *rect)
   rect->ymax = (int)line_snapped_end[1];
 }
 
-/**
- * This modal callback calls exec once per mouse move event while the gesture is active with the
- * updated line start and end values, so it can be used for tools that have a real time preview
- * (like a gradient updating in real time over the mesh).
- */
 int WM_gesture_straightline_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   wmGesture *gesture = op->customdata;
@@ -1012,13 +998,6 @@ int WM_gesture_straightline_modal(bContext *C, wmOperator *op, const wmEvent *ev
   return OPERATOR_RUNNING_MODAL;
 }
 
-/**
- * This modal one-shot callback only calls exec once after the gesture finishes without any updates
- * during the gesture execution. Should be used for operations that are intended to be applied once
- * without real time preview (like a trimming tool that only applies the bisect operation once
- * after finishing the gesture as the bisect operation is too heavy to be computed in real time for
- * a preview).
- */
 int WM_gesture_straightline_oneshot_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   wmGesture *gesture = op->customdata;

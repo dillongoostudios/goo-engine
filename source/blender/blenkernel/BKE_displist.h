@@ -86,7 +86,7 @@ void BKE_displist_free(struct ListBase *lb);
 void BKE_displist_make_curveTypes(struct Depsgraph *depsgraph,
                                   const struct Scene *scene,
                                   struct Object *ob,
-                                  const bool for_render);
+                                  bool for_render);
 void BKE_displist_make_mball(struct Depsgraph *depsgraph, struct Scene *scene, struct Object *ob);
 
 void BKE_curve_calc_modifiers_pre(struct Depsgraph *depsgraph,
@@ -94,14 +94,20 @@ void BKE_curve_calc_modifiers_pre(struct Depsgraph *depsgraph,
                                   struct Object *ob,
                                   struct ListBase *source_nurb,
                                   struct ListBase *target_nurb,
-                                  const bool for_render);
+                                  bool for_render);
 bool BKE_displist_surfindex_get(
     const struct DispList *dl, int a, int *b, int *p1, int *p2, int *p3, int *p4);
 
+/**
+ * \param normal_proj: Optional normal that's used to project the scan-fill verts into 2D coords.
+ * Pass this along if known since it saves time calculating the normal.
+ * This is also used to initialize #DispList.nors (one normal per display list).
+ * \param flip_normal: Flip the normal (same as passing \a normal_proj negated).
+ */
 void BKE_displist_fill(const struct ListBase *dispbase,
                        struct ListBase *to,
                        const float normal_proj[3],
-                       const bool flip_normal);
+                       bool flip_normal);
 
 float BKE_displist_calc_taper(struct Depsgraph *depsgraph,
                               const struct Scene *scene,

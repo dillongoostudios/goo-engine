@@ -27,6 +27,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_image.h"
+#include "BKE_node_tree_update.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -116,6 +117,7 @@ static void rna_Image_generated_update(Main *bmain, Scene *UNUSED(scene), Pointe
 {
   Image *ima = (Image *)ptr->owner_id;
   BKE_image_signal(bmain, ima, NULL, IMA_SIGNAL_FREE);
+  BKE_image_partial_update_mark_full_update(ima);
 }
 
 static void rna_Image_colormanage_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *ptr)
@@ -154,6 +156,7 @@ static void rna_Image_views_format_update(Main *bmain, Scene *scene, PointerRNA 
   }
 
   BKE_image_release_ibuf(ima, ibuf, lock);
+  BKE_image_partial_update_mark_full_update(ima);
 }
 
 static void rna_ImageUser_update(Main *bmain, Scene *scene, PointerRNA *ptr)
@@ -167,8 +170,9 @@ static void rna_ImageUser_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 
   if (id) {
     if (GS(id->name) == ID_NT) {
-      /* Special update for nodetrees to find parent datablock. */
-      ED_node_tag_update_nodetree(bmain, (bNodeTree *)id, NULL);
+      /* Special update for nodetrees. */
+      BKE_ntree_update_tag_image_user_changed((bNodeTree *)id, iuser);
+      ED_node_tree_propagate_change(NULL, bmain, NULL);
     }
     else {
       /* Update material or texture for render preview. */
@@ -606,7 +610,7 @@ static void rna_render_slots_active_set(PointerRNA *ptr,
     int index = BLI_findindex(&image->renderslots, slot);
     if (index != -1) {
       image->render_slot = index;
-      image->gpuflag |= IMA_GPU_REFRESH;
+      BKE_image_partial_update_mark_full_update(image);
     }
   }
 }
@@ -622,7 +626,7 @@ static void rna_render_slots_active_index_set(PointerRNA *ptr, int value)
   Image *image = (Image *)ptr->owner_id;
   int num_slots = BLI_listbase_count(&image->renderslots);
   image->render_slot = value;
-  image->gpuflag |= IMA_GPU_REFRESH;
+  BKE_image_partial_update_mark_full_update(image);
   CLAMP(image->render_slot, 0, num_slots - 1);
 }
 

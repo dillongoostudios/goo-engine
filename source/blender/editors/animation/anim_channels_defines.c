@@ -199,7 +199,7 @@ static void acf_generic_channel_color(bAnimContext *ac, bAnimListElem *ale, floa
   }
 
   /* set color for normal channels
-   * - use 3 shades of color group/standard color for 3 indention level
+   * - use 3 shades of color group/standard color for 3 indentation level
    * - only use group colors if allowed to, and if actually feasible
    */
   if (showGroupColors && (grp) && (grp->customCol)) {
@@ -4158,7 +4158,6 @@ static void ANIM_init_channel_typeinfo_data(void)
   }
 }
 
-/* Get type info from given channel type */
 const bAnimChannelType *ANIM_channel_get_typeinfo(bAnimListElem *ale)
 {
   /* Sanity checks. */
@@ -4179,7 +4178,6 @@ const bAnimChannelType *ANIM_channel_get_typeinfo(bAnimListElem *ale)
 
 /* --------------------------- */
 
-/* Print debug info string for the given channel */
 void ANIM_channel_debug_print_info(bAnimListElem *ale, short indent_level)
 {
   const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
@@ -4212,11 +4210,25 @@ void ANIM_channel_debug_print_info(bAnimListElem *ale, short indent_level)
   }
 }
 
+bAction *ANIM_channel_action_get(const bAnimListElem *ale)
+{
+  if (ale->datatype == ALE_ACT) {
+    return (bAction *)ale->key_data;
+  }
+
+  if (ELEM(ale->type, ANIMTYPE_GROUP, ANIMTYPE_FCURVE)) {
+    ID *owner = ale->fcurve_owner_id;
+
+    if (owner && GS(owner->name) == ID_AC) {
+      return (bAction *)owner;
+    }
+  }
+
+  return NULL;
+}
+
 /* --------------------------- */
 
-/* Check if some setting for a channel is enabled
- * Returns: 1 = On, 0 = Off, -1 = Invalid
- */
 short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, eAnimChannel_Settings setting)
 {
   const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
@@ -4299,10 +4311,6 @@ short ANIM_channel_setting_get(bAnimContext *ac, bAnimListElem *ale, eAnimChanne
   } \
   (void)0
 
-/* Change value of some setting for a channel
- * - setting: eAnimChannel_Settings
- * - mode: eAnimChannels_SetFlag
- */
 void ANIM_channel_setting_set(bAnimContext *ac,
                               bAnimListElem *ale,
                               eAnimChannel_Settings setting,
@@ -4376,7 +4384,6 @@ static bool achannel_is_being_renamed(const bAnimContext *ac,
   return false;
 }
 
-/* Draw the given channel */
 void ANIM_channel_draw(
     bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc, size_t channel_index)
 {
@@ -5132,7 +5139,6 @@ static void draw_setting_widget(bAnimContext *ac,
   }
 }
 
-/* Draw UI widgets the given channel */
 void ANIM_channel_draw_widgets(const bContext *C,
                                bAnimContext *ac,
                                bAnimListElem *ale,

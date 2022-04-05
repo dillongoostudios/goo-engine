@@ -48,17 +48,11 @@
 #include "MOD_modifiertypes.h"
 #include "MOD_ui_common.h"
 
-Mesh *triangulate_mesh(Mesh *mesh,
-                       const int quad_method,
-                       const int ngon_method,
-                       const int min_vertices,
-                       const int flag);
-
-Mesh *triangulate_mesh(Mesh *mesh,
-                       const int quad_method,
-                       const int ngon_method,
-                       const int min_vertices,
-                       const int flag)
+static Mesh *triangulate_mesh(Mesh *mesh,
+                              const int quad_method,
+                              const int ngon_method,
+                              const int min_vertices,
+                              const int flag)
 {
   Mesh *result;
   BMesh *bm;
@@ -80,6 +74,7 @@ Mesh *triangulate_mesh(Mesh *mesh,
                             &((struct BMeshCreateParams){0}),
                             &((struct BMeshFromMeshParams){
                                 .calc_face_normal = true,
+                                .calc_vert_normal = false,
                                 .cd_mask_extra = cd_mask_extra,
                             }));
 

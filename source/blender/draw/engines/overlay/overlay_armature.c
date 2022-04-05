@@ -104,9 +104,6 @@ typedef struct ArmatureDrawContext {
   const ThemeWireColor *bcolor; /* pchan color */
 } ArmatureDrawContext;
 
-/**
- * Return true if armature should be handled by the pose mode engine.
- */
 bool OVERLAY_armature_is_pose_mode(Object *ob, const DRWContextState *draw_ctx)
 {
   Object *active_ob = draw_ctx->obact;
@@ -142,6 +139,10 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
   pd->armature.do_pose_fade_geom = pd->armature.do_pose_xray &&
                                    ((draw_ctx->object_mode & OB_MODE_WEIGHT_PAINT) == 0) &&
                                    draw_ctx->object_pose != NULL;
+
+  const float wire_alpha = pd->overlay.bone_wire_alpha;
+  const bool use_wire_alpha = (wire_alpha < 1.0f);
+
   DRWState state;
 
   if (pd->armature.do_pose_fade_geom) {
@@ -167,8 +168,8 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
     OVERLAY_InstanceFormats *formats = OVERLAY_shader_instance_formats_get();
     OVERLAY_ArmatureCallBuffers *cb = &pd->armature_call_buffers[i];
 
-    cb->custom_shapes_ghash = BLI_ghash_ptr_new(__func__);
-    cb->custom_shapes_transp_ghash = BLI_ghash_ptr_new(__func__);
+    cb->solid.custom_shapes_ghash = BLI_ghash_ptr_new(__func__);
+    cb->transp.custom_shapes_ghash = BLI_ghash_ptr_new(__func__);
 
     DRWPass **p_armature_ps = &psl->armature_ps[i];
     DRWState infront_state = (DRW_state_is_select() && (i == 1)) ? DRW_STATE_IN_FRONT_SELECT : 0;
@@ -192,44 +193,85 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
-      cb->point_solid = BUF_INSTANCE(grp, format, DRW_cache_bone_point_get());
+      cb->solid.point_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_point_get());
 
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_state_disable(grp, DRW_STATE_WRITE_DEPTH);
       DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
-      DRW_shgroup_uniform_float_copy(grp, "alpha", 0.4f);
-      cb->point_transp = BUF_INSTANCE(grp, format, DRW_cache_bone_point_get());
+      DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+      DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha * 0.4f);
+      cb->transp.point_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_point_get());
 
       sh = OVERLAY_shader_armature_shape(false);
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
-      cb->custom_solid = grp;
-      cb->box_solid = BUF_INSTANCE(grp, format, DRW_cache_bone_box_get());
-      cb->octa_solid = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_get());
+      cb->solid.custom_fill = grp;
+      cb->solid.box_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_box_get());
+      cb->solid.octa_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_get());
 
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_state_disable(grp, DRW_STATE_WRITE_DEPTH);
       DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
-      DRW_shgroup_uniform_float_copy(grp, "alpha", 0.6f);
-      cb->custom_transp = grp;
-      cb->box_transp = BUF_INSTANCE(grp, format, DRW_cache_bone_box_get());
-      cb->octa_transp = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_get());
+      DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+      DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha * 0.6f);
+      cb->transp.custom_fill = grp;
+      cb->transp.box_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_box_get());
+      cb->transp.octa_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_get());
 
       sh = OVERLAY_shader_armature_sphere(true);
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->point_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_point_wire_outline_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.point_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_point_wire_outline_get());
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.point_outline = BUF_INSTANCE(
+            grp, format, DRW_cache_bone_point_wire_outline_get());
+      }
+      else {
+        cb->transp.point_outline = cb->solid.point_outline;
+      }
 
       sh = OVERLAY_shader_armature_shape(true);
-      cb->custom_outline = grp = DRW_shgroup_create(sh, armature_ps);
+      cb->solid.custom_outline = grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->box_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_box_wire_get());
-      cb->octa_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_wire_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.box_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_box_wire_get());
+      cb->solid.octa_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_wire_get());
+
+      if (use_wire_alpha) {
+        cb->transp.custom_outline = grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.box_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_box_wire_get());
+        cb->transp.octa_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_octahedral_wire_get());
+      }
+      else {
+        cb->transp.custom_outline = cb->solid.custom_outline;
+        cb->transp.box_outline = cb->solid.box_outline;
+        cb->transp.octa_outline = cb->solid.octa_outline;
+      }
 
       sh = OVERLAY_shader_armature_shape_wire();
-      cb->custom_wire = grp = DRW_shgroup_create(sh, armature_ps);
+      cb->solid.custom_wire = grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+
+      if (use_wire_alpha) {
+        cb->transp.custom_wire = grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+      }
+      else {
+        cb->transp.custom_wire = cb->solid.custom_wire;
+      }
     }
     {
       format = formats->instance_extra;
@@ -237,12 +279,35 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
       sh = OVERLAY_shader_armature_degrees_of_freedom_wire();
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->dof_lines = BUF_INSTANCE(grp, format, DRW_cache_bone_dof_lines_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.dof_lines = BUF_INSTANCE(grp, format, DRW_cache_bone_dof_lines_get());
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.dof_lines = BUF_INSTANCE(grp, format, DRW_cache_bone_dof_lines_get());
+      }
+      else {
+        cb->transp.dof_lines = cb->solid.dof_lines;
+      }
 
       sh = OVERLAY_shader_armature_degrees_of_freedom_solid();
       grp = DRW_shgroup_create(sh, armature_transp_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->dof_sphere = BUF_INSTANCE(grp, format, DRW_cache_bone_dof_sphere_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.dof_sphere = BUF_INSTANCE(grp, format, DRW_cache_bone_dof_sphere_get());
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_transp_ps);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.dof_sphere = BUF_INSTANCE(grp, format, DRW_cache_bone_dof_sphere_get());
+      }
+      else {
+        cb->transp.dof_sphere = cb->solid.dof_sphere;
+      }
     }
     {
       format = formats->instance_bone_stick;
@@ -250,7 +315,19 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
       sh = OVERLAY_shader_armature_stick();
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->stick = BUF_INSTANCE(grp, format, DRW_cache_bone_stick_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.stick = BUF_INSTANCE(grp, format, DRW_cache_bone_stick_get());
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.stick = BUF_INSTANCE(grp, format, DRW_cache_bone_stick_get());
+      }
+      else {
+        cb->transp.stick = cb->solid.stick;
+      }
     }
     {
       format = formats->instance_bone_envelope;
@@ -261,29 +338,57 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
       DRW_shgroup_uniform_bool_copy(grp, "isDistance", false);
       DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
-      cb->envelope_solid = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_solid_get());
+      cb->solid.envelope_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_solid_get());
 
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_state_disable(grp, DRW_STATE_WRITE_DEPTH);
       DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA | DRW_STATE_CULL_BACK);
-      DRW_shgroup_uniform_float_copy(grp, "alpha", 0.6f);
-      cb->envelope_transp = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_solid_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha * 0.6f);
+      cb->transp.envelope_fill = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_solid_get());
 
       format = formats->instance_bone_envelope_outline;
 
       sh = OVERLAY_shader_armature_envelope(true);
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->envelope_outline = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_outline_get());
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.envelope_outline = BUF_INSTANCE(
+          grp, format, DRW_cache_bone_envelope_outline_get());
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.envelope_outline = BUF_INSTANCE(
+            grp, format, DRW_cache_bone_envelope_outline_get());
+      }
+      else {
+        cb->transp.envelope_outline = cb->solid.envelope_outline;
+      }
 
       format = formats->instance_bone_envelope_distance;
 
       sh = OVERLAY_shader_armature_envelope(false);
       grp = DRW_shgroup_create(sh, armature_transp_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
       DRW_shgroup_uniform_bool_copy(grp, "isDistance", true);
       DRW_shgroup_state_enable(grp, DRW_STATE_CULL_FRONT);
-      cb->envelope_distance = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_solid_get());
+      cb->solid.envelope_distance = BUF_INSTANCE(grp, format, DRW_cache_bone_envelope_solid_get());
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_transp_ps);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        DRW_shgroup_uniform_bool_copy(grp, "isDistance", true);
+        DRW_shgroup_state_enable(grp, DRW_STATE_CULL_FRONT);
+        cb->transp.envelope_distance = BUF_INSTANCE(
+            grp, format, DRW_cache_bone_envelope_solid_get());
+      }
+      else {
+        cb->transp.envelope_distance = cb->solid.envelope_distance;
+      }
     }
     {
       format = formats->pos_color;
@@ -291,7 +396,19 @@ void OVERLAY_armature_cache_init(OVERLAY_Data *vedata)
       sh = OVERLAY_shader_armature_wire();
       grp = DRW_shgroup_create(sh, armature_ps);
       DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
-      cb->wire = BUF_LINE(grp, format);
+      DRW_shgroup_uniform_float_copy(grp, "alpha", 1.0f);
+      cb->solid.wire = BUF_LINE(grp, format);
+
+      if (use_wire_alpha) {
+        grp = DRW_shgroup_create(sh, armature_ps);
+        DRW_shgroup_state_enable(grp, DRW_STATE_BLEND_ALPHA);
+        DRW_shgroup_uniform_block(grp, "globalsBlock", G_draw.block_ubo);
+        DRW_shgroup_uniform_float_copy(grp, "alpha", wire_alpha);
+        cb->transp.wire = BUF_LINE(grp, format);
+      }
+      else {
+        cb->transp.wire = cb->solid.wire;
+      }
     }
   }
 }
@@ -543,14 +660,14 @@ static void drw_shgroup_bone_custom_solid(ArmatureDrawContext *ctx,
    * by #data_eval. This is bad since it gives preference to an object's evaluated mesh over any
    * other data type, but supporting all evaluated geometry components would require a much larger
    * refactor of this area. */
-  Mesh *mesh = BKE_object_get_evaluated_mesh(custom);
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf(custom);
   if (mesh == NULL) {
     return;
   }
 
   /* TODO(fclem): arg... less than ideal but we never iter on this object
    * to assure batch cache is valid. */
-  DRW_mesh_batch_cache_validate(mesh);
+  DRW_mesh_batch_cache_validate(custom, mesh);
 
   struct GPUBatch *surf = DRW_mesh_batch_cache_get_surface(mesh);
   struct GPUBatch *edges = DRW_mesh_batch_cache_get_edge_detection(mesh, NULL);
@@ -592,13 +709,13 @@ static void drw_shgroup_bone_custom_wire(ArmatureDrawContext *ctx,
                                          Object *custom)
 {
   /* See comments in #drw_shgroup_bone_custom_solid. */
-  Mesh *mesh = BKE_object_get_evaluated_mesh(custom);
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf(custom);
   if (mesh == NULL) {
     return;
   }
   /* TODO(fclem): arg... less than ideal but we never iter on this object
    * to assure batch cache is valid. */
-  DRW_mesh_batch_cache_validate(mesh);
+  DRW_mesh_batch_cache_validate(custom, mesh);
 
   struct GPUBatch *geom = DRW_mesh_batch_cache_get_all_edges(mesh);
   if (geom) {
@@ -1923,6 +2040,7 @@ static void draw_bone_name(ArmatureDrawContext *ctx,
                      DRW_TEXT_CACHE_GLOBALSPACE | DRW_TEXT_CACHE_STRING_PTR,
                      color);
 }
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -2163,16 +2281,15 @@ static void armature_context_setup(ArmatureDrawContext *ctx,
   const bool is_filled = (!pd->armature.transparent && !draw_as_wire) || !is_object_mode;
   const bool is_transparent = pd->armature.transparent || (draw_as_wire && !is_object_mode);
   bArmature *arm = ob->data;
-  OVERLAY_ArmatureCallBuffers *cb = &pd->armature_call_buffers[is_xray];
+  OVERLAY_ArmatureCallBuffers *cbo = &pd->armature_call_buffers[is_xray];
+  OVERLAY_ArmatureCallBuffersInner *cb = is_transparent ? &cbo->transp : &cbo->solid;
 
   static const float select_const_color[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 
   switch (arm->drawtype) {
     case ARM_ENVELOPE:
       ctx->envelope_outline = cb->envelope_outline;
-      ctx->envelope_solid = (is_filled) ?
-                                (is_transparent ? cb->envelope_transp : cb->envelope_solid) :
-                                NULL;
+      ctx->envelope_solid = (is_filled) ? cb->envelope_fill : NULL;
       ctx->envelope_distance = (do_envelope_dist) ? cb->envelope_distance : NULL;
       break;
     case ARM_LINE:
@@ -2183,24 +2300,23 @@ static void armature_context_setup(ArmatureDrawContext *ctx,
       break;
     case ARM_B_BONE:
       ctx->outline = cb->box_outline;
-      ctx->solid = (is_filled) ? (is_transparent ? cb->box_transp : cb->box_solid) : NULL;
+      ctx->solid = (is_filled) ? cb->box_fill : NULL;
       break;
     case ARM_OCTA:
       ctx->outline = cb->octa_outline;
-      ctx->solid = (is_filled) ? (is_transparent ? cb->octa_transp : cb->octa_solid) : NULL;
+      ctx->solid = (is_filled) ? cb->octa_fill : NULL;
       break;
   }
   ctx->ob = ob;
   ctx->extras = &pd->extra_call_buffers[is_xray];
   ctx->dof_lines = cb->dof_lines;
   ctx->dof_sphere = cb->dof_sphere;
-  ctx->point_solid = (is_filled) ? (is_transparent ? cb->point_transp : cb->point_solid) : NULL;
+  ctx->point_solid = (is_filled) ? cb->point_fill : NULL;
   ctx->point_outline = cb->point_outline;
-  ctx->custom_solid = (is_filled) ? (is_transparent ? cb->custom_transp : cb->custom_solid) : NULL;
+  ctx->custom_solid = (is_filled) ? cb->custom_fill : NULL;
   ctx->custom_outline = cb->custom_outline;
   ctx->custom_wire = cb->custom_wire;
-  ctx->custom_shapes_ghash = is_transparent ? cb->custom_shapes_transp_ghash :
-                                              cb->custom_shapes_ghash;
+  ctx->custom_shapes_ghash = cb->custom_shapes_ghash;
   ctx->show_relations = pd->armature.show_relations;
   ctx->do_relations = !DRW_state_is_select() && pd->armature.show_relations &&
                       (is_edit_mode | is_pose_mode);
@@ -2284,10 +2400,10 @@ void OVERLAY_armature_cache_finish(OVERLAY_Data *vedata)
   OVERLAY_PrivateData *pd = vedata->stl->pd;
 
   for (int i = 0; i < 2; i++) {
-    if (pd->armature_call_buffers[i].custom_shapes_ghash) {
+    if (pd->armature_call_buffers[i].solid.custom_shapes_ghash) {
       /* TODO(fclem): Do not free it for each frame but reuse it. Avoiding alloc cost. */
-      BLI_ghash_free(pd->armature_call_buffers[i].custom_shapes_ghash, NULL, NULL);
-      BLI_ghash_free(pd->armature_call_buffers[i].custom_shapes_transp_ghash, NULL, NULL);
+      BLI_ghash_free(pd->armature_call_buffers[i].solid.custom_shapes_ghash, NULL, NULL);
+      BLI_ghash_free(pd->armature_call_buffers[i].transp.custom_shapes_ghash, NULL, NULL);
     }
   }
 }
@@ -2331,3 +2447,5 @@ void OVERLAY_pose_draw(OVERLAY_Data *vedata)
     DRW_draw_pass(psl->armature_ps[1]);
   }
 }
+
+/** \} */

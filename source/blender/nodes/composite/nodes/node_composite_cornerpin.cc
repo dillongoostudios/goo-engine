@@ -23,27 +23,41 @@
 
 #include "node_composite_util.hh"
 
-static bNodeSocketTemplate inputs[] = {
-    {SOCK_RGBA, N_("Image"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-    {SOCK_VECTOR, N_("Upper Left"), 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-    {SOCK_VECTOR, N_("Upper Right"), 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-    {SOCK_VECTOR, N_("Lower Left"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-    {SOCK_VECTOR, N_("Lower Right"), 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, PROP_NONE},
-    {-1, ""},
-};
+namespace blender::nodes::node_composite_cornerpin_cc {
 
-static bNodeSocketTemplate outputs[] = {
-    {SOCK_RGBA, N_("Image")},
-    {SOCK_FLOAT, N_("Plane")},
-    {-1, ""},
-};
-
-void register_node_type_cmp_cornerpin(void)
+static void cmp_node_cornerpin_declare(NodeDeclarationBuilder &b)
 {
+  b.add_input<decl::Color>(N_("Image")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
+  b.add_input<decl::Vector>(N_("Upper Left"))
+      .default_value({0.0f, 1.0f, 0.0f})
+      .min(0.0f)
+      .max(1.0f);
+  b.add_input<decl::Vector>(N_("Upper Right"))
+      .default_value({1.0f, 1.0f, 0.0f})
+      .min(0.0f)
+      .max(1.0f);
+  b.add_input<decl::Vector>(N_("Lower Left"))
+      .default_value({0.0f, 0.0f, 0.0f})
+      .min(0.0f)
+      .max(1.0f);
+  b.add_input<decl::Vector>(N_("Lower Right"))
+      .default_value({1.0f, 0.0f, 0.0f})
+      .min(0.0f)
+      .max(1.0f);
+  b.add_output<decl::Color>(N_("Image"));
+  b.add_output<decl::Float>(N_("Plane"));
+}
+
+}  // namespace blender::nodes::node_composite_cornerpin_cc
+
+void register_node_type_cmp_cornerpin()
+{
+  namespace file_ns = blender::nodes::node_composite_cornerpin_cc;
+
   static bNodeType ntype;
 
-  cmp_node_type_base(&ntype, CMP_NODE_CORNERPIN, "Corner Pin", NODE_CLASS_DISTORT, 0);
-  node_type_socket_templates(&ntype, inputs, outputs);
+  cmp_node_type_base(&ntype, CMP_NODE_CORNERPIN, "Corner Pin", NODE_CLASS_DISTORT);
+  ntype.declare = file_ns::cmp_node_cornerpin_declare;
 
   nodeRegisterType(&ntype);
 }

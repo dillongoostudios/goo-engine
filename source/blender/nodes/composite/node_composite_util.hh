@@ -27,9 +27,6 @@
 #include "DNA_movieclip_types.h"
 #include "DNA_node_types.h"
 
-#include "BLI_blenlib.h"
-#include "BLI_math.h"
-
 #include "BLT_translation.h"
 
 #include "BKE_colorband.h"
@@ -45,8 +42,8 @@
 
 #include "RE_pipeline.h"
 
-/* only for forward declarations */
 #include "NOD_composite.h"
+#include "NOD_socket.h"
 #include "NOD_socket_declarations.hh"
 
 #define CMP_SCALE_MAX 12000
@@ -55,5 +52,4 @@ bool cmp_node_poll_default(struct bNodeType *ntype,
                            struct bNodeTree *ntree,
                            const char **r_disabled_hint);
 void cmp_node_update_default(struct bNodeTree *ntree, struct bNode *node);
-void cmp_node_type_base(
-    struct bNodeType *ntype, int type, const char *name, short nclass, short flag);
+void cmp_node_type_base(struct bNodeType *ntype, int type, const char *name, short nclass);

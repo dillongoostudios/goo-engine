@@ -1223,6 +1223,7 @@ static BMEdge *bm_face_region_pivot_edge_find(BMFace **faces_region,
 
   return e_pivot;
 }
+
 /** \} */
 
 #endif /* USE_PIVOT_SEARCH */
@@ -1332,12 +1333,6 @@ static void bm_vert_fasthash_destroy(UUIDFashMatch *fm)
 
 #endif /* USE_PIVOT_FASTMATCH */
 
-/**
- * Take a face-region and return a list of matching face-regions.
- *
- * \param faces_region: A single, contiguous face-region.
- * \return A list of matching null-terminated face-region arrays.
- */
 int BM_mesh_region_match(BMesh *bm,
                          BMFace **faces_region,
                          uint faces_region_len,

@@ -560,13 +560,6 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
                                                     thread_id);
 
     float brush_disp[3];
-    float normal[3];
-    if (vd.no) {
-      normal_short_to_float_v3(normal, vd.no);
-    }
-    else {
-      copy_v3_v3(normal, vd.fno);
-    }
 
     switch (brush->cloth_deform_type) {
       case BRUSH_CLOTH_DEFORM_DRAG:
@@ -621,7 +614,7 @@ static void do_cloth_brush_apply_forces_task_cb_ex(void *__restrict userdata,
         mul_v3_v3fl(force, disp_center, fade);
       } break;
       case BRUSH_CLOTH_DEFORM_INFLATE:
-        mul_v3_v3fl(force, normal, fade);
+        mul_v3_v3fl(force, vd.no ? vd.no : vd.fno, fade);
         break;
       case BRUSH_CLOTH_DEFORM_EXPAND:
         cloth_sim->length_constraint_tweak[vd.index] += fade * 0.1f;
@@ -1052,7 +1045,6 @@ static void cloth_sim_initialize_default_node_state(SculptSession *ss,
   MEM_SAFE_FREE(nodes);
 }
 
-/* Public functions. */
 SculptClothSimulation *SCULPT_cloth_brush_simulation_create(SculptSession *ss,
                                                             const float cloth_mass,
                                                             const float cloth_damping,
@@ -1195,7 +1187,6 @@ static void sculpt_cloth_ensure_constraints_in_simulation_area(Sculpt *sd,
       sd, ob, nodes, totnode, ss->cache->cloth_sim, sim_location, limit);
 }
 
-/* Main Brush Function. */
 void SCULPT_do_cloth_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 {
   SculptSession *ss = ob->sculpt;
@@ -1271,7 +1262,6 @@ void SCULPT_cloth_simulation_free(struct SculptClothSimulation *cloth_sim)
   MEM_SAFE_FREE(cloth_sim);
 }
 
-/* Cursor drawing function. */
 void SCULPT_cloth_simulation_limits_draw(const uint gpuattr,
                                          const Brush *brush,
                                          const float location[3],

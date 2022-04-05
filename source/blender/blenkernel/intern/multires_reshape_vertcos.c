@@ -114,7 +114,8 @@ static bool multires_reshape_vertcos_foreach_topology_info(
     const int num_vertices,
     const int UNUSED(num_edges),
     const int UNUSED(num_loops),
-    const int UNUSED(num_polygons))
+    const int UNUSED(num_polygons),
+    const int *UNUSED(subdiv_polygon_offset))
 {
   MultiresReshapeAssignVertcosContext *reshape_vertcos_context = foreach_context->user_data;
   if (num_vertices != reshape_vertcos_context->num_vert_coords) {
@@ -182,7 +183,6 @@ static void multires_reshape_vertcos_foreach_vertex_every_edge(
   multires_reshape_vertcos_foreach_vertex(foreach_context, &ptex_coord, subdiv_vertex_index);
 }
 
-/* Set displacement grids values at a reshape level to a object coordinates of the given source. */
 bool multires_reshape_assign_final_coords_from_vertcos(
     const MultiresReshapeContext *reshape_context,
     const float (*vert_coords)[3],

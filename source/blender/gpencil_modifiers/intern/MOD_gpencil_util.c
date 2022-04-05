@@ -40,6 +40,8 @@
 #include "MOD_gpencil_modifiertypes.h"
 #include "MOD_gpencil_util.h"
 
+#include "DEG_depsgraph_query.h"
+
 void gpencil_modifier_type_init(GpencilModifierTypeInfo *types[])
 {
 #define INIT_GP_TYPE(typeName) \
@@ -67,13 +69,13 @@ void gpencil_modifier_type_init(GpencilModifierTypeInfo *types[])
   INIT_GP_TYPE(WeightProximity);
   INIT_GP_TYPE(Lineart);
   INIT_GP_TYPE(Dash);
+  INIT_GP_TYPE(Shrinkwrap);
 #undef INIT_GP_TYPE
 }
 
-/* verify if valid layer, material and pass index */
 bool is_stroke_affected_by_modifier(Object *ob,
                                     char *mlayername,
-                                    const Material *material,
+                                    Material *material,
                                     const int mpassindex,
                                     const int gpl_passindex,
                                     const int minpoints,
@@ -84,8 +86,8 @@ bool is_stroke_affected_by_modifier(Object *ob,
                                     const bool inv3,
                                     const bool inv4)
 {
-  Material *ma = BKE_gpencil_material(ob, gps->mat_nr + 1);
-  MaterialGPencilStyle *gp_style = ma->gp_style;
+  Material *ma_gps = BKE_gpencil_material(ob, gps->mat_nr + 1);
+  MaterialGPencilStyle *gp_style = ma_gps->gp_style;
 
   /* omit if filter by layer */
   if (mlayername[0] != '\0') {
@@ -102,13 +104,16 @@ bool is_stroke_affected_by_modifier(Object *ob,
   }
   /* Omit if filter by material. */
   if (material != NULL) {
+    /* Requires to use the original material to compare the same pointer address. */
+    Material *ma_md_orig = (Material *)DEG_get_original_id(&material->id);
+    Material *ma_gps_orig = (Material *)DEG_get_original_id(&ma_gps->id);
     if (inv4 == false) {
-      if (material != ma) {
+      if (ma_md_orig != ma_gps_orig) {
         return false;
       }
     }
     else {
-      if (material == ma) {
+      if (ma_md_orig == ma_gps_orig) {
         return false;
       }
     }
@@ -147,7 +152,6 @@ bool is_stroke_affected_by_modifier(Object *ob,
   return true;
 }
 
-/* verify if valid vertex group *and return weight */
 float get_modifier_point_weight(MDeformVert *dvert, bool inverse, int def_nr)
 {
   float weight = 1.0f;

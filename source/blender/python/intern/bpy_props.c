@@ -366,7 +366,7 @@ static PyObject *bpy_prop_deferred_call(BPy_PropDeferred *UNUSED(self),
 
 /**
  * Expose the function in case scripts need to introspect this information
- * (not currently used by Blender it's self).
+ * (not currently used by Blender itself).
  */
 static PyObject *bpy_prop_deferred_function_get(BPy_PropDeferred *self, void *UNUSED(closure))
 {
@@ -377,7 +377,7 @@ static PyObject *bpy_prop_deferred_function_get(BPy_PropDeferred *self, void *UN
 
 /**
  * Expose keywords in case scripts need to introspect this information
- * (not currently used by Blender it's self).
+ * (not currently used by Blender itself).
  */
 static PyObject *bpy_prop_deferred_keywords_get(BPy_PropDeferred *self, void *UNUSED(closure))
 {
@@ -433,6 +433,10 @@ static PyObject *bpy_prop_deferred_data_CreatePyObject(PyObject *fn, PyObject *k
 }
 
 /** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Shared Property Utilities
+ * \{ */
 
 /* PyObject's */
 static PyObject *pymeth_BoolProperty = NULL;
@@ -2605,7 +2609,9 @@ static int bpy_prop_arg_parse_tag_defines(PyObject *o, void *p)
   "   :type step: int\n"
 
 #define BPY_PROPDEF_FLOAT_PREC_DOC \
-  "   :arg precision: Maximum number of decimal digits to display, in [0, 6].\n" \
+  "   :arg precision: Maximum number of decimal digits to display, in [0, 6]. Fraction is " \
+  "automatically hidden for exact integer values of fields with unit 'NONE' or 'TIME' (frame " \
+  "count) and step divisible by 100.\n" \
   "   :type precision: int\n"
 
 #define BPY_PROPDEF_UPDATE_DOC \
@@ -4396,10 +4402,6 @@ PyObject *BPY_rna_props(void)
   return submodule;
 }
 
-/**
- * Run this on exit, clearing all Python callback users and disable the RNA callback,
- * as it would be called after Python has already finished.
- */
 void BPY_rna_props_clear_all(void)
 {
   /* Remove all user counts, so this isn't considered a leak from Python's perspective. */

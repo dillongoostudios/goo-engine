@@ -29,14 +29,11 @@ static bNodeSocketTemplate inputs[] = {
     {SOCK_RGBA, N_("Color"), 1.0f, 0.0f, 0.0f, 1.0f},
     {-1, ""},
 };
-static bNodeSocketTemplate outputs[] = {
-    {-1, ""},
-};
 
 static void exec(void *data,
                  int UNUSED(thread),
                  bNode *UNUSED(node),
-                 bNodeExecData *execdata,
+                 bNodeExecData *UNUSED(execdata),
                  bNodeStack **in,
                  bNodeStack **UNUSED(out))
 {
@@ -48,7 +45,6 @@ static void exec(void *data,
     params_from_cdata(&params, cdata);
 
     tex_input_rgba(col, in[0], &params, cdata->thread);
-    tex_do_preview(execdata->preview, params.previewco, col, cdata->do_manage);
   }
 }
 
@@ -56,12 +52,12 @@ void register_node_type_tex_viewer(void)
 {
   static bNodeType ntype;
 
-  tex_node_type_base(&ntype, TEX_NODE_VIEWER, "Viewer", NODE_CLASS_OUTPUT, NODE_PREVIEW);
-  node_type_socket_templates(&ntype, inputs, outputs);
+  tex_node_type_base(&ntype, TEX_NODE_VIEWER, "Viewer", NODE_CLASS_OUTPUT);
+  node_type_socket_templates(&ntype, inputs, NULL);
   node_type_exec(&ntype, NULL, NULL, exec);
 
-  /* Do not allow muting viewer node. */
-  node_type_internal_links(&ntype, NULL);
+  ntype.no_muting = true;
+  ntype.flag |= NODE_PREVIEW;
 
   nodeRegisterType(&ntype);
 }

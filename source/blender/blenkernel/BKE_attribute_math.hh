@@ -18,8 +18,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_color.hh"
-#include "BLI_float2.hh"
-#include "BLI_float3.hh"
+#include "BLI_math_vec_types.hh"
 
 #include "DNA_customdata_types.h"
 
@@ -141,7 +140,7 @@ inline ColorGeometry4f mix3(const float3 &weights,
  * This is just basic linear interpolation.
  * \{ */
 
-template<typename T> T mix2(const float factor, const T &a, const T &b);
+template<typename T> T mix2(float factor, const T &a, const T &b);
 
 template<> inline bool mix2(const float factor, const bool &a, const bool &b)
 {
@@ -160,12 +159,12 @@ template<> inline float mix2(const float factor, const float &a, const float &b)
 
 template<> inline float2 mix2(const float factor, const float2 &a, const float2 &b)
 {
-  return float2::interpolate(a, b, factor);
+  return math::interpolate(a, b, factor);
 }
 
 template<> inline float3 mix2(const float factor, const float3 &a, const float3 &b)
 {
-  return float3::interpolate(a, b, factor);
+  return math::interpolate(a, b, factor);
 }
 
 template<>
@@ -232,6 +231,43 @@ template<typename T> class SimpleMixer {
 };
 
 /**
+ * Mixes together booleans with "or" while fitting the same interface as the other
+ * mixers in order to be simpler to use. This mixing method has a few benefits:
+ *  - An "average" for selections is relatively meaningless.
+ *  - Predictable selection propagation is very super important.
+ *  - It's generally  easier to remove an element from a selection that is slightly too large than
+ *    the opposite.
+ */
+class BooleanPropagationMixer {
+ private:
+  MutableSpan<bool> buffer_;
+
+ public:
+  /**
+   * \param buffer: Span where the interpolated values should be stored.
+   */
+  BooleanPropagationMixer(MutableSpan<bool> buffer) : buffer_(buffer)
+  {
+    buffer_.fill(false);
+  }
+
+  /**
+   * Mix a #value into the element with the given #index.
+   */
+  void mix_in(const int64_t index, const bool value, [[maybe_unused]] const float weight = 1.0f)
+  {
+    buffer_[index] |= value;
+  }
+
+  /**
+   * Does not do anything, since the mixing is trivial.
+   */
+  void finalize()
+  {
+  }
+};
+
+/**
  * This mixer accumulates values in a type that is different from the one that is mixed.
  * Some types cannot encode the floating point weights in their values (e.g. int and bool).
  */
@@ -287,12 +323,12 @@ class ColorGeometryMixer {
  public:
   ColorGeometryMixer(MutableSpan<ColorGeometry4f> buffer,
                      ColorGeometry4f default_color = ColorGeometry4f(0.0f, 0.0f, 0.0f, 1.0f));
-  void mix_in(const int64_t index, const ColorGeometry4f &color, const float weight = 1.0f);
+  void mix_in(int64_t index, const ColorGeometry4f &color, float weight = 1.0f);
   void finalize();
 };
 
 template<typename T> struct DefaultMixerStruct {
-  /* Use void by default. This can be check for in `if constexpr` statements. */
+  /* Use void by default. This can be checked for in `if constexpr` statements. */
   using type = void;
 };
 template<> struct DefaultMixerStruct<float> {
@@ -327,6 +363,23 @@ template<> struct DefaultMixerStruct<bool> {
    * Otherwise information provided by weights is easily rounded away. */
   using type = SimpleMixerWithAccumulationType<bool, float, float_to_bool>;
 };
+
+template<typename T> struct DefaultPropatationMixerStruct {
+  /* Use void by default. This can be checked for in `if constexpr` statements. */
+  using type = typename DefaultMixerStruct<T>::type;
+};
+
+template<> struct DefaultPropatationMixerStruct<bool> {
+  using type = BooleanPropagationMixer;
+};
+
+/**
+ * This mixer is meant for propagating attributes when creating new geometry. A key difference
+ * with the default mixer is that booleans are mixed with "or" instead of "at least half"
+ * (the default mixing for booleans).
+ */
+template<typename T>
+using DefaultPropatationMixer = typename DefaultPropatationMixerStruct<T>::type;
 
 /* Utility to get a good default mixer for a given type. This is `void` when there is no default
  * mixer for the given type. */

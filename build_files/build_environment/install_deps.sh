@@ -379,27 +379,27 @@ USE_CXX11=true
 CLANG_FORMAT_VERSION_MIN="6.0"
 CLANG_FORMAT_VERSION_MEX="10.0"
 
-PYTHON_VERSION="3.9.7"
-PYTHON_VERSION_SHORT="3.9"
-PYTHON_VERSION_MIN="3.7"
-PYTHON_VERSION_MEX="3.11"
+PYTHON_VERSION="3.10.2"
+PYTHON_VERSION_SHORT="3.10"
+PYTHON_VERSION_MIN="3.10"
+PYTHON_VERSION_MEX="3.12"
 PYTHON_VERSION_INSTALLED=$PYTHON_VERSION_SHORT
 PYTHON_FORCE_BUILD=false
 PYTHON_FORCE_REBUILD=false
 PYTHON_SKIP=false
 
 # Additional Python modules.
-PYTHON_IDNA_VERSION="3.2"
+PYTHON_IDNA_VERSION="3.3"
 PYTHON_IDNA_VERSION_MIN="2.0"
 PYTHON_IDNA_VERSION_MEX="4.0"
 PYTHON_IDNA_NAME="idna"
 
-PYTHON_CHARSET_NORMALIZER_VERSION="2.0.6"
+PYTHON_CHARSET_NORMALIZER_VERSION="2.0.10"
 PYTHON_CHARSET_NORMALIZER_VERSION_MIN="2.0.6"
 PYTHON_CHARSET_NORMALIZER_VERSION_MEX="2.1.0"  # requests uses `charset_normalizer~=2.0.0`
 PYTHON_CHARSET_NORMALIZER_NAME="charset-normalizer"
 
-PYTHON_URLLIB3_VERSION="1.26.7"
+PYTHON_URLLIB3_VERSION="1.26.8"
 PYTHON_URLLIB3_VERSION_MIN="1.0"
 PYTHON_URLLIB3_VERSION_MEX="2.0"
 PYTHON_URLLIB3_NAME="urllib3"
@@ -409,17 +409,17 @@ PYTHON_CERTIFI_VERSION_MIN="2021.0"
 PYTHON_CERTIFI_VERSION_MEX="2023.0"
 PYTHON_CERTIFI_NAME="certifi"
 
-PYTHON_REQUESTS_VERSION="2.23.0"
+PYTHON_REQUESTS_VERSION="2.27.1"
 PYTHON_REQUESTS_VERSION_MIN="2.0"
 PYTHON_REQUESTS_VERSION_MEX="3.0"
 PYTHON_REQUESTS_NAME="requests"
 
-PYTHON_ZSTANDARD_VERSION="0.15.2"
+PYTHON_ZSTANDARD_VERSION="0.16.0"
 PYTHON_ZSTANDARD_VERSION_MIN="0.15.2"
-PYTHON_ZSTANDARD_VERSION_MEX="0.16.0"
+PYTHON_ZSTANDARD_VERSION_MEX="0.20.0"
 PYTHON_ZSTANDARD_NAME="zstandard"
 
-PYTHON_NUMPY_VERSION="1.21.2"
+PYTHON_NUMPY_VERSION="1.22.0"
 PYTHON_NUMPY_VERSION_MIN="1.14"
 PYTHON_NUMPY_VERSION_MEX="2.0"
 PYTHON_NUMPY_NAME="numpy"
@@ -492,14 +492,14 @@ OIIO_SKIP=false
 LLVM_VERSION="12.0.0"
 LLVM_VERSION_SHORT="12.0"
 LLVM_VERSION_MIN="11.0"
-LLVM_VERSION_MEX="13.0"
+LLVM_VERSION_MEX="14.0"
 LLVM_VERSION_FOUND=""
 LLVM_FORCE_BUILD=false
 LLVM_FORCE_REBUILD=false
 LLVM_SKIP=false
 
 # OSL needs to be compiled for now!
-OSL_VERSION="1.11.14.1"
+OSL_VERSION="1.11.17.0"
 OSL_VERSION_SHORT="1.11"
 OSL_VERSION_MIN="1.11"
 OSL_VERSION_MEX="2.0"
@@ -1826,7 +1826,7 @@ compile_OCIO() {
     # Force linking against static libs
     #rm -f $_inst/lib/*.so*
 
-    # Additional depencencies
+    # Additional dependencies
     #cp ext/dist/lib/libtinyxml.a $_inst/lib
     #cp ext/dist/lib/libyaml-cpp.a $_inst/lib
 
@@ -2083,9 +2083,9 @@ compile_OIIO() {
     cmake_d="$cmake_d -D OPENEXR_VERSION=$OPENEXR_VERSION"
 
     if [ "$_with_built_openexr" = true ]; then
-      cmake_d="$cmake_d -D ILMBASE_HOME=$INST/openexr"
-      cmake_d="$cmake_d -D OPENEXR_HOME=$INST/openexr"
-      INFO "ILMBASE_HOME=$INST/openexr"
+      cmake_d="$cmake_d -D ILMBASE_ROOT=$INST/openexr"
+      cmake_d="$cmake_d -D OPENEXR_ROOT=$INST/openexr"
+      INFO "Ilmbase_ROOT=$INST/openexr"
     fi
 
     # ptex is only needed when nicholas bishop is ready
@@ -2374,9 +2374,9 @@ compile_OSL() {
     #~ cmake_d="$cmake_d -D ILMBASE_VERSION=$ILMBASE_VERSION"
 
     if [ "$_with_built_openexr" = true ]; then
-      INFO "ILMBASE_HOME=$INST/openexr"
-      cmake_d="$cmake_d -D OPENEXR_ROOT_DIR=$INST/openexr"
-      cmake_d="$cmake_d -D ILMBASE_ROOT_DIR=$INST/openexr"
+      cmake_d="$cmake_d -D ILMBASE_ROOT=$INST/openexr"
+      cmake_d="$cmake_d -D OPENEXR_ROOT=$INST/openexr"
+      INFO "Ilmbase_ROOT=$INST/openexr"
       # XXX Temp workaround... sigh, ILMBase really messed the things up by defining their custom names ON by default :(
     fi
 
@@ -3620,8 +3620,8 @@ compile_FFmpeg() {
     fi
 
     ./configure --cc="gcc -Wl,--as-needed" \
-        --extra-ldflags="-pthread -static-libgcc" \
-        --prefix=$_inst --enable-static \
+        --extra-ldflags="-pthread" \
+        --prefix=$_inst --enable-shared \
         --disable-ffplay --disable-doc \
         --enable-gray \
         --enable-avfilter --disable-vdpau \
@@ -5721,76 +5721,6 @@ install_OTHER() {
 # ----------------------------------------------------------------------------
 # Printing User Info
 
-print_info_ffmpeglink_DEB() {
-  dpkg -L $_packages | grep -e ".*\/lib[^\/]\+\.so" | gawk '{ printf(nlines ? "'"$_ffmpeg_list_sep"'%s" : "%s", gensub(/.*lib([^\/]+)\.so/, "\\1", "g", $0)); nlines++ }'
-}
-
-print_info_ffmpeglink_RPM() {
-  rpm -ql $_packages | grep -e ".*\/lib[^\/]\+\.so" | gawk '{ printf(nlines ? "'"$_ffmpeg_list_sep"'%s" : "%s", gensub(/.*lib([^\/]+)\.so/, "\\1", "g", $0)); nlines++ }'
-}
-
-print_info_ffmpeglink_ARCH() {
-  pacman -Ql $_packages | grep -e ".*\/lib[^\/]\+\.so$" | gawk '{ printf(nlines ? "'"$_ffmpeg_list_sep"'%s" : "%s", gensub(/.*lib([^\/]+)\.so/, "\\1", "g", $0)); nlines++ }'
-}
-
-print_info_ffmpeglink() {
-  # This func must only print a ';'-separated list of libs...
-  if [ -z "$DISTRO" ]; then
-    ERROR "Failed to detect distribution type"
-    exit 1
-  fi
-
-  # Create list of packages from which to get libs names...
-  _packages=""
-
-  if [ "$THEORA_USE" = true ]; then
-    _packages="$_packages $THEORA_DEV"
-  fi
-
-  if [ "$VORBIS_USE" = true ]; then
-    _packages="$_packages $VORBIS_DEV"
-  fi
-
-  if [ "$OGG_USE" = true ]; then
-    _packages="$_packages $OGG_DEV"
-  fi
-
-  if [ "$XVID_USE" = true ]; then
-    _packages="$_packages $XVID_DEV"
-  fi
-
-  if [ "$VPX_USE" = true ]; then
-    _packages="$_packages $VPX_DEV"
-  fi
-
-  if [ "$OPUS_USE" = true ]; then
-    _packages="$_packages $OPUS_DEV"
-  fi
-
-  if [ "$MP3LAME_USE" = true ]; then
-    _packages="$_packages $MP3LAME_DEV"
-  fi
-
-  if [ "$X264_USE" = true ]; then
-    _packages="$_packages $X264_DEV"
-  fi
-
-  if [ "$OPENJPEG_USE" = true ]; then
-    _packages="$_packages $OPENJPEG_DEV"
-  fi
-
-  if [ "$DISTRO" = "DEB" ]; then
-    print_info_ffmpeglink_DEB
-  elif [ "$DISTRO" = "RPM" ]; then
-    print_info_ffmpeglink_RPM
-  elif [ "$DISTRO" = "ARCH" ]; then
-    print_info_ffmpeglink_ARCH
-  # XXX TODO!
-  else
-    PRINT "<Could not determine additional link libraries needed for ffmpeg, replace this by valid list of libs...>"
-  fi
-}
-
 print_info() {
   PRINT ""
   PRINT ""
@@ -5801,7 +5731,7 @@ print_info() {
   PRINT "If you're using CMake add this to your configuration flags:"
 
   _buildargs="-U *SNDFILE* -U PYTHON* -U *BOOST* -U *Boost* -U *TBB*"
-  _buildargs="$_buildargs -U *OPENCOLORIO* -U *OPENEXR* -U *OPENIMAGEIO* -U *LLVM* -U *CYCLES*"
+  _buildargs="$_buildargs -U *OPENCOLORIO* -U *OPENEXR* -U *OPENIMAGEIO* -U *LLVM* -U *CLANG* -U *CYCLES*"
   _buildargs="$_buildargs -U *OPENSUBDIV* -U *OPENVDB*  -U *BLOSC* -U *COLLADA* -U *FFMPEG* -U *ALEMBIC* -U *USD*"
   _buildargs="$_buildargs -U *EMBREE* -U *OPENIMAGEDENOISE* -U *OPENXR*"
 
@@ -6002,12 +5932,10 @@ print_info() {
 
   if [ "$FFMPEG_SKIP" = false ]; then
     _1="-D WITH_CODEC_FFMPEG=ON"
-    _2="-D FFMPEG_LIBRARIES='avformat;avcodec;avutil;avdevice;swscale;swresample;lzma;rt;`print_info_ffmpeglink`'"
     PRINT "  $_1"
-    PRINT "  $_2"
-    _buildargs="$_buildargs $_1 $_2"
+    _buildargs="$_buildargs $_1"
     if [ -d $INST/ffmpeg ]; then
-      _1="-D FFMPEG=$INST/ffmpeg"
+      _1="-D FFMPEG_ROOT_DIR=$INST/ffmpeg"
       PRINT "  $_1"
       _buildargs="$_buildargs $_1"
     fi

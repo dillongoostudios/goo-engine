@@ -323,7 +323,9 @@ GPUShader *OVERLAY_shader_edit_mesh_vert(void)
                                  datatoc_edit_mesh_common_lib_glsl,
                                  datatoc_edit_mesh_vert_glsl,
                                  NULL},
-        .frag = (const char *[]){datatoc_gpu_shader_point_varying_color_frag_glsl, NULL},
+        .frag = (const char *[]){datatoc_common_globals_lib_glsl,
+                                 datatoc_gpu_shader_point_varying_color_frag_glsl,
+                                 NULL},
         .defs = (const char *[]){sh_cfg->def, "#define VERT\n", NULL},
     });
   }
@@ -383,7 +385,7 @@ GPUShader *OVERLAY_shader_armature_sphere(bool use_outline)
   const DRWContextState *draw_ctx = DRW_context_state_get();
   const GPUShaderConfigData *sh_cfg = &GPU_shader_cfg_data[draw_ctx->sh_cfg];
   OVERLAY_Shaders *sh_data = &e_data.sh_data[draw_ctx->sh_cfg];
-  const char extensions[] = "#extension GL_ARB_conservative_depth : enable\n";
+  const char extensions[] = "";
   if (use_outline && !sh_data->armature_sphere_outline) {
     sh_data->armature_sphere_outline = GPU_shader_create_from_arrays({
         .vert = (const char *[]){sh_cfg->lib,

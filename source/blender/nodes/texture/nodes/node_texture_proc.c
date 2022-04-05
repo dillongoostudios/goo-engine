@@ -72,7 +72,7 @@ static void do_proc(float *result,
   }
 
   if (textype & TEX_RGB) {
-    copy_v4_v4(result, &texres.tr);
+    copy_v4_v4(result, texres.trgba);
   }
   else {
     copy_v4_v4(result, col1);
@@ -294,12 +294,13 @@ static void init(bNodeTree *UNUSED(ntree), bNode *node)
   { \
     static bNodeType ntype; \
 \
-    tex_node_type_base(&ntype, TEX_NODE_PROC + TEXTYPE, Name, NODE_CLASS_TEXTURE, NODE_PREVIEW); \
+    tex_node_type_base(&ntype, TEX_NODE_PROC + TEXTYPE, Name, NODE_CLASS_TEXTURE); \
     node_type_socket_templates(&ntype, name##_inputs, outputs); \
     node_type_size_preset(&ntype, NODE_SIZE_MIDDLE); \
     node_type_init(&ntype, init); \
     node_type_storage(&ntype, "Tex", node_free_standard_storage, node_copy_standard_storage); \
     node_type_exec(&ntype, NULL, NULL, name##_exec); \
+    ntype.flag |= NODE_PREVIEW; \
 \
     nodeRegisterType(&ntype); \
   }

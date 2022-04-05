@@ -61,6 +61,7 @@
 #include "BKE_material.h"
 #include "BKE_mesh.h"
 #include "BKE_node.h"
+#include "BKE_node_tree_update.h"
 #include "BKE_paint.h"
 #include "BKE_screen.h"
 #include "BKE_workspace.h"
@@ -367,15 +368,6 @@ static void blo_update_defaults_scene(Main *bmain, Scene *scene)
   }
 }
 
-/**
- * Update defaults in startup.blend, without having to save and embed the file.
- * This function can be emptied each time the startup.blend is updated.
- *
- * \note Screen data may be cleared at this point, this will happen in the case
- * an app-template's data needs to be versioned when read-file is called with "Load UI" disabled.
- * Versioning the screen data can be safely skipped without "Load UI" since the screen data
- * will have been versioned when it was first loaded.
- */
 void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
 {
   /* For all app templates. */
@@ -592,11 +584,11 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
           bNodeSocketValueFloat *roughness_data = roughness_socket->default_value;
           roughness_data->value = 0.4f;
           node->custom2 = SHD_SUBSURFACE_RANDOM_WALK;
-          nodeUpdate(ma->nodetree, node);
+          BKE_ntree_update_tag_node_property(ma->nodetree, node);
         }
         else if (node->type == SH_NODE_SUBSURFACE_SCATTERING) {
           node->custom1 = SHD_SUBSURFACE_RANDOM_WALK;
-          nodeUpdate(ma->nodetree, node);
+          BKE_ntree_update_tag_node_property(ma->nodetree, node);
         }
       }
     }

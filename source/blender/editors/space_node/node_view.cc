@@ -24,7 +24,6 @@
 #include "DNA_node_types.h"
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
 #include "BLI_rect.h"
 #include "BLI_string_ref.hh"
 #include "BLI_utildefines.h"
@@ -54,33 +53,29 @@
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 
-#include "node_intern.h" /* own include */
+#include "node_intern.hh" /* own include */
 
-using blender::StringRef;
+namespace blender::ed::space_node {
 
 /* -------------------------------------------------------------------- */
 /** \name View All Operator
  * \{ */
 
-int space_node_view_flag(
-    bContext *C, SpaceNode *snode, ARegion *region, const int node_flag, const int smooth_viewtx)
+bool space_node_view_flag(
+    bContext &C, SpaceNode &snode, ARegion &region, const int node_flag, const int smooth_viewtx)
 {
-  bNode *node;
+  const float oldwidth = BLI_rctf_size_x(&region.v2d.cur);
+  const float oldheight = BLI_rctf_size_y(&region.v2d.cur);
+
+  const float old_aspect = oldwidth / oldheight;
+
   rctf cur_new;
-  float oldwidth, oldheight, width, height;
-  float oldasp, asp;
-  int tot = 0;
-  bool has_frame = false;
-
-  oldwidth = BLI_rctf_size_x(&region->v2d.cur);
-  oldheight = BLI_rctf_size_y(&region->v2d.cur);
-
-  oldasp = oldwidth / oldheight;
-
   BLI_rctf_init_minmax(&cur_new);
 
-  if (snode->edittree) {
-    for (node = (bNode *)snode->edittree->nodes.first; node; node = node->next) {
+  int tot = 0;
+  bool has_frame = false;
+  if (snode.edittree) {
+    LISTBASE_FOREACH (const bNode *, node, &snode.edittree->nodes) {
       if ((node->flag & node_flag) == node_flag) {
         BLI_rctf_union(&cur_new, &node->totr);
         tot++;
@@ -92,37 +87,39 @@ int space_node_view_flag(
     }
   }
 
-  if (tot) {
-    width = BLI_rctf_size_x(&cur_new);
-    height = BLI_rctf_size_y(&cur_new);
-    asp = width / height;
-
-    /* for single non-frame nodes, don't zoom in, just pan view,
-     * but do allow zooming out, this allows for big nodes to be zoomed out */
-    if ((tot == 1) && (has_frame == false) && ((oldwidth * oldheight) > (width * height))) {
-      /* center, don't zoom */
-      BLI_rctf_resize(&cur_new, oldwidth, oldheight);
-    }
-    else {
-      if (oldasp < asp) {
-        const float height_new = width / oldasp;
-        cur_new.ymin = cur_new.ymin - height_new / 2.0f;
-        cur_new.ymax = cur_new.ymax + height_new / 2.0f;
-      }
-      else {
-        const float width_new = height * oldasp;
-        cur_new.xmin = cur_new.xmin - width_new / 2.0f;
-        cur_new.xmax = cur_new.xmax + width_new / 2.0f;
-      }
-
-      /* add some padding */
-      BLI_rctf_scale(&cur_new, 1.1f);
-    }
-
-    UI_view2d_smooth_view(C, region, &cur_new, smooth_viewtx);
+  if (tot == 0) {
+    return false;
   }
 
-  return (tot != 0);
+  const float width = BLI_rctf_size_x(&cur_new);
+  const float height = BLI_rctf_size_y(&cur_new);
+  const float new_aspect = width / height;
+
+  /* for single non-frame nodes, don't zoom in, just pan view,
+   * but do allow zooming out, this allows for big nodes to be zoomed out */
+  if ((tot == 1) && (has_frame == false) && ((oldwidth * oldheight) > (width * height))) {
+    /* center, don't zoom */
+    BLI_rctf_resize(&cur_new, oldwidth, oldheight);
+  }
+  else {
+    if (old_aspect < new_aspect) {
+      const float height_new = width / old_aspect;
+      cur_new.ymin = cur_new.ymin - height_new / 2.0f;
+      cur_new.ymax = cur_new.ymax + height_new / 2.0f;
+    }
+    else {
+      const float width_new = height * old_aspect;
+      cur_new.xmin = cur_new.xmin - width_new / 2.0f;
+      cur_new.xmax = cur_new.xmax + width_new / 2.0f;
+    }
+
+    /* add some padding */
+    BLI_rctf_scale(&cur_new, 1.1f);
+  }
+
+  UI_view2d_smooth_view(&C, &region, &cur_new, smooth_viewtx);
+
+  return true;
 }
 
 static int node_view_all_exec(bContext *C, wmOperator *op)
@@ -135,7 +132,7 @@ static int node_view_all_exec(bContext *C, wmOperator *op)
   snode->xof = 0;
   snode->yof = 0;
 
-  if (space_node_view_flag(C, snode, region, 0, smooth_viewtx)) {
+  if (space_node_view_flag(*C, *snode, *region, 0, smooth_viewtx)) {
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
@@ -168,7 +165,7 @@ static int node_view_selected_exec(bContext *C, wmOperator *op)
   SpaceNode *snode = CTX_wm_space_node(C);
   const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
 
-  if (space_node_view_flag(C, snode, region, NODE_SELECT, smooth_viewtx)) {
+  if (space_node_view_flag(*C, *snode, *region, NODE_SELECT, smooth_viewtx)) {
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
@@ -258,7 +255,7 @@ static int snode_bg_viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *
     return OPERATOR_CANCELLED;
   }
 
-  nvm = (NodeViewMove *)MEM_callocN(sizeof(NodeViewMove), "NodeViewMove struct");
+  nvm = MEM_cnew<NodeViewMove>("NodeViewMove struct");
   op->customdata = nvm;
   nvm->mvalo[0] = event->mval[0];
   nvm->mvalo[1] = event->mval[1];
@@ -447,7 +444,8 @@ static void sample_draw(const bContext *C, ARegion *region, void *arg_info)
   }
 }
 
-/* Returns mouse position in image space. */
+}  // namespace blender::ed::space_node
+
 bool ED_space_node_get_position(
     Main *bmain, SpaceNode *snode, struct ARegion *region, const int mval[2], float fpos[2])
 {
@@ -475,9 +473,6 @@ bool ED_space_node_get_position(
   return true;
 }
 
-/* Returns color in linear space, matching ED_space_image_color_sample().
- * And here we've got recursion in the comments tips...
- */
 bool ED_space_node_color_sample(
     Main *bmain, SpaceNode *snode, ARegion *region, const int mval[2], float r_col[3])
 {
@@ -532,6 +527,8 @@ bool ED_space_node_color_sample(
 
   return ret;
 }
+
+namespace blender::ed::space_node {
 
 static void sample_apply(bContext *C, wmOperator *op, const wmEvent *event)
 {
@@ -650,7 +647,7 @@ static int sample_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     return OPERATOR_CANCELLED;
   }
 
-  info = (ImageSampleInfo *)MEM_callocN(sizeof(ImageSampleInfo), "ImageSampleInfo");
+  info = MEM_cnew<ImageSampleInfo>("ImageSampleInfo");
   info->art = region->type;
   info->draw_handle = ED_region_draw_cb_activate(
       region->type, sample_draw, info, REGION_DRAW_POST_PIXEL);
@@ -738,7 +735,7 @@ static int space_node_view_geometry_nodes_legacy(bContext *C, SpaceNode *snode, 
   }
 
   const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
-  if (space_node_view_flag(C, snode, region, NODE_SELECT, smooth_viewtx)) {
+  if (space_node_view_flag(*C, *snode, *region, NODE_SELECT, smooth_viewtx)) {
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
@@ -790,3 +787,5 @@ void NODE_OT_geometry_node_view_legacy(wmOperatorType *ot)
 }
 
 /** \} */
+
+}  // namespace blender::ed::space_node

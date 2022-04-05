@@ -60,16 +60,16 @@ LineStyleModifier *BKE_linestyle_geometry_modifier_add(FreestyleLineStyle *lines
 
 LineStyleModifier *BKE_linestyle_color_modifier_copy(FreestyleLineStyle *linestyle,
                                                      const LineStyleModifier *m,
-                                                     const int flag);
+                                                     int flag);
 LineStyleModifier *BKE_linestyle_alpha_modifier_copy(FreestyleLineStyle *linestyle,
                                                      const LineStyleModifier *m,
-                                                     const int flag);
+                                                     int flag);
 LineStyleModifier *BKE_linestyle_thickness_modifier_copy(FreestyleLineStyle *linestyle,
                                                          const LineStyleModifier *m,
-                                                         const int flag);
+                                                         int flag);
 LineStyleModifier *BKE_linestyle_geometry_modifier_copy(FreestyleLineStyle *linestyle,
                                                         const LineStyleModifier *m,
-                                                        const int flag);
+                                                        int flag);
 
 int BKE_linestyle_color_modifier_remove(FreestyleLineStyle *linestyle,
                                         LineStyleModifier *modifier);
@@ -80,6 +80,10 @@ int BKE_linestyle_thickness_modifier_remove(FreestyleLineStyle *linestyle,
 int BKE_linestyle_geometry_modifier_remove(FreestyleLineStyle *linestyle,
                                            LineStyleModifier *modifier);
 
+/**
+ * Reinsert \a modifier in modifier list with an offset of \a direction.
+ * \return if position of \a modifier has changed.
+ */
 bool BKE_linestyle_color_modifier_move(FreestyleLineStyle *linestyle,
                                        LineStyleModifier *modifier,
                                        int direction);
@@ -97,7 +101,7 @@ void BKE_linestyle_modifier_list_color_ramps(FreestyleLineStyle *linestyle, List
 char *BKE_linestyle_path_to_color_ramp(FreestyleLineStyle *linestyle,
                                        struct ColorBand *color_ramp);
 
-bool BKE_linestyle_use_textures(FreestyleLineStyle *linestyle, const bool use_shading_nodes);
+bool BKE_linestyle_use_textures(FreestyleLineStyle *linestyle, bool use_shading_nodes);
 
 void BKE_linestyle_default_shader(const struct bContext *C, FreestyleLineStyle *linestyle);
 

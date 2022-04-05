@@ -2984,14 +2984,14 @@ static void rna_def_function(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop,
       "No Self",
-      "Function does not pass its self as an argument (becomes a static method in python)");
+      "Function does not pass itself as an argument (becomes a static method in python)");
 
   prop = RNA_def_property(srna, "use_self_type", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
   RNA_def_property_boolean_funcs(prop, "rna_Function_use_self_type_get", NULL);
   RNA_def_property_ui_text(prop,
                            "Use Self Type",
-                           "Function passes its self type as an argument (becomes a class method "
+                           "Function passes itself type as an argument (becomes a class method "
                            "in python if use_self is false)");
 }
 
@@ -3117,7 +3117,11 @@ static void rna_def_number_property(StructRNA *srna, PropertyType type)
     prop = RNA_def_property(srna, "precision", PROP_INT, PROP_UNSIGNED);
     RNA_def_property_clear_flag(prop, PROP_EDITABLE);
     RNA_def_property_int_funcs(prop, "rna_FloatProperty_precision_get", NULL, NULL);
-    RNA_def_property_ui_text(prop, "Precision", "Number of digits after the dot used by buttons");
+    RNA_def_property_ui_text(prop,
+                             "Precision",
+                             "Number of digits after the dot used by buttons. Fraction is "
+                             "automatically hidden for exact integer values of fields with unit "
+                             "'NONE' or 'TIME' (frame count) and step divisible by 100");
   }
 }
 

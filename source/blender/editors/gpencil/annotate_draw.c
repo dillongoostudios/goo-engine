@@ -165,7 +165,7 @@ static void annotation_draw_stroke_buffer(bGPdata *gps,
     immBindBuiltinProgram(GPU_SHADER_3D_POINT_UNIFORM_SIZE_UNIFORM_COLOR_AA);
     immUniformColor3fvAlpha(ink, ink[3]);
     immBegin(GPU_PRIM_POINTS, 1);
-    immVertex2fv(pos, &pt->x);
+    immVertex2fv(pos, pt->m_xy);
   }
   else {
     float oldpressure = points[0].pressure;
@@ -191,7 +191,7 @@ static void annotation_draw_stroke_buffer(bGPdata *gps,
       if (fabsf(pt->pressure - oldpressure) > 0.2f) {
         /* need to have 2 points to avoid immEnd assert error */
         if (draw_points < 2) {
-          immVertex2fv(pos, &(pt - 1)->x);
+          immVertex2fv(pos, (pt - 1)->m_xy);
         }
 
         immEnd();
@@ -202,7 +202,7 @@ static void annotation_draw_stroke_buffer(bGPdata *gps,
 
         /* need to roll-back one point to ensure that there are no gaps in the stroke */
         if (i != 0) {
-          immVertex2fv(pos, &(pt - 1)->x);
+          immVertex2fv(pos, (pt - 1)->m_xy);
           draw_points++;
         }
 
@@ -210,12 +210,12 @@ static void annotation_draw_stroke_buffer(bGPdata *gps,
       }
 
       /* now the point we want */
-      immVertex2fv(pos, &pt->x);
+      immVertex2fv(pos, pt->m_xy);
       draw_points++;
     }
     /* need to have 2 points to avoid immEnd assert error */
     if (draw_points < 2) {
-      immVertex2fv(pos, &(pt - 1)->x);
+      immVertex2fv(pos, (pt - 1)->m_xy);
     }
   }
 
@@ -227,14 +227,14 @@ static void annotation_draw_stroke_buffer(bGPdata *gps,
     if ((sflag & GP_STROKE_USE_ARROW_END) &&
         (runtime.arrow_end_style != GP_STROKE_ARROWSTYLE_NONE)) {
       float end[2];
-      copy_v2_fl2(end, points[1].x, points[1].y);
+      copy_v2_v2(end, points[1].m_xy);
       annotation_draw_stroke_arrow_buffer(pos, end, runtime.arrow_end, runtime.arrow_end_style);
     }
     /* Draw starting arrow stroke. */
     if ((sflag & GP_STROKE_USE_ARROW_START) &&
         (runtime.arrow_start_style != GP_STROKE_ARROWSTYLE_NONE)) {
       float start[2];
-      copy_v2_fl2(start, points[0].x, points[0].y);
+      copy_v2_v2(start, points[0].m_xy);
       annotation_draw_stroke_arrow_buffer(
           pos, start, runtime.arrow_start, runtime.arrow_start_style);
     }
@@ -788,7 +788,6 @@ static void annotation_draw_data_all(Scene *scene,
 
 /* ----- Annotation Sketches Drawing API ------ */
 
-/* draw grease-pencil sketches to specified 2d-view that uses ibuf corrections */
 void ED_annotation_draw_2dimage(const bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -857,13 +856,6 @@ void ED_annotation_draw_2dimage(const bContext *C)
   annotation_draw_data_all(scene, gpd, offsx, offsy, sizex, sizey, CFRA, dflag, area->spacetype);
 }
 
-/**
- * Draw grease-pencil sketches to specified 2d-view
- * assuming that matrices are already set correctly.
- *
- * \note This gets called twice - first time with onlyv2d=true to draw 'canvas' strokes,
- * second time with onlyv2d=false for screen-aligned strokes.
- */
 void ED_annotation_draw_view2d(const bContext *C, bool onlyv2d)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -900,9 +892,6 @@ void ED_annotation_draw_view2d(const bContext *C, bool onlyv2d)
       scene, gpd, 0, 0, region->winx, region->winy, CFRA, dflag, area->spacetype);
 }
 
-/* draw annotations sketches to specified 3d-view assuming that matrices are already set
- * correctly NOTE: this gets called twice - first time with only3d=true to draw 3d-strokes,
- * second time with only3d=false for screen-aligned strokes */
 void ED_annotation_draw_view3d(
     Scene *scene, struct Depsgraph *depsgraph, View3D *v3d, ARegion *region, bool only3d)
 {

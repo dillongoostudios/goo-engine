@@ -71,8 +71,6 @@
 
 static int kill_selection(Object *obedit, int ins);
 
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
  * \{ */
@@ -2155,8 +2153,8 @@ void FONT_OT_open(wmOperatorType *ot)
                                  FILE_SPECIAL,
                                  FILE_OPENFILE,
                                  WM_FILESEL_FILEPATH | WM_FILESEL_RELPATH,
-                                 FILE_DEFAULTDISPLAY,
-                                 FILE_SORT_DEFAULT);
+                                 FILE_IMGDISPLAY,
+                                 FILE_SORT_ALPHA);
 }
 
 /** \} */
@@ -2199,9 +2197,6 @@ void FONT_OT_unlink(wmOperatorType *ot)
   ot->exec = font_unlink_exec;
 }
 
-/**
- * TextBox selection
- */
 bool ED_curve_editfont_select_pick(
     bContext *C, const int mval[2], bool extend, bool deselect, bool toggle)
 {

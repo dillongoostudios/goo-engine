@@ -50,12 +50,6 @@ blender::MutableSpan<SplinePtr> CurveEval::splines()
   return splines_;
 }
 
-/**
- * \return True if the curve contains a spline with the given type.
- *
- * \note If you are looping over all of the splines in the same scope anyway,
- * it's better to avoid calling this function, in case there are many splines.
- */
 bool CurveEval::has_spline_with_type(const Spline::Type type) const
 {
   for (const SplinePtr &spline : this->splines()) {
@@ -72,12 +66,16 @@ void CurveEval::resize(const int size)
   attributes.reallocate(size);
 }
 
-/**
- * \warning Call #reallocate on the spline's attributes after adding all splines.
- */
 void CurveEval::add_spline(SplinePtr spline)
 {
   splines_.append(std::move(spline));
+}
+
+void CurveEval::add_splines(MutableSpan<SplinePtr> splines)
+{
+  for (SplinePtr &spline : splines) {
+    this->add_spline(std::move(spline));
+  }
 }
 
 void CurveEval::remove_splines(blender::IndexMask mask)
@@ -102,20 +100,37 @@ void CurveEval::transform(const float4x4 &matrix)
   }
 }
 
-void CurveEval::bounds_min_max(float3 &min, float3 &max, const bool use_evaluated) const
+bool CurveEval::bounds_min_max(float3 &min, float3 &max, const bool use_evaluated) const
 {
+  bool have_minmax = false;
   for (const SplinePtr &spline : this->splines()) {
-    spline->bounds_min_max(min, max, use_evaluated);
+    if (spline->size()) {
+      spline->bounds_min_max(min, max, use_evaluated);
+      have_minmax = true;
+    }
   }
+
+  return have_minmax;
 }
 
-/**
- * Return the start indices for each of the curve spline's control points, if they were part
- * of a flattened array. This can be used to facilitate parallelism by avoiding the need to
- * accumulate an offset while doing more complex calculations.
- *
- * \note The result array is one longer than the spline count; the last element is the total size.
- */
+float CurveEval::total_length() const
+{
+  float length = 0.0f;
+  for (const SplinePtr &spline : this->splines()) {
+    length += spline->length();
+  }
+  return length;
+}
+
+int CurveEval::total_control_point_size() const
+{
+  int count = 0;
+  for (const SplinePtr &spline : this->splines()) {
+    count += spline->size();
+  }
+  return count;
+}
+
 blender::Array<int> CurveEval::control_point_offsets() const
 {
   Array<int> offsets(splines_.size() + 1);
@@ -128,9 +143,6 @@ blender::Array<int> CurveEval::control_point_offsets() const
   return offsets;
 }
 
-/**
- * Exactly like #control_point_offsets, but uses the number of evaluated points instead.
- */
 blender::Array<int> CurveEval::evaluated_point_offsets() const
 {
   Array<int> offsets(splines_.size() + 1);
@@ -143,11 +155,6 @@ blender::Array<int> CurveEval::evaluated_point_offsets() const
   return offsets;
 }
 
-/**
- * Return the accumulated length at the start of every spline in the curve.
- *
- * \note The result is one longer than the spline count; the last element is the total length.
- */
 blender::Array<float> CurveEval::accumulated_spline_lengths() const
 {
   Array<float> spline_lengths(splines_.size() + 1);
@@ -343,13 +350,6 @@ std::unique_ptr<CurveEval> curve_eval_from_dna_curve(const Curve &dna_curve)
   return curve_eval_from_dna_curve(dna_curve, *BKE_curve_nurbs_get_for_read(&dna_curve));
 }
 
-/**
- * Check the invariants that curve control point attributes should always uphold, necessary
- * because attributes are stored on splines rather than in a flat array on the curve:
- *  - The same set of attributes exists on every spline.
- *  - Attributes with the same name have the same type on every spline.
- *  - Attributes are in the same order on every spline.
- */
 void CurveEval::assert_valid_point_attributes() const
 {
 #ifdef DEBUG

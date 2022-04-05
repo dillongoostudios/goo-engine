@@ -41,6 +41,10 @@ struct USDExportParams {
   bool visible_objects_only;
   bool use_instancing;
   enum eEvaluationMode evaluation_mode;
+  bool generate_preview_surface;
+  bool export_textures;
+  bool overwrite_textures;
+  bool relative_texture_paths;
 };
 
 struct USDImportParams {
@@ -106,14 +110,14 @@ void USD_get_transform(struct CacheReader *reader, float r_mat[4][4], float time
 struct Mesh *USD_read_mesh(struct CacheReader *reader,
                            struct Object *ob,
                            struct Mesh *existing_mesh,
-                           const float time,
+                           float time,
                            const char **err_str,
                            int read_flag);
 
 bool USD_mesh_topology_changed(struct CacheReader *reader,
                                struct Object *ob,
                                struct Mesh *existing_mesh,
-                               const float time,
+                               float time,
                                const char **err_str);
 
 struct CacheReader *CacheReader_open_usd_object(struct CacheArchiveHandle *handle,

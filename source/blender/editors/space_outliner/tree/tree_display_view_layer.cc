@@ -22,6 +22,7 @@
 
 #include "DNA_collection_types.h"
 #include "DNA_scene_types.h"
+#include "DNA_space_types.h"
 
 #include "BKE_layer.h"
 
@@ -32,12 +33,13 @@
 
 #include "BLT_translation.h"
 
-#include "../outliner_intern.h"
+#include "../outliner_intern.hh"
+#include "common.hh"
 #include "tree_display.hh"
+#include "tree_element.hh"
 
 namespace blender::ed::outliner {
 
-/* Convenience/readability. */
 template<typename T> using List = ListBaseWrapper<T>;
 
 class ObjectsChildrenBuilder {

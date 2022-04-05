@@ -32,6 +32,7 @@
 #include "BLI_math.h"
 #include "BLI_math_bits.h"
 #include "BLI_rand.h"
+#include "BLI_string.h"
 #include "BLI_utildefines_stack.h"
 
 #include "BKE_context.h"
@@ -54,6 +55,8 @@
 #include "ED_select_utils.h"
 #include "ED_transform.h"
 #include "ED_view3d.h"
+
+#include "BLT_translation.h"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -267,17 +270,6 @@ static void findnearestvert__doClosest(void *userData,
   }
 }
 
-/**
- * Nearest vertex under the cursor.
- *
- * \param dist_px_manhattan_p: (in/out), minimal distance to the nearest and at the end,
- * actual distance.
- * \param use_select_bias:
- * - When true, selected vertices are given a 5 pixel bias
- *   to make them further than unselect verts.
- * - When false, unselected vertices are given the bias.
- * \param use_cycle: Cycle over elements within #FIND_NEAR_CYCLE_THRESHOLD_MIN in order of index.
- */
 BMVert *EDBM_vert_find_nearest_ex(ViewContext *vc,
                                   float *dist_px_manhattan_p,
                                   const bool use_select_bias,
@@ -713,13 +705,6 @@ static void findnearestface__doClosest(void *userData,
   }
 }
 
-/**
- * \param use_zbuf_single_px: Special case, when using the back-buffer selection,
- * only use the pixel at `vc->mval` instead of using `dist_px_manhattan_p` to search over a larger
- * region. This is needed because historically selection worked this way for a long time, however
- * it's reasonable that some callers might want to expand the region too. So add an argument to do
- * this,
- */
 BMFace *EDBM_face_find_nearest_ex(ViewContext *vc,
                                   float *dist_px_manhattan_p,
                                   float *r_dist_center,
@@ -1407,6 +1392,36 @@ static int edbm_select_mode_invoke(bContext *C, wmOperator *op, const wmEvent *e
   return edbm_select_mode_exec(C, op);
 }
 
+static char *edbm_select_mode_get_description(struct bContext *UNUSED(C),
+                                              struct wmOperatorType *UNUSED(op),
+                                              struct PointerRNA *values)
+{
+  const int type = RNA_enum_get(values, "type");
+
+  /* Because the special behavior for shift and ctrl click depend on user input, they may be
+   * incorrect if the operator is used from a script or from a special button. So only return the
+   * specialized descriptions if only the "type" is set, which conveys that the operator is meant
+   * to be used with the logic in the `invoke` method. */
+  if (RNA_struct_property_is_set(values, "type") &&
+      !RNA_struct_property_is_set(values, "use_extend") &&
+      !RNA_struct_property_is_set(values, "use_expand") &&
+      !RNA_struct_property_is_set(values, "action"))
+    switch (type) {
+      case SCE_SELECT_VERTEX:
+        return BLI_strdup(
+            N_("Vertex select - Shift-Click for multiple modes, Ctrl-Click contracts selection"));
+      case SCE_SELECT_EDGE:
+        return BLI_strdup(
+            N_("Edge select - Shift-Click for multiple modes, "
+               "Ctrl-Click expands/contracts selection depending on the current mode"));
+      case SCE_SELECT_FACE:
+        return BLI_strdup(
+            N_("Face select - Shift-Click for multiple modes, Ctrl-Click expands selection"));
+    }
+
+  return NULL;
+}
+
 void MESH_OT_select_mode(wmOperatorType *ot)
 {
   PropertyRNA *prop;
@@ -1427,6 +1442,7 @@ void MESH_OT_select_mode(wmOperatorType *ot)
   ot->invoke = edbm_select_mode_invoke;
   ot->exec = edbm_select_mode_exec;
   ot->poll = ED_operator_editmesh;
+  ot->get_description = edbm_select_mode_get_description;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
@@ -2217,8 +2233,6 @@ static void edbm_strip_selections(BMEditMesh *em)
   }
 }
 
-/* when switching select mode, makes sure selection is consistent for editing */
-/* also for paranoia checks to make sure edge or face mode works */
 void EDBM_selectmode_set(BMEditMesh *em)
 {
   BMVert *eve;
@@ -2273,20 +2287,6 @@ void EDBM_selectmode_set(BMEditMesh *em)
   }
 }
 
-/**
- * Expand & Contract the Selection
- * (used when changing modes and Ctrl key held)
- *
- * Flush the selection up:
- * - vert -> edge
- * - vert -> face
- * - edge -> face
- *
- * Flush the selection down:
- * - face -> edge
- * - face -> vert
- * - edge -> vert
- */
 void EDBM_selectmode_convert(BMEditMesh *em,
                              const short selectmode_old,
                              const short selectmode_new)
@@ -2393,7 +2393,6 @@ void EDBM_selectmode_convert(BMEditMesh *em,
   }
 }
 
-/* user facing function, does notification */
 bool EDBM_selectmode_toggle_multi(bContext *C,
                                   const short selectmode_new,
                                   const int action,
@@ -2569,12 +2568,6 @@ bool EDBM_selectmode_set_multi(bContext *C, const short selectmode)
   return changed;
 }
 
-/**
- * Use to disable a selectmode if its enabled, Using another mode as a fallback
- * if the disabled mode is the only mode set.
- *
- * \return true if the mode is changed.
- */
 bool EDBM_selectmode_disable(Scene *scene,
                              BMEditMesh *em,
                              const short selectmode_disable,

@@ -20,19 +20,21 @@ set(INC
   ../../blenkernel
   ../../blenlib
   ../../depsgraph
+  ../../functions
   ../../makesdna
   ../../makesrna
   ../../windowmanager
+  ../../../../intern/guardedalloc
 )
 
 set(INC_SYS
 )
 
 set(SRC
-  geometry_attributes.c
-  geometry_ops.c
+  geometry_attributes.cc
+  geometry_ops.cc
 
-  geometry_intern.h
+  geometry_intern.hh
 )
 
 set(LIB

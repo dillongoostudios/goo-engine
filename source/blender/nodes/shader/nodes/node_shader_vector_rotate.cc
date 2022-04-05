@@ -21,9 +21,12 @@
  * \ingroup shdnodes
  */
 
-#include "../node_shader_util.h"
+#include "node_shader_util.hh"
 
-namespace blender::nodes {
+#include "UI_interface.h"
+#include "UI_resources.h"
+
+namespace blender::nodes::node_shader_vector_rotate_cc {
 
 static void sh_node_vector_rotate_declare(NodeDeclarationBuilder &b)
 {
@@ -34,9 +37,13 @@ static void sh_node_vector_rotate_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>(N_("Angle")).subtype(PROP_ANGLE);
   b.add_input<decl::Vector>(N_("Rotation")).subtype(PROP_EULER);
   b.add_output<decl::Vector>(N_("Vector"));
-};
+}
 
-}  // namespace blender::nodes
+static void node_shader_buts_vector_rotate(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "rotation_type", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+  uiItemR(layout, ptr, "invert", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, 0);
+}
 
 static const char *gpu_shader_get_name(int mode)
 {
@@ -193,25 +200,32 @@ static void sh_node_vector_rotate_build_multi_function(
   builder.set_matching_fn(fn);
 }
 
-static void node_shader_update_vector_rotate(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_shader_update_vector_rotate(bNodeTree *ntree, bNode *node)
 {
   bNodeSocket *sock_rotation = nodeFindSocket(node, SOCK_IN, "Rotation");
-  nodeSetSocketAvailability(sock_rotation, ELEM(node->custom1, NODE_VECTOR_ROTATE_TYPE_EULER_XYZ));
+  nodeSetSocketAvailability(
+      ntree, sock_rotation, ELEM(node->custom1, NODE_VECTOR_ROTATE_TYPE_EULER_XYZ));
   bNodeSocket *sock_axis = nodeFindSocket(node, SOCK_IN, "Axis");
-  nodeSetSocketAvailability(sock_axis, ELEM(node->custom1, NODE_VECTOR_ROTATE_TYPE_AXIS));
+  nodeSetSocketAvailability(ntree, sock_axis, ELEM(node->custom1, NODE_VECTOR_ROTATE_TYPE_AXIS));
   bNodeSocket *sock_angle = nodeFindSocket(node, SOCK_IN, "Angle");
-  nodeSetSocketAvailability(sock_angle, !ELEM(node->custom1, NODE_VECTOR_ROTATE_TYPE_EULER_XYZ));
+  nodeSetSocketAvailability(
+      ntree, sock_angle, !ELEM(node->custom1, NODE_VECTOR_ROTATE_TYPE_EULER_XYZ));
 }
 
-void register_node_type_sh_vector_rotate(void)
+}  // namespace blender::nodes::node_shader_vector_rotate_cc
+
+void register_node_type_sh_vector_rotate()
 {
+  namespace file_ns = blender::nodes::node_shader_vector_rotate_cc;
+
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_VECTOR_ROTATE, "Vector Rotate", NODE_CLASS_OP_VECTOR, 0);
-  ntype.declare = blender::nodes::sh_node_vector_rotate_declare;
-  node_type_gpu(&ntype, gpu_shader_vector_rotate);
-  node_type_update(&ntype, node_shader_update_vector_rotate);
-  ntype.build_multi_function = sh_node_vector_rotate_build_multi_function;
+  sh_fn_node_type_base(&ntype, SH_NODE_VECTOR_ROTATE, "Vector Rotate", NODE_CLASS_OP_VECTOR);
+  ntype.declare = file_ns::sh_node_vector_rotate_declare;
+  ntype.draw_buttons = file_ns::node_shader_buts_vector_rotate;
+  node_type_gpu(&ntype, file_ns::gpu_shader_vector_rotate);
+  node_type_update(&ntype, file_ns::node_shader_update_vector_rotate);
+  ntype.build_multi_function = file_ns::sh_node_vector_rotate_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

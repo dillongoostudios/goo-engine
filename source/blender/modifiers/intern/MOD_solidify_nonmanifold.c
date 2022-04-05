@@ -158,7 +158,6 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
   const uint numVerts = (uint)mesh->totvert;
   const uint numEdges = (uint)mesh->totedge;
   const uint numPolys = (uint)mesh->totpoly;
-  const uint numLoops = (uint)mesh->totloop;
 
   if (numPolys == 0 && numVerts != 0) {
     return mesh;
@@ -169,8 +168,6 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
   const short mat_nr_max = mat_nrs - 1;
   const short mat_ofs = mat_nrs > 1 ? smd->mat_ofs : 0;
   const short mat_ofs_rim = mat_nrs > 1 ? smd->mat_ofs_rim : 0;
-
-  float(*poly_nors)[3] = NULL;
 
   /* #ofs_front and #ofs_back are the offset from the original
    * surface along the normal, where #oft_front is along the positive
@@ -186,7 +183,7 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
   const float offset = fabsf(smd->offset) * smd->offset_clamp;
   const bool do_angle_clamp = smd->flag & MOD_SOLIDIFY_OFFSET_ANGLE_CLAMP;
   /* #do_flip, flips the normals of the result. This is inverted if negative thickness
-   * is used, since simple soldify with negative thickness keeps the faces facing outside. */
+   * is used, since simple solidify with negative thickness keeps the faces facing outside. */
   const bool do_flip = ((smd->flag & MOD_SOLIDIFY_FLIP) != 0) == (smd->offset > 0);
   const bool do_rim = smd->flag & MOD_SOLIDIFY_RIM;
   const bool do_shell = ((smd->flag & MOD_SOLIDIFY_RIM) && (smd->flag & MOD_SOLIDIFY_NOSHELL)) ==
@@ -217,10 +214,9 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
 
 #define MOD_SOLIDIFY_EMPTY_TAG ((uint)-1)
 
-  /* Calculate only face normals. */
-  poly_nors = MEM_malloc_arrayN(numPolys, sizeof(*poly_nors), __func__);
-  BKE_mesh_calc_normals_poly(
-      orig_mvert, (int)numVerts, orig_mloop, (int)numLoops, orig_mpoly, (int)numPolys, poly_nors);
+  /* Calculate only face normals. Copied because they are modified directly below. */
+  float(*poly_nors)[3] = MEM_malloc_arrayN(numPolys, sizeof(float[3]), __func__);
+  memcpy(poly_nors, BKE_mesh_poly_normals_ensure(mesh), sizeof(float[3]) * numPolys);
 
   NewFaceRef *face_sides_arr = MEM_malloc_arrayN(
       numPolys * 2, sizeof(*face_sides_arr), "face_sides_arr in solidify");
@@ -1928,7 +1924,7 @@ Mesh *MOD_solidify_nonmanifold_modifyMesh(ModifierData *md,
   int *origindex_edge = CustomData_get_layer(&result->edata, CD_ORIGINDEX);
   int *origindex_poly = CustomData_get_layer(&result->pdata, CD_ORIGINDEX);
 
-  if (bevel_convex != 0.0f) {
+  if (bevel_convex != 0.0f || (result->cd_flag & ME_CDFLAG_VERT_BWEIGHT) != 0) {
     /* make sure bweight is enabled */
     result->cd_flag |= ME_CDFLAG_EDGE_BWEIGHT;
   }

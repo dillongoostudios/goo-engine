@@ -17,9 +17,12 @@
  * All rights reserved.
  */
 
-#include "../node_shader_util.h"
+#include "node_shader_util.hh"
 
-namespace blender::nodes {
+#include "UI_interface.h"
+#include "UI_resources.h"
+
+namespace blender::nodes::node_shader_tex_magic_cc {
 
 static void sh_node_tex_magic_declare(NodeDeclarationBuilder &b)
 {
@@ -29,13 +32,16 @@ static void sh_node_tex_magic_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>(N_("Distortion")).min(-1000.0f).max(1000.0f).default_value(1.0f);
   b.add_output<decl::Color>(N_("Color")).no_muted_links();
   b.add_output<decl::Float>(N_("Fac")).no_muted_links();
-};
+}
 
-}  // namespace blender::nodes
+static void node_shader_buts_tex_magic(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "turbulence_depth", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+}
 
 static void node_shader_init_tex_magic(bNodeTree *UNUSED(ntree), bNode *node)
 {
-  NodeTexMagic *tex = (NodeTexMagic *)MEM_callocN(sizeof(NodeTexMagic), "NodeTexMagic");
+  NodeTexMagic *tex = MEM_cnew<NodeTexMagic>(__func__);
   BKE_texture_mapping_default(&tex->base.tex_mapping, TEXMAP_TYPE_POINT);
   BKE_texture_colormapping_default(&tex->base.color_mapping);
   tex->depth = 2;
@@ -57,8 +63,6 @@ static int node_shader_gpu_tex_magic(GPUMaterial *mat,
 
   return GPU_stack_link(mat, node, "node_tex_magic", in, out, GPU_constant(&depth));
 }
-
-namespace blender::nodes {
 
 class MagicFunction : public fn::MultiFunction {
  private:
@@ -179,19 +183,22 @@ static void sh_node_magic_tex_build_multi_function(
   builder.construct_and_set_matching_fn<MagicFunction>(tex->depth);
 }
 
-}  // namespace blender::nodes
+}  // namespace blender::nodes::node_shader_tex_magic_cc
 
-void register_node_type_sh_tex_magic(void)
+void register_node_type_sh_tex_magic()
 {
+  namespace file_ns = blender::nodes::node_shader_tex_magic_cc;
+
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_TEX_MAGIC, "Magic Texture", NODE_CLASS_TEXTURE, 0);
-  ntype.declare = blender::nodes::sh_node_tex_magic_declare;
-  node_type_init(&ntype, node_shader_init_tex_magic);
+  sh_fn_node_type_base(&ntype, SH_NODE_TEX_MAGIC, "Magic Texture", NODE_CLASS_TEXTURE);
+  ntype.declare = file_ns::sh_node_tex_magic_declare;
+  ntype.draw_buttons = file_ns::node_shader_buts_tex_magic;
+  node_type_init(&ntype, file_ns::node_shader_init_tex_magic);
   node_type_storage(
       &ntype, "NodeTexMagic", node_free_standard_storage, node_copy_standard_storage);
-  node_type_gpu(&ntype, node_shader_gpu_tex_magic);
-  ntype.build_multi_function = blender::nodes::sh_node_magic_tex_build_multi_function;
+  node_type_gpu(&ntype, file_ns::node_shader_gpu_tex_magic);
+  ntype.build_multi_function = file_ns::sh_node_magic_tex_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

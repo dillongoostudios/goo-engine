@@ -35,6 +35,7 @@
 
 #include "BLT_translation.h"
 
+#include "DNA_action_types.h"
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
 #include "DNA_constraint_types.h"
@@ -90,7 +91,6 @@ static int delete_key_using_keying_set(bContext *C, wmOperator *op, KeyingSet *k
 /* ************************************************** */
 /* Keyframing Setting Wrangling */
 
-/* Get the active settings for keyframing settings from context (specifically the given scene) */
 eInsertKeyFlags ANIM_get_keyframing_flags(Scene *scene, const bool use_autokey_mode)
 {
   eInsertKeyFlags flag = INSERTKEY_NOFLAGS;
@@ -132,9 +132,6 @@ eInsertKeyFlags ANIM_get_keyframing_flags(Scene *scene, const bool use_autokey_m
 /* ******************************************* */
 /* Animation Data Validation */
 
-/* Get (or add relevant data to be able to do so) the Active Action for the given
- * Animation Data block, given an ID block where the Animation Data should reside.
- */
 bAction *ED_id_action_ensure(Main *bmain, ID *id)
 {
   AnimData *adt;
@@ -176,10 +173,6 @@ bAction *ED_id_action_ensure(Main *bmain, ID *id)
   return adt->action;
 }
 
-/**
- * Find the F-Curve from the Active Action,
- * for the given Animation Data block. This assumes that all the destinations are valid.
- */
 FCurve *ED_action_fcurve_find(struct bAction *act, const char rna_path[], const int array_index)
 {
   /* Sanity checks. */
@@ -189,10 +182,6 @@ FCurve *ED_action_fcurve_find(struct bAction *act, const char rna_path[], const 
   return BKE_fcurve_find(&act->curves, rna_path, array_index);
 }
 
-/**
- * Get (or add relevant data to be able to do so) F-Curve from the Active Action,
- * for the given Animation Data block. This assumes that all the destinations are valid.
- */
 FCurve *ED_action_fcurve_ensure(struct Main *bmain,
                                 struct bAction *act,
                                 const char group[],
@@ -294,9 +283,6 @@ static void update_autoflags_fcurve_direct(FCurve *fcu, PropertyRNA *prop)
   }
 }
 
-/* Update integer/discrete flags of the FCurve (used when creating/inserting keyframes,
- * but also through RNA when editing an ID prop, see T37103).
- */
 void update_autoflags_fcurve(FCurve *fcu, bContext *C, ReportList *reports, PointerRNA *ptr)
 {
   PointerRNA tmp_ptr;
@@ -375,6 +361,43 @@ static eFCU_Cycle_Type remap_cyclic_keyframe_location(FCurve *fcu, float *px, fl
   return type;
 }
 
+/* Used to make curves newly added to a cyclic Action cycle with the correct period. */
+static void make_new_fcurve_cyclic(const bAction *act, FCurve *fcu)
+{
+  /* The curve must contain one (newly-added) keyframe. */
+  if (fcu->totvert != 1 || !fcu->bezt) {
+    return;
+  }
+
+  const float period = act->frame_end - act->frame_start;
+
+  if (period < 0.1f) {
+    return;
+  }
+
+  /* Move the keyframe into the range. */
+  const float frame_offset = fcu->bezt[0].vec[1][0] - act->frame_start;
+  const float fix = floorf(frame_offset / period) * period;
+
+  fcu->bezt[0].vec[0][0] -= fix;
+  fcu->bezt[0].vec[1][0] -= fix;
+  fcu->bezt[0].vec[2][0] -= fix;
+
+  /* Duplicate and offset the keyframe. */
+  fcu->bezt = MEM_reallocN(fcu->bezt, sizeof(BezTriple) * 2);
+  fcu->totvert = 2;
+
+  fcu->bezt[1] = fcu->bezt[0];
+  fcu->bezt[1].vec[0][0] += period;
+  fcu->bezt[1].vec[1][0] += period;
+  fcu->bezt[1].vec[2][0] += period;
+
+  /* Add the cycles modifier. */
+  if (!fcu->modifiers.first) {
+    add_fmodifier(&fcu->modifiers, FMODIFIER_TYPE_CYCLES, fcu);
+  }
+}
+
 /* -------------- BezTriple Insertion -------------------- */
 
 /* Change the Y position of a keyframe to match the input, adjusting handles. */
@@ -395,13 +418,6 @@ static void replace_bezt_keyframe_ypos(BezTriple *dst, const BezTriple *bezt)
   /* TODO: perform some other operations? */
 }
 
-/* This function adds a given BezTriple to an F-Curve. It will allocate
- * memory for the array if needed, and will insert the BezTriple into a
- * suitable place in chronological order.
- *
- * NOTE: any recalculate of the F-Curve that needs to be done will need to
- *      be done by the caller.
- */
 int insert_bezt_fcurve(FCurve *fcu, const BezTriple *bezt, eInsertKeyFlags flag)
 {
   int i = 0;
@@ -537,15 +553,6 @@ static void subdivide_nonauto_handles(const FCurve *fcu,
   bezt->h1 = bezt->h2 = HD_ALIGN;
 }
 
-/**
- * This function is a wrapper for #insert_bezt_fcurve(), and should be used when
- * adding a new keyframe to a curve, when the keyframe doesn't exist anywhere else yet.
- * It returns the index at which the keyframe was added.
- *
- * \param keyframe_type: The type of keyframe (#eBezTriple_KeyframeType).
- * \param flag: Optional flags (eInsertKeyFlags) for controlling how keys get added
- * and/or whether updates get done.
- */
 int insert_vert_fcurve(
     FCurve *fcu, float x, float y, eBezTriple_KeyframeType keyframe_type, eInsertKeyFlags flag)
 {
@@ -573,7 +580,7 @@ int insert_vert_fcurve(
     beztr.ipo = BEZT_IPO_BEZ;
   }
   else {
-    /* for UI usage - defaults should come from the userprefs and/or toolsettings */
+    /* For UI usage - defaults should come from the user-preferences and/or tool-settings. */
     beztr.h1 = beztr.h2 = U.keyhandles_new; /* use default handle type here */
 
     /* use default interpolation mode, with exceptions for int/discrete values */
@@ -1235,19 +1242,6 @@ static bool insert_keyframe_value(ReportList *reports,
   return insert_vert_fcurve(fcu, cfra, curval, keytype, flag) >= 0;
 }
 
-/* Secondary Keyframing API call:
- * Use this when validation of necessary animation data is not necessary,
- * since an RNA-pointer to the necessary data being keyframed,
- * and a pointer to the F-Curve to use have both been provided.
- *
- * This function can't keyframe quaternion channels on some NLA strip types.
- *
- * keytype is the "keyframe type" (eBezTriple_KeyframeType), as shown in the Dope Sheet.
- *
- * The flag argument is used for special settings that alter the behavior of
- * the keyframe insertion. These include the 'visual' keyframing modes, quick refresh,
- * and extra keyframe filtering.
- */
 bool insert_keyframe_direct(ReportList *reports,
                             PointerRNA ptr,
                             PropertyRNA *prop,
@@ -1352,8 +1346,10 @@ static bool insert_keyframe_fcurve_value(Main *bmain,
 
   /* we may not have a F-Curve when we're replacing only... */
   if (fcu) {
+    const bool is_new_curve = (fcu->totvert == 0);
+
     /* set color mode if the F-Curve is new (i.e. without any keyframes) */
-    if ((fcu->totvert == 0) && (flag & INSERTKEY_XYZ2RGB)) {
+    if (is_new_curve && (flag & INSERTKEY_XYZ2RGB)) {
       /* for Loc/Rot/Scale and also Color F-Curves, the color of the F-Curve in the Graph Editor,
        * is determined by the array index for the F-Curve
        */
@@ -1366,12 +1362,26 @@ static bool insert_keyframe_fcurve_value(Main *bmain,
       }
     }
 
+    /* If the curve has only one key, make it cyclic if appropriate. */
+    const bool is_cyclic_action = (flag & INSERTKEY_CYCLE_AWARE) && BKE_action_is_cyclic(act);
+
+    if (is_cyclic_action && fcu->totvert == 1) {
+      make_new_fcurve_cyclic(act, fcu);
+    }
+
     /* update F-Curve flags to ensure proper behavior for property type */
     update_autoflags_fcurve_direct(fcu, prop);
 
     /* insert keyframe */
-    return insert_keyframe_value(
+    const bool success = insert_keyframe_value(
         reports, ptr, prop, fcu, anim_eval_context, curval, keytype, flag);
+
+    /* If the curve is new, make it cyclic if appropriate. */
+    if (is_cyclic_action && is_new_curve) {
+      make_new_fcurve_cyclic(act, fcu);
+    }
+
+    return success;
   }
 
   return false;
@@ -1399,19 +1409,6 @@ static AnimationEvalContext nla_time_remap(const AnimationEvalContext *anim_eval
   return *anim_eval_context;
 }
 
-/**
- * Main Keyframing API call
- *
- * Use this when validation of necessary animation data is necessary, since it may not exist yet.
- *
- * The flag argument is used for special settings that alter the behavior of
- * the keyframe insertion. These include the 'visual' keyframing modes, quick refresh,
- * and extra keyframe filtering.
- *
- * index of -1 keys all array indices
- *
- * \return The number of key-frames inserted.
- */
 int insert_keyframe(Main *bmain,
                     ReportList *reports,
                     ID *id,
@@ -1638,9 +1635,6 @@ static void deg_tag_after_keyframe_delete(Main *bmain, ID *id, AnimData *adt)
   }
 }
 
-/**
- * \return The number of key-frames deleted.
- */
 int delete_keyframe(Main *bmain,
                     ReportList *reports,
                     ID *id,
@@ -1962,7 +1956,6 @@ void ANIM_OT_keyframe_insert(wmOperatorType *ot)
   ot->prop = prop;
 }
 
-/* Clone of 'ANIM_OT_keyframe_insert' which uses a name for the keying set instead of an enum. */
 void ANIM_OT_keyframe_insert_by_name(wmOperatorType *ot)
 {
   PropertyRNA *prop;
@@ -2757,7 +2750,6 @@ bool autokeyframe_cfra_can_key(const Scene *scene, ID *id)
 
 /* --------------- API/Per-Datablock Handling ------------------- */
 
-/* Checks if some F-Curve has a keyframe for a given frame */
 bool fcurve_frame_has_keyframe(const FCurve *fcu, float frame, short filter)
 {
   /* quick sanity check */
@@ -2784,7 +2776,6 @@ bool fcurve_frame_has_keyframe(const FCurve *fcu, float frame, short filter)
   return false;
 }
 
-/* Returns whether the current value of a given property differs from the interpolated value. */
 bool fcurve_is_changed(PointerRNA ptr,
                        PropertyRNA *prop,
                        FCurve *fcu,
@@ -2913,7 +2904,6 @@ static bool object_frame_has_keyframe(Object *ob, float frame, short filter)
 
 /* --------------- API ------------------- */
 
-/* Checks whether a keyframe exists for the given ID-block one the given frame */
 bool id_frame_has_keyframe(ID *id, float frame, short filter)
 {
   /* sanity checks */
@@ -2989,9 +2979,6 @@ bool ED_autokeyframe_pchan(
   return false;
 }
 
-/**
- * Use for auto-keyframing from the UI.
- */
 bool ED_autokeyframe_property(
     bContext *C, Scene *scene, PointerRNA *ptr, PropertyRNA *prop, int rnaindex, float cfra)
 {

@@ -404,7 +404,13 @@ class FILEBROWSER_PT_advanced_filter(Panel):
 
 
 def is_option_region_visible(context, space):
-    if not space.active_operator:
+    from bpy_extras.asset_utils import SpaceAssetInfo
+
+    if SpaceAssetInfo.is_asset_browser(space):
+        pass
+    # For the File Browser, there must be an operator for there to be options
+    # (irrelevant for the Asset Browser).
+    elif not space.active_operator:
         return False
 
     for region in context.area.regions:
@@ -701,7 +707,7 @@ class ASSETBROWSER_PT_metadata(asset_utils.AssetBrowserPanel, Panel):
         asset_file_handle = context.asset_file_handle
 
         if asset_file_handle is None:
-            layout.label(text="No asset selected", icon='INFO')
+            layout.label(text="No active asset", icon='INFO')
             return
 
         asset_library_ref = context.asset_library_ref
@@ -755,6 +761,15 @@ class ASSETBROWSER_PT_metadata_preview(asset_utils.AssetMetaDataPanel, Panel):
         col.operator("ed.lib_id_load_custom_preview", icon='FILEBROWSER', text="")
         col.separator()
         col.operator("ed.lib_id_generate_preview", icon='FILE_REFRESH', text="")
+        col.menu("ASSETBROWSER_MT_metadata_preview_menu", icon='DOWNARROW_HLT', text="")
+
+
+class ASSETBROWSER_MT_metadata_preview_menu(bpy.types.Menu):
+    bl_label = "Preview"
+
+    def draw(self, context):
+        layout = self.layout
+        layout.operator("ed.lib_id_generate_preview_from_object", text="Render Active Object")
 
 
 class ASSETBROWSER_PT_metadata_tags(asset_utils.AssetMetaDataPanel, Panel):
@@ -834,6 +849,7 @@ classes = (
     ASSETBROWSER_MT_view,
     ASSETBROWSER_MT_select,
     ASSETBROWSER_MT_edit,
+    ASSETBROWSER_MT_metadata_preview_menu,
     ASSETBROWSER_PT_metadata,
     ASSETBROWSER_PT_metadata_preview,
     ASSETBROWSER_PT_metadata_tags,
@@ -841,10 +857,10 @@ classes = (
     ASSETBROWSER_MT_context_menu,
 )
 
-def asset_path_str_get(self):
+def asset_path_str_get(_self):
     asset_file_handle = bpy.context.asset_file_handle
     if asset_file_handle is None:
-        return None
+        return ""
 
     if asset_file_handle.local_id:
         return "Current File"

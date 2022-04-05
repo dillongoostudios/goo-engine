@@ -134,7 +134,7 @@ void GeometryExporter::operator()(Object *ob)
       /* skip the basis */
       kb = kb->next;
       for (; kb; kb = kb->next) {
-        BKE_keyblock_convert_to_mesh(kb, me);
+        BKE_keyblock_convert_to_mesh(kb, me->mvert, me->totvert);
         export_key_mesh(ob, me, kb);
       }
     }
@@ -324,7 +324,6 @@ std::string GeometryExporter::makeVertexColorSourceId(std::string &geom_id, char
   return result;
 }
 
-/* powerful because it handles both cases when there is material and when there's not */
 void GeometryExporter::create_mesh_primitive_list(short material_index,
                                                   bool has_uvs,
                                                   bool has_color,
@@ -441,7 +440,6 @@ void GeometryExporter::create_mesh_primitive_list(short material_index,
   finish_and_delete_primitive_List(is_triangulated, primitive_list);
 }
 
-/* creates <source> for positions */
 void GeometryExporter::createVertsSource(std::string geom_id, Mesh *me)
 {
 #if 0
@@ -542,7 +540,6 @@ std::string GeometryExporter::makeTexcoordSourceId(std::string &geom_id,
   return getIdBySemantics(geom_id, COLLADASW::InputSemantic::TEXCOORD) + suffix;
 }
 
-/* creates <source> for texcoords */
 void GeometryExporter::createTexcoordsSource(std::string geom_id, Mesh *me)
 {
 
@@ -593,7 +590,6 @@ bool operator<(const Normal &a, const Normal &b)
   return a.x < b.x || (a.x == b.x && (a.y < b.y || (a.y == b.y && a.z < b.z)));
 }
 
-/* creates <source> for normals */
 void GeometryExporter::createNormalsSource(std::string geom_id, Mesh *me, std::vector<Normal> &nor)
 {
 #if 0
@@ -635,6 +631,7 @@ void GeometryExporter::create_normals(std::vector<Normal> &normals,
   int last_normal_index = -1;
 
   MVert *verts = me->mvert;
+  const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(me);
   MLoop *mloops = me->mloop;
   float(*lnors)[3] = nullptr;
   bool use_custom_normals = false;
@@ -670,7 +667,7 @@ void GeometryExporter::create_normals(std::vector<Normal> &normals,
           normalize_v3_v3(normalized, lnors[loop_idx]);
         }
         else {
-          normal_short_to_float_v3(normalized, verts[mloops[loop_index].v].no);
+          copy_v3_v3(normalized, vert_normals[mloops[loop_index].v]);
           normalize_v3(normalized);
         }
         Normal n = {normalized[0], normalized[1], normalized[2]};

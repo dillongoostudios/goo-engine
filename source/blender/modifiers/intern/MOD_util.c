@@ -72,7 +72,6 @@ void MOD_init_texture(MappingInfoModifierData *dmd, const ModifierEvalContext *c
 }
 
 /* TODO: to be renamed to get_texture_coords once we are done with moving modifiers to Mesh. */
-/** \param cos: may be NULL, in which case we use directly mesh vertices' coordinates. */
 void MOD_get_texture_coords(MappingInfoModifierData *dmd,
                             const ModifierEvalContext *UNUSED(ctx),
                             Object *ob,
@@ -182,7 +181,6 @@ void MOD_previous_vcos_store(ModifierData *md, const float (*vert_coords)[3])
   /* lattice/mesh modifier too */
 }
 
-/* returns a mesh if mesh == NULL, for deforming modifiers that need it */
 Mesh *MOD_deform_mesh_eval_get(Object *ob,
                                struct BMEditMesh *em,
                                Mesh *mesh,
@@ -219,8 +217,7 @@ Mesh *MOD_deform_mesh_eval_get(Object *ob,
     }
 
     if (use_orco) {
-      CustomData_add_layer(
-          &mesh->vdata, CD_ORCO, CD_ASSIGN, BKE_mesh_orco_verts_get(ob), mesh->totvert);
+      BKE_mesh_orco_ensure(ob, mesh);
     }
   }
   else if (ELEM(ob->type, OB_FONT, OB_CURVE, OB_SURF)) {
@@ -237,9 +234,11 @@ Mesh *MOD_deform_mesh_eval_get(Object *ob,
     }
   }
 
+  /* TODO: Remove this "use_normals" argument, since the caller should retrieve normals afterwards
+   * if necessary. */
   if (use_normals) {
     if (LIKELY(mesh)) {
-      BKE_mesh_ensure_normals(mesh);
+      BKE_mesh_vertex_normals_ensure(mesh);
     }
   }
 
@@ -289,7 +288,6 @@ void MOD_depsgraph_update_object_bone_relation(struct DepsNodeHandle *node,
   }
 }
 
-/* only called by BKE_modifier.h/modifier.c */
 void modifier_type_init(ModifierTypeInfo *types[])
 {
 #define INIT_TYPE(typeName) (types[eModifierType_##typeName] = &modifierType_##typeName)

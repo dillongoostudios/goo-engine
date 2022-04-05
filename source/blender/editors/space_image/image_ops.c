@@ -728,9 +728,9 @@ void IMAGE_OT_view_zoom(wmOperatorType *ot)
   WM_operator_properties_use_cursor_init(ot);
 }
 
-#ifdef WITH_INPUT_NDOF
-
 /** \} */
+
+#ifdef WITH_INPUT_NDOF
 
 /* -------------------------------------------------------------------- */
 /** \name NDOF Operator
@@ -1499,7 +1499,13 @@ static void image_open_draw(bContext *UNUSED(C), wmOperator *op)
   }
 }
 
-/* called by other space types too */
+static void image_operator_prop_allow_tokens(wmOperatorType *ot)
+{
+  PropertyRNA *prop = RNA_def_boolean(
+      ot->srna, "allow_path_tokens", true, "", "Allow the path to contain substitution tokens");
+  RNA_def_property_flag(prop, PROP_HIDDEN);
+}
+
 void IMAGE_OT_open(wmOperatorType *ot)
 {
   /* identifiers */
@@ -1517,6 +1523,7 @@ void IMAGE_OT_open(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 
   /* properties */
+  image_operator_prop_allow_tokens(ot);
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE,
                                  FILE_SPECIAL,
@@ -1574,7 +1581,6 @@ static int image_match_len_exec(bContext *C, wmOperator *UNUSED(op))
   return OPERATOR_FINISHED;
 }
 
-/* called by other space types too */
 void IMAGE_OT_match_movie_length(wmOperatorType *ot)
 {
   /* identifiers */
@@ -1769,7 +1775,13 @@ static int image_save_options_init(Main *bmain,
       opts->im_format.views_format = ima->views_format;
     }
 
-    BLI_strncpy(opts->filepath, ibuf->name, sizeof(opts->filepath));
+    if (ima->source == IMA_SRC_TILED) {
+      BLI_strncpy(opts->filepath, ima->filepath, sizeof(opts->filepath));
+      BLI_path_abs(opts->filepath, ID_BLEND_PATH_FROM_GLOBAL(&ima->id));
+    }
+    else {
+      BLI_strncpy(opts->filepath, ibuf->name, sizeof(opts->filepath));
+    }
 
     /* sanitize all settings */
 
@@ -1806,14 +1818,10 @@ static int image_save_options_init(Main *bmain,
         BLI_path_abs(opts->filepath, is_prev_save ? G.ima : BKE_main_blendfile_path(bmain));
       }
 
-      /* append UDIM numbering if not present */
-      if (ima->source == IMA_SRC_TILED) {
-        char udim[6];
-        ImageTile *tile = ima->tiles.first;
-        BLI_snprintf(udim, sizeof(udim), ".%d", tile->tile_number);
-
+      /* append UDIM marker if not present */
+      if (ima->source == IMA_SRC_TILED && strstr(opts->filepath, "<UDIM>") == NULL) {
         int len = strlen(opts->filepath);
-        STR_CONCAT(opts->filepath, len, udim);
+        STR_CONCAT(opts->filepath, len, ".<UDIM>");
       }
     }
 
@@ -2072,6 +2080,7 @@ void IMAGE_OT_save_as(wmOperatorType *ot)
                   "Copy",
                   "Create a new image file without modifying the current image in blender");
 
+  image_operator_prop_allow_tokens(ot);
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER | FILE_TYPE_IMAGE | FILE_TYPE_MOVIE,
                                  FILE_SPECIAL,
@@ -2586,6 +2595,11 @@ static int image_new_exec(bContext *C, wmOperator *op)
   else if (sima) {
     ED_space_image_set(bmain, sima, ima, false);
   }
+  else {
+    /* #BKE_image_add_generated creates one user by default, remove it if image is not linked to
+     * anything. ref. T94599. */
+    id_us_min(&ima->id);
+  }
 
   BKE_image_signal(bmain, ima, (sima) ? &sima->iuser : NULL, IMA_SIGNAL_USER_NEW_IMAGE);
 
@@ -2781,8 +2795,7 @@ static int image_flip_exec(bContext *C, wmOperator *op)
 
   ED_image_undo_push_end();
 
-  /* force GPU re-upload, all image is invalid. */
-  BKE_image_free_gputextures(ima);
+  BKE_image_partial_update_mark_full_update(ima);
 
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
@@ -2901,8 +2914,7 @@ static int image_invert_exec(bContext *C, wmOperator *op)
 
   ED_image_undo_push_end();
 
-  /* Force GPU re-upload, all image is invalid. */
-  BKE_image_free_gputextures(ima);
+  BKE_image_partial_update_mark_full_update(ima);
 
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
 
@@ -2992,8 +3004,7 @@ static int image_scale_exec(bContext *C, wmOperator *op)
 
   ED_image_undo_push_end();
 
-  /* Force GPU re-upload, all image is invalid. */
-  BKE_image_free_gputextures(ima);
+  BKE_image_partial_update_mark_full_update(ima);
 
   DEG_id_tag_update(&ima->id, 0);
   WM_event_add_notifier(C, NC_IMAGE | NA_EDITED, ima);
@@ -3190,8 +3201,10 @@ void IMAGE_OT_unpack(wmOperatorType *ot)
 /** \name Sample Image Operator
  * \{ */
 
-/* Returns mouse position in image space. */
-bool ED_space_image_get_position(SpaceImage *sima, struct ARegion *ar, int mval[2], float fpos[2])
+bool ED_space_image_get_position(SpaceImage *sima,
+                                 struct ARegion *region,
+                                 int mval[2],
+                                 float fpos[2])
 {
   void *lock;
   ImBuf *ibuf = ED_space_image_acquire_buffer(sima, &lock, 0);
@@ -3201,13 +3214,12 @@ bool ED_space_image_get_position(SpaceImage *sima, struct ARegion *ar, int mval[
     return false;
   }
 
-  UI_view2d_region_to_view(&ar->v2d, mval[0], mval[1], &fpos[0], &fpos[1]);
+  UI_view2d_region_to_view(&region->v2d, mval[0], mval[1], &fpos[0], &fpos[1]);
 
   ED_space_image_release_buffer(sima, ibuf, lock);
   return true;
 }
 
-/* Returns color in linear space, matching ED_space_node_color_sample(). */
 bool ED_space_image_color_sample(
     SpaceImage *sima, ARegion *region, int mval[2], float r_col[3], bool *r_is_data)
 {
@@ -3590,7 +3602,7 @@ static void change_frame_apply(bContext *C, wmOperator *op)
   SUBFRA = 0.0f;
 
   /* do updates */
-  DEG_id_tag_update(&scene->id, ID_RECALC_AUDIO_SEEK);
+  DEG_id_tag_update(&scene->id, ID_RECALC_FRAME_CHANGE);
   WM_event_add_notifier(C, NC_SCENE | ND_FRAME, scene);
 }
 
@@ -4137,3 +4149,5 @@ void IMAGE_OT_tile_fill(wmOperatorType *ot)
 
   def_fill_tile(ot->srna);
 }
+
+/** \} */

@@ -44,6 +44,8 @@
 #include "BKE_node.h"
 #include "BKE_scene.h"
 
+#include "NOD_shader.h"
+
 #include "GPU_material.h"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
@@ -84,7 +86,7 @@ struct GPUMaterial {
   bool has_volume_output;
   bool has_surface_output;
 
-  /* Only used by Eevee to know which bsdf are used. */
+  /* Only used by Eevee to know which BSDF are used. */
   eGPUMatFlag flag;
 
   /* Used by 2.8 pipeline */
@@ -115,7 +117,6 @@ enum {
 
 /* Functions */
 
-/* Returns the address of the future pointer to coba_tex */
 GPUTexture **gpu_material_ramp_texture_row_set(GPUMaterial *mat,
                                                int size,
                                                float *pixels,
@@ -212,7 +213,6 @@ GPUShader *GPU_material_get_shader(GPUMaterial *material)
   return material->pass ? GPU_pass_shader_get(material->pass) : NULL;
 }
 
-/* Return can be NULL if it's a world material. */
 Material *GPU_material_get_material(GPUMaterial *material)
 {
   return material->ma;
@@ -223,11 +223,6 @@ GPUUniformBuf *GPU_material_uniform_buffer_get(GPUMaterial *material)
   return material->ubo;
 }
 
-/**
- * Create dynamic UBO from parameters
- *
- * \param inputs: Items are #LinkData, data is #GPUInput (`BLI_genericNodeN(GPUInput)`).
- */
 void GPU_material_uniform_buffer_create(GPUMaterial *material, ListBase *inputs)
 {
 #ifndef NDEBUG
@@ -545,7 +540,6 @@ GSet *gpu_material_used_libraries(GPUMaterial *material)
   return material->used_libraries;
 }
 
-/* Return true if the material compilation has not yet begin or begin. */
 eGPUMaterialStatus GPU_material_status(GPUMaterial *mat)
 {
   return mat->status;
@@ -614,11 +608,6 @@ GPUMaterial *GPU_material_from_nodetree_find(ListBase *gpumaterials,
   return NULL;
 }
 
-/**
- * \note Caller must use #GPU_material_from_nodetree_find to re-use existing materials,
- * This is enforced since constructing other arguments to this function may be expensive
- * so only do this when they are needed.
- */
 GPUMaterial *GPU_material_from_nodetree(Scene *scene,
                                         struct Material *ma,
                                         struct bNodeTree *ntree,
@@ -639,7 +628,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   /* Caller must re-use materials. */
   BLI_assert(GPU_material_from_nodetree_find(gpumaterials, engine_type, options) == NULL);
 
-  /* HACK: Eevee assume this to create Ghash keys. */
+  /* HACK: Eevee assume this to create #GHash keys. */
   BLI_assert(sizeof(GPUPass) > 16);
 
   /* allocate material */

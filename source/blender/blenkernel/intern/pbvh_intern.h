@@ -130,6 +130,9 @@ struct PBVH {
 
   /* Mesh data */
   const struct Mesh *mesh;
+
+  /* Note: Normals are not const because they can be updated for drawing by sculpt code. */
+  float (*vert_normals)[3];
   MVert *verts;
   const MPoly *mpoly;
   const MLoop *mloop;
@@ -180,9 +183,18 @@ struct PBVH {
 
 /* pbvh.c */
 void BB_reset(BB *bb);
+/**
+ * Expand the bounding box to include a new coordinate.
+ */
 void BB_expand(BB *bb, const float co[3]);
+/**
+ * Expand the bounding box to include another bounding box.
+ */
 void BB_expand_with_bb(BB *bb, BB *bb2);
 void BBC_update_centroid(BBC *bbc);
+/**
+ * Return 0, 1, or 2 to indicate the widest axis of the bounding box.
+ */
 int BB_widest_axis(const BB *bb);
 void pbvh_grow_nodes(PBVH *bvh, int totnode);
 bool ray_face_intersection_quad(const float ray_start[3],

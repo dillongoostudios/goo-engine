@@ -70,6 +70,7 @@ set(DEFSRC
   rna_packedfile.c
   rna_palette.c
   rna_particle.c
+  rna_pointcloud.c
   rna_pose.c
   rna_render.c
   rna_rigidbody.c
@@ -100,11 +101,9 @@ set(DEFSRC
 
 if(WITH_EXPERIMENTAL_FEATURES)
   add_definitions(-DWITH_SIMULATION_DATABLOCK)
-  add_definitions(-DWITH_POINT_CLOUD)
   add_definitions(-DWITH_HAIR_NODES)
   list(APPEND DEFSRC
     rna_hair.c
-    rna_pointcloud.c
     rna_simulation.c
   )
 endif()
@@ -203,6 +202,9 @@ set(INC
   ../../blenloader
 
   ${CMAKE_BINARY_DIR}/source/blender/makesdna/intern
+
+  # dna_type_offsets.h
+  ${CMAKE_CURRENT_BINARY_DIR}/../../makesdna/intern
 )
 
 set(INC_SYS

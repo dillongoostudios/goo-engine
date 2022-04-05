@@ -56,9 +56,10 @@ static void rna_Main_use_autopack_set(PointerRNA *UNUSED(ptr), bool value)
   }
 }
 
-static bool rna_Main_is_saved_get(PointerRNA *UNUSED(ptr))
+static bool rna_Main_is_saved_get(PointerRNA *ptr)
 {
-  return G.relbase_valid;
+  const Main *bmain = (Main *)ptr->data;
+  return (bmain->filepath[0] != '\0');
 }
 
 static bool rna_Main_is_dirty_get(PointerRNA *ptr)
@@ -76,20 +77,20 @@ static bool rna_Main_is_dirty_get(PointerRNA *ptr)
 static void rna_Main_filepath_get(PointerRNA *ptr, char *value)
 {
   Main *bmain = (Main *)ptr->data;
-  BLI_strncpy(value, bmain->name, sizeof(bmain->name));
+  BLI_strncpy(value, bmain->filepath, sizeof(bmain->filepath));
 }
 
 static int rna_Main_filepath_length(PointerRNA *ptr)
 {
   Main *bmain = (Main *)ptr->data;
-  return strlen(bmain->name);
+  return strlen(bmain->filepath);
 }
 
 #  if 0
 static void rna_Main_filepath_set(PointerRNA *ptr, const char *value)
 {
   Main *bmain = (Main *)ptr->data;
-  BLI_strncpy(bmain->name, value, sizeof(bmain->name));
+  STRNCPY(bmain->filepath, value);
 }
 #  endif
 
@@ -128,9 +129,7 @@ RNA_MAIN_LISTBASE_FUNCS_DEF(objects)
 RNA_MAIN_LISTBASE_FUNCS_DEF(paintcurves)
 RNA_MAIN_LISTBASE_FUNCS_DEF(palettes)
 RNA_MAIN_LISTBASE_FUNCS_DEF(particles)
-#  ifdef WITH_POINT_CLOUD
 RNA_MAIN_LISTBASE_FUNCS_DEF(pointclouds)
-#  endif
 RNA_MAIN_LISTBASE_FUNCS_DEF(scenes)
 RNA_MAIN_LISTBASE_FUNCS_DEF(screens)
 RNA_MAIN_LISTBASE_FUNCS_DEF(shapekeys)
@@ -393,14 +392,12 @@ void RNA_def_main(BlenderRNA *brna)
 #  ifdef WITH_HAIR_NODES
       {"hairs", "Hair", "rna_Main_hairs_begin", "Hairs", "Hair data-blocks", RNA_def_main_hairs},
 #  endif
-#  ifdef WITH_POINT_CLOUD
       {"pointclouds",
        "PointCloud",
        "rna_Main_pointclouds_begin",
        "Point Clouds",
        "Point cloud data-blocks",
        RNA_def_main_pointclouds},
-#  endif
       {"volumes",
        "Volume",
        "rna_Main_volumes_begin",

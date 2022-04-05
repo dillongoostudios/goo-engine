@@ -36,7 +36,9 @@ extern "C" {
 
 extern const void *DNA_default_table[SDNA_TYPE_MAX];
 
-char *_DNA_struct_default_alloc_impl(const char *data_src, size_t size, const char *alloc_str);
+uint8_t *_DNA_struct_default_alloc_impl(const uint8_t *data_src,
+                                        size_t size,
+                                        const char *alloc_str);
 
 /**
  * Wrap with macro that casts correctly.
@@ -46,7 +48,9 @@ char *_DNA_struct_default_alloc_impl(const char *data_src, size_t size, const ch
 
 #define DNA_struct_default_alloc(struct_name) \
   (struct_name *)_DNA_struct_default_alloc_impl( \
-      DNA_default_table[SDNA_TYPE_FROM_STRUCT(struct_name)], sizeof(struct_name), __func__)
+      (const uint8_t *)DNA_default_table[SDNA_TYPE_FROM_STRUCT(struct_name)], \
+      sizeof(struct_name), \
+      __func__)
 
 #ifdef __cplusplus
 }

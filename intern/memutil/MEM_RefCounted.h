@@ -18,7 +18,7 @@
  */
 
 /** \file
- * \ingroup memutil
+ * \ingroup intern_memutil
  *
  * Declaration of MEM_RefCounted class.
  */
@@ -41,7 +41,7 @@
 class MEM_RefCounted {
  public:
   /**
-   * Constructs a a shared object.
+   * Constructs a shared object.
    */
   MEM_RefCounted() : m_refCount(1)
   {

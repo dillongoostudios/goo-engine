@@ -182,6 +182,7 @@ static const EnumPropertyItem rna_enum_userdef_viewport_aa_items[] = {
 #  include "BKE_image.h"
 #  include "BKE_main.h"
 #  include "BKE_mesh_runtime.h"
+#  include "BKE_object.h"
 #  include "BKE_paint.h"
 #  include "BKE_pbvh.h"
 #  include "BKE_preferences.h"
@@ -261,6 +262,14 @@ static void rna_userdef_theme_update(Main *bmain, Scene *scene, PointerRNA *ptr)
 {
   /* Recreate gizmos when changing themes. */
   WM_reinit_gizmomap_all(bmain);
+
+  rna_userdef_update(bmain, scene, ptr);
+}
+
+static void rna_userdef_theme_text_style_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  const uiStyle *style = UI_style_get();
+  BLF_default_size(style->widgetlabel.points);
 
   rna_userdef_update(bmain, scene, ptr);
 }
@@ -568,6 +577,20 @@ static PointerRNA rna_UserDef_system_get(PointerRNA *ptr)
 static PointerRNA rna_UserDef_apps_get(PointerRNA *ptr)
 {
   return rna_pointer_inherit_refine(ptr, &RNA_PreferencesApps, ptr->data);
+}
+
+/* Reevaluate objects with a subsurf modifier as the last in their modifiers stacks. */
+static void rna_UserDef_subdivision_update(Main *bmain, Scene *scene, PointerRNA *ptr)
+{
+  Object *ob;
+
+  for (ob = bmain->objects.first; ob; ob = ob->id.next) {
+    if (BKE_object_get_last_subsurf_modifier(ob) != NULL) {
+      DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    }
+  }
+
+  rna_userdef_update(bmain, scene, ptr);
 }
 
 static void rna_UserDef_audio_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
@@ -1134,39 +1157,40 @@ static void rna_def_userdef_theme_ui_font_style(BlenderRNA *brna)
   RNA_def_struct_clear_flag(srna, STRUCT_UNDO);
   RNA_def_struct_ui_text(srna, "Font Style", "Theme settings for Font");
 
-  prop = RNA_def_property(srna, "points", PROP_INT, PROP_NONE);
-  RNA_def_property_range(prop, 6, 24);
+  prop = RNA_def_property(srna, "points", PROP_FLOAT, PROP_UNSIGNED);
+  RNA_def_property_range(prop, 6.0f, 32.0f);
+  RNA_def_property_ui_range(prop, 8.0f, 20.0f, 10.0f, 1);
   RNA_def_property_ui_text(prop, "Points", "Font size in points");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");
 
   prop = RNA_def_property(srna, "shadow", PROP_INT, PROP_PIXEL);
   RNA_def_property_range(prop, 0, 5);
   RNA_def_property_ui_text(prop, "Shadow Size", "Shadow size (0, 3 and 5 supported)");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_text_style_update");
 
   prop = RNA_def_property(srna, "shadow_offset_x", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "shadx");
   RNA_def_property_range(prop, -10, 10);
   RNA_def_property_ui_text(prop, "Shadow X Offset", "Shadow offset in pixels");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_text_style_update");
 
   prop = RNA_def_property(srna, "shadow_offset_y", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "shady");
   RNA_def_property_range(prop, -10, 10);
   RNA_def_property_ui_text(prop, "Shadow Y Offset", "Shadow offset in pixels");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_text_style_update");
 
   prop = RNA_def_property(srna, "shadow_alpha", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "shadowalpha");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop, "Shadow Alpha", "");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_text_style_update");
 
   prop = RNA_def_property(srna, "shadow_value", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, NULL, "shadowcolor");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop, "Shadow Brightness", "Shadow color in gray value");
-  RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
+  RNA_def_property_update(prop, 0, "rna_userdef_theme_text_style_update");
 }
 
 static void rna_def_userdef_theme_ui_style(BlenderRNA *brna)
@@ -2880,7 +2904,7 @@ static void rna_def_userdef_theme_space_node(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "group_node", PROP_FLOAT, PROP_COLOR_GAMMA);
   RNA_def_property_float_sdna(prop, NULL, "syntaxc");
-  RNA_def_property_array(prop, 4);
+  RNA_def_property_array(prop, 3);
   RNA_def_property_ui_text(prop, "Group Node", "");
   RNA_def_property_update(prop, 0, "rna_userdef_theme_update");
 
@@ -5022,6 +5046,14 @@ static void rna_def_userdef_edit(BlenderRNA *brna)
                            "Collection Instance Empty Size",
                            "Display size of the empty when new collection instances are created");
 
+  /* Text Editor */
+
+  prop = RNA_def_property(srna, "use_text_edit_auto_close", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "text_flag", USER_TEXT_EDIT_AUTO_CLOSE);
+  RNA_def_property_ui_text(
+      prop, "Auto Close", "Auto close relevant characters inside the text editor");
+  RNA_def_property_update(prop, NC_SPACE | ND_SPACE_TEXT, NULL);
+
   /* Undo */
 
   prop = RNA_def_property(srna, "undo_steps", PROP_INT, PROP_NONE);
@@ -5633,6 +5665,16 @@ static void rna_def_userdef_system(BlenderRNA *brna)
                            "OpenGL Depth Picking",
                            "Use the depth buffer for picking 3D View selection "
                            "(without this the front most object may not be selected first)");
+
+  /* GPU subdivision evaluation. */
+
+  prop = RNA_def_property(srna, "use_gpu_subdivision", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "gpu_flag", USER_GPU_FLAG_SUBDIVISION_EVALUATION);
+  RNA_def_property_ui_text(prop,
+                           "GPU Subdivision",
+                           "Enable GPU acceleration for evaluating the last subdivision surface "
+                           "modifiers in the stack");
+  RNA_def_property_update(prop, 0, "rna_UserDef_subdivision_update");
 
   /* Audio */
 
@@ -6393,6 +6435,14 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
   RNA_def_property_ui_text(prop,
                            "Asset Debug Info",
                            "Enable some extra fields in the Asset Browser to aid in debugging");
+  RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
+
+  prop = RNA_def_property(srna, "use_asset_indexing", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "no_asset_indexing", 1);
+  RNA_def_property_ui_text(prop,
+                           "Asset Indexing",
+                           "Disabling the asset indexer forces every asset library refresh to "
+                           "completely reread assets from disk");
   RNA_def_property_update(prop, 0, "rna_userdef_ui_update");
 
   prop = RNA_def_property(srna, "use_override_templates", PROP_BOOLEAN, PROP_NONE);

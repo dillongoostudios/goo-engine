@@ -18,9 +18,10 @@
  * \ingroup spoutliner
  */
 
+#include "DNA_ID.h"
 #include "DNA_listBase.h"
 
-#include "../outliner_intern.h"
+#include "../outliner_intern.hh"
 
 #include "tree_element_id_library.hh"
 

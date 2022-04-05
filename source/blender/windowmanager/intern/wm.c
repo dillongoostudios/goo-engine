@@ -91,13 +91,18 @@ static void window_manager_foreach_id(ID *id, LibraryForeachIDData *data)
     /* This pointer can be NULL during old files reading, better be safe than sorry. */
     if (win->workspace_hook != NULL) {
       ID *workspace = (ID *)BKE_workspace_active_get(win->workspace_hook);
-      BKE_LIB_FOREACHID_PROCESS_ID(data, workspace, IDWALK_CB_NOP);
+      BKE_lib_query_foreachid_process(data, &workspace, IDWALK_CB_USER);
       /* Allow callback to set a different workspace. */
       BKE_workspace_active_set(win->workspace_hook, (WorkSpace *)workspace);
+      if (BKE_lib_query_foreachid_iter_stop(data)) {
+        return;
+      }
     }
+
     if (BKE_lib_query_foreachid_process_flags_get(data) & IDWALK_INCLUDE_UI) {
       LISTBASE_FOREACH (ScrArea *, area, &win->global_areas.areabase) {
-        BKE_screen_foreach_id_screen_area(data, area);
+        BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(data,
+                                                BKE_screen_foreach_id_screen_area(data, area));
       }
     }
   }
@@ -267,6 +272,7 @@ IDTypeInfo IDType_ID_WM = {
     .name_plural = "window_managers",
     .translation_context = BLT_I18NCONTEXT_ID_WINDOWMANAGER,
     .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA,
+    .asset_type_info = NULL,
 
     .init_data = NULL,
     .copy_data = NULL,
@@ -274,6 +280,7 @@ IDTypeInfo IDType_ID_WM = {
     .make_local = NULL,
     .foreach_id = window_manager_foreach_id,
     .foreach_cache = NULL,
+    .foreach_path = NULL,
     .owner_get = NULL,
 
     .blend_write = window_manager_blend_write,
@@ -334,13 +341,6 @@ void WM_operator_free_all_after(wmWindowManager *wm, struct wmOperator *op)
   }
 }
 
-/**
- * Use with extreme care!,
- * properties, custom-data etc - must be compatible.
- *
- * \param op: Operator to assign the type to.
- * \param ot: Operator type to assign.
- */
 void WM_operator_type_set(wmOperator *op, wmOperatorType *ot)
 {
   /* Not supported for Python. */
@@ -370,8 +370,6 @@ static void wm_reports_free(wmWindowManager *wm)
   WM_event_remove_timer(wm, NULL, wm->reports.reporttimer);
 }
 
-/* All operations get registered in the windowmanager here. */
-/* Called on event handling by event_system.c. */
 void wm_operator_register(bContext *C, wmOperator *op)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -408,10 +406,6 @@ void WM_operator_stack_clear(wmWindowManager *wm)
   WM_main_add_notifier(NC_WM | ND_HISTORY, NULL);
 }
 
-/**
- * This function is needed in the case when an addon id disabled
- * while a modal operator it defined is running.
- */
 void WM_operator_handlers_clear(wmWindowManager *wm, wmOperatorType *ot)
 {
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
@@ -544,7 +538,6 @@ void wm_clear_default_size(bContext *C)
   }
 }
 
-/* On startup, it adds all data, for matching. */
 void wm_add_default(Main *bmain, bContext *C)
 {
   wmWindowManager *wm = BKE_libblock_alloc(bmain, ID_WM, "WinMan", 0);
@@ -566,7 +559,6 @@ void wm_add_default(Main *bmain, bContext *C)
   wm_window_make_drawable(wm, win);
 }
 
-/* Context is allowed to be NULL, do not free wm itself (lib_id.c). */
 void wm_close_and_free(bContext *C, wmWindowManager *wm)
 {
   if (wm->autosavetimer) {

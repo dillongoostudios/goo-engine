@@ -126,7 +126,6 @@ void render_result_free(RenderResult *rr)
   MEM_freeN(rr);
 }
 
-/** Version that's compatible with full-sample buffers. */
 void render_result_free_list(ListBase *lb, RenderResult *rr)
 {
   RenderResult *rrnext;
@@ -144,7 +143,6 @@ void render_result_free_list(ListBase *lb, RenderResult *rr)
 
 /********************************* multiview *************************************/
 
-/* create a new views Listbase in rr without duplicating the memory pointers */
 void render_result_views_shallowcopy(RenderResult *dst, RenderResult *src)
 {
   RenderView *rview;
@@ -166,7 +164,6 @@ void render_result_views_shallowcopy(RenderResult *dst, RenderResult *src)
   }
 }
 
-/* free the views created temporarily */
 void render_result_views_shallowdelete(RenderResult *rr)
 {
   if (rr == NULL) {
@@ -286,10 +283,6 @@ RenderPass *render_layer_add_pass(RenderResult *rr,
   return rpass;
 }
 
-/* called by main render as well for parts */
-/* will read info from Render *re to define layers */
-/* called in threads */
-/* re->winx,winy is coordinate space of entire image, partrct the part within */
 RenderResult *render_result_new(Render *re,
                                 rcti *partrct,
                                 const char *layername,
@@ -477,6 +470,12 @@ RenderResult *render_result_new(Render *re,
 
 void render_result_passes_allocated_ensure(RenderResult *rr)
 {
+  if (rr == NULL) {
+    /* Happens when the result was not yet allocated for the current scene or slot configuration.
+     */
+    return;
+  }
+
   LISTBASE_FOREACH (RenderLayer *, rl, &rr->layers) {
     LISTBASE_FOREACH (RenderPass *, rp, &rl->passes) {
       if (rl->exrhandle != NULL && !STREQ(rp->name, RE_PASSNAME_COMBINED)) {
@@ -733,10 +732,6 @@ static int order_render_passes(const void *a, const void *b)
   return (rpa->view_id < rpb->view_id);
 }
 
-/**
- * From imbuf, if a handle was returned and
- * it's not a single-layer multi-view we convert this to render result.
- */
 RenderResult *render_result_new_from_exr(
     void *exrhandle, const char *colorspace, bool predivide, int rectx, int recty)
 {
@@ -837,9 +832,6 @@ static void do_merge_tile(
   }
 }
 
-/* used when rendering to a full buffer, or when reading the exr part-layer-pass file */
-/* no test happens here if it fits... we also assume layers are in sync */
-/* is used within threads */
 void render_result_merge(RenderResult *rr, RenderResult *rrpart)
 {
   RenderLayer *rl, *rlp;
@@ -869,8 +861,6 @@ void render_result_merge(RenderResult *rr, RenderResult *rrpart)
   }
 }
 
-/* Called from the UI and render pipeline, to save multilayer and multiview
- * images, optionally isolating a specific, view, layer or RGBA/Z pass. */
 bool RE_WriteRenderResult(ReportList *reports,
                           RenderResult *rr,
                           const char *filename,
@@ -1040,7 +1030,6 @@ void render_result_single_layer_begin(Render *re)
   re->result = NULL;
 }
 
-/* if scemode is R_SINGLE_LAYER, at end of rendering, merge the both render results */
 void render_result_single_layer_end(Render *re)
 {
   ViewLayer *view_layer;
@@ -1085,7 +1074,6 @@ void render_result_single_layer_end(Render *re)
   re->pushedresult = NULL;
 }
 
-/* called for reading temp files, and for external engines */
 int render_result_exr_file_read_path(RenderResult *rr,
                                      RenderLayer *rl_single,
                                      const char *filepath)
@@ -1184,7 +1172,6 @@ void render_result_exr_file_cache_write(Render *re)
   RE_WriteRenderResult(NULL, rr, str, NULL, NULL, -1);
 }
 
-/* For cache, makes exact copy of render result */
 bool render_result_exr_file_cache_read(Render *re)
 {
   /* File path to cache. */
@@ -1251,7 +1238,7 @@ ImBuf *render_result_rect_to_ibuf(RenderResult *rr, const RenderData *rd, const 
     }
   }
 
-  /* color -> grayscale */
+  /* Color -> gray-scale. */
   /* editing directly would alter the render view */
   if (rd->im_format.planes == R_IMF_PLANES_BW) {
     ImBuf *ibuf_bw = IMB_dupImBuf(ibuf);

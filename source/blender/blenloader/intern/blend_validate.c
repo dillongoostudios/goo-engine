@@ -47,10 +47,6 @@
 
 #include "readfile.h"
 
-/**
- * Check (but do *not* fix) that all linked data-blocks are still valid
- * (i.e. pointing to the right library).
- */
 bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
 {
   ListBase mainlist;
@@ -165,7 +161,6 @@ bool BLO_main_validate_libraries(Main *bmain, ReportList *reports)
   return is_valid;
 }
 
-/** Check (and fix if needed) that shape key's 'from' pointer is valid. */
 bool BLO_main_validate_shapekeys(Main *bmain, ReportList *reports)
 {
   ListBase *lb;
@@ -199,6 +194,21 @@ bool BLO_main_validate_shapekeys(Main *bmain, ReportList *reports)
   FOREACH_MAIN_LISTBASE_END;
 
   BKE_main_unlock(bmain);
+
+  /* NOTE: #BKE_id_delete also locks `bmain`, so we need to do this loop outside of the lock here.
+   */
+  LISTBASE_FOREACH_MUTABLE (Key *, shapekey, &bmain->shapekeys) {
+    if (shapekey->from != NULL) {
+      continue;
+    }
+
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Shapekey %s has an invalid 'from' pointer (%p), it will be deleted",
+                shapekey->id.name,
+                shapekey->from);
+    BKE_id_delete(bmain, shapekey);
+  }
 
   return is_valid;
 }

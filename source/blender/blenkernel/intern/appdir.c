@@ -99,15 +99,6 @@ static bool is_appdir_init = false;
 #  define ASSERT_IS_INIT() ((void)0)
 #endif
 
-/**
- * Sanity check to ensure correct API use in debug mode.
- *
- * Run this once the first level of arguments has been passed so we can be sure
- * `--env-system-datafiles`, and other `--env-*` arguments has been passed.
- *
- * Without this any callers to this module that run early on,
- * will miss out on changes from parsing arguments.
- */
 void BKE_appdir_init(void)
 {
 #ifndef NDEBUG
@@ -147,14 +138,6 @@ static char *blender_version_decimal(const int version)
 /** \name Default Directories
  * \{ */
 
-/**
- * Get the folder that's the "natural" starting point for browsing files on an OS.
- * - Unix: `$HOME`
- * - Windows: `%userprofile%/Documents`
- *
- * \note On Windows `Users/{MyUserName}/Documents` is used as it's the default location to save
- * documents.
- */
 const char *BKE_appdir_folder_default(void)
 {
 #ifndef WIN32
@@ -190,29 +173,17 @@ const char *BKE_appdir_folder_default_or_root(void)
   return path;
 }
 
-/**
- * Get the user's home directory, i.e.
- * - Unix: `$HOME`
- * - Windows: `%userprofile%`
- */
 const char *BKE_appdir_folder_home(void)
 {
-#ifndef WIN32
-  return BLI_getenv("HOME");
-#else /* Windows */
+#ifdef WIN32
   return BLI_getenv("userprofile");
+#elif defined(__APPLE__)
+  return BLI_expand_tilde("~/");
+#else
+  return BLI_getenv("HOME");
 #endif
 }
 
-/**
- * Get the user's document directory, i.e.
- * - Linux: `$HOME/Documents`
- * - Windows: `%userprofile%/Documents`
- *
- * If this can't be found using OS queries (via Ghost), try manually finding it.
- *
- * \returns True if the path is valid and points to an existing directory.
- */
 bool BKE_appdir_folder_documents(char *dir)
 {
   dir[0] = '\0';
@@ -243,15 +214,6 @@ bool BKE_appdir_folder_documents(char *dir)
   return true;
 }
 
-/**
- * Get the user's cache directory, i.e.
- * - Linux: `$HOME/.cache/blender/`
- * - Windows: `%USERPROFILE%\AppData\Local\Blender Foundation\Blender\`
- * - MacOS: `/Library/Caches/Blender`
- *
- * \returns True if the path is valid. It doesn't create or checks format
- * if the `blender` folder exists. It does check if the parent of the path exists.
- */
 bool BKE_appdir_folder_caches(char *r_path, const size_t path_len)
 {
   r_path[0] = '\0';
@@ -276,26 +238,29 @@ bool BKE_appdir_folder_caches(char *r_path, const size_t path_len)
   return true;
 }
 
-/**
- * Gets a good default directory for fonts.
- */
-bool BKE_appdir_font_folder_default(
-    /* This parameter can only be `const` on non-windows platforms.
-     * NOLINTNEXTLINE: readability-non-const-parameter. */
-    char *dir)
+bool BKE_appdir_font_folder_default(char *dir)
 {
-  bool success = false;
+  char test_dir[FILE_MAXDIR];
+  test_dir[0] = '\0';
+
 #ifdef WIN32
   wchar_t wpath[FILE_MAXDIR];
-  success = SHGetSpecialFolderPathW(0, wpath, CSIDL_FONTS, 0);
-  if (success) {
+  if (SHGetSpecialFolderPathW(0, wpath, CSIDL_FONTS, 0)) {
     wcscat(wpath, L"\\");
-    BLI_strncpy_wchar_as_utf8(dir, wpath, FILE_MAXDIR);
+    BLI_strncpy_wchar_as_utf8(test_dir, wpath, sizeof(test_dir));
   }
+#elif defined(__APPLE__)
+  STRNCPY(test_dir, BLI_expand_tilde("~/Library/Fonts/"));
+  BLI_path_slash_ensure(test_dir);
+#else
+  STRNCPY(test_dir, "/usr/share/fonts");
 #endif
-  /* TODO: Values for other platforms. */
-  UNUSED_VARS(dir);
-  return success;
+
+  if (test_dir[0] && BLI_exists(test_dir)) {
+    BLI_strncpy(dir, test_dir, FILE_MAXDIR);
+    return true;
+  }
+  return false;
 }
 
 /** \} */
@@ -450,10 +415,6 @@ static bool get_path_local(char *targetpath,
       targetpath, targetpath_len, folder_name, subfolder_name, version, check_is_dir);
 }
 
-/**
- * Check if this is an install with user files kept together
- * with the Blender executable and its installation files.
- */
 bool BKE_appdir_app_is_portable_install(void)
 {
   /* Detect portable install by the existence of `config` folder. */
@@ -618,13 +579,6 @@ static bool get_path_system(char *targetpath,
 /** \name Path Presets API
  * \{ */
 
-/**
- * Get a folder out of the \a folder_id presets for paths.
- *
- * \param subfolder: The name of a directory to check for,
- * this may contain path separators but must resolve to a directory, checked with #BLI_is_dir.
- * \return The path if found, NULL string if not.
- */
 bool BKE_appdir_folder_id_ex(const int folder_id,
                              const char *subfolder,
                              char *path,
@@ -738,9 +692,6 @@ const char *BKE_appdir_folder_id(const int folder_id, const char *subfolder)
   return NULL;
 }
 
-/**
- * Returns the path to a folder in the user area without checking that it actually exists first.
- */
 const char *BKE_appdir_folder_id_user_notest(const int folder_id, const char *subfolder)
 {
   const int version = BLENDER_VERSION;
@@ -787,9 +738,6 @@ const char *BKE_appdir_folder_id_user_notest(const int folder_id, const char *su
   return path;
 }
 
-/**
- * Returns the path to a folder in the user area, creating it if it doesn't exist.
- */
 const char *BKE_appdir_folder_id_create(const int folder_id, const char *subfolder)
 {
   const char *path;
@@ -815,10 +763,6 @@ const char *BKE_appdir_folder_id_create(const int folder_id, const char *subfold
   return path;
 }
 
-/**
- * Returns the path of the top-level version-specific local, user or system directory.
- * If check_is_dir, then the result will be NULL if the directory doesn't exist.
- */
 const char *BKE_appdir_folder_id_version(const int folder_id,
                                          const int version,
                                          const bool check_is_dir)
@@ -934,18 +878,12 @@ void BKE_appdir_program_path_init(const char *argv0)
   BLI_split_dir_part(g_app.program_filename, g_app.program_dirname, sizeof(g_app.program_dirname));
 }
 
-/**
- * Path to executable
- */
 const char *BKE_appdir_program_path(void)
 {
   BLI_assert(g_app.program_filename[0]);
   return g_app.program_filename;
 }
 
-/**
- * Path to directory of executable
- */
 const char *BKE_appdir_program_dir(void)
 {
   BLI_assert(g_app.program_dirname[0]);
@@ -1039,9 +977,6 @@ static const int app_template_directory_id[2] = {
     BLENDER_SYSTEM_SCRIPTS,
 };
 
-/**
- * Return true if templates exist
- */
 bool BKE_appdir_app_template_any(void)
 {
   char temp_dir[FILE_MAX];
@@ -1209,14 +1144,13 @@ static void tempdir_session_create(char *tempdir_session,
   BLI_strncpy(tempdir_session, tempdir, tempdir_session_len);
 }
 
-/**
- * Sets #g_app.temp_dirname_base to \a userdir if specified and is a valid directory,
- * otherwise chooses a suitable OS-specific temporary directory.
- * Sets #g_app.temp_dirname_session to a #mkdtemp
- * generated sub-dir of #g_app.temp_dirname_base.
- */
 void BKE_tempdir_init(const char *userdir)
 {
+  /* Sets #g_app.temp_dirname_base to \a userdir if specified and is a valid directory,
+   * otherwise chooses a suitable OS-specific temporary directory.
+   * Sets #g_app.temp_dirname_session to a #mkdtemp
+   * generated sub-dir of #g_app.temp_dirname_base. */
+
   where_is_temp(g_app.temp_dirname_base, sizeof(g_app.temp_dirname_base), userdir);
 
   /* Clear existing temp dir, if needed. */
@@ -1226,25 +1160,16 @@ void BKE_tempdir_init(const char *userdir)
       g_app.temp_dirname_session, sizeof(g_app.temp_dirname_session), g_app.temp_dirname_base);
 }
 
-/**
- * Path to temporary directory (with trailing slash)
- */
 const char *BKE_tempdir_session(void)
 {
   return g_app.temp_dirname_session[0] ? g_app.temp_dirname_session : BKE_tempdir_base();
 }
 
-/**
- * Path to persistent temporary directory (with trailing slash)
- */
 const char *BKE_tempdir_base(void)
 {
   return g_app.temp_dirname_base;
 }
 
-/**
- * Delete content of this instance's temp dir.
- */
 void BKE_tempdir_session_purge(void)
 {
   if (g_app.temp_dirname_session[0] && BLI_is_dir(g_app.temp_dirname_session)) {

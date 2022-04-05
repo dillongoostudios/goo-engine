@@ -44,6 +44,8 @@ enum {
   PG_HITV, /* __VOLUME__ hit group. */
   PG_HITD_MOTION,
   PG_HITS_MOTION,
+  PG_HITD_POINTCLOUD,
+  PG_HITS_POINTCLOUD,
   PG_CALL_SVM_AO,
   PG_CALL_SVM_BEVEL,
   NUM_PROGRAM_GROUPS
@@ -52,9 +54,9 @@ enum {
 static const int MISS_PROGRAM_GROUP_OFFSET = PG_MISS;
 static const int NUM_MIS_PROGRAM_GROUPS = 1;
 static const int HIT_PROGAM_GROUP_OFFSET = PG_HITD;
-static const int NUM_HIT_PROGRAM_GROUPS = 6;
+static const int NUM_HIT_PROGRAM_GROUPS = 8;
 static const int CALLABLE_PROGRAM_GROUPS_BASE = PG_CALL_SVM_AO;
-static const int NUM_CALLABLE_PROGRAM_GROUPS = 3;
+static const int NUM_CALLABLE_PROGRAM_GROUPS = 2;
 
 /* List of OptiX pipelines. */
 enum { PIP_SHADE_RAYTRACE, PIP_INTERSECT, NUM_PIPELINES };
@@ -98,11 +100,11 @@ class OptiXDevice : public CUDADevice {
     /* OptiX denoiser state and scratch buffers, stored in a single memory buffer.
      * The memory layout goes as following: [denoiser state][scratch buffer]. */
     device_only_memory<unsigned char> state;
-    size_t scratch_offset = 0;
-    size_t scratch_size = 0;
+    OptixDenoiserSizes sizes = {};
 
     bool use_pass_albedo = false;
     bool use_pass_normal = false;
+    bool use_pass_flow = false;
   };
   Denoiser denoiser_;
 

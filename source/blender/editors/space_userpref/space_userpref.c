@@ -113,9 +113,9 @@ static SpaceLink *userpref_duplicate(SpaceLink *sl)
 /* add handlers, stuff you only do once or on area/region changes */
 static void userpref_main_region_init(wmWindowManager *wm, ARegion *region)
 {
-  /* do not use here, the properties changed in userprefs do a system-wide refresh,
+  /* do not use here, the properties changed in user-preferences do a system-wide refresh,
    * then scroller jumps back */
-  /*  region->v2d.flag &= ~V2D_IS_INIT; */
+  // region->v2d.flag &= ~V2D_IS_INIT;
 
   region->v2d.scroll = V2D_SCROLL_RIGHT | V2D_SCROLL_VERTICAL_HIDE;
 
@@ -199,7 +199,6 @@ static void userpref_execute_region_listener(const wmRegionListenerParams *UNUSE
 {
 }
 
-/* only called once, from space/spacetypes.c */
 void ED_spacetype_userpref(void)
 {
   SpaceType *st = MEM_callocN(sizeof(SpaceType), "spacetype userpref");

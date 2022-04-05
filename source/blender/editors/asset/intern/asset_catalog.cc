@@ -19,7 +19,6 @@
  */
 
 #include "BKE_asset_catalog.hh"
-#include "BKE_asset_catalog_path.hh"
 #include "BKE_asset_library.hh"
 #include "BKE_main.h"
 
@@ -174,7 +173,7 @@ void ED_asset_catalogs_save_from_main_path(::AssetLibrary *library, const Main *
   /* Since writing to disk also means loading any on-disk changes, it may be a good idea to store
    * an undo step. */
   catalog_service->undo_push();
-  catalog_service->write_to_disk(bmain->name);
+  catalog_service->write_to_disk(bmain->filepath);
 }
 
 void ED_asset_catalogs_set_save_catalogs_when_file_is_saved(const bool should_save)

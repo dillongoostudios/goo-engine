@@ -40,6 +40,7 @@ set(SRC
   object_cull.cpp
   output_driver.cpp
   particles.cpp
+  pointcloud.cpp
   curves.cpp
   logging.cpp
   python.cpp
@@ -87,6 +88,7 @@ endif()
 
 set(ADDON_FILES
   addon/__init__.py
+  addon/camera.py
   addon/engine.py
   addon/operators.py
   addon/osl.py
@@ -101,6 +103,11 @@ add_definitions(${GL_DEFINITIONS})
 if(WITH_CYCLES_DEVICE_HIP)
   add_definitions(-DWITH_HIP)
 endif()
+
+if(WITH_CYCLES_DEVICE_METAL)
+  add_definitions(-DWITH_METAL)
+endif()
+
 if(WITH_MOD_FLUID)
   add_definitions(-DWITH_FLUID)
 endif()
@@ -137,11 +144,6 @@ if(WITH_EXPERIMENTAL_FEATURES)
 endif()
 
 blender_add_lib(bf_intern_cycles "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-
-# avoid link failure with clang 3.4 debug
-if(CMAKE_C_COMPILER_ID MATCHES "Clang" AND NOT ${CMAKE_C_COMPILER_VERSION} VERSION_LESS '3.4')
-  string(APPEND CMAKE_CXX_FLAGS_DEBUG " -gline-tables-only")
-endif()
 
 add_dependencies(bf_intern_cycles bf_rna)
 

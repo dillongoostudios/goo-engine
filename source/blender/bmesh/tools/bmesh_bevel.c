@@ -6293,10 +6293,10 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
           sub_v3_v3v3(edge_dir, bv->v->co, v2->co);
           float z = fabsf(2.0f * sinf(angle_v3v3(vert_axis, edge_dir)));
           if (z < BEVEL_EPSILON) {
-            e->offset_l_spec = 0.01f * bp->offset; /* Undefined behavior, so tiny bevel. */
+            e->offset_l_spec = 0.01f * bv->offset; /* Undefined behavior, so tiny bevel. */
           }
           else {
-            e->offset_l_spec = bp->offset / z;
+            e->offset_l_spec = bv->offset / z;
           }
           break;
         }
@@ -6305,10 +6305,10 @@ static BevVert *bevel_vert_construct(BMesh *bm, BevelParams *bp, BMVert *v)
           sub_v3_v3v3(edge_dir, bv->v->co, v2->co);
           float z = fabsf(cosf(angle_v3v3(vert_axis, edge_dir)));
           if (z < BEVEL_EPSILON) {
-            e->offset_l_spec = 0.01f * bp->offset; /* Undefined behavior, so tiny bevel. */
+            e->offset_l_spec = 0.01f * bv->offset; /* Undefined behavior, so tiny bevel. */
           }
           else {
-            e->offset_l_spec = bp->offset / z;
+            e->offset_l_spec = bv->offset / z;
           }
           break;
         }
@@ -7443,18 +7443,6 @@ static void bevel_limit_offset(BevelParams *bp, BMesh *bm)
   }
 }
 
-/**
- * - Currently only bevels BM_ELEM_TAG'd verts and edges.
- *
- * - Newly created faces, edges, and verts are BM_ELEM_TAG'd too,
- *   the caller needs to ensure these are cleared before calling
- *   if its going to use this tag.
- *
- * - If limit_offset is set, adjusts offset down if necessary
- *   to avoid geometry collisions.
- *
- * \warning all tagged edges _must_ be manifold.
- */
 void BM_mesh_bevel(BMesh *bm,
                    const float offset,
                    const int offset_type,

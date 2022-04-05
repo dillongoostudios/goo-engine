@@ -187,6 +187,13 @@ mark_as_advanced(CPACK_OVERRIDE_PACKAGENAME)
 mark_as_advanced(BUILDINFO_OVERRIDE_DATE)
 mark_as_advanced(BUILDINFO_OVERRIDE_TIME)
 
+if(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.16")
+  option(WITH_UNITY_BUILD   "Enable unity build for modules that support it to improve compile times" ON)
+  mark_as_advanced(WITH_UNITY_BUILD)
+else()
+  set(WITH_UNITY_BUILD OFF)
+endif()
+
 option(WITH_IK_ITASC      "Enable ITASC IK solver (only disable for development & for incompatible C++ compilers)" ON)
 option(WITH_IK_SOLVER     "Enable Legacy IK solver (only disable for development)" ON)
 option(WITH_FFTW3         "Enable FFTW3 support (Used for smoke, ocean sim, and audio effects)" ON)
@@ -266,11 +273,13 @@ endif()
 
 if(UNIX AND NOT APPLE)
   option(WITH_SYSTEM_GLEW "Use GLEW OpenGL wrapper library provided by the operating system" OFF)
-  option(WITH_SYSTEM_GLES "Use OpenGL ES library provided by the operating system"           ON)
+  option(WITH_SYSTEM_GLEW "Use GLEW OpenGL wrapper library provided by the operating system" OFF)
+  option(WITH_SYSTEM_FREETYPE "Use the freetype library provided by the operating system" OFF)
 else()
   # not an option for other OS's
   set(WITH_SYSTEM_GLEW OFF)
   set(WITH_SYSTEM_GLES OFF)
+  set(WITH_SYSTEM_FREETYPE OFF)
 endif()
 
 
@@ -411,6 +420,7 @@ option(WITH_CYCLES                   "Enable Cycles Render Engine" ON)
 option(WITH_CYCLES_OSL               "Build Cycles with OpenShadingLanguage support" ON)
 option(WITH_CYCLES_EMBREE            "Build Cycles with Embree support" ON)
 option(WITH_CYCLES_LOGGING           "Build Cycles with logging support" ON)
+option(WITH_CYCLES_DEBUG             "Build Cycles with options useful for debugging (e.g., MIS)" OFF)
 
 option(WITH_CYCLES_STANDALONE        "Build Cycles standalone application" OFF)
 option(WITH_CYCLES_STANDALONE_GUI    "Build Cycles standalone with GUI" OFF)
@@ -425,30 +435,40 @@ mark_as_advanced(WITH_CYCLES_DEBUG_NAN)
 mark_as_advanced(WITH_CYCLES_NATIVE_ONLY)
 
 # NVIDIA CUDA & OptiX
-option(WITH_CYCLES_DEVICE_CUDA       "Enable Cycles NVIDIA CUDA compute support" ON)
-option(WITH_CYCLES_DEVICE_OPTIX      "Enable Cycles NVIDIA OptiX support" ON)
-mark_as_advanced(WITH_CYCLES_DEVICE_CUDA)
+if(NOT APPLE)
+  option(WITH_CYCLES_DEVICE_CUDA       "Enable Cycles NVIDIA CUDA compute support" ON)
+  option(WITH_CYCLES_DEVICE_OPTIX      "Enable Cycles NVIDIA OptiX support" ON)
+  mark_as_advanced(WITH_CYCLES_DEVICE_CUDA)
 
-option(WITH_CYCLES_CUDA_BINARIES     "Build Cycles NVIDIA CUDA binaries" OFF)
-set(CYCLES_CUDA_BINARIES_ARCH sm_30 sm_35 sm_37 sm_50 sm_52 sm_60 sm_61 sm_70 sm_75 sm_86 compute_75 CACHE STRING "CUDA architectures to build binaries for")
-option(WITH_CYCLES_CUBIN_COMPILER    "Build cubins with nvrtc based compiler instead of nvcc" OFF)
-option(WITH_CYCLES_CUDA_BUILD_SERIAL "Build cubins one after another (useful on machines with limited RAM)" OFF)
-option(WITH_CUDA_DYNLOAD             "Dynamically load CUDA libraries at runtime (for developers, makes cuda-gdb work)" ON)
-mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
-mark_as_advanced(WITH_CYCLES_CUBIN_COMPILER)
-mark_as_advanced(WITH_CYCLES_CUDA_BUILD_SERIAL)
-mark_as_advanced(WITH_CUDA_DYNLOAD)
+  option(WITH_CYCLES_CUDA_BINARIES     "Build Cycles NVIDIA CUDA binaries" OFF)
+  set(CYCLES_CUDA_BINARIES_ARCH sm_30 sm_35 sm_37 sm_50 sm_52 sm_60 sm_61 sm_70 sm_75 sm_86 compute_75 CACHE STRING "CUDA architectures to build binaries for")
+  option(WITH_CYCLES_CUBIN_COMPILER    "Build cubins with nvrtc based compiler instead of nvcc" OFF)
+  option(WITH_CYCLES_CUDA_BUILD_SERIAL "Build cubins one after another (useful on machines with limited RAM)" OFF)
+  option(WITH_CUDA_DYNLOAD             "Dynamically load CUDA libraries at runtime (for developers, makes cuda-gdb work)" ON)
+  mark_as_advanced(CYCLES_CUDA_BINARIES_ARCH)
+  mark_as_advanced(WITH_CYCLES_CUBIN_COMPILER)
+  mark_as_advanced(WITH_CYCLES_CUDA_BUILD_SERIAL)
+  mark_as_advanced(WITH_CUDA_DYNLOAD)
+endif()
 
 # AMD HIP
-if(WIN32)
-  option(WITH_CYCLES_DEVICE_HIP        "Enable Cycles AMD HIP support" ON)
-else()
-  option(WITH_CYCLES_DEVICE_HIP        "Enable Cycles AMD HIP support" OFF)
+if(NOT APPLE)
+  if(WIN32)
+    option(WITH_CYCLES_DEVICE_HIP        "Enable Cycles AMD HIP support" ON)
+  else()
+    option(WITH_CYCLES_DEVICE_HIP        "Enable Cycles AMD HIP support" OFF)
+  endif()
+
+  option(WITH_CYCLES_HIP_BINARIES      "Build Cycles AMD HIP binaries" OFF)
+  set(CYCLES_HIP_BINARIES_ARCH gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1034 CACHE STRING "AMD HIP architectures to build binaries for")
+  mark_as_advanced(WITH_CYCLES_DEVICE_HIP)
+  mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
 endif()
-option(WITH_CYCLES_HIP_BINARIES      "Build Cycles AMD HIP binaries" OFF)
-set(CYCLES_HIP_BINARIES_ARCH gfx1010 gfx1011 gfx1012 gfx1030 gfx1031 gfx1032 gfx1034 CACHE STRING "AMD HIP architectures to build binaries for")
-mark_as_advanced(WITH_CYCLES_DEVICE_HIP)
-mark_as_advanced(CYCLES_HIP_BINARIES_ARCH)
+
+# Apple Metal
+if(APPLE)
+  option(WITH_CYCLES_DEVICE_METAL       "Enable Cycles Apple Metal compute support" ON)
+endif()
 
 # Draw Manager
 option(WITH_DRAW_DEBUG "Add extra debug capabilities to Draw Manager" OFF)
@@ -493,12 +513,10 @@ if(WIN32)
 endif()
 
 # This should be turned off when Blender enter beta/rc/release
-if("${BLENDER_VERSION_CYCLE}" STREQUAL "release" OR
-   "${BLENDER_VERSION_CYCLE}" STREQUAL "rc" OR
-   "${BLENDER_VERSION_CYCLE}" STREQUAL "beta")
-  set(WITH_EXPERIMENTAL_FEATURES OFF)
-else()
+if("${BLENDER_VERSION_CYCLE}" STREQUAL "alpha")
   set(WITH_EXPERIMENTAL_FEATURES ON)
+else()
+  set(WITH_EXPERIMENTAL_FEATURES OFF)
 endif()
 
 # Unit testsing
@@ -520,12 +538,14 @@ option(WITH_OPENGL              "When off limits visibility of the opengl header
 option(WITH_GLEW_ES             "Switches to experimental copy of GLEW that has support for OpenGL ES. (temporary option for development purposes)" OFF)
 option(WITH_GL_EGL              "Use the EGL OpenGL system library instead of the platform specific OpenGL system library (CGL, glX, or WGL)"       OFF)
 option(WITH_GL_PROFILE_ES20     "Support using OpenGL ES 2.0. (through either EGL or the AGL/WGL/XGL 'es20' profile)"                               OFF)
+option(WITH_GPU_SHADER_BUILDER  "Shader builder is a developer option enabling linting on GLSL during compilation"                                  OFF)
 
 mark_as_advanced(
   WITH_OPENGL
   WITH_GLEW_ES
   WITH_GL_EGL
   WITH_GL_PROFILE_ES20
+  WITH_GPU_SHADER_BUILDER
 )
 
 if(WIN32)
@@ -543,12 +563,18 @@ if(WIN32)
   set(CPACK_INSTALL_PREFIX ${CMAKE_GENERIC_PROGRAM_FILES}/${})
 endif()
 
-# Compiler toolchain
-if(CMAKE_COMPILER_IS_GNUCC)
-  option(WITH_LINKER_GOLD "Use ld.gold linker which is usually faster than ld.bfd" ON)
-  mark_as_advanced(WITH_LINKER_GOLD)
-  option(WITH_LINKER_LLD "Use ld.lld linker which is usually faster than ld.gold" OFF)
-  mark_as_advanced(WITH_LINKER_LLD)
+# Compiler tool-chain.
+if(UNIX AND NOT APPLE)
+  if(CMAKE_COMPILER_IS_GNUCC)
+    option(WITH_LINKER_GOLD "Use ld.gold linker which is usually faster than ld.bfd" ON)
+    mark_as_advanced(WITH_LINKER_GOLD)
+    option(WITH_LINKER_LLD "Use ld.lld linker which is usually faster than ld.gold" OFF)
+    mark_as_advanced(WITH_LINKER_LLD)
+  endif()
+  if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+    option(WITH_LINKER_MOLD "Use ld.mold linker which is usually faster than ld.gold & ld.lld." OFF)
+    mark_as_advanced(WITH_LINKER_MOLD)
+  endif()
 endif()
 
 option(WITH_COMPILER_ASAN "Build and link against address sanitizer (only for Debug & RelWithDebInfo targets)." OFF)
@@ -659,7 +685,7 @@ if(WIN32 OR XCODE)
   option(IDE_GROUP_PROJECTS_IN_FOLDERS "Organize the projects according to source folder structure." ON)
   mark_as_advanced(IDE_GROUP_PROJECTS_IN_FOLDERS)
 
-  if (IDE_GROUP_PROJECTS_IN_FOLDERS)
+  if(IDE_GROUP_PROJECTS_IN_FOLDERS)
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
   endif()
 endif()
@@ -684,8 +710,11 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # Installation process.
-option(POSTINSTALL_SCRIPT "Run given CMake script after installation process" OFF)
+set(POSTINSTALL_SCRIPT "" CACHE FILEPATH "Run given CMake script after installation process")
 mark_as_advanced(POSTINSTALL_SCRIPT)
+
+set(POSTCONFIGURE_SCRIPT "" CACHE FILEPATH "Run given CMake script as the last step of CMake configuration")
+mark_as_advanced(POSTCONFIGURE_SCRIPT)
 
 # end option(...)
 
@@ -840,7 +869,7 @@ if(WITH_AUDASPACE)
 endif()
 
 # Auto-enable CUDA dynload if toolkit is not found.
-if(NOT WITH_CUDA_DYNLOAD)
+if(WITH_CYCLES AND WITH_CYCLES_DEVICE_CUDA AND NOT WITH_CUDA_DYNLOAD)
   find_package(CUDA)
   if(NOT CUDA_FOUND)
     message(STATUS "CUDA toolkit not found, using dynamic runtime loading of libraries (WITH_CUDA_DYNLOAD) instead")
@@ -877,8 +906,8 @@ if(WITH_PYTHON)
   # Do this before main 'platform_*' checks,
   # because UNIX will search for the old Python paths which may not exist.
   # giving errors about missing paths before this case is met.
-  if(DEFINED PYTHON_VERSION AND "${PYTHON_VERSION}" VERSION_LESS "3.9")
-    message(FATAL_ERROR "At least Python 3.9 is required to build, but found Python ${PYTHON_VERSION}")
+  if(DEFINED PYTHON_VERSION AND "${PYTHON_VERSION}" VERSION_LESS "3.10")
+    message(FATAL_ERROR "At least Python 3.10 is required to build, but found Python ${PYTHON_VERSION}")
   endif()
 
   file(GLOB RESULT "${CMAKE_SOURCE_DIR}/release/scripts/addons")
@@ -1070,7 +1099,7 @@ if(MSVC)
   add_definitions(-D__LITTLE_ENDIAN__)
 
   # OSX-Note: as we do cross-compiling with specific set architecture,
-  # endianess-detection and auto-setting is counterproductive
+  # endianness-detection and auto-setting is counterproductive
   # so we just set endianness according CMAKE_OSX_ARCHITECTURES
 
 elseif(CMAKE_OSX_ARCHITECTURES MATCHES i386 OR CMAKE_OSX_ARCHITECTURES MATCHES x86_64 OR CMAKE_OSX_ARCHITECTURES MATCHES arm64)
@@ -1760,7 +1789,7 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 # If C++17 is not available, downgrading to an earlier standard is NOT OK.
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# Do not enable compiler specific language extentions.
+# Do not enable compiler specific language extensions.
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Make MSVC properly report the value of the __cplusplus preprocessor macro
@@ -2049,4 +2078,9 @@ endif()
 
 if(0)
   print_all_vars()
+endif()
+
+# Should be the last step of configuration.
+if(POSTCONFIGURE_SCRIPT)
+  include(${POSTCONFIGURE_SCRIPT})
 endif()

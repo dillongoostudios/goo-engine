@@ -53,9 +53,6 @@
 /** \name Utility Functions
  * \{ */
 
-/**
- * Translate any popup regions (so we can drag them).
- */
 void ui_popup_translate(ARegion *region, const int mdiff[2])
 {
   BLI_rcti_translate(&region->winrct, UNPACK2(mdiff));
@@ -554,9 +551,6 @@ static void ui_popup_block_remove(bContext *C, uiPopupBlockHandle *handle)
   }
 }
 
-/**
- * Called for creating new popups and refreshing existing ones.
- */
 uiBlock *ui_popup_block_refresh(bContext *C,
                                 uiPopupBlockHandle *handle,
                                 ARegion *butregion,
@@ -743,7 +737,7 @@ uiBlock *ui_popup_block_refresh(bContext *C,
   if (block_old) {
     block->oldblock = block_old;
     UI_block_update_from_old(C, block);
-    UI_blocklist_free_inactive(C, &region->uiblocks);
+    UI_blocklist_free_inactive(C, region);
   }
 
   /* checks which buttons are visible, sets flags to prevent draw (do after region init) */

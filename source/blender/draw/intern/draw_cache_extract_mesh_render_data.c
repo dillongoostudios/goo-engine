@@ -174,8 +174,8 @@ void mesh_render_data_update_loose_geom(MeshRenderData *mr,
 /** \name Polygons sorted per material
  *
  * Contains polygon indices sorted based on their material.
- *
  * \{ */
+
 static void mesh_render_data_polys_sorted_load(MeshRenderData *mr, const MeshBufferCache *cache);
 static void mesh_render_data_polys_sorted_ensure(MeshRenderData *mr, MeshBufferCache *cache);
 static void mesh_render_data_polys_sorted_build(MeshRenderData *mr, MeshBufferCache *cache);
@@ -335,9 +335,6 @@ static int *mesh_render_data_mat_tri_len_build(MeshRenderData *mr)
 /** \name Mesh/BMesh Interface (indirect, partially cached access to complex data).
  * \{ */
 
-/**
- * Part of the creation of the #MeshRenderData that happens in a thread.
- */
 void mesh_render_data_update_looptris(MeshRenderData *mr,
                                       const eMRIterType iter_type,
                                       const eMRDataType data_flag)
@@ -382,14 +379,15 @@ void mesh_render_data_update_normals(MeshRenderData *mr, const eMRDataType data_
 
   if (mr->extract_type != MR_EXTRACT_BMESH) {
     /* Mesh */
+    mr->vert_normals = BKE_mesh_vertex_normals_ensure(mr->me);
     if (data_flag & (MR_DATA_POLY_NOR | MR_DATA_LOOP_NOR | MR_DATA_TAN_LOOP_NOR)) {
-      BKE_mesh_ensure_normals_for_display(mr->me);
-      mr->poly_normals = CustomData_get_layer(&mr->me->pdata, CD_NORMAL);
+      mr->poly_normals = BKE_mesh_poly_normals_ensure(mr->me);
     }
     if (((data_flag & MR_DATA_LOOP_NOR) && is_auto_smooth) || (data_flag & MR_DATA_TAN_LOOP_NOR)) {
       mr->loop_normals = MEM_mallocN(sizeof(*mr->loop_normals) * mr->loop_len, __func__);
       short(*clnors)[2] = CustomData_get_layer(&mr->me->ldata, CD_CUSTOMLOOPNORMAL);
       BKE_mesh_normals_loop_split(mr->me->mvert,
+                                  mr->vert_normals,
                                   mr->vert_len,
                                   mr->me->medge,
                                   mr->edge_len,
@@ -440,11 +438,8 @@ void mesh_render_data_update_normals(MeshRenderData *mr, const eMRDataType data_
   }
 }
 
-/**
- * \param is_mode_active: When true, use the modifiers from the edit-data,
- * otherwise don't use modifiers as they are not from this object.
- */
-MeshRenderData *mesh_render_data_create(Mesh *me,
+MeshRenderData *mesh_render_data_create(Object *object,
+                                        Mesh *me,
                                         const bool is_editmode,
                                         const bool is_paint_mode,
                                         const bool is_mode_active,
@@ -455,15 +450,18 @@ MeshRenderData *mesh_render_data_create(Mesh *me,
 {
   MeshRenderData *mr = MEM_callocN(sizeof(*mr), __func__);
   mr->toolsettings = ts;
-  mr->mat_len = mesh_render_mat_len_get(me);
+  mr->mat_len = mesh_render_mat_len_get(object, me);
 
   copy_m4_m4(mr->obmat, obmat);
 
   if (is_editmode) {
-    BLI_assert(me->edit_mesh->mesh_eval_cage && me->edit_mesh->mesh_eval_final);
+    Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(object);
+    Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(object);
+
+    BLI_assert(editmesh_eval_cage && editmesh_eval_final);
     mr->bm = me->edit_mesh->bm;
     mr->edit_bmesh = me->edit_mesh;
-    mr->me = (do_final) ? me->edit_mesh->mesh_eval_final : me->edit_mesh->mesh_eval_cage;
+    mr->me = (do_final) ? editmesh_eval_final : editmesh_eval_cage;
     mr->edit_data = is_mode_active ? mr->me->runtime.edit_data : NULL;
 
     if (mr->edit_data) {
@@ -479,7 +477,14 @@ MeshRenderData *mesh_render_data_create(Mesh *me,
       mr->bm_poly_centers = mr->edit_data->polyCos;
     }
 
-    bool has_mdata = is_mode_active && (mr->me->runtime.wrapper_type == ME_WRAPPER_TYPE_MDATA);
+    /* A subdivision wrapper may be created in edit mode when X-ray is turned on to ensure that the
+     * topology seen by the user matches the one used for the selection routines. This wrapper
+     * seemingly takes precedence over the MDATA one, however the mesh we use for rendering is not
+     * the subdivided one, but the one where the MDATA wrapper would have been added. So consider
+     * the subdivision wrapper as well for the `has_mdata` case. */
+    bool has_mdata = is_mode_active && ELEM(mr->me->runtime.wrapper_type,
+                                            ME_WRAPPER_TYPE_MDATA,
+                                            ME_WRAPPER_TYPE_SUBD);
     bool use_mapped = is_mode_active &&
                       (has_mdata && !do_uvedit && mr->me && !mr->me->runtime.is_original);
 
@@ -493,7 +498,8 @@ MeshRenderData *mesh_render_data_create(Mesh *me,
     mr->eed_act = BM_mesh_active_edge_get(mr->bm);
     mr->eve_act = BM_mesh_active_vert_get(mr->bm);
 
-    mr->crease_ofs = CustomData_get_offset(&mr->bm->edata, CD_CREASE);
+    mr->vert_crease_ofs = CustomData_get_offset(&mr->bm->vdata, CD_CREASE);
+    mr->edge_crease_ofs = CustomData_get_offset(&mr->bm->edata, CD_CREASE);
     mr->bweight_ofs = CustomData_get_offset(&mr->bm->edata, CD_BWEIGHT);
 #ifdef WITH_FREESTYLE
     mr->freestyle_edge_ofs = CustomData_get_offset(&mr->bm->edata, CD_FREESTYLE_EDGE);
@@ -512,7 +518,7 @@ MeshRenderData *mesh_render_data_create(Mesh *me,
 
     /* Seems like the mesh_eval_final do not have the right origin indices.
      * Force not mapped in this case. */
-    if (has_mdata && do_final && me->edit_mesh->mesh_eval_final != me->edit_mesh->mesh_eval_cage) {
+    if (has_mdata && do_final && editmesh_eval_final != editmesh_eval_cage) {
       // mr->edit_bmesh = NULL;
       mr->extract_type = MR_EXTRACT_MESH;
     }

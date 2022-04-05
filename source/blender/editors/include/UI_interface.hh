@@ -31,8 +31,8 @@ namespace blender::nodes::geometry_nodes_eval_log {
 struct GeometryAttributeInfo;
 }
 
-struct uiBlock;
 struct StructRNA;
+struct uiBlock;
 struct uiSearchItems;
 
 namespace blender::ui {
@@ -59,13 +59,16 @@ void template_breadcrumbs(uiLayout &layout, Span<ContextPathItem> context_path);
 
 void attribute_search_add_items(
     StringRefNull str,
-    const bool is_output,
+    bool is_output,
     Span<const nodes::geometry_nodes_eval_log::GeometryAttributeInfo *> infos,
     uiSearchItems *items,
-    const bool is_first);
+    bool is_first);
 
 }  // namespace blender::ui
 
+/**
+ * Override this for all available tree types.
+ */
 blender::ui::AbstractTreeView *UI_block_add_view(
     uiBlock &block,
     blender::StringRef idname,

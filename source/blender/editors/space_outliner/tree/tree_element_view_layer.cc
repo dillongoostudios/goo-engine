@@ -19,13 +19,14 @@
  */
 
 #include "DNA_layer_types.h"
+#include "DNA_scene_types.h"
+#include "DNA_space_types.h"
 
 #include "BLI_listbase_wrapper.hh"
 
 #include "BLT_translation.h"
 
-#include "../outliner_intern.h"
-#include "tree_display.h"
+#include "../outliner_intern.hh"
 
 #include "tree_element_view_layer.hh"
 

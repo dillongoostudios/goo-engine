@@ -88,10 +88,10 @@ class GVVectorArray {
   }
 
  protected:
-  virtual int64_t get_vector_size_impl(const int64_t index) const = 0;
+  virtual int64_t get_vector_size_impl(int64_t index) const = 0;
 
-  virtual void get_vector_element_impl(const int64_t index,
-                                       const int64_t index_in_vector,
+  virtual void get_vector_element_impl(int64_t index,
+                                       int64_t index_in_vector,
                                        void *r_value) const = 0;
 
   virtual bool is_single_vector_impl() const
@@ -100,38 +100,38 @@ class GVVectorArray {
   }
 };
 
-class GVArray_For_GVVectorArrayIndex : public GVArray {
+class GVArray_For_GVVectorArrayIndex : public GVArrayImpl {
  private:
   const GVVectorArray &vector_array_;
   const int64_t index_;
 
  public:
   GVArray_For_GVVectorArrayIndex(const GVVectorArray &vector_array, const int64_t index)
-      : GVArray(vector_array.type(), vector_array.get_vector_size(index)),
+      : GVArrayImpl(vector_array.type(), vector_array.get_vector_size(index)),
         vector_array_(vector_array),
         index_(index)
   {
   }
 
  protected:
-  void get_impl(const int64_t index_in_vector, void *r_value) const override;
-  void get_to_uninitialized_impl(const int64_t index_in_vector, void *r_value) const override;
+  void get(int64_t index_in_vector, void *r_value) const override;
+  void get_to_uninitialized(int64_t index_in_vector, void *r_value) const override;
 };
 
 class GVVectorArray_For_SingleGVArray : public GVVectorArray {
  private:
-  const GVArray &array_;
+  GVArray varray_;
 
  public:
-  GVVectorArray_For_SingleGVArray(const GVArray &array, const int64_t size)
-      : GVVectorArray(array.type(), size), array_(array)
+  GVVectorArray_For_SingleGVArray(GVArray varray, const int64_t size)
+      : GVVectorArray(varray.type(), size), varray_(std::move(varray))
   {
   }
 
  protected:
-  int64_t get_vector_size_impl(const int64_t index) const override;
-  void get_vector_element_impl(const int64_t index,
-                               const int64_t index_in_vector,
+  int64_t get_vector_size_impl(int64_t index) const override;
+  void get_vector_element_impl(int64_t index,
+                               int64_t index_in_vector,
                                void *r_value) const override;
 
   bool is_single_vector_impl() const override;
@@ -148,9 +148,9 @@ class GVVectorArray_For_SingleGSpan : public GVVectorArray {
   }
 
  protected:
-  int64_t get_vector_size_impl(const int64_t UNUSED(index)) const override;
-  void get_vector_element_impl(const int64_t UNUSED(index),
-                               const int64_t index_in_vector,
+  int64_t get_vector_size_impl(int64_t UNUSED(index)) const override;
+  void get_vector_element_impl(int64_t UNUSED(index),
+                               int64_t index_in_vector,
                                void *r_value) const override;
 
   bool is_single_vector_impl() const override;

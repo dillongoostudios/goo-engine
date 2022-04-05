@@ -20,15 +20,11 @@
 
 #include "asset_library_service.hh"
 
-#include "BKE_asset_library.hh"
 #include "BKE_blender.h"
-#include "BKE_callbacks.h"
 
-#include "BLI_fileops.h"
+#include "BLI_fileops.h" /* For PATH_MAX (at least on Windows). */
 #include "BLI_path_util.h"
 #include "BLI_string_ref.hh"
-
-#include "MEM_guardedalloc.h"
 
 #include "CLG_log.h"
 
@@ -129,9 +125,6 @@ static void on_blendfile_load(struct Main * /*bMain*/,
   AssetLibraryService::destroy();
 }
 
-/**
- * Ensure the AssetLibraryService instance is destroyed before a new blend file is loaded.
- * This makes memory management simple, and ensures a fresh start for every blend file. */
 void AssetLibraryService::app_handler_register()
 {
   /* The callback system doesn't own `on_load_callback_store_`. */

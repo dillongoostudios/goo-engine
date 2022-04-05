@@ -177,6 +177,7 @@ typedef struct DisplaceUserdata {
   float (*vertexCos)[3];
   float local_mat[4][4];
   MVert *mvert;
+  const float (*vert_normals)[3];
   float (*vert_clnors)[3];
 } DisplaceUserdata;
 
@@ -194,7 +195,6 @@ static void displaceModifier_do_task(void *__restrict userdata,
   bool use_global_direction = data->use_global_direction;
   float(*tex_co)[3] = data->tex_co;
   float(*vertexCos)[3] = data->vertexCos;
-  MVert *mvert = data->mvert;
   float(*vert_clnors)[3] = data->vert_clnors;
 
   const float delta_fixed = 1.0f -
@@ -262,9 +262,9 @@ static void displaceModifier_do_task(void *__restrict userdata,
       }
       break;
     case MOD_DISP_DIR_RGB_XYZ:
-      local_vec[0] = texres.tr - dmd->midlevel;
-      local_vec[1] = texres.tg - dmd->midlevel;
-      local_vec[2] = texres.tb - dmd->midlevel;
+      local_vec[0] = texres.trgba[0] - dmd->midlevel;
+      local_vec[1] = texres.trgba[1] - dmd->midlevel;
+      local_vec[2] = texres.trgba[2] - dmd->midlevel;
       if (use_global_direction) {
         mul_transposed_mat3_m4_v3(data->local_mat, local_vec);
       }
@@ -272,9 +272,7 @@ static void displaceModifier_do_task(void *__restrict userdata,
       add_v3_v3(vertexCos[iter], local_vec);
       break;
     case MOD_DISP_DIR_NOR:
-      vertexCos[iter][0] += delta * (mvert[iter].no[0] / 32767.0f);
-      vertexCos[iter][1] += delta * (mvert[iter].no[1] / 32767.0f);
-      vertexCos[iter][2] += delta * (mvert[iter].no[2] / 32767.0f);
+      madd_v3_v3fl(vertexCos[iter], data->vert_normals[iter], delta);
       break;
     case MOD_DISP_DIR_CLNOR:
       madd_v3_v3fl(vertexCos[iter], vert_clnors[iter], delta);
@@ -331,8 +329,7 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
     if (CustomData_has_layer(ldata, CD_CUSTOMLOOPNORMAL)) {
       float(*clnors)[3] = NULL;
 
-      if ((mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) ||
-          !CustomData_has_layer(ldata, CD_NORMAL)) {
+      if (!CustomData_has_layer(ldata, CD_NORMAL)) {
         BKE_mesh_calc_normals_split(mesh);
       }
 
@@ -363,6 +360,9 @@ static void displaceModifier_do(DisplaceModifierData *dmd,
   data.vertexCos = vertexCos;
   copy_m4_m4(data.local_mat, local_mat);
   data.mvert = mvert;
+  if (direction == MOD_DISP_DIR_NOR) {
+    data.vert_normals = BKE_mesh_vertex_normals_ensure(mesh);
+  }
   data.vert_clnors = vert_clnors;
   if (tex_target != NULL) {
     data.pool = BKE_image_pool_new();

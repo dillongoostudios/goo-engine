@@ -43,14 +43,6 @@
 
 /* ----------------------- Getter functions ----------------------- */
 
-/**
- * Write into "name" buffer, the name of the property
- * (retrieved using RNA from the curve's settings),
- * and return the icon used for the struct that this property refers to
- *
- * \warning name buffer we're writing to cannot exceed 256 chars
- * (check anim_channels_defines.c for details).
- */
 int getname_anim_fcurve(char *name, ID *id, FCurve *fcu)
 {
   int icon = 0;
@@ -143,6 +135,22 @@ int getname_anim_fcurve(char *name, ID *id, FCurve *fcu)
               structname = structname_all;
               free_structname = 1;
             }
+          }
+        }
+        /* For node sockets, it is useful to include the node name as well (multiple similar nodes
+         * are not distinguishable otherwise). Unfortunately, the node label cannot be retrieved
+         * from the rna path, for this to work access to the underlying node is needed (but finding
+         * the node iterates all nodes & sockets which would result in bad performance in some
+         * circumstances). */
+        if (RNA_struct_is_a(ptr.type, &RNA_NodeSocket)) {
+          char nodename[256];
+          if (BLI_str_quoted_substr(fcu->rna_path, "nodes[", nodename, sizeof(nodename))) {
+            const char *structname_all = BLI_sprintfN("%s : %s", nodename, structname);
+            if (free_structname) {
+              MEM_freeN((void *)structname);
+            }
+            structname = structname_all;
+            free_structname = 1;
           }
         }
       }

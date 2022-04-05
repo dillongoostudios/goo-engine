@@ -28,8 +28,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BLI_array.hh"
-#include "BLI_float3.hh"
 #include "BLI_listbase.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_multi_value_map.hh"
 #include "BLI_set.hh"
 #include "BLI_string.h"
@@ -60,6 +60,7 @@
 #include "BKE_main.h"
 #include "BKE_mesh.h"
 #include "BKE_modifier.h"
+#include "BKE_node_tree_update.h"
 #include "BKE_object.h"
 #include "BKE_pointcloud.h"
 #include "BKE_screen.h"
@@ -98,6 +99,7 @@
 #include "NOD_node_declaration.hh"
 
 #include "FN_field.hh"
+#include "FN_field_cpp_type.hh"
 #include "FN_multi_function.hh"
 
 using blender::Array;
@@ -107,15 +109,21 @@ using blender::float3;
 using blender::FunctionRef;
 using blender::IndexRange;
 using blender::Map;
+using blender::MultiValueMap;
+using blender::MutableSpan;
 using blender::Set;
 using blender::Span;
 using blender::StringRef;
 using blender::StringRefNull;
 using blender::Vector;
 using blender::bke::OutputAttribute;
+using blender::fn::Field;
 using blender::fn::GField;
 using blender::fn::GMutablePointer;
 using blender::fn::GPointer;
+using blender::fn::GVArray;
+using blender::fn::ValueOrField;
+using blender::fn::ValueOrFieldCPPType;
 using blender::nodes::FieldInferencingInterface;
 using blender::nodes::GeoNodeExecParams;
 using blender::nodes::InputSocketFieldType;
@@ -234,7 +242,7 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
   NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
   DEG_add_modifier_to_transform_relation(ctx->node, "Nodes Modifier");
   if (nmd->node_group != nullptr) {
-    DEG_add_node_tree_relation(ctx->node, nmd->node_group, "Nodes Modifier");
+    DEG_add_node_tree_output_relation(ctx->node, nmd->node_group, "Nodes Modifier");
 
     Set<ID *> used_ids;
     find_used_ids_from_settings(nmd->settings, used_ids);
@@ -263,6 +271,39 @@ static void updateDepsgraph(ModifierData *md, const ModifierUpdateDepsgraphConte
       }
     }
   }
+}
+
+static bool check_tree_for_time_node(const bNodeTree &tree,
+                                     Set<const bNodeTree *> &r_checked_trees)
+{
+  if (!r_checked_trees.add(&tree)) {
+    return false;
+  }
+  LISTBASE_FOREACH (const bNode *, node, &tree.nodes) {
+    if (node->type == GEO_NODE_INPUT_SCENE_TIME) {
+      return true;
+    }
+    if (node->type == NODE_GROUP) {
+      const bNodeTree *sub_tree = reinterpret_cast<const bNodeTree *>(node->id);
+      if (sub_tree && check_tree_for_time_node(*sub_tree, r_checked_trees)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+static bool dependsOnTime(struct Scene *UNUSED(scene),
+                          ModifierData *md,
+                          const int UNUSED(dag_eval_mode))
+{
+  const NodesModifierData *nmd = reinterpret_cast<NodesModifierData *>(md);
+  const bNodeTree *tree = nmd->node_group;
+  if (tree == nullptr) {
+    return false;
+  }
+  Set<const bNodeTree *> checked_trees;
+  return check_tree_for_time_node(*tree, checked_trees);
 }
 
 static void foreachIDLink(ModifierData *md, Object *ob, IDWalkFunc walk, void *userData)
@@ -394,6 +435,10 @@ static IDProperty *id_property_create_from_socket(const bNodeSocket &socket)
       ui_data->base.rna_subtype = PROP_COLOR;
       ui_data->default_array = (double *)MEM_mallocN(sizeof(double[4]), __func__);
       ui_data->default_array_len = 4;
+      ui_data->min = 0.0;
+      ui_data->max = FLT_MAX;
+      ui_data->soft_min = 0.0;
+      ui_data->soft_max = 1.0;
       for (const int i : IndexRange(4)) {
         ui_data->default_array[i] = double(value->value[i]);
       }
@@ -491,35 +536,34 @@ static void init_socket_cpp_value_from_property(const IDProperty &property,
       else if (property.type == IDP_DOUBLE) {
         value = (float)IDP_Double(&property);
       }
-      new (r_value) blender::fn::Field<float>(blender::fn::make_constant_field(value));
+      new (r_value) ValueOrField<float>(value);
       break;
     }
     case SOCK_INT: {
       int value = IDP_Int(&property);
-      new (r_value) blender::fn::Field<int>(blender::fn::make_constant_field(value));
+      new (r_value) ValueOrField<int>(value);
       break;
     }
     case SOCK_VECTOR: {
       float3 value;
       copy_v3_v3(value, (const float *)IDP_Array(&property));
-      new (r_value) blender::fn::Field<float3>(blender::fn::make_constant_field(value));
+      new (r_value) ValueOrField<float3>(value);
       break;
     }
     case SOCK_RGBA: {
       blender::ColorGeometry4f value;
       copy_v4_v4((float *)value, (const float *)IDP_Array(&property));
-      new (r_value) blender::fn::Field<ColorGeometry4f>(blender::fn::make_constant_field(value));
+      new (r_value) ValueOrField<ColorGeometry4f>(value);
       break;
     }
     case SOCK_BOOLEAN: {
       bool value = IDP_Int(&property) != 0;
-      new (r_value) blender::fn::Field<bool>(blender::fn::make_constant_field(value));
+      new (r_value) ValueOrField<bool>(value);
       break;
     }
     case SOCK_STRING: {
       std::string value = IDP_String(&property);
-      new (r_value)
-          blender::fn::Field<std::string>(blender::fn::make_constant_field(std::move(value)));
+      new (r_value) ValueOrField<std::string>(std::move(value));
       break;
     }
     case SOCK_OBJECT: {
@@ -559,11 +603,6 @@ static void init_socket_cpp_value_from_property(const IDProperty &property,
   }
 }
 
-/**
- * Rebuild the list of properties based on the sockets exposed as the modifier's node group
- * inputs. If any properties correspond to the old properties by name and type, carry over
- * the values.
- */
 void MOD_nodes_update_interface(Object *object, NodesModifierData *nmd)
 {
   if (nmd->node_group == nullptr) {
@@ -695,7 +734,7 @@ void MOD_nodes_init(Main *bmain, NodesModifierData *nmd)
               group_input_node,
               (bNodeSocket *)group_input_node->outputs.first);
 
-  ntreeUpdateTree(bmain, ntree);
+  BKE_ntree_update_main_tree(bmain, ntree, nullptr);
 }
 
 static void initialize_group_input(NodesModifierData &nmd,
@@ -739,8 +778,13 @@ static void initialize_group_input(NodesModifierData &nmd,
   if (use_attribute) {
     const StringRef attribute_name{IDP_String(property_attribute_name)};
     auto attribute_input = std::make_shared<blender::bke::AttributeFieldInput>(
-        attribute_name, *socket_type.get_base_cpp_type());
-    new (r_value) blender::fn::GField(std::move(attribute_input), 0);
+        attribute_name, *socket_type.base_cpp_type);
+    GField attribute_field{std::move(attribute_input), 0};
+    const blender::fn::ValueOrFieldCPPType *cpp_type =
+        dynamic_cast<const blender::fn::ValueOrFieldCPPType *>(
+            socket_type.geometry_nodes_cpp_type);
+    BLI_assert(cpp_type != nullptr);
+    cpp_type->construct_from_field(r_value, std::move(attribute_field));
   }
   else {
     init_socket_cpp_value_from_property(
@@ -856,74 +900,148 @@ static void clear_runtime_data(NodesModifierData *nmd)
   }
 }
 
-static void store_field_on_geometry_component(GeometryComponent &component,
-                                              const StringRef attribute_name,
-                                              AttributeDomain domain,
-                                              const GField &field)
+struct OutputAttributeInfo {
+  GField field;
+  StringRefNull name;
+};
+
+struct OutputAttributeToStore {
+  GeometryComponentType component_type;
+  AttributeDomain domain;
+  StringRefNull name;
+  GMutableSpan data;
+};
+
+/**
+ * The output attributes are organized based on their domain, because attributes on the same domain
+ * can be evaluated together.
+ */
+static MultiValueMap<AttributeDomain, OutputAttributeInfo> find_output_attributes_to_store(
+    const NodesModifierData &nmd, const NodeRef &output_node, Span<GMutablePointer> output_values)
 {
-  /* If the attribute name corresponds to a built-in attribute, use the domain of the built-in
-   * attribute instead. */
-  if (component.attribute_is_builtin(attribute_name)) {
-    component.attribute_try_create_builtin(attribute_name, AttributeInitDefault());
-    std::optional<AttributeMetaData> meta_data = component.attribute_get_meta_data(attribute_name);
-    if (meta_data.has_value()) {
-      domain = meta_data->domain;
+  MultiValueMap<AttributeDomain, OutputAttributeInfo> outputs_by_domain;
+  for (const InputSocketRef *socket : output_node.inputs().drop_front(1).drop_back(1)) {
+    if (!socket_type_has_attribute_toggle(*socket->bsocket())) {
+      continue;
     }
-    else {
-      return;
+
+    const std::string prop_name = socket->identifier() + attribute_name_suffix;
+    const IDProperty *prop = IDP_GetPropertyFromGroup(nmd.settings.properties, prop_name.c_str());
+    if (prop == nullptr) {
+      continue;
+    }
+    const StringRefNull attribute_name = IDP_String(prop);
+    if (attribute_name.is_empty()) {
+      continue;
+    }
+
+    const int index = socket->index();
+    const GPointer value = output_values[index];
+    const ValueOrFieldCPPType *cpp_type = dynamic_cast<const ValueOrFieldCPPType *>(value.type());
+    BLI_assert(cpp_type != nullptr);
+    const GField field = cpp_type->as_field(value.get());
+
+    const bNodeSocket *interface_socket = (const bNodeSocket *)BLI_findlink(
+        &nmd.node_group->outputs, socket->index());
+    const AttributeDomain domain = (AttributeDomain)interface_socket->attribute_domain;
+    OutputAttributeInfo output_info;
+    output_info.field = std::move(field);
+    output_info.name = attribute_name;
+    outputs_by_domain.add(domain, std::move(output_info));
+  }
+  return outputs_by_domain;
+}
+
+/**
+ * The computed values are stored in newly allocated arrays. They still have to be moved to the
+ * actual geometry.
+ */
+static Vector<OutputAttributeToStore> compute_attributes_to_store(
+    const GeometrySet &geometry,
+    const MultiValueMap<AttributeDomain, OutputAttributeInfo> &outputs_by_domain)
+{
+  Vector<OutputAttributeToStore> attributes_to_store;
+  for (const GeometryComponentType component_type : {GEO_COMPONENT_TYPE_MESH,
+                                                     GEO_COMPONENT_TYPE_POINT_CLOUD,
+                                                     GEO_COMPONENT_TYPE_CURVE,
+                                                     GEO_COMPONENT_TYPE_INSTANCES}) {
+    if (!geometry.has(component_type)) {
+      continue;
+    }
+    const GeometryComponent &component = *geometry.get_component_for_read(component_type);
+    for (const auto item : outputs_by_domain.items()) {
+      const AttributeDomain domain = item.key;
+      const Span<OutputAttributeInfo> outputs_info = item.value;
+      if (!component.attribute_domain_supported(domain)) {
+        continue;
+      }
+      const int domain_size = component.attribute_domain_size(domain);
+      blender::bke::GeometryComponentFieldContext field_context{component, domain};
+      blender::fn::FieldEvaluator field_evaluator{field_context, domain_size};
+      for (const OutputAttributeInfo &output_info : outputs_info) {
+        const CPPType &type = output_info.field.cpp_type();
+        OutputAttributeToStore store{
+            component_type,
+            domain,
+            output_info.name,
+            GMutableSpan{
+                type, MEM_malloc_arrayN(domain_size, type.size(), __func__), domain_size}};
+        field_evaluator.add_with_destination(output_info.field, store.data);
+        attributes_to_store.append(store);
+      }
+      field_evaluator.evaluate();
     }
   }
-  const CustomDataType data_type = blender::bke::cpp_type_to_custom_data_type(field.cpp_type());
-  OutputAttribute attribute = component.attribute_try_get_for_output_only(
-      attribute_name, domain, data_type);
-  if (attribute) {
-    /* In the future we could also evaluate all output fields at once. */
-    const int domain_size = component.attribute_domain_size(domain);
-    blender::bke::GeometryComponentFieldContext field_context{component, domain};
-    blender::fn::FieldEvaluator field_evaluator{field_context, domain_size};
-    field_evaluator.add_with_destination(field, attribute.varray());
-    field_evaluator.evaluate();
-    attribute.save();
+  return attributes_to_store;
+}
+
+static void store_computed_output_attributes(
+    GeometrySet &geometry, const Span<OutputAttributeToStore> attributes_to_store)
+{
+  for (const OutputAttributeToStore &store : attributes_to_store) {
+    GeometryComponent &component = geometry.get_component_for_write(store.component_type);
+    const CustomDataType data_type = blender::bke::cpp_type_to_custom_data_type(store.data.type());
+    const std::optional<AttributeMetaData> meta_data = component.attribute_get_meta_data(
+        store.name);
+    if (meta_data.has_value() && meta_data->domain == store.domain &&
+        meta_data->data_type == data_type) {
+      /* Copy the data into an existing attribute. */
+      blender::bke::WriteAttributeLookup write_attribute = component.attribute_try_get_for_write(
+          store.name);
+      if (write_attribute) {
+        write_attribute.varray.set_all(store.data.data());
+        if (write_attribute.tag_modified_fn) {
+          write_attribute.tag_modified_fn();
+        }
+      }
+      store.data.type().destruct_n(store.data.data(), store.data.size());
+      MEM_freeN(store.data.data());
+    }
+    else {
+      /* Replace the existing attribute with the new data. */
+      if (meta_data.has_value()) {
+        component.attribute_try_delete(store.name);
+      }
+      component.attribute_try_create(store.name,
+                                     store.domain,
+                                     blender::bke::cpp_type_to_custom_data_type(store.data.type()),
+                                     AttributeInitMove(store.data.data()));
+    }
   }
 }
 
-static void store_output_value_in_geometry(GeometrySet &geometry_set,
-                                           NodesModifierData *nmd,
-                                           const InputSocketRef &socket,
-                                           const GPointer value)
+static void store_output_attributes(GeometrySet &geometry,
+                                    const NodesModifierData &nmd,
+                                    const NodeRef &output_node,
+                                    Span<GMutablePointer> output_values)
 {
-  if (!socket_type_has_attribute_toggle(*socket.bsocket())) {
-    return;
-  }
-  const std::string prop_name = socket.identifier() + attribute_name_suffix;
-  const IDProperty *prop = IDP_GetPropertyFromGroup(nmd->settings.properties, prop_name.c_str());
-  if (prop == nullptr) {
-    return;
-  }
-  const StringRefNull attribute_name = IDP_String(prop);
-  if (attribute_name.is_empty()) {
-    return;
-  }
-  const GField &field = *(const GField *)value.get();
-  const bNodeSocket *interface_socket = (bNodeSocket *)BLI_findlink(&nmd->node_group->outputs,
-                                                                    socket.index());
-  const AttributeDomain domain = (AttributeDomain)interface_socket->attribute_domain;
-  if (geometry_set.has_mesh()) {
-    MeshComponent &component = geometry_set.get_component_for_write<MeshComponent>();
-    store_field_on_geometry_component(component, attribute_name, domain, field);
-  }
-  if (geometry_set.has_pointcloud()) {
-    PointCloudComponent &component = geometry_set.get_component_for_write<PointCloudComponent>();
-    store_field_on_geometry_component(component, attribute_name, domain, field);
-  }
-  if (geometry_set.has_curve()) {
-    CurveComponent &component = geometry_set.get_component_for_write<CurveComponent>();
-    store_field_on_geometry_component(component, attribute_name, domain, field);
-  }
-  if (geometry_set.has_instances()) {
-    InstancesComponent &component = geometry_set.get_component_for_write<InstancesComponent>();
-    store_field_on_geometry_component(component, attribute_name, domain, field);
-  }
+  /* All new attribute values have to be computed before the geometry is actually changed. This is
+   * necessary because some fields might depend on attributes that are overwritten. */
+  MultiValueMap<AttributeDomain, OutputAttributeInfo> outputs_by_domain =
+      find_output_attributes_to_store(nmd, output_node, output_values);
+  Vector<OutputAttributeToStore> attributes_to_store = compute_attributes_to_store(
+      geometry, outputs_by_domain);
+  store_computed_output_attributes(geometry, attributes_to_store);
 }
 
 /**
@@ -963,7 +1081,7 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
 
     /* Initialize remaining group inputs. */
     for (const OutputSocketRef *socket : remaining_input_sockets) {
-      const CPPType &cpp_type = *socket->typeinfo()->get_geometry_nodes_cpp_type();
+      const CPPType &cpp_type = *socket->typeinfo()->geometry_nodes_cpp_type;
       void *value_in = allocator.allocate(cpp_type.size(), cpp_type.alignment());
       initialize_group_input(*nmd, *socket, value_in);
       group_inputs.add_new({root_context, socket}, {cpp_type, value_in});
@@ -1000,19 +1118,20 @@ static GeometrySet compute_geometry(const DerivedNodeTree &tree,
   eval_params.geo_logger = geo_logger.has_value() ? &*geo_logger : nullptr;
   blender::modifiers::geometry_nodes::evaluate_geometry_nodes(eval_params);
 
-  GeometrySet output_geometry_set = eval_params.r_output_values[0].relocate_out<GeometrySet>();
+  GeometrySet output_geometry_set = std::move(*eval_params.r_output_values[0].get<GeometrySet>());
 
   if (geo_logger.has_value()) {
     geo_logger->log_output_geometry(output_geometry_set);
-    NodesModifierData *nmd_orig = (NodesModifierData *)BKE_modifier_get_original(&nmd->modifier);
+    NodesModifierData *nmd_orig = (NodesModifierData *)BKE_modifier_get_original(ctx->object,
+                                                                                 &nmd->modifier);
     clear_runtime_data(nmd_orig);
     nmd_orig->runtime_eval_log = new geo_log::ModifierLog(*geo_logger);
   }
 
-  for (const InputSocketRef *socket : output_node.inputs().drop_front(1).drop_back(1)) {
-    GMutablePointer socket_value = eval_params.r_output_values[socket->index()];
-    store_output_value_in_geometry(output_geometry_set, nmd, *socket, socket_value);
-    socket_value.destruct();
+  store_output_attributes(output_geometry_set, *nmd, output_node, eval_params.r_output_values);
+
+  for (GMutablePointer value : eval_params.r_output_values) {
+    value.destruct();
   }
 
   return output_geometry_set;
@@ -1108,8 +1227,34 @@ static void modifyGeometry(ModifierData *md,
     return;
   }
 
+  bool use_orig_index_verts = false;
+  bool use_orig_index_edges = false;
+  bool use_orig_index_polys = false;
+  if (geometry_set.has_mesh()) {
+    const Mesh &mesh = *geometry_set.get_mesh_for_read();
+    use_orig_index_verts = CustomData_has_layer(&mesh.vdata, CD_ORIGINDEX);
+    use_orig_index_edges = CustomData_has_layer(&mesh.edata, CD_ORIGINDEX);
+    use_orig_index_polys = CustomData_has_layer(&mesh.pdata, CD_ORIGINDEX);
+  }
+
   geometry_set = compute_geometry(
       tree, input_nodes, output_node, std::move(geometry_set), nmd, ctx);
+
+  if (geometry_set.has_mesh()) {
+    /* Add #CD_ORIGINDEX layers if they don't exist already. This is required because the
+     * #eModifierTypeFlag_SupportsMapping flag is set. If the layers did not exist before, it is
+     * assumed that the output mesh does not have a mapping to the original mesh. */
+    Mesh &mesh = *geometry_set.get_mesh_for_write();
+    if (use_orig_index_verts) {
+      CustomData_add_layer(&mesh.vdata, CD_ORIGINDEX, CD_DEFAULT, nullptr, mesh.totvert);
+    }
+    if (use_orig_index_edges) {
+      CustomData_add_layer(&mesh.edata, CD_ORIGINDEX, CD_DEFAULT, nullptr, mesh.totedge);
+    }
+    if (use_orig_index_polys) {
+      CustomData_add_layer(&mesh.pdata, CD_ORIGINDEX, CD_DEFAULT, nullptr, mesh.totpoly);
+    }
+  }
 }
 
 static Mesh *modifyMesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
@@ -1247,7 +1392,7 @@ static void add_attribute_search_button(const bContext &C,
                                  0.0f,
                                  0.0f,
                                  0.0f,
-                                 "");
+                                 socket.description);
 
   const Object *object = ED_object_context(&C);
   BLI_assert(object != nullptr);
@@ -1255,7 +1400,7 @@ static void add_attribute_search_button(const bContext &C,
     return;
   }
 
-  AttributeSearchData *data = OBJECT_GUARDED_NEW(AttributeSearchData);
+  AttributeSearchData *data = MEM_new<AttributeSearchData>(__func__);
   data->object_session_uid = object->id.session_uuid;
   STRNCPY(data->modifier_name, nmd.modifier.name);
   STRNCPY(data->socket_identifier, socket.identifier);
@@ -1584,7 +1729,7 @@ ModifierTypeInfo modifierType_Nodes = {
     /* freeData */ freeData,
     /* isDisabled */ isDisabled,
     /* updateDepsgraph */ updateDepsgraph,
-    /* dependsOnTime */ nullptr,
+    /* dependsOnTime */ dependsOnTime,
     /* dependsOnNormals */ nullptr,
     /* foreachIDLink */ foreachIDLink,
     /* foreachTexLink */ foreachTexLink,

@@ -29,6 +29,7 @@
 
 #include "BLI_alloca.h"
 #include "BLI_expr_pylike_eval.h"
+#include "BLI_listbase.h"
 #include "BLI_math.h"
 #include "BLI_string_utils.h"
 #include "BLI_threads.h"
@@ -199,9 +200,6 @@ static float dtar_get_prop_val(ChannelDriver *driver, DriverTarget *dtar)
   return value;
 }
 
-/**
- * Same as 'dtar_get_prop_val'. but get the RNA property.
- */
 bool driver_get_variable_property(ChannelDriver *driver,
                                   DriverTarget *dtar,
                                   PointerRNA *r_ptr,
@@ -326,7 +324,7 @@ static float dvar_eval_rotDiff(ChannelDriver *driver, DriverVar *dvar)
 
   float(*mat[2])[4];
 
-  /* NOTE: for now, these are all just worldspace */
+  /* NOTE: for now, these are all just world-space. */
   for (int i = 0; i < 2; i++) {
     /* Get pointer to loc values to store in. */
     DriverTarget *dtar = &dvar->targets[i];
@@ -422,7 +420,7 @@ static float dvar_eval_locDiff(ChannelDriver *driver, DriverVar *dvar)
         }
       }
       else {
-        /* Convert to worldspace. */
+        /* Convert to world-space. */
         copy_v3_v3(tmp_loc, pchan->pose_head);
         mul_m4_v3(ob->obmat, tmp_loc);
       }
@@ -621,7 +619,6 @@ static void quaternion_to_angles(float quat[4], int channel)
   }
 }
 
-/* Compute channel values for a rotational Transform Channel driver variable. */
 void BKE_driver_target_matrix_to_rot_channels(
     float mat[4][4], int auto_order, int rotation_mode, int channel, bool angles, float r_buf[4])
 {
@@ -720,7 +717,6 @@ static const DriverVarTypeInfo *get_dvar_typeinfo(int type)
 /** \name Driver API
  * \{ */
 
-/* Perform actual freeing driver variable and remove it from the given list */
 void driver_free_variable(ListBase *variables, DriverVar *dvar)
 {
   /* Sanity checks. */
@@ -745,7 +741,6 @@ void driver_free_variable(ListBase *variables, DriverVar *dvar)
   BLI_freelinkN(variables, dvar);
 }
 
-/* Free the driver variable and do extra updates */
 void driver_free_variable_ex(ChannelDriver *driver, DriverVar *dvar)
 {
   /* Remove and free the driver variable. */
@@ -755,7 +750,6 @@ void driver_free_variable_ex(ChannelDriver *driver, DriverVar *dvar)
   BKE_driver_invalidate_expression(driver, false, true);
 }
 
-/* Copy driver variables from src_vars list to dst_vars list */
 void driver_variables_copy(ListBase *dst_vars, const ListBase *src_vars)
 {
   BLI_assert(BLI_listbase_is_empty(dst_vars));
@@ -773,7 +767,6 @@ void driver_variables_copy(ListBase *dst_vars, const ListBase *src_vars)
   }
 }
 
-/* Change the type of driver variable */
 void driver_change_variable_type(DriverVar *dvar, int type)
 {
   const DriverVarTypeInfo *dvti = get_dvar_typeinfo(type);
@@ -803,7 +796,6 @@ void driver_change_variable_type(DriverVar *dvar, int type)
   DRIVER_TARGETS_LOOPER_END;
 }
 
-/* Validate driver name (after being renamed) */
 void driver_variable_name_validate(DriverVar *dvar)
 {
   /* Special character blacklist */
@@ -873,7 +865,12 @@ void driver_variable_name_validate(DriverVar *dvar)
   }
 }
 
-/* Add a new driver variable */
+void driver_variable_unique_name(DriverVar *dvar)
+{
+  ListBase variables = BLI_listbase_from_link((Link *)dvar);
+  BLI_uniquename(&variables, dvar, dvar->name, '_', offsetof(DriverVar, name), sizeof(dvar->name));
+}
+
 DriverVar *driver_add_new_variable(ChannelDriver *driver)
 {
   DriverVar *dvar;
@@ -906,7 +903,6 @@ DriverVar *driver_add_new_variable(ChannelDriver *driver)
   return dvar;
 }
 
-/* This frees the driver itself */
 void fcurve_free_driver(FCurve *fcu)
 {
   ChannelDriver *driver;
@@ -939,7 +935,6 @@ void fcurve_free_driver(FCurve *fcu)
   fcu->driver = NULL;
 }
 
-/* This makes a copy of the given driver */
 ChannelDriver *fcurve_copy_driver(const ChannelDriver *driver)
 {
   ChannelDriver *ndriver;
@@ -1082,7 +1077,6 @@ static bool driver_try_evaluate_simple_expr(ChannelDriver *driver,
          driver_evaluate_simple_expr(driver, driver_orig->expr_simple, result, time);
 }
 
-/* Check if the expression in the driver conforms to the simple subset. */
 bool BKE_driver_has_simple_expression(ChannelDriver *driver)
 {
   return driver_compile_simple_expr(driver) && BLI_expr_pylike_is_valid(driver->expr_simple);
@@ -1109,7 +1103,6 @@ static bool python_driver_exression_depends_on_time(const char *expression)
   return false;
 }
 
-/* Check if the expression in the driver may depend on the current frame. */
 bool BKE_driver_expression_depends_on_time(ChannelDriver *driver)
 {
   if (driver->type != DRIVER_TYPE_PYTHON) {
@@ -1125,7 +1118,6 @@ bool BKE_driver_expression_depends_on_time(ChannelDriver *driver)
   return python_driver_exression_depends_on_time(driver->expression);
 }
 
-/* Reset cached compiled expression data */
 void BKE_driver_invalidate_expression(ChannelDriver *driver,
                                       bool expr_changed,
                                       bool varname_changed)
@@ -1152,7 +1144,6 @@ void BKE_driver_invalidate_expression(ChannelDriver *driver,
 /** \name Driver Evaluation
  * \{ */
 
-/* Evaluate a Driver Variable to get a value that contributes to the final */
 float driver_get_variable_value(ChannelDriver *driver, DriverVar *dvar)
 {
   const DriverVarTypeInfo *dvti;
@@ -1269,14 +1260,6 @@ static void evaluate_driver_python(PathResolvedRNA *anim_rna,
   }
 }
 
-/**
- * Evaluate an Channel-Driver to get a 'time' value to use
- * instead of `anim_eval_context->eval_time`.
- *
- * - `anim_eval_context->eval_time` is the frame at which F-Curve is being evaluated.
- * - Has to return a float value.
- * - \a driver_orig is where we cache Python expressions, in case of COW
- */
 float evaluate_driver(PathResolvedRNA *anim_rna,
                       ChannelDriver *driver,
                       ChannelDriver *driver_orig,
@@ -1309,3 +1292,5 @@ float evaluate_driver(PathResolvedRNA *anim_rna,
   /* Return value for driver. */
   return driver->curval;
 }
+
+/** \} */

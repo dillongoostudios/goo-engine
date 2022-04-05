@@ -316,7 +316,7 @@ static void curve_to_displist(const Curve *cu,
        * and resolution > 1. */
       const bool use_cyclic_sample = is_cyclic && (samples_len != 2);
 
-      DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+      DispList *dl = MEM_cnew<DispList>(__func__);
       /* Add one to the length because of 'BKE_curve_forward_diff_bezier'. */
       dl->verts = (float *)MEM_mallocN(sizeof(float[3]) * (samples_len + 1), __func__);
       BLI_addtail(r_dispbase, dl);
@@ -371,7 +371,7 @@ static void curve_to_displist(const Curve *cu,
     }
     else if (nu->type == CU_NURBS) {
       const int len = (resolution * SEGMENTSU(nu));
-      DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+      DispList *dl = MEM_cnew<DispList>(__func__);
       dl->verts = (float *)MEM_mallocN(len * sizeof(float[3]), __func__);
       BLI_addtail(r_dispbase, dl);
       dl->parts = 1;
@@ -384,7 +384,7 @@ static void curve_to_displist(const Curve *cu,
     }
     else if (nu->type == CU_POLY) {
       const int len = nu->pntsu;
-      DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+      DispList *dl = MEM_cnew<DispList>(__func__);
       dl->verts = (float *)MEM_mallocN(len * sizeof(float[3]), __func__);
       BLI_addtail(r_dispbase, dl);
       dl->parts = 1;
@@ -402,12 +402,6 @@ static void curve_to_displist(const Curve *cu,
   }
 }
 
-/**
- * \param normal_proj: Optional normal that's used to project the scanfill verts into 2d coords.
- * Pass this along if known since it saves time calculating the normal.
- * This is also used to initialize #DispList.nors (one normal per display list).
- * \param flipnormal: Flip the normal (same as passing \a normal_proj negated)
- */
 void BKE_displist_fill(const ListBase *dispbase,
                        ListBase *to,
                        const float normal_proj[3],
@@ -481,7 +475,7 @@ void BKE_displist_fill(const ListBase *dispbase,
 
     const int triangles_len = BLI_scanfill_calc_ex(&sf_ctx, scanfill_flag, normal_proj);
     if (totvert != 0 && triangles_len != 0) {
-      DispList *dlnew = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+      DispList *dlnew = MEM_cnew<DispList>(__func__);
       dlnew->type = DL_INDEX3;
       dlnew->flag = (dl_flag_accum & (DL_BACK_CURVE | DL_FRONT_CURVE));
       dlnew->rt = (dl_rt_accum & CU_SMOOTH);
@@ -536,7 +530,7 @@ static void bevels_to_filledpoly(const Curve *cu, ListBase *dispbase)
     if (dl->type == DL_SURF) {
       if ((dl->flag & DL_CYCL_V) && (dl->flag & DL_CYCL_U) == 0) {
         if ((cu->flag & CU_BACK) && (dl->flag & DL_BACK_CURVE)) {
-          DispList *dlnew = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+          DispList *dlnew = MEM_cnew<DispList>(__func__);
           BLI_addtail(&front, dlnew);
           dlnew->verts = (float *)MEM_mallocN(sizeof(float[3]) * dl->parts, __func__);
           dlnew->nr = dl->parts;
@@ -555,7 +549,7 @@ static void bevels_to_filledpoly(const Curve *cu, ListBase *dispbase)
           }
         }
         if ((cu->flag & CU_FRONT) && (dl->flag & DL_FRONT_CURVE)) {
-          DispList *dlnew = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+          DispList *dlnew = MEM_cnew<DispList>(__func__);
           BLI_addtail(&back, dlnew);
           dlnew->verts = (float *)MEM_mallocN(sizeof(float[3]) * dl->parts, __func__);
           dlnew->nr = dl->parts;
@@ -671,7 +665,7 @@ void BKE_displist_make_mball(Depsgraph *depsgraph, Scene *scene, Object *ob)
       BKE_displist_free(&(ob->runtime.curve_cache->disp));
     }
     else {
-      ob->runtime.curve_cache = (CurveCache *)MEM_callocN(sizeof(CurveCache), __func__);
+      ob->runtime.curve_cache = MEM_cnew<CurveCache>(__func__);
     }
 
     BKE_mball_polygonize(depsgraph, scene, ob, &ob->runtime.curve_cache->disp);
@@ -830,7 +824,7 @@ static bool do_curve_implicit_mesh_conversion(const Curve *curve,
   }
 
   /* Curve objects with implicit "tube" meshes should convert implicitly to a mesh. */
-  if (curve->ext1 != 0.0f || curve->ext2 != 0.0f) {
+  if (curve->extrude != 0.0f || curve->bevel_radius != 0.0f) {
     return true;
   }
 
@@ -910,7 +904,7 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
       int totvert;
       float(*vertex_coords)[3] = BKE_mesh_vert_coords_alloc(mesh, &totvert);
       if (mti->dependsOnNormals != nullptr && mti->dependsOnNormals(md)) {
-        BKE_mesh_ensure_normals(mesh);
+        BKE_mesh_vertex_normals_ensure(mesh);
       }
       mti->deformVerts(md, &mectx_deform, mesh, vertex_coords, totvert);
       BKE_mesh_vert_coords_apply(mesh, vertex_coords);
@@ -918,7 +912,7 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
     }
     else {
       if (mti->dependsOnNormals != nullptr && mti->dependsOnNormals(md)) {
-        BKE_mesh_ensure_normals(mesh);
+        BKE_mesh_vertex_normals_ensure(mesh);
       }
       Mesh *output_mesh = mti->modifyMesh(md, &mectx_apply, mesh);
       if (mesh != output_mesh) {
@@ -930,7 +924,7 @@ static GeometrySet curve_calc_modifiers_post(Depsgraph *depsgraph,
   if (geometry_set.has_mesh()) {
     Mesh *final_mesh = geometry_set.get_mesh_for_write();
 
-    BKE_mesh_calc_normals(final_mesh);
+    BKE_mesh_ensure_normals_for_display(final_mesh);
 
     BLI_strncpy(final_mesh->id.name, cu->id.name, sizeof(final_mesh->id.name));
     *((short *)final_mesh->id.name) = ID_ME;
@@ -1002,7 +996,7 @@ static void evaluate_surface_object(Depsgraph *depsgraph,
     if (nu->pntsv == 1) {
       const int len = SEGMENTSU(nu) * resolu;
 
-      DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+      DispList *dl = MEM_cnew<DispList>(__func__);
       dl->verts = (float *)MEM_mallocN(len * sizeof(float[3]), __func__);
 
       BLI_addtail(r_dispbase, dl);
@@ -1025,7 +1019,7 @@ static void evaluate_surface_object(Depsgraph *depsgraph,
     else {
       const int len = (nu->pntsu * resolu) * (nu->pntsv * resolv);
 
-      DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+      DispList *dl = MEM_cnew<DispList>(__func__);
       dl->verts = (float *)MEM_mallocN(len * sizeof(float[3]), __func__);
       BLI_addtail(r_dispbase, dl);
 
@@ -1128,7 +1122,7 @@ static void fillBevelCap(const Nurb *nu,
                          const float *prev_fp,
                          ListBase *dispbase)
 {
-  DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+  DispList *dl = MEM_cnew<DispList>(__func__);
   dl->verts = (float *)MEM_mallocN(sizeof(float[3]) * dlb->nr, __func__);
   memcpy(dl->verts, prev_fp, sizeof(float[3]) * dlb->nr);
 
@@ -1310,11 +1304,11 @@ static GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
   ListBase dlbev = BKE_curve_bevel_make(cu);
 
   /* no bevel or extrude, and no width correction? */
-  if (BLI_listbase_is_empty(&dlbev) && cu->width == 1.0f) {
+  if (BLI_listbase_is_empty(&dlbev) && cu->offset == 1.0f) {
     curve_to_displist(cu, deformed_nurbs, for_render, r_dispbase);
   }
   else {
-    const float widfac = cu->width - 1.0f;
+    const float widfac = cu->offset - 1.0f;
 
     const BevList *bl = (BevList *)ob->runtime.curve_cache->bev.first;
     const Nurb *nu = (Nurb *)deformed_nurbs->first;
@@ -1327,7 +1321,7 @@ static GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
 
       /* exception handling; curve without bevel or extrude, with width correction */
       if (BLI_listbase_is_empty(&dlbev)) {
-        DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), "makeDispListbev");
+        DispList *dl = MEM_cnew<DispList>("makeDispListbev");
         dl->verts = (float *)MEM_mallocN(sizeof(float[3]) * bl->nr, "dlverts");
         BLI_addtail(r_dispbase, dl);
 
@@ -1377,7 +1371,7 @@ static GeometrySet evaluate_curve_type_object(Depsgraph *depsgraph,
 
         LISTBASE_FOREACH (DispList *, dlb, &dlbev) {
           /* for each part of the bevel use a separate displblock */
-          DispList *dl = (DispList *)MEM_callocN(sizeof(DispList), __func__);
+          DispList *dl = MEM_cnew<DispList>(__func__);
           dl->verts = data = (float *)MEM_mallocN(sizeof(float[3]) * dlb->nr * steps, __func__);
           BLI_addtail(r_dispbase, dl);
 
@@ -1501,7 +1495,7 @@ void BKE_displist_make_curveTypes(Depsgraph *depsgraph,
   BKE_object_free_derived_caches(ob);
   cow_curve.curve_eval = nullptr;
 
-  ob->runtime.curve_cache = (CurveCache *)MEM_callocN(sizeof(CurveCache), __func__);
+  ob->runtime.curve_cache = MEM_cnew<CurveCache>(__func__);
   ListBase *dispbase = &ob->runtime.curve_cache->disp;
 
   if (ob->type == OB_SURF) {
@@ -1534,7 +1528,7 @@ void BKE_displist_minmax(const ListBase *dispbase, float min[3], float max[3])
   bool doit = false;
 
   LISTBASE_FOREACH (const DispList *, dl, dispbase) {
-    const int tot = (dl->type == DL_INDEX3) ? dl->nr : dl->nr * dl->parts;
+    const int tot = (ELEM(dl->type, DL_INDEX3, DL_INDEX4)) ? dl->nr : dl->nr * dl->parts;
     for (const int i : IndexRange(tot)) {
       minmax_v3v3_v3(min, max, &dl->verts[i * 3]);
     }

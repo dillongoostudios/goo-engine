@@ -32,10 +32,9 @@
 CCL_NAMESPACE_BEGIN
 
 /* program paths */
-void path_init(const string &path = "", const string &user_path = "", const string &tmp_path = "");
+void path_init(const string &path = "", const string &user_path = "");
 string path_get(const string &sub = "");
 string path_user_get(const string &sub = "");
-string path_temp_get(const string &sub = "");
 string path_cache_get(const string &sub = "");
 
 /* path string manipulation */
@@ -65,6 +64,9 @@ bool path_read_text(const string &path, string &text);
 
 /* File manipulation. */
 bool path_remove(const string &path);
+
+/* source code utility */
+string path_source_replace_includes(const string &source, const string &path);
 
 /* cache utility */
 void path_cache_clear_except(const string &name, const set<string> &except);

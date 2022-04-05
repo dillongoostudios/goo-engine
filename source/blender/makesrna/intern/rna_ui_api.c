@@ -582,6 +582,56 @@ static void rna_uiTemplateCacheFile(uiLayout *layout,
   uiTemplateCacheFile(layout, C, ptr, propname);
 }
 
+static void rna_uiTemplateCacheFileVelocity(uiLayout *layout,
+                                            PointerRNA *ptr,
+                                            const char *propname)
+{
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  uiTemplateCacheFileVelocity(layout, &fileptr);
+}
+
+static void rna_uiTemplateCacheFileProcedural(uiLayout *layout,
+                                              bContext *C,
+                                              PointerRNA *ptr,
+                                              const char *propname)
+{
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  uiTemplateCacheFileProcedural(layout, C, &fileptr);
+}
+
+static void rna_uiTemplateCacheFileTimeSettings(uiLayout *layout,
+                                                PointerRNA *ptr,
+                                                const char *propname)
+{
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  uiTemplateCacheFileTimeSettings(layout, &fileptr);
+}
+
+static void rna_uiTemplateCacheFileLayers(uiLayout *layout,
+                                          bContext *C,
+                                          PointerRNA *ptr,
+                                          const char *propname)
+{
+  PointerRNA fileptr;
+  if (!uiTemplateCacheFilePointer(ptr, propname, &fileptr)) {
+    return;
+  }
+
+  uiTemplateCacheFileLayers(layout, C, &fileptr);
+}
+
 static void rna_uiTemplatePathBuilder(uiLayout *layout,
                                       PointerRNA *ptr,
                                       const char *propname,
@@ -1792,6 +1842,26 @@ void RNA_api_ui_layout(StructRNA *srna)
   func = RNA_def_function(srna, "template_cache_file", "rna_uiTemplateCacheFile");
   RNA_def_function_ui_description(
       func, "Item(s). User interface for selecting cache files and their source paths");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  api_ui_item_rna_common(func);
+
+  func = RNA_def_function(srna, "template_cache_file_velocity", "rna_uiTemplateCacheFileVelocity");
+  RNA_def_function_ui_description(func, "Show cache files velocity properties");
+  api_ui_item_rna_common(func);
+
+  func = RNA_def_function(
+      srna, "template_cache_file_procedural", "rna_uiTemplateCacheFileProcedural");
+  RNA_def_function_ui_description(func, "Show cache files render procedural properties");
+  RNA_def_function_flag(func, FUNC_USE_CONTEXT);
+  api_ui_item_rna_common(func);
+
+  func = RNA_def_function(
+      srna, "template_cache_file_time_settings", "rna_uiTemplateCacheFileTimeSettings");
+  RNA_def_function_ui_description(func, "Show cache files time settings");
+  api_ui_item_rna_common(func);
+
+  func = RNA_def_function(srna, "template_cache_file_layers", "rna_uiTemplateCacheFileLayers");
+  RNA_def_function_ui_description(func, "Show cache files override layers properties");
   RNA_def_function_flag(func, FUNC_USE_CONTEXT);
   api_ui_item_rna_common(func);
 

@@ -148,7 +148,6 @@ void device_hip_info(vector<DeviceInfo> &devices)
     info.description = string(name);
     info.num = num;
 
-    info.has_half_images = true;
     info.has_nanovdb = true;
     info.denoisers = 0;
 

@@ -265,6 +265,16 @@ extern GHOST_TSuccess GHOST_EndFullScreen(GHOST_SystemHandle systemhandle);
  */
 extern int GHOST_GetFullScreen(GHOST_SystemHandle systemhandle);
 
+/**
+ * Get the Window under the cursor.
+ * \param x: The x-coordinate of the cursor.
+ * \param y: The y-coordinate of the cursor.
+ * @return The window under the cursor or nullptr in none.
+ */
+extern GHOST_WindowHandle GHOST_GetWindowUnderCursor(GHOST_SystemHandle systemhandle,
+                                                     int32_t x,
+                                                     int32_t y);
+
 /***************************************************************************************
  * Event management functionality
  ***************************************************************************************/
@@ -727,13 +737,6 @@ extern GHOST_TSuccess GHOST_ReleaseOpenGLContext(GHOST_ContextHandle contexthand
  * Get the OpenGL frame-buffer handle that serves as a default frame-buffer.
  */
 extern unsigned int GHOST_GetContextDefaultOpenGLFramebuffer(GHOST_ContextHandle contexthandle);
-
-/**
- * Returns whether a context is rendered upside down compared to OpenGL. This only needs to be
- * called if there's a non-OpenGL context, which is really the exception.
- * So generally, this does not need to be called.
- */
-extern int GHOST_isUpsideDownContext(GHOST_ContextHandle contexthandle);
 
 /**
  * Get the OpenGL frame-buffer handle that serves as a default frame-buffer.

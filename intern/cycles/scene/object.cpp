@@ -23,6 +23,7 @@
 #include "scene/light.h"
 #include "scene/mesh.h"
 #include "scene/particles.h"
+#include "scene/pointcloud.h"
 #include "scene/scene.h"
 #include "scene/stats.h"
 #include "scene/volume.h"
@@ -69,6 +70,7 @@ struct UpdateObjectTransformState {
   /* Flags which will be synchronized to Integrator. */
   bool have_motion;
   bool have_curves;
+  // bool have_points;
 
   /* ** Scheduling queue. ** */
   Scene *scene;
@@ -435,7 +437,7 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
     state->have_motion = true;
   }
 
-  if (geom->geometry_type == Geometry::MESH) {
+  if (geom->geometry_type == Geometry::MESH || geom->geometry_type == Geometry::POINTCLOUD) {
     /* TODO: why only mesh? */
     Mesh *mesh = static_cast<Mesh *>(geom);
     if (mesh->attributes.find(ATTR_STD_MOTION_VERTEX_POSITION)) {
@@ -491,6 +493,8 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   kobject.dupli_generated[2] = ob->dupli_generated[2];
   kobject.numkeys = (geom->geometry_type == Geometry::HAIR) ?
                         static_cast<Hair *>(geom)->get_curve_keys().size() :
+                    (geom->geometry_type == Geometry::POINTCLOUD) ?
+                        static_cast<PointCloud *>(geom)->num_points() :
                         0;
   kobject.dupli_uv[0] = ob->dupli_uv[0];
   kobject.dupli_uv[1] = ob->dupli_uv[1];
@@ -528,6 +532,35 @@ void ObjectManager::device_update_object_transform(UpdateObjectTransformState *s
   if (geom->geometry_type == Geometry::HAIR) {
     state->have_curves = true;
   }
+}
+
+void ObjectManager::device_update_prim_offsets(Device *device, DeviceScene *dscene, Scene *scene)
+{
+  BVHLayoutMask layout_mask = device->get_bvh_layout_mask();
+  if (layout_mask != BVH_LAYOUT_METAL && layout_mask != BVH_LAYOUT_MULTI_METAL &&
+      layout_mask != BVH_LAYOUT_MULTI_METAL_EMBREE) {
+    return;
+  }
+
+  /* On MetalRT, primitive / curve segment offsets can't be baked at BVH build time. Intersection
+   * handlers need to apply the offset manually. */
+  uint *object_prim_offset = dscene->object_prim_offset.alloc(scene->objects.size());
+  foreach (Object *ob, scene->objects) {
+    uint32_t prim_offset = 0;
+    if (Geometry *const geom = ob->geometry) {
+      if (geom->geometry_type == Geometry::HAIR) {
+        prim_offset = ((Hair *const)geom)->curve_segment_offset;
+      }
+      else {
+        prim_offset = geom->prim_offset;
+      }
+    }
+    uint obj_index = ob->get_device_index();
+    object_prim_offset[obj_index] = prim_offset;
+  }
+
+  dscene->object_prim_offset.copy_to_device();
+  dscene->object_prim_offset.clear_modified();
 }
 
 void ObjectManager::device_update_transforms(DeviceScene *dscene, Scene *scene, Progress &progress)
@@ -788,7 +821,7 @@ void ObjectManager::device_update_flags(
   dscene->object_volume_step.clear_modified();
 }
 
-void ObjectManager::device_update_mesh_offsets(Device *, DeviceScene *dscene, Scene *scene)
+void ObjectManager::device_update_geom_offsets(Device *, DeviceScene *dscene, Scene *scene)
 {
   if (dscene->objects.size() == 0) {
     return;
@@ -840,6 +873,7 @@ void ObjectManager::device_free(Device *, DeviceScene *dscene, bool force_free)
   dscene->object_motion.free_if_need_realloc(force_free);
   dscene->object_flag.free_if_need_realloc(force_free);
   dscene->object_volume_step.free_if_need_realloc(force_free);
+  dscene->object_prim_offset.free_if_need_realloc(force_free);
 }
 
 void ObjectManager::apply_static_transforms(DeviceScene *dscene, Scene *scene, Progress &progress)

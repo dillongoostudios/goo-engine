@@ -82,9 +82,16 @@ typedef enum eGpencilExportSelect {
 typedef enum eGpencilExportFrame {
   GP_EXPORT_FRAME_ACTIVE = 0,
   GP_EXPORT_FRAME_SELECTED = 1,
+  GP_EXPORT_FRAME_SCENE = 2,
 } eGpencilExportFrame;
 
+/**
+ * Main export entry point function.
+ */
 bool gpencil_io_export(const char *filename, struct GpencilIOParams *iparams);
+/**
+ * Main import entry point function.
+ */
 bool gpencil_io_import(const char *filename, struct GpencilIOParams *iparams);
 
 #ifdef __cplusplus

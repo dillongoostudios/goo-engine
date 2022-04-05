@@ -49,6 +49,7 @@
 #include "DNA_text_types.h"
 #include "DNA_userdef_types.h"
 
+#include "BKE_bpath.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
@@ -169,6 +170,15 @@ static void text_free_data(ID *id)
 #endif
 }
 
+static void text_foreach_path(ID *id, BPathForeachPathData *bpath_data)
+{
+  Text *text = (Text *)id;
+
+  if (text->filepath != NULL) {
+    BKE_bpath_foreach_path_allocated_process(bpath_data, &text->filepath);
+  }
+}
+
 static void text_blend_write(BlendWriter *writer, ID *id, const void *id_address)
 {
   Text *text = (Text *)id;
@@ -242,6 +252,7 @@ IDTypeInfo IDType_ID_TXT = {
     .name_plural = "texts",
     .translation_context = BLT_I18NCONTEXT_ID_TEXT,
     .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = NULL,
 
     .init_data = text_init_data,
     .copy_data = text_copy_data,
@@ -249,6 +260,7 @@ IDTypeInfo IDType_ID_TXT = {
     .make_local = NULL,
     .foreach_id = NULL,
     .foreach_cache = NULL,
+    .foreach_path = text_foreach_path,
     .owner_get = NULL,
 
     .blend_write = text_blend_write,
@@ -267,9 +279,6 @@ IDTypeInfo IDType_ID_TXT = {
 /** \name Text Add, Free, Validation
  * \{ */
 
-/**
- * \note caller must handle `compiled` member.
- */
 void BKE_text_free_lines(Text *text)
 {
   for (TextLine *tmp = text->lines.first, *tmp_next; tmp; tmp = tmp_next) {
@@ -299,8 +308,6 @@ Text *BKE_text_add(Main *bmain, const char *name)
   return ta;
 }
 
-/* this function replaces extended ascii characters */
-/* to a valid utf-8 sequences */
 int txt_extended_ascii_as_utf8(char **str)
 {
   ptrdiff_t bad_char, i = 0;
@@ -463,14 +470,6 @@ bool BKE_text_reload(Text *text)
   return true;
 }
 
-/**
- * Load a text file.
- *
- * \param is_internal: If \a true, this text data-block only exists in memory,
- * not as a file on disk.
- *
- * \note text data-blocks have no real user but have 'fake user' enabled by default
- */
 Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const bool is_internal)
 {
   unsigned char *buffer;
@@ -523,11 +522,6 @@ Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const
   return ta;
 }
 
-/**
- * Load a text file.
- *
- * \note Text data-blocks have no user by default, only the 'real user' flag.
- */
 Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
 {
   return BKE_text_load_ex(bmain, file, relpath, false);
@@ -546,11 +540,6 @@ void BKE_text_write(Text *text, const char *str) /* called directly from rna */
   txt_move_eof(text, 0);
   txt_make_dirty(text);
 }
-
-/* returns 0 if file on disk is the same or Text is in memory only
- * returns 1 if file has been modified on disk since last local edit
- * returns 2 if file on disk has been deleted
- * -1 is returned if an error occurs */
 
 int BKE_text_file_modified_check(Text *text)
 {
@@ -1131,7 +1120,6 @@ void txt_move_toline(Text *text, unsigned int line, const bool sel)
   txt_move_to(text, line, 0, sel);
 }
 
-/* Moves to a certain byte in a line, not a certain utf8-character! */
 void txt_move_to(Text *text, unsigned int line, unsigned int ch, const bool sel)
 {
   TextLine **linep;
@@ -1291,11 +1279,6 @@ void txt_sel_all(Text *text)
   text->selc = text->sell->len;
 }
 
-/**
- * Reverse of #txt_pop_sel
- * Clears the selection and ensures the cursor is located
- * at the selection (where the cursor is visually while editing).
- */
 void txt_sel_clear(Text *text)
 {
   if (text->sell) {
@@ -1382,9 +1365,6 @@ void txt_sel_set(Text *text, int startl, int startc, int endl, int endc)
  * - Are not null terminated.
  * \{ */
 
-/**
- * Create a buffer, the only requirement is #txt_from_buf_for_undo can decode it.
- */
 char *txt_to_buf_for_undo(Text *text, int *r_buf_len)
 {
   int buf_len = 0;
@@ -1402,9 +1382,6 @@ char *txt_to_buf_for_undo(Text *text, int *r_buf_len)
   return buf;
 }
 
-/**
- * Decode a buffer from #txt_to_buf_for_undo.
- */
 void txt_from_buf_for_undo(Text *text, const char *buf, int buf_len)
 {
   const char *buf_end = buf + buf_len;
@@ -1977,7 +1954,7 @@ static char tab_to_spaces[] = "    ";
 static void txt_convert_tab_to_spaces(Text *text)
 {
   /* sb aims to pad adjust the tab-width needed so that the right number of spaces
-   * is added so that the indention of the line is the right width (i.e. aligned
+   * is added so that the indentation of the line is the right width (i.e. aligned
    * to multiples of TXT_TABSIZE)
    */
   const char *sb = &tab_to_spaces[text->curc % TXT_TABSIZE];
@@ -2401,10 +2378,11 @@ int text_check_bracket(const char ch)
   return 0;
 }
 
-/* TODO: have a function for operators -
- * http://docs.python.org/py3k/reference/lexical_analysis.html#operators */
 bool text_check_delim(const char ch)
 {
+  /* TODO: have a function for operators:
+   * http://docs.python.org/py3k/reference/lexical_analysis.html#operators */
+
   int a;
   char delims[] = "():\"\' ~!%^&*-+=[]{};/<>|.#\t,@";
 

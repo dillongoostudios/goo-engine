@@ -129,7 +129,8 @@ static void light_foreach_id(ID *id, LibraryForeachIDData *data)
   Light *lamp = (Light *)id;
   if (lamp->nodetree) {
     /* nodetree **are owned by IDs**, treat them as mere sub-data and not real ID! */
-    BKE_library_foreach_ID_embedded(data, (ID **)&lamp->nodetree);
+    BKE_LIB_FOREACHID_PROCESS_FUNCTION_CALL(
+        data, BKE_library_foreach_ID_embedded(data, (ID **)&lamp->nodetree));
   }
 }
 
@@ -194,6 +195,7 @@ IDTypeInfo IDType_ID_LA = {
     .name_plural = "lights",
     .translation_context = BLT_I18NCONTEXT_ID_LIGHT,
     .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = NULL,
 
     .init_data = light_init_data,
     .copy_data = light_copy_data,
@@ -201,6 +203,7 @@ IDTypeInfo IDType_ID_LA = {
     .make_local = NULL,
     .foreach_id = light_foreach_id,
     .foreach_cache = NULL,
+    .foreach_path = NULL,
     .owner_get = NULL,
 
     .blend_write = light_blend_write,

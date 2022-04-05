@@ -21,9 +21,9 @@
  * \ingroup shdnodes
  */
 
-#include "node_shader_util.h"
+#include "node_shader_util.hh"
 
-namespace blender::nodes {
+namespace blender::nodes::node_shader_curves_cc {
 
 static void sh_node_curve_vec_declare(NodeDeclarationBuilder &b)
 {
@@ -31,23 +31,6 @@ static void sh_node_curve_vec_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>(N_("Fac")).min(0.0f).max(1.0f).default_value(1.0f).subtype(PROP_FACTOR);
   b.add_input<decl::Vector>(N_("Vector")).min(-1.0f).max(1.0f);
   b.add_output<decl::Vector>(N_("Vector"));
-};
-
-}  // namespace blender::nodes
-
-static void node_shader_exec_curve_vec(void *UNUSED(data),
-                                       int UNUSED(thread),
-                                       bNode *node,
-                                       bNodeExecData *UNUSED(execdata),
-                                       bNodeStack **in,
-                                       bNodeStack **out)
-{
-  float vec[3];
-
-  /* stack order input:  vec */
-  /* stack order output: vec */
-  nodestack_get_vec(vec, SOCK_VECTOR, in[1]);
-  BKE_curvemapping_evaluate3F((CurveMapping *)node->storage, out[0]->vec, vec);
 }
 
 static void node_shader_init_curve_vec(bNodeTree *UNUSED(ntree), bNode *node)
@@ -66,6 +49,7 @@ static int gpu_shader_curve_vec(GPUMaterial *mat,
 
   CurveMapping *cumap = (CurveMapping *)node->storage;
 
+  BKE_curvemapping_init(cumap);
   BKE_curvemapping_table_RGBA(cumap, &array, &size);
   GPUNodeLink *tex = GPU_color_band(mat, size, array, &layer);
 
@@ -152,25 +136,28 @@ static void sh_node_curve_vec_build_multi_function(
   builder.construct_and_set_matching_fn<CurveVecFunction>(*cumap);
 }
 
-void register_node_type_sh_curve_vec(void)
+}  // namespace blender::nodes::node_shader_curves_cc
+
+void register_node_type_sh_curve_vec()
 {
+  namespace file_ns = blender::nodes::node_shader_curves_cc;
+
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_CURVE_VEC, "Vector Curves", NODE_CLASS_OP_VECTOR, 0);
-  ntype.declare = blender::nodes::sh_node_curve_vec_declare;
-  node_type_init(&ntype, node_shader_init_curve_vec);
+  sh_fn_node_type_base(&ntype, SH_NODE_CURVE_VEC, "Vector Curves", NODE_CLASS_OP_VECTOR);
+  ntype.declare = file_ns::sh_node_curve_vec_declare;
+  node_type_init(&ntype, file_ns::node_shader_init_curve_vec);
   node_type_size_preset(&ntype, NODE_SIZE_LARGE);
   node_type_storage(&ntype, "CurveMapping", node_free_curves, node_copy_curves);
-  node_type_exec(&ntype, node_initexec_curves, nullptr, node_shader_exec_curve_vec);
-  node_type_gpu(&ntype, gpu_shader_curve_vec);
-  ntype.build_multi_function = sh_node_curve_vec_build_multi_function;
+  node_type_gpu(&ntype, file_ns::gpu_shader_curve_vec);
+  ntype.build_multi_function = file_ns::sh_node_curve_vec_build_multi_function;
 
   nodeRegisterType(&ntype);
 }
 
 /* **************** CURVE RGB  ******************** */
 
-namespace blender::nodes {
+namespace blender::nodes::node_shader_curves_cc {
 
 static void sh_node_curve_rgb_declare(NodeDeclarationBuilder &b)
 {
@@ -178,28 +165,6 @@ static void sh_node_curve_rgb_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Float>(N_("Fac")).min(0.0f).max(1.0f).default_value(1.0f).subtype(PROP_FACTOR);
   b.add_input<decl::Color>(N_("Color")).default_value({1.0f, 1.0f, 1.0f, 1.0f});
   b.add_output<decl::Color>(N_("Color"));
-};
-
-}  // namespace blender::nodes
-
-static void node_shader_exec_curve_rgb(void *UNUSED(data),
-                                       int UNUSED(thread),
-                                       bNode *node,
-                                       bNodeExecData *UNUSED(execdata),
-                                       bNodeStack **in,
-                                       bNodeStack **out)
-{
-  float vec[3];
-  float fac;
-
-  /* stack order input:  vec */
-  /* stack order output: vec */
-  nodestack_get_vec(&fac, SOCK_FLOAT, in[0]);
-  nodestack_get_vec(vec, SOCK_VECTOR, in[1]);
-  BKE_curvemapping_evaluateRGBF((CurveMapping *)node->storage, out[0]->vec, vec);
-  if (fac != 1.0f) {
-    interp_v3_v3v3(out[0]->vec, vec, out[0]->vec, fac);
-  }
 }
 
 static void node_shader_init_curve_rgb(bNodeTree *UNUSED(ntree), bNode *node)
@@ -329,25 +294,28 @@ static void sh_node_curve_rgb_build_multi_function(
   builder.construct_and_set_matching_fn<CurveRGBFunction>(*cumap);
 }
 
-void register_node_type_sh_curve_rgb(void)
+}  // namespace blender::nodes::node_shader_curves_cc
+
+void register_node_type_sh_curve_rgb()
 {
+  namespace file_ns = blender::nodes::node_shader_curves_cc;
+
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_CURVE_RGB, "RGB Curves", NODE_CLASS_OP_COLOR, 0);
-  ntype.declare = blender::nodes::sh_node_curve_rgb_declare;
-  node_type_init(&ntype, node_shader_init_curve_rgb);
+  sh_fn_node_type_base(&ntype, SH_NODE_CURVE_RGB, "RGB Curves", NODE_CLASS_OP_COLOR);
+  ntype.declare = file_ns::sh_node_curve_rgb_declare;
+  node_type_init(&ntype, file_ns::node_shader_init_curve_rgb);
   node_type_size_preset(&ntype, NODE_SIZE_LARGE);
   node_type_storage(&ntype, "CurveMapping", node_free_curves, node_copy_curves);
-  node_type_exec(&ntype, node_initexec_curves, nullptr, node_shader_exec_curve_rgb);
-  node_type_gpu(&ntype, gpu_shader_curve_rgb);
-  ntype.build_multi_function = sh_node_curve_rgb_build_multi_function;
+  node_type_gpu(&ntype, file_ns::gpu_shader_curve_rgb);
+  ntype.build_multi_function = file_ns::sh_node_curve_rgb_build_multi_function;
 
   nodeRegisterType(&ntype);
 }
 
 /* **************** CURVE FLOAT  ******************** */
 
-namespace blender::nodes {
+namespace blender::nodes::node_shader_curves_cc {
 
 static void sh_node_curve_float_declare(NodeDeclarationBuilder &b)
 {
@@ -359,26 +327,6 @@ static void sh_node_curve_float_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_FACTOR);
   b.add_input<decl::Float>(N_("Value")).default_value(1.0f).is_default_link_socket();
   b.add_output<decl::Float>(N_("Value"));
-};
-
-}  // namespace blender::nodes
-
-static void node_shader_exec_curve_float(void *UNUSED(data),
-                                         int UNUSED(thread),
-                                         bNode *node,
-                                         bNodeExecData *UNUSED(execdata),
-                                         bNodeStack **in,
-                                         bNodeStack **out)
-{
-  float value;
-  float fac;
-
-  nodestack_get_vec(&fac, SOCK_FLOAT, in[0]);
-  nodestack_get_vec(&value, SOCK_FLOAT, in[1]);
-  out[0]->vec[0] = BKE_curvemapping_evaluateF((CurveMapping *)node->storage, 0, value);
-  if (fac != 1.0f) {
-    out[0]->vec[0] = (1.0f - fac) * value + fac * out[0]->vec[0];
-  }
 }
 
 static void node_shader_init_curve_float(bNodeTree *UNUSED(ntree), bNode *node)
@@ -397,6 +345,7 @@ static int gpu_shader_curve_float(GPUMaterial *mat,
 
   CurveMapping *cumap = (CurveMapping *)node->storage;
 
+  BKE_curvemapping_init(cumap);
   BKE_curvemapping_table_F(cumap, &array, &size);
   GPUNodeLink *tex = GPU_color_band(mat, size, array, &layer);
 
@@ -473,18 +422,21 @@ static void sh_node_curve_float_build_multi_function(
   builder.construct_and_set_matching_fn<CurveFloatFunction>(*cumap);
 }
 
-void register_node_type_sh_curve_float(void)
+}  // namespace blender::nodes::node_shader_curves_cc
+
+void register_node_type_sh_curve_float()
 {
+  namespace file_ns = blender::nodes::node_shader_curves_cc;
+
   static bNodeType ntype;
 
-  sh_fn_node_type_base(&ntype, SH_NODE_CURVE_FLOAT, "Float Curve", NODE_CLASS_CONVERTER, 0);
-  ntype.declare = blender::nodes::sh_node_curve_float_declare;
-  node_type_init(&ntype, node_shader_init_curve_float);
+  sh_fn_node_type_base(&ntype, SH_NODE_CURVE_FLOAT, "Float Curve", NODE_CLASS_CONVERTER);
+  ntype.declare = file_ns::sh_node_curve_float_declare;
+  node_type_init(&ntype, file_ns::node_shader_init_curve_float);
   node_type_size_preset(&ntype, NODE_SIZE_LARGE);
   node_type_storage(&ntype, "CurveMapping", node_free_curves, node_copy_curves);
-  node_type_exec(&ntype, node_initexec_curves, nullptr, node_shader_exec_curve_float);
-  node_type_gpu(&ntype, gpu_shader_curve_float);
-  ntype.build_multi_function = sh_node_curve_float_build_multi_function;
+  node_type_gpu(&ntype, file_ns::gpu_shader_curve_float);
+  ntype.build_multi_function = file_ns::sh_node_curve_float_build_multi_function;
 
   nodeRegisterType(&ntype);
 }

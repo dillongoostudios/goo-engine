@@ -240,6 +240,7 @@ static void file_draw_string(int sx,
   UI_fontstyle_draw(&fs,
                     &rect,
                     fname,
+                    sizeof(fname),
                     col,
                     &(struct uiFontStyleDraw_Params){
                         .align = align,
@@ -289,12 +290,12 @@ static void file_draw_string_multiline(int sx,
   UI_fontstyle_draw_ex(&style->widget,
                        &rect,
                        string,
+                       len,
                        text_col,
                        &(struct uiFontStyleDraw_Params){
                            .align = UI_STYLE_TEXT_LEFT,
                            .word_wrap = true,
                        },
-                       len,
                        NULL,
                        NULL,
                        &result);
@@ -402,19 +403,19 @@ static void file_draw_preview(const SpaceFile *sfile,
   }
 
   IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_COLOR);
-  immDrawPixelsTexScaled(&state,
-                         (float)xco,
-                         (float)yco,
-                         imb->x,
-                         imb->y,
-                         GPU_RGBA8,
-                         true,
-                         imb->rect,
-                         scale,
-                         scale,
-                         1.0f,
-                         1.0f,
-                         col);
+  immDrawPixelsTexTiled_scaling(&state,
+                                (float)xco,
+                                (float)yco,
+                                imb->x,
+                                imb->y,
+                                GPU_RGBA8,
+                                true,
+                                imb->rect,
+                                scale,
+                                scale,
+                                1.0f,
+                                1.0f,
+                                col);
 
   GPU_blend(GPU_BLEND_ALPHA);
 
@@ -905,7 +906,8 @@ void file_draw_list(const bContext *C, ARegion *region)
      * since it's filelist_file_cache_block() and filelist_cache_previews_update()
      * which controls previews task. */
     {
-      const bool previews_running = filelist_cache_previews_running(files);
+      const bool previews_running = filelist_cache_previews_running(files) &&
+                                    !filelist_cache_previews_done(files);
       //          printf("%s: preview task: %d\n", __func__, previews_running);
       if (previews_running && !sfile->previews_timer) {
         sfile->previews_timer = WM_event_add_timer_notifier(
@@ -1132,10 +1134,6 @@ static void file_draw_invalid_library_hint(const bContext *C,
   }
 }
 
-/**
- * Draw a string hint if the file list is invalid.
- * \return true if the list is invalid and a hint was drawn.
- */
 bool file_draw_hint_if_invalid(const bContext *C, const SpaceFile *sfile, ARegion *region)
 {
   FileAssetSelectParams *asset_params = ED_fileselect_get_asset_params(sfile);

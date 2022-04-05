@@ -496,8 +496,6 @@ typedef struct {
   int target_start;
   /** Represents the position of the end of the selection */
   int target_end;
-  /** custom temporal data */
-  GHOST_TUserDataPtr tmp;
 } GHOST_TEventImeData;
 
 typedef struct {
@@ -654,8 +652,8 @@ enum {
   GHOST_kXrContextDebug = (1 << 0),
   GHOST_kXrContextDebugTime = (1 << 1),
 #  ifdef WIN32
-  /* Needed to avoid issues with the SteamVR OpenGL graphics binding (use DirectX fallback
-     instead). */
+  /* Needed to avoid issues with the SteamVR OpenGL graphics binding
+   * (use DirectX fallback instead). */
   GHOST_kXrContextGpuNVIDIA = (1 << 2),
 #  endif
 };

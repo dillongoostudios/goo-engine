@@ -337,7 +337,7 @@ static bool gpencil_brush_smooth_apply(tGP_BrushEditData *gso,
 
   /* perform smoothing */
   if (gso->brush->gpencil_settings->sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_POSITION) {
-    BKE_gpencil_stroke_smooth_point(gps, pt_index, inf);
+    BKE_gpencil_stroke_smooth_point(gps, pt_index, inf, false);
   }
   if (gso->brush->gpencil_settings->sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_STRENGTH) {
     BKE_gpencil_stroke_smooth_strength(gps, pt_index, inf);
@@ -1454,7 +1454,7 @@ static bool gpencil_sculpt_brush_do_stroke(tGP_BrushEditData *gso,
     gpencil_point_to_xy(gsc, gps, &pt_temp, &pc1[0], &pc1[1]);
 
     pt_active = (pt->runtime.pt_orig) ? pt->runtime.pt_orig : pt;
-    /* do boundbox check first */
+    /* Do bound-box check first. */
     if ((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) {
       /* only check if point is inside */
       int mval_i[2];
@@ -1492,7 +1492,7 @@ static bool gpencil_sculpt_brush_do_stroke(tGP_BrushEditData *gso,
       gpencil_point_to_parent_space(pt2, diff_mat, &npt);
       gpencil_point_to_xy(gsc, gps, &npt, &pc2[0], &pc2[1]);
 
-      /* Check that point segment of the boundbox of the selection stroke */
+      /* Check that point segment of the bound-box of the selection stroke. */
       if (((!ELEM(V2D_IS_CLIPPED, pc1[0], pc1[1])) && BLI_rcti_isect_pt(rect, pc1[0], pc1[1])) ||
           ((!ELEM(V2D_IS_CLIPPED, pc2[0], pc2[1])) && BLI_rcti_isect_pt(rect, pc2[0], pc2[1]))) {
         /* Check if point segment of stroke had anything to do with
@@ -2134,7 +2134,6 @@ static int gpencil_sculpt_brush_modal(bContext *C, wmOperator *op, const wmEvent
   return OPERATOR_RUNNING_MODAL;
 }
 
-/* Also used for weight paint. */
 void GPENCIL_OT_sculpt_paint(wmOperatorType *ot)
 {
   /* identifiers */

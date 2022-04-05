@@ -15,7 +15,10 @@
  *
  * The Original Code is Copyright (C) 2012 Blender Foundation.
  * All rights reserved.
- *
+ */
+
+/** \file
+ * \ingroup intern_utf_conv
  */
 
 #include "utfconv.h"
@@ -53,7 +56,7 @@ size_t count_utf_8_from_16(const wchar_t *string16)
           }
           else {
             if (u < 0xE000) {
-              /*illigal*/;
+              /*illegal*/;
             }
             else {
               count += 3;

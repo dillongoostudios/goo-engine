@@ -84,6 +84,9 @@ bool BKE_vfont_to_curve_ex(struct Object *ob,
                            bool *r_text_free,
                            struct CharTrans **r_chartransdata);
 bool BKE_vfont_to_curve_nubase(struct Object *ob, int mode, struct ListBase *r_nubase);
+/**
+ * \warning Expects to have access to evaluated data (i.e. passed object should be evaluated one).
+ */
 bool BKE_vfont_to_curve(struct Object *ob, int mode);
 void BKE_vfont_build_char(struct Curve *cu,
                           struct ListBase *nubase,
@@ -93,7 +96,7 @@ void BKE_vfont_build_char(struct Curve *cu,
                           float ofsy,
                           float rot,
                           int charidx,
-                          const float fsize);
+                          float fsize);
 
 int BKE_vfont_select_get(struct Object *ob, int *r_start, int *r_end);
 void BKE_vfont_select_clamp(struct Object *ob);
@@ -101,7 +104,7 @@ void BKE_vfont_select_clamp(struct Object *ob);
 void BKE_vfont_clipboard_free(void);
 void BKE_vfont_clipboard_set(const char32_t *text_buf,
                              const struct CharInfo *info_buf,
-                             const size_t len);
+                             size_t len);
 void BKE_vfont_clipboard_get(char32_t **r_text_buf,
                              struct CharInfo **r_info_buf,
                              size_t *r_len_utf8,

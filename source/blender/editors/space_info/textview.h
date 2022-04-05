@@ -73,8 +73,15 @@ typedef struct TextViewContext {
 
 } TextViewContext;
 
+/**
+ * \param r_mval_pick_item: The resulting item clicked on using \a mval_init.
+ * Set from the void pointer which holds the current iterator.
+ * Its type depends on the data being iterated over.
+ * \param r_mval_pick_offset: The offset in bytes of the \a mval_init.
+ * Use for selection.
+ */
 int textview_draw(struct TextViewContext *tvc,
-                  const bool do_draw,
+                  bool do_draw,
                   const int mval_init[2],
                   void **r_mval_pick_item,
                   int *r_mval_pick_offset);

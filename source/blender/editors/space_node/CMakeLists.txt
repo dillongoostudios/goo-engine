@@ -39,22 +39,22 @@ set(INC
 
 set(SRC
   drawnode.cc
+  link_drag_search.cc
   node_add.cc
   node_context_path.cc
   node_draw.cc
   node_edit.cc
   node_geometry_attribute_search.cc
-  node_gizmo.c
+  node_gizmo.cc
   node_group.cc
-  node_ops.c
+  node_ops.cc
   node_relationships.cc
   node_select.cc
   node_templates.cc
-  node_toolbar.cc
   node_view.cc
-  space_node.c
+  space_node.cc
 
-  node_intern.h
+  node_intern.hh
 )
 
 set(LIB

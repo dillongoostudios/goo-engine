@@ -51,8 +51,6 @@ bool BlenderOutputDriver::read_render_tile(const Tile &tile)
 
   BL::RenderLayer b_rlay = *b_single_rlay;
 
-  vector<float> pixels(tile.size.x * tile.size.y * 4);
-
   /* Copy each pass.
    * TODO:copy only the required ones for better performance? */
   for (BL::RenderPass &b_pass : b_rlay.passes) {
@@ -66,7 +64,7 @@ bool BlenderOutputDriver::read_render_tile(const Tile &tile)
 
 bool BlenderOutputDriver::update_render_tile(const Tile &tile)
 {
-  /* Use final write for preview renders, otherwise render result wouldn't be be updated
+  /* Use final write for preview renders, otherwise render result wouldn't be updated
    * quickly on Blender side. For all other cases we use the display driver. */
   if (b_engine_.is_preview()) {
     write_render_tile(tile);
@@ -109,7 +107,7 @@ void BlenderOutputDriver::write_render_tile(const Tile &tile)
 
   BL::RenderLayer b_rlay = *b_single_rlay;
 
-  vector<float> pixels(tile.size.x * tile.size.y * 4);
+  vector<float> pixels(static_cast<size_t>(tile.size.x) * tile.size.y * 4);
 
   /* Copy each pass. */
   for (BL::RenderPass &b_pass : b_rlay.passes) {
@@ -120,7 +118,7 @@ void BlenderOutputDriver::write_render_tile(const Tile &tile)
     b_pass.rect(&pixels[0]);
   }
 
-  b_engine_.end_result(b_rr, true, false, true);
+  b_engine_.end_result(b_rr, false, false, true);
 }
 
 CCL_NAMESPACE_END

@@ -70,6 +70,8 @@ NodeTreeRef::NodeTreeRef(bNodeTree *btree) : btree_(btree)
           break;
         }
       }
+      BLI_assert(internal_link.from_ != nullptr);
+      BLI_assert(internal_link.to_ != nullptr);
       node.internal_links_.append(&internal_link);
     }
 
@@ -114,6 +116,22 @@ NodeTreeRef::NodeTreeRef(bNodeTree *btree) : btree_(btree)
   for (NodeRef *node : nodes_by_id_) {
     const bNodeType *nodetype = node->bnode_->typeinfo;
     nodes_by_type_.add(nodetype, node);
+  }
+
+  const Span<const NodeRef *> group_output_nodes = this->nodes_by_type("NodeGroupOutput");
+  if (group_output_nodes.is_empty()) {
+    group_output_node_ = nullptr;
+  }
+  else if (group_output_nodes.size() == 1) {
+    group_output_node_ = group_output_nodes.first();
+  }
+  else {
+    for (const NodeRef *group_output : group_output_nodes) {
+      if (group_output->bnode_->flag & NODE_DO_OUTPUT) {
+        group_output_node_ = group_output;
+        break;
+      }
+    }
   }
 }
 
@@ -441,9 +459,6 @@ static bool has_link_cycles_recursive(const NodeRef &node,
   return false;
 }
 
-/**
- * \return True when there is a link cycle. Unavailable sockets are ignored.
- */
 bool NodeTreeRef::has_link_cycles() const
 {
   const int node_amount = nodes_by_id_.size();
@@ -570,10 +585,6 @@ static void toposort_from_start_node(const NodeTreeRef::ToposortDirection direct
   }
 }
 
-/**
- * Sort nodes topologically from left to right or right to left.
- * In the future the result if this could be cached on #NodeTreeRef.
- */
 NodeTreeRef::ToposortResult NodeTreeRef::toposort(const ToposortDirection direction) const
 {
   ToposortResult result;

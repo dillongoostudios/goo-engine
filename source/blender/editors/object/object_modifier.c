@@ -152,12 +152,6 @@ static void object_force_modifier_bind_simple_options(Depsgraph *depsgraph,
   md_eval->mode = mode;
 }
 
-/**
- * Add a modifier to given object, including relevant extra processing needed by some physics types
- * (particles, simulations...).
- *
- * \param scene: is only used to set current frame in some cases, and may be NULL.
- */
 ModifierData *ED_object_modifier_add(
     ReportList *reports, Main *bmain, Scene *scene, Object *ob, const char *name, int type)
 {
@@ -264,14 +258,6 @@ static bool object_has_modifier(const Object *ob, const ModifierData *exclude, M
   return false;
 }
 
-/* If the object data of 'orig_ob' has other users, run 'callback' on
- * each of them.
- *
- * If include_orig is true, the callback will run on 'orig_ob' too.
- *
- * If the callback ever returns true, iteration will stop and the
- * function value will be true. Otherwise the function returns false.
- */
 bool ED_object_iter_other(Main *bmain,
                           Object *orig_ob,
                           const bool include_orig,
@@ -314,9 +300,6 @@ static bool object_has_modifier_cb(Object *ob, void *data)
   return object_has_modifier(ob, NULL, type);
 }
 
-/* Use with ED_object_iter_other(). Sets the total number of levels
- * for any multires modifiers on the object to the int pointed to by
- * callback_data. */
 bool ED_object_multires_update_totlevels_cb(Object *ob, void *totlevel_v)
 {
   int totlevel = *((char *)totlevel_v);
@@ -731,7 +714,7 @@ static bool modifier_apply_shape(Main *bmain,
     BKE_id_free(NULL, mesh_applied);
   }
   else {
-    /* TODO: implement for hair, point-clouds and volumes. */
+    /* TODO: implement for hair, point clouds and volumes. */
     BKE_report(reports, RPT_ERROR, "Cannot apply modifier for this object type");
     return false;
   }
@@ -779,6 +762,9 @@ static bool modifier_apply_obdata(
       Main *bmain = DEG_get_bmain(depsgraph);
       BKE_object_material_from_eval_data(bmain, ob, &mesh_applied->id);
       BKE_mesh_nomain_to_mesh(mesh_applied, me, ob, &CD_MASK_MESH, true);
+
+      /* Anonymous attributes shouldn't be available on the applied geometry. */
+      BKE_mesh_anonymous_attributes_remove(me);
 
       if (md_eval->type == eModifierType_Multires) {
         multires_customdata_delete(me);
@@ -830,7 +816,7 @@ static bool modifier_apply_obdata(
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
   }
   else {
-    /* TODO: implement for hair, point-clouds and volumes. */
+    /* TODO: implement for hair, point clouds and volumes. */
     BKE_report(reports, RPT_ERROR, "Cannot apply modifier for this object type");
     return false;
   }
@@ -1696,6 +1682,8 @@ void OBJECT_OT_modifier_set_active(wmOperatorType *ot)
 }
 
 /** \} */
+
+/* ------------------------------------------------------------------- */
 /** \name Copy Modifier To Selected Operator
  * \{ */
 
@@ -2695,6 +2683,7 @@ void OBJECT_OT_skin_armature_create(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
 }
+
 /** \} */
 
 /* ------------------------------------------------------------------- */

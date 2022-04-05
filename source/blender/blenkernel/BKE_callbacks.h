@@ -114,14 +114,14 @@ typedef enum {
 
 typedef struct bCallbackFuncStore {
   struct bCallbackFuncStore *next, *prev;
-  void (*func)(struct Main *, struct PointerRNA **, const int num_pointers, void *arg);
+  void (*func)(struct Main *, struct PointerRNA **, int num_pointers, void *arg);
   void *arg;
   short alloc;
 } bCallbackFuncStore;
 
 void BKE_callback_exec(struct Main *bmain,
                        struct PointerRNA **pointers,
-                       const int num_pointers,
+                       int num_pointers,
                        eCbEvent evt);
 void BKE_callback_exec_null(struct Main *bmain, eCbEvent evt);
 void BKE_callback_exec_id(struct Main *bmain, struct ID *id, eCbEvent evt);
@@ -133,6 +133,9 @@ void BKE_callback_add(bCallbackFuncStore *funcstore, eCbEvent evt);
 void BKE_callback_remove(bCallbackFuncStore *funcstore, eCbEvent evt);
 
 void BKE_callback_global_init(void);
+/**
+ * Call on application exit.
+ */
 void BKE_callback_global_finalize(void);
 
 #ifdef __cplusplus

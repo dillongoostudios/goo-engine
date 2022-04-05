@@ -27,6 +27,7 @@
 
 #include "BLI_listbase.h"
 #include "BLI_string.h"
+#include "BLI_string_ref.hh"
 
 #include "BKE_animsys.h"
 #include "BKE_lib_id.h"
@@ -36,6 +37,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "versioning_common.h"
+
+using blender::StringRef;
 
 ARegion *do_versions_add_region_if_not_found(ListBase *regionbase,
                                              int region_type,
@@ -58,11 +61,6 @@ ARegion *do_versions_add_region_if_not_found(ListBase *regionbase,
   return new_region;
 }
 
-/**
- * Rename if the ID doesn't exist.
- *
- * \return the ID (if found).
- */
 ID *do_versions_rename_id(Main *bmain,
                           const short id_type,
                           const char *name_src,
@@ -101,6 +99,27 @@ static void change_node_socket_name(ListBase *sockets, const char *old_name, con
   }
 }
 
+void version_node_socket_id_delim(bNodeSocket *socket)
+{
+  StringRef name = socket->name;
+  StringRef id = socket->identifier;
+
+  if (!id.startswith(name)) {
+    /* We only need to affect the case where the identifier starts with the name. */
+    return;
+  }
+
+  StringRef id_number = id.drop_known_prefix(name);
+  if (id_number.is_empty()) {
+    /* The name was already unique, and didn't need numbers at the end for the id. */
+    return;
+  }
+
+  if (id_number.startswith(".")) {
+    socket->identifier[name.size()] = '_';
+  }
+}
+
 void version_node_socket_name(bNodeTree *ntree,
                               const int node_type,
                               const char *old_name,
@@ -127,9 +146,9 @@ void version_node_input_socket_name(bNodeTree *ntree,
 }
 
 void version_node_output_socket_name(bNodeTree *ntree,
-                                    const int node_type,
-                                    const char *old_name,
-                                    const char *new_name)
+                                     const int node_type,
+                                     const char *old_name,
+                                     const char *new_name)
 {
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
     if (node->type == node_type) {
@@ -138,9 +157,21 @@ void version_node_output_socket_name(bNodeTree *ntree,
   }
 }
 
-/**
- * Replace the ID name of all nodes in the tree with the given type with the new name.
- */
+bNodeSocket *version_node_add_socket_if_not_exist(bNodeTree *ntree,
+                                                  bNode *node,
+                                                  eNodeSocketInOut in_out,
+                                                  int type,
+                                                  int subtype,
+                                                  const char *identifier,
+                                                  const char *name)
+{
+  bNodeSocket *sock = nodeFindSocket(node, in_out, identifier);
+  if (sock != nullptr) {
+    return sock;
+  }
+  return nodeAddStaticSocket(ntree, node, in_out, type, subtype, identifier, name);
+}
+
 void version_node_id(bNodeTree *ntree, const int node_type, const char *new_name)
 {
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
@@ -152,23 +183,6 @@ void version_node_id(bNodeTree *ntree, const int node_type, const char *new_name
   }
 }
 
-/**
- * Adjust animation data for newly added node sockets.
- *
- * Node sockets are addressed by their index (in their RNA path, and thus FCurves/drivers), and
- * thus when a new node is added in the middle of the list, existing animation data needs to be
- * adjusted.
- *
- * Since this is about animation data, it only concerns input sockets.
- *
- * \param node_tree_type node tree type that has these nodes, for example NTREE_SHADER.
- * \param node_type node type to adjust, for example SH_NODE_BSDF_PRINCIPLED.
- * \param socket_index_orig the original index of the moved socket; when socket 4 moved to 6,
- * pass 4 here.
- * \param socket_index_offset the offset of the nodes, so when socket 4 moved to 6,
- * pass 2 here.
- * \param total_number_of_sockets the total number of sockets in the node.
- */
 void version_node_socket_index_animdata(Main *bmain,
                                         const int node_tree_type,
                                         const int node_type,
@@ -207,5 +221,21 @@ void version_node_socket_index_animdata(Main *bmain,
       }
     }
     FOREACH_NODETREE_END;
+  }
+}
+
+void version_socket_update_is_used(bNodeTree *ntree)
+{
+  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    LISTBASE_FOREACH (bNodeSocket *, socket, &node->inputs) {
+      socket->flag &= ~SOCK_IN_USE;
+    }
+    LISTBASE_FOREACH (bNodeSocket *, socket, &node->outputs) {
+      socket->flag &= ~SOCK_IN_USE;
+    }
+  }
+  LISTBASE_FOREACH (bNodeLink *, link, &ntree->links) {
+    link->fromsock->flag |= SOCK_IN_USE;
+    link->tosock->flag |= SOCK_IN_USE;
   }
 }

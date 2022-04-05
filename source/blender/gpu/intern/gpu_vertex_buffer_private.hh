@@ -60,34 +60,36 @@ class VertBuf {
   virtual ~VertBuf();
 
   void init(const GPUVertFormat *format, GPUUsageType usage);
-  void clear(void);
+  void clear();
 
   /* Data management. */
   void allocate(uint vert_len);
   void resize(uint vert_len);
-  void upload(void);
+  void upload();
   virtual void bind_as_ssbo(uint binding) = 0;
 
-  VertBuf *duplicate(void);
+  virtual void wrap_handle(uint64_t handle) = 0;
+
+  VertBuf *duplicate();
 
   /* Size of the data allocated. */
-  size_t size_alloc_get(void) const
+  size_t size_alloc_get() const
   {
     BLI_assert(format.packed);
     return vertex_alloc * format.stride;
   }
   /* Size of the data uploaded to the GPU. */
-  size_t size_used_get(void) const
+  size_t size_used_get() const
   {
     BLI_assert(format.packed);
     return vertex_len * format.stride;
   }
 
-  void reference_add(void)
+  void reference_add()
   {
     handle_refcount_++;
   }
-  void reference_remove(void)
+  void reference_remove()
   {
     BLI_assert(handle_refcount_ > 0);
     handle_refcount_--;
@@ -96,15 +98,15 @@ class VertBuf {
     }
   }
 
-  virtual void update_sub(uint start, uint len, void *data) = 0;
+  virtual void update_sub(uint start, uint len, const void *data) = 0;
   virtual const void *read() const = 0;
   virtual void *unmap(const void *mapped_data) const = 0;
 
  protected:
-  virtual void acquire_data(void) = 0;
-  virtual void resize_data(void) = 0;
-  virtual void release_data(void) = 0;
-  virtual void upload_data(void) = 0;
+  virtual void acquire_data() = 0;
+  virtual void resize_data() = 0;
+  virtual void release_data() = 0;
+  virtual void upload_data() = 0;
   virtual void duplicate_data(VertBuf *dst) = 0;
 };
 

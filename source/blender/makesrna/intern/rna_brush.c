@@ -1283,7 +1283,7 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
   static EnumPropertyItem gppaint_mode_types_items[] = {
       {GPPAINT_MODE_STROKE, "STROKE", 0, "Stroke", "Vertex Color affects to Stroke only"},
       {GPPAINT_MODE_FILL, "FILL", 0, "Fill", "Vertex Color affects to Fill only"},
-      {GPPAINT_MODE_BOTH, "BOTH", 0, "Stroke and Fill", "Vertex Color affects to Stroke and Fill"},
+      {GPPAINT_MODE_BOTH, "BOTH", 0, "Stroke & Fill", "Vertex Color affects to Stroke and Fill"},
       {0, NULL, 0, NULL, NULL},
   };
 
@@ -1629,12 +1629,13 @@ static void rna_def_gpencil_options(BlenderRNA *brna)
       prop, "Stroke Extension", "Strokes end extension for closing gaps, use zero to disable");
   RNA_def_parameter_clear_flags(prop, PROP_ANIMATABLE, 0);
 
-  /* Number of pixels to dilate fill area. */
+  /* Number of pixels to dilate fill area. Negative values contract the filled area. */
   prop = RNA_def_property(srna, "dilate", PROP_INT, PROP_PIXEL);
   RNA_def_property_int_sdna(prop, NULL, "dilate_pixels");
-  RNA_def_property_range(prop, 0, 20);
+  RNA_def_property_range(prop, -40, 40);
   RNA_def_property_int_default(prop, 1);
-  RNA_def_property_ui_text(prop, "Dilate", "Number of pixels to dilate fill area");
+  RNA_def_property_ui_text(
+      prop, "Dilate/Contract", "Number of pixels to expand or contract fill area");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
   RNA_def_property_update(prop, NC_GPENCIL | ND_DATA, NULL);
 

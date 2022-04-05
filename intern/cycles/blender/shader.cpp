@@ -45,7 +45,8 @@ typedef map<string, ConvertNode *> ProxyMap;
 
 void BlenderSync::find_shader(BL::ID &id, array<Node *> &used_shaders, Shader *default_shader)
 {
-  Shader *shader = (id) ? shader_map.find(id) : default_shader;
+  Shader *synced_shader = (id) ? shader_map.find(id) : nullptr;
+  Shader *shader = (synced_shader) ? synced_shader : default_shader;
 
   used_shaders.push_back_slow(shader);
   shader->tag_used(scene);
@@ -378,10 +379,19 @@ static ShaderNode *add_node(Scene *scene,
   }
   else if (b_node.is_a(&RNA_ShaderNodeMapRange)) {
     BL::ShaderNodeMapRange b_map_range_node(b_node);
-    MapRangeNode *map_range_node = graph->create_node<MapRangeNode>();
-    map_range_node->set_clamp(b_map_range_node.clamp());
-    map_range_node->set_range_type((NodeMapRangeType)b_map_range_node.interpolation_type());
-    node = map_range_node;
+    if (b_map_range_node.data_type() == BL::ShaderNodeMapRange::data_type_FLOAT_VECTOR) {
+      VectorMapRangeNode *vector_map_range_node = graph->create_node<VectorMapRangeNode>();
+      vector_map_range_node->set_use_clamp(b_map_range_node.clamp());
+      vector_map_range_node->set_range_type(
+          (NodeMapRangeType)b_map_range_node.interpolation_type());
+      node = vector_map_range_node;
+    }
+    else {
+      MapRangeNode *map_range_node = graph->create_node<MapRangeNode>();
+      map_range_node->set_clamp(b_map_range_node.clamp());
+      map_range_node->set_range_type((NodeMapRangeType)b_map_range_node.interpolation_type());
+      node = map_range_node;
+    }
   }
   else if (b_node.is_a(&RNA_ShaderNodeClamp)) {
     BL::ShaderNodeClamp b_clamp_node(b_node);
@@ -680,6 +690,9 @@ static ShaderNode *add_node(Scene *scene,
   else if (b_node.is_a(&RNA_ShaderNodeHairInfo)) {
     node = graph->create_node<HairInfoNode>();
   }
+  else if (b_node.is_a(&RNA_ShaderNodePointInfo)) {
+    node = graph->create_node<PointInfoNode>();
+  }
   else if (b_node.is_a(&RNA_ShaderNodeVolumeInfo)) {
     node = graph->create_node<VolumeInfoNode>();
   }
@@ -767,7 +780,7 @@ static ShaderNode *add_node(Scene *scene,
       }
       else {
         ustring filename = ustring(
-            image_user_file_path(b_image_user, b_image, b_scene.frame_current(), true));
+            image_user_file_path(b_image_user, b_image, b_scene.frame_current()));
         image->set_filename(filename);
       }
     }
@@ -804,7 +817,7 @@ static ShaderNode *add_node(Scene *scene,
       }
       else {
         env->set_filename(
-            ustring(image_user_file_path(b_image_user, b_image, b_scene.frame_current(), false)));
+            ustring(image_user_file_path(b_image_user, b_image, b_scene.frame_current())));
       }
     }
     node = env;
@@ -1574,18 +1587,13 @@ void BlenderSync::sync_lights(BL::Depsgraph &b_depsgraph, bool update_all)
   }
 }
 
-void BlenderSync::sync_shaders(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d)
+void BlenderSync::sync_shaders(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d, bool update_all)
 {
-  /* for auto refresh images */
-  ImageManager *image_manager = scene->image_manager;
-  const int frame = b_scene.frame_current();
-  const bool auto_refresh_update = image_manager->set_animation_frame_update(frame);
-
   shader_map.pre_sync();
 
-  sync_world(b_depsgraph, b_v3d, auto_refresh_update);
-  sync_lights(b_depsgraph, auto_refresh_update);
-  sync_materials(b_depsgraph, auto_refresh_update);
+  sync_world(b_depsgraph, b_v3d, update_all);
+  sync_lights(b_depsgraph, update_all);
+  sync_materials(b_depsgraph, update_all);
 }
 
 CCL_NAMESPACE_END

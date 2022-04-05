@@ -99,7 +99,7 @@ static bool find_attribute(const std::string &attributes, const char *search_att
  */
 static bool test_onedrive_file_is_placeholder(const char *path)
 {
-  /* Note: Currently only checking for the "com.microsoft.OneDrive.RecallOnOpen" extended file
+  /* NOTE: Currently only checking for the "com.microsoft.OneDrive.RecallOnOpen" extended file
    * attribute. In theory this attribute can also be set on files that aren't located inside a
    * OneDrive folder. Maybe additional checks are required? */
 
@@ -183,4 +183,21 @@ eFileAttributes BLI_file_attributes(const char *path)
   }
 
   return (eFileAttributes)ret;
+}
+
+const char *BLI_expand_tilde(const char *path_with_tilde)
+{
+  static char path_expanded[FILE_MAX];
+  @autoreleasepool {
+    const NSString *const str_with_tilde = [[NSString alloc] initWithCString:path_with_tilde
+                                                                    encoding:NSUTF8StringEncoding];
+    if (!str_with_tilde) {
+      return nullptr;
+    }
+    const NSString *const str_expanded = [str_with_tilde stringByExpandingTildeInPath];
+    [str_expanded getCString:path_expanded
+                   maxLength:sizeof(path_expanded)
+                    encoding:NSUTF8StringEncoding];
+  }
+  return path_expanded;
 }

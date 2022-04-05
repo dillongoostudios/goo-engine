@@ -139,7 +139,7 @@ std::optional<std::string> CryptomatteSession::operator[](float encoded_hash) co
   return std::nullopt;
 }
 
-CryptomatteSession *BKE_cryptomatte_init(void)
+CryptomatteSession *BKE_cryptomatte_init()
 {
   CryptomatteSession *session = new CryptomatteSession();
   return session;
@@ -212,7 +212,6 @@ float BKE_cryptomatte_hash_to_float(uint32_t cryptomatte_hash)
   return blender::bke::cryptomatte::CryptomatteHash(cryptomatte_hash).float_encoded();
 }
 
-/* Find an ID in the given main that matches the given encoded float. */
 bool BKE_cryptomatte_find_name(const CryptomatteSession *session,
                                const float encoded_hash,
                                char *r_name,
@@ -279,13 +278,13 @@ void BKE_cryptomatte_matte_id_to_entries(NodeCryptomatte *node_storage, const ch
       token = token.substr(first, (last - first + 1));
       if (*token.begin() == '<' && *(--token.end()) == '>') {
         float encoded_hash = atof(token.substr(1, token.length() - 2).c_str());
-        entry = (CryptomatteEntry *)MEM_callocN(sizeof(CryptomatteEntry), __func__);
+        entry = MEM_cnew<CryptomatteEntry>(__func__);
         entry->encoded_hash = encoded_hash;
       }
       else {
         const char *name = token.c_str();
         int name_len = token.length();
-        entry = (CryptomatteEntry *)MEM_callocN(sizeof(CryptomatteEntry), __func__);
+        entry = MEM_cnew<CryptomatteEntry>(__func__);
         STRNCPY(entry->name, name);
         uint32_t hash = BKE_cryptomatte_hash(name, name_len);
         entry->encoded_hash = BKE_cryptomatte_hash_to_float(hash);
@@ -489,10 +488,6 @@ std::string BKE_cryptomatte_meta_data_key(const StringRef layer_name, const Stri
   return "cryptomatte/" + cryptomatte_layer_name_hash(layer_name) + "/" + key_name;
 }
 
-/* Extracts the cryptomatte name from a render pass name.
- *
- * Example: A render pass could be named `CryptoObject00`. This
- *   function would remove the trailing digits and return `CryptoObject`. */
 StringRef BKE_cryptomatte_extract_layer_name(const StringRef render_pass_name)
 {
   int64_t last_token = render_pass_name.size();
@@ -525,16 +520,6 @@ std::string CryptomatteHash::hex_encoded() const
   return encoded.str();
 }
 
-/* Convert a cryptomatte hash to a float.
- *
- * Cryptomatte hashes are stored in float textures and images. The conversion is taken from the
- * cryptomatte specification. See Floating point conversion section in
- * https://github.com/Psyop/Cryptomatte/blob/master/specification/cryptomatte_specification.pdf.
- *
- * The conversion uses as many 32 bit floating point values as possible to minimize hash
- * collisions. Unfortunately not all 32 bits can be used as NaN and Inf can be problematic.
- *
- * Note that this conversion assumes to be running on a L-endian system. */
 float CryptomatteHash::float_encoded() const
 {
   uint32_t mantissa = hash & ((1 << 23) - 1);
@@ -626,7 +611,6 @@ void CryptomatteStampDataCallbackData::extract_layer_names(void *_data,
   data->hash_to_layer_name.add(layer_hash, propvalue);
 }
 
-/* C type callback function (StampCallback). */
 void CryptomatteStampDataCallbackData::extract_layer_manifest(void *_data,
                                                               const char *propname,
                                                               char *propvalue,

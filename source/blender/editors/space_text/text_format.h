@@ -33,7 +33,9 @@ typedef struct FlattenString {
   int pos, len;
 } FlattenString;
 
-/* format continuation flags (stored just after the NULL terminator) */
+/**
+ * Format continuation flags (stored just after the NULL terminator).
+ */
 enum {
   FMT_CONT_NOP = 0,                /* no continuation */
   FMT_CONT_QUOTESINGLE = (1 << 0), /* single quotes */
@@ -48,11 +50,28 @@ enum {
 
 int flatten_string(const struct SpaceText *st, FlattenString *fs, const char *in);
 void flatten_string_free(FlattenString *fs);
+/**
+ * Takes a string within `fs->buf` and returns its length.
+ */
 int flatten_string_strlen(FlattenString *fs, const char *str);
 
+/**
+ * Ensures the format string for the given line is long enough, reallocating
+ * as needed. Allocation is done here, alone, to ensure consistency.
+ */
 int text_check_format_len(TextLine *line, unsigned int len);
-void text_format_fill(const char **str_p, char **fmt_p, const char type, const int len);
-void text_format_fill_ascii(const char **str_p, char **fmt_p, const char type, const int len);
+/**
+ * Fill the string with formatting constant,
+ * advancing \a str_p and \a fmt_p
+ *
+ * \param len: length in bytes of \a fmt_p to fill.
+ */
+void text_format_fill(const char **str_p, char **fmt_p, char type, int len);
+/**
+ * ASCII version of #text_format_fill,
+ * use when we no the text being stepped over is ascii (as is the case for most keywords)
+ */
+void text_format_fill_ascii(const char **str_p, char **fmt_p, char type, int len);
 
 /* *** Generalize Formatting *** */
 typedef struct TextFormatType {
@@ -69,7 +88,7 @@ typedef struct TextFormatType {
    *
    * See: FMT_TYPE_ enums below
    */
-  void (*format_line)(SpaceText *st, TextLine *line, const bool do_next);
+  void (*format_line)(SpaceText *st, TextLine *line, bool do_next);
 
   const char **ext; /* NULL terminated extensions */
 } TextFormatType;

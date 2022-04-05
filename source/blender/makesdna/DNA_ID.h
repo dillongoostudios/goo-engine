@@ -147,17 +147,18 @@ typedef struct IDProperty {
 #define DEFAULT_ALLOC_FOR_NULL_STRINGS 64
 
 /*->type*/
-enum {
+typedef enum eIDPropertyType {
   IDP_STRING = 0,
   IDP_INT = 1,
   IDP_FLOAT = 2,
+  /** Array containing int, floats, doubles or groups. */
   IDP_ARRAY = 5,
   IDP_GROUP = 6,
   IDP_ID = 7,
   IDP_DOUBLE = 8,
   IDP_IDPARRAY = 9,
-  IDP_NUMTYPES = 10,
-};
+} eIDPropertyType;
+#define IDP_NUMTYPES 10
 
 /** Used by some IDP utils, keep values in sync with type enum above. */
 enum {
@@ -315,7 +316,21 @@ typedef struct IDOverrideLibrary {
   struct ID *storage;
 
   IDOverrideLibraryRuntime *runtime;
+
+  void *_pad_0;
+
+  unsigned int flag;
+  char _pad_1[4];
 } IDOverrideLibrary;
+
+/* IDOverrideLibrary->flag */
+enum {
+  /**
+   * The override data-block should not be considered as part of an override hierarchy (generally
+   * because it was created as an single override, outside of any hierarchy consideration).
+   */
+  IDOVERRIDE_LIBRARY_FLAG_NO_HIERARCHY = 1 << 0,
+};
 
 /* watch it: Sequence has identical beginning. */
 /**
@@ -431,11 +446,20 @@ typedef struct Library {
 
   struct PackedFile *packedfile;
 
+  ushort tag;
+  char _pad_0[6];
+
   /* Temp data needed by read/write code, and liboverride recursive resync. */
   int temp_index;
   /** See BLENDER_FILE_VERSION, BLENDER_FILE_SUBVERSION, needed for do_versions. */
   short versionfile, subversionfile;
 } Library;
+
+/* Library.tag */
+enum eLibrary_Tag {
+  /* Automatic recursive resync was needed when linking/loading data from that library. */
+  LIBRARY_TAG_RESYNC_REQUIRED = 1 << 0,
+};
 
 /**
  * A weak library/ID reference for local data that has been appended, to allow re-using that local
@@ -510,12 +534,14 @@ typedef struct PreviewImage {
 
 #define ID_IS_LINKED(_id) (((const ID *)(_id))->lib != NULL)
 
-/* Note that this is a fairly high-level check, should be used at user interaction level, not in
+/* Note that these are fairly high-level checks, should be used at user interaction level, not in
  * BKE_library_override typically (especially due to the check on LIB_TAG_EXTERN). */
-#define ID_IS_OVERRIDABLE_LIBRARY(_id) \
-  (ID_IS_LINKED(_id) && !ID_MISSING(_id) && (((const ID *)(_id))->tag & LIB_TAG_EXTERN) != 0 && \
+#define ID_IS_OVERRIDABLE_LIBRARY_HIERARCHY(_id) \
+  (ID_IS_LINKED(_id) && !ID_MISSING(_id) && \
    (BKE_idtype_get_info_from_id((const ID *)(_id))->flags & IDTYPE_FLAGS_NO_LIBLINKING) == 0 && \
    !ELEM(GS(((ID *)(_id))->name), ID_SCE))
+#define ID_IS_OVERRIDABLE_LIBRARY(_id) \
+  (ID_IS_OVERRIDABLE_LIBRARY_HIERARCHY((_id)) && (((const ID *)(_id))->tag & LIB_TAG_EXTERN) != 0)
 
 /* NOTE: The three checks below do not take into account whether given ID is linked or not (when
  * chaining overrides over several libraries). User must ensure the ID is not linked itself
@@ -774,7 +800,9 @@ typedef enum IDRecalcFlag {
    * Use this tag with a scene ID which owns the sequences. */
   ID_RECALC_SEQUENCER_STRIPS = (1 << 14),
 
-  ID_RECALC_AUDIO_SEEK = (1 << 15),
+  /* Runs on frame-change (used for seeking audio too). */
+  ID_RECALC_FRAME_CHANGE = (1 << 15),
+
   ID_RECALC_AUDIO_FPS = (1 << 16),
   ID_RECALC_AUDIO_VOLUME = (1 << 17),
   ID_RECALC_AUDIO_MUTE = (1 << 18),
@@ -801,6 +829,9 @@ typedef enum IDRecalcFlag {
    * local one.
    */
   ID_RECALC_TAG_FOR_UNDO = (1 << 24),
+
+  /* The node tree has changed in a way that affects its output nodes. */
+  ID_RECALC_NTREE_OUTPUT = (1 << 25),
 
   /***************************************************************************
    * Pseudonyms, to have more semantic meaning in the actual code without

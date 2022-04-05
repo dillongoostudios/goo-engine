@@ -263,7 +263,7 @@ class VectorSet {
   }
 
   /**
-   * Get an Span referencing the keys vector. The referenced memory buffer is only valid as
+   * Get a Span referencing the keys vector. The referenced memory buffer is only valid as
    * long as the vector set is not changed.
    *
    * The keys must not be changed, because this would change their hash value.
@@ -465,6 +465,14 @@ class VectorSet {
   }
 
   /**
+   * Get an index range containing all valid indices for this array.
+   */
+  IndexRange index_range() const
+  {
+    return IndexRange(this->size());
+  }
+
+  /**
    * Print common statistics like size and collision count. This is useful for debugging purposes.
    */
   void print_stats(StringRef name = "") const
@@ -562,6 +570,10 @@ class VectorSet {
     if (this->size() == 0) {
       try {
         slots_.reinitialize(total_slots);
+        if (keys_ != nullptr) {
+          this->deallocate_keys_array(keys_);
+          keys_ = nullptr;
+        }
         keys_ = this->allocate_keys_array(usable_slots);
       }
       catch (...) {

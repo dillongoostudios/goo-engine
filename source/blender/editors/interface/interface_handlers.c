@@ -439,11 +439,11 @@ typedef struct uiHandleButtonData {
   float ungrab_mval[2];
 #endif
 
-  /* menu open (watch UI_screen_free_active_but) */
+  /* Menu open, see: #UI_screen_free_active_but_highlight. */
   uiPopupBlockHandle *menu;
   int menuretval;
 
-  /* search box (watch UI_screen_free_active_but) */
+  /* Search box see: #UI_screen_free_active_but_highlight. */
   ARegion *searchbox;
 #ifdef USE_KEYNAV_LIMIT
   struct uiKeyNavLock searchbox_keynav_state;
@@ -492,7 +492,7 @@ typedef struct uiAfterFunc {
 
   wmOperator *popup_op;
   wmOperatorType *optype;
-  int opcontext;
+  wmOperatorCallContext opcontext;
   PointerRNA *opptr;
 
   PointerRNA rnapoin;
@@ -555,7 +555,6 @@ bool ui_but_is_editing(const uiBut *but)
   return (data && ELEM(data->state, BUTTON_STATE_TEXT_EDITING, BUTTON_STATE_NUM_EDITING));
 }
 
-/* assumes event type is MOUSEPAN */
 void ui_pan_to_scroll(const wmEvent *event, int *type, int *val)
 {
   static int lastdy = 0;
@@ -594,11 +593,6 @@ static bool ui_but_find_select_in_enum__cmp(const uiBut *but_a, const uiBut *but
           (but_a->rnaprop == but_b->rnaprop));
 }
 
-/**
- * Finds the pressed button in an aligned row (typically an expanded enum).
- *
- * \param direction: Use when there may be multiple buttons pressed.
- */
 uiBut *ui_but_find_select_in_enum(uiBut *but, int direction)
 {
   uiBut *but_iter = but;
@@ -775,7 +769,7 @@ static uiAfterFunc *ui_afterfunc_new(void)
  */
 static void ui_handle_afterfunc_add_operator_ex(wmOperatorType *ot,
                                                 PointerRNA **properties,
-                                                int opcontext,
+                                                wmOperatorCallContext opcontext,
                                                 const uiBut *context_but)
 {
   uiAfterFunc *after = ui_afterfunc_new();
@@ -796,7 +790,7 @@ static void ui_handle_afterfunc_add_operator_ex(wmOperatorType *ot,
   }
 }
 
-void ui_handle_afterfunc_add_operator(wmOperatorType *ot, int opcontext)
+void ui_handle_afterfunc_add_operator(wmOperatorType *ot, wmOperatorCallContext opcontext)
 {
   ui_handle_afterfunc_add_operator_ex(ot, NULL, opcontext, NULL);
 }
@@ -1793,7 +1787,7 @@ static bool ui_but_is_drag_toggle(const uiBut *but)
 
 static bool ui_selectcontext_begin(bContext *C, uiBut *but, uiSelectContextStore *selctx_data)
 {
-  PointerRNA lptr, idptr;
+  PointerRNA lptr;
   PropertyRNA *lprop;
   bool success = false;
 
@@ -1827,68 +1821,48 @@ static bool ui_selectcontext_begin(bContext *C, uiBut *but, uiSelectContextStore
         if (i >= selctx_data->elems_len) {
           break;
         }
-        uiSelectContextElem *other = &selctx_data->elems[i];
-        /* TODO: de-duplicate copy_to_selected_button. */
-        if (link->ptr.data != ptr.data) {
-          if (use_path_from_id) {
-            /* Path relative to ID. */
-            lprop = NULL;
-            RNA_id_pointer_create(link->ptr.owner_id, &idptr);
-            RNA_path_resolve_property(&idptr, path, &lptr, &lprop);
-          }
-          else if (path) {
-            /* Path relative to elements from list. */
-            lprop = NULL;
-            RNA_path_resolve_property(&link->ptr, path, &lptr, &lprop);
-          }
-          else {
-            lptr = link->ptr;
-            lprop = prop;
-          }
 
-          /* lptr might not be the same as link->ptr! */
-          if ((lptr.data != ptr.data) && (lprop == prop) && RNA_property_editable(&lptr, lprop)) {
-            other->ptr = lptr;
-            if (is_array) {
-              if (rna_type == PROP_FLOAT) {
-                other->val_f = RNA_property_float_get_index(&lptr, lprop, index);
-              }
-              else if (rna_type == PROP_INT) {
-                other->val_i = RNA_property_int_get_index(&lptr, lprop, index);
-              }
-              /* ignored for now */
-#  if 0
-              else if (rna_type == PROP_BOOLEAN) {
-                other->val_b = RNA_property_boolean_get_index(&lptr, lprop, index);
-              }
-#  endif
-            }
-            else {
-              if (rna_type == PROP_FLOAT) {
-                other->val_f = RNA_property_float_get(&lptr, lprop);
-              }
-              else if (rna_type == PROP_INT) {
-                other->val_i = RNA_property_int_get(&lptr, lprop);
-              }
-              /* ignored for now */
-#  if 0
-              else if (rna_type == PROP_BOOLEAN) {
-                other->val_b = RNA_property_boolean_get(&lptr, lprop);
-              }
-              else if (rna_type == PROP_ENUM) {
-                other->val_i = RNA_property_enum_get(&lptr, lprop);
-              }
-#  endif
-            }
-
-            continue;
-          }
+        if (!UI_context_copy_to_selected_check(
+                &ptr, &link->ptr, prop, path, use_path_from_id, &lptr, &lprop)) {
+          selctx_data->elems_len -= 1;
+          i -= 1;
+          continue;
         }
 
-        selctx_data->elems_len -= 1;
-        i -= 1;
+        uiSelectContextElem *other = &selctx_data->elems[i];
+        other->ptr = lptr;
+        if (is_array) {
+          if (rna_type == PROP_FLOAT) {
+            other->val_f = RNA_property_float_get_index(&lptr, lprop, index);
+          }
+          else if (rna_type == PROP_INT) {
+            other->val_i = RNA_property_int_get_index(&lptr, lprop, index);
+          }
+          /* ignored for now */
+#  if 0
+            else if (rna_type == PROP_BOOLEAN) {
+              other->val_b = RNA_property_boolean_get_index(&lptr, lprop, index);
+            }
+#  endif
+        }
+        else {
+          if (rna_type == PROP_FLOAT) {
+            other->val_f = RNA_property_float_get(&lptr, lprop);
+          }
+          else if (rna_type == PROP_INT) {
+            other->val_i = RNA_property_int_get(&lptr, lprop);
+          }
+          /* ignored for now */
+#  if 0
+            else if (rna_type == PROP_BOOLEAN) {
+              other->val_b = RNA_property_boolean_get(&lptr, lprop);
+            }
+            else if (rna_type == PROP_ENUM) {
+              other->val_i = RNA_property_enum_get(&lptr, lprop);
+            }
+#  endif
+        }
       }
-
       success = (selctx_data->elems_len != 0);
     }
   }
@@ -2343,9 +2317,6 @@ static void ui_apply_but(
       break;
     case UI_BTYPE_LISTROW:
       ui_apply_but_LISTROW(C, block, but, data);
-      break;
-    case UI_BTYPE_DATASETROW:
-      ui_apply_but_ROW(C, block, but, data);
       break;
     case UI_BTYPE_TAB:
       ui_apply_but_TAB(C, but, data);
@@ -2995,11 +2966,6 @@ void ui_but_text_password_hide(char password_str[UI_MAX_PASSWORD_STR],
 /** \name Button Text Selection/Editing
  * \{ */
 
-/**
- * Use handling code to set a string for the button. Handles the case where the string is set for a
- * search button while the search menu is open, so the results are updated accordingly.
- * This is basically the same as pasting the string into the button.
- */
 void ui_but_set_string_interactive(bContext *C, uiBut *but, const char *value)
 {
   button_activate_state(C, but, BUTTON_STATE_TEXT_EDITING);
@@ -3529,8 +3495,17 @@ static void ui_textedit_begin(bContext *C, uiBut *but, uiHandleButtonData *data)
 
   ui_but_update(but);
 
-  /* Popup blocks don't support moving after creation, so don't change the view for them. */
-  if (!data->searchbox) {
+  /* Make sure the edited button is in view. */
+  if (data->searchbox) {
+    /* Popup blocks don't support moving after creation, so don't change the view for them. */
+  }
+  else if (UI_block_layout_needs_resolving(but->block)) {
+    /* Layout isn't resolved yet (may happen when activating while drawing through
+     * #UI_but_active_only()), so can't move it into view yet. This causes
+     * #ui_but_update_view_for_active() to run after the layout is resolved. */
+    but->changed = true;
+  }
+  else {
     UI_but_ensure_in_view(C, data->region, but);
   }
 
@@ -3565,6 +3540,12 @@ static void ui_textedit_end(bContext *C, uiBut *but, uiHandleButtonData *data)
         if ((ui_searchbox_apply(but, data->searchbox) == false) &&
             (ui_searchbox_find_index(data->searchbox, but->editstr) == -1) &&
             !but_search->results_are_suggestions) {
+
+          if (but->flag & UI_BUT_VALUE_CLEAR) {
+            /* It is valid for _VALUE_CLEAR flavor to have no active element
+             * (it's a valid way to unlink). */
+            but->editstr[0] = '\0';
+          }
           data->cancel = true;
 
           /* ensure menu (popup) too is closed! */
@@ -3781,7 +3762,12 @@ static void ui_do_but_textedit(
       case EVT_VKEY:
       case EVT_XKEY:
       case EVT_CKEY:
-        if (IS_EVENT_MOD(event, ctrl, oskey)) {
+#if defined(__APPLE__)
+        if ((event->oskey && !IS_EVENT_MOD(event, shift, alt, ctrl)) ||
+            (event->ctrl && !IS_EVENT_MOD(event, shift, alt, oskey))) {
+#else
+        if (event->ctrl && !IS_EVENT_MOD(event, shift, alt, oskey)) {
+#endif
           if (event->type == EVT_VKEY) {
             changed = ui_textedit_copypaste(but, data, UI_TEXTEDIT_PASTE);
           }
@@ -5498,7 +5484,7 @@ static int ui_do_but_NUM(
                                 log10f(number_but->step_size));
         }
         else {
-          value_step = (double)number_but->step_size * UI_PRECISION_FLOAT_SCALE;
+          value_step = (double)(number_but->step_size * UI_PRECISION_FLOAT_SCALE);
         }
         BLI_assert(value_step > 0.0f);
         const double value_test = (but->drawflag & UI_BUT_ACTIVE_LEFT) ?
@@ -7946,7 +7932,7 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
     const bool do_copy = event->type == EVT_CKEY && is_press_ctrl_but_no_shift;
     const bool do_paste = event->type == EVT_VKEY && is_press_ctrl_but_no_shift;
 
-    /* Specific handling for listrows, we try to find their overlapping tex button. */
+    /* Specific handling for list-rows, we try to find their overlapping text button. */
     if ((do_copy || do_paste) && but->type == UI_BTYPE_LISTROW) {
       uiBut *labelbut = ui_but_list_row_text_activate(C, but, data, event, BUTTON_ACTIVATE_OVER);
       if (labelbut) {
@@ -8022,7 +8008,6 @@ static int ui_do_button(bContext *C, uiBlock *block, uiBut *but, const wmEvent *
     case UI_BTYPE_CHECKBOX:
     case UI_BTYPE_CHECKBOX_N:
     case UI_BTYPE_ROW:
-    case UI_BTYPE_DATASETROW:
       retval = ui_do_but_TOG(C, but, data, event);
       break;
     case UI_BTYPE_TREEROW:
@@ -8195,9 +8180,6 @@ static void ui_blocks_set_tooltips(ARegion *region, const bool enable)
   }
 }
 
-/**
- * Recreate tool-tip (use to update dynamic tips)
- */
 void UI_but_tooltip_refresh(bContext *C, uiBut *but)
 {
   uiHandleButtonData *data = but->active;
@@ -8209,10 +8191,6 @@ void UI_but_tooltip_refresh(bContext *C, uiBut *but)
   }
 }
 
-/**
- * Removes tool-tip timer from active but
- * (meaning tool-tip is disabled until it's re-enabled again).
- */
 void UI_but_tooltip_timer_remove(bContext *C, uiBut *but)
 {
   uiHandleButtonData *data = but->active;
@@ -8780,11 +8758,6 @@ uiBut *UI_context_active_but_get(const bContext *C)
   return ui_context_button_active(CTX_wm_region(C), NULL);
 }
 
-/*
- * Version of #UI_context_active_get() that uses the result of #CTX_wm_menu()
- * if set. Does not traverse into parent menus, which may be wanted in some
- * cases.
- */
 uiBut *UI_context_active_but_get_respect_menu(const bContext *C)
 {
   ARegion *region_menu = CTX_wm_menu(C);
@@ -8808,12 +8781,6 @@ uiBlock *UI_region_block_find_mouse_over(const struct ARegion *region,
   return ui_block_find_mouse_over_ex(region, xy, only_clip);
 }
 
-/**
- * Version of #UI_context_active_but_get that also returns RNA property info.
- * Helper function for insert keyframe, reset to default, etc operators.
- *
- * \return active button, NULL if none found or if it doesn't contain valid RNA data.
- */
 uiBut *UI_context_active_but_prop_get(const bContext *C,
                                       struct PointerRNA *r_ptr,
                                       struct PropertyRNA **r_prop,
@@ -8835,7 +8802,7 @@ uiBut *UI_context_active_but_prop_get(const bContext *C,
   return activebut;
 }
 
-void UI_context_active_but_prop_handle(bContext *C)
+void UI_context_active_but_prop_handle(bContext *C, const bool handle_undo)
 {
   uiBut *activebut = ui_context_rna_button_active(C);
   if (activebut) {
@@ -8845,6 +8812,11 @@ void UI_context_active_but_prop_handle(bContext *C)
     uiBlock *block = activebut->block;
     if (block->handle_func) {
       block->handle_func(C, block->handle_func_arg, activebut->retval);
+    }
+    if (handle_undo) {
+      /* Update the button so the undo text uses the correct value. */
+      ui_but_update(activebut);
+      ui_apply_but_undo(activebut);
     }
   }
 }
@@ -8889,16 +8861,12 @@ wmOperator *UI_context_active_operator_get(const struct bContext *C)
   return NULL;
 }
 
-/**
- * Try to find a search-box region opened from a button in \a button_region.
- */
 ARegion *UI_region_searchbox_region_get(const ARegion *button_region)
 {
   uiBut *but = UI_region_active_but_get(button_region);
   return (but != NULL) ? but->active->searchbox : NULL;
 }
 
-/* helper function for insert keyframe, reset to default, etc operators */
 void UI_context_update_anim_flag(const bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
@@ -8947,10 +8915,6 @@ void UI_context_update_anim_flag(const bContext *C)
   }
 }
 
-/**
- * In some cases we may want to update the view (#View2D) in-between layout definition and drawing.
- * E.g. to make sure a button is visible while editing.
- */
 void ui_but_update_view_for_active(const bContext *C, const uiBlock *block)
 {
   uiBut *active_but = ui_block_active_but_get(block);
@@ -9010,11 +8974,6 @@ static int ui_handle_button_over(bContext *C, const wmEvent *event, ARegion *reg
   return WM_UI_HANDLER_CONTINUE;
 }
 
-/**
- * Exported to interface.c: #UI_but_active_only()
- * \note The region is only for the button.
- * The context needs to be set by the caller.
- */
 void ui_but_activate_event(bContext *C, ARegion *region, uiBut *but)
 {
   wmWindow *win = CTX_wm_window(C);
@@ -9032,12 +8991,6 @@ void ui_but_activate_event(bContext *C, ARegion *region, uiBut *but)
   ui_do_button(C, but->block, but, &event);
 }
 
-/**
- * Simulate moving the mouse over a button (or navigating to it with arrow keys).
- *
- * exported so menus can start with a highlighted button,
- * even if the mouse isn't over it
- */
 void ui_but_activate_over(bContext *C, ARegion *region, uiBut *but)
 {
   button_activate_init(C, region, but, BUTTON_ACTIVATE_OVER);
@@ -11277,10 +11230,6 @@ static int ui_handle_menus_recursive(bContext *C,
   return retval;
 }
 
-/**
- * Allow setting menu return value from externals.
- * E.g. WM might need to do this for exiting files correctly.
- */
 void UI_popup_menu_retval_set(const uiBlock *block, const int retval, const bool enable)
 {
   uiPopupBlockHandle *menu = block->handle;
@@ -11354,8 +11303,7 @@ static void ui_region_handler_remove(bContext *C, void *UNUSED(userdata))
     return;
   }
 
-  UI_blocklist_free(C, &region->uiblocks);
-
+  UI_blocklist_free(C, region);
   bScreen *screen = CTX_wm_screen(C);
   if (screen == NULL) {
     return;
@@ -11679,8 +11627,19 @@ bool UI_textbutton_activate_but(const bContext *C, uiBut *actbut)
 /** \name Public Utilities
  * \{ */
 
-/* is called by notifier */
-void UI_screen_free_active_but(const bContext *C, bScreen *screen)
+void UI_region_free_active_but_all(bContext *C, ARegion *region)
+{
+  LISTBASE_FOREACH (uiBlock *, block, &region->uiblocks) {
+    LISTBASE_FOREACH (uiBut *, but, &block->buttons) {
+      if (but->active == NULL) {
+        continue;
+      }
+      ui_but_active_free(C, but);
+    }
+  }
+}
+
+void UI_screen_free_active_but_highlight(const bContext *C, bScreen *screen)
 {
   wmWindow *win = CTX_wm_window(C);
 
@@ -11714,8 +11673,6 @@ uiBut *UI_but_active_drop_name_button(const bContext *C)
   return NULL;
 }
 
-/* returns true if highlighted button allows drop of names */
-/* called in region context */
 bool UI_but_active_drop_name(const bContext *C)
 {
   return UI_but_active_drop_name_button(C) != NULL;

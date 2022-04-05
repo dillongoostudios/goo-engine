@@ -100,6 +100,7 @@ LANGUAGES = (
     (45, "Abkhaz (Аԥсуа бызшәа)", "ab"),
     (46, "Thai (ภาษาไทย)", "th_TH"),
     (47, "Slovak (Slovenčina)", "sk_SK"),
+    (48, "Georgian (ქართული)", "ka"),
 )
 
 # Default context, in py (keep in sync with `BLT_translation.h`)!
@@ -355,6 +356,7 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "y",
     "y = (Ax + B)",
     # Sub-strings.
+    "and AMD Radeon Pro 21.Q4 driver or newer",
     "available with",
     "brown fox",
     "can't save image while rendering",
@@ -377,6 +379,7 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "image path can't be written to",
     "in memory to enable editing!",
     "insufficient content",
+    "into",
     "jumps over",
     "left",
     "local",
@@ -386,6 +389,7 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "performance impact!",
     "right",
     "the lazy dog",
+    "to the top level of the tree",
     "unable to load movie clip",
     "unable to load text",
     "unable to open the file",

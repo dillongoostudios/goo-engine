@@ -570,7 +570,8 @@ static void uhandle_restore_list(ListBase *undo_handles, bool use_init)
 
     if (changed) {
       BKE_image_mark_dirty(image, ibuf);
-      BKE_image_free_gputextures(image); /* force OpenGL reload */
+      /* TODO(jbakker): only mark areas that are actually updated to improve performance. */
+      BKE_image_partial_update_mark_full_update(image);
 
       if (ibuf->rect_float) {
         ibuf->userflags |= IB_RECT_INVALID; /* force recreate of char rect */
@@ -989,7 +990,6 @@ static void image_undosys_foreach_ID_ref(UndoStep *us_p,
   }
 }
 
-/* Export for ED_undo_sys. */
 void ED_image_undosys_type(UndoType *ut)
 {
   ut->name = "Image";
@@ -1040,7 +1040,6 @@ ListBase *ED_image_paint_tile_list_get(void)
   return &us->paint_tiles;
 }
 
-/* Restore painting image to previous state. Used for anchored and drag-dot style brushes. */
 void ED_image_undo_restore(UndoStep *us)
 {
   ListBase *paint_tiles = &((ImageUndoStep *)us)->paint_tiles;
@@ -1059,10 +1058,6 @@ static ImageUndoStep *image_undo_push_begin(const char *name, int paint_mode)
   return us;
 }
 
-/**
- * The caller is responsible for running #ED_image_undo_push_end,
- * failure to do so causes an invalid state for the undo system.
- */
 void ED_image_undo_push_begin(const char *name, int paint_mode)
 {
   image_undo_push_begin(name, paint_mode);

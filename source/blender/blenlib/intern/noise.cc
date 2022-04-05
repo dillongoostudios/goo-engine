@@ -50,21 +50,18 @@
 #include <cmath>
 #include <cstdint>
 
-#include "BLI_float2.hh"
-#include "BLI_float3.hh"
-#include "BLI_float4.hh"
 #include "BLI_math_base_safe.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_noise.hh"
 #include "BLI_utildefines.h"
 
 namespace blender::noise {
-/* ------------------------------
- * Jenkins Lookup3 Hash Functions
- * ------------------------------
+
+/* -------------------------------------------------------------------- */
+/** \name Jenkins Lookup3 Hash Functions
  *
  * https://burtleburtle.net/bob/c/lookup3.c
- *
- */
+ * \{ */
 
 BLI_INLINE uint32_t hash_bit_rotate(uint32_t x, uint32_t k)
 {
@@ -283,16 +280,17 @@ float4 hash_float_to_float4(float4 k)
                 hash_float_to_float(float4(k.y, k.z, k.w, k.x)));
 }
 
-/* ------------
- * Perlin Noise
- * ------------
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Perlin Noise
  *
  * Perlin, Ken. "Improving noise." Proceedings of the 29th annual conference on Computer graphics
  * and interactive techniques. 2002.
  *
  * This implementation is functionally identical to the implementations in EEVEE, OSL, and SVM. So
  * any changes should be applied in all relevant implementations.
- */
+ * \{ */
 
 /* Linear Interpolation. */
 BLI_INLINE float mix(float v0, float v1, float x)
@@ -757,25 +755,19 @@ float3 perlin_float3_fractal_distorted(float4 position,
                 perlin_fractal(position + random_float4_offset(5.0f), octaves, roughness));
 }
 
-/* --------------
- * Musgrave Noise
- * --------------
- */
+/** \} */
 
-/* 1D Musgrave fBm
- *
- * H: fractal increment parameter
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- *
- * from "Texturing and Modelling: A procedural approach"
- */
+/* -------------------------------------------------------------------- */
+/** \name Musgrave Noise
+ * \{ */
 
 float musgrave_fBm(const float co,
                    const float H,
                    const float lacunarity,
                    const float octaves_unclamped)
 {
+  /* From "Texturing and Modelling: A procedural approach". */
+
   float p = co;
   float value = 0.0f;
   float pwr = 1.0f;
@@ -795,13 +787,6 @@ float musgrave_fBm(const float co,
 
   return value;
 }
-
-/* 1D Musgrave Multifractal
- *
- * H: highest fractal dimension
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- */
 
 float musgrave_multi_fractal(const float co,
                              const float H,
@@ -827,14 +812,6 @@ float musgrave_multi_fractal(const float co,
 
   return value;
 }
-
-/* 1D Musgrave Heterogeneous Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hetero_terrain(const float co,
                               const float H,
@@ -866,14 +843,6 @@ float musgrave_hetero_terrain(const float co,
 
   return value;
 }
-
-/* 1D Hybrid Additive/Multiplicative Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hybrid_multi_fractal(const float co,
                                     const float H,
@@ -912,14 +881,6 @@ float musgrave_hybrid_multi_fractal(const float co,
   return value;
 }
 
-/* 1D Ridged Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
-
 float musgrave_ridged_multi_fractal(const float co,
                                     const float H,
                                     const float lacunarity,
@@ -951,20 +912,13 @@ float musgrave_ridged_multi_fractal(const float co,
   return value;
 }
 
-/* 2D Musgrave fBm
- *
- * H: fractal increment parameter
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- *
- * from "Texturing and Modelling: A procedural approach"
- */
-
 float musgrave_fBm(const float2 co,
                    const float H,
                    const float lacunarity,
                    const float octaves_unclamped)
 {
+  /* From "Texturing and Modelling: A procedural approach". */
+
   float2 p = co;
   float value = 0.0f;
   float pwr = 1.0f;
@@ -984,13 +938,6 @@ float musgrave_fBm(const float2 co,
 
   return value;
 }
-
-/* 2D Musgrave Multifractal
- *
- * H: highest fractal dimension
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- */
 
 float musgrave_multi_fractal(const float2 co,
                              const float H,
@@ -1016,14 +963,6 @@ float musgrave_multi_fractal(const float2 co,
 
   return value;
 }
-
-/* 2D Musgrave Heterogeneous Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hetero_terrain(const float2 co,
                               const float H,
@@ -1056,14 +995,6 @@ float musgrave_hetero_terrain(const float2 co,
 
   return value;
 }
-
-/* 2D Hybrid Additive/Multiplicative Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hybrid_multi_fractal(const float2 co,
                                     const float H,
@@ -1102,14 +1033,6 @@ float musgrave_hybrid_multi_fractal(const float2 co,
   return value;
 }
 
-/* 2D Ridged Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
-
 float musgrave_ridged_multi_fractal(const float2 co,
                                     const float H,
                                     const float lacunarity,
@@ -1141,20 +1064,13 @@ float musgrave_ridged_multi_fractal(const float2 co,
   return value;
 }
 
-/* 3D Musgrave fBm
- *
- * H: fractal increment parameter
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- *
- * from "Texturing and Modelling: A procedural approach"
- */
-
 float musgrave_fBm(const float3 co,
                    const float H,
                    const float lacunarity,
                    const float octaves_unclamped)
 {
+  /* From "Texturing and Modelling: A procedural approach". */
+
   float3 p = co;
   float value = 0.0f;
   float pwr = 1.0f;
@@ -1175,13 +1091,6 @@ float musgrave_fBm(const float3 co,
 
   return value;
 }
-
-/* 3D Musgrave Multifractal
- *
- * H: highest fractal dimension
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- */
 
 float musgrave_multi_fractal(const float3 co,
                              const float H,
@@ -1208,14 +1117,6 @@ float musgrave_multi_fractal(const float3 co,
 
   return value;
 }
-
-/* 3D Musgrave Heterogeneous Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hetero_terrain(const float3 co,
                               const float H,
@@ -1248,14 +1149,6 @@ float musgrave_hetero_terrain(const float3 co,
 
   return value;
 }
-
-/* 3D Hybrid Additive/Multiplicative Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hybrid_multi_fractal(const float3 co,
                                     const float H,
@@ -1294,14 +1187,6 @@ float musgrave_hybrid_multi_fractal(const float3 co,
   return value;
 }
 
-/* 3D Ridged Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
-
 float musgrave_ridged_multi_fractal(const float3 co,
                                     const float H,
                                     const float lacunarity,
@@ -1333,20 +1218,13 @@ float musgrave_ridged_multi_fractal(const float3 co,
   return value;
 }
 
-/* 4D Musgrave fBm
- *
- * H: fractal increment parameter
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- *
- * from "Texturing and Modelling: A procedural approach"
- */
-
 float musgrave_fBm(const float4 co,
                    const float H,
                    const float lacunarity,
                    const float octaves_unclamped)
 {
+  /* From "Texturing and Modelling: A procedural approach". */
+
   float4 p = co;
   float value = 0.0f;
   float pwr = 1.0f;
@@ -1367,13 +1245,6 @@ float musgrave_fBm(const float4 co,
 
   return value;
 }
-
-/* 4D Musgrave Multifractal
- *
- * H: highest fractal dimension
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- */
 
 float musgrave_multi_fractal(const float4 co,
                              const float H,
@@ -1400,14 +1271,6 @@ float musgrave_multi_fractal(const float4 co,
 
   return value;
 }
-
-/* 4D Musgrave Heterogeneous Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hetero_terrain(const float4 co,
                               const float H,
@@ -1440,14 +1303,6 @@ float musgrave_hetero_terrain(const float4 co,
 
   return value;
 }
-
-/* 4D Hybrid Additive/Multiplicative Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
 
 float musgrave_hybrid_multi_fractal(const float4 co,
                                     const float H,
@@ -1486,14 +1341,6 @@ float musgrave_hybrid_multi_fractal(const float4 co,
   return value;
 }
 
-/* 4D Ridged Multifractal Terrain
- *
- * H: fractal dimension of the roughest area
- * lacunarity: gap between successive frequencies
- * octaves: number of frequencies in the fBm
- * offset: raises the terrain from `sea level'
- */
-
 float musgrave_ridged_multi_fractal(const float4 co,
                                     const float H,
                                     const float lacunarity,
@@ -1525,8 +1372,12 @@ float musgrave_ridged_multi_fractal(const float4 co,
   return value;
 }
 
-/*
- * Voronoi: Ported from Cycles code.
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Voronoi Noise
+ *
+ * \note Ported from Cycles code.
  *
  * Original code is under the MIT License, Copyright (c) 2013 Inigo Quilez.
  *
@@ -1541,7 +1392,7 @@ float musgrave_ridged_multi_fractal(const float4 co,
  *
  * With optimization to change -2..2 scan window to -1..1 for better performance,
  * as explained in https://www.shadertoy.com/view/llG3zy.
- */
+ * \{ */
 
 /* **** 1D Voronoi **** */
 
@@ -1616,7 +1467,7 @@ void voronoi_smooth_f1(const float w,
       correctionFactor /= 1.0f + 3.0f * smoothness;
       if (r_color != nullptr) {
         const float3 cellColor = hash_float_to_float3(cellPosition + cellOffset);
-        smoothColor = float3::interpolate(smoothColor, cellColor, h) - correctionFactor;
+        smoothColor = math::interpolate(smoothColor, cellColor, h) - correctionFactor;
       }
       if (r_w != nullptr) {
         smoothPosition = mix(smoothPosition, pointPosition, h) - correctionFactor;
@@ -1739,7 +1590,7 @@ static float voronoi_distance(const float2 a,
 {
   switch (metric) {
     case NOISE_SHD_VORONOI_EUCLIDEAN:
-      return float2::distance(a, b);
+      return math::distance(a, b);
     case NOISE_SHD_VORONOI_MANHATTAN:
       return fabsf(a.x - b.x) + fabsf(a.y - b.y);
     case NOISE_SHD_VORONOI_CHEBYCHEV:
@@ -1762,7 +1613,7 @@ void voronoi_f1(const float2 coord,
                 float3 *r_color,
                 float2 *r_position)
 {
-  const float2 cellPosition = float2::floor(coord);
+  const float2 cellPosition = math::floor(coord);
   const float2 localPosition = coord - cellPosition;
 
   float minDistance = 8.0f;
@@ -1801,7 +1652,7 @@ void voronoi_smooth_f1(const float2 coord,
                        float3 *r_color,
                        float2 *r_position)
 {
-  const float2 cellPosition = float2::floor(coord);
+  const float2 cellPosition = math::floor(coord);
   const float2 localPosition = coord - cellPosition;
   const float smoothness_clamped = max_ff(smoothness, FLT_MIN);
 
@@ -1823,11 +1674,10 @@ void voronoi_smooth_f1(const float2 coord,
         correctionFactor /= 1.0f + 3.0f * smoothness;
         if (r_color != nullptr) {
           const float3 cellColor = hash_float_to_float3(cellPosition + cellOffset);
-          smoothColor = float3::interpolate(smoothColor, cellColor, h) - correctionFactor;
+          smoothColor = math::interpolate(smoothColor, cellColor, h) - correctionFactor;
         }
         if (r_position != nullptr) {
-          smoothPosition = float2::interpolate(smoothPosition, pointPosition, h) -
-                           correctionFactor;
+          smoothPosition = math::interpolate(smoothPosition, pointPosition, h) - correctionFactor;
         }
       }
     }
@@ -1851,7 +1701,7 @@ void voronoi_f2(const float2 coord,
                 float3 *r_color,
                 float2 *r_position)
 {
-  const float2 cellPosition = float2::floor(coord);
+  const float2 cellPosition = math::floor(coord);
   const float2 localPosition = coord - cellPosition;
 
   float distanceF1 = 8.0f;
@@ -1895,7 +1745,7 @@ void voronoi_f2(const float2 coord,
 
 void voronoi_distance_to_edge(const float2 coord, const float randomness, float *r_distance)
 {
-  const float2 cellPosition = float2::floor(coord);
+  const float2 cellPosition = math::floor(coord);
   const float2 localPosition = coord - cellPosition;
 
   float2 vectorToClosest = float2(0.0f, 0.0f);
@@ -1924,7 +1774,7 @@ void voronoi_distance_to_edge(const float2 coord, const float randomness, float 
       const float2 perpendicularToEdge = vectorToPoint - vectorToClosest;
       if (dot_v2v2(perpendicularToEdge, perpendicularToEdge) > 0.0001f) {
         const float distanceToEdge = dot_v2v2((vectorToClosest + vectorToPoint) / 2.0f,
-                                              perpendicularToEdge.normalized());
+                                              math::normalize(perpendicularToEdge));
         minDistance = std::min(minDistance, distanceToEdge);
       }
     }
@@ -1934,7 +1784,7 @@ void voronoi_distance_to_edge(const float2 coord, const float randomness, float 
 
 void voronoi_n_sphere_radius(const float2 coord, const float randomness, float *r_radius)
 {
-  const float2 cellPosition = float2::floor(coord);
+  const float2 cellPosition = math::floor(coord);
   const float2 localPosition = coord - cellPosition;
 
   float2 closestPoint = float2(0.0f, 0.0f);
@@ -1945,7 +1795,7 @@ void voronoi_n_sphere_radius(const float2 coord, const float randomness, float *
       const float2 cellOffset = float2(i, j);
       const float2 pointPosition = cellOffset +
                                    hash_float_to_float2(cellPosition + cellOffset) * randomness;
-      const float distanceToPoint = float2::distance(pointPosition, localPosition);
+      const float distanceToPoint = math::distance(pointPosition, localPosition);
       if (distanceToPoint < minDistance) {
         minDistance = distanceToPoint;
         closestPoint = pointPosition;
@@ -1964,14 +1814,14 @@ void voronoi_n_sphere_radius(const float2 coord, const float randomness, float *
       const float2 cellOffset = float2(i, j) + closestPointOffset;
       const float2 pointPosition = cellOffset +
                                    hash_float_to_float2(cellPosition + cellOffset) * randomness;
-      const float distanceToPoint = float2::distance(closestPoint, pointPosition);
+      const float distanceToPoint = math::distance(closestPoint, pointPosition);
       if (distanceToPoint < minDistance) {
         minDistance = distanceToPoint;
         closestPointToClosestPoint = pointPosition;
       }
     }
   }
-  *r_radius = float2::distance(closestPointToClosestPoint, closestPoint) / 2.0f;
+  *r_radius = math::distance(closestPointToClosestPoint, closestPoint) / 2.0f;
 }
 
 /* **** 3D Voronoi **** */
@@ -1983,7 +1833,7 @@ static float voronoi_distance(const float3 a,
 {
   switch (metric) {
     case NOISE_SHD_VORONOI_EUCLIDEAN:
-      return float3::distance(a, b);
+      return math::distance(a, b);
     case NOISE_SHD_VORONOI_MANHATTAN:
       return fabsf(a.x - b.x) + fabsf(a.y - b.y) + fabsf(a.z - b.z);
     case NOISE_SHD_VORONOI_CHEBYCHEV:
@@ -2007,7 +1857,7 @@ void voronoi_f1(const float3 coord,
                 float3 *r_color,
                 float3 *r_position)
 {
-  const float3 cellPosition = float3::floor(coord);
+  const float3 cellPosition = math::floor(coord);
   const float3 localPosition = coord - cellPosition;
 
   float minDistance = 8.0f;
@@ -2049,7 +1899,7 @@ void voronoi_smooth_f1(const float3 coord,
                        float3 *r_color,
                        float3 *r_position)
 {
-  const float3 cellPosition = float3::floor(coord);
+  const float3 cellPosition = math::floor(coord);
   const float3 localPosition = coord - cellPosition;
   const float smoothness_clamped = max_ff(smoothness, FLT_MIN);
 
@@ -2072,10 +1922,10 @@ void voronoi_smooth_f1(const float3 coord,
           correctionFactor /= 1.0f + 3.0f * smoothness;
           if (r_color != nullptr) {
             const float3 cellColor = hash_float_to_float3(cellPosition + cellOffset);
-            smoothColor = float3::interpolate(smoothColor, cellColor, h) - correctionFactor;
+            smoothColor = math::interpolate(smoothColor, cellColor, h) - correctionFactor;
           }
           if (r_position != nullptr) {
-            smoothPosition = float3::interpolate(smoothPosition, pointPosition, h) -
+            smoothPosition = math::interpolate(smoothPosition, pointPosition, h) -
                              correctionFactor;
           }
         }
@@ -2101,7 +1951,7 @@ void voronoi_f2(const float3 coord,
                 float3 *r_color,
                 float3 *r_position)
 {
-  const float3 cellPosition = float3::floor(coord);
+  const float3 cellPosition = math::floor(coord);
   const float3 localPosition = coord - cellPosition;
 
   float distanceF1 = 8.0f;
@@ -2147,7 +1997,7 @@ void voronoi_f2(const float3 coord,
 
 void voronoi_distance_to_edge(const float3 coord, const float randomness, float *r_distance)
 {
-  const float3 cellPosition = float3::floor(coord);
+  const float3 cellPosition = math::floor(coord);
   const float3 localPosition = coord - cellPosition;
 
   float3 vectorToClosest = float3(0.0f, 0.0f, 0.0f);
@@ -2179,7 +2029,7 @@ void voronoi_distance_to_edge(const float3 coord, const float randomness, float 
         const float3 perpendicularToEdge = vectorToPoint - vectorToClosest;
         if (dot_v3v3(perpendicularToEdge, perpendicularToEdge) > 0.0001f) {
           const float distanceToEdge = dot_v3v3((vectorToClosest + vectorToPoint) / 2.0f,
-                                                perpendicularToEdge.normalized());
+                                                math::normalize(perpendicularToEdge));
           minDistance = std::min(minDistance, distanceToEdge);
         }
       }
@@ -2190,7 +2040,7 @@ void voronoi_distance_to_edge(const float3 coord, const float randomness, float 
 
 void voronoi_n_sphere_radius(const float3 coord, const float randomness, float *r_radius)
 {
-  const float3 cellPosition = float3::floor(coord);
+  const float3 cellPosition = math::floor(coord);
   const float3 localPosition = coord - cellPosition;
 
   float3 closestPoint = float3(0.0f, 0.0f, 0.0f);
@@ -2202,7 +2052,7 @@ void voronoi_n_sphere_radius(const float3 coord, const float randomness, float *
         const float3 cellOffset = float3(i, j, k);
         const float3 pointPosition = cellOffset +
                                      hash_float_to_float3(cellPosition + cellOffset) * randomness;
-        const float distanceToPoint = float3::distance(pointPosition, localPosition);
+        const float distanceToPoint = math::distance(pointPosition, localPosition);
         if (distanceToPoint < minDistance) {
           minDistance = distanceToPoint;
           closestPoint = pointPosition;
@@ -2223,7 +2073,7 @@ void voronoi_n_sphere_radius(const float3 coord, const float randomness, float *
         const float3 cellOffset = float3(i, j, k) + closestPointOffset;
         const float3 pointPosition = cellOffset +
                                      hash_float_to_float3(cellPosition + cellOffset) * randomness;
-        const float distanceToPoint = float3::distance(closestPoint, pointPosition);
+        const float distanceToPoint = math::distance(closestPoint, pointPosition);
         if (distanceToPoint < minDistance) {
           minDistance = distanceToPoint;
           closestPointToClosestPoint = pointPosition;
@@ -2231,7 +2081,7 @@ void voronoi_n_sphere_radius(const float3 coord, const float randomness, float *
       }
     }
   }
-  *r_radius = float3::distance(closestPointToClosestPoint, closestPoint) / 2.0f;
+  *r_radius = math::distance(closestPointToClosestPoint, closestPoint) / 2.0f;
 }
 
 /* **** 4D Voronoi **** */
@@ -2243,7 +2093,7 @@ static float voronoi_distance(const float4 a,
 {
   switch (metric) {
     case NOISE_SHD_VORONOI_EUCLIDEAN:
-      return float4::distance(a, b);
+      return math::distance(a, b);
     case NOISE_SHD_VORONOI_MANHATTAN:
       return fabsf(a.x - b.x) + fabsf(a.y - b.y) + fabsf(a.z - b.z) + fabsf(a.w - b.w);
     case NOISE_SHD_VORONOI_CHEBYCHEV:
@@ -2268,7 +2118,7 @@ void voronoi_f1(const float4 coord,
                 float3 *r_color,
                 float4 *r_position)
 {
-  const float4 cellPosition = float4::floor(coord);
+  const float4 cellPosition = math::floor(coord);
   const float4 localPosition = coord - cellPosition;
 
   float minDistance = 8.0f;
@@ -2313,7 +2163,7 @@ void voronoi_smooth_f1(const float4 coord,
                        float3 *r_color,
                        float4 *r_position)
 {
-  const float4 cellPosition = float4::floor(coord);
+  const float4 cellPosition = math::floor(coord);
   const float4 localPosition = coord - cellPosition;
   const float smoothness_clamped = max_ff(smoothness, FLT_MIN);
 
@@ -2338,10 +2188,10 @@ void voronoi_smooth_f1(const float4 coord,
             correctionFactor /= 1.0f + 3.0f * smoothness;
             if (r_color != nullptr) {
               const float3 cellColor = hash_float_to_float3(cellPosition + cellOffset);
-              smoothColor = float3::interpolate(smoothColor, cellColor, h) - correctionFactor;
+              smoothColor = math::interpolate(smoothColor, cellColor, h) - correctionFactor;
             }
             if (r_position != nullptr) {
-              smoothPosition = float4::interpolate(smoothPosition, pointPosition, h) -
+              smoothPosition = math::interpolate(smoothPosition, pointPosition, h) -
                                correctionFactor;
             }
           }
@@ -2368,7 +2218,7 @@ void voronoi_f2(const float4 coord,
                 float3 *r_color,
                 float4 *r_position)
 {
-  const float4 cellPosition = float4::floor(coord);
+  const float4 cellPosition = math::floor(coord);
   const float4 localPosition = coord - cellPosition;
 
   float distanceF1 = 8.0f;
@@ -2417,7 +2267,7 @@ void voronoi_f2(const float4 coord,
 
 void voronoi_distance_to_edge(const float4 coord, const float randomness, float *r_distance)
 {
-  const float4 cellPosition = float4::floor(coord);
+  const float4 cellPosition = math::floor(coord);
   const float4 localPosition = coord - cellPosition;
 
   float4 vectorToClosest = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -2454,7 +2304,7 @@ void voronoi_distance_to_edge(const float4 coord, const float randomness, float 
           const float4 perpendicularToEdge = vectorToPoint - vectorToClosest;
           if (dot_v4v4(perpendicularToEdge, perpendicularToEdge) > 0.0001f) {
             const float distanceToEdge = dot_v4v4((vectorToClosest + vectorToPoint) / 2.0f,
-                                                  float4::normalize(perpendicularToEdge));
+                                                  math::normalize(perpendicularToEdge));
             minDistance = std::min(minDistance, distanceToEdge);
           }
         }
@@ -2466,7 +2316,7 @@ void voronoi_distance_to_edge(const float4 coord, const float randomness, float 
 
 void voronoi_n_sphere_radius(const float4 coord, const float randomness, float *r_radius)
 {
-  const float4 cellPosition = float4::floor(coord);
+  const float4 cellPosition = math::floor(coord);
   const float4 localPosition = coord - cellPosition;
 
   float4 closestPoint = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -2480,7 +2330,7 @@ void voronoi_n_sphere_radius(const float4 coord, const float randomness, float *
           const float4 pointPosition = cellOffset +
                                        hash_float_to_float4(cellPosition + cellOffset) *
                                            randomness;
-          const float distanceToPoint = float4::distance(pointPosition, localPosition);
+          const float distanceToPoint = math::distance(pointPosition, localPosition);
           if (distanceToPoint < minDistance) {
             minDistance = distanceToPoint;
             closestPoint = pointPosition;
@@ -2504,7 +2354,7 @@ void voronoi_n_sphere_radius(const float4 coord, const float randomness, float *
           const float4 pointPosition = cellOffset +
                                        hash_float_to_float4(cellPosition + cellOffset) *
                                            randomness;
-          const float distanceToPoint = float4::distance(closestPoint, pointPosition);
+          const float distanceToPoint = math::distance(closestPoint, pointPosition);
           if (distanceToPoint < minDistance) {
             minDistance = distanceToPoint;
             closestPointToClosestPoint = pointPosition;
@@ -2513,7 +2363,9 @@ void voronoi_n_sphere_radius(const float4 coord, const float randomness, float *
       }
     }
   }
-  *r_radius = float4::distance(closestPointToClosestPoint, closestPoint) / 2.0f;
+  *r_radius = math::distance(closestPointToClosestPoint, closestPoint) / 2.0f;
 }
+
+/** \} */
 
 }  // namespace blender::noise

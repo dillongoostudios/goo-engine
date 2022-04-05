@@ -27,6 +27,10 @@
  * parts of the bmesh internals.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* returns positive nonzero on error */
 
 #ifdef NDEBUG
@@ -34,7 +38,13 @@
  * it can take most of the CPU time when running some tools. */
 #  define BM_CHECK_ELEMENT(el) (void)(el)
 #else
-int bmesh_elem_check(void *element, const char htype);
+/**
+ * Check the element is valid.
+ *
+ * BMESH_TODO, when this raises an error the output is incredibly confusing.
+ * need to have some nice way to print/debug what the heck's going on.
+ */
+int bmesh_elem_check(void *element, char htype);
 #  define BM_CHECK_ELEMENT(el) \
     { \
       if (bmesh_elem_check(el, ((BMHeader *)el)->htype)) { \
@@ -50,7 +60,7 @@ int bmesh_elem_check(void *element, const char htype);
 #endif
 
 int bmesh_radial_length(const BMLoop *l);
-int bmesh_disk_count_at_most(const BMVert *v, const int count_max);
+int bmesh_disk_count_at_most(const BMVert *v, int count_max);
 int bmesh_disk_count(const BMVert *v);
 
 /**
@@ -86,7 +96,17 @@ enum {
   } \
   (void)0
 
-void poly_rotate_plane(const float normal[3], float (*verts)[3], const uint nverts);
+/**
+ * \brief POLY ROTATE PLANE
+ *
+ * Rotates a polygon so that its
+ * normal is pointing towards the mesh Z axis
+ */
+void poly_rotate_plane(const float normal[3], float (*verts)[3], uint nverts);
 
 /* include the rest of our private declarations */
 #include "bmesh_structure.h"
+
+#ifdef __cplusplus
+}
+#endif

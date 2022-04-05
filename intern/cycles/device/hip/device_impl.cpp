@@ -47,12 +47,6 @@ bool HIPDevice::have_precompiled_kernels()
   return path_exists(fatbins_path);
 }
 
-bool HIPDevice::show_samples() const
-{
-  /* The HIPDevice only processes one tile at a time, so showing samples is fine. */
-  return true;
-}
-
 BVHLayoutMask HIPDevice::get_bvh_layout_mask() const
 {
   return BVH_LAYOUT_BVH2;
@@ -243,7 +237,7 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
   hipGetDeviceProperties(&props, hipDevId);
 
   /* gcnArchName can contain tokens after the arch name with features, ie.
-    "gfx1010:sramecc-:xnack-" so we tokenize it to get the first part. */
+   * `gfx1010:sramecc-:xnack-` so we tokenize it to get the first part. */
   char *arch = strtok(props.gcnArchName, ":");
   if (arch == NULL) {
     arch = props.gcnArchName;
@@ -374,10 +368,9 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
 
 bool HIPDevice::load_kernels(const uint kernel_features)
 {
-  /* TODO(sergey): Support kernels re-load for CUDA devices adaptive compile.
+  /* TODO(sergey): Support kernels re-load for HIP devices adaptive compile.
    *
-   * Currently re-loading kernel will invalidate memory pointers,
-   * causing problems in cuCtxSynchronize.
+   * Currently re-loading kernels will invalidate memory pointers.
    */
   if (hipModule) {
     if (use_adaptive_compilation()) {
@@ -447,10 +440,10 @@ void HIPDevice::reserve_local_memory(const uint kernel_features)
      * still to make it faster. */
     HIPDeviceQueue queue(this);
 
-    void *d_path_index = nullptr;
-    void *d_render_buffer = nullptr;
+    device_ptr d_path_index = 0;
+    device_ptr d_render_buffer = 0;
     int d_work_size = 0;
-    void *args[] = {&d_path_index, &d_render_buffer, &d_work_size};
+    DeviceKernelArguments args(&d_path_index, &d_render_buffer, &d_work_size);
 
     queue.init_execution();
     queue.enqueue(test_kernel, 1, args);
@@ -899,7 +892,6 @@ void HIPDevice::tex_alloc(device_texture &mem)
 {
   HIPContextScope scope(this);
 
-  /* General variables for both architectures */
   string bind_name = mem.name;
   size_t dsize = datatype_size(mem.data_type);
   size_t size = mem.memory_size();

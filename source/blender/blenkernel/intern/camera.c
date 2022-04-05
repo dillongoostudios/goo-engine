@@ -182,6 +182,7 @@ IDTypeInfo IDType_ID_CA = {
     .name_plural = "cameras",
     .translation_context = BLT_I18NCONTEXT_ID_CAMERA,
     .flags = IDTYPE_FLAGS_APPEND_IS_REUSABLE,
+    .asset_type_info = NULL,
 
     .init_data = camera_init_data,
     .copy_data = camera_copy_data,
@@ -189,6 +190,7 @@ IDTypeInfo IDType_ID_CA = {
     .make_local = NULL,
     .foreach_id = camera_foreach_id,
     .foreach_cache = NULL,
+    .foreach_path = NULL,
     .owner_get = NULL,
 
     .blend_write = camera_blend_write,
@@ -216,8 +218,7 @@ void *BKE_camera_add(Main *bmain, const char *name)
   return cam;
 }
 
-/* get the camera's dof value, takes the dof object into account */
-float BKE_camera_object_dof_distance(Object *ob)
+float BKE_camera_object_dof_distance(const Object *ob)
 {
   Camera *cam = (Camera *)ob->data;
   if (ob->type != OB_CAMERA) {
@@ -425,7 +426,6 @@ void BKE_camera_params_compute_viewplane(
   params->viewplane = viewplane;
 }
 
-/* viewplane is assumed to be already computed */
 void BKE_camera_params_compute_matrix(CameraParams *params)
 {
   rctf viewplane = params->viewplane;
@@ -566,9 +566,8 @@ void BKE_camera_view_frame(const Scene *scene, const Camera *camera, float r_vec
 #define CAMERA_VIEWFRAME_NUM_PLANES 4
 
 typedef struct CameraViewFrameData {
-  float plane_tx[CAMERA_VIEWFRAME_NUM_PLANES][4]; /* 4 planes */
-  float normal_tx[CAMERA_VIEWFRAME_NUM_PLANES][3];
-  float dist_vals_sq[CAMERA_VIEWFRAME_NUM_PLANES]; /* distance squared (signed) */
+  float plane_tx[CAMERA_VIEWFRAME_NUM_PLANES][4]; /* 4 planes normalized */
+  float dist_vals[CAMERA_VIEWFRAME_NUM_PLANES];   /* distance (signed) */
   unsigned int tot;
 
   /* Ortho camera only. */
@@ -585,8 +584,8 @@ static void camera_to_frame_view_cb(const float co[3], void *user_data)
   CameraViewFrameData *data = (CameraViewFrameData *)user_data;
 
   for (uint i = 0; i < CAMERA_VIEWFRAME_NUM_PLANES; i++) {
-    const float nd = dist_signed_squared_to_plane_v3(co, data->plane_tx[i]);
-    CLAMP_MAX(data->dist_vals_sq[i], nd);
+    const float nd = plane_point_side_v3(data->plane_tx[i], co);
+    CLAMP_MAX(data->dist_vals[i], nd);
   }
 
   if (data->is_ortho) {
@@ -641,10 +640,11 @@ static void camera_frame_fit_data_init(const Scene *scene,
   /* Rotate planes and get normals from them */
   for (uint i = 0; i < CAMERA_VIEWFRAME_NUM_PLANES; i++) {
     mul_m4_v4(camera_rotmat_transposed_inversed, data->plane_tx[i]);
-    normalize_v3_v3(data->normal_tx[i], data->plane_tx[i]);
+    /* Normalize. */
+    data->plane_tx[i][3] /= normalize_v3(data->plane_tx[i]);
   }
 
-  copy_v4_fl(data->dist_vals_sq, FLT_MAX);
+  copy_v4_fl(data->dist_vals, FLT_MAX);
   data->tot = 0;
   data->is_ortho = params->is_ortho;
   if (params->is_ortho) {
@@ -669,13 +669,8 @@ static bool camera_frame_fit_calc_from_data(CameraParams *params,
     const float *cam_axis_x = data->camera_rotmat[0];
     const float *cam_axis_y = data->camera_rotmat[1];
     const float *cam_axis_z = data->camera_rotmat[2];
-    float dists[CAMERA_VIEWFRAME_NUM_PLANES];
+    const float *dists = data->dist_vals;
     float scale_diff;
-
-    /* apply the dist-from-plane's to the transformed plane points */
-    for (int i = 0; i < CAMERA_VIEWFRAME_NUM_PLANES; i++) {
-      dists[i] = sqrtf_signed(data->dist_vals_sq[i]);
-    }
 
     if ((dists[0] + dists[2]) > (dists[1] + dists[3])) {
       scale_diff = (dists[1] + dists[3]) *
@@ -703,8 +698,8 @@ static bool camera_frame_fit_calc_from_data(CameraParams *params,
   /* apply the dist-from-plane's to the transformed plane points */
   for (int i = 0; i < CAMERA_VIEWFRAME_NUM_PLANES; i++) {
     float co[3];
-    mul_v3_v3fl(co, data->normal_tx[i], sqrtf_signed(data->dist_vals_sq[i]));
-    plane_from_point_normal_v3(plane_tx[i], co, data->normal_tx[i]);
+    mul_v3_v3fl(co, data->plane_tx[i], data->dist_vals[i]);
+    plane_from_point_normal_v3(plane_tx[i], co, data->plane_tx[i]);
   }
 
   if ((!isect_plane_plane_v3(plane_tx[0], plane_tx[2], plane_isect_1, plane_isect_1_no)) ||
@@ -756,8 +751,6 @@ static bool camera_frame_fit_calc_from_data(CameraParams *params,
   return false;
 }
 
-/* don't move the camera, just yield the fit location */
-/* r_scale only valid/useful for ortho cameras */
 bool BKE_camera_view_frame_fit_to_scene(
     Depsgraph *depsgraph, const Scene *scene, Object *camera_ob, float r_co[3], float *r_scale)
 {
@@ -908,7 +901,6 @@ static void camera_stereo3d_model_matrix(const Object *camera,
   }
 }
 
-/* the view matrix is used by the viewport drawing, it is basically the inverted model matrix */
 void BKE_camera_multiview_view_matrix(const RenderData *rd,
                                       const Object *camera,
                                       const bool is_left,
@@ -1031,7 +1023,6 @@ static Object *camera_multiview_advanced(const Scene *scene, Object *camera, con
   return camera;
 }
 
-/* returns the camera to be used for render */
 Object *BKE_camera_multiview_render(const Scene *scene, Object *camera, const char *viewname)
 {
   const bool is_multiview = (camera != NULL) && (scene->r.scemode & R_MULTIVIEW) != 0;

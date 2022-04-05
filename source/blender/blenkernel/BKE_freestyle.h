@@ -38,15 +38,19 @@ typedef struct FreestyleSettings FreestyleSettings;
 
 /* FreestyleConfig */
 void BKE_freestyle_config_init(struct FreestyleConfig *config);
-void BKE_freestyle_config_free(struct FreestyleConfig *config, const bool do_id_user);
+void BKE_freestyle_config_free(struct FreestyleConfig *config, bool do_id_user);
 void BKE_freestyle_config_copy(struct FreestyleConfig *new_config,
                                const struct FreestyleConfig *config,
-                               const int flag);
+                               int flag);
 
 /* FreestyleConfig.modules */
 struct FreestyleModuleConfig *BKE_freestyle_module_add(struct FreestyleConfig *config);
 bool BKE_freestyle_module_delete(struct FreestyleConfig *config,
                                  struct FreestyleModuleConfig *module_conf);
+/**
+ * Reinsert \a module_conf offset by \a direction from current position.
+ * \return if position of \a module_conf changed.
+ */
 bool BKE_freestyle_module_move(struct FreestyleConfig *config,
                                struct FreestyleModuleConfig *module_conf,
                                int direction);

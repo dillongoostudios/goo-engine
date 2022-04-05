@@ -639,6 +639,7 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
     MESSAGE(STATUS "Disabling Cycles tests because WITH_OPENCOLORIO is disabled")
   else()
     set(render_tests
+      camera
       bsdf
       hair
       image_colorspace
@@ -648,10 +649,10 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
       integrator
       light
       mesh
+      pointcloud
       shader
       shadow_catcher
       sss
-      volume
     )
 
     if(WITH_OPENSUBDIV)
@@ -663,7 +664,7 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
     endif()
 
     if(WITH_MOD_FLUID)
-      list(APPEND render_tests motion_blur reports)
+      list(APPEND render_tests motion_blur reports volume)
     endif()
 
     if(WITH_OPENVDB)
@@ -736,15 +737,17 @@ if(WITH_COMPOSITOR)
   set(compositor_tests
     color
     converter
-    distort
     filter
     input
-    matte
     output
     vector
 
     multiple_node_setups
   )
+
+  if(WITH_LIBMV)
+    list(APPEND compositor_tests distort matte)
+  endif()
 
   foreach(comp_test ${compositor_tests})
     add_python_test(
@@ -766,6 +769,7 @@ set(geo_node_tests
   geometry
   mesh_primitives
   mesh
+  mesh/extrude
   points
   utilities
   vector

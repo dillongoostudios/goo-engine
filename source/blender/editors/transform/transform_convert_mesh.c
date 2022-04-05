@@ -1000,11 +1000,6 @@ static bool bmesh_test_loose_edge(BMEdge *edge)
   return true;
 }
 
-/**
- * \param mtx: Measure distance in this space.
- * \param dists: Store the closest connected distance to selected vertices.
- * \param index: Optionally store the original index we're measuring the distance to (can be NULL).
- */
 void transform_convert_mesh_connectivity_distance(struct BMesh *bm,
                                                   const float mtx[3][3],
                                                   float *dists,
@@ -1307,8 +1302,6 @@ void transform_convert_mesh_mirrordata_free(struct TransMirrorData *mirror_data)
 /** \name Crazy Space
  * \{ */
 
-/* Detect CrazySpace [tm].
- * Vertices with space affected by quats are marked with #BM_ELEM_TAG */
 void transform_convert_mesh_crazyspace_detect(TransInfo *t,
                                               struct TransDataContainer *tc,
                                               struct BMEditMesh *em,
@@ -1472,7 +1465,7 @@ static void VertsToTransData(TransInfo *t,
   td->ext = NULL;
   td->val = NULL;
   td->extra = eve;
-  if (t->mode == TFM_BWEIGHT) {
+  if (t->mode == TFM_BWEIGHT || t->mode == TFM_VERT_CREASE) {
     td->val = bweight;
     td->ival = *bweight;
   }
@@ -1613,9 +1606,14 @@ void createTransEditVerts(TransInfo *t)
     }
 
     int cd_vert_bweight_offset = -1;
+    int cd_vert_crease_offset = -1;
     if (t->mode == TFM_BWEIGHT) {
       BM_mesh_cd_flag_ensure(bm, BKE_mesh_from_object(tc->obedit), ME_CDFLAG_VERT_BWEIGHT);
       cd_vert_bweight_offset = CustomData_get_offset(&bm->vdata, CD_BWEIGHT);
+    }
+    else if (t->mode == TFM_VERT_CREASE) {
+      BM_mesh_cd_flag_ensure(bm, BKE_mesh_from_object(tc->obedit), ME_CDFLAG_VERT_CREASE);
+      cd_vert_crease_offset = CustomData_get_offset(&bm->vdata, CD_CREASE);
     }
 
     TransData *tob = tc->data;
@@ -1652,6 +1650,8 @@ void createTransEditVerts(TransInfo *t)
       else if (prop_mode || BM_elem_flag_test(eve, BM_ELEM_SELECT)) {
         float *bweight = (cd_vert_bweight_offset != -1) ?
                              BM_ELEM_CD_GET_VOID_P(eve, cd_vert_bweight_offset) :
+                         (cd_vert_crease_offset != -1) ?
+                             BM_ELEM_CD_GET_VOID_P(eve, cd_vert_crease_offset) :
                              NULL;
 
         /* Do not use the island center in case we are using islands
@@ -2099,6 +2099,7 @@ void recalcData_mesh(TransInfo *t)
     tc_mesh_partial_update(t, tc, &partial_state);
   }
 }
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -2164,4 +2165,5 @@ void special_aftertrans_update__mesh(bContext *UNUSED(C), TransInfo *t)
     break;
   }
 }
+
 /** \} */

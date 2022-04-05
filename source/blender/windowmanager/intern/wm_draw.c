@@ -108,6 +108,8 @@ static void wm_paintcursor_draw(bContext *C, ScrArea *area, ARegion *region)
     }
 
     if (pc->poll == NULL || pc->poll(C)) {
+      UI_SetTheme(area->spacetype, region->regiontype);
+
       /* Prevent drawing outside region. */
       GPU_scissor_test(true);
       GPU_scissor(region->winrct.xmin,
@@ -146,6 +148,7 @@ static void wm_region_draw_overlay(bContext *C, ScrArea *area, ARegion *region)
 }
 
 /** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Internal Utilities
  * \{ */
@@ -839,6 +842,7 @@ static void wm_draw_window_onscreen(bContext *C, wmWindow *win, int view)
   }
 
   /* After area regions so we can do area 'overlay' drawing. */
+  UI_SetTheme(0, 0);
   ED_screen_draw_edges(win);
   wm_draw_callbacks(win);
   wmWindowViewport(win);
@@ -1136,7 +1140,7 @@ void WM_redraw_windows(bContext *C)
  * This is needed for viewport drawing for operator use
  * (where the viewport may not have drawn yet).
  *
- * Otherwise avoid using these sine they're exposing low level logic externally.
+ * Otherwise avoid using these since they're exposing low level logic externally.
  *
  * \{ */
 

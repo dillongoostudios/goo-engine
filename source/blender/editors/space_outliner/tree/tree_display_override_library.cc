@@ -25,14 +25,22 @@
 #include "BKE_main.h"
 
 #include "DNA_collection_types.h"
+#include "DNA_space_types.h"
 
 #include "BLT_translation.h"
 
-#include "../outliner_intern.h"
+#include "../outliner_intern.hh"
+#include "common.hh"
 #include "tree_display.hh"
+#include "tree_element.hh"
 
 namespace blender::ed::outliner {
 
+/* Convenience/readability. */
+/* Convenience/readability. */
+/* Convenience/readability. */
+/* Convenience/readability. */
+/* Convenience/readability. */
 /* Convenience/readability. */
 template<typename T> using List = ListBaseWrapper<T>;
 
@@ -107,7 +115,7 @@ ListBase TreeDisplayOverrideLibrary::buildTree(const TreeSourceData &source_data
 
 TreeElement *TreeDisplayOverrideLibrary::add_library_contents(Main &mainvar,
                                                               ListBase &lb,
-                                                              Library *lib) const
+                                                              Library *lib)
 {
   const short filter_id_type = id_filter_get();
 
@@ -146,6 +154,9 @@ TreeElement *TreeDisplayOverrideLibrary::add_library_contents(Main &mainvar,
         else {
           tenlib = outliner_add_element(&space_outliner_, &lb, &mainvar, nullptr, TSE_ID_BASE, 0);
           tenlib->name = IFACE_("Current File");
+        }
+        if (tenlib->flag & TE_HAS_WARNING) {
+          has_warnings = true;
         }
       }
 

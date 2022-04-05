@@ -70,8 +70,7 @@
 /* ************************************************************************** */
 /* ACTION CREATION */
 
-/* Helper function to find the active AnimData block from the Action Editor context */
-AnimData *ED_actedit_animdata_from_context(bContext *C, ID **r_adt_id_owner)
+AnimData *ED_actedit_animdata_from_context(const bContext *C, ID **r_adt_id_owner)
 {
   SpaceAction *saction = (SpaceAction *)CTX_wm_space_data(C);
   Object *ob = CTX_data_active_object(C);
@@ -702,6 +701,9 @@ void ACTION_OT_unlink(wmOperatorType *ot)
                          "Clear Fake User and remove "
                          "copy stashed in this data-block's NLA stack");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /* ************************************************************************** */

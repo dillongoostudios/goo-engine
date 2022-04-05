@@ -98,7 +98,7 @@ const char *imb_ext_movie[] = {
     ".mpg2", ".vob", ".mkv", ".flv",   ".divx", ".xvid", ".mxf", ".webm", NULL,
 };
 
-/* sort of wrong being here... */
+/** Sort of wrong having audio extensions in imbuf. */
 const char *imb_ext_audio[] = {
     ".wav",
     ".ogg",
@@ -267,7 +267,7 @@ static int isffmpeg(const char *filepath)
   AVFormatContext *pFormatCtx = NULL;
   unsigned int i;
   int videoStream;
-  AVCodec *pCodec;
+  const AVCodec *pCodec;
 
   if (BLI_path_extension_check_n(filepath,
                                  ".swf",

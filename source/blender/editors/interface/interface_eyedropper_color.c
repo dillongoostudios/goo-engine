@@ -42,6 +42,8 @@
 #include "BKE_node.h"
 #include "BKE_screen.h"
 
+#include "NOD_composite.h"
+
 #include "RNA_access.h"
 
 #include "UI_interface.h"
@@ -263,33 +265,33 @@ static bool eyedropper_cryptomatte_sample_fl(
   }
 
   bScreen *screen = CTX_wm_screen(C);
-  ScrArea *sa = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, mx, my);
-  if (!sa || !ELEM(sa->spacetype, SPACE_IMAGE, SPACE_NODE, SPACE_CLIP)) {
+  ScrArea *area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, (const int[2]){mx, my});
+  if (!area || !ELEM(area->spacetype, SPACE_IMAGE, SPACE_NODE, SPACE_CLIP)) {
     return false;
   }
 
-  ARegion *ar = BKE_area_find_region_xy(sa, RGN_TYPE_WINDOW, mx, my);
-  if (!ar) {
+  ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, (const int[2]){mx, my});
+  if (!region) {
     return false;
   }
 
-  int mval[2] = {mx - ar->winrct.xmin, my - ar->winrct.ymin};
+  int mval[2] = {mx - region->winrct.xmin, my - region->winrct.ymin};
   float fpos[2] = {-1.0f, -1.0};
-  switch (sa->spacetype) {
+  switch (area->spacetype) {
     case SPACE_IMAGE: {
-      SpaceImage *sima = sa->spacedata.first;
-      ED_space_image_get_position(sima, ar, mval, fpos);
+      SpaceImage *sima = area->spacedata.first;
+      ED_space_image_get_position(sima, region, mval, fpos);
       break;
     }
     case SPACE_NODE: {
       Main *bmain = CTX_data_main(C);
-      SpaceNode *snode = sa->spacedata.first;
-      ED_space_node_get_position(bmain, snode, ar, mval, fpos);
+      SpaceNode *snode = area->spacedata.first;
+      ED_space_node_get_position(bmain, snode, region, mval, fpos);
       break;
     }
     case SPACE_CLIP: {
-      SpaceClip *sc = sa->spacedata.first;
-      ED_space_clip_get_position(sc, ar, mval, fpos);
+      SpaceClip *sc = area->spacedata.first;
+      ED_space_clip_get_position(sc, region, mval, fpos);
       break;
     }
     default: {
@@ -322,13 +324,6 @@ static bool eyedropper_cryptomatte_sample_fl(
   return false;
 }
 
-/**
- * \brief get the color from the screen.
- *
- * Special check for image or nodes where we MAY have HDR pixels which don't display.
- *
- * \note Exposed by 'interface_eyedropper_intern.h' for use with color band picking.
- */
 void eyedropper_color_sample_fl(bContext *C, int mx, int my, float r_col[3])
 {
   /* we could use some clever */
@@ -344,7 +339,7 @@ void eyedropper_color_sample_fl(bContext *C, int mx, int my, float r_col[3])
 
   if (area) {
     if (area->spacetype == SPACE_IMAGE) {
-      ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, mval[0], mval[1]);
+      ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, mval);
       if (region) {
         SpaceImage *sima = area->spacedata.first;
         int region_mval[2] = {mval[0] - region->winrct.xmin, mval[1] - region->winrct.ymin};
@@ -355,7 +350,7 @@ void eyedropper_color_sample_fl(bContext *C, int mx, int my, float r_col[3])
       }
     }
     else if (area->spacetype == SPACE_NODE) {
-      ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, mval[0], mval[1]);
+      ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, mval);
       if (region) {
         SpaceNode *snode = area->spacedata.first;
         int region_mval[2] = {mval[0] - region->winrct.xmin, mval[1] - region->winrct.ymin};
@@ -366,7 +361,7 @@ void eyedropper_color_sample_fl(bContext *C, int mx, int my, float r_col[3])
       }
     }
     else if (area->spacetype == SPACE_CLIP) {
-      ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, mval[0], mval[1]);
+      ARegion *region = BKE_area_find_region_xy(area, RGN_TYPE_WINDOW, mval);
       if (region) {
         SpaceClip *sc = area->spacedata.first;
         int region_mval[2] = {mval[0] - region->winrct.xmin, mval[1] - region->winrct.ymin};

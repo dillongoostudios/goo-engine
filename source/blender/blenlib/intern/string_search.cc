@@ -35,14 +35,6 @@ static int64_t count_utf8_code_points(StringRef str)
   return static_cast<int64_t>(BLI_strnlen_utf8(str.data(), static_cast<size_t>(str.size())));
 }
 
-/**
- * Computes the cost of transforming string a into b. The cost/distance is the minimal number of
- * operations that need to be executed. Valid operations are deletion, insertion, substitution and
- * transposition.
- *
- * This function is utf8 aware in the sense that it works at the level of individual code points
- * (1-4 bytes long) instead of on individual bytes.
- */
 int damerau_levenshtein_distance(StringRef a, StringRef b)
 {
   constexpr int deletion_cost = 1;
@@ -106,10 +98,6 @@ int damerau_levenshtein_distance(StringRef a, StringRef b)
   return v1.last();
 }
 
-/**
- * Returns -1 when this is no reasonably good match.
- * Otherwise returns the number of errors in the match.
- */
 int get_fuzzy_match_errors(StringRef query, StringRef full)
 {
   /* If it is a perfect partial match, return immediately. */
@@ -346,10 +334,6 @@ static int score_query_against_words(Span<StringRef> query_words, Span<StringRef
   return total_match_score;
 }
 
-/**
- * Splits a string into words and normalizes them (currently that just means converting to lower
- * case). The returned strings are allocated in the given allocator.
- */
 void extract_normalized_words(StringRef str,
                               LinearAllocator<> &allocator,
                               Vector<StringRef, 64> &r_words)
@@ -405,6 +389,7 @@ struct SearchItem {
   blender::Span<blender::StringRef> normalized_words;
   int length;
   void *user_data;
+  int weight;
 };
 
 struct StringSearch {
@@ -417,25 +402,21 @@ StringSearch *BLI_string_search_new()
   return new StringSearch();
 }
 
-/**
- * Add a new possible result to the search.
- * The caller keeps ownership of all parameters.
- */
-void BLI_string_search_add(StringSearch *search, const char *str, void *user_data)
+void BLI_string_search_add(StringSearch *search,
+                           const char *str,
+                           void *user_data,
+                           const int weight)
 {
   using namespace blender;
   Vector<StringRef, 64> words;
   StringRef str_ref{str};
   string_search::extract_normalized_words(str_ref, search->allocator, words);
-  search->items.append(
-      {search->allocator.construct_array_copy(words.as_span()), (int)str_ref.size(), user_data});
+  search->items.append({search->allocator.construct_array_copy(words.as_span()),
+                        (int)str_ref.size(),
+                        user_data,
+                        weight});
 }
 
-/**
- * Filter and sort all previously added search items.
- * Returns an array containing the filtered user data.
- * The caller has to free the returned array.
- */
 int BLI_string_search_query(StringSearch *search, const char *query, void ***r_data)
 {
   using namespace blender;
@@ -473,6 +454,11 @@ int BLI_string_search_query(StringSearch *search, const char *query, void ***r_d
        * a substring of another item. */
       std::sort(indices.begin(), indices.end(), [&](int a, int b) {
         return search->items[a].length < search->items[b].length;
+      });
+      /* Prefer items with larger weights. Use `stable_sort` so that if the weights are the same,
+       * the order won't be changed. */
+      std::stable_sort(indices.begin(), indices.end(), [&](int a, int b) {
+        return search->items[a].weight > search->items[b].weight;
       });
     }
     sorted_result_indices.extend(indices);

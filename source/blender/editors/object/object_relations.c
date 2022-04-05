@@ -583,8 +583,8 @@ bool ED_object_parent_set(ReportList *reports,
     }
     case PAR_BONE:
     case PAR_BONE_RELATIVE:
-      pchan = BKE_pose_channel_active(par);
-      pchan_eval = BKE_pose_channel_active(parent_eval);
+      pchan = BKE_pose_channel_active_if_layer_visible(par);
+      pchan_eval = BKE_pose_channel_active_if_layer_visible(parent_eval);
 
       if (pchan == NULL) {
         BKE_report(reports, RPT_ERROR, "No active bone");
@@ -1685,18 +1685,20 @@ static bool single_data_needs_duplication(ID *id)
   return (id != NULL && (id->us > 1 || ID_IS_LINKED(id)));
 }
 
-static void libblock_relink_collection(Collection *collection, const bool do_collection)
+static void libblock_relink_collection(Main *bmain,
+                                       Collection *collection,
+                                       const bool do_collection)
 {
   if (do_collection) {
-    BKE_libblock_relink_to_newid(&collection->id);
+    BKE_libblock_relink_to_newid(bmain, &collection->id, 0);
   }
 
   for (CollectionObject *cob = collection->gobject.first; cob != NULL; cob = cob->next) {
-    BKE_libblock_relink_to_newid(&cob->ob->id);
+    BKE_libblock_relink_to_newid(bmain, &cob->ob->id, 0);
   }
 
   LISTBASE_FOREACH (CollectionChild *, child, &collection->children) {
-    libblock_relink_collection(child->collection, true);
+    libblock_relink_collection(bmain, child->collection, true);
   }
 }
 
@@ -1766,10 +1768,10 @@ static void single_object_users(
   single_object_users_collection(bmain, scene, master_collection, flag, copy_collections, true);
 
   /* Will also handle the master collection. */
-  BKE_libblock_relink_to_newid(&scene->id);
+  BKE_libblock_relink_to_newid(bmain, &scene->id, 0);
 
   /* Collection and object pointers in collections */
-  libblock_relink_collection(scene->master_collection, false);
+  libblock_relink_collection(bmain, scene->master_collection, false);
 
   /* We also have to handle runtime things in UI. */
   if (v3d) {
@@ -1781,8 +1783,6 @@ static void single_object_users(
   BKE_main_collection_sync_remap(bmain);
 }
 
-/* not an especially efficient function, only added so the single user
- * button can be functional. */
 void ED_object_single_user(Main *bmain, Scene *scene, Object *ob)
 {
   FOREACH_SCENE_OBJECT_BEGIN (scene, ob_iter) {
@@ -2355,7 +2355,8 @@ static bool make_override_library_poll(bContext *C)
   /* Object must be directly linked to be overridable. */
   return (ED_operator_objectmode(C) && obact != NULL &&
           (ID_IS_LINKED(obact) || (obact->instance_collection != NULL &&
-                                   ID_IS_OVERRIDABLE_LIBRARY(obact->instance_collection))));
+                                   ID_IS_OVERRIDABLE_LIBRARY(obact->instance_collection) &&
+                                   !ID_IS_OVERRIDE_LIBRARY(obact))));
 }
 
 static const EnumPropertyItem *make_override_collections_of_linked_object_itemf(
@@ -2642,10 +2643,6 @@ static int drop_named_material_invoke(bContext *C, wmOperator *op, const wmEvent
   return OPERATOR_FINISHED;
 }
 
-/**
- * Used for drop-box.
- * Assigns to object under cursor, only first material slot.
- */
 void OBJECT_OT_drop_named_material(wmOperatorType *ot)
 {
   /* identifiers */
@@ -2654,7 +2651,7 @@ void OBJECT_OT_drop_named_material(wmOperatorType *ot)
 
   /* api callbacks */
   ot->invoke = drop_named_material_invoke;
-  ot->poll = ED_operator_objectmode;
+  ot->poll = ED_operator_objectmode_poll_msg;
 
   /* flags */
   ot->flag = OPTYPE_UNDO | OPTYPE_INTERNAL;
@@ -2704,9 +2701,6 @@ static int object_unlink_data_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-/**
- * \note Only for empty-image objects, this operator is needed
- */
 void OBJECT_OT_unlink_data(wmOperatorType *ot)
 {
   /* identifiers */

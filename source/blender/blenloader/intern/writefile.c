@@ -50,7 +50,7 @@
  * Almost all data in Blender are structures. Each struct saved
  * gets a BHead header.  With BHead the struct can be linked again
  * and compared with #StructDNA.
-
+ *
  * WRITE
  * =====
  *
@@ -1028,7 +1028,7 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
 
   /* prevent mem checkers from complaining */
   memset(fg._pad, 0, sizeof(fg._pad));
-  memset(fg.filename, 0, sizeof(fg.filename));
+  memset(fg.filepath, 0, sizeof(fg.filepath));
   memset(fg.build_hash, 0, sizeof(fg.build_hash));
   fg._pad1 = NULL;
 
@@ -1045,7 +1045,7 @@ static void write_global(WriteData *wd, int fileflags, Main *mainvar)
   fg.globalf = G.f;
   /* Write information needed for recovery. */
   if (fileflags & G_FILE_RECOVER_WRITE) {
-    BLI_strncpy(fg.filename, mainvar->name, sizeof(fg.filename));
+    STRNCPY(fg.filepath, mainvar->filepath);
   }
   sprintf(subvstr, "%4d", BLENDER_FILE_SUBVERSION);
   memcpy(fg.subvstr, subvstr, 4);
@@ -1312,15 +1312,15 @@ static bool do_history(const char *name, ReportList *reports)
 /** \name File Writing (Public)
  * \{ */
 
-/**
- * \return Success.
- */
 bool BLO_write_file(Main *mainvar,
                     const char *filepath,
                     const int write_flags,
                     const struct BlendFileWriteParams *params,
                     ReportList *reports)
 {
+  BLI_assert(!BLI_path_is_rel(filepath));
+  BLI_assert(BLI_path_is_abs_from_cwd(filepath));
+
   char tempname[FILE_MAX + 1];
   WriteWrap ww;
 
@@ -1329,10 +1329,12 @@ bool BLO_write_file(Main *mainvar,
   const bool use_save_as_copy = params->use_save_as_copy;
   const bool use_userdef = params->use_userdef;
   const BlendThumbnail *thumb = params->thumb;
+  const bool relbase_valid = (mainvar->filepath[0] != '\0');
 
   /* path backup/restore */
   void *path_list_backup = NULL;
-  const int path_list_flag = (BKE_BPATH_TRAVERSE_SKIP_LIBRARY | BKE_BPATH_TRAVERSE_SKIP_MULTIFILE);
+  const eBPathForeachFlag path_list_flag = (BKE_BPATH_FOREACH_PATH_SKIP_LINKED |
+                                            BKE_BPATH_FOREACH_PATH_SKIP_MULTIFILE);
 
   if (G.debug & G_DEBUG_IO && mainvar->lock != NULL) {
     BKE_report(reports, RPT_INFO, "Checking sanity of current .blend file *BEFORE* save to disk");
@@ -1351,35 +1353,47 @@ bool BLO_write_file(Main *mainvar,
     return 0;
   }
 
+  if (remap_mode == BLO_WRITE_PATH_REMAP_ABSOLUTE) {
+    /* Paths will already be absolute, no remapping to do. */
+    if (relbase_valid == false) {
+      remap_mode = BLO_WRITE_PATH_REMAP_NONE;
+    }
+  }
+
   /* Remapping of relative paths to new file location. */
   if (remap_mode != BLO_WRITE_PATH_REMAP_NONE) {
 
     if (remap_mode == BLO_WRITE_PATH_REMAP_RELATIVE) {
-      /* Make all relative as none of the existing paths can be relative in an unsaved document.
-       */
-      if (G.relbase_valid == false) {
+      /* Make all relative as none of the existing paths can be relative in an unsaved document. */
+      if (relbase_valid == false) {
         remap_mode = BLO_WRITE_PATH_REMAP_RELATIVE_ALL;
       }
     }
 
+    /* The source path only makes sense to set if the file was saved (`relbase_valid`). */
     char dir_src[FILE_MAX];
     char dir_dst[FILE_MAX];
-    BLI_split_dir_part(mainvar->name, dir_src, sizeof(dir_src));
-    BLI_split_dir_part(filepath, dir_dst, sizeof(dir_dst));
 
-    /* Just in case there is some subtle difference. */
-    BLI_path_normalize(mainvar->name, dir_dst);
-    BLI_path_normalize(mainvar->name, dir_src);
+    /* Normalize the paths in case there is some subtle difference (so they can be compared). */
+    if (relbase_valid) {
+      BLI_split_dir_part(mainvar->filepath, dir_src, sizeof(dir_src));
+      BLI_path_normalize(NULL, dir_src);
+    }
+    else {
+      dir_src[0] = '\0';
+    }
+    BLI_split_dir_part(filepath, dir_dst, sizeof(dir_dst));
+    BLI_path_normalize(NULL, dir_dst);
 
     /* Only for relative, not relative-all, as this means making existing paths relative. */
     if (remap_mode == BLO_WRITE_PATH_REMAP_RELATIVE) {
-      if (G.relbase_valid && (BLI_path_cmp(dir_dst, dir_src) == 0)) {
+      if (relbase_valid && (BLI_path_cmp(dir_dst, dir_src) == 0)) {
         /* Saved to same path. Nothing to do. */
         remap_mode = BLO_WRITE_PATH_REMAP_NONE;
       }
     }
     else if (remap_mode == BLO_WRITE_PATH_REMAP_ABSOLUTE) {
-      if (G.relbase_valid == false) {
+      if (relbase_valid == false) {
         /* Unsaved, all paths are absolute.Even if the user manages to set a relative path,
          * there is no base-path that can be used to make it absolute. */
         remap_mode = BLO_WRITE_PATH_REMAP_NONE;
@@ -1395,6 +1409,7 @@ bool BLO_write_file(Main *mainvar,
       switch (remap_mode) {
         case BLO_WRITE_PATH_REMAP_RELATIVE:
           /* Saved, make relative paths relative to new location (if possible). */
+          BLI_assert(relbase_valid);
           BKE_bpath_relative_rebase(mainvar, dir_src, dir_dst, NULL);
           break;
         case BLO_WRITE_PATH_REMAP_RELATIVE_ALL:
@@ -1403,6 +1418,7 @@ bool BLO_write_file(Main *mainvar,
           break;
         case BLO_WRITE_PATH_REMAP_ABSOLUTE:
           /* Make all absolute (when requested or unsaved). */
+          BLI_assert(relbase_valid);
           BKE_bpath_absolute_convert(mainvar, dir_src, NULL);
           break;
         case BLO_WRITE_PATH_REMAP_NONE:
@@ -1452,9 +1468,6 @@ bool BLO_write_file(Main *mainvar,
   return 1;
 }
 
-/**
- * \return Success.
- */
 bool BLO_write_file_mem(Main *mainvar, MemFile *compare, MemFile *current, int write_flags)
 {
   bool use_userdef = false;
@@ -1577,9 +1590,6 @@ void BLO_write_float3_array(BlendWriter *writer, uint num, const float *data_ptr
   BLO_write_raw(writer, sizeof(float[3]) * (size_t)num, data_ptr);
 }
 
-/**
- * Write a null terminated string.
- */
 void BLO_write_string(BlendWriter *writer, const char *data_ptr)
 {
   if (data_ptr != NULL) {
@@ -1587,10 +1597,6 @@ void BLO_write_string(BlendWriter *writer, const char *data_ptr)
   }
 }
 
-/**
- * Sometimes different data is written depending on whether the file is saved to disk or used for
- * undo. This function returns true when the current file-writing is done for undo.
- */
 bool BLO_write_is_undo(BlendWriter *writer)
 {
   return writer->wd->use_memfile;

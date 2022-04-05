@@ -487,8 +487,6 @@ static void sculpt_boundary_falloff_factor_init(SculptSession *ss,
   }
 }
 
-/* Main function to get SculptBoundary data both for brush deformation and viewport preview. Can
- * return NULL if there is no boundary from the given vertex using the given radius. */
 SculptBoundary *SCULPT_boundary_data_init(Object *object,
                                           Brush *brush,
                                           const int initial_vertex,
@@ -774,12 +772,10 @@ static void do_boundary_brush_inflate_task_cb_ex(void *__restrict userdata,
 
     const float mask = vd.mask ? 1.0f - *vd.mask : 1.0f;
     const float automask = SCULPT_automasking_factor_get(ss->cache->automasking, ss, vd.index);
-    float normal[3];
-    normal_short_to_float_v3(normal, orig_data.no);
     float *target_co = SCULPT_brush_deform_target_vertex_co_get(ss, brush->deform_target, &vd);
     madd_v3_v3v3fl(target_co,
                    orig_data.co,
-                   normal,
+                   orig_data.no,
                    boundary->edit_info[vd.index].strength_factor * disp * mask * automask *
                        strength);
 
@@ -946,7 +942,6 @@ static void do_boundary_brush_smooth_task_cb_ex(void *__restrict userdata,
   BKE_pbvh_vertex_iter_end;
 }
 
-/* Main Brush Function. */
 void SCULPT_do_boundary_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode)
 {
   SculptSession *ss = ob->sculpt;

@@ -104,7 +104,7 @@ typedef struct UndoMesh {
   int selectmode;
 
   /** \note
-   * this isn't a prefect solution, if you edit keys and change shapes this works well
+   * This isn't a perfect solution, if you edit keys and change shapes this works well
    * (fixing T32442), but editing shape keys, going into object mode, removing or changing their
    * order, then go back into editmode and undo will give issues - where the old index will be
    * out of sync with the new object index.
@@ -615,6 +615,7 @@ static void *undomesh_from_editmesh(UndoMesh *um, BMEditMesh *em, Key *key, Undo
           .calc_object_remap = false,
           .update_shapekey_indices = false,
           .cd_mask_extra = {.vmask = CD_MASK_SHAPE_KEYINDEX},
+          .active_shapekey_to_mvert = true,
       }));
 
   um->selectmode = em->selectmode;
@@ -646,7 +647,7 @@ static void *undomesh_from_editmesh(UndoMesh *um, BMEditMesh *em, Key *key, Undo
   return um;
 }
 
-static void undomesh_to_editmesh(UndoMesh *um, Object *ob, BMEditMesh *em, Key *key)
+static void undomesh_to_editmesh(UndoMesh *um, Object *ob, BMEditMesh *em)
 {
   BMEditMesh *em_tmp;
   BMesh *bm;
@@ -684,46 +685,24 @@ static void undomesh_to_editmesh(UndoMesh *um, Object *ob, BMEditMesh *em, Key *
                      (&(struct BMeshFromMeshParams){
                          /* Handled with tessellation. */
                          .calc_face_normal = false,
+                         .calc_vert_normal = false,
                          .active_shapekey = um->shapenr,
                      }));
 
   em_tmp = BKE_editmesh_create(bm);
   *em = *em_tmp;
 
-  /* Calculate face normals and tessellation at once since it's multi-threaded.
-   * The vertex normals are stored in the undo-mesh, so this doesn't need to be updated. */
-  BKE_editmesh_looptri_calc_ex(em,
-                               &(const struct BMeshCalcTessellation_Params){
-                                   .face_normals = true,
-                               });
+  /* Normals should not be stored in the undo mesh, so recalculate them. The edit
+   * mesh is expected to have valid normals and there is no tracked dirty state. */
+  BLI_assert(BKE_mesh_vertex_normals_are_dirty(&um->me));
+
+  /* Calculate face normals and tessellation at once since it's multi-threaded. */
+  BKE_editmesh_looptri_and_normals_calc(em);
 
   em->selectmode = um->selectmode;
   bm->selectmode = um->selectmode;
 
   bm->spacearr_dirty = BM_SPACEARR_DIRTY_ALL;
-
-  /* T35170: Restore the active key on the RealMesh. Otherwise 'fake' offset propagation happens
-   *         if the active is a basis for any other. */
-  if (key && (key->type == KEY_RELATIVE)) {
-    /* Since we can't add, remove or reorder keyblocks in editmode, it's safe to assume
-     * shapenr from restored bmesh and keyblock indices are in sync. */
-    const int kb_act_idx = ob->shapenr - 1;
-
-    /* If it is, let's patch the current mesh key block to its restored value.
-     * Else, the offsets won't be computed and it won't matter. */
-    if (BKE_keyblock_is_basis(key, kb_act_idx)) {
-      KeyBlock *kb_act = BLI_findlink(&key->block, kb_act_idx);
-
-      if (kb_act->totelem != um->me.totvert) {
-        /* The current mesh has some extra/missing verts compared to the undo, adjust. */
-        MEM_SAFE_FREE(kb_act->data);
-        kb_act->data = MEM_mallocN((size_t)(key->elemsize) * bm->totvert, __func__);
-        kb_act->totelem = um->me.totvert;
-      }
-
-      BKE_keyblock_update_from_mesh(&um->me, kb_act);
-    }
-  }
 
   ob->shapenr = um->shapenr;
 
@@ -872,7 +851,7 @@ static void mesh_undosys_step_decode(struct bContext *C,
       continue;
     }
     BMEditMesh *em = me->edit_mesh;
-    undomesh_to_editmesh(&elem->data, obedit, em, me->key);
+    undomesh_to_editmesh(&elem->data, obedit, em);
     em->needs_flush_to_id = 1;
     DEG_id_tag_update(&me->id, ID_RECALC_GEOMETRY);
   }
@@ -915,7 +894,6 @@ static void mesh_undosys_foreach_ID_ref(UndoStep *us_p,
   }
 }
 
-/* Export for ED_undo_sys. */
 void ED_mesh_undosys_type(UndoType *ut)
 {
   ut->name = "Edit Mesh";

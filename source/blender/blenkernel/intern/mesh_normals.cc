@@ -38,9 +38,12 @@
 #include "BLI_linklist.h"
 #include "BLI_linklist_stack.h"
 #include "BLI_math.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_memarena.h"
+#include "BLI_span.hh"
 #include "BLI_stack.h"
 #include "BLI_task.h"
+#include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
 #include "BKE_customdata.h"
@@ -49,6 +52,8 @@
 #include "BKE_mesh.h"
 
 #include "atomic_ops.h"
+
+using blender::Span;
 
 // #define DEBUG_TIME
 
@@ -105,8 +110,73 @@ static void add_v3_v3_atomic(float r[3], const float a[3])
 
 void BKE_mesh_normals_tag_dirty(Mesh *mesh)
 {
-  mesh->runtime.cd_dirty_vert |= CD_MASK_NORMAL;
-  mesh->runtime.cd_dirty_poly |= CD_MASK_NORMAL;
+  mesh->runtime.vert_normals_dirty = true;
+  mesh->runtime.poly_normals_dirty = true;
+}
+
+float (*BKE_mesh_vertex_normals_for_write(Mesh *mesh))[3]
+{
+  if (mesh->runtime.vert_normals == nullptr) {
+    mesh->runtime.vert_normals = (float(*)[3])MEM_malloc_arrayN(
+        mesh->totvert, sizeof(float[3]), __func__);
+  }
+
+  BLI_assert(MEM_allocN_len(mesh->runtime.vert_normals) >= sizeof(float[3]) * mesh->totvert);
+
+  return mesh->runtime.vert_normals;
+}
+
+float (*BKE_mesh_poly_normals_for_write(Mesh *mesh))[3]
+{
+  if (mesh->runtime.poly_normals == nullptr) {
+    mesh->runtime.poly_normals = (float(*)[3])MEM_malloc_arrayN(
+        mesh->totpoly, sizeof(float[3]), __func__);
+  }
+
+  BLI_assert(MEM_allocN_len(mesh->runtime.poly_normals) >= sizeof(float[3]) * mesh->totpoly);
+
+  return mesh->runtime.poly_normals;
+}
+
+void BKE_mesh_vertex_normals_clear_dirty(Mesh *mesh)
+{
+  mesh->runtime.vert_normals_dirty = false;
+  BKE_mesh_assert_normals_dirty_or_calculated(mesh);
+}
+
+void BKE_mesh_poly_normals_clear_dirty(Mesh *mesh)
+{
+  mesh->runtime.poly_normals_dirty = false;
+  BKE_mesh_assert_normals_dirty_or_calculated(mesh);
+}
+
+bool BKE_mesh_vertex_normals_are_dirty(const Mesh *mesh)
+{
+  return mesh->runtime.vert_normals_dirty;
+}
+
+bool BKE_mesh_poly_normals_are_dirty(const Mesh *mesh)
+{
+  return mesh->runtime.poly_normals_dirty;
+}
+
+void BKE_mesh_clear_derived_normals(Mesh *mesh)
+{
+  MEM_SAFE_FREE(mesh->runtime.vert_normals);
+  MEM_SAFE_FREE(mesh->runtime.poly_normals);
+
+  mesh->runtime.vert_normals_dirty = true;
+  mesh->runtime.poly_normals_dirty = true;
+}
+
+void BKE_mesh_assert_normals_dirty_or_calculated(const Mesh *mesh)
+{
+  if (!mesh->runtime.vert_normals_dirty) {
+    BLI_assert(mesh->runtime.vert_normals || mesh->totvert == 0);
+  }
+  if (!mesh->runtime.poly_normals_dirty) {
+    BLI_assert(mesh->runtime.poly_normals || mesh->totpoly == 0);
+  }
 }
 
 /** \} */
@@ -160,8 +230,6 @@ void BKE_mesh_calc_normals_poly(const MVert *mvert,
 
 /* -------------------------------------------------------------------- */
 /** \name Mesh Normal Calculation (Polygons & Vertices)
- *
- * Implement #BKE_mesh_calc_normals_poly_and_vertex,
  *
  * Take care making optimizations to this function as improvements to low-poly
  * meshes can slow down high-poly meshes. For details on performance, see D11993.
@@ -253,8 +321,6 @@ static void mesh_calc_normals_poly_and_vertex_finalize_fn(
     /* Following Mesh convention; we use vertex coordinate itself for normal in this case. */
     normalize_v3_v3(no, mv->co);
   }
-
-  normal_float_to_short_v3(mv->no, no);
 }
 
 void BKE_mesh_calc_normals_poly_and_vertex(MVert *mvert,
@@ -308,22 +374,101 @@ void BKE_mesh_calc_normals_poly_and_vertex(MVert *mvert,
 /** \name Mesh Normal Calculation
  * \{ */
 
-void BKE_mesh_ensure_normals(Mesh *mesh)
+const float (*BKE_mesh_vertex_normals_ensure(const Mesh *mesh))[3]
 {
-  if (mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) {
-    BKE_mesh_calc_normals(mesh);
+  if (!(BKE_mesh_vertex_normals_are_dirty(mesh) || BKE_mesh_poly_normals_are_dirty(mesh))) {
+    BLI_assert(mesh->runtime.vert_normals != nullptr || mesh->totvert == 0);
+    return mesh->runtime.vert_normals;
   }
-  BLI_assert((mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) == 0);
+
+  if (mesh->totvert == 0) {
+    return nullptr;
+  }
+
+  ThreadMutex *normals_mutex = (ThreadMutex *)mesh->runtime.normals_mutex;
+  BLI_mutex_lock(normals_mutex);
+  if (!(BKE_mesh_vertex_normals_are_dirty(mesh) || BKE_mesh_poly_normals_are_dirty(mesh))) {
+    BLI_assert(mesh->runtime.vert_normals != nullptr);
+    BLI_mutex_unlock(normals_mutex);
+    return mesh->runtime.vert_normals;
+  }
+
+  float(*vert_normals)[3];
+  float(*poly_normals)[3];
+
+  /* Isolate task because a mutex is locked and computing normals is multi-threaded. */
+  blender::threading::isolate_task([&]() {
+    Mesh &mesh_mutable = *const_cast<Mesh *>(mesh);
+
+    vert_normals = BKE_mesh_vertex_normals_for_write(&mesh_mutable);
+    poly_normals = BKE_mesh_poly_normals_for_write(&mesh_mutable);
+
+    BKE_mesh_calc_normals_poly_and_vertex(mesh_mutable.mvert,
+                                          mesh_mutable.totvert,
+                                          mesh_mutable.mloop,
+                                          mesh_mutable.totloop,
+                                          mesh_mutable.mpoly,
+                                          mesh_mutable.totpoly,
+                                          poly_normals,
+                                          vert_normals);
+
+    BKE_mesh_vertex_normals_clear_dirty(&mesh_mutable);
+    BKE_mesh_poly_normals_clear_dirty(&mesh_mutable);
+  });
+
+  BLI_mutex_unlock(normals_mutex);
+  return vert_normals;
 }
 
-/**
- * Called after calculating all modifiers.
- */
+const float (*BKE_mesh_poly_normals_ensure(const Mesh *mesh))[3]
+{
+  if (!BKE_mesh_poly_normals_are_dirty(mesh)) {
+    BLI_assert(mesh->runtime.poly_normals != nullptr || mesh->totpoly == 0);
+    return mesh->runtime.poly_normals;
+  }
+
+  if (mesh->totpoly == 0) {
+    return nullptr;
+  }
+
+  ThreadMutex *normals_mutex = (ThreadMutex *)mesh->runtime.normals_mutex;
+  BLI_mutex_lock(normals_mutex);
+  if (!BKE_mesh_poly_normals_are_dirty(mesh)) {
+    BLI_assert(mesh->runtime.poly_normals != nullptr);
+    BLI_mutex_unlock(normals_mutex);
+    return mesh->runtime.poly_normals;
+  }
+
+  float(*poly_normals)[3];
+
+  /* Isolate task because a mutex is locked and computing normals is multi-threaded. */
+  blender::threading::isolate_task([&]() {
+    Mesh &mesh_mutable = *const_cast<Mesh *>(mesh);
+
+    poly_normals = BKE_mesh_poly_normals_for_write(&mesh_mutable);
+
+    BKE_mesh_calc_normals_poly(mesh_mutable.mvert,
+                               mesh_mutable.totvert,
+                               mesh_mutable.mloop,
+                               mesh_mutable.totloop,
+                               mesh_mutable.mpoly,
+                               mesh_mutable.totpoly,
+                               poly_normals);
+
+    BKE_mesh_poly_normals_clear_dirty(&mesh_mutable);
+  });
+
+  BLI_mutex_unlock(normals_mutex);
+  return poly_normals;
+}
+
 void BKE_mesh_ensure_normals_for_display(Mesh *mesh)
 {
   switch ((eMeshWrapperType)mesh->runtime.wrapper_type) {
+    case ME_WRAPPER_TYPE_SUBD:
     case ME_WRAPPER_TYPE_MDATA:
-      /* Run code below. */
+      BKE_mesh_vertex_normals_ensure(mesh);
+      BKE_mesh_poly_normals_ensure(mesh);
       break;
     case ME_WRAPPER_TYPE_BMESH: {
       struct BMEditMesh *em = mesh->edit_mesh;
@@ -335,70 +480,17 @@ void BKE_mesh_ensure_normals_for_display(Mesh *mesh)
       return;
     }
   }
-
-  float(*poly_nors)[3] = (float(*)[3])CustomData_get_layer(&mesh->pdata, CD_NORMAL);
-  const bool do_vert_normals = (mesh->runtime.cd_dirty_vert & CD_MASK_NORMAL) != 0;
-  const bool do_poly_normals = (mesh->runtime.cd_dirty_poly & CD_MASK_NORMAL ||
-                                poly_nors == nullptr);
-
-  if (do_vert_normals || do_poly_normals) {
-    const bool do_add_poly_nors_cddata = (poly_nors == nullptr);
-    if (do_add_poly_nors_cddata) {
-      poly_nors = (float(*)[3])MEM_malloc_arrayN(
-          (size_t)mesh->totpoly, sizeof(*poly_nors), __func__);
-    }
-
-    /* Calculate poly/vert normals. */
-    if (do_vert_normals) {
-      BKE_mesh_calc_normals_poly_and_vertex(mesh->mvert,
-                                            mesh->totvert,
-                                            mesh->mloop,
-                                            mesh->totloop,
-                                            mesh->mpoly,
-                                            mesh->totpoly,
-                                            poly_nors,
-                                            nullptr);
-    }
-    else {
-      BKE_mesh_calc_normals_poly(mesh->mvert,
-                                 mesh->totvert,
-                                 mesh->mloop,
-                                 mesh->totloop,
-                                 mesh->mpoly,
-                                 mesh->totpoly,
-                                 poly_nors);
-    }
-
-    if (do_add_poly_nors_cddata) {
-      CustomData_add_layer(&mesh->pdata, CD_NORMAL, CD_ASSIGN, poly_nors, mesh->totpoly);
-    }
-
-    mesh->runtime.cd_dirty_vert &= ~CD_MASK_NORMAL;
-    mesh->runtime.cd_dirty_poly &= ~CD_MASK_NORMAL;
-  }
 }
 
-/**
- * NOTE: this does not update the #CD_NORMAL layer,
- * but does update the normals in the #CD_MVERT layer.
- */
 void BKE_mesh_calc_normals(Mesh *mesh)
 {
 #ifdef DEBUG_TIME
   TIMEIT_START_AVERAGED(BKE_mesh_calc_normals);
 #endif
-  BKE_mesh_calc_normals_poly_and_vertex(mesh->mvert,
-                                        mesh->totvert,
-                                        mesh->mloop,
-                                        mesh->totloop,
-                                        mesh->mpoly,
-                                        mesh->totpoly,
-                                        nullptr,
-                                        nullptr);
+  BKE_mesh_vertex_normals_ensure(mesh);
 #ifdef DEBUG_TIME
   TIMEIT_END_AVERAGED(BKE_mesh_calc_normals);
 #endif
-  mesh->runtime.cd_dirty_vert &= ~CD_MASK_NORMAL;
 }
 
 void BKE_mesh_calc_normals_looptri(MVert *mverts,
@@ -445,8 +537,6 @@ void BKE_mesh_calc_normals_looptri(MVert *mverts,
     if (UNLIKELY(normalize_v3(no) == 0.0f)) {
       normalize_v3_v3(no, mv->co);
     }
-
-    normal_float_to_short_v3(mv->no, no);
   }
 
 cleanup:
@@ -479,13 +569,6 @@ void BKE_lnor_spacearr_init(MLoopNorSpaceArray *lnors_spacearr,
   lnors_spacearr->data_type = data_type;
 }
 
-/**
- * Utility for multi-threaded calculation that ensures
- * `lnors_spacearr_tls` doesn't share memory with `lnors_spacearr`
- * that would cause it not to be thread safe.
- *
- * \note This works as long as threads never operate on the same loops at once.
- */
 void BKE_lnor_spacearr_tls_init(MLoopNorSpaceArray *lnors_spacearr,
                                 MLoopNorSpaceArray *lnors_spacearr_tls)
 {
@@ -493,10 +576,6 @@ void BKE_lnor_spacearr_tls_init(MLoopNorSpaceArray *lnors_spacearr,
   lnors_spacearr_tls->mem = BLI_memarena_new(BLI_MEMARENA_STD_BUFSIZE, __func__);
 }
 
-/**
- * Utility for multi-threaded calculation
- * that merges `lnors_spacearr_tls` into `lnors_spacearr`.
- */
 void BKE_lnor_spacearr_tls_join(MLoopNorSpaceArray *lnors_spacearr,
                                 MLoopNorSpaceArray *lnors_spacearr_tls)
 {
@@ -537,11 +616,6 @@ MLoopNorSpace *BKE_lnor_space_create(MLoopNorSpaceArray *lnors_spacearr)
 /* This threshold is a bit touchy (usual float precision issue), this value seems OK. */
 #define LNOR_SPACE_TRIGO_THRESHOLD (1.0f - 1e-4f)
 
-/* Should only be called once.
- * Beware, this modifies ref_vec and other_vec in place!
- * In case no valid space can be generated, ref_alpha and ref_beta are set to zero
- * (which means 'use auto lnors').
- */
 void BKE_lnor_space_define(MLoopNorSpace *lnor_space,
                            const float lnor[3],
                            float vec_ref[3],
@@ -614,14 +688,6 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space,
   }
 }
 
-/**
- * Add a new given loop to given lnor_space.
- * Depending on \a lnor_space->data_type, we expect \a bm_loop to be a pointer to BMLoop struct
- * (in case of BMLOOP_PTR), or nullptr (in case of LOOP_INDEX), loop index is then stored in
- * pointer. If \a is_single is set, the BMLoop or loop index is directly stored in \a
- * lnor_space->loops pointer (since there is only one loop in this fan), else it is added to the
- * linked list of loops in the fan.
- */
 void BKE_lnor_space_add_loop(MLoopNorSpaceArray *lnors_spacearr,
                              MLoopNorSpace *lnor_space,
                              const int ml_index,
@@ -783,6 +849,7 @@ struct LoopSplitTaskDataCommon {
   int (*edge_to_loops)[2];
   int *loop_to_poly;
   const float (*polynors)[3];
+  const float (*vert_normals)[3];
 
   int numEdges;
   int numLoops;
@@ -799,7 +866,6 @@ static void mesh_edges_sharp_tag(LoopSplitTaskDataCommon *data,
                                  const float split_angle,
                                  const bool do_sharp_edges_tag)
 {
-  const MVert *mverts = data->mverts;
   const MEdge *medges = data->medges;
   const MLoop *mloops = data->mloops;
 
@@ -838,7 +904,7 @@ static void mesh_edges_sharp_tag(LoopSplitTaskDataCommon *data,
        * this way we don't have to compute those later!
        */
       if (loopnors) {
-        normal_short_to_float_v3(loopnors[ml_curr_index], mverts[ml_curr->v].no);
+        copy_v3_v3(loopnors[ml_curr_index], data->vert_normals[ml_curr->v]);
       }
 
       /* Check whether current edge might be smooth or sharp */
@@ -901,12 +967,6 @@ static void mesh_edges_sharp_tag(LoopSplitTaskDataCommon *data,
   }
 }
 
-/**
- * Define sharp edges as needed to mimic 'autosmooth' from angle threshold.
- *
- * Used when defining an empty custom loop normals data layer,
- * to keep same shading as with auto-smooth!
- */
 void BKE_edges_sharp_from_angle_set(const struct MVert *mverts,
                                     const int UNUSED(numVerts),
                                     struct MEdge *medges,
@@ -1568,12 +1628,8 @@ static void loop_split_generator(TaskPool *pool, LoopSplitTaskDataCommon *common
 #endif
 }
 
-/**
- * Compute split normals, i.e. vertex normals associated with each poly (hence 'loop normals').
- * Useful to materialize sharp edges (or non-smooth faces) without actually modifying the geometry
- * (splitting edges).
- */
 void BKE_mesh_normals_loop_split(const MVert *mverts,
+                                 const float (*vert_normals)[3],
                                  const int UNUSED(numVerts),
                                  MEdge *medges,
                                  const int numEdges,
@@ -1616,7 +1672,7 @@ void BKE_mesh_normals_loop_split(const MVert *mverts,
           copy_v3_v3(r_loopnors[ml_index], polynors[mp_index]);
         }
         else {
-          normal_short_to_float_v3(r_loopnors[ml_index], mverts[mloops[ml_index].v].no);
+          copy_v3_v3(r_loopnors[ml_index], vert_normals[mloops[ml_index].v]);
         }
       }
     }
@@ -1674,6 +1730,7 @@ void BKE_mesh_normals_loop_split(const MVert *mverts,
   common_data.edge_to_loops = edge_to_loops;
   common_data.loop_to_poly = loop_to_poly;
   common_data.polynors = polynors;
+  common_data.vert_normals = vert_normals;
   common_data.numEdges = numEdges;
   common_data.numLoops = numLoops;
   common_data.numPolys = numPolys;
@@ -1725,6 +1782,7 @@ void BKE_mesh_normals_loop_split(const MVert *mverts,
  * in which case they will be replaced by default loop/vertex normal.
  */
 static void mesh_normals_loop_custom_set(const MVert *mverts,
+                                         const float (*vert_normals)[3],
                                          const int numVerts,
                                          MEdge *medges,
                                          const int numEdges,
@@ -1756,6 +1814,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
 
   /* Compute current lnor spacearr. */
   BKE_mesh_normals_loop_split(mverts,
+                              vert_normals,
                               numVerts,
                               medges,
                               numEdges,
@@ -1775,7 +1834,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
   if (use_vertices) {
     for (int i = 0; i < numVerts; i++) {
       if (is_zero_v3(r_custom_loopnors[i])) {
-        normal_short_to_float_v3(r_custom_loopnors[i], mverts[i].no);
+        copy_v3_v3(r_custom_loopnors[i], vert_normals[i]);
       }
     }
   }
@@ -1878,6 +1937,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
     /* And now, recompute our new auto lnors and lnor spacearr! */
     BKE_lnor_spacearr_clear(&lnors_spacearr);
     BKE_mesh_normals_loop_split(mverts,
+                                vert_normals,
                                 numVerts,
                                 medges,
                                 numEdges,
@@ -1959,6 +2019,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
 }
 
 void BKE_mesh_normals_loop_custom_set(const MVert *mverts,
+                                      const float (*vert_normals)[3],
                                       const int numVerts,
                                       MEdge *medges,
                                       const int numEdges,
@@ -1971,6 +2032,7 @@ void BKE_mesh_normals_loop_custom_set(const MVert *mverts,
                                       short (*r_clnors_data)[2])
 {
   mesh_normals_loop_custom_set(mverts,
+                               vert_normals,
                                numVerts,
                                medges,
                                numEdges,
@@ -1985,6 +2047,7 @@ void BKE_mesh_normals_loop_custom_set(const MVert *mverts,
 }
 
 void BKE_mesh_normals_loop_custom_from_vertices_set(const MVert *mverts,
+                                                    const float (*vert_normals)[3],
                                                     float (*r_custom_vertnors)[3],
                                                     const int numVerts,
                                                     MEdge *medges,
@@ -1997,6 +2060,7 @@ void BKE_mesh_normals_loop_custom_from_vertices_set(const MVert *mverts,
                                                     short (*r_clnors_data)[2])
 {
   mesh_normals_loop_custom_set(mverts,
+                               vert_normals,
                                numVerts,
                                medges,
                                numEdges,
@@ -2024,22 +2088,8 @@ static void mesh_set_custom_normals(Mesh *mesh, float (*r_custom_nors)[3], const
         &mesh->ldata, CD_CUSTOMLOOPNORMAL, CD_CALLOC, nullptr, numloops);
   }
 
-  float(*polynors)[3] = (float(*)[3])CustomData_get_layer(&mesh->pdata, CD_NORMAL);
-  bool free_polynors = false;
-  if (polynors == nullptr) {
-    polynors = (float(*)[3])MEM_mallocN(sizeof(float[3]) * (size_t)mesh->totpoly, __func__);
-    BKE_mesh_calc_normals_poly_and_vertex(mesh->mvert,
-                                          mesh->totvert,
-                                          mesh->mloop,
-                                          mesh->totloop,
-                                          mesh->mpoly,
-                                          mesh->totpoly,
-                                          polynors,
-                                          nullptr);
-    free_polynors = true;
-  }
-
   mesh_normals_loop_custom_set(mesh->mvert,
+                               BKE_mesh_vertex_normals_ensure(mesh),
                                mesh->totvert,
                                mesh->medge,
                                mesh->totedge,
@@ -2047,46 +2097,22 @@ static void mesh_set_custom_normals(Mesh *mesh, float (*r_custom_nors)[3], const
                                r_custom_nors,
                                mesh->totloop,
                                mesh->mpoly,
-                               polynors,
+                               BKE_mesh_poly_normals_ensure(mesh),
                                mesh->totpoly,
                                clnors,
                                use_vertices);
-
-  if (free_polynors) {
-    MEM_freeN(polynors);
-  }
 }
 
-/**
- * Higher level functions hiding most of the code needed around call to
- * #BKE_mesh_normals_loop_custom_set().
- *
- * \param r_custom_loopnors: is not const, since code will replace zero_v3 normals there
- * with automatically computed vectors.
- */
 void BKE_mesh_set_custom_normals(Mesh *mesh, float (*r_custom_loopnors)[3])
 {
   mesh_set_custom_normals(mesh, r_custom_loopnors, false);
 }
 
-/**
- * Higher level functions hiding most of the code needed around call to
- * #BKE_mesh_normals_loop_custom_from_vertices_set().
- *
- * \param r_custom_vertnors: is not const, since code will replace zero_v3 normals there
- * with automatically computed vectors.
- */
 void BKE_mesh_set_custom_normals_from_vertices(Mesh *mesh, float (*r_custom_vertnors)[3])
 {
   mesh_set_custom_normals(mesh, r_custom_vertnors, true);
 }
 
-/**
- * Computes average per-vertex normals from given custom loop normals.
- *
- * \param clnors: The computed custom loop normals.
- * \param r_vert_clnors: The (already allocated) array where to store averaged per-vertex normals.
- */
 void BKE_mesh_normals_loop_to_vertex(const int numVerts,
                                      const MLoop *mloops,
                                      const int numLoops,

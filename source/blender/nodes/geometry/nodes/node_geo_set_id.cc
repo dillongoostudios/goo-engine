@@ -16,9 +16,9 @@
 
 #include "node_geometry_util.hh"
 
-namespace blender::nodes {
+namespace blender::nodes::node_geo_set_id_cc {
 
-static void geo_node_set_id_declare(NodeDeclarationBuilder &b)
+static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Geometry>(N_("Geometry"));
   b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
@@ -30,40 +30,41 @@ static void set_id_in_component(GeometryComponent &component,
                                 const Field<bool> &selection_field,
                                 const Field<int> &id_field)
 {
-  GeometryComponentFieldContext field_context{component, ATTR_DOMAIN_POINT};
-  const int domain_size = component.attribute_domain_size(ATTR_DOMAIN_POINT);
+  const AttributeDomain domain = (component.type() == GEO_COMPONENT_TYPE_INSTANCES) ?
+                                     ATTR_DOMAIN_INSTANCE :
+                                     ATTR_DOMAIN_POINT;
+  GeometryComponentFieldContext field_context{component, domain};
+  const int domain_size = component.attribute_domain_size(domain);
   if (domain_size == 0) {
     return;
   }
 
-  fn::FieldEvaluator selection_evaluator{field_context, domain_size};
-  selection_evaluator.add(selection_field);
-  selection_evaluator.evaluate();
-  const IndexMask selection = selection_evaluator.get_evaluated_as_mask(0);
+  fn::FieldEvaluator evaluator{field_context, domain_size};
+  evaluator.set_selection(selection_field);
 
   /* Since adding the ID attribute can change the result of the field evaluation (the random value
    * node uses the index if the ID is unavailable), make sure that it isn't added before evaluating
    * the field. However, as an optimization, use a faster code path when it already exists. */
-  fn::FieldEvaluator id_evaluator{field_context, &selection};
   if (component.attribute_exists("id")) {
     OutputAttribute_Typed<int> id_attribute = component.attribute_try_get_for_output_only<int>(
-        "id", ATTR_DOMAIN_POINT);
-    id_evaluator.add_with_destination(id_field, id_attribute.varray());
-    id_evaluator.evaluate();
+        "id", domain);
+    evaluator.add_with_destination(id_field, id_attribute.varray());
+    evaluator.evaluate();
     id_attribute.save();
   }
   else {
-    id_evaluator.add(id_field);
-    id_evaluator.evaluate();
-    const VArray<int> &result_ids = id_evaluator.get_evaluated<int>(0);
+    evaluator.add(id_field);
+    evaluator.evaluate();
+    const IndexMask selection = evaluator.get_evaluated_selection_as_mask();
+    const VArray<int> &result_ids = evaluator.get_evaluated<int>(0);
     OutputAttribute_Typed<int> id_attribute = component.attribute_try_get_for_output_only<int>(
-        "id", ATTR_DOMAIN_POINT);
+        "id", domain);
     result_ids.materialize(selection, id_attribute.as_span());
     id_attribute.save();
   }
 }
 
-static void geo_node_set_id_exec(GeoNodeExecParams params)
+static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
@@ -81,14 +82,16 @@ static void geo_node_set_id_exec(GeoNodeExecParams params)
   params.set_output("Geometry", std::move(geometry_set));
 }
 
-}  // namespace blender::nodes
+}  // namespace blender::nodes::node_geo_set_id_cc
 
 void register_node_type_geo_set_id()
 {
+  namespace file_ns = blender::nodes::node_geo_set_id_cc;
+
   static bNodeType ntype;
 
-  geo_node_type_base(&ntype, GEO_NODE_SET_ID, "Set ID", NODE_CLASS_GEOMETRY, 0);
-  ntype.geometry_node_execute = blender::nodes::geo_node_set_id_exec;
-  ntype.declare = blender::nodes::geo_node_set_id_declare;
+  geo_node_type_base(&ntype, GEO_NODE_SET_ID, "Set ID", NODE_CLASS_GEOMETRY);
+  ntype.geometry_node_execute = file_ns::node_geo_exec;
+  ntype.declare = file_ns::node_declare;
   nodeRegisterType(&ntype);
 }

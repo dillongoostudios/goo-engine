@@ -21,14 +21,17 @@
 
 #include "BKE_appdir.h"
 #include "BKE_blender.h"
+#include "BKE_callbacks.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_idtype.h"
 #include "BKE_image.h"
 #include "BKE_main.h"
+#include "BKE_mball_tessellate.h"
 #include "BKE_modifier.h"
 #include "BKE_node.h"
 #include "BKE_scene.h"
+#include "BKE_vfont.h"
 
 #include "BLI_path_util.h"
 #include "BLI_threads.h"
@@ -42,6 +45,8 @@
 #include "DNA_windowmanager_types.h"
 
 #include "IMB_imbuf.h"
+
+#include "ED_datafiles.h"
 
 #include "RNA_define.h"
 
@@ -67,11 +72,12 @@ void BlendfileLoadingBaseTest::SetUpTestCase()
   BKE_idtype_init();
   BKE_appdir_init();
   IMB_init();
-  BKE_images_init();
   BKE_modifier_init();
   DEG_register_node_types();
   RNA_init();
   BKE_node_system_init();
+  BKE_callback_global_init();
+  BKE_vfont_builtin_register(datatoc_bfont_pfb, datatoc_bfont_pfb_size);
 
   G.background = true;
   G.factory_startup = true;
@@ -110,6 +116,7 @@ void BlendfileLoadingBaseTest::TearDownTestCase()
 
 void BlendfileLoadingBaseTest::TearDown()
 {
+  BKE_mball_cubeTable_free();
   depsgraph_free();
   blendfile_free();
 

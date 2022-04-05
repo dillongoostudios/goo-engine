@@ -102,7 +102,7 @@ struct CurveDrawData {
 
     /* offset projection by this value */
     bool use_offset;
-    float offset[3]; /* worldspace */
+    float offset[3]; /* world-space */
     float surface_offset;
     bool use_surface_offset_absolute;
   } project;
@@ -144,7 +144,7 @@ static float stroke_elem_radius_from_pressure(const struct CurveDrawData *cdd,
                                               const float pressure)
 {
   const Curve *cu = cdd->vc.obedit->data;
-  return ((pressure * cdd->radius.range) + cdd->radius.min) * cu->ext2;
+  return ((pressure * cdd->radius.range) + cdd->radius.min) * cu->bevel_radius;
 }
 
 static float stroke_elem_radius(const struct CurveDrawData *cdd, const struct StrokeElem *selem)
@@ -364,7 +364,7 @@ static void curve_draw_stroke_3d(const struct bContext *UNUSED(C),
   Object *obedit = cdd->vc.obedit;
   Curve *cu = obedit->data;
 
-  if (cu->ext2 > 0.0f) {
+  if (cu->bevel_radius > 0.0f) {
     BLI_mempool_iter iter;
     const struct StrokeElem *selem;
 
@@ -588,6 +588,14 @@ static bool curve_draw_init(bContext *C, wmOperator *op, bool is_invoke)
     cdd->vc.scene = CTX_data_scene(C);
     cdd->vc.view_layer = CTX_data_view_layer(C);
     cdd->vc.obedit = CTX_data_edit_object(C);
+
+    /* Using an empty stroke complicates logic later,
+     * it's simplest to disallow early on (see: T94085). */
+    if (RNA_collection_length(op->ptr, "stroke") == 0) {
+      MEM_freeN(cdd);
+      BKE_report(op->reports, RPT_ERROR, "The \"stroke\" cannot be empty");
+      return false;
+    }
   }
 
   op->customdata = cdd;

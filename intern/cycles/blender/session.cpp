@@ -396,6 +396,13 @@ void BlenderSession::render(BL::Depsgraph &b_depsgraph_)
     /* set the current view */
     b_engine.active_view_set(b_rview_name.c_str());
 
+    /* Force update in this case, since the camera transform on each frame changes
+     * in different views. This could be optimized by somehow storing the animated
+     * camera transforms separate from the fixed stereo transform. */
+    if ((scene->need_motion() != Scene::MOTION_NONE) && view_index > 0) {
+      sync->tag_update();
+    }
+
     /* update scene */
     BL::Object b_camera_override(b_engine.camera_override());
     sync->sync_camera(b_render, b_camera_override, width, height, b_rview_name.c_str());
@@ -495,9 +502,19 @@ void BlenderSession::render_frame_finish()
     path_remove(filename);
   }
 
-  /* Clear driver. */
+  /* Clear output driver. */
   session->set_output_driver(nullptr);
   session->full_buffer_written_cb = function_null;
+
+  /* The display driver is the source of drawing context for both drawing and possible graphics
+   * interop objects in the path trace. Once the frame is finished the OpenGL context might be
+   * freed form Blender side. Need to ensure that all GPU resources are freed prior to that
+   * point.
+   * Ideally would only do this when OpenGL context is actually destroyed, but there is no way to
+   * know when this happens (at least in the code at the time when this comment was written).
+   * The penalty of re-creating resources on every frame is unlikely to be noticed. */
+  display_driver_ = nullptr;
+  session->set_display_driver(nullptr);
 
   /* All the files are handled.
    * Clear the list so that this session can be re-used by Persistent Data. */
@@ -629,7 +646,7 @@ void BlenderSession::bake(BL::Depsgraph &b_depsgraph_,
       integrator->set_use_emission((bake_filter & BL::BakeSettings::pass_filter_EMIT) != 0);
     }
 
-    /* Always use transpanent background for baking. */
+    /* Always use transparent background for baking. */
     scene->background->set_transparent(true);
 
     /* Load built-in images from Blender. */

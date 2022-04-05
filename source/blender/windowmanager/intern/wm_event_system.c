@@ -51,6 +51,7 @@
 #include "BKE_customdata.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
+#include "BKE_lib_remap.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -84,6 +85,7 @@
 #include "wm.h"
 #include "wm_event_system.h"
 #include "wm_event_types.h"
+#include "wm_surface.h"
 #include "wm_window.h"
 
 #include "DEG_depsgraph.h"
@@ -109,7 +111,7 @@ static int wm_operator_call_internal(bContext *C,
                                      wmOperatorType *ot,
                                      PointerRNA *properties,
                                      ReportList *reports,
-                                     const short context,
+                                     const wmOperatorCallContext context,
                                      const bool poll_only,
                                      wmEvent *event);
 
@@ -288,9 +290,6 @@ void WM_main_add_notifier(unsigned int type, void *reference)
   note->reference = reference;
 }
 
-/**
- * Clear notifiers by reference, Used so listeners don't act on freed data.
- */
 void WM_main_remove_notifier_reference(const void *reference)
 {
   Main *bmain = G_MAIN;
@@ -314,28 +313,39 @@ void WM_main_remove_notifier_reference(const void *reference)
   }
 }
 
-void WM_main_remap_editor_id_reference(ID *old_id, ID *new_id)
+static void wm_main_remap_assetlist(ID *old_id, ID *new_id, void *UNUSED(user_data))
+{
+  ED_assetlist_storage_id_remap(old_id, new_id);
+}
+
+static void wm_main_remap_msgbus_notify(ID *old_id, ID *new_id, void *user_data)
+{
+  struct wmMsgBus *mbus = user_data;
+  if (new_id != NULL) {
+    WM_msg_id_update(mbus, old_id, new_id);
+  }
+  else {
+    WM_msg_id_remove(mbus, old_id);
+  }
+}
+
+void WM_main_remap_editor_id_reference(const struct IDRemapper *mappings)
 {
   Main *bmain = G_MAIN;
 
   LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
     LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
-        ED_spacedata_id_remap(area, sl, old_id, new_id);
+        ED_spacedata_id_remap(area, sl, mappings);
       }
     }
   }
-  ED_assetlist_storage_id_remap(old_id, new_id);
+
+  BKE_id_remapper_iter(mappings, wm_main_remap_assetlist, NULL);
 
   wmWindowManager *wm = bmain->wm.first;
   if (wm && wm->message_bus) {
-    struct wmMsgBus *mbus = wm->message_bus;
-    if (new_id != NULL) {
-      WM_msg_id_update(mbus, old_id, new_id);
-    }
-    else {
-      WM_msg_id_remove(mbus, old_id);
-    }
+    BKE_id_remapper_iter(mappings, wm_main_remap_msgbus_notify, wm->message_bus);
   }
 }
 
@@ -385,13 +395,10 @@ void wm_event_do_depsgraph(bContext *C, bool is_after_open_file)
     DEG_make_active(depsgraph);
     BKE_scene_graph_update_tagged(depsgraph, bmain);
   }
+
+  wm_surfaces_do_depsgraph(C);
 }
 
-/**
- * Was part of #wm_event_do_notifiers,
- * split out so it can be called once before entering the #WM_main loop.
- * This ensures operators don't run before the UI and depsgraph are initialized.
- */
 void wm_event_do_refresh_wm_and_depsgraph(bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -428,7 +435,6 @@ static void wm_event_execute_timers(bContext *C)
   CTX_wm_window_set(C, NULL);
 }
 
-/* Called in mainloop. */
 void wm_event_do_notifiers(bContext *C)
 {
   /* Run the timer before assigning 'wm' in the unlikely case a timer loads a file, see T80028. */
@@ -639,6 +645,20 @@ static int wm_event_always_pass(const wmEvent *event)
   return ISTIMER(event->type) || (event->type == WINDEACTIVATE);
 }
 
+/**
+ * Debug only sanity check for the return value of event handlers. Checks that "always pass" events
+ * don't cause non-passing handler return values, and thus actually pass.
+ *
+ * Can't be executed if the handler just loaded a file (typically identified by `CTX_wm_window(C)`
+ * returning `NULL`), because the event will have been freed then.
+ */
+BLI_INLINE void wm_event_handler_return_value_check(const wmEvent *event, const int action)
+{
+  BLI_assert_msg(!wm_event_always_pass(event) || (action != WM_HANDLER_BREAK),
+                 "Return value for events that should always pass should never be BREAK.");
+  UNUSED_VARS_NDEBUG(event, action);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -756,9 +776,6 @@ static void wm_event_handler_ui_cancel(bContext *C)
  * Access to #wmWindowManager.reports
  * \{ */
 
-/**
- * Show the report in the info header.
- */
 void WM_report_banner_show(void)
 {
   wmWindowManager *wm = G_MAIN->wm.first;
@@ -774,9 +791,6 @@ void WM_report_banner_show(void)
   wm_reports->reporttimer->customdata = rti;
 }
 
-/**
- * Hide all currently displayed banners and abort their timer.
- */
 void WM_report_banners_cancel(Main *bmain)
 {
   wmWindowManager *wm = bmain->wm.first;
@@ -859,9 +873,9 @@ bool WM_operator_poll(bContext *C, wmOperatorType *ot)
   return true;
 }
 
-/* sets up the new context and calls 'wm_operator_invoke()' with poll_only */
 bool WM_operator_poll_context(bContext *C, wmOperatorType *ot, short context)
 {
+  /* Sets up the new context and calls #wm_operator_invoke() with poll_only. */
   return wm_operator_call_internal(C, ot, NULL, NULL, context, true, NULL);
 }
 
@@ -896,11 +910,6 @@ bool WM_operator_check_ui_empty(wmOperatorType *ot)
   return true;
 }
 
-/**
- * Sets the active region for this space from the context.
- *
- * \see #BKE_area_find_region_active_win
- */
 void WM_operator_region_active_win_set(bContext *C)
 {
   ScrArea *area = CTX_wm_area(C);
@@ -1107,13 +1116,6 @@ static int wm_operator_exec_notest(bContext *C, wmOperator *op)
   return retval;
 }
 
-/**
- * For running operators with frozen context (modal handlers, menus).
- *
- * \param store: Store settings for re-use.
- *
- * \warning do not use this within an operator to call its self! T29537.
- */
 int WM_operator_call_ex(bContext *C, wmOperator *op, const bool store)
 {
   return wm_operator_exec(C, op, false, store);
@@ -1124,19 +1126,11 @@ int WM_operator_call(bContext *C, wmOperator *op)
   return WM_operator_call_ex(C, op, false);
 }
 
-/**
- * This is intended to be used when an invoke operator wants to call exec on its self
- * and is basically like running op->type->exec() directly, no poll checks no freeing,
- * since we assume whoever called invoke will take care of that
- */
 int WM_operator_call_notest(bContext *C, wmOperator *op)
 {
   return wm_operator_exec_notest(C, op);
 }
 
-/**
- * Execute this operator again, put here so it can share above code
- */
 int WM_operator_repeat(bContext *C, wmOperator *op)
 {
   const int op_flag = OP_IS_REPEAT;
@@ -1153,12 +1147,6 @@ int WM_operator_repeat_last(bContext *C, wmOperator *op)
   op->flag &= ~op_flag;
   return ret;
 }
-/**
- * \return true if #WM_operator_repeat can run.
- * Simple check for now but may become more involved.
- * To be sure the operator can run call `WM_operator_poll(C, op->type)` also, since this call
- * checks if #WM_operator_repeat() can run at all, not that it WILL run at any time.
- */
 bool WM_operator_repeat_check(const bContext *UNUSED(C), wmOperator *op)
 {
   if (op->type->exec != NULL) {
@@ -1464,7 +1452,7 @@ static int wm_operator_call_internal(bContext *C,
                                      wmOperatorType *ot,
                                      PointerRNA *properties,
                                      ReportList *reports,
-                                     const short context,
+                                     const wmOperatorCallContext context,
                                      const bool poll_only,
                                      wmEvent *event)
 {
@@ -1596,16 +1584,18 @@ static int wm_operator_call_internal(bContext *C,
   return 0;
 }
 
-/* Invokes operator in context. */
 int WM_operator_name_call_ptr(bContext *C,
                               wmOperatorType *ot,
-                              short context,
+                              wmOperatorCallContext context,
                               PointerRNA *properties)
 {
   BLI_assert(ot == WM_operatortype_find(ot->idname, true));
   return wm_operator_call_internal(C, ot, properties, NULL, context, false, NULL);
 }
-int WM_operator_name_call(bContext *C, const char *opstring, short context, PointerRNA *properties)
+int WM_operator_name_call(bContext *C,
+                          const char *opstring,
+                          wmOperatorCallContext context,
+                          PointerRNA *properties)
 {
   wmOperatorType *ot = WM_operatortype_find(opstring, 0);
   if (ot) {
@@ -1627,7 +1617,7 @@ bool WM_operator_name_poll(bContext *C, const char *opstring)
 
 int WM_operator_name_call_with_properties(struct bContext *C,
                                           const char *opstring,
-                                          short context,
+                                          wmOperatorCallContext context,
                                           struct IDProperty *properties)
 {
   PointerRNA props_ptr;
@@ -1636,9 +1626,6 @@ int WM_operator_name_call_with_properties(struct bContext *C,
   return WM_operator_name_call_ptr(C, ot, context, &props_ptr);
 }
 
-/**
- * Call an existent menu. The menu can be created in C or Python.
- */
 void WM_menu_name_call(bContext *C, const char *menu_name, short context)
 {
   wmOperatorType *ot = WM_operatortype_find("WM_OT_call_menu", false);
@@ -1649,16 +1636,9 @@ void WM_menu_name_call(bContext *C, const char *menu_name, short context)
   WM_operator_properties_free(&ptr);
 }
 
-/**
- * Similar to #WM_operator_name_call called with #WM_OP_EXEC_DEFAULT context.
- *
- * - #wmOperatorType is used instead of operator name since python already has the operator type.
- * - `poll()` must be called by python before this runs.
- * - reports can be passed to this function (so python can report them as exceptions).
- */
 int WM_operator_call_py(bContext *C,
                         wmOperatorType *ot,
-                        short context,
+                        wmOperatorCallContext context,
                         PointerRNA *properties,
                         ReportList *reports,
                         const bool is_undo)
@@ -1782,8 +1762,11 @@ static int ui_handler_wait_for_input(bContext *C, const wmEvent *event, void *us
   return WM_UI_HANDLER_CONTINUE;
 }
 
-void WM_operator_name_call_ptr_with_depends_on_cursor(
-    bContext *C, wmOperatorType *ot, short opcontext, PointerRNA *properties, const char *drawstr)
+void WM_operator_name_call_ptr_with_depends_on_cursor(bContext *C,
+                                                      wmOperatorType *ot,
+                                                      wmOperatorCallContext opcontext,
+                                                      PointerRNA *properties,
+                                                      const char *drawstr)
 {
   int flag = ot->flag;
 
@@ -1857,9 +1840,9 @@ void WM_operator_name_call_ptr_with_depends_on_cursor(
  * General API for different handler types.
  * \{ */
 
-/* Future extra customadata free? */
 void wm_event_free_handler(wmEventHandler *handler)
 {
+  /* Future extra customa-data free? */
   MEM_freeN(handler);
 }
 
@@ -1904,8 +1887,7 @@ static void wm_handler_op_context(bContext *C, wmEventHandler_Op *handler, const
       CTX_wm_area_set(C, area);
 
       if (op && (op->flag & OP_IS_MODAL_CURSOR_REGION)) {
-        region = BKE_area_find_region_xy(
-            area, handler->context.region_type, event->xy[0], event->xy[1]);
+        region = BKE_area_find_region_xy(area, handler->context.region_type, event->xy);
         if (region) {
           handler->context.region = region;
         }
@@ -1931,7 +1913,6 @@ static void wm_handler_op_context(bContext *C, wmEventHandler_Op *handler, const
   }
 }
 
-/* Called on exit or remove area, only here call cancel callback. */
 void WM_event_remove_handlers(bContext *C, ListBase *handlers)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -2308,7 +2289,7 @@ static int wm_handler_operator_call(bContext *C,
           CTX_wm_region_set(C, NULL);
         }
 
-        /* /update gizmos during modal handlers. */
+        /* Update gizmos during modal handlers. */
         wm_gizmomaps_handled_modal_update(C, event, handler);
 
         /* Remove modal handler, operator itself should have been canceled and freed. */
@@ -2998,9 +2979,9 @@ static int wm_handlers_do_intern(bContext *C, wmWindow *win, wmEvent *event, Lis
 
   wmWindowManager *wm = CTX_wm_manager(C);
   int action = WM_HANDLER_CONTINUE;
-  int always_pass;
 
   if (handlers == NULL) {
+    wm_event_handler_return_value_check(event, action);
     return action;
   }
 
@@ -3021,7 +3002,7 @@ static int wm_handlers_do_intern(bContext *C, wmWindow *win, wmEvent *event, Lis
     }
     else if (handler_base->poll == NULL || handler_base->poll(CTX_wm_region(C), event)) {
       /* In advance to avoid access to freed event on window close. */
-      always_pass = wm_event_always_pass(event);
+      const int always_pass = wm_event_always_pass(event);
 
       /* Modal+blocking handler_base. */
       if (handler_base->flag & WM_HANDLER_BLOCKING) {
@@ -3077,8 +3058,9 @@ static int wm_handlers_do_intern(bContext *C, wmWindow *win, wmEvent *event, Lis
                   BLI_addtail(&single_lb, drag);
                   event->customdata = &single_lb;
 
+                  const wmOperatorCallContext opcontext = wm_drop_operator_context_get(drop);
                   int op_retval = wm_operator_call_internal(
-                      C, drop->ot, drop->ptr, NULL, drop->opcontext, false, event);
+                      C, drop->ot, drop->ptr, NULL, opcontext, false, event);
                   OPERATOR_RETVAL_CHECK(op_retval);
 
                   if ((op_retval & OPERATOR_CANCELLED) && drop->cancel) {
@@ -3162,6 +3144,10 @@ static int wm_handlers_do_intern(bContext *C, wmWindow *win, wmEvent *event, Lis
     wm_cursor_arrow_move(CTX_wm_window(C), event);
   }
 
+  /* Do some extra sanity checking before returning the action. */
+  if (CTX_wm_window(C) != NULL) {
+    wm_event_handler_return_value_check(event, action);
+  }
   return action;
 }
 
@@ -3289,6 +3275,7 @@ static int wm_handlers_do(bContext *C, wmEvent *event, ListBase *handlers)
     }
   }
 
+  wm_event_handler_return_value_check(event, action);
   return action;
 }
 
@@ -3309,14 +3296,6 @@ static bool wm_event_inside_rect(const wmEvent *event, const rcti *rect)
     return true;
   }
   return false;
-}
-
-static bool wm_event_inside_region(const wmEvent *event, const ARegion *region)
-{
-  if (wm_event_always_pass(event)) {
-    return true;
-  }
-  return ED_region_contains_xy(region, event->xy);
 }
 
 static ScrArea *area_event_inside(bContext *C, const int xy[2])
@@ -3532,8 +3511,55 @@ static void wm_event_handle_xrevent(bContext *C,
 }
 #endif /* WITH_XR_OPENXR */
 
-/* Called in main loop. */
-/* Goes over entire hierarchy:  events -> window -> screen -> area -> region. */
+static int wm_event_do_region_handlers(bContext *C, wmEvent *event, ARegion *region)
+{
+  CTX_wm_region_set(C, region);
+
+  /* Call even on non mouse events, since the */
+  wm_region_mouse_co(C, event);
+
+  const wmWindowManager *wm = CTX_wm_manager(C);
+  if (!BLI_listbase_is_empty(&wm->drags)) {
+    /* Does polls for drop regions and checks #uiButs. */
+    /* Need to be here to make sure region context is true. */
+    if (ELEM(event->type, MOUSEMOVE, EVT_DROP) || ISKEYMODIFIER(event->type)) {
+      wm_drags_check_ops(C, event);
+    }
+  }
+
+  return wm_handlers_do(C, event, &region->handlers);
+}
+
+/**
+ * Send event to region handlers in \a area.
+ *
+ * Two cases:
+ * 1) Always pass events (#wm_event_always_pass()) are sent to all regions.
+ * 2) Event is passed to the region visually under the cursor (#ED_area_find_region_xy_visual()).
+ */
+static int wm_event_do_handlers_area_regions(bContext *C, wmEvent *event, ScrArea *area)
+{
+  /* Case 1. */
+  if (wm_event_always_pass(event)) {
+    int action = WM_HANDLER_CONTINUE;
+
+    LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+      action |= wm_event_do_region_handlers(C, event, region);
+    }
+
+    wm_event_handler_return_value_check(event, action);
+    return action;
+  }
+
+  /* Case 2. */
+  ARegion *region_hovered = ED_area_find_region_xy_visual(area, RGN_TYPE_ANY, event->xy);
+  if (!region_hovered) {
+    return WM_HANDLER_CONTINUE;
+  }
+
+  return wm_event_do_region_handlers(C, event, region_hovered);
+}
+
 void wm_event_do_handlers(bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -3563,7 +3589,7 @@ void wm_event_do_handlers(bContext *C)
       if (scene_eval != NULL) {
         const int is_playing_sound = BKE_sound_scene_playing(scene_eval);
 
-        if (scene_eval->id.recalc & ID_RECALC_AUDIO_SEEK) {
+        if (scene_eval->id.recalc & ID_RECALC_FRAME_CHANGE) {
           /* Ignore seek here, the audio will be updated to the scene frame after jump during next
            * dependency graph update. */
         }
@@ -3716,36 +3742,12 @@ void wm_event_do_handlers(bContext *C)
           if (wm_event_inside_rect(event, &area->totrct)) {
             CTX_wm_area_set(C, area);
 
-            if ((action & WM_HANDLER_BREAK) == 0) {
-              LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
-                if (wm_event_inside_region(event, region)) {
+            action |= wm_event_do_handlers_area_regions(C, event, area);
 
-                  CTX_wm_region_set(C, region);
-
-                  /* Call even on non mouse events, since the */
-                  wm_region_mouse_co(C, event);
-
-                  if (!BLI_listbase_is_empty(&wm->drags)) {
-                    /* Does polls for drop regions and checks #uiButs. */
-                    /* Need to be here to make sure region context is true. */
-                    if (ELEM(event->type, MOUSEMOVE, EVT_DROP) || ISKEYMODIFIER(event->type)) {
-                      wm_drags_check_ops(C, event);
-                    }
-                  }
-
-                  action |= wm_handlers_do(C, event, &region->handlers);
-
-                  /* Fileread case (python), T29489. */
-                  if (CTX_wm_window(C) == NULL) {
-                    wm_event_free_and_remove_from_queue_if_valid(event);
-                    return;
-                  }
-
-                  if (action & WM_HANDLER_BREAK) {
-                    break;
-                  }
-                }
-              }
+            /* Fileread case (python), T29489. */
+            if (CTX_wm_window(C) == NULL) {
+              wm_event_free_and_remove_from_queue_if_valid(event);
+              return;
             }
 
             CTX_wm_region_set(C, NULL);
@@ -3843,12 +3845,6 @@ void WM_event_fileselect_event(wmWindowManager *wm, void *ophandle, int eventval
 /* Operator is supposed to have a filled "path" property. */
 /* Optional property: file-type (XXX enum?) */
 
-/**
- * The idea here is to keep a handler alive on window queue, owning the operator.
- * The file window can send event to make it execute, thus ensuring
- * executing happens outside of lower level queues, with UI refreshed.
- * Should also allow multiwin solutions.
- */
 void WM_event_add_fileselect(bContext *C, wmOperator *op)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -3947,10 +3943,6 @@ wmEventHandler_Op *WM_event_add_modal_handler(bContext *C, wmOperator *op)
   return handler;
 }
 
-/**
- * Modal handlers store a pointer to an area which might be freed while the handler runs.
- * Use this function to NULL all handler pointers to \a old_area.
- */
 void WM_event_modal_handler_area_replace(wmWindow *win, const ScrArea *old_area, ScrArea *new_area)
 {
   LISTBASE_FOREACH (wmEventHandler *, handler_base, &win->modalhandlers) {
@@ -3965,10 +3957,6 @@ void WM_event_modal_handler_area_replace(wmWindow *win, const ScrArea *old_area,
   }
 }
 
-/**
- * Modal handlers store a pointer to a region which might be freed while the handler runs.
- * Use this function to NULL all handler pointers to \a old_region.
- */
 void WM_event_modal_handler_region_replace(wmWindow *win,
                                            const ARegion *old_region,
                                            ARegion *new_region)
@@ -4159,7 +4147,6 @@ struct wmEventHandler_Keymap *WM_event_add_keymap_handler_dynamic(
   return handler;
 }
 
-/* Priorities not implemented yet, for time being just insert in begin of list. */
 wmEventHandler_Keymap *WM_event_add_keymap_handler_priority(ListBase *handlers,
                                                             wmKeyMap *keymap,
                                                             int UNUSED(priority))
@@ -4266,7 +4253,6 @@ wmEventHandler_UI *WM_event_add_ui_handler(const bContext *C,
   return handler;
 }
 
-/* Set "postpone" for win->modalhandlers, this is in a running for () loop in wm_handlers_do(). */
 void WM_event_remove_ui_handler(ListBase *handlers,
                                 wmUIHandlerFunc handle_fn,
                                 wmUIHandlerRemoveFunc remove_fn,
@@ -4331,9 +4317,10 @@ wmEventHandler_Dropbox *WM_event_add_dropbox_handler(ListBase *handlers, ListBas
   return handler;
 }
 
-/* XXX(ton): solution works, still better check the real cause. */
 void WM_event_remove_area_handler(ListBase *handlers, void *area)
 {
+  /* XXX(ton): solution works, still better check the real cause. */
+
   LISTBASE_FOREACH_MUTABLE (wmEventHandler *, handler_base, handlers) {
     if (handler_base->type == WM_HANDLER_TYPE_UI) {
       wmEventHandler_UI *handler = (wmEventHandler_UI *)handler_base;
@@ -4676,8 +4663,8 @@ static wmWindow *wm_event_cursor_other_windows(wmWindowManager *wm, wmWindow *wi
       }
     }
 
-    wmWindow *win_other = WM_window_find_under_cursor(wm, win, win, mval, mval);
-    if (win_other) {
+    wmWindow *win_other = WM_window_find_under_cursor(win, mval, mval);
+    if (win_other && win_other != win) {
       copy_v2_v2_int(event->xy, mval);
       return win_other;
     }
@@ -4759,9 +4746,6 @@ static wmEvent *wm_event_add_trackpad(wmWindow *win, const wmEvent *event, int d
   return event_new;
 }
 
-/**
- * Windows store own event queues #wmWindow.event_queue (no #bContext here).
- */
 void wm_event_add_ghostevent(wmWindowManager *wm, wmWindow *win, int type, void *customdata)
 {
   if (UNLIKELY(G.f & G_FLAG_EVENT_SIMULATE)) {
@@ -5379,10 +5363,6 @@ const char *WM_window_cursor_keymap_status_get(const wmWindow *win,
   return NULL;
 }
 
-/**
- * Similar to #BKE_screen_area_map_find_area_xy and related functions,
- * use here since the area is stored in the window manager.
- */
 ScrArea *WM_window_status_area_find(wmWindow *win, bScreen *screen)
 {
   if (screen->state == SCREENFULL) {

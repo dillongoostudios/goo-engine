@@ -39,6 +39,7 @@
 #include "BKE_editmesh.h"
 #include "BKE_mesh_iterators.h"
 #include "BKE_mesh_runtime.h"
+#include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
 
 #include "DEG_depsgraph.h"
@@ -272,8 +273,7 @@ typedef struct foreachScreenFace_userData {
 static void meshobject_foreachScreenVert__mapFunc(void *userData,
                                                   int index,
                                                   const float co[3],
-                                                  const float UNUSED(no_f[3]),
-                                                  const short UNUSED(no_s[3]))
+                                                  const float UNUSED(no[3]))
 {
   foreachScreenObjectVert_userData *data = userData;
   struct MVert *mv = &((Mesh *)(data->vc.obact->data))->mvert[index];
@@ -322,8 +322,7 @@ void meshobject_foreachScreenVert(
 static void mesh_foreachScreenVert__mapFunc(void *userData,
                                             int index,
                                             const float co[3],
-                                            const float UNUSED(no_f[3]),
-                                            const short UNUSED(no_s[3]))
+                                            const float UNUSED(no[3]))
 {
   foreachScreenVert_userData *data = userData;
   BMVert *eve = BM_vert_at_index(data->vc.em->bm, index);
@@ -350,6 +349,7 @@ void mesh_foreachScreenVert(
 
   Mesh *me = editbmesh_get_eval_cage_from_orig(
       vc->depsgraph, vc->scene, vc->obedit, &CD_MASK_BAREMESH);
+  me = BKE_mesh_wrapper_ensure_subdivision(vc->obedit, me);
 
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
@@ -412,6 +412,7 @@ void mesh_foreachScreenEdge(ViewContext *vc,
 
   Mesh *me = editbmesh_get_eval_cage_from_orig(
       vc->depsgraph, vc->scene, vc->obedit, &CD_MASK_BAREMESH);
+  me = BKE_mesh_wrapper_ensure_subdivision(vc->obedit, me);
 
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
@@ -486,10 +487,6 @@ static void mesh_foreachScreenEdge_clip_bb_segment__mapFunc(void *userData,
   data->func(data->userData, eed, screen_co_a, screen_co_b, index);
 }
 
-/**
- * A version of #mesh_foreachScreenEdge that clips the segment when
- * there is a clipping bounding box.
- */
 void mesh_foreachScreenEdge_clip_bb_segment(ViewContext *vc,
                                             void (*func)(void *userData,
                                                          BMEdge *eed,
@@ -503,6 +500,7 @@ void mesh_foreachScreenEdge_clip_bb_segment(ViewContext *vc,
 
   Mesh *me = editbmesh_get_eval_cage_from_orig(
       vc->depsgraph, vc->scene, vc->obedit, &CD_MASK_BAREMESH);
+  me = BKE_mesh_wrapper_ensure_subdivision(vc->obedit, me);
 
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
@@ -574,6 +572,7 @@ void mesh_foreachScreenFace(
 
   Mesh *me = editbmesh_get_eval_cage_from_orig(
       vc->depsgraph, vc->scene, vc->obedit, &CD_MASK_BAREMESH);
+  me = BKE_mesh_wrapper_ensure_subdivision(vc->obedit, me);
   ED_view3d_check_mats_rv3d(vc->rv3d);
 
   data.vc = *vc;
@@ -691,7 +690,6 @@ void nurbs_foreachScreenVert(ViewContext *vc,
 /** \name Edit-Meta: For Each Screen Meta-Element
  * \{ */
 
-/* ED_view3d_init_mats_rv3d must be called first */
 void mball_foreachScreenElem(struct ViewContext *vc,
                              void (*func)(void *userData,
                                           struct MetaElem *ml,
@@ -756,7 +754,6 @@ void lattice_foreachScreenVert(ViewContext *vc,
 /** \name Edit-Armature: For Each Screen Bone
  * \{ */
 
-/* ED_view3d_init_mats_rv3d must be called first */
 void armature_foreachScreenBone(struct ViewContext *vc,
                                 void (*func)(void *userData,
                                              struct EditBone *ebone,
@@ -824,8 +821,6 @@ void armature_foreachScreenBone(struct ViewContext *vc,
 /** \name Pose: For Each Screen Bone
  * \{ */
 
-/* ED_view3d_init_mats_rv3d must be called first */
-/* almost _exact_ copy of #armature_foreachScreenBone */
 void pose_foreachScreenBone(struct ViewContext *vc,
                             void (*func)(void *userData,
                                          struct bPoseChannel *pchan,
@@ -834,6 +829,8 @@ void pose_foreachScreenBone(struct ViewContext *vc,
                             void *userData,
                             const eV3DProjTest clip_flag)
 {
+  /* Almost _exact_ copy of #armature_foreachScreenBone */
+
   const Object *ob_eval = DEG_get_evaluated_object(vc->depsgraph, vc->obact);
   const bArmature *arm_eval = ob_eval->data;
   bPose *pose = vc->obact->pose;

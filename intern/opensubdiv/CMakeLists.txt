@@ -72,9 +72,22 @@ if(WITH_OPENSUBDIV)
     internal/device/device_context_openmp.h
 
     # Evaluator.
+    internal/evaluator/eval_output.cc
+    internal/evaluator/eval_output.h
+    internal/evaluator/eval_output_cpu.cc
+    internal/evaluator/eval_output_cpu.h
+    internal/evaluator/eval_output_gpu.cc
+    internal/evaluator/eval_output_gpu.h
+    internal/evaluator/evaluator_cache_impl.cc
+    internal/evaluator/evaluator_cache_impl.h
     internal/evaluator/evaluator_capi.cc
     internal/evaluator/evaluator_impl.cc
     internal/evaluator/evaluator_impl.h
+    internal/evaluator/gl_compute_evaluator.cc
+    internal/evaluator/gl_compute_evaluator.h
+    internal/evaluator/patch_map.cc
+    internal/evaluator/patch_map.h
+
 
     # Topology.
     internal/topology/mesh_topology.cc
@@ -110,6 +123,8 @@ if(WITH_OPENSUBDIV)
     add_definitions(-DNOMINMAX)
     add_definitions(-D_USE_MATH_DEFINES)
   endif()
+
+  data_to_c_simple(internal/evaluator/shaders/glsl_compute_kernel.glsl SRC)
 else()
   list(APPEND SRC
     stub/opensubdiv_stub.cc

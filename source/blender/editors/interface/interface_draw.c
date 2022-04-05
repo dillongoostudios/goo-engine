@@ -57,6 +57,7 @@
 #include "GPU_immediate.h"
 #include "GPU_immediate_util.h"
 #include "GPU_matrix.h"
+#include "GPU_shader_shared.h"
 #include "GPU_state.h"
 
 #include "UI_interface.h"
@@ -194,8 +195,6 @@ void UI_draw_text_underline(int pos_x, int pos_y, int len, int height, const flo
 
 /* ************** SPECIAL BUTTON DRAWING FUNCTIONS ************* */
 
-/* based on UI_draw_roundbox_gl_mode,
- * check on making a version which allows us to skip some sides */
 void ui_draw_but_TAB_outline(const rcti *rect,
                              float rad,
                              uchar highlight[3],
@@ -326,17 +325,17 @@ void ui_draw_but_IMAGE(ARegion *UNUSED(region),
   }
 
   IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_COLOR);
-  immDrawPixelsTex(&state,
-                   (float)rect->xmin,
-                   (float)rect->ymin,
-                   ibuf->x,
-                   ibuf->y,
-                   GPU_RGBA8,
-                   false,
-                   ibuf->rect,
-                   1.0f,
-                   1.0f,
-                   col);
+  immDrawPixelsTexTiled(&state,
+                        (float)rect->xmin,
+                        (float)rect->ymin,
+                        ibuf->x,
+                        ibuf->y,
+                        GPU_RGBA8,
+                        false,
+                        ibuf->rect,
+                        1.0f,
+                        1.0f,
+                        col);
 
   GPU_blend(GPU_BLEND_NONE);
 
@@ -348,14 +347,6 @@ void ui_draw_but_IMAGE(ARegion *UNUSED(region),
 #endif
 }
 
-/**
- * Draw title and text safe areas.
- *
- * \note This function is to be used with the 2D dashed shader enabled.
- *
- * \param pos: is a #PRIM_FLOAT, 2, #GPU_FETCH_FLOAT vertex attribute.
- * \param x1, x2, y1, y2: The offsets for the view, not the zones.
- */
 void UI_draw_safe_areas(uint pos,
                         const rctf *rect,
                         const float title_aspect[2],
@@ -1394,10 +1385,16 @@ void ui_draw_but_UNITVEC(uiBut *but,
   GPU_matrix_scale_1f(size);
 
   GPUBatch *sphere = GPU_batch_preset_sphere(2);
+  struct SimpleLightingData simple_lighting_data;
+  copy_v4_fl4(simple_lighting_data.color, diffuse[0], diffuse[1], diffuse[2], 1.0f);
+  copy_v3_v3(simple_lighting_data.light, light);
+  GPUUniformBuf *ubo = GPU_uniformbuf_create_ex(
+      sizeof(struct SimpleLightingData), &simple_lighting_data, __func__);
+
   GPU_batch_program_set_builtin(sphere, GPU_SHADER_SIMPLE_LIGHTING);
-  GPU_batch_uniform_4f(sphere, "color", diffuse[0], diffuse[1], diffuse[2], 1.0f);
-  GPU_batch_uniform_3fv(sphere, "light", light);
+  GPU_batch_uniformbuf_bind(sphere, "simple_lighting_data", ubo);
   GPU_batch_draw(sphere);
+  GPU_uniformbuf_free(ubo);
 
   /* Restore. */
   GPU_face_culling(GPU_CULL_NONE);
@@ -1753,9 +1750,6 @@ static bool point_draw_handles(CurveProfilePoint *point)
          ELEM(point->flag, PROF_H1_SELECT, PROF_H2_SELECT);
 }
 
-/**
- *  Draws the curve profile widget. Somewhat similar to ui_draw_but_CURVE.
- */
 void ui_draw_but_CURVEPROFILE(ARegion *region,
                               uiBut *but,
                               const uiWidgetColors *wcol,
@@ -2141,17 +2135,17 @@ void ui_draw_but_TRACKPREVIEW(ARegion *UNUSED(region),
       }
 
       IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_COLOR);
-      immDrawPixelsTex(&state,
-                       rect.xmin,
-                       rect.ymin + 1,
-                       drawibuf->x,
-                       drawibuf->y,
-                       GPU_RGBA8,
-                       true,
-                       drawibuf->rect,
-                       1.0f,
-                       1.0f,
-                       NULL);
+      immDrawPixelsTexTiled(&state,
+                            rect.xmin,
+                            rect.ymin + 1,
+                            drawibuf->x,
+                            drawibuf->y,
+                            GPU_RGBA8,
+                            true,
+                            drawibuf->rect,
+                            1.0f,
+                            1.0f,
+                            NULL);
 
       /* draw cross for pixel position */
       GPU_matrix_translate_2f(rect.xmin + scopes->track_pos[0], rect.ymin + scopes->track_pos[1]);

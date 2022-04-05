@@ -195,7 +195,7 @@ static bool bm_loop_calc_opposite_co(BMLoop *l_tmp, const float plane_no[3], flo
       /* allow some overlap to avoid missing the intersection because of float precision */
       if ((fac > -FLT_EPSILON) && (fac < 1.0f + FLT_EPSILON)) {
         /* likelihood of multiple intersections per ngon is quite low,
-         * it would have to loop back on its self, but better support it
+         * it would have to loop back on itself, but better support it
          * so check for the closest opposite edge */
         const float tdist = len_v3v3(l_tmp->v->co, tvec);
         if (tdist < dist) {
@@ -1458,7 +1458,7 @@ static void applyEdgeSlide(TransInfo *t, const int UNUSED(mval[2]))
   const bool is_clamp = !(t->flag & T_ALT_TRANSFORM);
   const bool is_constrained = !(is_clamp == false || hasNumInput(&t->num));
 
-  final = t->values[0];
+  final = t->values[0] + t->values_modal_offset[0];
 
   applySnapping(t, &final);
   if (!validSnap(t)) {
@@ -1567,4 +1567,5 @@ void initEdgeSlide(TransInfo *t)
 {
   initEdgeSlide_ex(t, true, false, false, true);
 }
+
 /** \} */

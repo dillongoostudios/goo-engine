@@ -52,6 +52,7 @@ enum DeviceType {
   DEVICE_MULTI,
   DEVICE_OPTIX,
   DEVICE_HIP,
+  DEVICE_METAL,
   DEVICE_DUMMY,
 };
 
@@ -60,6 +61,7 @@ enum DeviceTypeMask {
   DEVICE_MASK_CUDA = (1 << DEVICE_CUDA),
   DEVICE_MASK_OPTIX = (1 << DEVICE_OPTIX),
   DEVICE_MASK_HIP = (1 << DEVICE_HIP),
+  DEVICE_MASK_METAL = (1 << DEVICE_METAL),
   DEVICE_MASK_ALL = ~0
 };
 
@@ -73,11 +75,11 @@ class DeviceInfo {
   int num;
   bool display_device;        /* GPU is used as a display device. */
   bool has_nanovdb;           /* Support NanoVDB volumes. */
-  bool has_half_images;       /* Support half-float textures. */
   bool has_osl;               /* Support Open Shading Language. */
   bool has_profiling;         /* Supports runtime collection of profiling info. */
   bool has_peer_memory;       /* GPU has P2P access to memory of another GPU. */
   bool has_gpu_queue;         /* Device supports GPU queue. */
+  bool use_metalrt;           /* Use MetalRT to accelerate ray queries (Metal only). */
   DenoiserTypeMask denoisers; /* Supported denoiser types. */
   int cpu_threads;
   vector<DeviceInfo> multi_devices;
@@ -90,12 +92,12 @@ class DeviceInfo {
     num = 0;
     cpu_threads = 0;
     display_device = false;
-    has_half_images = false;
     has_nanovdb = false;
     has_osl = false;
     has_profiling = false;
     has_peer_memory = false;
     has_gpu_queue = false;
+    use_metalrt = false;
     denoisers = DENOISER_NONE;
   }
 
@@ -150,10 +152,6 @@ class Device {
     }
     fprintf(stderr, "%s\n", error.c_str());
     fflush(stderr);
-  }
-  virtual bool show_samples() const
-  {
-    return false;
   }
   virtual BVHLayoutMask get_bvh_layout_mask() const = 0;
 
@@ -287,6 +285,7 @@ class Device {
   static vector<DeviceInfo> optix_devices;
   static vector<DeviceInfo> cpu_devices;
   static vector<DeviceInfo> hip_devices;
+  static vector<DeviceInfo> metal_devices;
   static uint devices_initialized_mask;
 };
 

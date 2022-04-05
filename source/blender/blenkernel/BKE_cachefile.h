@@ -28,6 +28,7 @@ extern "C" {
 #endif
 
 struct CacheFile;
+struct CacheFileLayer;
 struct CacheReader;
 struct Depsgraph;
 struct Main;
@@ -50,9 +51,7 @@ bool BKE_cachefile_filepath_get(const struct Main *bmain,
                                 const struct CacheFile *cache_file,
                                 char r_filename[1024]);
 
-float BKE_cachefile_time_offset(const struct CacheFile *cache_file,
-                                const float time,
-                                const float fps);
+float BKE_cachefile_time_offset(const struct CacheFile *cache_file, float time, float fps);
 
 /* Modifiers and constraints open and free readers through these. */
 void BKE_cachefile_reader_open(struct CacheFile *cache_file,
@@ -61,9 +60,24 @@ void BKE_cachefile_reader_open(struct CacheFile *cache_file,
                                const char *object_path);
 void BKE_cachefile_reader_free(struct CacheFile *cache_file, struct CacheReader **reader);
 
+/**
+ * Determine whether the #CacheFile should use a render engine procedural. If so, data is not read
+ * from the file and bounding boxes are used to represent the objects in the Scene.
+ * Render engines will receive the bounding box as a placeholder but can instead
+ * load the data directly if they support it.
+ */
 bool BKE_cache_file_uses_render_procedural(const struct CacheFile *cache_file,
                                            struct Scene *scene,
-                                           const int dag_eval_mode);
+                                           int dag_eval_mode);
+
+/* Add a layer to the cache_file. Return NULL if the filename is already that of an existing layer
+ * or if the number of layers exceeds the maximum allowed layer count. */
+struct CacheFileLayer *BKE_cachefile_add_layer(struct CacheFile *cache_file,
+                                               const char filename[1024]);
+
+struct CacheFileLayer *BKE_cachefile_get_active_layer(struct CacheFile *cache_file);
+
+void BKE_cachefile_remove_layer(struct CacheFile *cache_file, struct CacheFileLayer *layer);
 
 #ifdef __cplusplus
 }

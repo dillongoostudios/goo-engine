@@ -33,10 +33,10 @@
 
 #include "BLI_array_utils.h"
 #include "BLI_blenlib.h"
-#include "BLI_float3.hh"
 #include "BLI_ghash.h"
 #include "BLI_hash.h"
 #include "BLI_heap.h"
+#include "BLI_math_vec_types.hh"
 #include "BLI_math_vector.h"
 #include "BLI_polyfill_2d.h"
 #include "BLI_span.hh"
@@ -60,6 +60,7 @@
 #include "BKE_gpencil_geom.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
+#include "BKE_mesh.h"
 #include "BKE_object.h"
 
 #include "DEG_depsgraph_query.h"
@@ -67,15 +68,10 @@
 using blender::float3;
 using blender::Span;
 
-/* GP Object - Boundbox Support */
-/**
- *Get min/max coordinate bounds for single stroke.
- * \param gps: Grease pencil stroke
- * \param use_select: Include only selected points
- * \param r_min: Result minimum coordinates
- * \param r_max: Result maximum coordinates
- * \return True if it was possible to calculate
- */
+/* -------------------------------------------------------------------- */
+/** \name Grease Pencil Object: Bound-box Support
+ * \{ */
+
 bool BKE_gpencil_stroke_minmax(const bGPDstroke *gps,
                                const bool use_select,
                                float r_min[3],
@@ -104,13 +100,6 @@ bool BKE_gpencil_stroke_minmax(const bGPDstroke *gps,
   return changed;
 }
 
-/**
- * Get min/max bounds of all strokes in grease pencil data-block.
- * \param gpd: Grease pencil datablock
- * \param r_min: Result minimum coordinates
- * \param r_max: Result maximum coordinates
- * \return True if it was possible to calculate
- */
 bool BKE_gpencil_data_minmax(const bGPdata *gpd, float r_min[3], float r_max[3])
 {
   bool changed = false;
@@ -134,11 +123,6 @@ bool BKE_gpencil_data_minmax(const bGPdata *gpd, float r_min[3], float r_max[3])
   return changed;
 }
 
-/**
- * Compute center of bounding box.
- * \param gpd: Grease pencil data-block
- * \param r_centroid: Location of the center
- */
 void BKE_gpencil_centroid_3d(bGPdata *gpd, float r_centroid[3])
 {
   float3 min;
@@ -149,10 +133,6 @@ void BKE_gpencil_centroid_3d(bGPdata *gpd, float r_centroid[3])
   mul_v3_v3fl(r_centroid, tot, 0.5f);
 }
 
-/**
- * Compute stroke bounding box.
- * \param gps: Grease pencil Stroke
- */
 void BKE_gpencil_stroke_boundingbox_calc(bGPDstroke *gps)
 {
   INIT_MINMAX(gps->boundbox_min, gps->boundbox_max);
@@ -166,7 +146,7 @@ void BKE_gpencil_stroke_boundingbox_calc(bGPDstroke *gps)
 static void boundbox_gpencil(Object *ob)
 {
   if (ob->runtime.bb == nullptr) {
-    ob->runtime.bb = (BoundBox *)MEM_callocN(sizeof(BoundBox), "GPencil boundbox");
+    ob->runtime.bb = MEM_cnew<BoundBox>("GPencil boundbox");
   }
 
   BoundBox *bb = ob->runtime.bb;
@@ -184,11 +164,6 @@ static void boundbox_gpencil(Object *ob)
   bb->flag &= ~BOUNDBOX_DIRTY;
 }
 
-/**
- * Get grease pencil object bounding box.
- * \param ob: Grease pencil object
- * \return Bounding box
- */
 BoundBox *BKE_gpencil_boundbox_get(Object *ob)
 {
   if (ELEM(nullptr, ob, ob->data)) {
@@ -208,7 +183,7 @@ BoundBox *BKE_gpencil_boundbox_get(Object *ob)
    * to keep both values synchronized. */
   if (!ELEM(ob_orig, nullptr, ob)) {
     if (ob_orig->runtime.bb == nullptr) {
-      ob_orig->runtime.bb = (BoundBox *)MEM_callocN(sizeof(BoundBox), "GPencil boundbox");
+      ob_orig->runtime.bb = MEM_cnew<BoundBox>("GPencil boundbox");
     }
     for (int i = 0; i < 8; i++) {
       copy_v3_v3(ob_orig->runtime.bb->vec[i], ob->runtime.bb->vec[i]);
@@ -218,7 +193,11 @@ BoundBox *BKE_gpencil_boundbox_get(Object *ob)
   return ob->runtime.bb;
 }
 
-/* ************************************************** */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Sample
+ * \{ */
 
 static int stroke_march_next_point(const bGPDstroke *gps,
                                    const int index_next_pt,
@@ -386,7 +365,7 @@ static void stroke_defvert_create_nr_list(MDeformVert *dv_list,
         }
       }
       if (!found) {
-        ld = (LinkData *)MEM_callocN(sizeof(LinkData), "def_nr_item");
+        ld = MEM_cnew<LinkData>("def_nr_item");
         ld->data = POINTER_FROM_INT(dw->def_nr);
         BLI_addtail(result, ld);
         tw++;
@@ -431,12 +410,6 @@ static void stroke_interpolate_deform_weights(
   }
 }
 
-/**
- * Resample a stroke
- * \param gpd: Grease pencil data-block
- * \param gps: Stroke to sample
- * \param dist: Distance of one segment
- */
 bool BKE_gpencil_stroke_sample(bGPdata *gpd, bGPDstroke *gps, const float dist, const bool select)
 {
   bGPDspoint *pt = gps->points;
@@ -594,15 +567,6 @@ static bool BKE_gpencil_stroke_extra_points(bGPDstroke *gps,
   return true;
 }
 
-/**
- * Backbone stretch similar to Freestyle.
- * \param gps: Stroke to sample.
- * \param dist: Length of the added section.
- * \param overshoot_fac: Relative length of the curve which is used to determine the extension.
- * \param mode: Affect to Start, End or Both extremes (0->Both, 1->Start, 2->End)
- * \param follow_curvature: True for approximating curvature of given overshoot.
- * \param extra_point_count: When follow_curvature is true, use this amount of extra points
- */
 bool BKE_gpencil_stroke_stretch(bGPDstroke *gps,
                                 const float dist,
                                 const float overshoot_fac,
@@ -779,12 +743,12 @@ bool BKE_gpencil_stroke_stretch(bGPDstroke *gps,
   return true;
 }
 
-/**
- * Trim stroke to needed segments
- * \param gps: Target stroke
- * \param index_from: the index of the first point to be used in the trimmed result
- * \param index_to: the index of the last point to be used in the trimmed result
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Trim
+ * \{ */
+
 bool BKE_gpencil_stroke_trim_points(bGPDstroke *gps, const int index_from, const int index_to)
 {
   bGPDspoint *pt = gps->points, *new_pt;
@@ -837,15 +801,12 @@ bool BKE_gpencil_stroke_trim_points(bGPDstroke *gps, const int index_from, const
   return true;
 }
 
-/**
- * Split stroke.
- * \param gpd: Grease pencil data-block
- * \param gpf: Grease pencil frame
- * \param gps: Grease pencil original stroke
- * \param before_index: Position of the point to split
- * \param remaining_gps: Secondary stroke after split.
- * \return True if the split was done
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Split
+ * \{ */
+
 bool BKE_gpencil_stroke_split(bGPdata *gpd,
                               bGPDframe *gpf,
                               bGPDstroke *gps,
@@ -898,12 +859,12 @@ bool BKE_gpencil_stroke_split(bGPdata *gpd,
   return true;
 }
 
-/**
- * Shrink the stroke by length.
- * \param gps: Stroke to shrink
- * \param dist: delta length
- * \param mode: 1->Start, 2->End
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Shrink
+ * \{ */
+
 bool BKE_gpencil_stroke_shrink(bGPDstroke *gps, const float dist, const short mode)
 {
 #define START 1
@@ -976,13 +937,14 @@ bool BKE_gpencil_stroke_shrink(bGPDstroke *gps, const float dist, const short mo
 
   return true;
 }
-/**
- * Apply smooth position to stroke point.
- * \param gps: Stroke to smooth
- * \param i: Point index
- * \param inf: Amount of smoothing to apply
- */
-bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps, int i, float inf)
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Smooth Positions
+ * \{ */
+
+bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps, int i, float inf, const bool smooth_caps)
 {
   bGPDspoint *pt = &gps->points[i];
   float sco[3] = {0.0f};
@@ -996,7 +958,7 @@ bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps, int i, float inf)
   /* Only affect endpoints by a fraction of the normal strength,
    * to prevent the stroke from shrinking too much
    */
-  if (!is_cyclic && ELEM(i, 0, gps->totpoints - 1)) {
+  if ((!smooth_caps) && (!is_cyclic && ELEM(i, 0, gps->totpoints - 1))) {
     inf *= 0.1f;
   }
 
@@ -1054,12 +1016,12 @@ bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps, int i, float inf)
   return true;
 }
 
-/**
- * Apply smooth strength to stroke point.
- * \param gps: Stroke to smooth
- * \param point_index: Point index
- * \param influence: Amount of smoothing to apply
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Smooth Strength
+ * \{ */
+
 bool BKE_gpencil_stroke_smooth_strength(bGPDstroke *gps, int point_index, float influence)
 {
   bGPDspoint *ptb = &gps->points[point_index];
@@ -1132,12 +1094,12 @@ bool BKE_gpencil_stroke_smooth_strength(bGPDstroke *gps, int point_index, float 
   return true;
 }
 
-/**
- * Apply smooth for thickness to stroke point (use pressure).
- * \param gps: Stroke to smooth
- * \param point_index: Point index
- * \param influence: Amount of smoothing to apply
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Smooth Thickness
+ * \{ */
+
 bool BKE_gpencil_stroke_smooth_thickness(bGPDstroke *gps, int point_index, float influence)
 {
   bGPDspoint *ptb = &gps->points[point_index];
@@ -1209,12 +1171,12 @@ bool BKE_gpencil_stroke_smooth_thickness(bGPDstroke *gps, int point_index, float
   return true;
 }
 
-/**
- * Apply smooth for UV rotation to stroke point (use pressure).
- * \param gps: Stroke to smooth
- * \param point_index: Point index
- * \param influence: Amount of smoothing to apply
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Smooth UV
+ * \{ */
+
 bool BKE_gpencil_stroke_smooth_uv(bGPDstroke *gps, int point_index, float influence)
 {
   bGPDspoint *ptb = &gps->points[point_index];
@@ -1266,14 +1228,6 @@ bool BKE_gpencil_stroke_smooth_uv(bGPDstroke *gps, int point_index, float influe
   return true;
 }
 
-/**
- * Get points of stroke always flat to view not affected
- * by camera view or view position.
- * \param points: Array of grease pencil points (3D)
- * \param totpoints: Total of points
- * \param points2d: Result array of 2D points
- * \param r_direction: Return Concave (-1), Convex (1), or Auto-detect (0)
- */
 void BKE_gpencil_stroke_2d_flat(const bGPDspoint *points,
                                 int totpoints,
                                 float (*points2d)[2],
@@ -1348,17 +1302,6 @@ void BKE_gpencil_stroke_2d_flat(const bGPDspoint *points,
   *r_direction = (cross >= 0.0f) ? 1 : -1;
 }
 
-/**
- * Get points of stroke always flat to view not affected by camera view or view position
- * using another stroke as reference.
- * \param ref_points: Array of reference points (3D)
- * \param ref_totpoints: Total reference points
- * \param points: Array of points to flat (3D)
- * \param totpoints: Total points
- * \param points2d: Result array of 2D points
- * \param scale: Scale factor
- * \param r_direction: Return Concave (-1), Convex (1), or Auto-detect (0)
- */
 void BKE_gpencil_stroke_2d_flat_ref(const bGPDspoint *ref_points,
                                     int ref_totpoints,
                                     const bGPDspoint *points,
@@ -1482,10 +1425,12 @@ static void gpencil_calc_stroke_fill_uv(const float (*points2d)[2],
   }
 }
 
-/**
- * Triangulate stroke to generate data for filling areas.
- * \param gps: Grease pencil stroke
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Fill Triangulate
+ * \{ */
+
 void BKE_gpencil_stroke_fill_triangulate(bGPDstroke *gps)
 {
   BLI_assert(gps->totpoints >= 3);
@@ -1545,10 +1490,6 @@ void BKE_gpencil_stroke_fill_triangulate(bGPDstroke *gps)
   MEM_SAFE_FREE(uv);
 }
 
-/**
- * Update Stroke UV data.
- * \param gps: Grease pencil stroke
- */
 void BKE_gpencil_stroke_uv_update(bGPDstroke *gps)
 {
   if (gps == nullptr || gps->totpoints == 0) {
@@ -1564,11 +1505,6 @@ void BKE_gpencil_stroke_uv_update(bGPDstroke *gps)
   }
 }
 
-/**
- * Recalc all internal geometry data for the stroke
- * \param gpd: Grease pencil data-block
- * \param gps: Grease pencil stroke
- */
 void BKE_gpencil_stroke_geometry_update(bGPdata *gpd, bGPDstroke *gps)
 {
   if (gps == nullptr) {
@@ -1606,12 +1542,6 @@ void BKE_gpencil_stroke_geometry_update(bGPdata *gpd, bGPDstroke *gps)
   BKE_gpencil_stroke_boundingbox_calc(gps);
 }
 
-/**
- * Calculate grease pencil stroke length.
- * \param gps: Grease pencil stroke
- * \param use_3d: Set to true to use 3D points
- * \return Length of the stroke
- */
 float BKE_gpencil_stroke_length(const bGPDstroke *gps, bool use_3d)
 {
   if (!gps->points || gps->totpoints < 2) {
@@ -1632,7 +1562,6 @@ float BKE_gpencil_stroke_length(const bGPDstroke *gps, bool use_3d)
   return total_length;
 }
 
-/** Calculate grease pencil stroke length between points. */
 float BKE_gpencil_stroke_segment_length(const struct bGPDstroke *gps,
                                         const int start_index,
                                         const int end_index,
@@ -1660,10 +1589,6 @@ float BKE_gpencil_stroke_segment_length(const struct bGPDstroke *gps,
   return total_length;
 }
 
-/**
- * Trim stroke to the first intersection or loop.
- * \param gps: Stroke data
- */
 bool BKE_gpencil_stroke_trim(bGPdata *gpd, bGPDstroke *gps)
 {
   if (gps->totpoints < 4) {
@@ -1756,10 +1681,6 @@ bool BKE_gpencil_stroke_trim(bGPdata *gpd, bGPDstroke *gps)
   return intersect;
 }
 
-/**
- * Close grease pencil stroke.
- * \param gps: Stroke to close
- */
 bool BKE_gpencil_stroke_close(bGPDstroke *gps)
 {
   bGPDspoint *pt1 = nullptr;
@@ -1845,13 +1766,12 @@ bool BKE_gpencil_stroke_close(bGPDstroke *gps)
   return true;
 }
 
-/**
- * Dissolve points in stroke.
- * \param gpd: Grease pencil data-block
- * \param gpf: Grease pencil frame
- * \param gps: Grease pencil stroke
- * \param tag: Type of tag for point
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Dissolve Points
+ * \{ */
+
 void BKE_gpencil_dissolve_points(bGPdata *gpd, bGPDframe *gpf, bGPDstroke *gps, const short tag)
 {
   bGPDspoint *pt;
@@ -1934,11 +1854,12 @@ void BKE_gpencil_dissolve_points(bGPdata *gpd, bGPDframe *gpf, bGPDstroke *gps, 
   }
 }
 
-/**
- * Calculate stroke normals.
- * \param gps: Grease pencil stroke
- * \param r_normal: Return Normal vector normalized
- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Normal Calculation
+ * \{ */
+
 void BKE_gpencil_stroke_normal(const bGPDstroke *gps, float r_normal[3])
 {
   if (gps->totpoints < 3) {
@@ -1969,18 +1890,12 @@ void BKE_gpencil_stroke_normal(const bGPDstroke *gps, float r_normal[3])
   normalize_v3(r_normal);
 }
 
-/* Stroke Simplify ------------------------------------- */
+/** \} */
 
-/**
- * Reduce a series of points to a simplified version, but
- * maintains the general shape of the series
- *
- * Ramer - Douglas - Peucker algorithm
- * by http://en.wikipedia.org/wiki/Ramer-Douglas-Peucker_algorithm
- * \param gpd: Grease pencil data-block
- * \param gps: Grease pencil stroke
- * \param epsilon: Epsilon value to define precision of the algorithm
- */
+/* -------------------------------------------------------------------- */
+/** \name Stroke Simplify
+ * \{ */
+
 void BKE_gpencil_stroke_simplify_adaptive(bGPdata *gpd, bGPDstroke *gps, float epsilon)
 {
   bGPDspoint *old_points = (bGPDspoint *)MEM_dupallocN(gps->points);
@@ -2085,11 +2000,6 @@ void BKE_gpencil_stroke_simplify_adaptive(bGPdata *gpd, bGPDstroke *gps, float e
   MEM_SAFE_FREE(marked);
 }
 
-/**
- * Simplify alternate vertex of stroke except extremes.
- * \param gpd: Grease pencil data-block
- * \param gps: Grease pencil stroke
- */
 void BKE_gpencil_stroke_simplify_fixed(bGPdata *gpd, bGPDstroke *gps)
 {
   if (gps->totpoints < 5) {
@@ -2150,13 +2060,6 @@ void BKE_gpencil_stroke_simplify_fixed(bGPdata *gpd, bGPDstroke *gps)
   MEM_SAFE_FREE(old_dvert);
 }
 
-/**
- * Subdivide a stroke
- * \param gpd: Grease pencil data-block
- * \param gps: Stroke
- * \param level: Level of subdivision
- * \param type: Type of subdivision
- */
 void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int type)
 {
   bGPDspoint *temp_points;
@@ -2269,19 +2172,12 @@ void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int 
   BKE_gpencil_stroke_geometry_update(gpd, gps);
 }
 
-/* Merge by distance ------------------------------------- */
+/** \} */
 
-/**
- * Reduce a series of points when the distance is below a threshold.
- * Special case for first and last points (both are kept) for other points,
- * the merge point always is at first point.
- *
- * \param gpd: Grease pencil data-block.
- * \param gpf: Grease Pencil frame.
- * \param gps: Grease Pencil stroke.
- * \param threshold: Distance between points.
- * \param use_unselected: Set to true to analyze all stroke and not only selected points.
- */
+/* -------------------------------------------------------------------- */
+/** \name Merge by Distance
+ * \{ */
+
 void BKE_gpencil_stroke_merge_distance(bGPdata *gpd,
                                        bGPDframe *gpf,
                                        bGPDstroke *gps,
@@ -2455,6 +2351,7 @@ static void gpencil_generate_edgeloops(Object *ob,
   if (me->totedge == 0) {
     return;
   }
+  const float(*vert_normals)[3] = BKE_mesh_vertex_normals_ensure(me);
 
   /* Arrays for all edge vertices (forward and backward) that form a edge loop.
    * This is reused for each edge-loop to create gpencil stroke. */
@@ -2469,13 +2366,13 @@ static void gpencil_generate_edgeloops(Object *ob,
     MEdge *ed = &me->medge[i];
     gped = &gp_edges[i];
     MVert *mv1 = &me->mvert[ed->v1];
-    normal_short_to_float_v3(gped->n1, mv1->no);
+    copy_v3_v3(gped->n1, vert_normals[ed->v1]);
 
     gped->v1 = ed->v1;
     copy_v3_v3(gped->v1_co, mv1->co);
 
     MVert *mv2 = &me->mvert[ed->v2];
-    normal_short_to_float_v3(gped->n2, mv2->no);
+    copy_v3_v3(gped->n2, vert_normals[ed->v2]);
     gped->v2 = ed->v2;
     copy_v3_v3(gped->v2_co, mv2->co);
 
@@ -2544,7 +2441,7 @@ static void gpencil_generate_edgeloops(Object *ob,
 
       /* Add segment. */
       bGPDspoint *pt = &gps_stroke->points[i];
-      normal_short_to_float_v3(fpt, mv->no);
+      copy_v3_v3(fpt, vert_normals[vertex_index]);
       mul_v3_v3fl(fpt, fpt, offset);
       add_v3_v3v3(&pt->x, mv->co, fpt);
       mul_m4_v3(matrix, &pt->x);
@@ -2639,22 +2536,6 @@ static void make_element_name(const char *obname, const char *name, const int ma
   BLI_strncpy_utf8(r_name, str, maxlen);
 }
 
-/**
- * Convert a mesh object to grease pencil stroke.
- *
- * \param bmain: Main thread pointer.
- * \param depsgraph: Original depsgraph.
- * \param scene: Original scene.
- * \param ob_gp: Grease pencil object to add strokes.
- * \param ob_mesh: Mesh to convert.
- * \param angle: Limit angle to consider a edge-loop ends.
- * \param thickness: Thickness of the strokes.
- * \param offset: Offset along the normals.
- * \param matrix: Transformation matrix.
- * \param frame_offset: Destination frame number offset.
- * \param use_seams: Only export seam edges.
- * \param use_faces: Export faces as filled strokes.
- */
 bool BKE_gpencil_convert_mesh(Main *bmain,
                               Depsgraph *depsgraph,
                               Scene *scene,
@@ -2807,11 +2688,6 @@ bool BKE_gpencil_convert_mesh(Main *bmain,
   return true;
 }
 
-/**
- * Apply grease pencil Transforms.
- * \param gpd: Grease pencil data-block
- * \param mat: Transformation matrix
- */
 void BKE_gpencil_transform(bGPdata *gpd, const float mat[4][4])
 {
   if (gpd == nullptr) {
@@ -2845,7 +2721,6 @@ void BKE_gpencil_transform(bGPdata *gpd, const float mat[4][4])
   }
 }
 
-/* Used for "move only origins" in object_data_transform.c */
 int BKE_gpencil_stroke_point_count(const bGPdata *gpd)
 {
   int total_points = 0;
@@ -2872,7 +2747,6 @@ int BKE_gpencil_stroke_point_count(const bGPdata *gpd)
   return total_points;
 }
 
-/* Used for "move only origins" in object_data_transform.c */
 void BKE_gpencil_point_coords_get(bGPdata *gpd, GPencilPointCoordinates *elem_data)
 {
   if (gpd == nullptr) {
@@ -2903,7 +2777,6 @@ void BKE_gpencil_point_coords_get(bGPdata *gpd, GPencilPointCoordinates *elem_da
   }
 }
 
-/* Used for "move only origins" in object_data_transform.c */
 void BKE_gpencil_point_coords_apply(bGPdata *gpd, const GPencilPointCoordinates *elem_data)
 {
   if (gpd == nullptr) {
@@ -2937,7 +2810,6 @@ void BKE_gpencil_point_coords_apply(bGPdata *gpd, const GPencilPointCoordinates 
   }
 }
 
-/* Used for "move only origins" in object_data_transform.c */
 void BKE_gpencil_point_coords_apply_with_mat4(bGPdata *gpd,
                                               const GPencilPointCoordinates *elem_data,
                                               const float mat[4][4])
@@ -2974,10 +2846,6 @@ void BKE_gpencil_point_coords_apply_with_mat4(bGPdata *gpd,
   }
 }
 
-/**
- * Set a random color to stroke using vertex color.
- * \param gps: Stroke
- */
 void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
 {
   BLI_assert(gps->totpoints > 0);
@@ -2993,7 +2861,6 @@ void BKE_gpencil_stroke_set_random_color(bGPDstroke *gps)
   }
 }
 
-/* Flip stroke. */
 void BKE_gpencil_stroke_flip(bGPDstroke *gps)
 {
   /* Reverse points. */
@@ -3103,28 +2970,25 @@ static void gpencil_stroke_join_islands(bGPdata *gpd,
   BKE_gpencil_free_stroke(gps_last);
 }
 
-/* Split the given stroke into several new strokes, partitioning
- * it based on whether the stroke points have a particular flag
- * is set (e.g. "GP_SPOINT_SELECT" in most cases, but not always)
- *
- * The algorithm used here is as follows:
- * 1) We firstly identify the number of "islands" of non-tagged points
- *    which will all end up being in new strokes.
- *    - In the most extreme case (i.e. every other vert is a 1-vert island),
- *      we have at most n / 2 islands
- *    - Once we start having larger islands than that, the number required
- *      becomes much less
- * 2) Each island gets converted to a new stroke
- * If the number of points is <= limit, the stroke is deleted
- */
 bGPDstroke *BKE_gpencil_stroke_delete_tagged_points(bGPdata *gpd,
                                                     bGPDframe *gpf,
                                                     bGPDstroke *gps,
                                                     bGPDstroke *next_stroke,
                                                     int tag_flags,
-                                                    bool select,
-                                                    int limit)
+                                                    const bool select,
+                                                    const bool flat_cap,
+                                                    const int limit)
 {
+  /* The algorithm used here is as follows:
+   * 1) We firstly identify the number of "islands" of non-tagged points
+   *    which will all end up being in new strokes.
+   *    - In the most extreme case (i.e. every other vert is a 1-vert island),
+   *      we have at most `n / 2` islands
+   *    - Once we start having larger islands than that, the number required
+   *      becomes much less
+   * 2) Each island gets converted to a new stroke
+   * If the number of points is <= limit, the stroke is deleted. */
+
   tGPDeleteIsland *islands = (tGPDeleteIsland *)MEM_callocN(
       sizeof(tGPDeleteIsland) * (gps->totpoints + 1) / 2, "gp_point_islands");
   bool in_island = false;
@@ -3171,6 +3035,9 @@ bGPDstroke *BKE_gpencil_stroke_delete_tagged_points(bGPdata *gpd,
     for (idx = 0; idx < num_islands; idx++) {
       tGPDeleteIsland *island = &islands[idx];
       new_stroke = BKE_gpencil_stroke_duplicate(gps, false, true);
+      if (flat_cap) {
+        new_stroke->caps[1 - (idx % 2)] = GP_STROKE_CAP_FLAT;
+      }
 
       /* if cyclic and first stroke, save to join later */
       if ((is_cyclic) && (gps_first == nullptr)) {
@@ -3426,7 +3293,6 @@ static void gpencil_stroke_copy_point(bGPDstroke *gps,
   }
 }
 
-/* Join two strokes using the shortest distance (reorder stroke if necessary ) */
 void BKE_gpencil_stroke_join(bGPDstroke *gps_a,
                              bGPDstroke *gps_b,
                              const bool leave_gaps,
@@ -3544,7 +3410,7 @@ void BKE_gpencil_stroke_join(bGPDstroke *gps_a,
     for (i = start; i < end; i++) {
       pt = &gps_a->points[i];
       pt->pressure += (avg_pressure - pt->pressure) * ratio;
-      BKE_gpencil_stroke_smooth_point(gps_a, i, ratio * 0.6f);
+      BKE_gpencil_stroke_smooth_point(gps_a, i, ratio * 0.6f, false);
 
       ratio += step;
       /* In the center, reverse the ratio. */
@@ -3556,7 +3422,6 @@ void BKE_gpencil_stroke_join(bGPDstroke *gps_a,
   }
 }
 
-/* Copy the stroke of the frame to all frames selected (except current). */
 void BKE_gpencil_stroke_copy_to_keyframes(
     bGPdata *gpd, bGPDlayer *gpl, bGPDframe *gpf, bGPDstroke *gps, const bool tail)
 {
@@ -3595,7 +3460,11 @@ void BKE_gpencil_stroke_copy_to_keyframes(
   BLI_ghash_free(frame_list, nullptr, nullptr);
 }
 
-/* Stroke Uniform Subdivide  ------------------------------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke Uniform Subdivide
+ * \{ */
 
 struct tSamplePoint {
   struct tSamplePoint *next, *prev;
@@ -3615,7 +3484,7 @@ struct tSampleEdge {
 /* Helper: creates a tSamplePoint from a bGPDspoint and (optionally) a MDeformVert. */
 static tSamplePoint *new_sample_point_from_gp_point(const bGPDspoint *pt, const MDeformVert *dvert)
 {
-  tSamplePoint *new_pt = (tSamplePoint *)MEM_callocN(sizeof(tSamplePoint), __func__);
+  tSamplePoint *new_pt = MEM_cnew<tSamplePoint>(__func__);
   copy_v3_v3(&new_pt->x, &pt->x);
   new_pt->pressure = pt->pressure;
   new_pt->strength = pt->strength;
@@ -3638,22 +3507,13 @@ static tSamplePoint *new_sample_point_from_gp_point(const bGPDspoint *pt, const 
  * the edge. */
 static tSampleEdge *new_sample_edge_from_sample_points(tSamplePoint *from, tSamplePoint *to)
 {
-  tSampleEdge *new_edge = (tSampleEdge *)MEM_callocN(sizeof(tSampleEdge), __func__);
+  tSampleEdge *new_edge = MEM_cnew<tSampleEdge>(__func__);
   new_edge->from = from;
   new_edge->to = to;
   new_edge->length_sq = len_squared_v3v3(&from->x, &to->x);
   return new_edge;
 }
 
-/**
- * Subdivide the grease pencil stroke so the number of points is target_number.
- * Does not change the shape of the stroke. The new points will be distributed as
- * uniformly as possible by repeatedly subdividing the current longest edge.
- *
- * \param gps: The stroke to be up-sampled.
- * \param target_number: The number of points the up-sampled stroke should have.
- * \param select: Select/Deselect the stroke.
- */
 void BKE_gpencil_stroke_uniform_subdivide(bGPdata *gpd,
                                           bGPDstroke *gps,
                                           const uint32_t target_number,
@@ -3703,7 +3563,7 @@ void BKE_gpencil_stroke_uniform_subdivide(bGPdata *gpd,
     tSamplePoint *sp_next = se->to;
 
     /* Subdivide the edge. */
-    tSamplePoint *new_sp = (tSamplePoint *)MEM_callocN(sizeof(tSamplePoint), __func__);
+    tSamplePoint *new_sp = MEM_cnew<tSamplePoint>(__func__);
     interp_v3_v3v3(&new_sp->x, &sp->x, &sp_next->x, 0.5f);
     new_sp->pressure = interpf(sp->pressure, sp_next->pressure, 0.5f);
     new_sp->strength = interpf(sp->strength, sp_next->strength, 0.5f);
@@ -3789,12 +3649,6 @@ void BKE_gpencil_stroke_uniform_subdivide(bGPdata *gpd,
   BKE_gpencil_stroke_geometry_update(gpd, gps);
 }
 
-/**
- * Stroke to view space
- * Transforms a stroke to view space. This allows for manipulations in 2D but also easy conversion
- * back to 3D.
- * NOTE: also takes care of parent space transform
- */
 void BKE_gpencil_stroke_to_view_space(RegionView3D *rv3d,
                                       bGPDstroke *gps,
                                       const float diff_mat[4][4])
@@ -3808,12 +3662,6 @@ void BKE_gpencil_stroke_to_view_space(RegionView3D *rv3d,
   }
 }
 
-/**
- * Stroke from view space
- * Transforms a stroke from view space back to world space. Inverse of
- * BKE_gpencil_stroke_to_view_space
- * NOTE: also takes care of parent space transform
- */
 void BKE_gpencil_stroke_from_view_space(RegionView3D *rv3d,
                                         bGPDstroke *gps,
                                         const float diff_mat[4][4])
@@ -3828,8 +3676,11 @@ void BKE_gpencil_stroke_from_view_space(RegionView3D *rv3d,
   }
 }
 
-/* ----------------------------------------------------------------------------- */
-/* Stroke to perimeter */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Stroke to Perimeter
+ * \{ */
 
 struct tPerimeterPoint {
   struct tPerimeterPoint *next, *prev;
@@ -3838,7 +3689,7 @@ struct tPerimeterPoint {
 
 static tPerimeterPoint *new_perimeter_point(const float pt[3])
 {
-  tPerimeterPoint *new_pt = (tPerimeterPoint *)MEM_callocN(sizeof(tPerimeterPoint), __func__);
+  tPerimeterPoint *new_pt = MEM_cnew<tPerimeterPoint>(__func__);
   copy_v3_v3(&new_pt->x, pt);
   return new_pt;
 }
@@ -4007,8 +3858,8 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   float defaultpixsize = 1000.0f / gpd->pixfactor;
   float stroke_radius = ((gps->thickness + gpl->line_change) / defaultpixsize) / 2.0f;
 
-  ListBase *perimeter_right_side = (ListBase *)MEM_callocN(sizeof(ListBase), __func__);
-  ListBase *perimeter_left_side = (ListBase *)MEM_callocN(sizeof(ListBase), __func__);
+  ListBase *perimeter_right_side = MEM_cnew<ListBase>(__func__);
+  ListBase *perimeter_left_side = MEM_cnew<ListBase>(__func__);
   int num_perimeter_points = 0;
 
   bGPDspoint *first = &gps->points[0];
@@ -4234,12 +4085,6 @@ static ListBase *gpencil_stroke_perimeter_ex(const bGPdata *gpd,
   return perimeter_list;
 }
 
-/**
- * Calculates the perimeter of a stroke projected from the view and
- * returns it as a new stroke.
- * \param subdivisions: Number of subdivisions for the start and end caps
- * \return: bGPDstroke pointer to stroke perimeter
- */
 bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(struct RegionView3D *rv3d,
                                                    bGPdata *gpd,
                                                    const bGPDlayer *gpl,
@@ -4306,7 +4151,6 @@ bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(struct RegionView3D *rv3d,
   return perimeter_stroke;
 }
 
-/** Get average pressure. */
 float BKE_gpencil_stroke_average_pressure_get(bGPDstroke *gps)
 {
 
@@ -4323,7 +4167,6 @@ float BKE_gpencil_stroke_average_pressure_get(bGPDstroke *gps)
   return tot / (float)gps->totpoints;
 }
 
-/** Check if the thickness of the stroke is constant. */
 bool BKE_gpencil_stroke_is_pressure_constant(bGPDstroke *gps)
 {
   if (gps->totpoints == 1) {
@@ -4340,4 +4183,5 @@ bool BKE_gpencil_stroke_is_pressure_constant(bGPDstroke *gps)
 
   return true;
 }
+
 /** \} */

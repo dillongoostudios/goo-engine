@@ -240,12 +240,14 @@ static void detect_workarounds()
     GLContext::unused_fb_slot_workaround = true;
     /* Turn off extensions. */
     GCaps.shader_image_load_store_support = false;
+    GCaps.shader_storage_buffer_objects_support = false;
     GLContext::base_instance_support = false;
     GLContext::clear_texture_support = false;
     GLContext::copy_image_support = false;
     GLContext::debug_layer_support = false;
     GLContext::direct_state_access_support = false;
     GLContext::fixed_restart_index_support = false;
+    GLContext::geometry_shader_invocations = false;
     GLContext::multi_bind_support = false;
     GLContext::multi_draw_indirect_support = false;
     GLContext::shader_draw_parameters_support = false;
@@ -280,6 +282,11 @@ static void detect_workarounds()
     GCaps.mip_render_workaround = true;
     GCaps.shader_image_load_store_support = false;
     GCaps.broken_amd_driver = true;
+  }
+  /* Compute shaders have some issues with those versions (see T94936). */
+  if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL) &&
+      (strstr(version, "4.5.14831") || strstr(version, "4.5.14760"))) {
+    GCaps.compute_shader_support = false;
   }
   /* We have issues with this specific renderer. (see T74024) */
   if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_UNIX, GPU_DRIVER_OPENSOURCE) &&
@@ -418,19 +425,30 @@ static void detect_workarounds()
       strstr(renderer, "HD Graphics 4000")) {
     GLContext::generate_mipmap_workaround = true;
   }
+
+  /* Buggy interface query functions cause crashes when handling SSBOs (T93680) */
+  if (GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_ANY, GPU_DRIVER_ANY) &&
+      (strstr(renderer, "HD Graphics 4400") || strstr(renderer, "HD Graphics 4600"))) {
+    GCaps.shader_storage_buffer_objects_support = false;
+  }
 }  // namespace blender::gpu
 
 /** Internal capabilities. */
+
 GLint GLContext::max_cubemap_size = 0;
 GLint GLContext::max_texture_3d_size = 0;
 GLint GLContext::max_ubo_binds = 0;
 GLint GLContext::max_ubo_size = 0;
+
 /** Extensions. */
+
 bool GLContext::base_instance_support = false;
 bool GLContext::clear_texture_support = false;
 bool GLContext::copy_image_support = false;
 bool GLContext::debug_layer_support = false;
 bool GLContext::direct_state_access_support = false;
+bool GLContext::explicit_location_support = false;
+bool GLContext::geometry_shader_invocations = false;
 bool GLContext::fixed_restart_index_support = false;
 bool GLContext::multi_bind_support = false;
 bool GLContext::multi_draw_indirect_support = false;
@@ -439,7 +457,9 @@ bool GLContext::texture_cube_map_array_support = false;
 bool GLContext::texture_filter_anisotropic_support = false;
 bool GLContext::texture_gather_support = false;
 bool GLContext::vertex_attrib_binding_support = false;
+
 /** Workarounds. */
+
 bool GLContext::debug_layer_workaround = false;
 bool GLContext::unused_fb_slot_workaround = false;
 bool GLContext::generate_mipmap_workaround = false;
@@ -487,6 +507,8 @@ void GLBackend::capabilities_init()
   GLContext::copy_image_support = GLEW_ARB_copy_image;
   GLContext::debug_layer_support = GLEW_VERSION_4_3 || GLEW_KHR_debug || GLEW_ARB_debug_output;
   GLContext::direct_state_access_support = GLEW_ARB_direct_state_access;
+  GLContext::explicit_location_support = GLEW_VERSION_4_3;
+  GLContext::geometry_shader_invocations = GLEW_ARB_gpu_shader5;
   GLContext::fixed_restart_index_support = GLEW_ARB_ES3_compatibility;
   GLContext::multi_bind_support = GLEW_ARB_multi_bind;
   GLContext::multi_draw_indirect_support = GLEW_ARB_multi_draw_indirect;

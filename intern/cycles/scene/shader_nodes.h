@@ -1005,9 +1005,20 @@ class HairInfoNode : public ShaderNode {
   {
     return true;
   }
-  virtual int get_feature()
+};
+
+class PointInfoNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(PointInfoNode)
+
+  void attributes(Shader *shader, AttributeRequestSet *attributes);
+  bool has_attribute_dependency()
   {
-    return ShaderNode::get_feature() | KERNEL_FEATURE_NODE_HAIR;
+    return true;
+  }
+  bool has_spatial_varying()
+  {
+    return true;
   }
 };
 
@@ -1261,6 +1272,21 @@ class BlackbodyNode : public ShaderNode {
   void constant_fold(const ConstantFolder &folder);
 
   NODE_SOCKET_API(float, temperature)
+};
+
+class VectorMapRangeNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(VectorMapRangeNode)
+  void expand(ShaderGraph *graph);
+
+  NODE_SOCKET_API(float3, vector)
+  NODE_SOCKET_API(float3, from_min)
+  NODE_SOCKET_API(float3, from_max)
+  NODE_SOCKET_API(float3, to_min)
+  NODE_SOCKET_API(float3, to_max)
+  NODE_SOCKET_API(float3, steps)
+  NODE_SOCKET_API(NodeMapRangeType, range_type)
+  NODE_SOCKET_API(bool, use_clamp)
 };
 
 class MapRangeNode : public ShaderNode {

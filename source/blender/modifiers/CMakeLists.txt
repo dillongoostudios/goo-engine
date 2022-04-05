@@ -30,6 +30,7 @@ set(INC
   ../depsgraph
   ../editors/include
   ../functions
+  ../geometry
   ../makesdna
   ../makesrna
   ../nodes
@@ -113,7 +114,7 @@ set(SRC
   intern/MOD_weightvgedit.c
   intern/MOD_weightvgmix.c
   intern/MOD_weightvgproximity.c
-  intern/MOD_weld.c
+  intern/MOD_weld.cc
   intern/MOD_wireframe.c
 
   MOD_modifiertypes.h
@@ -235,7 +236,6 @@ endif()
 
 if(WITH_EXPERIMENTAL_FEATURES)
   add_definitions(-DWITH_SIMULATION_DATABLOCK)
-  add_definitions(-DWITH_POINT_CLOUD)
   add_definitions(-DWITH_HAIR_NODES)
 endif()
 

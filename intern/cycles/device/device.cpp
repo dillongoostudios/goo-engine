@@ -27,6 +27,7 @@
 #include "device/cuda/device.h"
 #include "device/dummy/device.h"
 #include "device/hip/device.h"
+#include "device/metal/device.h"
 #include "device/multi/device.h"
 #include "device/optix/device.h"
 
@@ -36,6 +37,7 @@
 #include "util/math.h"
 #include "util/string.h"
 #include "util/system.h"
+#include "util/task.h"
 #include "util/time.h"
 #include "util/types.h"
 #include "util/vector.h"
@@ -49,6 +51,7 @@ vector<DeviceInfo> Device::cuda_devices;
 vector<DeviceInfo> Device::optix_devices;
 vector<DeviceInfo> Device::cpu_devices;
 vector<DeviceInfo> Device::hip_devices;
+vector<DeviceInfo> Device::metal_devices;
 uint Device::devices_initialized_mask = 0;
 
 /* Device */
@@ -105,6 +108,12 @@ Device *Device::create(const DeviceInfo &info, Stats &stats, Profiler &profiler)
       break;
 #endif
 
+#ifdef WITH_METAL
+    case DEVICE_METAL:
+      if (device_metal_init())
+        device = device_metal_create(info, stats, profiler);
+      break;
+#endif
     default:
       break;
   }
@@ -128,6 +137,8 @@ DeviceType Device::type_from_string(const char *name)
     return DEVICE_MULTI;
   else if (strcmp(name, "HIP") == 0)
     return DEVICE_HIP;
+  else if (strcmp(name, "METAL") == 0)
+    return DEVICE_METAL;
 
   return DEVICE_NONE;
 }
@@ -144,6 +155,8 @@ string Device::string_from_type(DeviceType type)
     return "MULTI";
   else if (type == DEVICE_HIP)
     return "HIP";
+  else if (type == DEVICE_METAL)
+    return "METAL";
 
   return "";
 }
@@ -161,7 +174,9 @@ vector<DeviceType> Device::available_types()
 #ifdef WITH_HIP
   types.push_back(DEVICE_HIP);
 #endif
-
+#ifdef WITH_METAL
+  types.push_back(DEVICE_METAL);
+#endif
   return types;
 }
 
@@ -227,6 +242,20 @@ vector<DeviceInfo> Device::available_devices(uint mask)
     }
   }
 
+#ifdef WITH_METAL
+  if (mask & DEVICE_MASK_METAL) {
+    if (!(devices_initialized_mask & DEVICE_MASK_METAL)) {
+      if (device_metal_init()) {
+        device_metal_info(metal_devices);
+      }
+      devices_initialized_mask |= DEVICE_MASK_METAL;
+    }
+    foreach (DeviceInfo &info, metal_devices) {
+      devices.push_back(info);
+    }
+  }
+#endif
+
   return devices;
 }
 
@@ -266,6 +295,15 @@ string Device::device_capabilities(uint mask)
   }
 #endif
 
+#ifdef WITH_METAL
+  if (mask & DEVICE_MASK_METAL) {
+    if (device_metal_init()) {
+      capabilities += "\nMetal device capabilities:\n";
+      capabilities += device_metal_capabilities();
+    }
+  }
+#endif
+
   return capabilities;
 }
 
@@ -286,19 +324,19 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
   info.description = "Multi Device";
   info.num = 0;
 
-  info.has_half_images = true;
   info.has_nanovdb = true;
   info.has_osl = true;
   info.has_profiling = true;
   info.has_peer_memory = false;
+  info.use_metalrt = false;
   info.denoisers = DENOISER_ALL;
 
   foreach (const DeviceInfo &device, subdevices) {
     /* Ensure CPU device does not slow down GPU. */
     if (device.type == DEVICE_CPU && subdevices.size() > 1) {
       if (background) {
-        int orig_cpu_threads = (threads) ? threads : system_cpu_thread_count();
-        int cpu_threads = max(orig_cpu_threads - (subdevices.size() - 1), 0);
+        int orig_cpu_threads = (threads) ? threads : TaskScheduler::max_concurrency();
+        int cpu_threads = max(orig_cpu_threads - (subdevices.size() - 1), size_t(0));
 
         VLOG(1) << "CPU render threads reduced from " << orig_cpu_threads << " to " << cpu_threads
                 << ", to dedicate to GPU.";
@@ -333,11 +371,11 @@ DeviceInfo Device::get_multi_device(const vector<DeviceInfo> &subdevices,
     }
 
     /* Accumulate device info. */
-    info.has_half_images &= device.has_half_images;
     info.has_nanovdb &= device.has_nanovdb;
     info.has_osl &= device.has_osl;
     info.has_profiling &= device.has_profiling;
     info.has_peer_memory |= device.has_peer_memory;
+    info.use_metalrt |= device.use_metalrt;
     info.denoisers &= device.denoisers;
   }
 
@@ -356,6 +394,7 @@ void Device::free_memory()
   optix_devices.free_memory();
   hip_devices.free_memory();
   cpu_devices.free_memory();
+  metal_devices.free_memory();
 }
 
 unique_ptr<DeviceQueue> Device::gpu_queue_create()

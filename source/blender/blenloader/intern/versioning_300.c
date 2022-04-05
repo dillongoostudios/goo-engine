@@ -30,6 +30,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_string_utils.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_anim_types.h"
@@ -44,6 +45,8 @@
 #include "DNA_listBase.h"
 #include "DNA_material_types.h"
 #include "DNA_modifier_types.h"
+#include "DNA_screen_types.h"
+#include "DNA_space_types.h"
 #include "DNA_text_types.h"
 #include "DNA_workspace_types.h"
 
@@ -53,10 +56,12 @@
 #include "BKE_armature.h"
 #include "BKE_asset.h"
 #include "BKE_collection.h"
+#include "BKE_colortools.h"
 #include "BKE_deform.h"
 #include "BKE_fcurve.h"
 #include "BKE_fcurve_driver.h"
 #include "BKE_idprop.h"
+#include "BKE_image.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_override.h"
 #include "BKE_main.h"
@@ -592,7 +597,7 @@ static bNodeTree *add_realize_node_tree(Main *bmain)
     nodeSetSelected(node, false);
   }
 
-  ntreeUpdateTree(bmain, node_tree);
+  version_socket_update_is_used(node_tree);
   return node_tree;
 }
 
@@ -774,6 +779,42 @@ void do_versions_after_linking_300(Main *bmain, ReportList *UNUSED(reports))
             add_realize_instances_before_socket(ntree, node, geometry_socket);
           }
         }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 301, 6)) {
+    { /* Ensure driver variable names are unique within the driver. */
+      ID *id;
+      FOREACH_MAIN_ID_BEGIN (bmain, id) {
+        AnimData *adt = BKE_animdata_from_id(id);
+        if (adt == NULL) {
+          continue;
+        }
+        LISTBASE_FOREACH (FCurve *, fcu, &adt->drivers) {
+          ChannelDriver *driver = fcu->driver;
+          /* Ensure the uniqueness front to back. Given a list of identically
+           * named variables, the last one gets to keep its original name. This
+           * matches the evaluation order, and thus shouldn't change the evaluated
+           * value of the driver expression. */
+          LISTBASE_FOREACH (DriverVar *, dvar, &driver->variables) {
+            BLI_uniquename(&driver->variables,
+                           dvar,
+                           dvar->name,
+                           '_',
+                           offsetof(DriverVar, name),
+                           sizeof(dvar->name));
+          }
+        }
+      }
+      FOREACH_MAIN_ID_END;
+    }
+
+    /* Ensure tiled image sources contain a UDIM token. */
+    LISTBASE_FOREACH (Image *, ima, &bmain->images) {
+      if (ima->source == IMA_SRC_TILED) {
+        char *filename = (char *)BLI_path_basename(ima->filepath);
+        BKE_image_ensure_tile_token(filename);
       }
     }
   }
@@ -1136,7 +1177,7 @@ static void legacy_vec_roll_to_mat3_normalized(const float nor[3],
   const float z = nor[2];
 
   const float theta = 1.0f + y;          /* remapping Y from [-1,+1] to [0,2]. */
-  const float theta_alt = x * x + z * z; /* Helper value for matrix calculations.*/
+  const float theta_alt = x * x + z * z; /* Helper value for matrix calculations. */
   float rMatrix[3][3], bMatrix[3][3];
 
   BLI_ASSERT_UNIT_V3(nor);
@@ -1279,6 +1320,18 @@ static void version_geometry_nodes_set_position_node_offset(bNodeTree *ntree)
   }
 }
 
+static void version_node_tree_socket_id_delim(bNodeTree *ntree)
+{
+  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    LISTBASE_FOREACH (bNodeSocket *, socket, &node->inputs) {
+      version_node_socket_id_delim(socket);
+    }
+    LISTBASE_FOREACH (bNodeSocket *, socket, &node->outputs) {
+      version_node_socket_id_delim(socket);
+    }
+  }
+}
+
 static bool version_fix_seq_meta_range(Sequence *seq, void *user_data)
 {
   Scene *scene = (Scene *)user_data;
@@ -1286,6 +1339,18 @@ static bool version_fix_seq_meta_range(Sequence *seq, void *user_data)
     SEQ_time_update_meta_strip_range(scene, seq);
   }
   return true;
+}
+
+static void version_old_custom_nodes(struct Main* main, bNodeTree *ntree) {
+  if (ntree == NULL) return;
+  
+  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+    if (STREQ(node->idname, "ShaderNodeFloatCurve")) {
+        // node->storage points to garbage.
+        printf("Corrupted ShaderNodeFloatCurve found, resetting curve mapping to default\n");
+        node->storage = BKE_curvemapping_add(1, 0.0f, 0.0f, 1.0f, 1.0f);
+    }
+  }
 }
 
 /* Those `version_liboverride_rnacollections_*` functions mimic the old, pre-3.0 code to find
@@ -2023,7 +2088,7 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
               SpaceFile *sfile = (SpaceFile *)sl;
               if (sfile->params) {
                 sfile->params->flag &= ~(FILE_PARAMS_FLAG_UNUSED_1 | FILE_PARAMS_FLAG_UNUSED_2 |
-                                         FILE_PARAMS_FLAG_UNUSED_3 | FILE_PARAMS_FLAG_UNUSED_4);
+                                         FILE_PARAMS_FLAG_UNUSED_3 | FILE_PATH_TOKENS_ALLOW);
               }
 
               /* New default import type: Append with reuse. */
@@ -2179,7 +2244,7 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
       if (ntree->type != NTREE_GEOMETRY) {
         continue;
       }
-      version_node_id(ntree, FN_NODE_COMPARE_FLOATS, "FunctionNodeCompareFloats");
+      version_node_id(ntree, FN_NODE_COMPARE, "FunctionNodeCompareFloats");
       version_node_id(ntree, GEO_NODE_CAPTURE_ATTRIBUTE, "GeometryNodeCaptureAttribute");
       version_node_id(ntree, GEO_NODE_MESH_BOOLEAN, "GeometryNodeMeshBoolean");
       version_node_id(ntree, GEO_NODE_FILL_CURVE, "GeometryNodeFillCurve");
@@ -2308,35 +2373,11 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
   }
 
   if (!MAIN_VERSION_ATLEAST(bmain, 300, 42)) {
-    /* Update LibOverride operations regarding insertions in RNA collections (i.e. modifiers,
-     * constraints and NLA tracks). */
-    ID *id_iter;
-    FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
-      if (ID_IS_OVERRIDE_LIBRARY_REAL(id_iter)) {
-        version_liboverride_rnacollections_insertion_animdata(id_iter);
-        if (GS(id_iter->name) == ID_OB) {
-          version_liboverride_rnacollections_insertion_object((Object *)id_iter);
-        }
-      }
-    }
-    FOREACH_MAIN_ID_END;
-
     /* Use consistent socket identifiers for the math node.
      * The code to make unique identifiers from the names was inconsistent. */
     FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
-      if (ELEM(ntree->type, NTREE_SHADER, NTREE_GEOMETRY)) {
-        LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-          if (node->type == SH_NODE_MATH) {
-            bNodeSocket *value1 = ((bNodeSocket *)node->inputs.first)->next;
-            bNodeSocket *value2 = value1->next;
-            strcpy(value1->identifier, "Value_001");
-            if (value2 != NULL) {
-              /* This can be null when file is quite old so that the socket did not exist
-               * (before 0406eb110332a8). */
-              strcpy(value2->identifier, "Value_002");
-            }
-          }
-        }
+      if (ntree->type != NTREE_CUSTOM) {
+        version_node_tree_socket_id_delim(ntree);
       }
     }
     FOREACH_NODETREE_END;
@@ -2357,6 +2398,25 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
       }
     }
 
+    /* Change minimum zoom to 0.05f in the node editor. */
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_NODE) {
+            ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
+                                                                   &sl->regionbase;
+            LISTBASE_FOREACH (ARegion *, region, regionbase) {
+              if (region->regiontype == RGN_TYPE_WINDOW) {
+                if (region->v2d.minzoom > 0.05f) {
+                  region->v2d.minzoom = 0.05f;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       Editing *ed = SEQ_editing_get(scene);
       /* Make sure range of meta strips is correct.
@@ -2365,6 +2425,177 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
        * with invalid meta strip range are corrected. */
       if (ed != NULL) {
         SEQ_for_each_callback(&ed->seqbase, version_fix_seq_meta_range, scene);
+      }
+    }
+  }
+
+  /* Special case to handle older in-development 3.1 files, before change from 3.0 branch gets
+   * merged in master. */
+  if (!MAIN_VERSION_ATLEAST(bmain, 300, 42) ||
+      (bmain->versionfile == 301 && !MAIN_VERSION_ATLEAST(bmain, 301, 3))) {
+    /* Update LibOverride operations regarding insertions in RNA collections (i.e. modifiers,
+     * constraints and NLA tracks). */
+    ID *id_iter;
+    FOREACH_MAIN_ID_BEGIN (bmain, id_iter) {
+      if (ID_IS_OVERRIDE_LIBRARY_REAL(id_iter)) {
+        version_liboverride_rnacollections_insertion_animdata(id_iter);
+        if (GS(id_iter->name) == ID_OB) {
+          version_liboverride_rnacollections_insertion_object((Object *)id_iter);
+        }
+      }
+    }
+    FOREACH_MAIN_ID_END;
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 301, 4)) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type != NTREE_GEOMETRY) {
+        continue;
+      }
+      version_node_id(ntree, GEO_NODE_CURVE_SPLINE_PARAMETER, "GeometryNodeSplineParameter");
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == GEO_NODE_CURVE_SPLINE_PARAMETER) {
+          version_node_add_socket_if_not_exist(
+              ntree, node, SOCK_OUT, SOCK_INT, PROP_NONE, "Index", "Index");
+        }
+
+        /* Convert float compare into a more general compare node. */
+        if (node->type == FN_NODE_COMPARE) {
+          if (node->storage == NULL) {
+            NodeFunctionCompare *data = (NodeFunctionCompare *)MEM_callocN(
+                sizeof(NodeFunctionCompare), __func__);
+            data->data_type = SOCK_FLOAT;
+            data->operation = node->custom1;
+            strcpy(node->idname, "FunctionNodeCompare");
+            node->storage = data;
+          }
+        }
+      }
+    }
+
+    /* Add a toggle for the breadcrumbs overlay in the node editor. */
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, space, &area->spacedata) {
+          if (space->spacetype == SPACE_NODE) {
+            SpaceNode *snode = (SpaceNode *)space;
+            snode->overlay.flag |= SN_OVERLAY_SHOW_PATH;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 301, 5)) {
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type != NTREE_GEOMETRY) {
+        continue;
+      }
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type != GEO_NODE_REALIZE_INSTANCES) {
+          continue;
+        }
+        node->custom1 |= GEO_NODE_REALIZE_INSTANCES_LEGACY_BEHAVIOR;
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 301, 6)) {
+    /* Add node storage for map range node. */
+    FOREACH_NODETREE_BEGIN (bmain, ntree, id) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == SH_NODE_MAP_RANGE) {
+          if (node->storage == NULL) {
+            NodeMapRange *data = MEM_callocN(sizeof(NodeMapRange), __func__);
+            data->clamp = node->custom1;
+            data->data_type = CD_PROP_FLOAT;
+            data->interpolation_type = node->custom2;
+            node->storage = data;
+          }
+        }
+      }
+    }
+    FOREACH_NODETREE_END;
+
+    /* Update spreadsheet data set region type. */
+    LISTBASE_FOREACH (bScreen *, screen, &bmain->screens) {
+      LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+        LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+          if (sl->spacetype == SPACE_SPREADSHEET) {
+            ListBase *regionbase = (sl == area->spacedata.first) ? &area->regionbase :
+                                                                   &sl->regionbase;
+            LISTBASE_FOREACH (ARegion *, region, regionbase) {
+              if (region->regiontype == RGN_TYPE_CHANNELS) {
+                region->regiontype = RGN_TYPE_TOOLS;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    /* Initialize the bone wireframe opacity setting. */
+    if (!DNA_struct_elem_find(fd->filesdna, "View3DOverlay", "float", "bone_wire_alpha")) {
+      for (bScreen *screen = bmain->screens.first; screen; screen = screen->id.next) {
+        LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+          LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
+            if (sl->spacetype == SPACE_VIEW3D) {
+              View3D *v3d = (View3D *)sl;
+              v3d->overlay.bone_wire_alpha = 1.0f;
+            }
+          }
+        }
+      }
+    }
+
+    /* Rename sockets on multiple nodes */
+    LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+      if (ntree->type == NTREE_GEOMETRY) {
+        version_node_output_socket_name(
+            ntree, GEO_NODE_STRING_TO_CURVES, "Curves", "Curve Instances");
+        version_node_output_socket_name(
+            ntree, GEO_NODE_INPUT_MESH_EDGE_ANGLE, "Angle", "Unsigned Angle");
+        version_node_output_socket_name(
+            ntree, GEO_NODE_INPUT_MESH_ISLAND, "Index", "Island Index");
+        version_node_input_socket_name(ntree, GEO_NODE_TRANSFER_ATTRIBUTE, "Target", "Source");
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 301, 7)) {
+    /* Duplicate value for two flags that mistakenly had the same numeric value. */
+    LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
+      LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
+        if (md->type == eModifierType_WeightVGProximity) {
+          WeightVGProximityModifierData *wpmd = (WeightVGProximityModifierData *)md;
+          if (wpmd->proximity_flags & MOD_WVG_PROXIMITY_INVERT_VGROUP_MASK) {
+            wpmd->proximity_flags |= MOD_WVG_PROXIMITY_WEIGHTS_NORMALIZE;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_ATLEAST(bmain, 301, 7)) {
+    bool is_custom = false;
+    LISTBASE_FOREACH (Text *, tex, &bmain->texts) {
+      if (BLI_strcasecmp(tex->id.name, ".version_warning.py")) {
+        is_custom = true;
+        break;
+      }
+    }
+
+    if (is_custom) {
+      LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
+        printf("ntree->type %d\n", ntree->type);
+        if (ntree->type == NTREE_SHADER) {
+          version_old_custom_nodes(bmain, ntree);
+        }
+      }
+
+      LISTBASE_FOREACH (Material *, mat, &bmain->materials) {
+        bNodeTree *ntree = mat->nodetree;
+        version_old_custom_nodes(bmain, ntree);
       }
     }
   }
@@ -2379,5 +2610,6 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
    * \note Keep this message at the bottom of the function.
    */
   {
+    /* Keep this block, even when empty. */
   }
 }

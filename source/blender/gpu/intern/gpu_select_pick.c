@@ -673,7 +673,7 @@ uint gpu_select_pick_end(void)
 #endif
       /* first 3 are dummy values */
       g_pick_state.buffer[hits][0] = 1;
-      g_pick_state.buffer[hits][1] = 0x0; /* depth_data[i].depth; */ /* unused */
+      g_pick_state.buffer[hits][1] = depth_data[i].depth;
       g_pick_state.buffer[hits][2] = 0x0; /* z-far is currently never used. */
       g_pick_state.buffer[hits][3] = depth_data[i].id;
       hits++;
@@ -730,7 +730,6 @@ void gpu_select_pick_cache_end(void)
   BLI_freelistN(&g_pick_state.cache.bufs);
 }
 
-/* is drawing needed? */
 bool gpu_select_pick_is_cached(void)
 {
   return g_pick_state.is_cached;

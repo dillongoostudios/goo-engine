@@ -32,7 +32,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BKE_ccg.h"
-#include "BKE_mesh.h" /* for BKE_mesh_calc_normals */
+#include "BKE_mesh.h"
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
 #include "BKE_subdiv_ccg.h"
@@ -78,7 +78,6 @@ void BB_reset(BB *bb)
   bb->bmax[0] = bb->bmax[1] = bb->bmax[2] = -FLT_MAX;
 }
 
-/* Expand the bounding box to include a new coordinate */
 void BB_expand(BB *bb, const float co[3])
 {
   for (int i = 0; i < 3; i++) {
@@ -87,7 +86,6 @@ void BB_expand(BB *bb, const float co[3])
   }
 }
 
-/* Expand the bounding box to include another bounding box */
 void BB_expand_with_bb(BB *bb, BB *bb2)
 {
   for (int i = 0; i < 3; i++) {
@@ -96,7 +94,6 @@ void BB_expand_with_bb(BB *bb, BB *bb2)
   }
 }
 
-/* Return 0, 1, or 2 to indicate the widest axis of the bounding box */
 int BB_widest_axis(const BB *bb)
 {
   float dim[3];
@@ -351,7 +348,6 @@ static void update_vb(PBVH *pbvh, PBVHNode *node, BBC *prim_bbc, int offset, int
   node->orig_vb = node->vb;
 }
 
-/* Returns the number of visible quads in the nodes' grids. */
 int BKE_pbvh_count_grid_quads(BLI_bitmap **grid_hidden,
                               const int *grid_indices,
                               int totgrid,
@@ -555,14 +551,8 @@ static void pbvh_build(PBVH *pbvh, BB *cb, BBC *prim_bbc, int totprim)
   build_sub(pbvh, 0, cb, prim_bbc, 0, totprim);
 }
 
-/**
- * Do a full rebuild with on Mesh data structure.
- *
- * \note Unlike mpoly/mloop/verts, looptri is **totally owned** by PBVH
- * (which means it may rewrite it if needed, see #BKE_pbvh_vert_coords_apply().
- */
 void BKE_pbvh_build_mesh(PBVH *pbvh,
-                         const Mesh *mesh,
+                         Mesh *mesh,
                          const MPoly *mpoly,
                          const MLoop *mloop,
                          MVert *verts,
@@ -582,6 +572,8 @@ void BKE_pbvh_build_mesh(PBVH *pbvh,
   pbvh->mloop = mloop;
   pbvh->looptri = looptri;
   pbvh->verts = verts;
+  BKE_mesh_vertex_normals_ensure(mesh);
+  pbvh->vert_normals = BKE_mesh_vertex_normals_for_write(mesh);
   pbvh->vert_bitmap = BLI_BITMAP_NEW(totvert, "bvh->vert_bitmap");
   pbvh->totvert = totvert;
   pbvh->leaf_limit = LEAF_LIMIT;
@@ -621,7 +613,6 @@ void BKE_pbvh_build_mesh(PBVH *pbvh,
   MEM_freeN(pbvh->vert_bitmap);
 }
 
-/* Do a full rebuild with on Grids data structure */
 void BKE_pbvh_build_grids(PBVH *pbvh,
                           CCGElem **grids,
                           int totgrid,
@@ -1016,6 +1007,28 @@ typedef struct PBVHUpdateData {
   bool show_sculpt_face_sets;
 } PBVHUpdateData;
 
+static void pbvh_update_normals_clear_task_cb(void *__restrict userdata,
+                                              const int n,
+                                              const TaskParallelTLS *__restrict UNUSED(tls))
+{
+  PBVHUpdateData *data = userdata;
+  PBVH *pbvh = data->pbvh;
+  PBVHNode *node = data->nodes[n];
+  float(*vnors)[3] = data->vnors;
+
+  if (node->flag & PBVH_UpdateNormals) {
+    const int *verts = node->vert_indices;
+    const int totvert = node->uniq_verts;
+    for (int i = 0; i < totvert; i++) {
+      const int v = verts[i];
+      const MVert *mvert = &pbvh->verts[v];
+      if (mvert->flag & ME_VERT_PBVH_UPDATE) {
+        zero_v3(vnors[v]);
+      }
+    }
+  }
+}
+
 static void pbvh_update_normals_accum_task_cb(void *__restrict userdata,
                                               const int n,
                                               const TaskParallelTLS *__restrict UNUSED(tls))
@@ -1087,7 +1100,6 @@ static void pbvh_update_normals_store_task_cb(void *__restrict userdata,
        * so we know only this thread will handle this vertex. */
       if (mvert->flag & ME_VERT_PBVH_UPDATE) {
         normalize_v3(vnors[v]);
-        normal_float_to_short_v3(mvert->no, vnors[v]);
         mvert->flag &= ~ME_VERT_PBVH_UPDATE;
       }
     }
@@ -1098,10 +1110,6 @@ static void pbvh_update_normals_store_task_cb(void *__restrict userdata,
 
 static void pbvh_faces_update_normals(PBVH *pbvh, PBVHNode **nodes, int totnode)
 {
-  /* could be per node to save some memory, but also means
-   * we have to store for each vertex which node it is in */
-  float(*vnors)[3] = MEM_callocN(sizeof(*vnors) * pbvh->totvert, __func__);
-
   /* subtle assumptions:
    * - We know that for all edited vertices, the nodes with faces
    *   adjacent to these vertices have been marked with PBVH_UpdateNormals.
@@ -1115,16 +1123,16 @@ static void pbvh_faces_update_normals(PBVH *pbvh, PBVHNode **nodes, int totnode)
   PBVHUpdateData data = {
       .pbvh = pbvh,
       .nodes = nodes,
-      .vnors = vnors,
+      .vnors = pbvh->vert_normals,
   };
 
   TaskParallelSettings settings;
   BKE_pbvh_parallel_range_settings(&settings, true, totnode);
 
+  /* Zero normals before accumulation. */
+  BLI_task_parallel_range(0, totnode, &data, pbvh_update_normals_clear_task_cb, &settings);
   BLI_task_parallel_range(0, totnode, &data, pbvh_update_normals_accum_task_cb, &settings);
   BLI_task_parallel_range(0, totnode, &data, pbvh_update_normals_store_task_cb, &settings);
-
-  MEM_freeN(vnors);
 }
 
 static void pbvh_update_mask_redraw_task_cb(void *__restrict userdata,
@@ -1311,6 +1319,7 @@ static void pbvh_update_draw_buffer_cb(void *__restrict userdata,
       case PBVH_FACES:
         GPU_pbvh_mesh_buffers_update(node->draw_buffers,
                                      pbvh->verts,
+                                     pbvh->vert_normals,
                                      CustomData_get_layer(pbvh->vdata, CD_PAINT_MASK),
                                      CustomData_get_layer(pbvh->ldata, CD_MLOOPCOL),
                                      CustomData_get_layer(pbvh->pdata, CD_SCULPT_FACE_SETS),
@@ -1954,11 +1963,6 @@ void BKE_pbvh_node_get_bm_orco_data(PBVHNode *node,
   *r_orco_coords = node->bm_orco;
 }
 
-/**
- * \note doing a full search on all vertices here seems expensive,
- * however this is important to avoid having to recalculate bound-box & sync the buffers to the
- * GPU (which is far more expensive!) See: T47232.
- */
 bool BKE_pbvh_node_vert_update_check_any(PBVH *pbvh, PBVHNode *node)
 {
   BLI_assert(pbvh->type == PBVH_FACES);
@@ -2798,7 +2802,7 @@ float (*BKE_pbvh_vert_coords_alloc(PBVH *pbvh))[3]
 void BKE_pbvh_vert_coords_apply(PBVH *pbvh, const float (*vertCos)[3], const int totvert)
 {
   if (totvert != pbvh->totvert) {
-    BLI_assert_msg(0, "PBVH: Given deforming vcos number does not natch PBVH vertex number!");
+    BLI_assert_msg(0, "PBVH: Given deforming vcos number does not match PBVH vertex number!");
     return;
   }
 
@@ -2980,6 +2984,8 @@ void pbvh_vertex_iter_init(PBVH *pbvh, PBVHNode *node, PBVHVertexIter *vi, int m
 
   vi->mask = NULL;
   if (pbvh->type == PBVH_FACES) {
+    vi->vert_normals = pbvh->vert_normals;
+
     vi->vmask = CustomData_get_layer(pbvh->vdata, CD_PAINT_MASK);
     vi->vcol = CustomData_get_layer(pbvh->vdata, CD_PROP_COLOR);
   }
@@ -3051,6 +3057,12 @@ MVert *BKE_pbvh_get_verts(const PBVH *pbvh)
 {
   BLI_assert(pbvh->type == PBVH_FACES);
   return pbvh->verts;
+}
+
+const float (*BKE_pbvh_get_vert_normals(const PBVH *pbvh))[3]
+{
+  BLI_assert(pbvh->type == PBVH_FACES);
+  return pbvh->vert_normals;
 }
 
 void BKE_pbvh_subdiv_cgg_set(PBVH *pbvh, SubdivCCG *subdiv_ccg)

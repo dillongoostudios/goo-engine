@@ -89,7 +89,6 @@ typedef struct wmDropBoxMap {
 
 } wmDropBoxMap;
 
-/* spaceid/regionid is zero for window drop maps */
 ListBase *WM_dropboxmap_find(const char *idname, int spaceid, int regionid)
 {
   LISTBASE_FOREACH (wmDropBoxMap *, dm, &dropboxes) {
@@ -122,7 +121,6 @@ wmDropBox *WM_dropbox_add(ListBase *lb,
   drop->cancel = cancel;
   drop->tooltip = tooltip;
   drop->ot = WM_operatortype_find(idname, 0);
-  drop->opcontext = WM_OP_INVOKE_DEFAULT;
 
   if (drop->ot == NULL) {
     MEM_freeN(drop);
@@ -154,7 +152,6 @@ void wm_dropbox_free(void)
 
 /* *********************************** */
 
-/* note that the pointer should be valid allocated and not on stack */
 wmDrag *WM_event_start_drag(
     struct bContext *C, int icon, int type, void *poin, double value, unsigned int flags)
 {
@@ -209,11 +206,6 @@ wmDrag *WM_event_start_drag(
   return drag;
 }
 
-/**
- * Additional work to cleanly end dragging. Additional because this doesn't actually remove the
- * drag items. Should be called whenever dragging is stopped (successful or not, also when
- * canceled).
- */
 void wm_drags_exit(wmWindowManager *wm, wmWindow *win)
 {
   bool any_active = false;
@@ -324,7 +316,8 @@ static wmDropBox *dropbox_active(bContext *C,
             continue;
           }
 
-          if (WM_operator_poll_context(C, drop->ot, drop->opcontext)) {
+          const wmOperatorCallContext opcontext = wm_drop_operator_context_get(drop);
+          if (WM_operator_poll_context(C, drop->ot, opcontext)) {
             return drop;
           }
 
@@ -392,17 +385,17 @@ static void wm_drop_update_active(bContext *C, wmDrag *drag, const wmEvent *even
 
 void wm_drop_prepare(bContext *C, wmDrag *drag, wmDropBox *drop)
 {
+  const wmOperatorCallContext opcontext = wm_drop_operator_context_get(drop);
   /* Optionally copy drag information to operator properties. Don't call it if the
    * operator fails anyway, it might do more than just set properties (e.g.
    * typically import an asset). */
-  if (drop->copy && WM_operator_poll_context(C, drop->ot, drop->opcontext)) {
+  if (drop->copy && WM_operator_poll_context(C, drop->ot, opcontext)) {
     drop->copy(drag, drop);
   }
 
   wm_drags_exit(CTX_wm_manager(C), CTX_wm_window(C));
 }
 
-/* called in inner handler loop, region context */
 void wm_drags_check_ops(bContext *C, const wmEvent *event)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
@@ -421,6 +414,11 @@ void wm_drags_check_ops(bContext *C, const wmEvent *event)
   if (!BLI_listbase_is_empty(&wm->drags)) {
     WM_cursor_modal_set(CTX_wm_window(C), any_active ? WM_CURSOR_DEFAULT : WM_CURSOR_STOP);
   }
+}
+
+wmOperatorCallContext wm_drop_operator_context_get(const wmDropBox *UNUSED(drop))
+{
+  return WM_OP_INVOKE_DEFAULT;
 }
 
 /* ************** IDs ***************** */
@@ -473,17 +471,11 @@ ID *WM_drag_get_local_ID_from_event(const wmEvent *event, short idcode)
   return WM_drag_get_local_ID(lb->first, idcode);
 }
 
-/**
- * Check if the drag data is either a local ID or an external ID asset of type \a idcode.
- */
 bool WM_drag_is_ID_type(const wmDrag *drag, int idcode)
 {
   return WM_drag_get_local_ID(drag, idcode) || WM_drag_get_asset_data(drag, idcode);
 }
 
-/**
- * \note: Does not store \a asset in any way, so it's fine to pass a temporary.
- */
 wmDragAsset *WM_drag_create_asset_data(const AssetHandle *asset,
                                        AssetMetaData *metadata,
                                        const char *path,
@@ -531,9 +523,6 @@ struct AssetMetaData *WM_drag_get_asset_meta_data(const wmDrag *drag, int idcode
   return NULL;
 }
 
-/**
- * \param flag_extra: Additional linking flags (from #eFileSel_Params_Flag).
- */
 ID *WM_drag_asset_id_import(wmDragAsset *asset_drag, const int flag_extra)
 {
   /* Only support passing in limited flags. */
@@ -592,15 +581,6 @@ bool WM_drag_asset_will_import_linked(const wmDrag *drag)
   return asset_drag->import_type == FILE_ASSET_IMPORT_LINK;
 }
 
-/**
- * When dragging a local ID, return that. Otherwise, if dragging an asset-handle, link or append
- * that depending on what was chosen by the drag-box (currently append only in fact).
- *
- * Use #WM_drag_free_imported_drag_ID() as cancel callback of the drop-box, so that the asset
- * import is rolled back if the drop operator fails.
- *
- * \param flag: #eFileSel_Params_Flag passed to linking code.
- */
 ID *WM_drag_get_local_ID_or_import_from_asset(const wmDrag *drag, int idcode)
 {
   if (!ELEM(drag->type, WM_DRAG_ASSET, WM_DRAG_ID)) {
@@ -620,14 +600,6 @@ ID *WM_drag_get_local_ID_or_import_from_asset(const wmDrag *drag, int idcode)
   return WM_drag_asset_id_import(asset_drag, 0);
 }
 
-/**
- * \brief Free asset ID imported for canceled drop.
- *
- * If the asset was imported (linked/appended) using #WM_drag_get_local_ID_or_import_from_asset()`
- * (typically via a #wmDropBox.copy() callback), we want the ID to be removed again if the drop
- * operator cancels.
- * This is for use as #wmDropBox.cancel() callback.
- */
 void WM_drag_free_imported_drag_ID(struct Main *bmain, wmDrag *drag, wmDropBox *drop)
 {
   if (drag->type != WM_DRAG_ASSET) {
@@ -648,8 +620,12 @@ void WM_drag_free_imported_drag_ID(struct Main *bmain, wmDrag *drag, wmDropBox *
   }
 
   ID *id = BKE_libblock_find_name(bmain, asset_drag->id_type, name);
-  if (id) {
-    BKE_id_delete(bmain, id);
+  if (id != NULL) {
+    /* Do not delete the dragged ID if it has any user, otherwise if it is a 're-used' ID it will
+     * cause T95636. Note that we need first to add the user that we want to remove in
+     * #BKE_id_free_us. */
+    id_us_plus(id);
+    BKE_id_free_us(bmain, id);
   }
 }
 
@@ -662,9 +638,6 @@ wmDragAssetCatalog *WM_drag_get_asset_catalog_data(const wmDrag *drag)
   return drag->poin;
 }
 
-/**
- * \note: Does not store \a asset in any way, so it's fine to pass a temporary.
- */
 void WM_drag_add_asset_list_item(
     wmDrag *drag,
     /* Context only needed for the hack in #ED_asset_handle_get_full_library_path(). */
@@ -779,19 +752,19 @@ static void wm_drag_draw_icon(bContext *UNUSED(C),
 
     float col[4] = {1.0f, 1.0f, 1.0f, 0.65f}; /* this blends texture */
     IMMDrawPixelsTexState state = immDrawPixelsTexSetup(GPU_SHADER_2D_IMAGE_COLOR);
-    immDrawPixelsTexScaled(&state,
-                           x,
-                           y,
-                           drag->imb->x,
-                           drag->imb->y,
-                           GPU_RGBA8,
-                           false,
-                           drag->imb->rect,
-                           drag->scale,
-                           drag->scale,
-                           1.0f,
-                           1.0f,
-                           col);
+    immDrawPixelsTexTiled_scaling(&state,
+                                  x,
+                                  y,
+                                  drag->imb->x,
+                                  drag->imb->y,
+                                  GPU_RGBA8,
+                                  false,
+                                  drag->imb->rect,
+                                  drag->scale,
+                                  drag->scale,
+                                  1.0f,
+                                  1.0f,
+                                  col);
   }
   else {
     int padding = 4 * UI_DPI_FAC;
@@ -901,7 +874,6 @@ void WM_drag_draw_default_fn(bContext *C, wmWindow *win, wmDrag *drag, const int
   wm_drag_draw_default(C, win, drag, xy);
 }
 
-/* Called in #wm_draw_window_onscreen. */
 void wm_drags_draw(bContext *C, wmWindow *win)
 {
   int xy[2];
@@ -916,7 +888,7 @@ void wm_drags_draw(bContext *C, wmWindow *win)
   bScreen *screen = CTX_wm_screen(C);
   /* To start with, use the area and region under the mouse cursor, just like event handling. The
    * operator context may still override it. */
-  ScrArea *area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, UNPACK2(xy));
+  ScrArea *area = BKE_screen_find_area_xy(screen, SPACE_TYPE_ANY, xy);
   ARegion *region = ED_area_find_region_xy_visual(area, RGN_TYPE_ANY, xy);
   /* Will be overridden and unset eventually. */
   BLI_assert(!CTX_wm_area(C) && !CTX_wm_region(C));

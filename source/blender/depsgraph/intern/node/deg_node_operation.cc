@@ -182,6 +182,9 @@ const char *operationCodeAsString(OperationCode opcode)
       return "LIGHT_UPDATE";
     case OperationCode::WORLD_UPDATE:
       return "WORLD_UPDATE";
+    /* Node Tree. */
+    case OperationCode::NTREE_OUTPUT:
+      return "NTREE_OUTPUT";
     /* Movie clip. */
     case OperationCode::MOVIECLIP_EVAL:
       return "MOVIECLIP_EVAL";
@@ -218,8 +221,6 @@ string OperationNode::identifier() const
   return string(operationCodeAsString(opcode)) + "(" + name + ")";
 }
 
-/* Full node identifier, including owner name.
- * used for logging and debug prints. */
 string OperationNode::full_identifier() const
 {
   string owner_str = owner->owner->name;

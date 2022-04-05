@@ -634,7 +634,7 @@ static void particle_batch_cache_fill_segments_proc_pos(ParticleCacheKey **path_
       seg_data[3] = total_len;
       co_prev = path[j].co;
     }
-    /* Assign length value*/
+    /* Assign length value. */
     *(float *)GPU_vertbuf_raw_step(length_step) = total_len;
     if (total_len > 0.0f) {
       /* Divide by total length to have a [0-1] number. */
@@ -1674,7 +1674,6 @@ GPUBatch *DRW_particles_batch_cache_get_edit_tip_points(Object *object,
   return cache->edit_tip_points;
 }
 
-/* Ensure all textures and buffers needed for GPU accelerated drawing. */
 bool particles_ensure_procedural_data(Object *object,
                                       ParticleSystem *psys,
                                       ModifierData *md,

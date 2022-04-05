@@ -185,6 +185,7 @@ IDTypeInfo IDType_ID_IP = {
     .name_plural = "ipos",
     .translation_context = "",
     .flags = IDTYPE_FLAGS_NO_COPY | IDTYPE_FLAGS_NO_LIBLINKING | IDTYPE_FLAGS_NO_ANIMDATA,
+    .asset_type_info = NULL,
 
     .init_data = NULL,
     .copy_data = NULL,
@@ -192,6 +193,7 @@ IDTypeInfo IDType_ID_IP = {
     .make_local = NULL,
     .foreach_id = NULL,
     .foreach_cache = NULL,
+    .foreach_path = NULL,
     .owner_get = NULL,
 
     .blend_write = NULL,
@@ -2093,17 +2095,6 @@ static bool seq_convert_callback(Sequence *seq, void *userdata)
 /* *************************************************** */
 /* External API - Only Called from do_versions() */
 
-/* Called from do_versions() in readfile.c to convert the old 'IPO/adrcode' system
- * to the new 'Animato/RNA' system.
- *
- * The basic method used here, is to loop over data-blocks which have IPO-data,
- * and add those IPO's to new AnimData blocks as Actions.
- * Action/NLA data only works well for Objects, so these only need to be checked for there.
- *
- * Data that has been converted should be freed immediately, which means that it is immediately
- * clear which data-blocks have yet to be converted, and also prevent freeing errors when we exit.
- */
-/* XXX currently done after all file reading... */
 void do_versions_ipos_to_animato(Main *bmain)
 {
   ListBase drivers = {NULL, NULL};

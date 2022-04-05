@@ -320,12 +320,19 @@ struct CachedData {
   DataStore<int> num_ngons;
   DataStore<array<int>> subd_creases_edge;
   DataStore<array<float>> subd_creases_weight;
+  DataStore<array<int>> subd_vertex_crease_indices;
+  DataStore<array<float>> subd_vertex_crease_weights;
 
   /* hair data */
   DataStore<array<float3>> curve_keys;
   DataStore<array<float>> curve_radius;
   DataStore<array<int>> curve_first_key;
   DataStore<array<int>> curve_shader;
+
+  /* point data */
+  DataStore<array<float3>> points;
+  DataStore<array<float>> radiuses;
+  DataStore<array<int>> points_shader;
 
   struct CachedAttribute {
     AttributeStandard std;
@@ -414,6 +421,7 @@ class AlembicObject : public Node {
     POLY_MESH,
     SUBD,
     CURVES,
+    POINTS,
   };
 
   bool need_shader_update = true;
@@ -472,6 +480,10 @@ class AlembicProcedural : public Procedural {
 
   /* The file path to the Alembic archive */
   NODE_SOCKET_API(ustring, filepath)
+
+  /* Layers for the Alembic archive. Layers are in the order in which they override data, with the
+   * latter elements overriding the former ones. */
+  NODE_SOCKET_API_ARRAY(array<ustring>, layers)
 
   /* The current frame to render. */
   NODE_SOCKET_API(float, frame)
@@ -549,6 +561,10 @@ class AlembicProcedural : public Procedural {
   /* Read the data for an ICurves at the specified frame_time. Creates corresponding Geometry and
    * Object Nodes in the Cycles scene if none exist yet. */
   void read_curves(AlembicObject *abc_object, Alembic::AbcGeom::Abc::chrono_t frame_time);
+
+  /* Read the data for an IPoints at the specified frame_time. Creates corresponding Geometry and
+   * Object Nodes in the Cycles scene if none exist yet. */
+  void read_points(AlembicObject *abc_object, Alembic::AbcGeom::Abc::chrono_t frame_time);
 
   /* Read the data for an ISubD at the specified frame_time. Creates corresponding Geometry and
    * Object Nodes in the Cycles scene if none exist yet. */

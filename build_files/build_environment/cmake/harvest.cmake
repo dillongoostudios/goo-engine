@@ -17,7 +17,7 @@
 # ***** END GPL LICENSE BLOCK *****
 
 ########################################################################
-# Copy all generated files to the proper strucure as blender prefers
+# Copy all generated files to the proper structure as blender prefers
 ########################################################################
 
 if(NOT DEFINED HARVEST_TARGET)
@@ -79,6 +79,8 @@ endfunction()
 harvest(alembic/include alembic/include "*.h")
 harvest(alembic/lib/libAlembic.a alembic/lib/libAlembic.a)
 harvest(alembic/bin alembic/bin "*")
+harvest(brotli/include brotli/include "*.h")
+harvest(brotli/lib brotli/lib "*.a")
 harvest(boost/include boost/include "*")
 harvest(boost/lib boost/lib "*.a")
 harvest(ffmpeg/include ffmpeg/include "*.h")

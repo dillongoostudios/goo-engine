@@ -33,7 +33,10 @@
 #include "BKE_global.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
+#include "BKE_node_tree_update.h"
 #include "BKE_tracking.h"
+
+#include "UI_resources.h"
 
 #include "node_common.h"
 #include "node_util.h"
@@ -117,27 +120,9 @@ static void localize(bNodeTree *localtree, bNodeTree *ntree)
       }
     }
 
-    bNodeSocket *output_sock = (bNodeSocket *)node->outputs.first;
-    bNodeSocket *local_output_sock = (bNodeSocket *)local_node->outputs.first;
-    while (output_sock != nullptr) {
-      local_output_sock->cache = output_sock->cache;
-      output_sock->cache = nullptr;
-      /* This is actually link to original: someone was just lazy enough and tried to save few
-       * bytes in the cost of readability. */
-      local_output_sock->new_sock = output_sock;
-
-      output_sock = output_sock->next;
-      local_output_sock = local_output_sock->next;
-    }
-
     node = node->next;
     local_node = local_node->next;
   }
-}
-
-static void local_sync(bNodeTree *localtree, bNodeTree *ntree)
-{
-  BKE_node_preview_sync_tree(ntree, localtree);
 }
 
 static void local_merge(Main *bmain, bNodeTree *localtree, bNodeTree *ntree)
@@ -149,11 +134,11 @@ static void local_merge(Main *bmain, bNodeTree *localtree, bNodeTree *ntree)
   BKE_node_preview_merge_tree(ntree, localtree, true);
 
   for (lnode = (bNode *)localtree->nodes.first; lnode; lnode = lnode->next) {
-    if (ntreeNodeExists(ntree, lnode->new_node)) {
+    if (bNode *orig_node = nodeFindNodebyName(ntree, lnode->name)) {
       if (ELEM(lnode->type, CMP_NODE_VIEWER, CMP_NODE_SPLITVIEWER)) {
         if (lnode->id && (lnode->flag & NODE_DO_OUTPUT)) {
           /* image_merge does sanity check for pointers */
-          BKE_image_merge(bmain, (Image *)lnode->new_node->id, (Image *)lnode->id);
+          BKE_image_merge(bmain, (Image *)orig_node->id, (Image *)lnode->id);
         }
       }
       else if (lnode->type == CMP_NODE_MOVIEDISTORTION) {
@@ -161,20 +146,19 @@ static void local_merge(Main *bmain, bNodeTree *localtree, bNodeTree *ntree)
          * and to achieve much better performance on further calls this context should be
          * copied back to original node */
         if (lnode->storage) {
-          if (lnode->new_node->storage) {
-            BKE_tracking_distortion_free((MovieDistortion *)lnode->new_node->storage);
+          if (orig_node->storage) {
+            BKE_tracking_distortion_free((MovieDistortion *)orig_node->storage);
           }
 
-          lnode->new_node->storage = BKE_tracking_distortion_copy(
-              (MovieDistortion *)lnode->storage);
+          orig_node->storage = BKE_tracking_distortion_copy((MovieDistortion *)lnode->storage);
         }
       }
 
       for (lsock = (bNodeSocket *)lnode->outputs.first; lsock; lsock = lsock->next) {
-        if (ntreeOutputExists(lnode->new_node, lsock->new_sock)) {
-          lsock->new_sock->cache = lsock->cache;
+        if (bNodeSocket *orig_socket = nodeFindSocket(orig_node, SOCK_OUT, lsock->identifier)) {
+          orig_socket->cache = lsock->cache;
           lsock->cache = nullptr;
-          lsock->new_sock = nullptr;
+          orig_socket = nullptr;
         }
       }
     }
@@ -186,11 +170,6 @@ static void update(bNodeTree *ntree)
   ntreeSetOutput(ntree);
 
   ntree_update_reroute_nodes(ntree);
-
-  if (ntree->update & NTREE_UPDATE_NODES) {
-    /* clean up preview cache, in case nodes have been removed */
-    BKE_node_preview_remove_unused(ntree);
-  }
 }
 
 static void composite_node_add_init(bNodeTree *UNUSED(bnodetree), bNode *bnode)
@@ -212,22 +191,20 @@ static bool composite_node_tree_socket_type_valid(bNodeTreeType *UNUSED(ntreetyp
 
 bNodeTreeType *ntreeType_Composite;
 
-void register_node_tree_type_cmp(void)
+void register_node_tree_type_cmp()
 {
-  bNodeTreeType *tt = ntreeType_Composite = (bNodeTreeType *)MEM_callocN(
-      sizeof(bNodeTreeType), "compositor node tree type");
+  bNodeTreeType *tt = ntreeType_Composite = MEM_cnew<bNodeTreeType>(__func__);
 
   tt->type = NTREE_COMPOSIT;
   strcpy(tt->idname, "CompositorNodeTree");
   strcpy(tt->ui_name, N_("Compositor"));
-  tt->ui_icon = 0; /* Defined in `drawnode.c`. */
+  tt->ui_icon = ICON_NODE_COMPOSITING;
   strcpy(tt->ui_description, N_("Compositing nodes"));
 
   tt->free_cache = free_cache;
   tt->free_node_cache = free_node_cache;
   tt->foreach_nodeclass = foreach_nodeclass;
   tt->localize = localize;
-  tt->local_sync = local_sync;
   tt->local_merge = local_merge;
   tt->update = update;
   tt->get_from_context = composite_get_from_context;
@@ -259,16 +236,6 @@ void ntreeCompositExecTree(Scene *scene,
 
 /* *********************************************** */
 
-/**
- * Update the outputs of the render layer nodes.
- * Since the outputs depend on the render engine, this part is a bit complex:
- * - #ntreeCompositUpdateRLayers is called and loops over all render layer nodes.
- * - Each render layer node calls the update function of the
- *   render engine that's used for its scene.
- * - The render engine calls RE_engine_register_pass for each pass.
- * - #RE_engine_register_pass calls #ntreeCompositRegisterPass,
- *   which calls #node_cmp_rlayers_register_pass for every render layer node.
- */
 void ntreeCompositUpdateRLayers(bNodeTree *ntree)
 {
   if (ntree == nullptr) {
@@ -282,25 +249,6 @@ void ntreeCompositUpdateRLayers(bNodeTree *ntree)
   }
 }
 
-void ntreeCompositRegisterPass(bNodeTree *ntree,
-                               Scene *scene,
-                               ViewLayer *view_layer,
-                               const char *name,
-                               eNodeSocketDatatype type)
-{
-  if (ntree == nullptr) {
-    return;
-  }
-
-  LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
-    if (node->type == CMP_NODE_R_LAYERS) {
-      node_cmp_rlayers_register_pass(ntree, node, scene, view_layer, name, type);
-    }
-  }
-}
-
-/* called from render pipeline, to tag render input and output */
-/* need to do all scenes, to prevent errors when you re-render 1 scene */
 void ntreeCompositTagRender(Scene *scene)
 {
   /* XXX Think using G_MAIN here is valid, since you want to update current file's scene nodes,
@@ -313,14 +261,15 @@ void ntreeCompositTagRender(Scene *scene)
     if (sce_iter->nodetree) {
       LISTBASE_FOREACH (bNode *, node, &sce_iter->nodetree->nodes) {
         if (node->id == (ID *)scene || node->type == CMP_NODE_COMPOSITE) {
-          nodeUpdate(sce_iter->nodetree, node);
+          BKE_ntree_update_tag_node_property(sce_iter->nodetree, node);
         }
         else if (node->type == CMP_NODE_TEXTURE) /* uses scene size_x/size_y */ {
-          nodeUpdate(sce_iter->nodetree, node);
+          BKE_ntree_update_tag_node_property(sce_iter->nodetree, node);
         }
       }
     }
   }
+  BKE_ntree_update_main(G_MAIN, nullptr);
 }
 
 /* XXX after render animation system gets a refresh, this call allows composite to end clean */

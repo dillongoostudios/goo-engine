@@ -23,7 +23,7 @@
 
 #include "node_function_util.hh"
 
-namespace blender::nodes {
+namespace blender::nodes::node_fn_align_euler_to_vector_cc {
 
 static void fn_node_align_euler_to_vector_declare(NodeDeclarationBuilder &b)
 {
@@ -69,14 +69,14 @@ static void align_rotations_auto_pivot(IndexMask mask,
       float3 old_axis;
       mul_v3_m3v3(old_axis, old_rotation, local_main_axis);
 
-      const float3 new_axis = vector.normalized();
-      float3 rotation_axis = float3::cross_high_precision(old_axis, new_axis);
+      const float3 new_axis = math::normalize(vector);
+      float3 rotation_axis = math::cross_high_precision(old_axis, new_axis);
       if (is_zero_v3(rotation_axis)) {
         /* The vectors are linearly dependent, so we fall back to another axis. */
-        rotation_axis = float3::cross_high_precision(old_axis, float3(1, 0, 0));
+        rotation_axis = math::cross_high_precision(old_axis, float3(1, 0, 0));
         if (is_zero_v3(rotation_axis)) {
           /* This is now guaranteed to not be zero. */
-          rotation_axis = float3::cross_high_precision(old_axis, float3(0, 1, 0));
+          rotation_axis = math::cross_high_precision(old_axis, float3(0, 1, 0));
         }
       }
 
@@ -207,16 +207,18 @@ static void fn_node_align_euler_to_vector_build_multi_function(NodeMultiFunction
   builder.construct_and_set_matching_fn<MF_AlignEulerToVector>(node.custom1, node.custom2);
 }
 
-}  // namespace blender::nodes
+}  // namespace blender::nodes::node_fn_align_euler_to_vector_cc
 
 void register_node_type_fn_align_euler_to_vector()
 {
+  namespace file_ns = blender::nodes::node_fn_align_euler_to_vector_cc;
+
   static bNodeType ntype;
 
   fn_node_type_base(
-      &ntype, FN_NODE_ALIGN_EULER_TO_VECTOR, "Align Euler to Vector", NODE_CLASS_CONVERTER, 0);
-  ntype.declare = blender::nodes::fn_node_align_euler_to_vector_declare;
-  ntype.draw_buttons = blender::nodes::fn_node_align_euler_to_vector_layout;
-  ntype.build_multi_function = blender::nodes::fn_node_align_euler_to_vector_build_multi_function;
+      &ntype, FN_NODE_ALIGN_EULER_TO_VECTOR, "Align Euler to Vector", NODE_CLASS_CONVERTER);
+  ntype.declare = file_ns::fn_node_align_euler_to_vector_declare;
+  ntype.draw_buttons = file_ns::fn_node_align_euler_to_vector_layout;
+  ntype.build_multi_function = file_ns::fn_node_align_euler_to_vector_build_multi_function;
   nodeRegisterType(&ntype);
 }

@@ -47,6 +47,7 @@
 #include "BKE_key.h"
 #include "BKE_main.h"
 #include "BKE_mesh.h"
+#include "BKE_mesh_runtime.h"
 #include "BKE_multires.h"
 #include "BKE_object.h"
 #include "BKE_paint.h"
@@ -547,6 +548,8 @@ static void sculpt_undo_geometry_restore_data(SculptUndoNodeGeometry *geometry, 
       &geometry->pdata, &mesh->pdata, CD_MASK_MESH.pmask, CD_DUPLICATE, geometry->totpoly);
 
   BKE_mesh_update_customdata_pointers(mesh, false);
+
+  BKE_mesh_runtime_clear_cache(mesh);
 }
 
 static void sculpt_undo_geometry_free_data(SculptUndoNodeGeometry *geometry)
@@ -1107,10 +1110,10 @@ static void sculpt_undo_store_coords(Object *ob, SculptUndoNode *unode)
   BKE_pbvh_vertex_iter_begin (ss->pbvh, unode->node, vd, PBVH_ITER_ALL) {
     copy_v3_v3(unode->co[vd.i], vd.co);
     if (vd.no) {
-      copy_v3_v3_short(unode->no[vd.i], vd.no);
+      copy_v3_v3(unode->no[vd.i], vd.no);
     }
     else {
-      normal_float_to_short_v3(unode->no[vd.i], vd.fno);
+      copy_v3_v3(unode->no[vd.i], vd.fno);
     }
 
     if (ss->deform_modifiers_active) {
@@ -1598,7 +1601,6 @@ void ED_sculpt_undo_geometry_end(struct Object *ob)
   SCULPT_undo_push_end();
 }
 
-/* Export for ED_undo_sys. */
 void ED_sculpt_undosys_type(UndoType *ut)
 {
   ut->name = "Sculpt";

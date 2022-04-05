@@ -84,7 +84,6 @@ void GLStateManager::apply_state()
   active_fb->apply_state();
 };
 
-/* Will set all the states regardless of the current ones. */
 void GLStateManager::force_state()
 {
   /* Little exception for clip distances since they need to keep the old count correct. */
@@ -378,7 +377,7 @@ void GLStateManager::set_blend(const eGPUBlend value)
       break;
     }
     case GPU_BLEND_ADDITIVE: {
-      /* Do not let alpha accumulate but premult the source RGB by it. */
+      /* Do not let alpha accumulate but pre-multiply the source RGB by it. */
       src_rgb = GL_SRC_ALPHA;
       dst_rgb = GL_ONE;
       src_alpha = GL_ZERO;
@@ -482,7 +481,6 @@ void GLStateManager::texture_bind(Texture *tex_, eGPUSamplerState sampler_type, 
   dirty_texture_binds_ |= 1ULL << unit;
 }
 
-/* Bind the texture to slot 0 for editing purpose. Used by legacy pipeline. */
 void GLStateManager::texture_bind_temp(GLTexture *tex)
 {
   glActiveTexture(GL_TEXTURE0);

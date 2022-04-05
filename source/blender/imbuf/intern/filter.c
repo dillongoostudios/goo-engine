@@ -420,12 +420,6 @@ static int check_pixel_assigned(
   return res;
 }
 
-/**
- * if alpha is zero, it checks surrounding pixels and averages color. sets new alphas to 1.0
- *
- * When a mask is given, only effect pixels with a mask value of 1,
- * defined as #BAKE_MASK_MARGIN in rendercore.c
- */
 void IMB_filter_extend(struct ImBuf *ibuf, char *mask, int filter)
 {
   const int width = ibuf->x;
@@ -557,7 +551,6 @@ void IMB_filter_extend(struct ImBuf *ibuf, char *mask, int filter)
   }
 }
 
-/* threadsafe version, only recreates existing maps */
 void IMB_remakemipmap(ImBuf *ibuf, int use_filter)
 {
   ImBuf *hbuf = ibuf;
@@ -594,7 +587,6 @@ void IMB_remakemipmap(ImBuf *ibuf, int use_filter)
   }
 }
 
-/* frees too (if there) and recreates new data */
 void IMB_makemipmap(ImBuf *ibuf, int use_filter)
 {
   ImBuf *hbuf = ibuf;

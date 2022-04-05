@@ -298,6 +298,8 @@ class GRAPH_MT_key(Menu):
         layout.operator("graph.decimate", text="Decimate (Allowed Change)").mode = 'ERROR'
         layout.operator_context = operator_context
 
+        layout.menu("GRAPH_MT_slider", text="Slider Operators")
+
         layout.operator("graph.clean").channels = False
         layout.operator("graph.clean", text="Clean Channels").channels = True
         layout.operator("graph.smooth")
@@ -333,9 +335,31 @@ class GRAPH_MT_key_snap(Menu):
         layout.operator("graph.snap", text="Selection to Nearest Second").type = 'NEAREST_SECOND'
         layout.operator("graph.snap", text="Selection to Nearest Marker").type = 'NEAREST_MARKER'
         layout.operator("graph.snap", text="Flatten Handles").type = 'HORIZONTAL'
+        layout.operator("graph.equalize_handles", text="Equalize Handles").side = 'BOTH'
         layout.separator()
         layout.operator("graph.frame_jump", text="Cursor to Selection")
         layout.operator("graph.snap_cursor_value", text="Cursor Value to Selection")
+
+class GRAPH_MT_slider(Menu):
+    bl_label = "Slider Operators"
+
+    def draw(self, _context):
+        layout = self.layout
+
+        layout.operator("graph.breakdown", text="Breakdown")
+        layout.operator("graph.blend_to_neighbor", text="Blend To Neighbor")
+
+
+class GRAPH_MT_view_pie(Menu):
+    bl_label = "View"
+
+    def draw(self, _context):
+        layout = self.layout
+
+        pie = layout.menu_pie()
+        pie.operator("graph.view_all")
+        pie.operator("graph.view_selected", icon='ZOOM_SELECTED')
+        pie.operator("graph.view_frame")
 
 
 class GRAPH_MT_delete(Menu):
@@ -463,11 +487,13 @@ classes = (
     GRAPH_MT_key,
     GRAPH_MT_key_transform,
     GRAPH_MT_key_snap,
+    GRAPH_MT_slider,
     GRAPH_MT_delete,
     GRAPH_MT_context_menu,
     GRAPH_MT_channel_context_menu,
     GRAPH_MT_pivot_pie,
     GRAPH_MT_snap_pie,
+    GRAPH_MT_view_pie,
     GRAPH_PT_filters,
 )
 

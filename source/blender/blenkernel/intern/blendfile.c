@@ -78,7 +78,9 @@
 /** \name High Level `.blend` file read/write.
  * \{ */
 
-static bool clean_paths_visit_cb(void *UNUSED(userdata), char *path_dst, const char *path_src)
+static bool foreach_path_clean_cb(BPathForeachPathData *UNUSED(bpath_data),
+                                  char *path_dst,
+                                  const char *path_src)
 {
   strcpy(path_dst, path_src);
   BLI_path_slash_native(path_dst);
@@ -86,13 +88,16 @@ static bool clean_paths_visit_cb(void *UNUSED(userdata), char *path_dst, const c
 }
 
 /* make sure path names are correct for OS */
-static void clean_paths(Main *main)
+static void clean_paths(Main *bmain)
 {
-  Scene *scene;
+  BKE_bpath_foreach_path_main(&(BPathForeachPathData){
+      .bmain = bmain,
+      .callback_function = foreach_path_clean_cb,
+      .flag = BKE_BPATH_FOREACH_PATH_SKIP_MULTIFILE,
+      .user_data = NULL,
+  });
 
-  BKE_bpath_traverse_main(main, clean_paths_visit_cb, BKE_BPATH_TRAVERSE_SKIP_MULTIFILE, NULL);
-
-  for (scene = main->scenes.first; scene; scene = scene->id.next) {
+  LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
     BLI_path_slash_native(scene->r.pic);
   }
 }
@@ -355,12 +360,12 @@ static void setup_app_data(bContext *C,
 
   /* startup.blend or recovered startup */
   if (is_startup) {
-    bmain->name[0] = '\0';
+    bmain->filepath[0] = '\0';
   }
   else if (recover) {
-    /* In case of autosave or quit.blend, use original filename instead. */
+    /* In case of autosave or quit.blend, use original filepath instead. */
     bmain->recovered = 1;
-    BLI_strncpy(bmain->name, bfd->filename, FILE_MAX);
+    STRNCPY(bmain->filepath, bfd->filepath);
   }
 
   /* baseflags, groups, make depsgraph, etc */
@@ -447,14 +452,6 @@ static void handle_subversion_warning(Main *main, BlendFileReadReport *reports)
   }
 }
 
-/**
- * Shared setup function that makes the data from `bfd` into the current blend file,
- * replacing the contents of #G.main.
- * This uses the bfd #BKE_blendfile_read and similarly named functions.
- *
- * This is done in a separate step so the caller may perform actions after it is known the file
- * loaded correctly but before the file replaces the existing blend file contents.
- */
 void BKE_blendfile_read_setup_ex(bContext *C,
                                  BlendFileData *bfd,
                                  const struct BlendFileReadParams *params,
@@ -480,9 +477,6 @@ void BKE_blendfile_read_setup(bContext *C,
   BKE_blendfile_read_setup_ex(C, bfd, params, reports, false, NULL);
 }
 
-/**
- * \return Blend file data, this must be passed to #BKE_blendfile_read_setup when non-NULL.
- */
 struct BlendFileData *BKE_blendfile_read(const char *filepath,
                                          const struct BlendFileReadParams *params,
                                          BlendFileReadReport *reports)
@@ -502,9 +496,6 @@ struct BlendFileData *BKE_blendfile_read(const char *filepath,
   return bfd;
 }
 
-/**
- * \return Blend file data, this must be passed to #BKE_blendfile_read_setup when non-NULL.
- */
 struct BlendFileData *BKE_blendfile_read_from_memory(const void *filebuf,
                                                      int filelength,
                                                      const struct BlendFileReadParams *params,
@@ -520,10 +511,6 @@ struct BlendFileData *BKE_blendfile_read_from_memory(const void *filebuf,
   return bfd;
 }
 
-/**
- * \return Blend file data, this must be passed to #BKE_blendfile_read_setup when non-NULL.
- * \note `memfile` is the undo buffer.
- */
 struct BlendFileData *BKE_blendfile_read_from_memfile(Main *bmain,
                                                       struct MemFile *memfile,
                                                       const struct BlendFileReadParams *params,
@@ -546,10 +533,6 @@ struct BlendFileData *BKE_blendfile_read_from_memfile(Main *bmain,
   return bfd;
 }
 
-/**
- * Utility to make a file 'empty' used for startup to optionally give an empty file.
- * Handy for tests.
- */
 void BKE_blendfile_read_make_empty(bContext *C)
 {
   Main *bmain = CTX_data_main(C);
@@ -568,7 +551,6 @@ void BKE_blendfile_read_make_empty(bContext *C)
   FOREACH_MAIN_LISTBASE_END;
 }
 
-/* only read the userdef from a .blend */
 UserDef *BKE_blendfile_userdef_read(const char *filepath, ReportList *reports)
 {
   BlendFileData *bfd;
@@ -671,10 +653,6 @@ UserDef *BKE_blendfile_userdef_from_defaults(void)
   return userdef;
 }
 
-/**
- * Only write the userdef in a .blend
- * \return success
- */
 bool BKE_blendfile_userdef_write(const char *filepath, ReportList *reports)
 {
   Main *mainb = MEM_callocN(sizeof(Main), "empty main");
@@ -695,13 +673,6 @@ bool BKE_blendfile_userdef_write(const char *filepath, ReportList *reports)
   return ok;
 }
 
-/**
- * Only write the userdef in a .blend, merging with the existing blend file.
- * \return success
- *
- * \note In the future we should re-evaluate user preferences,
- * possibly splitting out system/hardware specific prefs.
- */
 bool BKE_blendfile_userdef_write_app_template(const char *filepath, ReportList *reports)
 {
   /* if it fails, overwrite is OK. */
@@ -872,10 +843,6 @@ static void blendfile_write_partial_cb(void *UNUSED(handle), Main *UNUSED(bmain)
   }
 }
 
-/**
- * \param remap_mode: Choose the kind of path remapping or none #eBLO_WritePathRemap.
- * \return Success.
- */
 bool BKE_blendfile_write_partial(Main *bmain_src,
                                  const char *filepath,
                                  const int write_flags,
@@ -887,11 +854,12 @@ bool BKE_blendfile_write_partial(Main *bmain_src,
   int a, retval;
 
   void *path_list_backup = NULL;
-  const int path_list_flag = (BKE_BPATH_TRAVERSE_SKIP_LIBRARY | BKE_BPATH_TRAVERSE_SKIP_MULTIFILE);
+  const eBPathForeachFlag path_list_flag = (BKE_BPATH_FOREACH_PATH_SKIP_LINKED |
+                                            BKE_BPATH_FOREACH_PATH_SKIP_MULTIFILE);
 
   /* This is needed to be able to load that file as a real one later
-   * (otherwise main->name will not be set at read time). */
-  BLI_strncpy(bmain_dst->name, bmain_src->name, sizeof(bmain_dst->name));
+   * (otherwise `main->filepath` will not be set at read time). */
+  STRNCPY(bmain_dst->filepath, bmain_src->filepath);
 
   BLO_main_expander(blendfile_write_partial_cb);
   BLO_expand_main(NULL, bmain_src);

@@ -871,6 +871,7 @@ struct GPUShader *EEVEE_shaders_subsurface_translucency_sh_get()
 }
 
 /** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Volumes
  * \{ */
@@ -927,10 +928,7 @@ struct GPUShader *EEVEE_shaders_volumes_integration_sh_get()
         datatoc_volumetric_geom_glsl,
         datatoc_volumetric_integration_frag_glsl,
         e_data.lib,
-        USE_VOLUME_OPTI ? "#extension GL_ARB_shader_image_load_store: enable\n"
-                          "#extension GL_ARB_shading_language_420pack: enable\n"
-                          "#define USE_VOLUME_OPTI\n" SHADER_DEFINES :
-                          SHADER_DEFINES);
+        USE_VOLUME_OPTI ? "#define USE_VOLUME_OPTI\n" SHADER_DEFINES : SHADER_DEFINES);
   }
   return e_data.volumetric_integration_sh;
 }
@@ -1315,7 +1313,6 @@ Material *EEVEE_material_default_error_get(void)
   return e_data.error_mat;
 }
 
-/* Configure a default nodetree with the given material. */
 struct bNodeTree *EEVEE_shader_default_surface_nodetree(Material *ma)
 {
   /* WARNING: This function is not threadsafe. Which is not a problem for the moment. */
@@ -1343,7 +1340,6 @@ struct bNodeTree *EEVEE_shader_default_surface_nodetree(Material *ma)
   return e_data.surface.ntree;
 }
 
-/* Configure a default nodetree with the given world. */
 struct bNodeTree *EEVEE_shader_default_world_nodetree(World *wo)
 {
   /* WARNING: This function is not threadsafe. Which is not a problem for the moment. */
@@ -1398,6 +1394,9 @@ static char *eevee_get_defines(int options)
   }
   if ((options & VAR_MAT_HAIR) != 0) {
     BLI_dynstr_append(ds, "#define HAIR_SHADER\n");
+  }
+  if ((options & VAR_MAT_POINTCLOUD) != 0) {
+    BLI_dynstr_append(ds, "#define POINTCLOUD_SHADER\n");
   }
   if ((options & VAR_WORLD_PROBE) != 0) {
     BLI_dynstr_append(ds, "#define PROBE_CAPTURE\n");
@@ -1537,7 +1536,6 @@ static struct GPUMaterial *eevee_material_get_ex(
   return mat;
 }
 
-/* NOTE: Compilation is not deferred. */
 struct GPUMaterial *EEVEE_material_default_get(struct Scene *scene, Material *ma, int options)
 {
   Material *def_ma = (ma && (options & VAR_MAT_VOLUME)) ? BKE_material_default_volume() :

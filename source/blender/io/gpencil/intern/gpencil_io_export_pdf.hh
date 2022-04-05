@@ -45,21 +45,29 @@ class GpencilExporterPDF : public GpencilExporter {
 
  protected:
  private:
-  /* PDF document. */
+  /** PDF document. */
   HPDF_Doc pdf_;
-  /* PDF page. */
+  /** PDF page. */
   HPDF_Page page_;
 
+  /** Create PDF document. */
   bool create_document();
+  /** Add page. */
   bool add_page();
+  /** Main layer loop. */
   void export_gpencil_layers();
 
-  void export_stroke_to_polyline(bGPDlayer *gpl,
-                                 bGPDstroke *gps,
-                                 const bool is_stroke,
-                                 const bool do_fill,
-                                 const bool normalize);
-  void color_set(bGPDlayer *gpl, const bool do_fill);
+  /**
+   * Export a stroke using poly-line or polygon
+   * \param do_fill: True if the stroke is only fill
+   */
+  void export_stroke_to_polyline(
+      bGPDlayer *gpl, bGPDstroke *gps, bool is_stroke, bool do_fill, bool normalize);
+  /**
+   * Set color.
+   * \param do_fill: True if the stroke is only fill.
+   */
+  void color_set(bGPDlayer *gpl, bool do_fill);
 };
 
 }  // namespace blender::io::gpencil
