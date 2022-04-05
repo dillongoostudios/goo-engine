@@ -2587,7 +2587,6 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
 
     if (is_custom) {
       LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
-        printf("ntree->type %d\n", ntree->type);
         if (ntree->type == NTREE_SHADER) {
           version_old_custom_nodes(bmain, ntree);
         }
