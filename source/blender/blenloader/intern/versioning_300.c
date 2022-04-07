@@ -1341,9 +1341,9 @@ static bool version_fix_seq_meta_range(Sequence *seq, void *user_data)
   return true;
 }
 
-static void version_old_custom_nodes(struct Main* main, bNodeTree *ntree) {
+static void version_old_custom_nodes(bNodeTree *ntree) {
   if (ntree == NULL) return;
-  
+
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
     if (STREQ(node->idname, "ShaderNodeFloatCurve")) {
         // node->storage points to garbage.
@@ -2584,17 +2584,18 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
         break;
       }
     }
-
-    if (is_custom) {
+    
+    /* Commented out so we crash instead of overwriting data, use the patching script instead */
+    if (is_custom && false) {
       LISTBASE_FOREACH (bNodeTree *, ntree, &bmain->nodetrees) {
-        if (ntree->type == NTREE_SHADER) {
-          version_old_custom_nodes(bmain, ntree);
+        if (ntree->type == NTREE_SHADER || ntree->type == NTREE_GEOMETRY) {
+          version_old_custom_nodes(ntree);
         }
       }
 
       LISTBASE_FOREACH (Material *, mat, &bmain->materials) {
         bNodeTree *ntree = mat->nodetree;
-        version_old_custom_nodes(bmain, ntree);
+        version_old_custom_nodes(ntree);
       }
     }
   }
