@@ -23,6 +23,9 @@
 
 #include "RNA_enum_types.h"
 
+#include "UI_interface.h"
+#include "UI_resources.h"
+
 #include "../node_shader_util.hh"
 
 #define TEST_SDF 255
@@ -512,6 +515,12 @@ static void node_shader_update_sdf_primitive(bNodeTree *ntree, bNode *node)
   }
 }
 
+static void node_shader_buts_sdf_primitive(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout, ptr, "mode", 0, "", ICON_NONE);
+  uiItemR(layout, ptr, "invert", 0, NULL, ICON_NONE);
+}
+
 /* node type definition */
 void register_node_type_sh_sdf_primitive(void)
 {
@@ -526,6 +535,7 @@ void register_node_type_sh_sdf_primitive(void)
   node_type_gpu(&ntype, node_shader_gpu_sdf_primitive);
   ntype.labelfunc = &node_shader_label_sdf_primitive;
   node_type_update(&ntype, node_shader_update_sdf_primitive);
+  ntype.draw_buttons = node_shader_buts_sdf_primitive;
 
   nodeRegisterType(&ntype);
 }
