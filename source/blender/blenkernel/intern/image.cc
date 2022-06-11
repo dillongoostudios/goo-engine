@@ -1661,6 +1661,7 @@ struct StampDataCustomField {
 
 struct StampData {
   char file[512];
+  char filename[512];
   char note[512];
   char date[512];
   char marker[512];
@@ -1698,8 +1699,12 @@ static void stampdata(
   if (scene->r.stamp & R_STAMP_FILENAME) {
     const char *blendfile_path = BKE_main_blendfile_path_from_global();
     SNPRINTF(stamp_data->file,
-             do_prefix ? "File %s" : "%s",
-             (blendfile_path[0] != '\0') ? blendfile_path : "<untitled>");
+             do_prefix ? "Path %s" : "%s",
+             (blendfile_path[0] != '\0') ? blendfile_path : "<unsaved>");
+
+    const char* filename = BLI_path_basename(blendfile_path);
+    SNPRINTF(stamp_data->filename,
+             do_prefix ? "File %s" : "%s", (filename[0] != '\0') ? filename : "<untitled>");
   }
   else {
     stamp_data->file[0] = '\0';
@@ -2047,6 +2052,28 @@ void BKE_image_stamp_buf(Scene *scene,
 
     /* and draw the text. */
     BLF_position(mono, x, y + y_ofs, 0.0);
+    BLF_draw_buffer(mono, stamp_data.filename, sizeof(stamp_data.filename));
+
+    /* the extra pixel for background. */
+    y -= BUFF_MARGIN_Y * 2;
+
+    /* Draw file *path* here, under the basename */
+    y -= h;
+
+    /* also a little of space to the background. */
+    buf_rectfill_area(rect,
+                      rectf,
+                      width,
+                      height,
+                      scene->r.bg_stamp,
+                      display,
+                      x - BUFF_MARGIN_X,
+                      y - BUFF_MARGIN_Y,
+                      w + BUFF_MARGIN_X,
+                      y + h + BUFF_MARGIN_Y);
+
+    /* and draw the text. */
+    BLF_position(mono, x, y + y_ofs, 0.0);
     BLF_draw_buffer(mono, stamp_data.file, sizeof(stamp_data.file));
 
     /* the extra pixel for background. */
@@ -2146,6 +2173,29 @@ void BKE_image_stamp_buf(Scene *scene,
   }
 
   /* Top left corner, below: File, Date, Memory, Render-time, Host-name. */
+  if (TEXT_SIZE_CHECK(stamp_data.frame, w, h)) {
+    y -= h;
+
+    /* and space for background. */
+    buf_rectfill_area(rect,
+                      rectf,
+                      width,
+                      height,
+                      scene->r.bg_stamp,
+                      display,
+                      0,
+                      y - BUFF_MARGIN_Y,
+                      w + BUFF_MARGIN_X,
+                      y + h + BUFF_MARGIN_Y);
+
+    BLF_position(mono, x, y + y_ofs, 0.0);
+    BLF_draw_buffer(mono, stamp_data.frame, sizeof(stamp_data.frame));
+
+    /* the extra pixel for background. */
+    y -= BUFF_MARGIN_Y * 2;
+  }
+
+  /* Top left corner, below File, Date, Memory, Rendertime, Hostname */
   BLF_enable(mono, BLF_WORD_WRAP);
   if (TEXT_SIZE_CHECK_WORD_WRAP(stamp_data.note, w, h)) {
     y -= h;
@@ -2211,28 +2261,6 @@ void BKE_image_stamp_buf(Scene *scene,
     /* and pad the text. */
     BLF_position(mono, x, y + y_ofs, 0.0);
     BLF_draw_buffer(mono, stamp_data.time, sizeof(stamp_data.time));
-
-    /* space width. */
-    x += w + pad;
-  }
-
-  if (TEXT_SIZE_CHECK(stamp_data.frame, w, h)) {
-
-    /* extra space for background. */
-    buf_rectfill_area(rect,
-                      rectf,
-                      width,
-                      height,
-                      scene->r.bg_stamp,
-                      display,
-                      x - BUFF_MARGIN_X,
-                      y - BUFF_MARGIN_Y,
-                      x + w + BUFF_MARGIN_X,
-                      y + h + BUFF_MARGIN_Y);
-
-    /* and pad the text. */
-    BLF_position(mono, x, y + y_ofs, 0.0);
-    BLF_draw_buffer(mono, stamp_data.frame, sizeof(stamp_data.frame));
 
     /* space width. */
     x += w + pad;
