@@ -346,10 +346,6 @@ set(GLSL_SRC
   engines/eevee/shaders/volumetric_scatter_frag.glsl
   engines/eevee/shaders/volumetric_integration_frag.glsl
 
-  engines/eevee/shaders/effect_ssgi_trace_frag.glsl
-  engines/eevee/shaders/effect_ssgi_resolve_frag.glsl
-  engines/eevee/shaders/effect_ssgi_filter_frag.glsl
-
   engines/workbench/shaders/workbench_cavity_lib.glsl
   engines/workbench/shaders/workbench_common_lib.glsl
   engines/workbench/shaders/workbench_composite_frag.glsl
@@ -381,7 +377,6 @@ set(GLSL_SRC
   engines/workbench/workbench_shader_shared.h
 
   intern/shaders/common_colormanagement_lib.glsl
-  intern/shaders/common_colorpacking_lib.glsl
   intern/shaders/common_globals_lib.glsl
   intern/shaders/common_pointcloud_lib.glsl
   intern/shaders/common_hair_lib.glsl

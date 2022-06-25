@@ -9,8 +9,6 @@
 /* -------------------------------------------------------------------- */
 /** \name Microfacet GGX distribution
  * \{ */
- 
-/* SSGI - TODO Lambert, cosine */
 
 #define USE_VISIBLE_NORMAL 1
 
