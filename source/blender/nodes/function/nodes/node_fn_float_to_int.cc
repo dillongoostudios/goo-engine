@@ -1,21 +1,8 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <cmath>
 
+#include "BLI_noise.hh"
 #include "BLI_string.h"
 
 #include "RNA_enum_types.h"
@@ -54,11 +41,15 @@ static void node_float_to_int_label(const bNodeTree *UNUSED(ntree),
 
 static const fn::MultiFunction *get_multi_function(bNode &bnode)
 {
-  static fn::CustomMF_SI_SO<float, int> round_fn{"Round", [](float a) { return (int)round(a); }};
-  static fn::CustomMF_SI_SO<float, int> floor_fn{"Floor", [](float a) { return (int)floor(a); }};
-  static fn::CustomMF_SI_SO<float, int> ceil_fn{"Ceiling", [](float a) { return (int)ceil(a); }};
-  static fn::CustomMF_SI_SO<float, int> trunc_fn{"Truncate",
-                                                 [](float a) { return (int)trunc(a); }};
+  static auto exec_preset = fn::CustomMF_presets::AllSpanOrSingle();
+  static fn::CustomMF_SI_SO<float, int> round_fn{
+      "Round", [](float a) { return (int)round(a); }, exec_preset};
+  static fn::CustomMF_SI_SO<float, int> floor_fn{
+      "Floor", [](float a) { return (int)floor(a); }, exec_preset};
+  static fn::CustomMF_SI_SO<float, int> ceil_fn{
+      "Ceiling", [](float a) { return (int)ceil(a); }, exec_preset};
+  static fn::CustomMF_SI_SO<float, int> trunc_fn{
+      "Truncate", [](float a) { return (int)trunc(a); }, exec_preset};
 
   switch (static_cast<FloatToIntRoundingMode>(bnode.custom1)) {
     case FN_NODE_FLOAT_TO_INT_ROUND:

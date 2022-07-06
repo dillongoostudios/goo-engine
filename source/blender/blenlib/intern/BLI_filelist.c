@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
@@ -111,8 +97,8 @@ static int bli_compare(struct direntry *entry1, struct direntry *entry2)
 }
 
 struct BuildDirCtx {
-  struct direntry *files; /* array[nrfiles] */
-  int nrfiles;
+  struct direntry *files; /* array[files_num] */
+  int files_num;
 };
 
 /**
@@ -168,7 +154,7 @@ static void bli_builddir(struct BuildDirCtx *dir_ctx, const char *dirname)
     if (newnum) {
       if (dir_ctx->files) {
         void *const tmp = MEM_reallocN(dir_ctx->files,
-                                       (dir_ctx->nrfiles + newnum) * sizeof(struct direntry));
+                                       (dir_ctx->files_num + newnum) * sizeof(struct direntry));
         if (tmp) {
           dir_ctx->files = (struct direntry *)tmp;
         }
@@ -185,7 +171,7 @@ static void bli_builddir(struct BuildDirCtx *dir_ctx, const char *dirname)
 
       if (dir_ctx->files) {
         struct dirlink *dlink = (struct dirlink *)dirbase.first;
-        struct direntry *file = &dir_ctx->files[dir_ctx->nrfiles];
+        struct direntry *file = &dir_ctx->files[dir_ctx->files_num];
         while (dlink) {
           char fullname[PATH_MAX];
           memset(file, 0, sizeof(struct direntry));
@@ -200,7 +186,7 @@ static void bli_builddir(struct BuildDirCtx *dir_ctx, const char *dirname)
              * does not support stat on '\\SERVER\foo\..', sigh... */
             file->type |= S_IFDIR;
           }
-          dir_ctx->nrfiles++;
+          dir_ctx->files_num++;
           file++;
           dlink = dlink->next;
         }
@@ -213,7 +199,7 @@ static void bli_builddir(struct BuildDirCtx *dir_ctx, const char *dirname)
       BLI_freelist(&dirbase);
       if (dir_ctx->files) {
         qsort(dir_ctx->files,
-              dir_ctx->nrfiles,
+              dir_ctx->files_num,
               sizeof(struct direntry),
               (int (*)(const void *, const void *))bli_compare);
       }
@@ -233,7 +219,7 @@ unsigned int BLI_filelist_dir_contents(const char *dirname, struct direntry **r_
 {
   struct BuildDirCtx dir_ctx;
 
-  dir_ctx.nrfiles = 0;
+  dir_ctx.files_num = 0;
   dir_ctx.files = NULL;
 
   bli_builddir(&dir_ctx, dirname);
@@ -247,7 +233,7 @@ unsigned int BLI_filelist_dir_contents(const char *dirname, struct direntry **r_
     *r_filelist = MEM_mallocN(sizeof(**r_filelist), __func__);
   }
 
-  return dir_ctx.nrfiles;
+  return dir_ctx.files_num;
 }
 
 void BLI_filelist_entry_size_to_string(const struct stat *st,

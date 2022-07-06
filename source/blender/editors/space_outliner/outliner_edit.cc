@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2004 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2004 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spoutliner
@@ -46,6 +30,7 @@
 #include "BKE_context.h"
 #include "BKE_idtype.h"
 #include "BKE_lib_id.h"
+#include "BKE_lib_override.h"
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
@@ -241,8 +226,11 @@ static int outliner_item_openclose_invoke(bContext *C, wmOperator *op, const wmE
   const bool toggle_all = RNA_boolean_get(op->ptr, "all");
 
   float view_mval[2];
-  UI_view2d_region_to_view(
-      &region->v2d, event->mval[0], event->mval[1], &view_mval[0], &view_mval[1]);
+
+  int mval[2];
+  WM_event_drag_start_mval(event, region, mval);
+
+  UI_view2d_region_to_view(&region->v2d, mval[0], mval[1], &view_mval[0], &view_mval[1]);
 
   TreeElement *te = outliner_find_item_at_y(space_outliner, &space_outliner->tree, view_mval[1]);
 
@@ -256,7 +244,7 @@ static int outliner_item_openclose_invoke(bContext *C, wmOperator *op, const wmE
     outliner_tag_redraw_avoid_rebuild_on_open_change(space_outliner, region);
 
     /* Only toggle once for single click toggling */
-    if (event->type == LEFTMOUSE) {
+    if ((event->type == LEFTMOUSE) && (event->val != KM_CLICK_DRAG)) {
       return OPERATOR_FINISHED;
     }
 
@@ -459,6 +447,17 @@ static void id_delete(bContext *C, ReportList *reports, TreeElement *te, TreeSto
   BLI_assert(((tselem->type == TSE_SOME_ID) && (te->idcode != 0)) ||
              (tselem->type == TSE_LAYER_COLLECTION));
   UNUSED_VARS_NDEBUG(te);
+
+  if (ID_IS_OVERRIDE_LIBRARY(id)) {
+    if (!ID_IS_OVERRIDE_LIBRARY_REAL(id) ||
+        (id->override_library->flag & IDOVERRIDE_LIBRARY_FLAG_NO_HIERARCHY) == 0) {
+      BKE_reportf(reports,
+                  RPT_WARNING,
+                  "Cannot delete library override id '%s', it is part of an override hierarchy",
+                  id->name);
+      return;
+    }
+  }
 
   if (te->idcode == ID_LI && ((Library *)id)->parent != nullptr) {
     BKE_reportf(reports, RPT_WARNING, "Cannot delete indirectly linked library '%s'", id->name);
@@ -742,7 +741,7 @@ void id_remap_fn(bContext *C,
   RNA_enum_set(&op_props, "id_type", GS(tselem->id->name));
   RNA_enum_set_identifier(C, &op_props, "old_id", tselem->id->name + 2);
 
-  WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_props);
+  WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_props, nullptr);
 
   WM_operator_properties_free(&op_props);
 }
@@ -888,10 +887,10 @@ static int lib_relocate(
     RNA_string_set(&op_props, "directory", dir);
     RNA_string_set(&op_props, "filename", filename);
 
-    ret = WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, &op_props);
+    ret = WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, &op_props, nullptr);
   }
   else {
-    ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_props);
+    ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_props, nullptr);
   }
 
   WM_operator_properties_free(&op_props);

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edtransform
@@ -222,6 +206,12 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
     t->obedit_type = -1;
   }
 
+  if (t->options & CTX_CURSOR) {
+    /* Cursor should always use the drag start as the combination of click-drag to place & move
+     * doesn't work well if the click location isn't used when transforming. */
+    t->flag |= T_EVENT_DRAG_START;
+  }
+
   /* Many kinds of transform only use a single handle. */
   if (t->data_container == NULL) {
     t->data_container = MEM_callocN(sizeof(*t->data_container), __func__);
@@ -232,7 +222,12 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
 
   int mval[2];
   if (event) {
-    copy_v2_v2_int(mval, event->mval);
+    if (t->flag & T_EVENT_DRAG_START) {
+      WM_event_drag_start_mval(event, region, mval);
+    }
+    else {
+      copy_v2_v2_int(mval, event->mval);
+    }
   }
   else {
     zero_v2_int(mval);
@@ -723,9 +718,6 @@ void postTrans(bContext *C, TransInfo *t)
   if (t->draw_handle_view) {
     ED_region_draw_cb_exit(t->region->type, t->draw_handle_view);
   }
-  if (t->draw_handle_apply) {
-    ED_region_draw_cb_exit(t->region->type, t->draw_handle_apply);
-  }
   if (t->draw_handle_pixel) {
     ED_region_draw_cb_exit(t->region->type, t->draw_handle_pixel);
   }
@@ -747,7 +739,8 @@ void postTrans(bContext *C, TransInfo *t)
   if (t->data_len_all != 0) {
     FOREACH_TRANS_DATA_CONTAINER (t, tc) {
       /* free data malloced per trans-data */
-      if (ELEM(t->obedit_type, OB_CURVE, OB_SURF, OB_GPENCIL) || (t->spacetype == SPACE_GRAPH)) {
+      if (ELEM(t->obedit_type, OB_CURVES_LEGACY, OB_SURF, OB_GPENCIL) ||
+          (t->spacetype == SPACE_GRAPH)) {
         TransData *td = tc->data;
         for (int a = 0; a < tc->data_len; a++, td++) {
           if (td->flag & TD_BEZTRIPLE) {
@@ -1161,7 +1154,7 @@ void calculateCenter(TransInfo *t)
 
         projectFloatView(t, axis, t->center2d);
 
-        /* rotate only needs correct 2d center, grab needs ED_view3d_calc_zfac() value */
+        /* Rotate only needs correct 2d center, grab needs #ED_view3d_calc_zfac() value. */
         if (t->mode == TFM_TRANSLATION) {
           copy_v3_v3(t->center_global, axis);
         }
@@ -1170,17 +1163,16 @@ void calculateCenter(TransInfo *t)
   }
 
   if (t->spacetype == SPACE_VIEW3D) {
-    /* ED_view3d_calc_zfac() defines a factor for perspective depth correction,
-     * used in ED_view3d_win_to_delta() */
+    /* #ED_view3d_calc_zfac() defines a factor for perspective depth correction,
+     * used in #ED_view3d_win_to_delta(). */
 
-    /* zfac is only used convertViewVec only in cases operator was invoked in RGN_TYPE_WINDOW
-     * and never used in other cases.
+    /* NOTE: `t->zfac` is only used #convertViewVec only in cases operator was invoked in
+     * #RGN_TYPE_WINDOW and never used in other cases.
      *
-     * We need special case here as well, since ED_view3d_calc_zfac will crash when called
-     * for a region different from RGN_TYPE_WINDOW.
-     */
+     * We need special case here as well, since #ED_view3d_calc_zfac will crash when called
+     * for a region different from #RGN_TYPE_WINDOW. */
     if (t->region->regiontype == RGN_TYPE_WINDOW) {
-      t->zfac = ED_view3d_calc_zfac(t->region->regiondata, t->center_global, NULL);
+      t->zfac = ED_view3d_calc_zfac(t->region->regiondata, t->center_global);
     }
     else {
       t->zfac = 0.0f;

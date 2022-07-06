@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup depsgraph
@@ -70,7 +54,7 @@ void deg_invalidate_iterator_work_data(DEGObjectIterData *data)
 {
 #ifdef INVALIDATE_WORK_DATA
   BLI_assert(data != nullptr);
-  memset(&data->temp_dupli_object, 0xff, sizeof(data->temp_dupli_object));
+  memset((void *)&data->temp_dupli_object, 0xff, sizeof(data->temp_dupli_object));
 #else
   (void)data;
 #endif
@@ -183,7 +167,7 @@ bool deg_iterator_duplis_step(DEGObjectIterData *data)
     /* Temporary object to evaluate. */
     Object *dupli_parent = data->dupli_parent;
     Object *temp_dupli_object = &data->temp_dupli_object;
-    *temp_dupli_object = *dob->ob;
+    *temp_dupli_object = blender::dna::shallow_copy(*dob->ob);
     temp_dupli_object->base_flag = dupli_parent->base_flag | BASE_FROM_DUPLI;
     temp_dupli_object->base_local_view_bits = dupli_parent->base_local_view_bits;
     temp_dupli_object->runtime.local_collections_bits =

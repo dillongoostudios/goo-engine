@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -140,7 +126,7 @@ static char *rna_PoseBone_path(PointerRNA *ptr)
 
 static bool rna_bone_group_poll(Object *ob, ReportList *reports)
 {
-  if ((ob->proxy != NULL) || (ob->proxy_group != NULL) || ID_IS_OVERRIDE_LIBRARY(ob)) {
+  if (ID_IS_OVERRIDE_LIBRARY(ob)) {
     BKE_report(reports, RPT_ERROR, "Cannot edit bone groups for proxies or library overrides");
     return false;
   }
@@ -658,11 +644,11 @@ static bConstraint *rna_PoseChannel_constraints_copy(ID *id,
   return new_con;
 }
 
-bool rna_PoseChannel_constraints_override_apply(Main *UNUSED(bmain),
+bool rna_PoseChannel_constraints_override_apply(Main *bmain,
                                                 PointerRNA *ptr_dst,
                                                 PointerRNA *ptr_src,
                                                 PointerRNA *UNUSED(ptr_storage),
-                                                PropertyRNA *UNUSED(prop_dst),
+                                                PropertyRNA *prop_dst,
                                                 PropertyRNA *UNUSED(prop_src),
                                                 PropertyRNA *UNUSED(prop_storage),
                                                 const int UNUSED(len_dst),
@@ -708,6 +694,7 @@ bool rna_PoseChannel_constraints_override_apply(Main *UNUSED(bmain),
   BKE_constraint_unique_name(con_dst, &pchan_dst->constraints);
 
   //  printf("%s: We inserted a constraint...\n", __func__);
+  RNA_property_update_main(bmain, NULL, ptr_dst, prop_dst);
   return true;
 }
 
@@ -717,7 +704,7 @@ static int rna_PoseChannel_proxy_editable(PointerRNA *ptr, const char **r_info)
   bArmature *arm = ob->data;
   bPoseChannel *pchan = (bPoseChannel *)ptr->data;
 
-  if (ob->proxy && pchan->bone && (pchan->bone->layer & arm->layer_protected)) {
+  if (false && pchan->bone && (pchan->bone->layer & arm->layer_protected)) {
     *r_info = "Can't edit property of a proxy on a protected layer";
     return 0;
   }
@@ -1373,7 +1360,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   RNA_def_property_pointer_sdna(prop, NULL, "custom_tx");
   RNA_def_property_struct_type(prop, "PoseBone");
   RNA_def_property_flag(prop, PROP_EDITABLE | PROP_PTR_NO_OWNERSHIP);
-  RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   RNA_def_property_ui_text(prop,
                            "Custom Shape Transform",
                            "Bone that defines the display transform of this custom shape");

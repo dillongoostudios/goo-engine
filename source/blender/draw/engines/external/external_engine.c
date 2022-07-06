@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2017, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -118,16 +103,8 @@ static void external_engine_init(void *vedata)
 
   /* Depth pre-pass. */
   if (!e_data.depth_sh) {
-    const GPUShaderConfigData *sh_cfg = &GPU_shader_cfg_data[GPU_SHADER_CFG_DEFAULT];
-
-    e_data.depth_sh = GPU_shader_create_from_arrays({
-        .vert = (const char *[]){sh_cfg->lib,
-                                 datatoc_common_view_lib_glsl,
-                                 datatoc_depth_vert_glsl,
-                                 NULL},
-        .frag = (const char *[]){datatoc_depth_frag_glsl, NULL},
-        .defs = (const char *[]){sh_cfg->def, NULL},
-    });
+    /* NOTE: Reuse Basic engine depth only shader. */
+    e_data.depth_sh = GPU_shader_create_from_info_name("basic_depth_mesh");
   }
 
   if (!stl->g_data) {

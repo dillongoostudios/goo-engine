@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2019, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2019 Blender Foundation. */
 
 /** \file
  * \ingroup draw
@@ -323,6 +308,9 @@ typedef struct MeshBatchCache {
   float tot_area, tot_uv_area;
 
   bool no_loose_wire;
+
+  eV3DShadingColorType color_type;
+  bool pbvh_is_drawing;
 } MeshBatchCache;
 
 #define MBC_EDITUV \
@@ -340,7 +328,6 @@ void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
                                         const float obmat[4][4],
                                         bool do_final,
                                         bool do_uvedit,
-                                        bool use_subsurf_fdots,
                                         const Scene *scene,
                                         const struct ToolSettings *ts,
                                         bool use_hide);

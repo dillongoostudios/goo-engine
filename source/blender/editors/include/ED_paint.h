@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup editors
@@ -20,10 +6,14 @@
 
 #pragma once
 
+#include "DNA_view3d_enums.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+struct bToolRef;
+struct PaintModeSettings;
 struct ImBuf;
 struct Image;
 struct ImageUser;
@@ -34,11 +24,13 @@ struct wmKeyConfig;
 struct wmOperator;
 
 /* paint_ops.c */
+
 void ED_operatortypes_paint(void);
 void ED_operatormacros_paint(void);
 void ED_keymap_paint(struct wmKeyConfig *keyconf);
 
 /* paint_image.c */
+
 void ED_imapaint_clear_partial_redraw(void);
 void ED_imapaint_dirty_region(struct Image *ima,
                               struct ImBuf *ibuf,
@@ -120,6 +112,23 @@ void ED_paintcurve_undo_push_end(struct bContext *C);
 
 /** Export for ED_undo_sys. */
 void ED_paintcurve_undosys_type(struct UndoType *ut);
+
+/* paint_canvas.cc */
+/** Color type of an object can be overridden in sculpt/paint mode. */
+eV3DShadingColorType ED_paint_shading_color_override(struct bContext *C,
+                                                     const struct PaintModeSettings *settings,
+                                                     struct Object *ob,
+                                                     eV3DShadingColorType orig_color_type);
+
+/**
+ * Does the given tool use a paint canvas.
+ *
+ * When #tref isn't given the active tool from the context is used.
+ */
+bool ED_paint_tool_use_canvas(struct bContext *C, struct bToolRef *tref);
+
+/* Store the last used tool in the sculpt session. */
+void ED_paint_tool_update_sticky_shading_color(struct bContext *C, struct Object *ob);
 
 #ifdef __cplusplus
 }

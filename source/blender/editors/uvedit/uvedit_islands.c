@@ -1,25 +1,11 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup eduv
  *
  * Utilities for manipulating UV islands.
  *
- * \note This is similar to `uvedit_parametrizer.c`,
+ * \note This is similar to `GEO_uv_parametrizer.h`,
  * however the data structures there don't support arbitrary topology
  * such as an edge with 3 or more faces using it.
  * This API uses #BMesh data structures and doesn't have limitations for manifold meshes.

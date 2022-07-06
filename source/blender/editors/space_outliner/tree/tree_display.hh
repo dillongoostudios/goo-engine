@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -48,6 +34,8 @@ struct TreeElement;
 struct ViewLayer;
 
 namespace blender::ed::outliner {
+
+class TreeElementID;
 
 /**
  * \brief The data to build the tree from.
@@ -141,18 +129,33 @@ class TreeDisplayLibraries final : public AbstractTreeDisplay {
 /* Library Overrides Tree-Display. */
 
 /**
- * \brief Tree-Display for the Library Overrides display mode.
+ * \brief Tree-Display for the Library Overrides display mode, Properties view mode.
  */
-class TreeDisplayOverrideLibrary final : public AbstractTreeDisplay {
+class TreeDisplayOverrideLibraryProperties final : public AbstractTreeDisplay {
  public:
-  TreeDisplayOverrideLibrary(SpaceOutliner &space_outliner);
+  TreeDisplayOverrideLibraryProperties(SpaceOutliner &space_outliner);
 
   ListBase buildTree(const TreeSourceData &source_data) override;
 
  private:
-  TreeElement *add_library_contents(Main &, ListBase &, Library *);
-  bool override_library_id_filter_poll(const Library *lib, ID *id) const;
+  ListBase add_library_contents(Main &);
   short id_filter_get() const;
+};
+
+/**
+ * \brief Tree-Display for the Library Overrides display mode, Hierarchies view mode.
+ */
+class TreeDisplayOverrideLibraryHierarchies final : public AbstractTreeDisplay {
+ public:
+  TreeDisplayOverrideLibraryHierarchies(SpaceOutliner &space_outliner);
+
+  ListBase buildTree(const TreeSourceData &source_data) override;
+
+ private:
+  ListBase build_hierarchy_for_lib_or_main(Main *bmain,
+                                           TreeElement &parent_te,
+                                           Library *lib = nullptr);
+  void build_hierarchy_for_ID(Main *bmain, ID &override_root_id, TreeElementID &te_id) const;
 };
 
 /* -------------------------------------------------------------------- */

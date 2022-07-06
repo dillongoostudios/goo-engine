@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -84,13 +71,13 @@ typedef unsigned long long uint64_t;
 
 #define ccl_gpu_syncthreads() __syncthreads()
 #define ccl_gpu_ballot(predicate) __ballot(predicate)
-#define ccl_gpu_shfl_down_sync(mask, var, detla) __shfl_down(var, detla)
 
 /* GPU texture objects */
-typedef hipTextureObject_t ccl_gpu_tex_object;
+typedef hipTextureObject_t ccl_gpu_tex_object_2D;
+typedef hipTextureObject_t ccl_gpu_tex_object_3D;
 
 template<typename T>
-ccl_device_forceinline T ccl_gpu_tex_object_read_2D(const ccl_gpu_tex_object texobj,
+ccl_device_forceinline T ccl_gpu_tex_object_read_2D(const ccl_gpu_tex_object_2D texobj,
                                                     const float x,
                                                     const float y)
 {
@@ -98,7 +85,7 @@ ccl_device_forceinline T ccl_gpu_tex_object_read_2D(const ccl_gpu_tex_object tex
 }
 
 template<typename T>
-ccl_device_forceinline T ccl_gpu_tex_object_read_3D(const ccl_gpu_tex_object texobj,
+ccl_device_forceinline T ccl_gpu_tex_object_read_3D(const ccl_gpu_tex_object_3D texobj,
                                                     const float x,
                                                     const float y,
                                                     const float z)

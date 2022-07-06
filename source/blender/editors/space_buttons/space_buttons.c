@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spbuttons
@@ -740,6 +724,9 @@ static void buttons_area_listener(const wmSpaceTypeListenerParams *params)
           /* Needed to refresh context path when changing active particle system index. */
           buttons_area_redraw(area, BCONTEXT_PARTICLE);
           break;
+        case ND_DRAW_ANIMVIZ:
+          buttons_area_redraw(area, BCONTEXT_OBJECT);
+          break;
         default:
           /* Not all object RNA props have a ND_ notifier (yet) */
           ED_area_tag_redraw(area);
@@ -877,12 +864,11 @@ static void buttons_id_remap(ScrArea *UNUSED(area),
     for (int i = 0; i < path->len; i++) {
       switch (BKE_id_remapper_apply(mappings, &path->ptr[i].owner_id, ID_REMAP_APPLY_DEFAULT)) {
         case ID_REMAP_RESULT_SOURCE_UNASSIGNED: {
-          if (i == 0) {
-            MEM_SAFE_FREE(sbuts->path);
-          }
-          else {
+          path->len = i;
+          if (i != 0) {
+            /* If the first item in the path is cleared, the whole path is cleared, so no need to
+             * clear further items here, see also at the end of this block. */
             memset(&path->ptr[i], 0, sizeof(path->ptr[i]) * (path->len - i));
-            path->len = i;
           }
           break;
         }
@@ -902,6 +888,9 @@ static void buttons_id_remap(ScrArea *UNUSED(area),
           break;
         }
       }
+    }
+    if (path->len == 0) {
+      MEM_SAFE_FREE(sbuts->path);
     }
   }
 

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_task.hh"
 
@@ -297,7 +283,7 @@ static void limit_radii(FilletData &fd, const bool cyclic)
 
   /* Assign the max_radii to the fillet data's radii. */
   for (const int i : IndexRange(size)) {
-    radii[i] = max_radii[i];
+    radii[i] = std::min(radii[i], max_radii[i]);
   }
 }
 
@@ -408,9 +394,9 @@ static void update_bezier_positions(const FilletData &fd,
     dst_spline.handle_positions_left()[end_i] = dst_spline.positions()[end_i] -
                                                 handle_length * next_dir;
     dst_spline.handle_types_right()[i_dst] = dst_spline.handle_types_left()[end_i] =
-        BezierSpline::HandleType::Align;
+        BEZIER_HANDLE_ALIGN;
     dst_spline.handle_types_left()[i_dst] = dst_spline.handle_types_right()[end_i] =
-        BezierSpline::HandleType::Vector;
+        BEZIER_HANDLE_VECTOR;
     dst_spline.mark_cache_invalid();
 
     /* Calculate the center of the radius to be formed. */
@@ -420,8 +406,8 @@ static void update_bezier_positions(const FilletData &fd,
     float radius;
     radius_vec = math::normalize_and_get_length(radius_vec, radius);
 
-    dst_spline.handle_types_right().slice(1, count - 2).fill(BezierSpline::HandleType::Align);
-    dst_spline.handle_types_left().slice(1, count - 2).fill(BezierSpline::HandleType::Align);
+    dst_spline.handle_types_right().slice(1, count - 2).fill(BEZIER_HANDLE_ALIGN);
+    dst_spline.handle_types_left().slice(1, count - 2).fill(BEZIER_HANDLE_ALIGN);
 
     /* For each of the vertices in between the end points. */
     for (const int j : IndexRange(1, count - 2)) {
@@ -526,12 +512,12 @@ static SplinePtr fillet_spline(const Spline &spline,
   copy_common_attributes_by_mapping(spline, *dst_spline_ptr, dst_to_src);
 
   switch (spline.type()) {
-    case Spline::Type::Bezier: {
+    case CURVE_TYPE_BEZIER: {
       const BezierSpline &src_spline = static_cast<const BezierSpline &>(spline);
       BezierSpline &dst_spline = static_cast<BezierSpline &>(*dst_spline_ptr);
       if (fillet_param.mode == GEO_NODE_CURVE_FILLET_POLY) {
-        dst_spline.handle_types_left().fill(BezierSpline::HandleType::Vector);
-        dst_spline.handle_types_right().fill(BezierSpline::HandleType::Vector);
+        dst_spline.handle_types_left().fill(BEZIER_HANDLE_VECTOR);
+        dst_spline.handle_types_right().fill(BEZIER_HANDLE_VECTOR);
         update_poly_positions(fd, dst_spline, src_spline, point_counts);
       }
       else {
@@ -539,15 +525,19 @@ static SplinePtr fillet_spline(const Spline &spline,
       }
       break;
     }
-    case Spline::Type::Poly: {
+    case CURVE_TYPE_POLY: {
       update_poly_positions(fd, *dst_spline_ptr, spline, point_counts);
       break;
     }
-    case Spline::Type::NURBS: {
+    case CURVE_TYPE_NURBS: {
       const NURBSpline &src_spline = static_cast<const NURBSpline &>(spline);
       NURBSpline &dst_spline = static_cast<NURBSpline &>(*dst_spline_ptr);
       copy_attribute_by_mapping(src_spline.weights(), dst_spline.weights(), dst_to_src);
       update_poly_positions(fd, dst_spline, src_spline, point_counts);
+      break;
+    }
+    case CURVE_TYPE_CATMULL_ROM: {
+      BLI_assert_unreachable();
       break;
     }
   }
@@ -561,8 +551,8 @@ static std::unique_ptr<CurveEval> fillet_curve(const CurveEval &input_curve,
   Span<SplinePtr> input_splines = input_curve.splines();
 
   std::unique_ptr<CurveEval> output_curve = std::make_unique<CurveEval>();
-  const int num_splines = input_splines.size();
-  output_curve->resize(num_splines);
+  const int splines_num = input_splines.size();
+  output_curve->resize(splines_num);
   MutableSpan<SplinePtr> output_splines = output_curve->splines();
   Array<int> spline_offsets = input_curve.control_point_offsets();
 
@@ -582,7 +572,7 @@ static void calculate_curve_fillet(GeometrySet &geometry_set,
                                    const std::optional<Field<int>> &count_field,
                                    const bool limit_radius)
 {
-  if (!geometry_set.has_curve()) {
+  if (!geometry_set.has_curves()) {
     return;
   }
 
@@ -613,10 +603,10 @@ static void calculate_curve_fillet(GeometrySet &geometry_set,
 
   fillet_param.limit_radius = limit_radius;
 
-  const CurveEval &input_curve = *geometry_set.get_curve_for_read();
-  std::unique_ptr<CurveEval> output_curve = fillet_curve(input_curve, fillet_param);
+  const std::unique_ptr<CurveEval> input_curve = curves_to_curve_eval(*component.get_for_read());
+  std::unique_ptr<CurveEval> output_curve = fillet_curve(*input_curve, fillet_param);
 
-  geometry_set.replace_curve(output_curve.release());
+  geometry_set.replace_curves(curve_eval_to_curves(*output_curve));
 }
 
 static void node_geo_exec(GeoNodeExecParams params)

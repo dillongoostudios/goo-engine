@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -236,14 +220,13 @@ void BKE_mesh_calc_normals_poly(const MVert *mvert,
  * \{ */
 
 struct MeshCalcNormalsData_PolyAndVertex {
-  /** Write into vertex normals #MVert.no. */
-  MVert *mvert;
+  const MVert *mvert;
   const MLoop *mloop;
   const MPoly *mpoly;
 
   /** Polygon normal output. */
   float (*pnors)[3];
-  /** Vertex normal output (may be freed, copied into #MVert.no). */
+  /** Vertex normal output. */
   float (*vnors)[3];
 };
 
@@ -314,7 +297,7 @@ static void mesh_calc_normals_poly_and_vertex_finalize_fn(
 {
   MeshCalcNormalsData_PolyAndVertex *data = (MeshCalcNormalsData_PolyAndVertex *)userdata;
 
-  MVert *mv = &data->mvert[vidx];
+  const MVert *mv = &data->mvert[vidx];
   float *no = data->vnors[vidx];
 
   if (UNLIKELY(normalize_v3(no) == 0.0f)) {
@@ -323,7 +306,7 @@ static void mesh_calc_normals_poly_and_vertex_finalize_fn(
   }
 }
 
-void BKE_mesh_calc_normals_poly_and_vertex(MVert *mvert,
+void BKE_mesh_calc_normals_poly_and_vertex(const MVert *mvert,
                                            const int mvert_len,
                                            const MLoop *mloop,
                                            const int UNUSED(mloop_len),
@@ -336,36 +319,22 @@ void BKE_mesh_calc_normals_poly_and_vertex(MVert *mvert,
   BLI_parallel_range_settings_defaults(&settings);
   settings.min_iter_per_thread = 1024;
 
-  float(*vnors)[3] = r_vert_normals;
-  bool free_vnors = false;
-
-  /* First go through and calculate normals for all the polys. */
-  if (vnors == nullptr) {
-    vnors = (float(*)[3])MEM_calloc_arrayN((size_t)mvert_len, sizeof(*vnors), __func__);
-    free_vnors = true;
-  }
-  else {
-    memset(vnors, 0, sizeof(*vnors) * (size_t)mvert_len);
-  }
+  memset(r_vert_normals, 0, sizeof(*r_vert_normals) * (size_t)mvert_len);
 
   MeshCalcNormalsData_PolyAndVertex data = {};
   data.mpoly = mpoly;
   data.mloop = mloop;
   data.mvert = mvert;
   data.pnors = r_poly_normals;
-  data.vnors = vnors;
+  data.vnors = r_vert_normals;
 
-  /* Compute poly normals (`pnors`), accumulating them into vertex normals (`vnors`). */
+  /* Compute poly normals, accumulating them into vertex normals. */
   BLI_task_parallel_range(
       0, mpoly_len, &data, mesh_calc_normals_poly_and_vertex_accum_fn, &settings);
 
-  /* Normalize and validate computed vertex normals (`vnors`). */
+  /* Normalize and validate computed vertex normals. */
   BLI_task_parallel_range(
       0, mvert_len, &data, mesh_calc_normals_poly_and_vertex_finalize_fn, &settings);
-
-  if (free_vnors) {
-    MEM_freeN(vnors);
-  }
 }
 
 /** \} */
@@ -563,7 +532,7 @@ void BKE_lnor_spacearr_init(MLoopNorSpaceArray *lnors_spacearr,
     lnors_spacearr->loops_pool = (LinkNode *)BLI_memarena_alloc(
         mem, sizeof(LinkNode) * (size_t)numLoops);
 
-    lnors_spacearr->num_spaces = 0;
+    lnors_spacearr->spaces_num = 0;
   }
   BLI_assert(ELEM(data_type, MLNOR_SPACEARR_BMLOOP_PTR, MLNOR_SPACEARR_LOOP_INDEX));
   lnors_spacearr->data_type = data_type;
@@ -581,7 +550,7 @@ void BKE_lnor_spacearr_tls_join(MLoopNorSpaceArray *lnors_spacearr,
 {
   BLI_assert(lnors_spacearr->data_type == lnors_spacearr_tls->data_type);
   BLI_assert(lnors_spacearr->mem != lnors_spacearr_tls->mem);
-  lnors_spacearr->num_spaces += lnors_spacearr_tls->num_spaces;
+  lnors_spacearr->spaces_num += lnors_spacearr_tls->spaces_num;
   BLI_memarena_merge(lnors_spacearr->mem, lnors_spacearr_tls->mem);
   BLI_memarena_free(lnors_spacearr_tls->mem);
   lnors_spacearr_tls->mem = nullptr;
@@ -590,7 +559,7 @@ void BKE_lnor_spacearr_tls_join(MLoopNorSpaceArray *lnors_spacearr,
 
 void BKE_lnor_spacearr_clear(MLoopNorSpaceArray *lnors_spacearr)
 {
-  lnors_spacearr->num_spaces = 0;
+  lnors_spacearr->spaces_num = 0;
   lnors_spacearr->lspacearr = nullptr;
   lnors_spacearr->loops_pool = nullptr;
   if (lnors_spacearr->mem != nullptr) {
@@ -600,7 +569,7 @@ void BKE_lnor_spacearr_clear(MLoopNorSpaceArray *lnors_spacearr)
 
 void BKE_lnor_spacearr_free(MLoopNorSpaceArray *lnors_spacearr)
 {
-  lnors_spacearr->num_spaces = 0;
+  lnors_spacearr->spaces_num = 0;
   lnors_spacearr->lspacearr = nullptr;
   lnors_spacearr->loops_pool = nullptr;
   BLI_memarena_free(lnors_spacearr->mem);
@@ -609,7 +578,7 @@ void BKE_lnor_spacearr_free(MLoopNorSpaceArray *lnors_spacearr)
 
 MLoopNorSpace *BKE_lnor_space_create(MLoopNorSpaceArray *lnors_spacearr)
 {
-  lnors_spacearr->num_spaces++;
+  lnors_spacearr->spaces_num++;
   return (MLoopNorSpace *)BLI_memarena_calloc(lnors_spacearr->mem, sizeof(MLoopNorSpace));
 }
 
@@ -644,19 +613,19 @@ void BKE_lnor_space_define(MLoopNorSpace *lnor_space,
   /* Compute ref alpha, average angle of all available edge vectors to lnor. */
   if (edge_vectors) {
     float alpha = 0.0f;
-    int nbr = 0;
+    int count = 0;
     while (!BLI_stack_is_empty(edge_vectors)) {
       const float *vec = (const float *)BLI_stack_peek(edge_vectors);
       alpha += saacosf(dot_v3v3(vec, lnor));
       BLI_stack_discard(edge_vectors);
-      nbr++;
+      count++;
     }
-    /* NOTE: In theory, this could be `nbr > 2`,
+    /* NOTE: In theory, this could be `count > 2`,
      * but there is one case where we only have two edges for two loops:
      * a smooth vertex with only two edges and two faces (our Monkey's nose has that, e.g.).
      */
-    BLI_assert(nbr >= 2); /* This piece of code shall only be called for more than one loop. */
-    lnor_space->ref_alpha = alpha / (float)nbr;
+    BLI_assert(count >= 2); /* This piece of code shall only be called for more than one loop. */
+    lnor_space->ref_alpha = alpha / (float)count;
   }
   else {
     lnor_space->ref_alpha = (saacosf(dot_v3v3(vec_ref, lnor)) +
@@ -1165,7 +1134,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
   /* We validate clnors data on the fly - cheapest way to do! */
   int clnors_avg[2] = {0, 0};
   short(*clnor_ref)[2] = nullptr;
-  int clnors_nbr = 0;
+  int clnors_count = 0;
   bool clnors_invalid = false;
 
   /* Temp loop normal stack. */
@@ -1225,7 +1194,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
       if (clnors_data) {
         /* Accumulate all clnors, if they are not all equal we have to fix that! */
         short(*clnor)[2] = &clnors_data[mlfan_vert_index];
-        if (clnors_nbr) {
+        if (clnors_count) {
           clnors_invalid |= ((*clnor_ref)[0] != (*clnor)[0] || (*clnor_ref)[1] != (*clnor)[1]);
         }
         else {
@@ -1233,7 +1202,7 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
         }
         clnors_avg[0] += (*clnor)[0];
         clnors_avg[1] += (*clnor)[1];
-        clnors_nbr++;
+        clnors_count++;
         /* We store here a pointer to all custom lnors processed. */
         BLI_SMALLSTACK_PUSH(clnors, (short *)*clnor);
       }
@@ -1293,8 +1262,8 @@ static void split_loop_nor_fan_do(LoopSplitTaskDataCommon *common_data, LoopSpli
         if (clnors_invalid) {
           short *clnor;
 
-          clnors_avg[0] /= clnors_nbr;
-          clnors_avg[1] /= clnors_nbr;
+          clnors_avg[0] /= clnors_count;
+          clnors_avg[1] /= clnors_count;
           /* Fix/update all clnors of this fan with computed average value. */
           if (G.debug & G_DEBUG) {
             printf("Invalid clnors in this fan!\n");
@@ -1983,7 +1952,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
         BLI_BITMAP_DISABLE(done_loops, i);
       }
       else {
-        int nbr_nors = 0;
+        int avg_nor_count = 0;
         float avg_nor[3];
         short clnor_data_tmp[2], *clnor_data;
 
@@ -1993,7 +1962,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
           const int nidx = use_vertices ? (int)mloops[lidx].v : lidx;
           float *nor = r_custom_loopnors[nidx];
 
-          nbr_nors++;
+          avg_nor_count++;
           add_v3_v3(avg_nor, nor);
           BLI_SMALLSTACK_PUSH(clnors_data, (short *)r_clnors_data[lidx]);
 
@@ -2001,7 +1970,7 @@ static void mesh_normals_loop_custom_set(const MVert *mverts,
           BLI_BITMAP_DISABLE(done_loops, lidx);
         }
 
-        mul_v3_fl(avg_nor, 1.0f / (float)nbr_nors);
+        mul_v3_fl(avg_nor, 1.0f / (float)avg_nor_count);
         BKE_lnor_space_custom_normal_to_data(lnors_spacearr.lspacearr[i], avg_nor, clnor_data_tmp);
 
         while ((clnor_data = (short *)BLI_SMALLSTACK_POP(clnors_data))) {
@@ -2119,8 +2088,8 @@ void BKE_mesh_normals_loop_to_vertex(const int numVerts,
                                      const float (*clnors)[3],
                                      float (*r_vert_clnors)[3])
 {
-  int *vert_loops_nbr = (int *)MEM_calloc_arrayN(
-      (size_t)numVerts, sizeof(*vert_loops_nbr), __func__);
+  int *vert_loops_count = (int *)MEM_calloc_arrayN(
+      (size_t)numVerts, sizeof(*vert_loops_count), __func__);
 
   copy_vn_fl((float *)r_vert_clnors, 3 * numVerts, 0.0f);
 
@@ -2130,14 +2099,14 @@ void BKE_mesh_normals_loop_to_vertex(const int numVerts,
     const uint v = ml->v;
 
     add_v3_v3(r_vert_clnors[v], clnors[i]);
-    vert_loops_nbr[v]++;
+    vert_loops_count[v]++;
   }
 
   for (i = 0; i < numVerts; i++) {
-    mul_v3_fl(r_vert_clnors[i], 1.0f / (float)vert_loops_nbr[i]);
+    mul_v3_fl(r_vert_clnors[i], 1.0f / (float)vert_loops_count[i]);
   }
 
-  MEM_freeN(vert_loops_nbr);
+  MEM_freeN(vert_loops_count);
 }
 
 #undef LNOR_SPACE_TRIGO_THRESHOLD

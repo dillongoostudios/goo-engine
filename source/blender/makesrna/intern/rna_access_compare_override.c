@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -51,6 +37,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "rna_access_internal.h"
 #include "rna_internal.h"
@@ -232,7 +219,7 @@ bool RNA_property_copy(
 
   /* IDprops: destination may not exist, if source does and is set, try to create it. */
   /* NOTE: this is sort of quick hack/bandage to fix the issue,
-   * we need to rethink how IDProps are handled in 'diff' RNA code completely, imho... */
+   * we need to rethink how IDProps are handled in 'diff' RNA code completely, IMHO. */
   if (prop_src != NULL && prop_dst == NULL && RNA_property_is_set(fromptr, prop)) {
     BLI_assert(prop_src->magic != RNA_MAGIC);
     IDProperty *idp_dst = RNA_struct_idprops(ptr, true);
@@ -625,10 +612,6 @@ static bool rna_property_override_operation_apply(Main *bmain,
                                       ptr_item_src,
                                       ptr_item_storage,
                                       opop);
-  if (success) {
-    RNA_property_update_main(bmain, NULL, ptr_dst, prop_dst);
-  }
-
   return success;
 }
 

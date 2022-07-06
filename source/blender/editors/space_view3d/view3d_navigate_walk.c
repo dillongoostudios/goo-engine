@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spview3d
@@ -36,6 +22,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
+#include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 
@@ -58,6 +45,7 @@
 #include "DEG_depsgraph.h"
 
 #include "view3d_intern.h" /* own include */
+#include "view3d_navigate.h"
 
 #ifdef WITH_INPUT_NDOF
 //#  define NDOF_WALK_DEBUG
@@ -516,8 +504,11 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op)
     walk->rv3d->persp = RV3D_PERSP;
   }
 
-  if (walk->rv3d->persp == RV3D_CAMOB && ID_IS_LINKED(walk->v3d->camera)) {
-    BKE_report(op->reports, RPT_ERROR, "Cannot navigate a camera from an external library");
+  if (walk->rv3d->persp == RV3D_CAMOB &&
+      !BKE_id_is_editable(CTX_data_main(C), &walk->v3d->camera->id)) {
+    BKE_report(op->reports,
+               RPT_ERROR,
+               "Cannot navigate a camera from an external library or non-editable override");
     return false;
   }
 
@@ -1214,7 +1205,6 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
             dvec_tmp[2] = 0.0f;
           }
 
-          normalize_v3(dvec_tmp);
           add_v3_v3(dvec, dvec_tmp);
         }
 
@@ -1235,7 +1225,6 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
           dvec_tmp[1] = direction * rv3d->viewinv[0][1];
           dvec_tmp[2] = 0.0f;
 
-          normalize_v3(dvec_tmp);
           add_v3_v3(dvec, dvec_tmp);
         }
 
@@ -1257,6 +1246,8 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
             add_v3_v3(dvec, dvec_tmp);
           }
         }
+
+        normalize_v3(dvec);
 
         /* apply movement */
         mul_v3_fl(dvec, walk->speed * time_redraw);

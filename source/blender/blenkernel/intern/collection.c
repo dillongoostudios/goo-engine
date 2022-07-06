@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -143,7 +129,7 @@ static void collection_free_data(ID *id)
 {
   Collection *collection = (Collection *)id;
 
-  /* No animdata here. */
+  /* No animation-data here. */
   BKE_previewimg_free(&collection->preview);
 
   BLI_freelistN(&collection->gobject);
@@ -374,7 +360,7 @@ IDTypeInfo IDType_ID_GR = {
     .name = "Collection",
     .name_plural = "collections",
     .translation_context = BLT_I18NCONTEXT_ID_COLLECTION,
-    .flags = IDTYPE_FLAGS_NO_ANIMDATA,
+    .flags = IDTYPE_FLAGS_NO_ANIMDATA | IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     .asset_type_info = NULL,
 
     .init_data = collection_init_data,
@@ -446,7 +432,8 @@ void BKE_collection_add_from_object(Main *bmain,
   bool is_instantiated = false;
 
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    if (!ID_IS_LINKED(collection) && BKE_collection_has_object(collection, ob_src)) {
+    if (!ID_IS_LINKED(collection) && !ID_IS_OVERRIDABLE_LIBRARY(collection) &&
+        BKE_collection_has_object(collection, ob_src)) {
       collection_child_add(collection, collection_dst, 0, true);
       is_instantiated = true;
     }
@@ -468,7 +455,8 @@ void BKE_collection_add_from_collection(Main *bmain,
   bool is_instantiated = false;
 
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    if (!ID_IS_LINKED(collection) && collection_find_child(collection, collection_src)) {
+    if (!ID_IS_LINKED(collection) && !ID_IS_OVERRIDABLE_LIBRARY(collection) &&
+        collection_find_child(collection, collection_src)) {
       collection_child_add(collection, collection_dst, 0, true);
       is_instantiated = true;
     }
@@ -1008,9 +996,11 @@ static void collection_tag_update_parent_recursive(Main *bmain,
   }
 }
 
-static Collection *collection_parent_editable_find_recursive(Collection *collection)
+static Collection *collection_parent_editable_find_recursive(const ViewLayer *view_layer,
+                                                             Collection *collection)
 {
-  if (!ID_IS_LINKED(collection) && !ID_IS_OVERRIDE_LIBRARY(collection)) {
+  if (!ID_IS_LINKED(collection) && !ID_IS_OVERRIDE_LIBRARY(collection) &&
+      (view_layer == NULL || BKE_view_layer_has_collection(view_layer, collection))) {
     return collection;
   }
 
@@ -1021,10 +1011,16 @@ static Collection *collection_parent_editable_find_recursive(Collection *collect
   LISTBASE_FOREACH (CollectionParent *, collection_parent, &collection->parents) {
     if (!ID_IS_LINKED(collection_parent->collection) &&
         !ID_IS_OVERRIDE_LIBRARY(collection_parent->collection)) {
+      if (view_layer != NULL &&
+          !BKE_view_layer_has_collection(view_layer, collection_parent->collection)) {
+        /* In case this parent collection is not in given view_layer, there is no point in
+         * searching in its ancestors either, we can skip that whole parenting branch. */
+        continue;
+      }
       return collection_parent->collection;
     }
     Collection *editable_collection = collection_parent_editable_find_recursive(
-        collection_parent->collection);
+        view_layer, collection_parent->collection);
     if (editable_collection != NULL) {
       return editable_collection;
     }
@@ -1122,11 +1118,23 @@ bool BKE_collection_object_add_notest(Main *bmain, Collection *collection, Objec
 
 bool BKE_collection_object_add(Main *bmain, Collection *collection, Object *ob)
 {
+  return BKE_collection_viewlayer_object_add(bmain, NULL, collection, ob);
+}
+
+bool BKE_collection_viewlayer_object_add(Main *bmain,
+                                         const ViewLayer *view_layer,
+                                         Collection *collection,
+                                         Object *ob)
+{
   if (collection == NULL) {
     return false;
   }
 
-  collection = collection_parent_editable_find_recursive(collection);
+  collection = collection_parent_editable_find_recursive(view_layer, collection);
+
+  if (collection == NULL) {
+    return false;
+  }
 
   return BKE_collection_object_add_notest(bmain, collection, ob);
 }
@@ -1184,14 +1192,21 @@ static bool scene_collections_object_remove(
 {
   bool removed = false;
 
+  /* If given object is removed from all collections in given scene, then it can also be safely
+   * removed from rigidbody world for given scene. */
   if (collection_skip == NULL) {
     BKE_scene_remove_rigidbody_object(bmain, scene, ob, free_us);
   }
 
   FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
-    if (collection != collection_skip) {
-      removed |= collection_object_remove(bmain, collection, ob, free_us);
+    if (ID_IS_LINKED(collection) || ID_IS_OVERRIDE_LIBRARY(collection)) {
+      continue;
     }
+    if (collection == collection_skip) {
+      continue;
+    }
+
+    removed |= collection_object_remove(bmain, collection, ob, free_us);
   }
   FOREACH_SCENE_COLLECTION_END;
 
@@ -1939,6 +1954,67 @@ void BKE_scene_objects_iterator_begin(BLI_Iterator *iter, void *data_in)
   Scene *scene = data_in;
 
   scene_objects_iterator_begin(iter, scene, NULL);
+}
+
+static void scene_objects_iterator_skip_invalid_flag(BLI_Iterator *iter)
+{
+  if (!iter->valid) {
+    return;
+  }
+
+  /* Unpack the data. */
+  SceneObjectsIteratorExData *data = iter->data;
+  iter->data = data->iter_data;
+
+  Object *ob = iter->current;
+  if (ob && (ob->flag & data->flag) == 0) {
+    iter->skip = true;
+  }
+
+  /* Pack the data. */
+  data->iter_data = iter->data;
+  iter->data = data;
+}
+
+void BKE_scene_objects_iterator_begin_ex(BLI_Iterator *iter, void *data_in)
+{
+  SceneObjectsIteratorExData *data = data_in;
+
+  BKE_scene_objects_iterator_begin(iter, data->scene);
+
+  /* Pack the data. */
+  data->iter_data = iter->data;
+  iter->data = data_in;
+
+  scene_objects_iterator_skip_invalid_flag(iter);
+}
+
+void BKE_scene_objects_iterator_next_ex(struct BLI_Iterator *iter)
+{
+  /* Unpack the data. */
+  SceneObjectsIteratorExData *data = iter->data;
+  iter->data = data->iter_data;
+
+  BKE_scene_objects_iterator_next(iter);
+
+  /* Pack the data. */
+  data->iter_data = iter->data;
+  iter->data = data;
+
+  scene_objects_iterator_skip_invalid_flag(iter);
+}
+
+void BKE_scene_objects_iterator_end_ex(struct BLI_Iterator *iter)
+{
+  /* Unpack the data. */
+  SceneObjectsIteratorExData *data = iter->data;
+  iter->data = data->iter_data;
+
+  BKE_scene_objects_iterator_end(iter);
+
+  /* Pack the data. */
+  data->iter_data = iter->data;
+  iter->data = data;
 }
 
 /**

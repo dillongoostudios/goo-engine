@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -23,6 +9,7 @@
 #include "BKE_context.h"
 #include "BLI_path_util.h"
 #include "DEG_depsgraph.h"
+#include "IO_path_util_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,6 +38,8 @@ static const int TOTAL_AXES = 3;
 struct OBJExportParams {
   /** Full path to the destination .OBJ file. */
   char filepath[FILE_MAX];
+  /** Pretend that destination file folder is this, if non-empty. Used only for tests. */
+  char file_base_for_tests[FILE_MAX];
 
   /** Full path to current blender file (used for comments in output). */
   const char *blen_filepath;
@@ -76,6 +65,7 @@ struct OBJExportParams {
   bool export_materials;
   bool export_triangulated_mesh;
   bool export_curves_as_nurbs;
+  ePathReferenceMode path_mode;
 
   /* Grouping options. */
   bool export_object_groups;
@@ -91,6 +81,24 @@ struct OBJExportParams {
   bool smooth_groups_bitflags;
 };
 
+struct OBJImportParams {
+  /** Full path to the source OBJ file to import. */
+  char filepath[FILE_MAX];
+  /** Value 0 disables clamping. */
+  float clamp_size;
+  eTransformAxisForward forward_axis;
+  eTransformAxisUp up_axis;
+  bool validate_meshes;
+};
+
+/**
+ * Time the full import process.
+ */
+void OBJ_import(bContext *C, const struct OBJImportParams *import_params);
+
+/**
+ * C-interface for the exporter.
+ */
 void OBJ_export(bContext *C, const struct OBJExportParams *export_params);
 
 #ifdef __cplusplus

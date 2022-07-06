@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -625,11 +611,11 @@ static void rna_def_dopesheet(BlenderRNA *brna)
   RNA_def_property_ui_icon(prop, ICON_FILE, 0);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 
-  prop = RNA_def_property(srna, "show_hairs", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "show_hair_curves", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(prop, NULL, "filterflag2", ADS_FILTER_NOHAIR);
   RNA_def_property_ui_text(
       prop, "Display Hair", "Include visualization of hair related animation data");
-  RNA_def_property_ui_icon(prop, ICON_OUTLINER_OB_HAIR, 0);
+  RNA_def_property_ui_icon(prop, ICON_OUTLINER_OB_CURVES, 0);
   RNA_def_property_update(prop, NC_ANIMATION | ND_ANIMCHAN | NA_EDITED, NULL);
 
   prop = RNA_def_property(srna, "show_pointclouds", PROP_BOOLEAN, PROP_NONE);
@@ -797,7 +783,7 @@ static void rna_def_action_fcurves(BlenderRNA *brna, PropertyRNA *cprop)
 
   /* Action.fcurves.remove(...) */
   func = RNA_def_function(srna, "remove", "rna_Action_fcurve_remove");
-  RNA_def_function_ui_description(func, "Remove action group");
+  RNA_def_function_ui_description(func, "Remove F-Curve");
   RNA_def_function_flag(func, FUNC_USE_REPORTS);
   parm = RNA_def_pointer(func, "fcurve", "FCurve", "", "F-Curve to remove");
   RNA_def_parameter_flags(parm, PROP_NEVER_NULL, PARM_REQUIRED | PARM_RNAPTR);

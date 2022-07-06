@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2011 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2011 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -59,6 +43,7 @@
 #include "IMB_imbuf_types.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "libmv-capi.h"
 #include "tracking_private.h"
@@ -1489,7 +1474,7 @@ static const MovieTrackingMarker *get_usable_marker_for_interpolation(
     const MovieTrackingMarker *anchor_marker,
     const int direction)
 {
-  BLI_assert(direction == -1 || direction == 1);
+  BLI_assert(ELEM(direction, -1, 1));
 
   const MovieTrackingMarker *last_marker = track->markers + track->markersnr - 1;
   const MovieTrackingMarker *current_marker = anchor_marker;

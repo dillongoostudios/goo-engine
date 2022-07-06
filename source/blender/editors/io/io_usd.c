@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2019 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2019 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editor/io
@@ -206,6 +190,20 @@ static void wm_usd_export_draw(bContext *UNUSED(C), wmOperator *op)
   uiItemR(box, ptr, "use_instancing", 0, NULL, ICON_NONE);
 }
 
+static bool wm_usd_export_check(bContext *UNUSED(C), wmOperator *op)
+{
+  char filepath[FILE_MAX];
+  RNA_string_get(op->ptr, "filepath", filepath);
+
+  if (!BLI_path_extension_check_n(filepath, ".usd", ".usda", ".usdc", NULL)) {
+    BLI_path_extension_ensure(filepath, FILE_MAX, ".usdc");
+    RNA_string_set(op->ptr, "filepath", filepath);
+    return true;
+  }
+
+  return false;
+}
+
 void WM_OT_usd_export(struct wmOperatorType *ot)
 {
   ot->name = "Export USD";
@@ -216,6 +214,9 @@ void WM_OT_usd_export(struct wmOperatorType *ot)
   ot->exec = wm_usd_export_exec;
   ot->poll = WM_operator_winactive;
   ot->ui = wm_usd_export_draw;
+  ot->check = wm_usd_export_check;
+
+  ot->flag = OPTYPE_REGISTER; /* No UNDO possible. */
 
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER | FILE_TYPE_USD,
@@ -229,47 +230,43 @@ void WM_OT_usd_export(struct wmOperatorType *ot)
                   "selected_objects_only",
                   false,
                   "Selection Only",
-                  "Only selected objects are exported. Unselected parents of selected objects are "
+                  "Only export selected objects. Unselected parents of selected objects are "
                   "exported as empty transform");
 
   RNA_def_boolean(ot->srna,
                   "visible_objects_only",
                   true,
                   "Visible Only",
-                  "Only visible objects are exported. Invisible parents of exported objects are "
-                  "exported as empty transform");
+                  "Only export visible objects. Invisible parents of exported objects are "
+                  "exported as empty transforms");
 
-  RNA_def_boolean(ot->srna,
-                  "export_animation",
-                  false,
-                  "Animation",
-                  "When checked, the render frame range is exported. When false, only the current "
-                  "frame is exported");
   RNA_def_boolean(
-      ot->srna, "export_hair", false, "Hair", "When checked, hair is exported as USD curves");
-  RNA_def_boolean(ot->srna,
-                  "export_uvmaps",
-                  true,
-                  "UV Maps",
-                  "When checked, all UV maps of exported meshes are included in the export");
+      ot->srna,
+      "export_animation",
+      false,
+      "Animation",
+      "Export all frames in the render frame range, rather than only the current frame");
+  RNA_def_boolean(
+      ot->srna, "export_hair", false, "Hair", "Export hair particle systems as USD curves");
+  RNA_def_boolean(
+      ot->srna, "export_uvmaps", true, "UV Maps", "Include all mesh UV maps in the export");
   RNA_def_boolean(ot->srna,
                   "export_normals",
                   true,
                   "Normals",
-                  "When checked, normals of exported meshes are included in the export");
+                  "Include normals of exported meshes in the export");
   RNA_def_boolean(ot->srna,
                   "export_materials",
                   true,
                   "Materials",
-                  "When checked, the viewport settings of materials are exported as USD preview "
-                  "materials, and material assignments are exported as geometry subsets");
+                  "Export viewport settings of materials as USD preview materials, and export "
+                  "material assignments as geometry subsets");
 
   RNA_def_boolean(ot->srna,
                   "use_instancing",
                   false,
                   "Instancing",
-                  "When checked, instanced objects are exported as references in USD. "
-                  "When unchecked, instanced objects are exported as real objects");
+                  "Export instanced objects as references in USD rather than real objects");
 
   RNA_def_enum(ot->srna,
                "evaluation_mode",
@@ -475,6 +472,8 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
   ot->poll = WM_operator_winactive;
   ot->ui = wm_usd_import_draw;
 
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
   WM_operator_properties_filesel(ot,
                                  FILE_TYPE_FOLDER | FILE_TYPE_USD,
                                  FILE_BLENDER,
@@ -536,7 +535,8 @@ void WM_OT_usd_import(struct wmOperatorType *ot)
 
   RNA_def_boolean(ot->srna, "read_mesh_uvs", true, "UV Coordinates", "Read mesh UV coordinates");
 
-  RNA_def_boolean(ot->srna, "read_mesh_colors", false, "Vertex Colors", "Read mesh vertex colors");
+  RNA_def_boolean(
+      ot->srna, "read_mesh_colors", false, "Color Attributes", "Read mesh color attributes");
 
   RNA_def_string(ot->srna,
                  "prim_path_mask",

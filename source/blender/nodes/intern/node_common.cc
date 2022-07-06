@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup nodes
@@ -172,7 +156,8 @@ static void group_verify_socket_list(bNodeTree &node_tree,
                                      bNode &node,
                                      const ListBase &interface_sockets,
                                      ListBase &verify_lb,
-                                     const eNodeSocketInOut in_out)
+                                     const eNodeSocketInOut in_out,
+                                     const bool ensure_extend_socket_exists)
 {
   ListBase old_sockets = verify_lb;
   BLI_listbase_clear(&verify_lb);
@@ -187,9 +172,20 @@ static void group_verify_socket_list(bNodeTree &node_tree,
       BLI_addtail(&verify_lb, matching_socket);
     }
     else {
-      /* If there was no socket withe the same identifier already, simply create a new socket
+      /* If there was no socket with the same identifier already, simply create a new socket
        * based on the interface socket, which will already add it to the new list. */
       add_new_socket_from_interface(node_tree, node, *interface_socket, in_out);
+    }
+  }
+
+  if (ensure_extend_socket_exists) {
+    bNodeSocket *last_socket = static_cast<bNodeSocket *>(old_sockets.last);
+    if (last_socket != nullptr && STREQ(last_socket->identifier, "__extend__")) {
+      BLI_remlink(&old_sockets, last_socket);
+      BLI_addtail(&verify_lb, last_socket);
+    }
+    else {
+      nodeAddSocket(&node_tree, &node, in_out, "NodeSocketVirtual", "__extend__", "");
     }
   }
 
@@ -211,8 +207,8 @@ void node_group_update(struct bNodeTree *ntree, struct bNode *node)
   }
   else {
     bNodeTree *ngroup = (bNodeTree *)node->id;
-    group_verify_socket_list(*ntree, *node, ngroup->inputs, node->inputs, SOCK_IN);
-    group_verify_socket_list(*ntree, *node, ngroup->outputs, node->outputs, SOCK_OUT);
+    group_verify_socket_list(*ntree, *node, ngroup->inputs, node->inputs, SOCK_IN, false);
+    group_verify_socket_list(*ntree, *node, ngroup->outputs, node->outputs, SOCK_OUT, false);
   }
 }
 
@@ -342,7 +338,7 @@ void ntree_update_reroute_nodes(bNodeTree *ntree)
   }
 
   /* Propagate socket types from right to left. This affects reroute nodes that haven't been
-   * changed in the the loop above. */
+   * changed in the loop above. */
   for (bNode *start_node : nodes_linked_with_reroutes) {
     LISTBASE_FOREACH (bNodeSocket *, input_socket, &start_node->inputs) {
       propagate_reroute_type_from_start_socket(input_socket, links_map, reroute_types);
@@ -492,20 +488,15 @@ void node_group_input_update(bNodeTree *ntree, bNode *node)
 
     /* redirect links from the extension socket */
     for (link = (bNodeLink *)tmplinks.first; link; link = link->next) {
-      nodeAddLink(ntree, node, newsock, link->tonode, link->tosock);
+      bNodeLink *newlink = nodeAddLink(ntree, node, newsock, link->tonode, link->tosock);
+      if (newlink->tosock->flag & SOCK_MULTI_INPUT) {
+        newlink->multi_input_socket_index = link->multi_input_socket_index;
+      }
     }
   }
 
   BLI_freelistN(&tmplinks);
-
-  /* check inputs and outputs, and remove or insert them */
-  {
-    /* value_in_out inverted for interface nodes to get correct socket value_property */
-    group_verify_socket_list(*ntree, *node, ntree->inputs, node->outputs, SOCK_OUT);
-
-    /* add virtual extension socket */
-    nodeAddSocket(ntree, node, SOCK_OUT, "NodeSocketVirtual", "__extend__", "");
-  }
+  group_verify_socket_list(*ntree, *node, ntree->inputs, node->outputs, SOCK_OUT, true);
 }
 
 void register_node_type_group_input()
@@ -595,15 +586,7 @@ void node_group_output_update(bNodeTree *ntree, bNode *node)
   }
 
   BLI_freelistN(&tmplinks);
-
-  /* check inputs and outputs, and remove or insert them */
-  {
-    /* value_in_out inverted for interface nodes to get correct socket value_property */
-    group_verify_socket_list(*ntree, *node, ntree->outputs, node->inputs, SOCK_IN);
-
-    /* add virtual extension socket */
-    nodeAddSocket(ntree, node, SOCK_IN, "NodeSocketVirtual", "__extend__", "");
-  }
+  group_verify_socket_list(*ntree, *node, ntree->outputs, node->inputs, SOCK_IN, true);
 }
 
 void register_node_type_group_output()

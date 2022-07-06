@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spconsole
@@ -422,7 +408,7 @@ static int console_insert_invoke(bContext *C, wmOperator *op, const wmEvent *eve
      * (when input method are used for utf8 inputs, the user may assign key event
      * including alt/ctrl/super like ctrl+m to commit utf8 string.  in such case,
      * the modifiers in the utf8 character event make no sense.) */
-    if ((event->ctrl || event->oskey) && !event->utf8_buf[0]) {
+    if ((event->modifier & (KM_CTRL | KM_OSKEY)) && !event->utf8_buf[0]) {
       return OPERATOR_PASS_THROUGH;
     }
 
@@ -483,10 +469,10 @@ static int console_indent_or_autocomplete_exec(bContext *C, wmOperator *UNUSED(o
   }
 
   if (text_before_cursor) {
-    WM_operator_name_call(C, "CONSOLE_OT_autocomplete", WM_OP_INVOKE_DEFAULT, NULL);
+    WM_operator_name_call(C, "CONSOLE_OT_autocomplete", WM_OP_INVOKE_DEFAULT, NULL, NULL);
   }
   else {
-    WM_operator_name_call(C, "CONSOLE_OT_indent", WM_OP_EXEC_DEFAULT, NULL);
+    WM_operator_name_call(C, "CONSOLE_OT_indent", WM_OP_EXEC_DEFAULT, NULL, NULL);
   }
   return OPERATOR_FINISHED;
 }
@@ -1084,7 +1070,7 @@ static int console_paste_exec(bContext *C, wmOperator *UNUSED(op))
     }
 
     if (buf_next != buf_str) {
-      WM_operator_name_call(C, "CONSOLE_OT_execute", WM_OP_EXEC_DEFAULT, NULL);
+      WM_operator_name_call(C, "CONSOLE_OT_execute", WM_OP_EXEC_DEFAULT, NULL, NULL);
       ci = console_history_verify(C);
     }
 

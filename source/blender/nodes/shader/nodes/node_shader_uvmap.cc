@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -60,7 +44,11 @@ static int node_shader_gpu_uvmap(GPUMaterial *mat,
                                  GPUNodeStack *out)
 {
   NodeShaderUVMap *attr = static_cast<NodeShaderUVMap *>(node->storage);
-  GPUNodeLink *mtface = GPU_attribute(mat, CD_MTFACE, attr->uv_map);
+
+  /* NOTE: using CD_AUTO_FROM_NAME instead of CD_MTFACE as geometry nodes may overwrite data which
+   * will also change the CustomDataType. This will also make EEVEE and Cycles consistent. See
+   * T93179. */
+  GPUNodeLink *mtface = GPU_attribute(mat, CD_AUTO_FROM_NAME, attr->uv_map);
 
   GPU_stack_link(mat, node, "node_uvmap", in, out, mtface);
 

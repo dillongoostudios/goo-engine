@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_collection.h"
 #include "BKE_geometry_set_instances.hh"
@@ -21,7 +7,6 @@
 #include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
 #include "BKE_pointcloud.h"
-#include "BKE_spline.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_layer_types.h"
@@ -65,7 +50,12 @@ GeometrySet object_get_evaluated_geometry_set(const Object &object)
     return geometry_set;
   }
   if (object.runtime.geometry_set_eval != nullptr) {
-    return *object.runtime.geometry_set_eval;
+    GeometrySet geometry_set = *object.runtime.geometry_set_eval;
+    /* Ensure that subdivision is performed on the CPU. */
+    if (geometry_set.has_mesh()) {
+      add_final_mesh_as_geometry_component(object, geometry_set);
+    }
+    return geometry_set;
   }
 
   /* Otherwise, construct a new geometry set with the component based on the object type. */

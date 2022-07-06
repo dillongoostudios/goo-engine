@@ -1,21 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 import bpy
@@ -313,6 +296,41 @@ class RENDER_PT_output_views(RenderOutputButtonsPanel, Panel):
         layout.template_image_views(rd.image_settings)
 
 
+class RENDER_PT_output_color_management(RenderOutputButtonsPanel, Panel):
+    bl_label = "Color Management"
+    bl_options = {'DEFAULT_CLOSED'}
+    bl_parent_id = "RENDER_PT_output"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+
+    def draw(self, context):
+        scene = context.scene
+        image_settings = scene.render.image_settings
+
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        layout.row().prop(image_settings, "color_management", text=" ", expand=True)
+
+        flow = layout.grid_flow(row_major=True, columns=0, even_columns=False, even_rows=False, align=True)
+
+        if image_settings.color_management == 'OVERRIDE':
+            owner = image_settings
+        else:
+            owner = scene
+            flow.enabled = False
+
+        col = flow.column()
+
+        if image_settings.has_linear_colorspace:
+            if hasattr(owner, 'linear_colorspace_settings'):
+                col.prop(owner.linear_colorspace_settings, "name", text="Color Space")
+        else:
+            col.prop(owner.display_settings, "display_device")
+            col.separator()
+            col.template_colormanaged_view_settings(owner, "view_settings")
+
+
 class RENDER_PT_encoding(RenderOutputButtonsPanel, Panel):
     bl_label = "Encoding"
     bl_parent_id = "RENDER_PT_output"
@@ -501,6 +519,7 @@ classes = (
     RENDER_PT_stereoscopy,
     RENDER_PT_output,
     RENDER_PT_output_views,
+    RENDER_PT_output_color_management,
     RENDER_PT_encoding,
     RENDER_PT_encoding_video,
     RENDER_PT_encoding_audio,

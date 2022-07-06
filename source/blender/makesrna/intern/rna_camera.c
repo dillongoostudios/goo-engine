@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -150,7 +136,7 @@ static void rna_CameraDOFSettings_aperture_blades_set(PointerRNA *ptr, const int
 {
   CameraDOFSettings *dofsettings = (CameraDOFSettings *)ptr->data;
 
-  if (value == 1 || value == 2) {
+  if (ELEM(value, 1, 2)) {
     if (dofsettings->aperture_blades == 0) {
       dofsettings->aperture_blades = 3;
     }
@@ -406,13 +392,13 @@ static void rna_def_camera_stereo_data(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 
   prop = RNA_def_property(srna, "pole_merge_angle_from", PROP_FLOAT, PROP_ANGLE);
-  RNA_def_property_range(prop, 0.0f, M_PI / 2.0);
+  RNA_def_property_range(prop, 0.0f, M_PI_2);
   RNA_def_property_ui_text(
       prop, "Pole Merge Start Angle", "Angle at which interocular distance starts to fade to 0");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
 
   prop = RNA_def_property(srna, "pole_merge_angle_to", PROP_FLOAT, PROP_ANGLE);
-  RNA_def_property_range(prop, 0.0f, M_PI / 2.0);
+  RNA_def_property_range(prop, 0.0f, M_PI_2);
   RNA_def_property_ui_text(
       prop, "Pole Merge End Angle", "Angle at which interocular distance is 0");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, NULL);
@@ -495,7 +481,7 @@ void RNA_def_camera(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
   static const EnumPropertyItem prop_lens_unit_items[] = {
-      {0, "MILLIMETERS", 0, "Millimeters", "Specify the lens in millimeters"},
+      {0, "MILLIMETERS", 0, "Millimeters", "Specify focal length of the lens in millimeters"},
       {CAM_ANGLETOGGLE,
        "FOV",
        0,
@@ -578,7 +564,8 @@ void RNA_def_camera(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "lens");
   RNA_def_property_range(prop, 1.0f, FLT_MAX);
   RNA_def_property_ui_range(prop, 1.0f, 5000.0f, 100, 4);
-  RNA_def_property_ui_text(prop, "Focal Length", "Perspective Camera lens value in millimeters");
+  RNA_def_property_ui_text(
+      prop, "Focal Length", "Perspective Camera focal length value in millimeters");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_update");
 
   prop = RNA_def_property(srna, "sensor_width", PROP_FLOAT, PROP_DISTANCE_CAMERA);

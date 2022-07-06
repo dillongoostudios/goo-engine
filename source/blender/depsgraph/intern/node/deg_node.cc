@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2013 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2013 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup depsgraph
@@ -67,8 +51,6 @@ const char *nodeTypeAsString(NodeType type)
     /* **** Outer Types **** */
     case NodeType::PARAMETERS:
       return "PARAMETERS";
-    case NodeType::PROXY:
-      return "PROXY";
     case NodeType::ANIMATION:
       return "ANIMATION";
     case NodeType::TRANSFORM:
@@ -174,7 +156,6 @@ eDepsSceneComponentType nodeTypeToSceneComponent(NodeType type)
     case NodeType::BONE:
     case NodeType::SHADING:
     case NodeType::CACHE:
-    case NodeType::PROXY:
     case NodeType::SIMULATION:
     case NodeType::NTREE_OUTPUT:
       return DEG_SCENE_COMP_PARAMETERS;
@@ -194,8 +175,6 @@ NodeType nodeTypeFromObjectComponent(eDepsObjectComponentType component_type)
       return NodeType::UNDEFINED;
     case DEG_OB_COMP_PARAMETERS:
       return NodeType::PARAMETERS;
-    case DEG_OB_COMP_PROXY:
-      return NodeType::PROXY;
     case DEG_OB_COMP_ANIMATION:
       return NodeType::ANIMATION;
     case DEG_OB_COMP_TRANSFORM:
@@ -219,8 +198,6 @@ eDepsObjectComponentType nodeTypeToObjectComponent(NodeType type)
   switch (type) {
     case NodeType::PARAMETERS:
       return DEG_OB_COMP_PARAMETERS;
-    case NodeType::PROXY:
-      return DEG_OB_COMP_PROXY;
     case NodeType::ANIMATION:
       return DEG_OB_COMP_ANIMATION;
     case NodeType::TRANSFORM:

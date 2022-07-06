@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edtransform
@@ -29,6 +13,7 @@
 #include "BKE_animsys.h"
 #include "BKE_context.h"
 #include "BKE_layer.h"
+#include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_object.h"
 #include "BKE_pointcache.h"
@@ -497,6 +482,7 @@ static void clear_trans_object_base_flags(TransInfo *t)
 
 void createTransObject(bContext *C, TransInfo *t)
 {
+  Main *bmain = CTX_data_main(C);
   TransData *td = NULL;
   TransDataExtension *tx;
   const bool is_prop_edit = (t->flag & T_PROP_EDIT) != 0;
@@ -543,7 +529,7 @@ void createTransObject(bContext *C, TransInfo *t)
     }
 
     /* select linked objects, but skip them later */
-    if (ID_IS_LINKED(ob)) {
+    if (!BKE_id_is_editable(bmain, &ob->id)) {
       td->flag |= TD_SKIP;
     }
 

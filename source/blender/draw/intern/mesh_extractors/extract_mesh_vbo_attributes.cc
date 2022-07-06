@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -99,9 +83,10 @@ static uint gpu_component_size_for_attribute_type(CustomDataType type)
 {
   switch (type) {
     case CD_PROP_BOOL:
+    case CD_PROP_INT8:
     case CD_PROP_INT32:
     case CD_PROP_FLOAT: {
-      /* TODO(kevindietrich) : should be 1 when scalar attributes conversion is handled by us. See
+      /* TODO(@kevindietrich): should be 1 when scalar attributes conversion is handled by us. See
        * comment #extract_attr_init. */
       return 3;
     }
@@ -173,17 +158,6 @@ static void init_vbo_for_attribute(const MeshRenderData *mr,
   GPUVertFormat format = {0};
   GPU_vertformat_deinterleave(&format);
   GPU_vertformat_attr_add(&format, attr_name, comp_type, comp_size, fetch_mode);
-
-  /* Ensure Sculpt Vertex Colors are properly aliased. */
-  if (request.cd_type == CD_PROP_COLOR && request.domain == ATTR_DOMAIN_POINT) {
-    CustomData *cd_vdata = get_custom_data_for_domain(mr, ATTR_DOMAIN_POINT);
-    if (request.layer_index == CustomData_get_render_layer(cd_vdata, CD_PROP_COLOR)) {
-      GPU_vertformat_alias_add(&format, "c");
-    }
-    if (request.layer_index == CustomData_get_active_layer(cd_vdata, CD_PROP_COLOR)) {
-      GPU_vertformat_alias_add(&format, "ac");
-    }
-  }
 
   if (build_on_device) {
     GPU_vertbuf_init_build_on_device(vbo, &format, len);
@@ -317,13 +291,17 @@ static void extract_attr_init(const MeshRenderData *mr,
 
   init_vbo_for_attribute(mr, vbo, request, false, static_cast<uint32_t>(mr->loop_len));
 
-  /* TODO(kevindietrich) : float3 is used for scalar attributes as the implicit conversion done by
+  /* TODO(@kevindietrich): float3 is used for scalar attributes as the implicit conversion done by
    * OpenGL to vec4 for a scalar `s` will produce a `vec4(s, 0, 0, 1)`. However, following the
    * Blender convention, it should be `vec4(s, s, s, 1)`. This could be resolved using a similar
    * texture as for volume attribute, so we can control the conversion ourselves. */
   switch (request.cd_type) {
     case CD_PROP_BOOL: {
       extract_attr_generic<bool, float3>(mr, vbo, request);
+      break;
+    }
+    case CD_PROP_INT8: {
+      extract_attr_generic<int8_t, float3>(mr, vbo, request);
       break;
     }
     case CD_PROP_INT32: {
@@ -368,7 +346,7 @@ static void extract_attr_init_subdiv(const DRWSubdivCache *subdiv_cache,
 
   /* Prepare VBO for coarse data. The compute shader only expects floats. */
   GPUVertBuf *src_data = GPU_vertbuf_calloc();
-  static GPUVertFormat coarse_format = {0};
+  GPUVertFormat coarse_format = {0};
   GPU_vertformat_attr_add(&coarse_format, "data", GPU_COMP_F32, dimensions, GPU_FETCH_FLOAT);
   GPU_vertbuf_init_with_format_ex(src_data, &coarse_format, GPU_USAGE_STATIC);
   GPU_vertbuf_data_alloc(src_data, static_cast<uint32_t>(coarse_mesh->totloop));
@@ -376,6 +354,10 @@ static void extract_attr_init_subdiv(const DRWSubdivCache *subdiv_cache,
   switch (request.cd_type) {
     case CD_PROP_BOOL: {
       extract_attr_generic<bool, float3>(mr, src_data, request);
+      break;
+    }
+    case CD_PROP_INT8: {
+      extract_attr_generic<int8_t, float3>(mr, src_data, request);
       break;
     }
     case CD_PROP_INT32: {

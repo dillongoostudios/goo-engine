@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edrend
@@ -26,6 +10,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <list>
 
 #ifndef WIN32
 #  include <unistd.h>
@@ -274,7 +259,7 @@ static bool render_engine_supports_ray_visibility(const Scene *sce)
   return !STREQ(sce->r.engine, RE_engine_id_BLENDER_EEVEE);
 }
 
-static void switch_preview_collection_visibilty(ViewLayer *view_layer, const ePreviewType pr_type)
+static void switch_preview_collection_visibility(ViewLayer *view_layer, const ePreviewType pr_type)
 {
   /* Set appropriate layer as visible. */
   LayerCollection *lc = static_cast<LayerCollection *>(view_layer->layer_collections.first);
@@ -344,7 +329,7 @@ static void set_preview_visibility(Main *pr_main,
                                    const ePreviewType pr_type,
                                    const ePreviewRenderMethod pr_method)
 {
-  switch_preview_collection_visibilty(view_layer, pr_type);
+  switch_preview_collection_visibility(view_layer, pr_type);
   switch_preview_floor_visibility(pr_main, scene, view_layer, pr_method);
   BKE_layer_collection_sync(scene, view_layer);
 }
@@ -388,6 +373,14 @@ static ID *duplicate_ids(ID *id, const bool allow_failure)
                                    LIB_ID_CREATE_LOCAL | LIB_ID_COPY_LOCALIZE |
                                        LIB_ID_COPY_NO_ANIMDATA);
       return id_copy;
+    }
+    case ID_GR: {
+      /* Doesn't really duplicate the collection. Just creates a collection instance empty. */
+      BLI_assert(BKE_previewimg_id_supports_jobs(id));
+      Object *instance_empty = BKE_object_add_only_object(nullptr, OB_EMPTY, nullptr);
+      instance_empty->instance_collection = (Collection *)id;
+      instance_empty->transflag |= OB_DUPLICOLLECTION;
+      return &instance_empty->id;
     }
     /* These support threading, but don't need duplicating. */
     case ID_IM:
@@ -474,11 +467,11 @@ static Scene *preview_prepare_scene(
   if (sce) {
     ViewLayer *view_layer = static_cast<ViewLayer *>(sce->view_layers.first);
 
-    /* Only enable the combined renderpass */
+    /* Only enable the combined render-pass. */
     view_layer->passflag = SCE_PASS_COMBINED;
     view_layer->eevee.render_passes = 0;
 
-    /* this flag tells render to not execute depsgraph or ipos etc */
+    /* This flag tells render to not execute depsgraph or F-Curves etc. */
     sce->r.scemode |= R_BUTS_PREVIEW;
     BLI_strncpy(sce->r.engine, scene->r.engine, sizeof(sce->r.engine));
 
@@ -720,7 +713,8 @@ void ED_preview_draw(const bContext *C, void *idp, void *parentp, void *slotp, r
     ID *parent = (ID *)parentp;
     MTex *slot = (MTex *)slotp;
     SpaceProperties *sbuts = CTX_wm_space_properties(C);
-    ShaderPreview *sp = static_cast<ShaderPreview *>(WM_jobs_customdata(wm, area));
+    ShaderPreview *sp = static_cast<ShaderPreview *>(
+        WM_jobs_customdata_from_type(wm, area, WM_JOB_TYPE_LOAD_PREVIEW));
     rcti newrect;
     bool ok;
     int newx = BLI_rcti_size_x(rect);
@@ -767,7 +761,7 @@ struct ObjectPreviewData {
   /* The main for the preview, not of the current file. */
   Main *pr_main;
   /* Copy of the object to create the preview for. The copy is for thread safety (and to insert
-   * it into an own main). */
+   * it into its own main). */
   Object *object;
   /* Current frame. */
   int cfra;
@@ -837,7 +831,8 @@ static Scene *object_preview_scene_create(const struct ObjectPreviewData *previe
   DEG_graph_build_from_view_layer(depsgraph);
   DEG_evaluate_on_refresh(depsgraph);
 
-  ED_view3d_camera_to_view_selected(preview_data->pr_main, depsgraph, scene, camera_object);
+  ED_view3d_camera_to_view_selected_with_set_clipping(
+      preview_data->pr_main, depsgraph, scene, camera_object);
 
   BKE_scene_graph_update_tagged(depsgraph, preview_data->pr_main);
 
@@ -894,6 +889,44 @@ static void object_preview_render(IconPreview *preview, IconPreviewSize *preview
 
   DEG_graph_free(depsgraph);
   BKE_main_free(preview_main);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Collection Preview
+ *
+ * For the most part this reuses the object preview code by creating an instance collection empty
+ * object and rendering that.
+ *
+ * \{ */
+
+/**
+ * Check if the collection contains any geometry that can be rendered. Otherwise there's nothing to
+ * display in the preview, so don't generate one.
+ * Objects and sub-collections hidden in the render will be skipped.
+ */
+static bool collection_preview_contains_geometry_recursive(const Collection *collection)
+{
+  LISTBASE_FOREACH (CollectionObject *, col_ob, &collection->gobject) {
+    if (col_ob->ob->visibility_flag & OB_HIDE_RENDER) {
+      continue;
+    }
+    if (OB_TYPE_IS_GEOMETRY(col_ob->ob->type)) {
+      return true;
+    }
+  }
+
+  LISTBASE_FOREACH (CollectionChild *, child_col, &collection->children) {
+    if (child_col->collection->flag & COLLECTION_HIDE_RENDER) {
+      continue;
+    }
+    if (collection_preview_contains_geometry_recursive(child_col->collection)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** \} */
@@ -1002,9 +1035,7 @@ static void action_preview_render(IconPreview *preview, IconPreviewSize *preview
  * \{ */
 
 /* inside thread, called by renderer, sets job update value */
-static void shader_preview_update(void *spv,
-                                  RenderResult *UNUSED(rr),
-                                  volatile struct rcti *UNUSED(rect))
+static void shader_preview_update(void *spv, RenderResult *UNUSED(rr), struct rcti *UNUSED(rect))
 {
   ShaderPreview *sp = static_cast<ShaderPreview *>(spv);
 
@@ -1386,89 +1417,73 @@ static void icon_preview_startjob(void *customdata, short *stop, short *do_updat
   ShaderPreview *sp = static_cast<ShaderPreview *>(customdata);
 
   if (sp->pr_method == PR_ICON_DEFERRED) {
-    PreviewImage *prv = static_cast<PreviewImage *>(sp->owner);
-    ImBuf *thumb;
-    char *deferred_data = static_cast<char *>(PRV_DEFERRED_DATA(prv));
-    ThumbSource source = static_cast<ThumbSource>(deferred_data[0]);
-    char *path = &deferred_data[1];
+    BLI_assert_unreachable();
+    return;
+  }
 
-    // printf("generating deferred %d×%d preview for %s\n", sp->sizex, sp->sizey, path);
+  ID *id = sp->id;
+  short idtype = GS(id->name);
 
-    thumb = IMB_thumb_manage(path, THB_LARGE, source);
+  BLI_assert(id != nullptr);
 
-    if (thumb) {
-      /* PreviewImage assumes premultiplied alhpa... */
-      IMB_premultiply_alpha(thumb);
+  if (idtype == ID_IM) {
+    Image *ima = (Image *)id;
+    ImBuf *ibuf = nullptr;
+    ImageUser iuser;
+    BKE_imageuser_default(&iuser);
 
-      icon_copy_rect(thumb, sp->sizex, sp->sizey, sp->pr_rect);
-      IMB_freeImBuf(thumb);
+    if (ima == nullptr) {
+      return;
     }
+
+    /* setup dummy image user */
+    iuser.framenr = 1;
+    iuser.scene = sp->scene;
+
+    /* NOTE(@elubie): this needs to be changed: here image is always loaded if not
+     * already there. Very expensive for large images. Need to find a way to
+     * only get existing `ibuf`. */
+    ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
+    if (ibuf == nullptr || (ibuf->rect == nullptr && ibuf->rect_float == nullptr)) {
+      BKE_image_release_ibuf(ima, ibuf, nullptr);
+      return;
+    }
+
+    icon_copy_rect(ibuf, sp->sizex, sp->sizey, sp->pr_rect);
+
+    *do_update = true;
+
+    BKE_image_release_ibuf(ima, ibuf, nullptr);
+  }
+  else if (idtype == ID_BR) {
+    Brush *br = (Brush *)id;
+
+    br->icon_imbuf = icon_preview_imbuf_from_brush(br);
+
+    memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(uint));
+
+    if (!(br->icon_imbuf) || !(br->icon_imbuf->rect)) {
+      return;
+    }
+
+    icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
+
+    *do_update = true;
+  }
+  else if (idtype == ID_SCR) {
+    bScreen *screen = (bScreen *)id;
+
+    ED_screen_preview_render(screen, sp->sizex, sp->sizey, sp->pr_rect);
+    *do_update = true;
   }
   else {
-    ID *id = sp->id;
-    short idtype = GS(id->name);
+    /* re-use shader job */
+    shader_preview_startjob(customdata, stop, do_update);
 
-    BLI_assert(id != nullptr);
-
-    if (idtype == ID_IM) {
-      Image *ima = (Image *)id;
-      ImBuf *ibuf = nullptr;
-      ImageUser iuser;
-      BKE_imageuser_default(&iuser);
-
-      if (ima == nullptr) {
-        return;
-      }
-
-      /* setup dummy image user */
-      iuser.framenr = 1;
-      iuser.scene = sp->scene;
-
-      /* NOTE(@elubie): this needs to be changed: here image is always loaded if not
-       * already there. Very expensive for large images. Need to find a way to
-       * only get existing `ibuf`. */
-      ibuf = BKE_image_acquire_ibuf(ima, &iuser, nullptr);
-      if (ibuf == nullptr || (ibuf->rect == nullptr && ibuf->rect_float == nullptr)) {
-        BKE_image_release_ibuf(ima, ibuf, nullptr);
-        return;
-      }
-
-      icon_copy_rect(ibuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-      *do_update = true;
-
-      BKE_image_release_ibuf(ima, ibuf, nullptr);
-    }
-    else if (idtype == ID_BR) {
-      Brush *br = (Brush *)id;
-
-      br->icon_imbuf = icon_preview_imbuf_from_brush(br);
-
-      memset(sp->pr_rect, 0x88, sp->sizex * sp->sizey * sizeof(uint));
-
-      if (!(br->icon_imbuf) || !(br->icon_imbuf->rect)) {
-        return;
-      }
-
-      icon_copy_rect(br->icon_imbuf, sp->sizex, sp->sizey, sp->pr_rect);
-
-      *do_update = true;
-    }
-    else if (idtype == ID_SCR) {
-      bScreen *screen = (bScreen *)id;
-
-      ED_screen_preview_render(screen, sp->sizex, sp->sizey, sp->pr_rect);
-      *do_update = true;
-    }
-    else {
-      /* re-use shader job */
-      shader_preview_startjob(customdata, stop, do_update);
-
-      /* world is rendered with alpha=0, so it wasn't displayed
-       * this could be render option for sky to, for later */
-      if (idtype == ID_WO) {
-        set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
-      }
+    /* world is rendered with alpha=0, so it wasn't displayed
+     * this could be render option for sky to, for later */
+    if (idtype == ID_WO) {
+      set_alpha((char *)sp->pr_rect, sp->sizex, sp->sizey, 255);
     }
   }
 }
@@ -1610,6 +1625,12 @@ static void icon_preview_startjob_all_sizes(void *customdata,
             continue;
           }
           break;
+        case ID_GR:
+          BLI_assert(collection_preview_contains_geometry_recursive((Collection *)ip->id));
+          /* A collection instance empty was created, so this can just reuse the object preview
+           * rendering. */
+          object_preview_render(ip, cur_size);
+          continue;
         case ID_AC:
           action_preview_render(ip, cur_size);
           continue;
@@ -1686,6 +1707,197 @@ static void icon_preview_endjob(void *customdata)
   }
 }
 
+/**
+ * Background job to manage requests for deferred loading of previews from the hard drive.
+ *
+ * Launches a single job to manage all incoming preview requests. The job is kept running until all
+ * preview requests are done loading (or it's otherwise aborted, e.g. by closing Blender).
+ *
+ * Note that this will use the OS thumbnail cache, i.e. load a preview from there or add it if not
+ * there yet. These two cases may lead to different performance.
+ */
+class PreviewLoadJob {
+  struct RequestedPreview {
+    PreviewImage *preview;
+    /** Requested size. */
+    eIconSizes icon_size;
+  };
+
+  /** The previews that are still to be loaded. */
+  ThreadQueue *todo_queue_; /* RequestedPreview * */
+  /** All unfinished preview requests, #update_fn() calls #finish_preview_request() on loaded
+   * previews and removes them from this list. Only access from the main thread! */
+  std::list<struct RequestedPreview> requested_previews_;
+
+ public:
+  PreviewLoadJob();
+  ~PreviewLoadJob();
+
+  static PreviewLoadJob &ensure_job(wmWindowManager *wm, wmWindow *win);
+  static void load_jobless(PreviewImage *preview, eIconSizes icon_size);
+
+  void push_load_request(PreviewImage *preview, eIconSizes icon_size);
+
+ private:
+  static void run_fn(void *customdata, short *stop, short *do_update, float *progress);
+  static void update_fn(void *customdata);
+  static void end_fn(void *customdata);
+  static void free_fn(void *customdata);
+
+  /** Mark a single requested preview as being done, remove the request. */
+  static void finish_request(RequestedPreview &request);
+};
+
+PreviewLoadJob::PreviewLoadJob() : todo_queue_(BLI_thread_queue_init())
+{
+}
+
+PreviewLoadJob::~PreviewLoadJob()
+{
+  BLI_thread_queue_free(todo_queue_);
+}
+
+PreviewLoadJob &PreviewLoadJob::ensure_job(wmWindowManager *wm, wmWindow *win)
+{
+  wmJob *wm_job = WM_jobs_get(wm, win, nullptr, "Load Previews", 0, WM_JOB_TYPE_LOAD_PREVIEW);
+
+  if (!WM_jobs_is_running(wm_job)) {
+    PreviewLoadJob *job_data = MEM_new<PreviewLoadJob>("PreviewLoadJobData");
+
+    WM_jobs_customdata_set(wm_job, job_data, free_fn);
+    WM_jobs_timer(wm_job, 0.1, NC_WINDOW, NC_WINDOW);
+    WM_jobs_callbacks(wm_job, run_fn, nullptr, update_fn, end_fn);
+
+    WM_jobs_start(wm, wm_job);
+  }
+
+  return *reinterpret_cast<PreviewLoadJob *>(WM_jobs_customdata_get(wm_job));
+}
+
+void PreviewLoadJob::load_jobless(PreviewImage *preview, const eIconSizes icon_size)
+{
+  PreviewLoadJob job_data{};
+
+  job_data.push_load_request(preview, icon_size);
+
+  short stop = 0, do_update = 0;
+  float progress = 0;
+  run_fn(&job_data, &stop, &do_update, &progress);
+  update_fn(&job_data);
+  end_fn(&job_data);
+}
+
+void PreviewLoadJob::push_load_request(PreviewImage *preview, const eIconSizes icon_size)
+{
+  BLI_assert(preview->tag & PRV_TAG_DEFFERED);
+  RequestedPreview requested_preview{};
+  requested_preview.preview = preview;
+  requested_preview.icon_size = icon_size;
+
+  preview->flag[icon_size] |= PRV_RENDERING;
+  /* Warn main thread code that this preview is being rendered and cannot be freed. */
+  preview->tag |= PRV_TAG_DEFFERED_RENDERING;
+
+  requested_previews_.push_back(requested_preview);
+  BLI_thread_queue_push(todo_queue_, &requested_previews_.back());
+}
+
+void PreviewLoadJob::run_fn(void *customdata,
+                            short *stop,
+                            short *do_update,
+                            float *UNUSED(progress))
+{
+  PreviewLoadJob *job_data = reinterpret_cast<PreviewLoadJob *>(customdata);
+
+  IMB_thumb_locks_acquire();
+
+  while (RequestedPreview *request = reinterpret_cast<RequestedPreview *>(
+             BLI_thread_queue_pop_timeout(job_data->todo_queue_, 100))) {
+    if (*stop) {
+      break;
+    }
+
+    PreviewImage *preview = request->preview;
+
+    const char *deferred_data = static_cast<char *>(PRV_DEFERRED_DATA(preview));
+    const ThumbSource source = static_cast<ThumbSource>(deferred_data[0]);
+    const char *path = &deferred_data[1];
+
+    //    printf("loading deferred %d×%d preview for %s\n", request->sizex, request->sizey, path);
+
+    IMB_thumb_path_lock(path);
+    ImBuf *thumb = IMB_thumb_manage(path, THB_LARGE, source);
+    IMB_thumb_path_unlock(path);
+
+    if (thumb) {
+      /* PreviewImage assumes premultiplied alpha... */
+      IMB_premultiply_alpha(thumb);
+
+      icon_copy_rect(thumb,
+                     preview->w[request->icon_size],
+                     preview->h[request->icon_size],
+                     preview->rect[request->icon_size]);
+      IMB_freeImBuf(thumb);
+    }
+
+    *do_update = true;
+  }
+
+  IMB_thumb_locks_release();
+}
+
+/* Only execute on the main thread! */
+void PreviewLoadJob::finish_request(RequestedPreview &request)
+{
+  PreviewImage *preview = request.preview;
+
+  preview->tag &= ~PRV_TAG_DEFFERED_RENDERING;
+  BKE_previewimg_finish(preview, request.icon_size);
+
+  BLI_assert_msg(BLI_thread_is_main(),
+                 "Deferred releasing of preview images should only run on the main thread");
+  if (preview->tag & PRV_TAG_DEFFERED_DELETE) {
+    BLI_assert(preview->tag & PRV_TAG_DEFFERED);
+    BKE_previewimg_deferred_release(preview);
+  }
+}
+
+void PreviewLoadJob::update_fn(void *customdata)
+{
+  PreviewLoadJob *job_data = reinterpret_cast<PreviewLoadJob *>(customdata);
+
+  for (auto request_it = job_data->requested_previews_.begin();
+       request_it != job_data->requested_previews_.end();) {
+    RequestedPreview &requested = *request_it;
+    /* Skip items that are not done loading yet. */
+    if (requested.preview->tag & PRV_TAG_DEFFERED_RENDERING) {
+      ++request_it;
+      continue;
+    }
+    finish_request(requested);
+
+    /* Remove properly finished previews from the job data. */
+    auto next_it = job_data->requested_previews_.erase(request_it);
+    request_it = next_it;
+  }
+}
+
+void PreviewLoadJob::end_fn(void *customdata)
+{
+  PreviewLoadJob *job_data = reinterpret_cast<PreviewLoadJob *>(customdata);
+
+  /* Finish any possibly remaining queued previews. */
+  for (RequestedPreview &request : job_data->requested_previews_) {
+    finish_request(request);
+  }
+  job_data->requested_previews_.clear();
+}
+
+void PreviewLoadJob::free_fn(void *customdata)
+{
+  MEM_delete(reinterpret_cast<PreviewLoadJob *>(customdata));
+}
+
 static void icon_preview_free(void *customdata)
 {
   IconPreview *ip = (IconPreview *)customdata;
@@ -1710,12 +1922,26 @@ bool ED_preview_id_is_supported(const ID *id)
   if (GS(id->name) == ID_OB) {
     return object_preview_is_type_supported((const Object *)id);
   }
+  if (GS(id->name) == ID_GR) {
+    return collection_preview_contains_geometry_recursive((const Collection *)id);
+  }
   return BKE_previewimg_id_get_p(id) != nullptr;
 }
 
 void ED_preview_icon_render(
-    const bContext *C, Scene *scene, ID *id, uint *rect, int sizex, int sizey)
+    const bContext *C, Scene *scene, PreviewImage *prv_img, ID *id, eIconSizes icon_size)
 {
+  /* Deferred loading of previews from the file system. */
+  if (prv_img->tag & PRV_TAG_DEFFERED) {
+    if (prv_img->flag[icon_size] & PRV_RENDERING) {
+      /* Already in the queue, don't add it again. */
+      return;
+    }
+
+    PreviewLoadJob::load_jobless(prv_img, icon_size);
+    return;
+  }
+
   IconPreview ip = {nullptr};
   short stop = false, update = false;
   float progress = 0.0f;
@@ -1732,7 +1958,10 @@ void ED_preview_icon_render(
   ip.id_copy = duplicate_ids(id, true);
   ip.active_object = CTX_data_active_object(C);
 
-  icon_preview_add_size(&ip, rect, sizex, sizey);
+  prv_img->flag[icon_size] |= PRV_RENDERING;
+
+  icon_preview_add_size(
+      &ip, prv_img->rect[icon_size], prv_img->w[icon_size], prv_img->h[icon_size]);
 
   icon_preview_startjob_all_sizes(&ip, &stop, &update, &progress);
 
@@ -1745,20 +1974,31 @@ void ED_preview_icon_render(
 }
 
 void ED_preview_icon_job(
-    const bContext *C, void *owner, ID *id, uint *rect, int sizex, int sizey, const bool delay)
+    const bContext *C, PreviewImage *prv_img, ID *id, eIconSizes icon_size, const bool delay)
 {
-  wmJob *wm_job;
+  /* Deferred loading of previews from the file system. */
+  if (prv_img->tag & PRV_TAG_DEFFERED) {
+    if (prv_img->flag[icon_size] & PRV_RENDERING) {
+      /* Already in the queue, don't add it again. */
+      return;
+    }
+    PreviewLoadJob &load_job = PreviewLoadJob::ensure_job(CTX_wm_manager(C), CTX_wm_window(C));
+    load_job.push_load_request(prv_img, icon_size);
+
+    return;
+  }
+
   IconPreview *ip, *old_ip;
 
   ED_preview_ensure_dbase();
 
   /* suspended start means it starts after 1 timer step, see WM_jobs_timer below */
-  wm_job = WM_jobs_get(CTX_wm_manager(C),
-                       CTX_wm_window(C),
-                       owner,
-                       "Icon Preview",
-                       WM_JOB_EXCL_RENDER,
-                       WM_JOB_TYPE_RENDER_PREVIEW);
+  wmJob *wm_job = WM_jobs_get(CTX_wm_manager(C),
+                              CTX_wm_window(C),
+                              prv_img,
+                              "Icon Preview",
+                              WM_JOB_EXCL_RENDER,
+                              WM_JOB_TYPE_RENDER_PREVIEW);
 
   ip = MEM_cnew<IconPreview>("icon preview");
 
@@ -1773,20 +2013,14 @@ void ED_preview_icon_job(
   ip->depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ip->scene = DEG_get_input_scene(ip->depsgraph);
   ip->active_object = CTX_data_active_object(C);
-  ip->owner = owner;
+  ip->owner = prv_img;
   ip->id = id;
   ip->id_copy = duplicate_ids(id, false);
 
-  icon_preview_add_size(ip, rect, sizex, sizey);
+  prv_img->flag[icon_size] |= PRV_RENDERING;
 
-  /* Special threading hack:
-   * warn main code that this preview is being rendered and cannot be freed... */
-  {
-    PreviewImage *prv_img = static_cast<PreviewImage *>(owner);
-    if (prv_img->tag & PRV_TAG_DEFFERED) {
-      prv_img->tag |= PRV_TAG_DEFFERED_RENDERING;
-    }
-  }
+  icon_preview_add_size(
+      ip, prv_img->rect[icon_size], prv_img->w[icon_size], prv_img->h[icon_size]);
 
   /* setup job */
   WM_jobs_customdata_set(wm_job, ip, icon_preview_free);

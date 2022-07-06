@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
 #include "BLI_task.hh"
@@ -25,20 +11,6 @@
 #include "UI_resources.h"
 
 #include "node_geometry_util.hh"
-
-namespace blender::nodes {
-void curve_create_default_rotation_attribute(Span<float3> tangents,
-                                             Span<float3> normals,
-                                             MutableSpan<float3> rotations)
-{
-  threading::parallel_for(IndexRange(rotations.size()), 512, [&](IndexRange range) {
-    for (const int i : range) {
-      rotations[i] =
-          float4x4::from_normalized_axis_data({0, 0, 0}, normals[i], tangents[i]).to_euler();
-    }
-  });
-}
-}  // namespace blender::nodes
 
 namespace blender::nodes::node_geo_curve_to_points_cc {
 
@@ -88,6 +60,18 @@ static void node_update(bNodeTree *ntree, bNode *node)
 
   nodeSetSocketAvailability(ntree, count_socket, mode == GEO_NODE_CURVE_RESAMPLE_COUNT);
   nodeSetSocketAvailability(ntree, length_socket, mode == GEO_NODE_CURVE_RESAMPLE_LENGTH);
+}
+
+static void curve_create_default_rotation_attribute(Span<float3> tangents,
+                                                    Span<float3> normals,
+                                                    MutableSpan<float3> rotations)
+{
+  threading::parallel_for(IndexRange(rotations.size()), 512, [&](IndexRange range) {
+    for (const int i : range) {
+      rotations[i] =
+          float4x4::from_normalized_axis_data({0, 0, 0}, normals[i], tangents[i]).to_euler();
+    }
+  });
 }
 
 static Array<int> calculate_spline_point_offsets(GeoNodeExecParams &params,
@@ -335,15 +319,16 @@ static void node_geo_exec(GeoNodeExecParams params)
   attribute_outputs.rotation_id = StrongAnonymousAttributeID("Rotation");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (!geometry_set.has_curve()) {
+    if (!geometry_set.has_curves()) {
       geometry_set.keep_only({GEO_COMPONENT_TYPE_INSTANCES});
       return;
     }
-    const CurveEval &curve = *geometry_set.get_curve_for_read();
-    const Span<SplinePtr> splines = curve.splines();
-    curve.assert_valid_point_attributes();
+    const std::unique_ptr<CurveEval> curve = curves_to_curve_eval(
+        *geometry_set.get_curves_for_read());
+    const Span<SplinePtr> splines = curve->splines();
+    curve->assert_valid_point_attributes();
 
-    const Array<int> offsets = calculate_spline_point_offsets(params, mode, curve, splines);
+    const Array<int> offsets = calculate_spline_point_offsets(params, mode, *curve, splines);
     const int total_size = offsets.last();
     if (total_size == 0) {
       geometry_set.keep_only({GEO_COMPONENT_TYPE_INSTANCES});
@@ -353,7 +338,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     geometry_set.replace_pointcloud(BKE_pointcloud_new_nomain(total_size));
     PointCloudComponent &points = geometry_set.get_component_for_write<PointCloudComponent>();
     ResultAttributes point_attributes = create_attributes_for_transfer(
-        points, curve, attribute_outputs);
+        points, *curve, attribute_outputs);
 
     switch (mode) {
       case GEO_NODE_CURVE_RESAMPLE_COUNT:
@@ -365,7 +350,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         break;
     }
 
-    copy_spline_domain_attributes(curve, offsets, points);
+    copy_spline_domain_attributes(*curve, offsets, points);
 
     if (!point_attributes.rotations.is_empty()) {
       curve_create_default_rotation_attribute(

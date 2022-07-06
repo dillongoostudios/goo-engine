@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edmesh
@@ -102,6 +88,7 @@ typedef struct UndoMesh {
 
   Mesh me;
   int selectmode;
+  char uv_selectmode;
 
   /** \note
    * This isn't a perfect solution, if you edit keys and change shapes this works well
@@ -604,7 +591,8 @@ static void *undomesh_from_editmesh(UndoMesh *um, BMEditMesh *em, Key *key, Undo
     um->me.key = NULL;
   }
 
-  /* BM_mesh_validate(em->bm); */ /* for troubleshooting */
+  /* Uncomment for troubleshooting. */
+  // BM_mesh_validate(em->bm);
 
   BM_mesh_bm_to_me(
       NULL,
@@ -785,6 +773,7 @@ static bool mesh_undosys_step_encode(struct bContext *C, struct Main *bmain, Und
   /* Important not to use the 3D view when getting objects because all objects
    * outside of this list will be moved out of edit-mode when reading back undo steps. */
   ViewLayer *view_layer = CTX_data_view_layer(C);
+  ToolSettings *ts = CTX_data_tool_settings(C);
   uint objects_len = 0;
   Object **objects = ED_undo_editmode_objects_from_view_layer(view_layer, &objects_len);
 
@@ -808,6 +797,7 @@ static bool mesh_undosys_step_encode(struct bContext *C, struct Main *bmain, Und
         &elem->data, me->edit_mesh, me->key, um_references ? um_references[i] : NULL);
     em->needs_flush_to_id = 1;
     us->step.data_size += elem->data.undo_size;
+    elem->data.uv_selectmode = ts->uv_selectmode;
 
 #ifdef USE_ARRAY_STORE
     /** As this is only data storage it is safe to set the session ID here. */
@@ -865,6 +855,7 @@ static void mesh_undosys_step_decode(struct bContext *C,
 
   Scene *scene = CTX_data_scene(C);
   scene->toolsettings->selectmode = us->elems[0].data.selectmode;
+  scene->toolsettings->uv_selectmode = us->elems[0].data.uv_selectmode;
 
   bmain->is_memfile_undo_flush_needed = true;
 

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -47,12 +33,12 @@
  */
 
 #include "BLI_function_ref.hh"
+#include "BLI_generic_virtual_array.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_vector.hh"
 #include "BLI_vector_set.hh"
 
-#include "FN_generic_virtual_array.hh"
-#include "FN_multi_function_builder.hh"
+#include "FN_multi_function.hh"
 
 namespace blender::fn {
 
@@ -87,8 +73,7 @@ class FieldNode {
 
  public:
   FieldNode(FieldNodeType node_type);
-
-  virtual ~FieldNode() = default;
+  virtual ~FieldNode();
 
   virtual const CPPType &output_cpp_type(int output_index) const = 0;
 
@@ -134,7 +119,7 @@ template<typename NodePtr> class GFieldBase {
     return get_default_hash_2(*node_, node_output_index_);
   }
 
-  const fn::CPPType &cpp_type() const
+  const CPPType &cpp_type() const
   {
     return node_->output_cpp_type(node_output_index_);
   }
@@ -230,6 +215,7 @@ class FieldOperation : public FieldNode {
  public:
   FieldOperation(std::shared_ptr<const MultiFunction> function, Vector<GField> inputs = {});
   FieldOperation(const MultiFunction &function, Vector<GField> inputs = {});
+  ~FieldOperation();
 
   Span<GField> inputs() const;
   const MultiFunction &multi_function() const;
@@ -259,6 +245,7 @@ class FieldInput : public FieldNode {
 
  public:
   FieldInput(const CPPType &type, std::string debug_name = "");
+  ~FieldInput();
 
   /**
    * Get the value of this specific input based on the given context. The returned virtual array,
@@ -489,12 +476,12 @@ template<typename T> T evaluate_constant_field(const Field<T> &field)
   return value;
 }
 
+GField make_constant_field(const CPPType &type, const void *value);
+
 template<typename T> Field<T> make_constant_field(T value)
 {
   return make_constant_field(CPPType::get<T>(), &value);
 }
-
-GField make_constant_field(const CPPType &type, const void *value);
 
 /**
  * If the field depends on some input, the same field is returned.

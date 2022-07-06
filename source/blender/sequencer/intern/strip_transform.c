@@ -1,24 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * - Blender Foundation, 2003-2009
- * - Peter Schlaile <peter [at] schlaile [dot] de> 2005/2006
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved.
+ *           2003-2009 Blender Foundation.
+ *           2005-2006 Peter Schlaile <peter [at] schlaile [dot] de> */
 
 /** \file
  * \ingroup bke
@@ -34,6 +17,7 @@
 #include "BKE_sound.h"
 
 #include "SEQ_animation.h"
+#include "SEQ_channels.h"
 #include "SEQ_effects.h"
 #include "SEQ_iterator.h"
 #include "SEQ_relations.h"
@@ -313,9 +297,12 @@ static int shuffle_seq_time_offset_test(SeqCollection *strips_to_shuffle,
       if (!SEQ_transform_test_overlap_seq_seq(seq, seq_other)) {
         continue;
       }
+      if (SEQ_relation_is_effect_of_strip(seq_other, seq)) {
+        continue;
+      }
       if (UNLIKELY(SEQ_collection_has_strip(seq_other, strips_to_shuffle))) {
         CLOG_WARN(&LOG,
-                  "Strip overlaps with itself or another strip, that is to be shuffled."
+                  "Strip overlaps with itself or another strip, that is to be shuffled. "
                   "This should never happen.");
         continue;
       }
@@ -406,6 +393,13 @@ void SEQ_transform_offset_after_frame(Scene *scene,
       }
     }
   }
+}
+
+bool SEQ_transform_is_locked(ListBase *channels, Sequence *seq)
+{
+  SeqTimelineChannel *channel = SEQ_channel_get_by_index(channels, seq->machine);
+  return seq->flag & SEQ_LOCK ||
+         (SEQ_channel_is_locked(channel) && ((seq->flag & SEQ_IGNORE_CHANNEL_LOCK) == 0));
 }
 
 void SEQ_image_transform_mirror_factor_get(const Sequence *seq, float r_mirror[2])
@@ -525,4 +519,19 @@ void SEQ_image_preview_unit_from_px(const Scene *scene, const float co_src[2], f
 {
   co_dst[0] = co_src[0] / scene->r.xsch;
   co_dst[1] = co_src[1] / scene->r.ysch;
+}
+
+void SEQ_image_transform_bounding_box_from_collection(
+    Scene *scene, SeqCollection *strips, bool apply_rotation, float r_min[2], float r_max[2])
+{
+  Sequence *seq;
+
+  INIT_MINMAX2(r_min, r_max);
+  SEQ_ITERATOR_FOREACH (seq, strips) {
+    float quad[4][2];
+    SEQ_image_transform_quad_get(scene, seq, apply_rotation, quad);
+    for (int i = 0; i < 4; i++) {
+      minmax_v2v2_v2(r_min, r_max, quad[i]);
+    }
+  }
 }

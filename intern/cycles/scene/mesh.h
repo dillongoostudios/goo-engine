@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #ifndef __MESH_H__
 #define __MESH_H__
@@ -212,7 +199,7 @@ class Mesh : public Geometry {
   void add_vertex(float3 P);
   void add_vertex_slow(float3 P);
   void add_triangle(int v0, int v1, int v2, int shader, bool smooth);
-  void add_subd_face(int *corners, int num_corners, int shader_, bool smooth_);
+  void add_subd_face(const int *corners, int num_corners, int shader_, bool smooth_);
   void add_edge_crease(int v0, int v1, float weight);
   void add_vertex_crease(int v, float weight);
 

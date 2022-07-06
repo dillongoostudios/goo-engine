@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -30,7 +16,7 @@ struct bContext;
 namespace blender::nodes {
 
 /**
- * Parameters for the operation operation of adding a node after the link drag search menu closes.
+ * Parameters for the operation of adding a node after the link drag search menu closes.
  */
 class LinkSearchOpParams {
  private:
@@ -134,8 +120,8 @@ class GatherLinkSearchOpParams {
 /**
  * This callback can be used for a node type when a few things are true about its inputs.
  * To avoid creating more boilerplate, it is the default callback for node types.
- *  - Either all declared sockets are visible in the default state of the node, *OR* the node's
- *    type's declaration has been extended with #make_available functions for those sockets.
+ * - Either all declared sockets are visible in the default state of the node, *OR* the node's
+ *   type's declaration has been extended with #make_available functions for those sockets.
  *
  * If a node type does not meet these criteria, the function will do nothing in a release build.
  * In a debug build, an assert will most likely be hit.

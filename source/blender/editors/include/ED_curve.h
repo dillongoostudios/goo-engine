@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -35,6 +19,7 @@ struct EditNurb;
 struct Main;
 struct Nurb;
 struct Object;
+struct SelectPick_Params;
 struct Text;
 struct UndoType;
 struct View3D;
@@ -62,8 +47,13 @@ void ED_curve_editnurb_load(struct Main *bmain, struct Object *obedit);
 void ED_curve_editnurb_make(struct Object *obedit);
 void ED_curve_editnurb_free(struct Object *obedit);
 
-bool ED_curve_editnurb_select_pick(
-    struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+/**
+ * \param dist_px: Maximum distance to pick (in pixels).
+ */
+bool ED_curve_editnurb_select_pick(struct bContext *C,
+                                   const int mval[2],
+                                   int dist_px,
+                                   const struct SelectPick_Params *params);
 
 struct Nurb *ED_curve_add_nurbs_primitive(
     struct bContext *C, struct Object *obedit, float mat[4][4], int type, int newob);
@@ -116,10 +106,13 @@ int ED_curve_updateAnimPaths(struct Main *bmain, struct Curve *cu);
 bool ED_curve_active_center(struct Curve *cu, float center[3]);
 
 /**
- * TextBox selection
+ * Text box selection.
+ *
+ * \return True when pick finds an element or the selection changed.
  */
-bool ED_curve_editfont_select_pick(
-    struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+bool ED_curve_editfont_select_pick(struct bContext *C,
+                                   const int mval[2],
+                                   const struct SelectPick_Params *params);
 
 /* editfont_undo.c */
 

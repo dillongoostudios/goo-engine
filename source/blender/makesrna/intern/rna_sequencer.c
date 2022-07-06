@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -29,7 +15,9 @@
 #include "DNA_vfont_types.h"
 
 #include "BLI_iterator.h"
+#include "BLI_listbase.h"
 #include "BLI_math.h"
+#include "BLI_string_utils.h"
 
 #include "BLT_translation.h"
 
@@ -48,6 +36,7 @@
 #include "rna_internal.h"
 
 #include "SEQ_add.h"
+#include "SEQ_channels.h"
 #include "SEQ_effects.h"
 #include "SEQ_iterator.h"
 #include "SEQ_modifier.h"
@@ -71,13 +60,13 @@ typedef struct EffectInfo {
 } EffectInfo;
 
 const EnumPropertyItem rna_enum_sequence_modifier_type_items[] = {
+    {seqModifierType_BrightContrast, "BRIGHT_CONTRAST", ICON_NONE, "Bright/Contrast", ""},
     {seqModifierType_ColorBalance, "COLOR_BALANCE", ICON_NONE, "Color Balance", ""},
     {seqModifierType_Curves, "CURVES", ICON_NONE, "Curves", ""},
     {seqModifierType_HueCorrect, "HUE_CORRECT", ICON_NONE, "Hue Correct", ""},
-    {seqModifierType_BrightContrast, "BRIGHT_CONTRAST", ICON_NONE, "Bright/Contrast", ""},
     {seqModifierType_Mask, "MASK", ICON_NONE, "Mask", ""},
-    {seqModifierType_WhiteBalance, "WHITE_BALANCE", ICON_NONE, "White Balance", ""},
     {seqModifierType_Tonemap, "TONEMAP", ICON_NONE, "Tone Map", ""},
+    {seqModifierType_WhiteBalance, "WHITE_BALANCE", ICON_NONE, "White Balance", ""},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -1388,6 +1377,71 @@ static void rna_Sequence_separate(ID *id, Sequence *seqm, Main *bmain)
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
 
+/* Find channel owner. If NULL, owner is `Editing`, otherwise it's `Sequence`. */
+static Sequence *rna_SeqTimelineChannel_owner_get(Editing *ed, SeqTimelineChannel *channel)
+{
+  SeqCollection *strips = SEQ_query_all_strips_recursive(&ed->seqbase);
+
+  Sequence *channel_owner = NULL;
+  Sequence *seq;
+  SEQ_ITERATOR_FOREACH (seq, strips) {
+    if (seq->type != SEQ_TYPE_META) {
+      continue;
+    }
+    if (BLI_findindex(&seq->channels, channel) >= 0) {
+      channel_owner = seq;
+    }
+  }
+
+  SEQ_collection_free(strips);
+  return channel_owner;
+}
+
+static void rna_SequenceTimelineChannel_name_set(PointerRNA *ptr, const char *value)
+{
+  SeqTimelineChannel *channel = (SeqTimelineChannel *)ptr->data;
+  Scene *scene = (Scene *)ptr->owner_id;
+  Editing *ed = SEQ_editing_get(scene);
+
+  Sequence *channel_owner = rna_SeqTimelineChannel_owner_get(ed, channel);
+  ListBase *channels_base = &ed->channels;
+
+  if (channel_owner != NULL) {
+    channels_base = &channel_owner->channels;
+  }
+
+  BLI_strncpy_utf8(channel->name, value, sizeof(channel->name));
+  BLI_uniquename(channels_base,
+                 channel,
+                 "Channel",
+                 '.',
+                 offsetof(SeqTimelineChannel, name),
+                 sizeof(channel->name));
+}
+
+static char *rna_SeqTimelineChannel_path(PointerRNA *ptr)
+{
+  Scene *scene = (Scene *)ptr->owner_id;
+  Editing *ed = SEQ_editing_get(scene);
+  SeqTimelineChannel *channel = (SeqTimelineChannel *)ptr->data;
+
+  Sequence *channel_owner = rna_SeqTimelineChannel_owner_get(ed, channel);
+
+  char channel_name_esc[(sizeof(channel->name)) * 2];
+  BLI_str_escape(channel_name_esc, channel->name, sizeof(channel_name_esc));
+
+  if (channel_owner == NULL) {
+    return BLI_sprintfN("sequence_editor.channels[\"%s\"]", channel_name_esc);
+  }
+  else {
+    char owner_name_esc[(sizeof(channel_owner->name) - 2) * 2];
+    BLI_str_escape(owner_name_esc, channel_owner->name + 2, sizeof(owner_name_esc));
+    return BLI_sprintfN("sequence_editor.sequences_all[\"%s\"].channels[\"%s\"]",
+                        owner_name_esc,
+                        channel_name_esc);
+  }
+}
+
 #else
 
 static void rna_def_strip_element(BlenderRNA *brna)
@@ -1456,6 +1510,12 @@ static void rna_def_strip_crop(BlenderRNA *brna)
   RNA_def_struct_path_func(srna, "rna_SequenceCrop_path");
 }
 
+static const EnumPropertyItem transform_filter_items[] = {
+    {SEQ_TRANSFORM_FILTER_NEAREST, "NEAREST", 0, "Nearest", ""},
+    {SEQ_TRANSFORM_FILTER_BILINEAR, "BILINEAR", 0, "Bilinear", ""},
+    {0, NULL, 0, NULL, NULL},
+};
+
 static void rna_def_strip_transform(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -1479,16 +1539,16 @@ static void rna_def_strip_transform(BlenderRNA *brna)
   RNA_def_property_float_default(prop, 1.0f);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceTransform_update");
 
-  prop = RNA_def_property(srna, "offset_x", PROP_INT, PROP_PIXEL);
-  RNA_def_property_int_sdna(prop, NULL, "xofs");
+  prop = RNA_def_property(srna, "offset_x", PROP_FLOAT, PROP_PIXEL);
+  RNA_def_property_float_sdna(prop, NULL, "xofs");
   RNA_def_property_ui_text(prop, "Translate X", "Move along X axis");
-  RNA_def_property_ui_range(prop, INT_MIN, INT_MAX, 1, 6);
+  RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 100, 3);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceTransform_update");
 
-  prop = RNA_def_property(srna, "offset_y", PROP_INT, PROP_PIXEL);
-  RNA_def_property_int_sdna(prop, NULL, "yofs");
+  prop = RNA_def_property(srna, "offset_y", PROP_FLOAT, PROP_PIXEL);
+  RNA_def_property_float_sdna(prop, NULL, "yofs");
   RNA_def_property_ui_text(prop, "Translate Y", "Move along Y axis");
-  RNA_def_property_ui_range(prop, INT_MIN, INT_MAX, 1, 6);
+  RNA_def_property_ui_range(prop, -FLT_MAX, FLT_MAX, 100, 3);
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceTransform_update");
 
   prop = RNA_def_property(srna, "rotation", PROP_FLOAT, PROP_ANGLE);
@@ -1500,6 +1560,13 @@ static void rna_def_strip_transform(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "origin");
   RNA_def_property_ui_text(prop, "Origin", "Origin of image for transformation");
   RNA_def_property_ui_range(prop, 0, 1, 1, 3);
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceTransform_update");
+
+  prop = RNA_def_property(srna, "filter", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "filter");
+  RNA_def_property_enum_items(prop, transform_filter_items);
+  RNA_def_property_enum_default(prop, SEQ_TRANSFORM_FILTER_BILINEAR);
+  RNA_def_property_ui_text(prop, "Filter", "Type of filter to use for image transformation");
   RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_SequenceTransform_update");
 
   RNA_def_struct_path_func(srna, "rna_SequenceTransform_path");
@@ -2082,6 +2149,34 @@ static void rna_def_sequence(BlenderRNA *brna)
   RNA_api_sequence_strip(srna);
 }
 
+static void rna_def_channel(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "SequenceTimelineChannel", NULL);
+  RNA_def_struct_sdna(srna, "SeqTimelineChannel");
+  RNA_def_struct_path_func(srna, "rna_SeqTimelineChannel_path");
+  RNA_def_struct_ui_text(srna, "Channel", "");
+
+  prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_maxlength(prop, sizeof(((SeqTimelineChannel *)NULL)->name));
+  RNA_def_property_ui_text(prop, "Name", "");
+  RNA_def_struct_name_property(srna, prop);
+  RNA_def_property_string_funcs(prop, NULL, NULL, "rna_SequenceTimelineChannel_name_set");
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, NULL);
+
+  prop = RNA_def_property(srna, "lock", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_CHANNEL_LOCK);
+  RNA_def_property_ui_text(prop, "Lock channel", "");
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, NULL);
+
+  prop = RNA_def_property(srna, "mute", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "flag", SEQ_CHANNEL_MUTE);
+  RNA_def_property_ui_text(prop, "Mute channel", "");
+  RNA_def_property_update(prop, NC_SCENE | ND_SEQUENCER, "rna_Sequence_sound_update");
+}
+
 static void rna_def_editor(BlenderRNA *brna)
 {
   StructRNA *srna;
@@ -2129,6 +2224,11 @@ static void rna_def_editor(BlenderRNA *brna)
       prop, "Meta Stack", "Meta strip stack, last is currently edited meta strip");
   RNA_def_property_collection_funcs(
       prop, NULL, NULL, NULL, "rna_SequenceEditor_meta_stack_get", NULL, NULL, NULL, NULL);
+
+  prop = RNA_def_property(srna, "channels", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, NULL, "channels", NULL);
+  RNA_def_property_struct_type(prop, "SequenceTimelineChannel");
+  RNA_def_property_ui_text(prop, "Channels", "");
 
   prop = RNA_def_property(srna, "active_strip", PROP_POINTER, PROP_NONE);
   RNA_def_property_pointer_sdna(prop, NULL, "act_seq");
@@ -2475,6 +2575,11 @@ static void rna_def_meta(BlenderRNA *brna)
   RNA_def_property_struct_type(prop, "Sequence");
   RNA_def_property_ui_text(prop, "Sequences", "Sequences nested in meta strip");
   RNA_api_sequences(brna, prop, true);
+
+  prop = RNA_def_property(srna, "channels", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, NULL, "channels", NULL);
+  RNA_def_property_struct_type(prop, "SequenceTimelineChannel");
+  RNA_def_property_ui_text(prop, "Channels", "");
 
   func = RNA_def_function(srna, "separate", "rna_Sequence_separate");
   RNA_def_function_flag(func, FUNC_USE_SELF_ID | FUNC_USE_MAIN);
@@ -3473,6 +3578,7 @@ void RNA_def_sequencer(BlenderRNA *brna)
 
   rna_def_sequence(brna);
   rna_def_editor(brna);
+  rna_def_channel(brna);
 
   rna_def_image(brna);
   rna_def_meta(brna);

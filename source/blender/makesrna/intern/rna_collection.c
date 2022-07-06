@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -152,7 +138,7 @@ static bool rna_Collection_objects_override_apply(Main *bmain,
                                                   PointerRNA *ptr_dst,
                                                   PointerRNA *UNUSED(ptr_src),
                                                   PointerRNA *UNUSED(ptr_storage),
-                                                  PropertyRNA *UNUSED(prop_dst),
+                                                  PropertyRNA *prop_dst,
                                                   PropertyRNA *UNUSED(prop_src),
                                                   PropertyRNA *UNUSED(prop_storage),
                                                   const int UNUSED(len_dst),
@@ -199,6 +185,7 @@ static bool rna_Collection_objects_override_apply(Main *bmain,
     BKE_main_collection_sync(bmain);
   }
 
+  RNA_property_update_main(bmain, NULL, ptr_dst, prop_dst);
   return true;
 }
 
@@ -259,7 +246,7 @@ static bool rna_Collection_children_override_apply(Main *bmain,
                                                    PointerRNA *ptr_dst,
                                                    PointerRNA *UNUSED(ptr_src),
                                                    PointerRNA *UNUSED(ptr_storage),
-                                                   PropertyRNA *UNUSED(prop_dst),
+                                                   PropertyRNA *prop_dst,
                                                    PropertyRNA *UNUSED(prop_src),
                                                    PropertyRNA *UNUSED(prop_storage),
                                                    const int UNUSED(len_dst),
@@ -301,6 +288,7 @@ static bool rna_Collection_children_override_apply(Main *bmain,
   BKE_collection_object_cache_free(coll_dst);
   BKE_main_collection_sync(bmain);
 
+  RNA_property_update_main(bmain, NULL, ptr_dst, prop_dst);
   return true;
 }
 

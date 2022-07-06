@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup wm
@@ -108,7 +92,10 @@ struct PointerRNA *WM_gizmo_operator_set(struct wmGizmo *gz,
                                          int part_index,
                                          struct wmOperatorType *ot,
                                          struct IDProperty *properties);
-int WM_gizmo_operator_invoke(struct bContext *C, struct wmGizmo *gz, struct wmGizmoOpElem *gzop);
+int WM_gizmo_operator_invoke(struct bContext *C,
+                             struct wmGizmo *gz,
+                             struct wmGizmoOpElem *gzop,
+                             const struct wmEvent *event);
 
 /* Callbacks. */
 
@@ -193,6 +180,7 @@ void WM_gizmo_properties_clear(struct PointerRNA *ptr);
 void WM_gizmo_properties_free(struct PointerRNA *ptr);
 
 /* wm_gizmo_type.c */
+
 const struct wmGizmoType *WM_gizmotype_find(const char *idname, bool quiet);
 void WM_gizmotype_append(void (*gtfunc)(struct wmGizmoType *));
 void WM_gizmotype_append_ptr(void (*gtfunc)(struct wmGizmoType *, void *), void *userdata);
@@ -208,6 +196,7 @@ void WM_gizmotype_free_ptr(struct wmGizmoType *gzt);
 void WM_gizmotype_iter(struct GHashIterator *ghi);
 
 /* wm_gizmo_group_type.c */
+
 struct wmGizmoGroupType *WM_gizmogrouptype_find(const char *idname, bool quiet);
 struct wmGizmoGroupType *WM_gizmogrouptype_append(void (*wtfunc)(struct wmGizmoGroupType *));
 struct wmGizmoGroupType *WM_gizmogrouptype_append_ptr(void (*wtfunc)(struct wmGizmoGroupType *,
@@ -241,6 +230,7 @@ void WM_gizmoconfig_update(struct Main *bmain);
 void WM_gizmoconfig_update_tag_group_remove(struct wmGizmoMap *gzmap);
 
 /* wm_maniulator_target_props.c */
+
 struct wmGizmoProperty *WM_gizmo_target_property_array(struct wmGizmo *gz);
 struct wmGizmoProperty *WM_gizmo_target_property_at_index(struct wmGizmo *gz, int index);
 struct wmGizmoProperty *WM_gizmo_target_property_find(struct wmGizmo *gz, const char *idname);

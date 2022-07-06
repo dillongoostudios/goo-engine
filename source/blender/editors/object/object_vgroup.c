@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edobj
@@ -39,6 +23,7 @@
 
 #include "BLI_alloca.h"
 #include "BLI_array.h"
+#include "BLI_bitmap.h"
 #include "BLI_blenlib.h"
 #include "BLI_listbase.h"
 #include "BLI_math.h"
@@ -62,6 +47,8 @@
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
 #include "DEG_depsgraph_query.h"
+
+#include "BLT_translation.h"
 
 #include "DNA_armature_types.h"
 #include "RNA_access.h"
@@ -1353,17 +1340,17 @@ static void moveCloserToDistanceFromPlane(Depsgraph *depsgraph,
   float oldPos[3] = {0};
   float vc, hc, dist = 0.0f;
   int i, k;
-  float(*changes)[2] = MEM_mallocN(sizeof(float *) * totweight * 2, "vertHorzChange");
+  float(*changes)[2] = MEM_mallocN(sizeof(float[2]) * totweight, "vertHorzChange");
   float *dists = MEM_mallocN(sizeof(float) * totweight, "distance");
 
   /* track if up or down moved it closer for each bone */
-  int *upDown = MEM_callocN(sizeof(int) * totweight, "upDownTracker");
+  bool *upDown = MEM_callocN(sizeof(bool) * totweight, "upDownTracker");
 
   int *dwIndices = MEM_callocN(sizeof(int) * totweight, "dwIndexTracker");
   float distToStart;
   int bestIndex = 0;
   bool wasChange;
-  char wasUp;
+  bool wasUp;
   int lastIndex = -1;
   float originalDistToBe = distToBe;
   do {
@@ -1423,13 +1410,13 @@ static void moveCloserToDistanceFromPlane(Depsgraph *depsgraph,
         }
         else {
           if (fabsf(dist - distToBe) < fabsf(dists[i] - distToBe)) {
-            upDown[i] = 0;
+            upDown[i] = false;
             changes[i][0] = vc;
             changes[i][1] = hc;
             dists[i] = dist;
           }
           else {
-            upDown[i] = 1;
+            upDown[i] = true;
           }
           if (fabsf(dists[i] - distToBe) > fabsf(distToStart - distToBe)) {
             changes[i][0] = 0;
@@ -1441,8 +1428,6 @@ static void moveCloserToDistanceFromPlane(Depsgraph *depsgraph,
     }
     /* sort the changes by the vertical change */
     for (k = 0; k < totweight; k++) {
-      float tf;
-      int ti;
       bestIndex = k;
       for (i = k + 1; i < totweight; i++) {
         dist = dists[i];
@@ -1453,25 +1438,10 @@ static void moveCloserToDistanceFromPlane(Depsgraph *depsgraph,
       }
       /* switch with k */
       if (bestIndex != k) {
-        ti = upDown[k];
-        upDown[k] = upDown[bestIndex];
-        upDown[bestIndex] = ti;
-
-        ti = dwIndices[k];
-        dwIndices[k] = dwIndices[bestIndex];
-        dwIndices[bestIndex] = ti;
-
-        tf = changes[k][0];
-        changes[k][0] = changes[bestIndex][0];
-        changes[bestIndex][0] = tf;
-
-        tf = changes[k][1];
-        changes[k][1] = changes[bestIndex][1];
-        changes[bestIndex][1] = tf;
-
-        tf = dists[k];
-        dists[k] = dists[bestIndex];
-        dists[bestIndex] = tf;
+        SWAP(bool, upDown[k], upDown[bestIndex]);
+        SWAP(int, dwIndices[k], dwIndices[bestIndex]);
+        swap_v2_v2(changes[k], changes[bestIndex]);
+        SWAP(float, dists[k], dists[bestIndex]);
       }
     }
     bestIndex = -1;
@@ -2464,17 +2434,14 @@ void ED_vgroup_mirror(Object *ob,
         sel = sel_mirr = true;
       }
 
-      /* tag verts we have used */
-      for (vidx = 0, mv = me->mvert; vidx < me->totvert; vidx++, mv++) {
-        mv->flag &= ~ME_VERT_TMP_TAG;
-      }
+      BLI_bitmap *vert_tag = BLI_BITMAP_NEW(me->totvert, __func__);
 
       for (vidx = 0, mv = me->mvert; vidx < me->totvert; vidx++, mv++) {
-        if ((mv->flag & ME_VERT_TMP_TAG) == 0) {
+        if (!BLI_BITMAP_TEST(vert_tag, vidx)) {
           if ((vidx_mirr = mesh_get_x_mirror_vert(ob, NULL, vidx, use_topology)) != -1) {
             if (vidx != vidx_mirr) {
               mv_mirr = &me->mvert[vidx_mirr];
-              if ((mv_mirr->flag & ME_VERT_TMP_TAG) == 0) {
+              if (!BLI_BITMAP_TEST(vert_tag, vidx_mirr)) {
 
                 if (use_vert_sel) {
                   sel = mv->flag & SELECT;
@@ -2489,8 +2456,8 @@ void ED_vgroup_mirror(Object *ob,
                   totmirr++;
                 }
 
-                mv->flag |= ME_VERT_TMP_TAG;
-                mv_mirr->flag |= ME_VERT_TMP_TAG;
+                BLI_BITMAP_ENABLE(vert_tag, vidx);
+                BLI_BITMAP_ENABLE(vert_tag, vidx_mirr);
               }
             }
           }
@@ -2499,6 +2466,8 @@ void ED_vgroup_mirror(Object *ob,
           }
         }
       }
+
+      MEM_freeN(vert_tag);
     }
   }
   else if (ob->type == OB_LATTICE) {
@@ -3076,7 +3045,7 @@ static int vertex_group_select_exec(bContext *C, wmOperator *UNUSED(op))
 {
   Object *ob = ED_object_context(C);
 
-  if (!ob || ID_IS_LINKED(ob)) {
+  if (!ob || ID_IS_LINKED(ob) || ID_IS_OVERRIDE_LIBRARY(ob)) {
     return OPERATOR_CANCELLED;
   }
 
@@ -3427,16 +3396,16 @@ static char *vertex_group_lock_description(struct bContext *UNUSED(C),
 
   switch (action) {
     case VGROUP_LOCK:
-      action_str = "Lock";
+      action_str = TIP_("Lock");
       break;
     case VGROUP_UNLOCK:
-      action_str = "Unlock";
+      action_str = TIP_("Unlock");
       break;
     case VGROUP_TOGGLE:
-      action_str = "Toggle locks of";
+      action_str = TIP_("Toggle locks of");
       break;
     case VGROUP_INVERT:
-      action_str = "Invert locks of";
+      action_str = TIP_("Invert locks of");
       break;
     default:
       return NULL;
@@ -3444,34 +3413,34 @@ static char *vertex_group_lock_description(struct bContext *UNUSED(C),
 
   switch (mask) {
     case VGROUP_MASK_ALL:
-      target_str = "all";
+      target_str = TIP_("all");
       break;
     case VGROUP_MASK_SELECTED:
-      target_str = "selected";
+      target_str = TIP_("selected");
       break;
     case VGROUP_MASK_UNSELECTED:
-      target_str = "unselected";
+      target_str = TIP_("unselected");
       break;
     case VGROUP_MASK_INVERT_UNSELECTED:
       switch (action) {
         case VGROUP_INVERT:
-          target_str = "selected";
+          target_str = TIP_("selected");
           break;
         case VGROUP_LOCK:
-          target_str = "selected and unlock unselected";
+          target_str = TIP_("selected and unlock unselected");
           break;
         case VGROUP_UNLOCK:
-          target_str = "selected and lock unselected";
+          target_str = TIP_("selected and lock unselected");
           break;
         default:
-          target_str = "all and invert unselected";
+          target_str = TIP_("all and invert unselected");
       }
       break;
     default:
       return NULL;
   }
 
-  return BLI_sprintfN("%s %s vertex groups of the active object", action_str, target_str);
+  return BLI_sprintfN(TIP_("%s %s vertex groups of the active object"), action_str, target_str);
 }
 
 void OBJECT_OT_vertex_group_lock(wmOperatorType *ot)

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2020, Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -35,6 +19,7 @@
 #include "gl_index_buffer.hh"
 #include "gl_query.hh"
 #include "gl_shader.hh"
+#include "gl_storage_buffer.hh"
 #include "gl_texture.hh"
 #include "gl_uniform_buffer.hh"
 #include "gl_vertex_buffer.hh"
@@ -117,6 +102,11 @@ class GLBackend : public GPUBackend {
     return new GLUniformBuf(size, name);
   };
 
+  StorageBuf *storagebuf_alloc(int size, GPUUsageType usage, const char *name) override
+  {
+    return new GLStorageBuf(size, usage, name);
+  };
+
   VertBuf *vertbuf_alloc() override
   {
     return new GLVertBuf();
@@ -132,6 +122,24 @@ class GLBackend : public GPUBackend {
     GLContext::get()->state_manager_active_get()->apply_state();
     GLCompute::dispatch(groups_x_len, groups_y_len, groups_z_len);
   }
+
+  void compute_dispatch_indirect(StorageBuf *indirect_buf) override
+  {
+    GLContext::get()->state_manager_active_get()->apply_state();
+
+    dynamic_cast<GLStorageBuf *>(indirect_buf)->bind_as(GL_DISPATCH_INDIRECT_BUFFER);
+    /* This barrier needs to be here as it only work on the currently bound indirect buffer. */
+    glMemoryBarrier(GL_DRAW_INDIRECT_BUFFER);
+
+    glDispatchComputeIndirect((GLintptr)0);
+    /* Unbind. */
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+  }
+
+  /* Render Frame Coordination */
+  void render_begin(void) override{};
+  void render_end(void) override{};
+  void render_step(void) override{};
 
  private:
   static void platform_init();

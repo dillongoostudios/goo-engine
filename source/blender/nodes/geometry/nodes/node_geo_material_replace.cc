@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "node_geometry_util.hh"
 
@@ -42,8 +28,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    Mesh *mesh = geometry_set.get_mesh_for_write();
-    if (mesh != nullptr) {
+    if (Mesh *mesh = geometry_set.get_mesh_for_write()) {
       for (const int i : IndexRange(mesh->totcol)) {
         if (mesh->mat[i] == old_material) {
           mesh->mat[i] = new_material;

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -575,7 +561,7 @@ void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
 typedef bool (*MeshRemap_CheckIslandBoundary)(const struct MPoly *mpoly,
                                               const struct MLoop *mloop,
                                               const struct MEdge *medge,
-                                              const int nbr_edge_users,
+                                              const int edge_user_count,
                                               const struct MPoly *mpoly_array,
                                               const struct MeshElemMap *edge_poly_map,
                                               void *user_data);
@@ -778,14 +764,14 @@ static void poly_edge_loop_islands_calc(const MEdge *medge,
 static bool poly_is_island_boundary_smooth_cb(const MPoly *mp,
                                               const MLoop *UNUSED(ml),
                                               const MEdge *me,
-                                              const int nbr_edge_users,
+                                              const int edge_user_count,
                                               const MPoly *mpoly_array,
                                               const MeshElemMap *edge_poly_map,
                                               void *UNUSED(user_data))
 {
   /* Edge is sharp if one of its polys is flat, or edge itself is sharp,
    * or edge is not used by exactly two polygons. */
-  if ((mp->flag & ME_SMOOTH) && !(me->flag & ME_SHARP) && (nbr_edge_users == 2)) {
+  if ((mp->flag & ME_SMOOTH) && !(me->flag & ME_SHARP) && (edge_user_count == 2)) {
     /* In that case, edge appears to be smooth, but we need to check its other poly too. */
     const MPoly *mp_other = (mp == &mpoly_array[edge_poly_map->indices[0]]) ?
                                 &mpoly_array[edge_poly_map->indices[1]] :
@@ -949,7 +935,7 @@ typedef struct MeshCheckIslandBoundaryUv {
 static bool mesh_check_island_boundary_uv(const MPoly *UNUSED(mp),
                                           const MLoop *ml,
                                           const MEdge *me,
-                                          const int UNUSED(nbr_edge_users),
+                                          const int UNUSED(edge_user_count),
                                           const MPoly *UNUSED(mpoly_array),
                                           const MeshElemMap *UNUSED(edge_poly_map),
                                           void *user_data)

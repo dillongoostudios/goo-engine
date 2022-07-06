@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -130,6 +116,11 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
     ID *id = static_cast<ID *>(lbarray[a]->first);
     const bool is_library = (GS(id->name) == ID_LI) && (lib != nullptr);
 
+    /* Don't show deprecated types. */
+    if (ID_TYPE_IS_DEPRECATED(GS(id->name))) {
+      continue;
+    }
+
     /* check if there's data in current lib */
     for (ID *id_iter : List<ID>(lbarray[a])) {
       if (id_iter->lib == lib) {
@@ -164,7 +155,7 @@ TreeElement *TreeDisplayLibraries::add_library_contents(Main &mainvar, ListBase 
         }
         else {
           ten = outliner_add_element(
-              &space_outliner_, &tenlib->subtree, lbarray[a], nullptr, TSE_ID_BASE, 0);
+              &space_outliner_, &tenlib->subtree, lib, nullptr, TSE_ID_BASE, a);
           ten->directdata = lbarray[a];
           ten->name = outliner_idcode_to_plural(GS(id->name));
         }

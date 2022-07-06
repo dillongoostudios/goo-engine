@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edtransform
@@ -177,7 +161,7 @@ static void graph_bezt_get_transform_selection(const TransInfo *t,
   bool left = use_handle ? ((bezt->f1 & SELECT) != 0) : key;
   bool right = use_handle ? ((bezt->f3 & SELECT) != 0) : key;
 
-  if (use_handle && t->is_launch_event_tweak) {
+  if (use_handle && t->is_launch_event_drag) {
     if (sipo->runtime.flag & SIPO_RUNTIME_FLAG_TWEAK_HANDLES_LEFT) {
       key = right = false;
     }

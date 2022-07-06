@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spview3d
@@ -32,6 +16,8 @@ struct ARegionType;
 struct BoundBox;
 struct Depsgraph;
 struct Object;
+struct Scene;
+struct ViewContext;
 struct ViewLayer;
 struct bContext;
 struct wmGizmoGroupType;
@@ -40,95 +26,32 @@ struct wmKeyConfig;
 struct wmOperatorType;
 struct wmWindowManager;
 
-/* drawing flags: */
-enum {
-  DRAW_PICKING = (1 << 0),
-  DRAW_CONSTCOLOR = (1 << 1),
-  DRAW_SCENESET = (1 << 2),
-};
-
 /* view3d_header.c */
+
 void VIEW3D_OT_toggle_matcap_flip(struct wmOperatorType *ot);
 
 /* view3d_ops.c */
+
 void view3d_operatortypes(void);
 
 /* view3d_edit.c */
-void VIEW3D_OT_zoom(struct wmOperatorType *ot);
-void VIEW3D_OT_dolly(struct wmOperatorType *ot);
+
 void VIEW3D_OT_zoom_camera_1_to_1(struct wmOperatorType *ot);
-void VIEW3D_OT_move(struct wmOperatorType *ot);
-void VIEW3D_OT_rotate(struct wmOperatorType *ot);
-#ifdef WITH_INPUT_NDOF
-void VIEW3D_OT_ndof_orbit(struct wmOperatorType *ot);
-void VIEW3D_OT_ndof_orbit_zoom(struct wmOperatorType *ot);
-void VIEW3D_OT_ndof_pan(struct wmOperatorType *ot);
-void VIEW3D_OT_ndof_all(struct wmOperatorType *ot);
-#endif /* WITH_INPUT_NDOF */
-void VIEW3D_OT_view_all(struct wmOperatorType *ot);
-void VIEW3D_OT_view_axis(struct wmOperatorType *ot);
-void VIEW3D_OT_view_camera(struct wmOperatorType *ot);
-void VIEW3D_OT_view_selected(struct wmOperatorType *ot);
 void VIEW3D_OT_view_lock_clear(struct wmOperatorType *ot);
 void VIEW3D_OT_view_lock_to_active(struct wmOperatorType *ot);
-void VIEW3D_OT_view_center_cursor(struct wmOperatorType *ot);
-void VIEW3D_OT_view_center_pick(struct wmOperatorType *ot);
 void VIEW3D_OT_view_center_camera(struct wmOperatorType *ot);
 void VIEW3D_OT_view_center_lock(struct wmOperatorType *ot);
-void VIEW3D_OT_view_pan(struct wmOperatorType *ot);
 void VIEW3D_OT_view_persportho(struct wmOperatorType *ot);
 void VIEW3D_OT_navigate(struct wmOperatorType *ot);
 void VIEW3D_OT_background_image_add(struct wmOperatorType *ot);
 void VIEW3D_OT_background_image_remove(struct wmOperatorType *ot);
 void VIEW3D_OT_drop_world(struct wmOperatorType *ot);
-void VIEW3D_OT_view_orbit(struct wmOperatorType *ot);
-void VIEW3D_OT_view_roll(struct wmOperatorType *ot);
 void VIEW3D_OT_clip_border(struct wmOperatorType *ot);
 void VIEW3D_OT_cursor3d(struct wmOperatorType *ot);
 void VIEW3D_OT_render_border(struct wmOperatorType *ot);
 void VIEW3D_OT_clear_render_border(struct wmOperatorType *ot);
-void VIEW3D_OT_zoom_border(struct wmOperatorType *ot);
 void VIEW3D_OT_toggle_shading(struct wmOperatorType *ot);
 void VIEW3D_OT_toggle_xray(struct wmOperatorType *ot);
-
-/**
- * For home, center etc.
- */
-void view3d_boxview_copy(struct ScrArea *area, struct ARegion *region);
-/**
- * Sync center/zoom view of region to others, for view transforms.
- */
-void view3d_boxview_sync(struct ScrArea *area, struct ARegion *region);
-
-void view3d_orbit_apply_dyn_ofs(float r_ofs[3],
-                                const float ofs_old[3],
-                                const float viewquat_old[4],
-                                const float viewquat_new[4],
-                                const float dyn_ofs[3]);
-
-#ifdef WITH_INPUT_NDOF
-struct wmNDOFMotionData;
-
-/**
- * Called from both fly mode and walk mode,
- */
-void view3d_ndof_fly(const struct wmNDOFMotionData *ndof,
-                     struct View3D *v3d,
-                     struct RegionView3D *rv3d,
-                     bool use_precision,
-                     short protectflag,
-                     bool *r_has_translate,
-                     bool *r_has_rotate);
-#endif /* WITH_INPUT_NDOF */
-
-/* view3d_navigate_fly.c */
-
-void view3d_keymap(struct wmKeyConfig *keyconf);
-void VIEW3D_OT_fly(struct wmOperatorType *ot);
-
-/* view3d_navigate_walk.c */
-
-void VIEW3D_OT_walk(struct wmOperatorType *ot);
 
 /* view3d_draw.c */
 
@@ -141,16 +64,16 @@ void view3d_draw_region_info(const struct bContext *C, struct ARegion *region);
 /* view3d_draw_legacy.c */
 
 void ED_view3d_draw_select_loop(struct Depsgraph *depsgraph,
-                                ViewContext *vc,
-                                Scene *scene,
+                                struct ViewContext *vc,
+                                struct Scene *scene,
                                 struct ViewLayer *view_layer,
-                                View3D *v3d,
+                                struct View3D *v3d,
                                 struct ARegion *region,
                                 bool use_obedit_skip,
                                 bool use_nearest);
 
 void ED_view3d_draw_depth_loop(struct Depsgraph *depsgraph,
-                               Scene *scene,
+                               struct Scene *scene,
                                struct ARegion *region,
                                View3D *v3d);
 
@@ -161,6 +84,7 @@ void view3d_depths_rect_create(struct ARegion *region, struct rcti *rect, struct
 float view3d_depth_near(struct ViewDepths *d);
 
 /* view3d_select.c */
+
 void VIEW3D_OT_select(struct wmOperatorType *ot);
 void VIEW3D_OT_select_circle(struct wmOperatorType *ot);
 void VIEW3D_OT_select_box(struct wmOperatorType *ot);
@@ -168,57 +92,29 @@ void VIEW3D_OT_select_lasso(struct wmOperatorType *ot);
 void VIEW3D_OT_select_menu(struct wmOperatorType *ot);
 void VIEW3D_OT_bone_select_menu(struct wmOperatorType *ot);
 
-/* view3d_view.c */
-void VIEW3D_OT_smoothview(struct wmOperatorType *ot);
-void VIEW3D_OT_camera_to_view(struct wmOperatorType *ot);
-void VIEW3D_OT_camera_to_view_selected(struct wmOperatorType *ot);
-void VIEW3D_OT_object_as_camera(struct wmOperatorType *ot);
-void VIEW3D_OT_localview(struct wmOperatorType *ot);
-void VIEW3D_OT_localview_remove_from(struct wmOperatorType *ot);
+/* view3d_utils.c */
+
+/**
+ * For home, center etc.
+ */
+void view3d_boxview_copy(struct ScrArea *area, struct ARegion *region);
+/**
+ * Sync center/zoom view of region to others, for view transforms.
+ */
+void view3d_boxview_sync(struct ScrArea *area, struct ARegion *region);
 
 bool ED_view3d_boundbox_clip_ex(const RegionView3D *rv3d,
                                 const struct BoundBox *bb,
                                 float obmat[4][4]);
 bool ED_view3d_boundbox_clip(RegionView3D *rv3d, const struct BoundBox *bb);
 
-/**
- * Parameters for setting the new 3D Viewport state.
- *
- * Each of the struct members may be NULL to signify they aren't to be adjusted.
- */
-typedef struct V3D_SmoothParams {
-  struct Object *camera_old, *camera;
-  const float *ofs, *quat, *dist, *lens;
+/* view3d_view.c */
 
-  /** Alternate rotation center, when set `ofs` must be NULL. */
-  const float *dyn_ofs;
-} V3D_SmoothParams;
-
-/**
- * The arguments are the desired situation.
- */
-void ED_view3d_smooth_view_ex(const struct Depsgraph *depsgraph,
-                              struct wmWindowManager *wm,
-                              struct wmWindow *win,
-                              struct ScrArea *area,
-                              struct View3D *v3d,
-                              struct ARegion *region,
-                              int smooth_viewtx,
-                              const V3D_SmoothParams *sview);
-
-void ED_view3d_smooth_view(struct bContext *C,
-                           struct View3D *v3d,
-                           struct ARegion *region,
-                           int smooth_viewtx,
-                           const V3D_SmoothParams *sview);
-
-/**
- * Apply the smooth-view immediately, use when we need to start a new view operation.
- * (so we don't end up half-applying a view operation when pressing keys quickly).
- */
-void ED_view3d_smooth_view_force_finish(struct bContext *C,
-                                        struct View3D *v3d,
-                                        struct ARegion *region);
+void VIEW3D_OT_camera_to_view(struct wmOperatorType *ot);
+void VIEW3D_OT_camera_to_view_selected(struct wmOperatorType *ot);
+void VIEW3D_OT_object_as_camera(struct wmOperatorType *ot);
+void VIEW3D_OT_localview(struct wmOperatorType *ot);
+void VIEW3D_OT_localview_remove_from(struct wmOperatorType *ot);
 
 /**
  * \param rect: optional for picking (can be NULL).
@@ -247,12 +143,8 @@ void view3d_viewmatrix_set(struct Depsgraph *depsgraph,
 
 /* Called in transform_ops.c, on each regeneration of key-maps. */
 
-void fly_modal_keymap(struct wmKeyConfig *keyconf);
-void walk_modal_keymap(struct wmKeyConfig *keyconf);
-void viewrotate_modal_keymap(struct wmKeyConfig *keyconf);
-void viewmove_modal_keymap(struct wmKeyConfig *keyconf);
-void viewzoom_modal_keymap(struct wmKeyConfig *keyconf);
-void viewdolly_modal_keymap(struct wmKeyConfig *keyconf);
+/* view3d_placement.c */
+
 void viewplace_modal_keymap(struct wmKeyConfig *keyconf);
 
 /* view3d_buttons.c */
@@ -267,7 +159,7 @@ void view3d_buttons_register(struct ARegionType *art);
  * the view for first-person style navigation.
  */
 struct View3DCameraControl *ED_view3d_cameracontrol_acquire(struct Depsgraph *depsgraph,
-                                                            Scene *scene,
+                                                            struct Scene *scene,
                                                             View3D *v3d,
                                                             RegionView3D *rv3d);
 /**
@@ -307,12 +199,15 @@ void VIEW3D_OT_snap_cursor_to_selected(struct wmOperatorType *ot);
 void VIEW3D_OT_snap_cursor_to_active(struct wmOperatorType *ot);
 
 /* view3d_placement.c */
+
 void VIEW3D_OT_interactive_add(struct wmOperatorType *ot);
 
 /* space_view3d.c */
+
 extern const char *view3d_context_dir[]; /* doc access */
 
 /* view3d_widgets.c */
+
 void VIEW3D_GGT_light_spot(struct wmGizmoGroupType *gzgt);
 void VIEW3D_GGT_light_area(struct wmGizmoGroupType *gzgt);
 void VIEW3D_GGT_light_target(struct wmGizmoGroupType *gzgt);

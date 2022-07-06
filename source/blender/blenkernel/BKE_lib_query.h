@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2014 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2014 Blender Foundation. All rights reserved. */
 #pragma once
 
 /** \file
@@ -33,6 +17,8 @@
  *
  * - `BKE_lib_query_` should be used for functions in that file.
  */
+
+#include "BLI_sys_types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -63,7 +49,7 @@ enum {
 
   /**
    * That ID is not really used by its owner, it's just an internal hint/helper.
-   * This addresses Their Highest Ugliness the 'from' pointers: Object->from_proxy and Key->from.
+   * This marks the 'from' pointers issue, like Key->from.
    * How to handle that kind of cases totally depends on what caller code is doing... */
   IDWALK_CB_LOOPBACK = (1 << 4),
 
@@ -129,13 +115,22 @@ typedef int (*LibraryIDLinkCallback)(LibraryIDLinkCallbackData *cb_data);
 /* Flags for the foreach function itself. */
 enum {
   IDWALK_NOP = 0,
+  /** The callback will never modify the ID pointers it processes. */
   IDWALK_READONLY = (1 << 0),
-  IDWALK_RECURSE = (1 << 1),    /* Also implies IDWALK_READONLY. */
-  IDWALK_INCLUDE_UI = (1 << 2), /* Include UI pointers (from WM and screens editors). */
+  /** Recurse into 'descendant' IDs.
+   * Each ID is only processed once. Order of ID processing is not guaranteed.
+   *
+   * Also implies IDWALK_READONLY, and excludes IDWALK_DO_INTERNAL_RUNTIME_POINTERS.
+   *
+   * NOTE: When enabled, embedded IDs are processed separately from their owner, as if they were
+   * regular IDs. Owner ID is not available then in the #LibraryForeachIDData callback data.
+   */
+  IDWALK_RECURSE = (1 << 1),
+  /** Include UI pointers (from WM and screens editors). */
+  IDWALK_INCLUDE_UI = (1 << 2),
   /** Do not process ID pointers inside embedded IDs. Needed by depsgraph processing e.g. */
   IDWALK_IGNORE_EMBEDDED_ID = (1 << 3),
 
-  IDWALK_NO_INDIRECT_PROXY_DATA_USAGE = (1 << 8), /* Ugly special case :(((( */
   /** Also process internal ID pointers like `ID.newid` or `ID.orig_id`.
    *  WARNING: Dangerous, use with caution. */
   IDWALK_DO_INTERNAL_RUNTIME_POINTERS = (1 << 9),
@@ -223,6 +218,11 @@ int BKE_library_ID_use_ID(struct ID *id_user, struct ID *id_used);
  * quite useful to reduce useless iterations in some cases.
  */
 bool BKE_library_id_can_use_idtype(struct ID *id_owner, short id_type_used);
+
+/**
+ * Given the id_owner return the type of id_types it can use as a filter_id.
+ */
+uint64_t BKE_library_id_can_use_filter_id(const struct ID *id_owner);
 
 /**
  * Check whether given ID is used locally (i.e. by another non-linked ID).

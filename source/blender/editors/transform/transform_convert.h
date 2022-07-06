@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edtransform
@@ -23,6 +7,8 @@
  */
 
 #pragma once
+
+#include "RE_engine.h"
 
 struct BMEditMesh;
 struct BMesh;
@@ -124,10 +110,8 @@ void special_aftertrans_update__actedit(bContext *C, TransInfo *t);
  * Sets transform flags in the bones.
  * Returns total number of bones with #BONE_TRANSFORM.
  */
-int transform_convert_pose_transflags_update(Object *ob,
-                                             int mode,
-                                             short around,
-                                             bool has_translate_rotate[2]);
+void transform_convert_pose_transflags_update(Object *ob, int mode, short around);
+
 /**
  * When objects array is NULL, use 't->data_container' as is.
  */
@@ -152,6 +136,7 @@ void createTransCurveVerts(TransInfo *t);
 void recalcData_curve(TransInfo *t);
 
 /* transform_convert_graph.c */
+
 /**
  * It is important to note that this doesn't always act on the selection (like it's usually done),
  * it acts on a subset of it. E.g. the selection code may leave a hint that we just dragged on a
@@ -167,24 +152,29 @@ void recalcData_graphedit(TransInfo *t);
 void special_aftertrans_update__graph(bContext *C, TransInfo *t);
 
 /* transform_convert_gpencil.c */
+
 void createTransGPencil(bContext *C, TransInfo *t);
 /* force recalculation of triangles during transformation */
 void recalcData_gpencil_strokes(TransInfo *t);
 
 /* transform_convert_lattice.c */
+
 void createTransLatticeVerts(TransInfo *t);
 void recalcData_lattice(TransInfo *t);
 
 /* transform_convert_mask.c */
+
 void createTransMaskingData(bContext *C, TransInfo *t);
 void recalcData_mask_common(TransInfo *t);
 void special_aftertrans_update__mask(bContext *C, TransInfo *t);
 
 /* transform_convert_mball.c */
+
 void createTransMBallVerts(TransInfo *t);
 void recalcData_mball(TransInfo *t);
 
 /* transform_convert_mesh.c */
+
 struct TransIslandData {
   float (*center)[3];
   float (*axismtx)[3][3];
@@ -248,65 +238,78 @@ void recalcData_mesh(TransInfo *t);
 void special_aftertrans_update__mesh(bContext *C, TransInfo *t);
 
 /* transform_convert_mesh_edge.c */
+
 void createTransEdge(TransInfo *t);
 void recalcData_mesh_edge(TransInfo *t);
 
 /* transform_convert_mesh_skin.c */
+
 void createTransMeshSkin(TransInfo *t);
 void recalcData_mesh_skin(TransInfo *t);
 
 /* transform_convert_mesh_uv.c */
+
 void createTransUVs(bContext *C, TransInfo *t);
 /* helper for recalcData() - for Image Editor transforms */
 void recalcData_uv(TransInfo *t);
 
 /* transform_convert_nla.c */
+
 void createTransNlaData(bContext *C, TransInfo *t);
 /* helper for recalcData() - for NLA Editor transforms */
 void recalcData_nla(TransInfo *t);
 void special_aftertrans_update__nla(bContext *C, TransInfo *t);
 
 /* transform_convert_node.c */
+
 void createTransNodeData(TransInfo *t);
 void flushTransNodes(TransInfo *t);
 void special_aftertrans_update__node(bContext *C, TransInfo *t);
 
 /* transform_convert_object.c */
+
 void createTransObject(bContext *C, TransInfo *t);
 /* helper for recalcData() - for object transforms, typically in the 3D view */
 void recalcData_objects(TransInfo *t);
 void special_aftertrans_update__object(bContext *C, TransInfo *t);
 
 /* transform_convert_object_texspace.c */
+
 void createTransTexspace(TransInfo *t);
 /* helper for recalcData() - for object transforms, typically in the 3D view */
 void recalcData_texspace(TransInfo *t);
 
 /* transform_convert_paintcurve.c */
+
 void createTransPaintCurveVerts(bContext *C, TransInfo *t);
 void flushTransPaintCurve(TransInfo *t);
 
 /* transform_convert_particle.c */
+
 void createTransParticleVerts(TransInfo *t);
 void recalcData_particles(TransInfo *t);
 
 /* transform_convert_sculpt.c */
+
 void createTransSculpt(bContext *C, TransInfo *t);
 void recalcData_sculpt(TransInfo *t);
 void special_aftertrans_update__sculpt(bContext *C, TransInfo *t);
 
 /* transform_convert_sequencer.c */
+
 void createTransSeqData(TransInfo *t);
 /* helper for recalcData() - for sequencer transforms */
 void recalcData_sequencer(TransInfo *t);
 void special_aftertrans_update__sequencer(bContext *C, TransInfo *t);
 
 /* transform_convert_sequencer_image.c */
+
 void createTransSeqImageData(TransInfo *t);
 void recalcData_sequencer_image(TransInfo *t);
 void special_aftertrans_update__sequencer_image(bContext *C, TransInfo *t);
 
 /* transform_convert_tracking.c */
+
 void createTransTrackingData(bContext *C, TransInfo *t);
 /* helper for recalcData() - for Movie Clip transforms */
 void recalcData_tracking(TransInfo *t);

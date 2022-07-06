@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 /** \file
  * \ingroup spnla
@@ -126,7 +110,7 @@ static void nla_action_draw_keyframes(
    */
 
   Range2f frame_range;
-  ED_keylist_frame_range(keylist, &frame_range);
+  ED_keylist_all_keys_frame_range(keylist, &frame_range);
   immRectf(pos_id, frame_range.min, ymin + 2, frame_range.max, ymax - 2);
   immUnbindProgram();
 
@@ -760,7 +744,7 @@ void draw_nla_main_data(bAnimContext *ac, SpaceNla *snla, ARegion *region)
           for (strip = nlt->strips.first, index = 1; strip; strip = strip->next, index++) {
             if (BKE_nlastrip_within_bounds(strip, v2d->cur.xmin, v2d->cur.xmax)) {
               const float xminc = strip->start + text_margin_x;
-              const float xmaxc = strip->end + text_margin_x;
+              const float xmaxc = strip->end - text_margin_x;
 
               /* draw the visualization of the strip */
               nla_draw_strip(snla, adt, nlt, strip, v2d, ymin, ymax);

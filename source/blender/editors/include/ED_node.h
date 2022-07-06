@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -49,7 +33,7 @@ typedef enum {
   NODE_RIGHT = 8,
 } NodeBorder;
 
-#define NODE_GRID_STEP_SIZE 10
+#define NODE_GRID_STEP_SIZE U.widget_unit /* Based on the grid nodes snap to. */
 #define NODE_EDGE_PAN_INSIDE_PAD 2
 #define NODE_EDGE_PAN_OUTSIDE_PAD 0 /* Disable clamping for node panning, use whole screen. */
 #define NODE_EDGE_PAN_SPEED_RAMP 1
@@ -57,7 +41,7 @@ typedef enum {
 #define NODE_EDGE_PAN_DELAY 0.5f
 #define NODE_EDGE_PAN_ZOOM_INFLUENCE 0.5f
 
-/* space_node.c */
+/* space_node.cc */
 
 void ED_node_cursor_location_get(const struct SpaceNode *snode, float value[2]);
 void ED_node_cursor_location_set(struct SpaceNode *snode, const float value[2]);
@@ -76,7 +60,7 @@ struct bNodeTree *ED_node_tree_get(struct SpaceNode *snode, int level);
 
 void ED_node_set_active_viewer_key(struct SpaceNode *snode);
 
-/* drawnode.c */
+/* drawnode.cc */
 
 void ED_node_init_butfuncs(void);
 void ED_init_custom_node_type(struct bNodeType *ntype);
@@ -103,7 +87,7 @@ void ED_node_tag_update_id(struct ID *id);
 
 float ED_node_grid_size(void);
 
-/* node_relationships.c */
+/* node_relationships.cc */
 
 /**
  * Test == 0, clear all intersect flags.
@@ -114,7 +98,7 @@ void ED_node_link_intersect_test(struct ScrArea *area, int test);
  */
 void ED_node_link_insert(struct Main *bmain, struct ScrArea *area);
 
-/* node_edit.c */
+/* node_edit.cc */
 
 void ED_node_set_tree_type(struct SpaceNode *snode, struct bNodeTreeType *typeinfo);
 bool ED_node_is_compositor(struct SpaceNode *snode);
@@ -175,11 +159,12 @@ void ED_node_composite_job(const struct bContext *C,
                            struct bNodeTree *nodetree,
                            struct Scene *scene_owner);
 
-/* node_ops.c */
+/* node_ops.cc */
 
 void ED_operatormacros_node(void);
 
-/* node_view.c */
+/* node_view.cc */
+
 /**
  * Returns mouse position in image space.
  */

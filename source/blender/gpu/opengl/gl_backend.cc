@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2020, Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -156,7 +140,7 @@ void GLBackend::platform_init()
     }
   }
 
-  GPG.init(device, os, driver, support_level, vendor, renderer, version);
+  GPG.init(device, os, driver, support_level, GPU_BACKEND_OPENGL, vendor, renderer, version);
 }
 
 void GLBackend::platform_exit()
@@ -248,12 +232,15 @@ static void detect_workarounds()
     GLContext::direct_state_access_support = false;
     GLContext::fixed_restart_index_support = false;
     GLContext::geometry_shader_invocations = false;
+    GLContext::layered_rendering_support = false;
+    GLContext::native_barycentric_support = false;
     GLContext::multi_bind_support = false;
     GLContext::multi_draw_indirect_support = false;
     GLContext::shader_draw_parameters_support = false;
     GLContext::texture_cube_map_array_support = false;
     GLContext::texture_filter_anisotropic_support = false;
     GLContext::texture_gather_support = false;
+    GLContext::texture_storage_support = false;
     GLContext::vertex_attrib_binding_support = false;
     return;
   }
@@ -304,26 +291,12 @@ static void detect_workarounds()
   }
   /* See T82856: AMD drivers since 20.11 running on a polaris architecture doesn't support the
    * `GL_INT_2_10_10_10_REV` data type correctly. This data type is used to pack normals and flags.
-   * The work around uses `GPU_RGBA16I`.
+   * The work around uses `GPU_RGBA16I`. In 22.?.? drivers this has been fixed for
+   * polaris platform. Keeping legacy platforms around just in case.
    */
   if (GPU_type_matches(GPU_DEVICE_ATI, GPU_OS_ANY, GPU_DRIVER_OFFICIAL)) {
-    const Vector<std::string> matches = {"RX 460",
-                                         "RX 470",
-                                         "RX 480",
-                                         "RX 490",
-                                         "RX 560",
-                                         "RX 560X",
-                                         "RX 570",
-                                         "RX 580",
-                                         "RX 580X",
-                                         "RX 590",
-                                         "RX550/550",
-                                         "(TM) 520",
-                                         "(TM) 530",
-                                         "(TM) 535",
-                                         "R5",
-                                         "R7",
-                                         "R9"};
+    const Vector<std::string> matches = {
+        "RX550/550", "(TM) 520", "(TM) 530", "(TM) 535", "R5", "R7", "R9"};
 
     if (match_renderer(renderer, matches)) {
       GCaps.use_hq_normals_workaround = true;
@@ -431,6 +404,19 @@ static void detect_workarounds()
       (strstr(renderer, "HD Graphics 4400") || strstr(renderer, "HD Graphics 4600"))) {
     GCaps.shader_storage_buffer_objects_support = false;
   }
+
+  /* Certain Intel/AMD based platforms don't clear the viewport textures. Always clearing leads to
+   * noticeable performance regressions on other platforms as well. */
+  if (GPU_type_matches(GPU_DEVICE_ANY, GPU_OS_MAC, GPU_DRIVER_ANY) ||
+      GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_UNIX, GPU_DRIVER_ANY)) {
+    GCaps.clear_viewport_workaround = true;
+  }
+
+  /* Metal-related Workarounds. */
+
+  /* Minimum Per-Vertex stride is 1 byte for OpenGL. */
+  GCaps.minimum_per_vertex_stride = 1;
+
 }  // namespace blender::gpu
 
 /** Internal capabilities. */
@@ -439,6 +425,8 @@ GLint GLContext::max_cubemap_size = 0;
 GLint GLContext::max_texture_3d_size = 0;
 GLint GLContext::max_ubo_binds = 0;
 GLint GLContext::max_ubo_size = 0;
+GLint GLContext::max_ssbo_binds = 0;
+GLint GLContext::max_ssbo_size = 0;
 
 /** Extensions. */
 
@@ -450,12 +438,16 @@ bool GLContext::direct_state_access_support = false;
 bool GLContext::explicit_location_support = false;
 bool GLContext::geometry_shader_invocations = false;
 bool GLContext::fixed_restart_index_support = false;
+bool GLContext::layered_rendering_support = false;
+bool GLContext::native_barycentric_support = false;
 bool GLContext::multi_bind_support = false;
 bool GLContext::multi_draw_indirect_support = false;
 bool GLContext::shader_draw_parameters_support = false;
+bool GLContext::stencil_texturing_support = false;
 bool GLContext::texture_cube_map_array_support = false;
 bool GLContext::texture_filter_anisotropic_support = false;
 bool GLContext::texture_gather_support = false;
+bool GLContext::texture_storage_support = false;
 bool GLContext::vertex_attrib_binding_support = false;
 
 /** Workarounds. */
@@ -480,7 +472,14 @@ void GLBackend::capabilities_init()
   glGetIntegerv(GL_MAX_ELEMENTS_INDICES, &GCaps.max_batch_indices);
   glGetIntegerv(GL_MAX_ELEMENTS_VERTICES, &GCaps.max_batch_vertices);
   glGetIntegerv(GL_MAX_VERTEX_ATTRIBS, &GCaps.max_vertex_attribs);
-  glGetIntegerv(GL_MAX_VARYING_FLOATS, &GCaps.max_varying_floats);
+  if (GPU_type_matches(GPU_DEVICE_APPLE, GPU_OS_MAC, GPU_DRIVER_OFFICIAL)) {
+    /* Due to a bug, querying GL_MAX_VARYING_FLOATS is emitting GL_INVALID_ENUM.
+     * Force use minimum required value. */
+    GCaps.max_varying_floats = 32;
+  }
+  else {
+    glGetIntegerv(GL_MAX_VARYING_FLOATS, &GCaps.max_varying_floats);
+  }
 
   glGetIntegerv(GL_NUM_EXTENSIONS, &GCaps.extensions_len);
   GCaps.extension_get = gl_extension_get;
@@ -495,6 +494,9 @@ void GLBackend::capabilities_init()
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 0, &GCaps.max_work_group_size[0]);
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 1, &GCaps.max_work_group_size[1]);
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, 2, &GCaps.max_work_group_size[2]);
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS,
+                  &GCaps.max_shader_storage_buffer_bindings);
+    glGetIntegerv(GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS, &GCaps.max_compute_shader_storage_blocks);
   }
   GCaps.shader_storage_buffer_objects_support = GLEW_ARB_shader_storage_buffer_object;
   /* GL specific capabilities. */
@@ -502,6 +504,10 @@ void GLBackend::capabilities_init()
   glGetIntegerv(GL_MAX_CUBE_MAP_TEXTURE_SIZE, &GLContext::max_cubemap_size);
   glGetIntegerv(GL_MAX_FRAGMENT_UNIFORM_BLOCKS, &GLContext::max_ubo_binds);
   glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &GLContext::max_ubo_size);
+  if (GCaps.shader_storage_buffer_objects_support) {
+    glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &GLContext::max_ssbo_binds);
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &GLContext::max_ssbo_size);
+  }
   GLContext::base_instance_support = GLEW_ARB_base_instance;
   GLContext::clear_texture_support = GLEW_ARB_clear_texture;
   GLContext::copy_image_support = GLEW_ARB_copy_image;
@@ -510,12 +516,16 @@ void GLBackend::capabilities_init()
   GLContext::explicit_location_support = GLEW_VERSION_4_3;
   GLContext::geometry_shader_invocations = GLEW_ARB_gpu_shader5;
   GLContext::fixed_restart_index_support = GLEW_ARB_ES3_compatibility;
+  GLContext::layered_rendering_support = GLEW_AMD_vertex_shader_layer;
+  GLContext::native_barycentric_support = GLEW_AMD_shader_explicit_vertex_parameter;
   GLContext::multi_bind_support = GLEW_ARB_multi_bind;
   GLContext::multi_draw_indirect_support = GLEW_ARB_multi_draw_indirect;
   GLContext::shader_draw_parameters_support = GLEW_ARB_shader_draw_parameters;
+  GLContext::stencil_texturing_support = GLEW_VERSION_4_3;
   GLContext::texture_cube_map_array_support = GLEW_ARB_texture_cube_map_array;
   GLContext::texture_filter_anisotropic_support = GLEW_EXT_texture_filter_anisotropic;
   GLContext::texture_gather_support = GLEW_ARB_texture_gather;
+  GLContext::texture_storage_support = GLEW_VERSION_4_3;
   GLContext::vertex_attrib_binding_support = GLEW_ARB_vertex_attrib_binding;
 
   detect_workarounds();

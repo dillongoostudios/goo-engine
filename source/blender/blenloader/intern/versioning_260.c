@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup blenloader
@@ -371,7 +357,7 @@ static void do_versions_mesh_mloopcol_swap_2_62_1(Mesh *me)
   for (a = 0; a < me->ldata.totlayer; a++) {
     layer = &me->ldata.layers[a];
 
-    if (layer->type == CD_MLOOPCOL) {
+    if (layer->type == CD_PROP_BYTE_COLOR) {
       mloopcol = (MLoopCol *)layer->data;
       for (i = 0; i < me->totloop; i++, mloopcol++) {
         SWAP(uchar, mloopcol->r, mloopcol->b);
@@ -1852,7 +1838,7 @@ void blo_do_versions_260(FileData *fd, Library *UNUSED(lib), Main *bmain)
         Image *image = blo_do_versions_newlibadr(fd, tex->id.lib, tex->ima);
 
         if (image && (image->flag & IMA_DO_PREMUL) == 0) {
-          const int IMA_IGNORE_ALPHA = (1 << 12);
+          enum { IMA_IGNORE_ALPHA = (1 << 12) };
           image->flag |= IMA_IGNORE_ALPHA;
         }
       }

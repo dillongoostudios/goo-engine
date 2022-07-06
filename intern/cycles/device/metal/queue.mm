@@ -1,18 +1,5 @@
-/*
- * Copyright 2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2021-2022 Blender Foundation */
 
 #ifdef WITH_METAL
 
@@ -278,6 +265,7 @@ bool MetalDeviceQueue::enqueue(DeviceKernel kernel,
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE:
         case DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK:
         case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE:
+        case DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE:
           break;
         default:
           bvhMetalRT = nil;
@@ -503,11 +491,6 @@ void MetalDeviceQueue::copy_from_device(device_memory &mem)
   else {
     metal_device->mem_copy_from(mem);
   }
-}
-
-bool MetalDeviceQueue::kernel_available(DeviceKernel kernel) const
-{
-  return metal_device->kernels.available(kernel);
 }
 
 void MetalDeviceQueue::prepare_resources(DeviceKernel kernel)

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2013 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2013 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup depsgraph
@@ -192,7 +176,6 @@ DEG_COMPONENT_NODE_DECLARE_GENERIC(Particles);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(ParticleSettings);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Pose);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(PointCache);
-DEG_COMPONENT_NODE_DECLARE_GENERIC(Proxy);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(Sequencer);
 DEG_COMPONENT_NODE_DECLARE_NO_COW_TAG_ON_UPDATE(Shading);
 DEG_COMPONENT_NODE_DECLARE_GENERIC(ShadingParameters);

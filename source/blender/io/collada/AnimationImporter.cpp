@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup collada
@@ -733,7 +719,7 @@ void AnimationImporter::Assign_float_animations(const COLLADAFW::UniqueId &listi
           fcurve_deg_to_rad(fcu);
         }
       }
-      /** XXX What About animtype "rotation" ? */
+      /** XXX What About animation-type "rotation" ? */
 
       BLI_addtail(AnimCurves, fcu);
       fcurve_is_used(fcu);
@@ -1073,7 +1059,7 @@ void AnimationImporter::translate_Animations(
           apply_matrix_curves(ob, animcurves, root, node, transform);
         }
         else {
-          /* Calculate RNA-paths and array index of F-curves according to transformation and
+          /* Calculate RNA-paths and array index of F-Curves according to transformation and
            * animation class */
           Assign_transform_animations(transform, &bindings[j], &animcurves, is_joint, joint_path);
 
@@ -1952,7 +1938,7 @@ bool AnimationImporter::evaluate_animation(COLLADAFW::Transformation *tm,
           return false;
         }
 
-        /* TODO: support other animclasses. */
+        /* TODO: support other animation-classes. */
         if (animclass != COLLADAFW::AnimationList::ANGLE) {
           report_class_type_unsupported(path, animclass, type);
           return false;

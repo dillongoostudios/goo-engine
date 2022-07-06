@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2011 by Bastien Montagne.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2011 by Bastien Montagne. All rights reserved. */
 
 /** \file
  * \ingroup modifiers
@@ -151,7 +135,7 @@ void weightvg_do_mask(const ModifierEvalContext *ctx,
     float(*tex_co)[3];
     /* See mapping note below... */
     MappingInfoModifierData t_map;
-    const int numVerts = mesh->totvert;
+    const int verts_num = mesh->totvert;
 
     /* Use new generic get_texture_coords, but do not modify our DNA struct for it...
      * XXX Why use a ModifierData stuff here ? Why not a simple, generic struct for parameters?
@@ -164,7 +148,7 @@ void weightvg_do_mask(const ModifierEvalContext *ctx,
     BLI_strncpy(t_map.uvlayer_name, tex_uvlayer_name, sizeof(t_map.uvlayer_name));
     t_map.texmapping = tex_mapping;
 
-    tex_co = MEM_calloc_arrayN(numVerts, sizeof(*tex_co), "WeightVG Modifier, TEX mode, tex_co");
+    tex_co = MEM_calloc_arrayN(verts_num, sizeof(*tex_co), "WeightVG Modifier, TEX mode, tex_co");
     MOD_get_texture_coords(&t_map, ctx, ob, mesh, NULL, tex_co);
 
     MOD_init_texture(&t_map, ctx);

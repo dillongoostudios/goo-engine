@@ -166,6 +166,11 @@ EvalOutputAPI::~EvalOutputAPI()
   delete implementation_;
 }
 
+void EvalOutputAPI::setSettings(const OpenSubdiv_EvaluatorSettings *settings)
+{
+  implementation_->updateSettings(settings);
+}
+
 void EvalOutputAPI::setCoarsePositions(const float *positions,
                                        const int start_vertex_index,
                                        const int num_vertices)
@@ -180,6 +185,14 @@ void EvalOutputAPI::setVaryingData(const float *varying_data,
 {
   // TODO(sergey): Add sanity check on indices.
   implementation_->updateVaryingData(varying_data, start_vertex_index, num_vertices);
+}
+
+void EvalOutputAPI::setVertexData(const float *vertex_data,
+                                  const int start_vertex_index,
+                                  const int num_vertices)
+{
+  // TODO(sergey): Add sanity check on indices.
+  implementation_->updateVertexData(vertex_data, start_vertex_index, num_vertices);
 }
 
 void EvalOutputAPI::setFaceVaryingData(const int face_varying_channel,
@@ -284,6 +297,20 @@ void EvalOutputAPI::evaluateVarying(const int ptex_face_index,
   const PatchTable::PatchHandle *handle = patch_map_->FindPatch(ptex_face_index, face_u, face_v);
   PatchCoord patch_coord(*handle, face_u, face_v);
   implementation_->evalPatchesVarying(&patch_coord, 1, varying);
+}
+
+void EvalOutputAPI::evaluateVertexData(const int ptex_face_index,
+                                       float face_u,
+                                       float face_v,
+                                       float vertex_data[])
+{
+  assert(face_u >= 0.0f);
+  assert(face_u <= 1.0f);
+  assert(face_v >= 0.0f);
+  assert(face_v <= 1.0f);
+  const PatchTable::PatchHandle *handle = patch_map_->FindPatch(ptex_face_index, face_u, face_v);
+  PatchCoord patch_coord(*handle, face_u, face_v);
+  implementation_->evalPatchesVertexData(&patch_coord, 1, vertex_data);
 }
 
 void EvalOutputAPI::evaluateFaceVarying(const int face_varying_channel,

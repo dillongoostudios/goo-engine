@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 by the Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup modifiers
@@ -45,6 +29,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -115,7 +100,7 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   Mesh *mesh_src = mesh;
   ParticleSystemModifierData *psmd = (ParticleSystemModifierData *)md;
@@ -133,7 +118,8 @@ static void deformVerts(ModifierData *md,
   }
 
   if (mesh_src == NULL) {
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, NULL, vertexCos, numVerts, false, true);
+    mesh_src = MOD_deform_mesh_eval_get(
+        ctx->object, NULL, NULL, vertexCos, verts_num, false, true);
     if (mesh_src == NULL) {
       return;
     }
@@ -172,7 +158,6 @@ static void deformVerts(ModifierData *md,
   /* make new mesh */
   psmd->mesh_final = BKE_mesh_copy_for_eval(mesh_src, false);
   BKE_mesh_vert_coords_apply(psmd->mesh_final, vertexCos);
-  BKE_mesh_calc_normals(psmd->mesh_final);
 
   BKE_mesh_tessface_ensure(psmd->mesh_final);
 
@@ -250,7 +235,7 @@ static void deformVertsEM(ModifierData *md,
                           BMEditMesh *editData,
                           Mesh *mesh,
                           float (*vertexCos)[3],
-                          int numVerts)
+                          int verts_num)
 {
   const bool do_temp_mesh = (mesh == NULL);
   if (do_temp_mesh) {
@@ -258,7 +243,7 @@ static void deformVertsEM(ModifierData *md,
     BM_mesh_bm_to_me(NULL, editData->bm, mesh, &((BMeshToMeshParams){0}));
   }
 
-  deformVerts(md, ob, mesh, vertexCos, numVerts);
+  deformVerts(md, ob, mesh, vertexCos, verts_num);
 
   if (derivedData) {
     BKE_id_free(NULL, mesh);
@@ -334,7 +319,6 @@ ModifierTypeInfo modifierType_ParticleSystem = {
     /* deformVertsEM */ NULL,
     /* deformMatricesEM */ NULL,
     /* modifyMesh */ NULL,
-    /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
 
     /* initData */ initData,

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -105,7 +91,7 @@ const char *BKE_unit_identifier_get(const void *usys_pt, int index);
 double BKE_unit_scalar_get(const void *usys_pt, int index);
 bool BKE_unit_is_suppressed(const void *usys_pt, int index);
 
-/** Aligned with #PropertyUnit. */
+/** Aligned with #PropertyUnit and `bpyunits_ucategories_items` in `bpy_utils_units.c`. */
 enum {
   B_UNIT_NONE = 0,
   B_UNIT_LENGTH = 1,

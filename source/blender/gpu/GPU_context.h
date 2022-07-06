@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 by Mike Erwin.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 by Mike Erwin. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -27,18 +11,15 @@
 
 #include "GPU_batch.h"
 #include "GPU_common.h"
+#include "GPU_platform.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef enum eGPUBackendType {
-  GPU_BACKEND_NONE = 0,
-  GPU_BACKEND_OPENGL,
-} eGPUBackendType;
-
 void GPU_backend_init(eGPUBackendType backend);
 void GPU_backend_exit(void);
+bool GPU_backend_supported(eGPUBackendType type);
 
 eGPUBackendType GPU_backend_get_type(void);
 
@@ -64,6 +45,14 @@ GPUContext *GPU_context_active_get(void);
  * using it by locking the main context using these two functions. */
 void GPU_context_main_lock(void);
 void GPU_context_main_unlock(void);
+
+/* GPU Begin/end work blocks */
+void GPU_render_begin(void);
+void GPU_render_end(void);
+
+/* For operations which need to run exactly once per frame -- even if there are no render updates.
+ */
+void GPU_render_step(void);
 
 #ifdef __cplusplus
 }

@@ -1,16 +1,5 @@
-# Copyright 2011-2020 Blender Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2011-2022 Blender Foundation
 
 remove_extra_strict_flags()
 
@@ -61,7 +50,6 @@ set(SRC_KERNEL_DEVICE_GPU_HEADERS
   device/gpu/kernel.h
   device/gpu/parallel_active_index.h
   device/gpu/parallel_prefix_sum.h
-  device/gpu/parallel_reduce.h
   device/gpu/parallel_sorted_index.h
   device/gpu/work_stealing.h
 )
@@ -235,6 +223,7 @@ set(SRC_KERNEL_INTEGRATOR_HEADERS
   integrator/intersect_subsurface.h
   integrator/intersect_volume_stack.h
   integrator/megakernel.h
+  integrator/mnee.h
   integrator/path_state.h
   integrator/shade_background.h
   integrator/shade_light.h
@@ -367,16 +356,13 @@ if(WITH_CYCLES_CUDA_BINARIES)
   set(CUDA_VERSION "${CUDA_VERSION_MAJOR}${CUDA_VERSION_MINOR}")
 
   # warn for other versions
-  if((CUDA_VERSION MATCHES "101") OR
-     (CUDA_VERSION MATCHES "102") OR
-     (CUDA_VERSION MATCHES "111") OR
-     (CUDA_VERSION MATCHES "112") OR
-     (CUDA_VERSION MATCHES "113") OR
-     (CUDA_VERSION MATCHES "114"))
+  if((CUDA_VERSION STREQUAL "101") OR
+     (CUDA_VERSION STREQUAL "102") OR
+     (CUDA_VERSION_MAJOR STREQUAL "11"))
   else()
     message(WARNING
       "CUDA version ${CUDA_VERSION_MAJOR}.${CUDA_VERSION_MINOR} detected, "
-      "build may succeed but only CUDA 10.1 to 11.4 are officially supported")
+      "build may succeed but only CUDA 11, 10.2 and 10.1 have been tested")
   endif()
 
   # build for each arch
@@ -417,6 +403,11 @@ if(WITH_CYCLES_CUDA_BINARIES)
       --use_fast_math
       -o ${CMAKE_CURRENT_BINARY_DIR}/${cuda_file}
       -Wno-deprecated-gpu-targets)
+
+    if(CUDA_HOST_COMPILER)
+      set(cuda_flags ${cuda_flags}
+        -ccbin="${CUDA_HOST_COMPILER}")
+    endif()
 
     if(WITH_NANOVDB)
       set(cuda_flags ${cuda_flags}
@@ -488,19 +479,19 @@ if(WITH_CYCLES_CUDA_BINARIES)
       if(DEFINED CUDA10_NVCC_EXECUTABLE)
         set(cuda_nvcc_executable ${CUDA10_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA10_TOOLKIT_ROOT_DIR})
-      elseif(${CUDA_VERSION} LESS 110) # Support for sm_30 was removed in CUDA 11
+      elseif("${CUDA_VERSION}" LESS 110) # Support for sm_30 was removed in CUDA 11
         set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
       else()
         message(STATUS "CUDA binaries for ${arch} require CUDA 10 or earlier, skipped.")
       endif()
-    elseif(${arch} MATCHES ".*_7." AND ${CUDA_VERSION} LESS 100)
+    elseif(${arch} MATCHES ".*_7." AND "${CUDA_VERSION}" LESS 100)
       message(STATUS "CUDA binaries for ${arch} require CUDA 10.0+, skipped.")
     elseif(${arch} MATCHES ".*_8.")
       if(DEFINED CUDA11_NVCC_EXECUTABLE)
         set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA11_TOOLKIT_ROOT_DIR})
-      elseif(${CUDA_VERSION} GREATER_EQUAL 111) # Support for sm_86 was introduced in CUDA 11
+      elseif("${CUDA_VERSION}" GREATER_EQUAL 111) # Support for sm_86 was introduced in CUDA 11
         set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
       else()
@@ -737,6 +728,14 @@ endif()
 
 if(CXX_HAS_AVX2)
   set_source_files_properties(device/cpu/kernel_avx2.cpp PROPERTIES COMPILE_FLAGS "${CYCLES_AVX2_KERNEL_FLAGS}")
+endif()
+
+# Warnings to avoid using doubles in the kernel.
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_C_COMPILER_ID MATCHES "Clang")
+  ADD_CHECK_CXX_COMPILER_FLAG(CMAKE_CXX_FLAGS _has_cxxflag_float_conversion "-Werror=float-conversion")
+  ADD_CHECK_CXX_COMPILER_FLAG(CMAKE_CXX_FLAGS _has_cxxflag_double_promotion "-Werror=double-promotion")
+  unset(_has_cxxflag_float_conversion)
+  unset(_has_cxxflag_double_promotion)
 endif()
 
 cycles_add_library(cycles_kernel "${LIB}"

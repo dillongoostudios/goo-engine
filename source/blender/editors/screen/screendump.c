@@ -1,25 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * Making screendumps.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edscr
+ * Making screenshots of the entire window or sub-regions.
  */
 
 #include <errno.h>
@@ -40,12 +24,14 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
+#include "BKE_image_format.h"
 #include "BKE_main.h"
 #include "BKE_report.h"
 #include "BKE_screen.h"
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_prototypes.h"
 
 #include "UI_interface.h"
 
@@ -86,7 +72,7 @@ static int screenshot_data_create(bContext *C, wmOperator *op, ScrArea *area)
       scd->crop = area->totrct;
     }
 
-    BKE_imformat_defaults(&scd->im_format);
+    BKE_image_format_init(&scd->im_format, false);
 
     op->customdata = scd;
 

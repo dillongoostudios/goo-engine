@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2021, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -31,7 +16,6 @@
 
 #include "image_batches.hh"
 #include "image_private.hh"
-#include "image_wrappers.hh"
 
 namespace blender::draw::image_engine {
 
@@ -73,7 +57,7 @@ struct OneTextureMethod {
   {
     /* Although this works, computing an inverted matrix adds some precision issues and leads to
      * tearing artifacts. This should be modified to use the scaling and transformation from the
-     * not inverted matrix.*/
+     * not inverted matrix. */
     float4x4 mat(instance_data->ss_to_texture);
     float4x4 mat_inv = mat.inverted();
     float3 min_uv = mat_inv * float3(0.0f, 0.0f, 0.0f);
@@ -89,6 +73,7 @@ struct OneTextureMethod {
 };
 
 using namespace blender::bke::image::partial_update;
+using namespace blender::bke::image;
 
 template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractDrawingMode {
  private:
@@ -249,7 +234,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
                          IMAGE_InstanceData &instance_data) const
   {
     while (iterator.get_next_change() == ePartialUpdateIterResult::ChangeAvailable) {
-      /* Quick exit when tile_buffer isn't availble. */
+      /* Quick exit when tile_buffer isn't available. */
       if (iterator.tile_data.tile_buffer == nullptr) {
         continue;
       }
@@ -273,8 +258,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
         GPUTexture *texture = info.texture;
         const float texture_width = GPU_texture_width(texture);
         const float texture_height = GPU_texture_height(texture);
-        // TODO
-        // early bound check.
+        /* TODO: early bound check. */
         ImageTileWrapper tile_accessor(iterator.tile_data.tile);
         float tile_offset_x = static_cast<float>(tile_accessor.get_tile_x_offset());
         float tile_offset_y = static_cast<float>(tile_accessor.get_tile_y_offset());
@@ -300,9 +284,9 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
         if (!region_overlap) {
           continue;
         }
-        // convert the overlapping region to texel space and to ss_pixel space...
-        // TODO: first convert to ss_pixel space as integer based. and from there go back to texel
-        // space. But perhaps this isn't needed and we could use an extraction offset somehow.
+        /* Convert the overlapping region to texel space and to ss_pixel space...
+         * TODO: first convert to ss_pixel space as integer based. and from there go back to texel
+         * space. But perhaps this isn't needed and we could use an extraction offset somehow. */
         rcti gpu_texture_region_to_update;
         BLI_rcti_init(
             &gpu_texture_region_to_update,
@@ -323,8 +307,8 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
             ceil((changed_overlapping_region_in_uv_space.ymin - tile_offset_y) * tile_height),
             ceil((changed_overlapping_region_in_uv_space.ymax - tile_offset_y) * tile_height));
 
-        // Create an image buffer with a size
-        // extract and scale into an imbuf
+        /* Create an image buffer with a size.
+         * Extract and scale into an imbuf. */
         const int texture_region_width = BLI_rcti_size_x(&gpu_texture_region_to_update);
         const int texture_region_height = BLI_rcti_size_y(&gpu_texture_region_to_update);
 
@@ -414,9 +398,9 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
   /**
    * \brief Ensure that the float buffer of the given image buffer is available.
    *
-   * Returns true when a float buffer was created. Somehow the VSE cache increases the ref
+   * Returns true when a float buffer was created. Somehow the sequencer cache increases the ref
    * counter, but might use a different mechanism for destructing the image, that doesn't free the
-   * rect_float as the refcounter isn't 0. To work around this we destruct any created local
+   * rect_float as the reference-counter isn't 0. To work around this we destruct any created local
    * buffers ourself.
    */
   ImBuf *ensure_float_buffer(IMAGE_InstanceData &instance_data, ImBuf *image_buffer) const
@@ -436,7 +420,7 @@ template<typename TextureMethod> class ScreenSpaceDrawingMode : public AbstractD
 
     /* IMB_transform works in a non-consistent space. This should be documented or fixed!.
      * Construct a variant of the info_uv_to_texture that adds the texel space
-     * transformation.*/
+     * transformation. */
     float uv_to_texel[4][4];
     copy_m4_m4(uv_to_texel, instance_data.ss_to_texture);
     float scale[3] = {static_cast<float>(texture_width) / static_cast<float>(tile_buffer.x),

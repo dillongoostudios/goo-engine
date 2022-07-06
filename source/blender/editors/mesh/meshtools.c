@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2004 by Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2004 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edmesh
@@ -153,22 +137,22 @@ static void join_mesh_single(Depsgraph *depsgraph,
         mul_m4_v3(cmat, mvert->co);
       }
 
-      /* For each shapekey in destination mesh:
+      /* For each shape-key in destination mesh:
        * - if there's a matching one, copy it across
        *   (will need to transform vertices into new space...).
        * - otherwise, just copy own coordinates of mesh
        *   (no need to transform vertex coordinates into new space).
        */
       if (key) {
-        /* if this mesh has any shapekeys, check first, otherwise just copy coordinates */
+        /* if this mesh has any shape-keys, check first, otherwise just copy coordinates */
         LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-          /* get pointer to where to write data for this mesh in shapekey's data array */
+          /* get pointer to where to write data for this mesh in shape-key's data array */
           float(*cos)[3] = ((float(*)[3])kb->data) + *vertofs;
 
-          /* check if this mesh has such a shapekey */
+          /* Check if this mesh has such a shape-key. */
           KeyBlock *okb = me->key ? BKE_keyblock_find_name(me->key, kb->name) : NULL;
           if (okb) {
-            /* copy this mesh's shapekey to the destination shapekey
+            /* copy this mesh's shape-key to the destination shape-key
              * (need to transform first) */
             float(*ocos)[3] = okb->data;
             for (a = 0; a < me->totvert; a++, cos++, ocos++) {
@@ -177,7 +161,7 @@ static void join_mesh_single(Depsgraph *depsgraph,
             }
           }
           else {
-            /* copy this mesh's vertex coordinates to the destination shapekey */
+            /* Copy this mesh's vertex coordinates to the destination shape-key. */
             for (a = 0, mvert = *mvert_pp; a < me->totvert; a++, cos++, mvert++) {
               copy_v3_v3(*cos, mvert->co);
             }
@@ -186,26 +170,26 @@ static void join_mesh_single(Depsgraph *depsgraph,
       }
     }
     else {
-      /* for each shapekey in destination mesh:
+      /* for each shape-key in destination mesh:
        * - if it was an 'original', copy the appropriate data from nkey
        * - otherwise, copy across plain coordinates (no need to transform coordinates)
        */
       if (key) {
         LISTBASE_FOREACH (KeyBlock *, kb, &key->block) {
-          /* get pointer to where to write data for this mesh in shapekey's data array */
+          /* get pointer to where to write data for this mesh in shape-key's data array */
           float(*cos)[3] = ((float(*)[3])kb->data) + *vertofs;
 
-          /* check if this was one of the original shapekeys */
+          /* Check if this was one of the original shape-keys. */
           KeyBlock *okb = nkey ? BKE_keyblock_find_name(nkey, kb->name) : NULL;
           if (okb) {
-            /* copy this mesh's shapekey to the destination shapekey */
+            /* copy this mesh's shape-key to the destination shape-key */
             float(*ocos)[3] = okb->data;
             for (a = 0; a < me->totvert; a++, cos++, ocos++) {
               copy_v3_v3(*cos, *ocos);
             }
           }
           else {
-            /* copy base-coordinates to the destination shapekey */
+            /* Copy base-coordinates to the destination shape-key. */
             for (a = 0, mvert = *mvert_pp; a < me->totvert; a++, cos++, mvert++) {
               copy_v3_v3(*cos, mvert->co);
             }
@@ -381,7 +365,7 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
         join_parent = true;
       }
 
-      /* check for shapekeys */
+      /* Check for shape-keys. */
       if (me->key) {
         haskey++;
       }
@@ -444,10 +428,10 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
     /* increase id->us : will be lowered later */
   }
 
-  /* - if destination mesh had shapekeys, move them somewhere safe, and set up placeholders
-   *   with arrays that are large enough to hold shapekey data for all meshes
-   * - if destination mesh didn't have shapekeys, but we encountered some in the meshes we're
-   *   joining, set up a new keyblock and assign to the mesh
+  /* - If destination mesh had shape-keys, move them somewhere safe, and set up placeholders
+   *   with arrays that are large enough to hold shape-key data for all meshes.
+   * - If destination mesh didn't have shape-keys, but we encountered some in the meshes we're
+   *   joining, set up a new key-block and assign to the mesh.
    */
   if (key) {
     /* make a duplicate copy that will only be used here... (must remember to free it!) */
@@ -534,8 +518,8 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
           }
         }
 
-        /* if this mesh has shapekeys,
-         * check if destination mesh already has matching entries too */
+        /* If this mesh has shape-keys,
+         * check if destination mesh already has matching entries too. */
         if (me->key && key) {
           /* for remapping KeyBlock.relative */
           int *index_map = MEM_mallocN(sizeof(int) * me->key->totkey, __func__);
@@ -697,8 +681,8 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
   /* tessface data removed above, no need to update */
   BKE_mesh_update_customdata_pointers(me, false);
 
-  /* update normals in case objects with non-uniform scale are joined */
-  BKE_mesh_calc_normals(me);
+  /* Tag normals dirty because vertex positions could be changed from the original. */
+  BKE_mesh_normals_tag_dirty(me);
 
   /* old material array */
   for (a = 1; a <= ob->totcol; a++) {
@@ -729,7 +713,7 @@ int ED_mesh_join_objects_exec(bContext *C, wmOperator *op)
   /* other mesh users */
   BKE_objects_materials_test_all(bmain, (ID *)me);
 
-  /* free temp copy of destination shapekeys (if applicable) */
+  /* Free temporary copy of destination shape-keys (if applicable). */
   if (nkey) {
     /* We can assume nobody is using that ID currently. */
     BKE_id_free_ex(bmain, nkey, LIB_ID_FREE_NO_UI_USER, false);

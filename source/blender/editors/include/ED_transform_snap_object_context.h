@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup editors
@@ -35,20 +21,19 @@ struct Object;
 struct Scene;
 struct View3D;
 
-/* transform_snap_object.c */
+/* transform_snap_object.cc */
 
 /* ED_transform_snap_object_*** API */
 
-typedef enum {
+typedef enum eSnapSelect {
   SNAP_ALL = 0,
   SNAP_NOT_SELECTED = 1,
   SNAP_NOT_ACTIVE = 2,
   SNAP_NOT_EDITED = 3,
-  SNAP_ONLY_ACTIVE = 4,
-  SNAP_SELECTABLE = 5,
+  SNAP_SELECTABLE = 4,
 } eSnapSelect;
 
-typedef enum {
+typedef enum eSnapEditType {
   SNAP_GEOM_FINAL = 0,
   SNAP_GEOM_CAGE = 1,
   SNAP_GEOM_EDIT = 2, /* Bmesh for mesh-type. */
@@ -74,13 +59,13 @@ struct SnapObjectHitDepth {
 /** parameters that define which objects will be used to snap. */
 struct SnapObjectParams {
   /* Special context sensitive handling for the active or selected object. */
-  char snap_select;
+  eSnapSelect snap_select;
   /* Geometry for snapping in edit mode. */
-  char edit_mode_type;
+  eSnapEditType edit_mode_type;
   /* snap to the closest element, use when using more than one snap type */
-  unsigned int use_occlusion_test : 1;
+  bool use_occlusion_test : true;
   /* exclude back facing geometry from snapping */
-  unsigned int use_backface_culling : 1;
+  bool use_backface_culling : true;
 };
 
 typedef struct SnapObjectContext SnapObjectContext;

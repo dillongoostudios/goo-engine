@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edinterface
@@ -26,6 +10,7 @@
 #include "MEM_guardedalloc.h"
 
 #include "DNA_armature_types.h"
+#include "DNA_material_types.h"
 #include "DNA_modifier_types.h" /* for handling geometry nodes properties */
 #include "DNA_object_types.h"   /* for OB_DATA_SUPPORT_ID */
 #include "DNA_screen_types.h"
@@ -43,6 +28,7 @@
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_lib_override.h"
+#include "BKE_material.h"
 #include "BKE_node.h"
 #include "BKE_report.h"
 #include "BKE_screen.h"
@@ -54,6 +40,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_prototypes.h"
 #include "RNA_types.h"
 
 #include "UI_interface.h"
@@ -1687,7 +1674,7 @@ static int edittranslation_exec(bContext *C, wmOperator *op)
   RNA_string_set(&ptr, "rna_prop", rna_prop.strinfo);
   RNA_string_set(&ptr, "rna_enum", rna_enum.strinfo);
   RNA_string_set(&ptr, "rna_ctxt", rna_ctxt.strinfo);
-  const int ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &ptr);
+  const int ret = WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &ptr, NULL);
 
   /* Clean up */
   if (but_label.strinfo) {
@@ -1875,7 +1862,7 @@ bool UI_drop_color_poll(struct bContext *C, wmDrag *drag, const wmEvent *UNUSED(
   return 0;
 }
 
-void UI_drop_color_copy(wmDrag *drag, wmDropBox *drop)
+void UI_drop_color_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   uiDragColorHandle *drag_info = drag->poin;
 
@@ -1908,14 +1895,14 @@ static int drop_color_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
     if (RNA_property_subtype(but->rnaprop) == PROP_COLOR_GAMMA) {
       if (!gamma) {
-        IMB_colormanagement_scene_linear_to_srgb_v3(color);
+        IMB_colormanagement_scene_linear_to_srgb_v3(color, color);
       }
       RNA_property_float_set_array(&but->rnapoin, but->rnaprop, color);
       RNA_property_update(C, &but->rnapoin, but->rnaprop);
     }
     else if (RNA_property_subtype(but->rnaprop) == PROP_COLOR) {
       if (gamma) {
-        IMB_colormanagement_srgb_to_scene_linear_v3(color);
+        IMB_colormanagement_srgb_to_scene_linear_v3(color, color);
       }
       RNA_property_float_set_array(&but->rnapoin, but->rnaprop, color);
       RNA_property_update(C, &but->rnapoin, but->rnaprop);
@@ -2091,8 +2078,9 @@ static void UI_OT_tree_view_drop(wmOperatorType *ot)
 /** \name UI Tree-View Item Rename Operator
  *
  * General purpose renaming operator for tree-views. Thanks to this, to add a rename button to
- * context menus for example, tree-view API users don't have to implement own renaming operators
- * with the same logic as they already have for their #ui::AbstractTreeViewItem::rename() override.
+ * context menus for example, tree-view API users don't have to implement their own renaming
+ * operators with the same logic as they already have for their #ui::AbstractTreeViewItem::rename()
+ * override.
  *
  * \{ */
 
@@ -2127,6 +2115,86 @@ static void UI_OT_tree_view_item_rename(wmOperatorType *ot)
 
   ot->flag = OPTYPE_INTERNAL;
 }
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Material Drag/Drop Operator
+ *
+ * \{ */
+
+static bool ui_drop_material_poll(bContext *C)
+{
+  PointerRNA ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
+  Object *ob = ptr.data;
+  if (ob == NULL) {
+    return false;
+  }
+
+  PointerRNA mat_slot = CTX_data_pointer_get_type(C, "material_slot", &RNA_MaterialSlot);
+  if (RNA_pointer_is_null(&mat_slot)) {
+    return false;
+  }
+
+  return true;
+}
+
+static int ui_drop_material_exec(bContext *C, wmOperator *op)
+{
+  Main *bmain = CTX_data_main(C);
+
+  if (!RNA_struct_property_is_set(op->ptr, "session_uuid")) {
+    return OPERATOR_CANCELLED;
+  }
+  const uint32_t session_uuid = (uint32_t)RNA_int_get(op->ptr, "session_uuid");
+  Material *ma = (Material *)BKE_libblock_find_session_uuid(bmain, ID_MA, session_uuid);
+  if (ma == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
+  PointerRNA ptr = CTX_data_pointer_get_type(C, "object", &RNA_Object);
+  Object *ob = ptr.data;
+  BLI_assert(ob);
+
+  PointerRNA mat_slot = CTX_data_pointer_get_type(C, "material_slot", &RNA_MaterialSlot);
+  BLI_assert(mat_slot.data);
+  const int target_slot = RNA_int_get(&mat_slot, "slot_index") + 1;
+
+  /* only drop grease pencil material on grease pencil objects */
+  if ((ma->gp_style != NULL) && (ob->type != OB_GPENCIL)) {
+    return OPERATOR_CANCELLED;
+  }
+
+  BKE_object_material_assign(bmain, ob, ma, target_slot, BKE_MAT_ASSIGN_USERPREF);
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_OB_SHADING, ob);
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, NULL);
+  WM_event_add_notifier(C, NC_MATERIAL | ND_SHADING_LINKS, ma);
+  DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM);
+
+  return OPERATOR_FINISHED;
+}
+
+static void UI_OT_drop_material(wmOperatorType *ot)
+{
+  ot->name = "Drop Material in Material slots";
+  ot->description = "Drag material to Material slots in Properties";
+  ot->idname = "UI_OT_drop_material";
+
+  ot->poll = ui_drop_material_poll;
+  ot->exec = ui_drop_material_exec;
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
+
+  PropertyRNA *prop = RNA_def_int(ot->srna,
+                                  "session_uuid",
+                                  0,
+                                  INT32_MIN,
+                                  INT32_MAX,
+                                  "Session UUID",
+                                  "Session UUID of the data-block to assign",
+                                  INT32_MIN,
+                                  INT32_MAX);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_HIDDEN);
+}
 
 /** \} */
 
@@ -2148,6 +2216,7 @@ void ED_operatortypes_ui(void)
   WM_operatortype_append(UI_OT_jump_to_target_button);
   WM_operatortype_append(UI_OT_drop_color);
   WM_operatortype_append(UI_OT_drop_name);
+  WM_operatortype_append(UI_OT_drop_material);
 #ifdef WITH_PYTHON
   WM_operatortype_append(UI_OT_editsource);
   WM_operatortype_append(UI_OT_edittranslation_init);

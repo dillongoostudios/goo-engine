@@ -1,19 +1,6 @@
-/*
+/* SPDX-License-Identifier: Apache-2.0
  * Copyright 2019, NVIDIA Corporation.
- * Copyright 2019, Blender Foundation.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+ * Copyright 2019-2022 Blender Foundation. */
 
 #pragma once
 
@@ -37,6 +24,7 @@ enum {
   PG_RGEN_INTERSECT_SUBSURFACE,
   PG_RGEN_INTERSECT_VOLUME_STACK,
   PG_RGEN_SHADE_SURFACE_RAYTRACE,
+  PG_RGEN_SHADE_SURFACE_MNEE,
   PG_MISS,
   PG_HITD, /* Default hit group. */
   PG_HITS, /* __SHADOW_RECORD_ALL__ hit group. */
@@ -59,7 +47,7 @@ static const int CALLABLE_PROGRAM_GROUPS_BASE = PG_CALL_SVM_AO;
 static const int NUM_CALLABLE_PROGRAM_GROUPS = 2;
 
 /* List of OptiX pipelines. */
-enum { PIP_SHADE_RAYTRACE, PIP_INTERSECT, NUM_PIPELINES };
+enum { PIP_SHADE_RAYTRACE, PIP_SHADE_MNEE, PIP_INTERSECT, NUM_PIPELINES };
 
 /* A single shader binding table entry. */
 struct SbtRecord {

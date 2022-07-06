@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 /** \file
  * \ingroup edanimation
@@ -506,7 +490,7 @@ static void anim_flush_channel_setting_up(bAnimContext *ac,
   }
 
   /* Go backwards in the list, until the highest-ranking element
-   * (by indention has been covered). */
+   * (by indentation has been covered). */
   int prevLevel = matchLevel;
   for (bAnimListElem *ale = match->prev; ale; ale = ale->prev) {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
@@ -555,7 +539,7 @@ static void anim_flush_channel_setting_down(bAnimContext *ac,
                                             bAnimListElem *const match,
                                             const int matchLevel)
 {
-  /* go forwards in the list, until the lowest-ranking element (by indention has been covered) */
+  /* go forwards in the list, until the lowest-ranking element (by indentation has been covered) */
   for (bAnimListElem *ale = match->next; ale; ale = ale->next) {
     const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
 
@@ -2805,8 +2789,9 @@ static bool rename_anim_channels(bAnimContext *ac, int channel_index)
   }
 
   /* don't allow renaming linked channels */
-  if ((ale->fcurve_owner_id != NULL && ID_IS_LINKED(ale->fcurve_owner_id)) ||
-      (ale->id != NULL && ID_IS_LINKED(ale->id))) {
+  if ((ale->fcurve_owner_id != NULL &&
+       (ID_IS_LINKED(ale->fcurve_owner_id) || ID_IS_OVERRIDE_LIBRARY(ale->fcurve_owner_id))) ||
+      (ale->id != NULL && (ID_IS_LINKED(ale->id) || ID_IS_OVERRIDE_LIBRARY(ale->id)))) {
     ANIM_animdata_freelist(&anim_data);
     return false;
   }

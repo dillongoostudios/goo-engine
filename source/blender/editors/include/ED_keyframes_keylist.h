@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -147,7 +131,11 @@ const struct ActKeyColumn *ED_keylist_find_any_between(const struct AnimKeylist 
                                                        const Range2f frame_range);
 bool ED_keylist_is_empty(const struct AnimKeylist *keylist);
 const struct ListBase /* ActKeyColumn */ *ED_keylist_listbase(const struct AnimKeylist *keylist);
-bool ED_keylist_frame_range(const struct AnimKeylist *keylist, Range2f *r_frame_range);
+bool ED_keylist_all_keys_frame_range(const struct AnimKeylist *keylist, Range2f *r_frame_range);
+/* Return the selected keyframe's range. If none are selected, return False and
+ * do not affect the frame range. */
+bool ED_keylist_selected_keys_frame_range(const struct AnimKeylist *keylist,
+                                          Range2f *r_frame_range);
 const ActKeyColumn *ED_keylist_array(const struct AnimKeylist *keylist);
 int64_t ED_keylist_array_len(const struct AnimKeylist *keylist);
 
@@ -199,10 +187,10 @@ void mask_to_keylist(struct bDopeSheet *ads,
 
 /* ActKeyColumn API ---------------- */
 
-/* Checks if ActKeyColumn has any block data */
+/** Checks if #ActKeyColumn has any block data. */
 bool actkeyblock_is_valid(const ActKeyColumn *ac);
 
-/* Checks if ActKeyColumn can be used as a block (i.e. drawn/used to detect "holds") */
+/** Checks if #ActKeyColumn can be used as a block (i.e. drawn/used to detect "holds"). */
 int actkeyblock_get_valid_hold(const ActKeyColumn *ac);
 
 #ifdef __cplusplus

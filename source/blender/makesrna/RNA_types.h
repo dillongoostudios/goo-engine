@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -193,7 +179,7 @@ typedef enum PropertySubType {
 
 /* Make sure enums are updated with these */
 /* HIGHEST FLAG IN USE: 1 << 31
- * FREE FLAGS: 2, 9, 11, 13, 14, 15, 30 */
+ * FREE FLAGS: 2, 9, 11, 13, 14, 15. */
 typedef enum PropertyFlag {
   /**
    * Editable means the property is editable in the user
@@ -272,7 +258,7 @@ typedef enum PropertyFlag {
 
   /**
    * flag contains multiple enums.
-   * NOTE: not to be confused with prop->enumbitflags
+   * NOTE: not to be confused with `prop->enumbitflags`
    * this exposes the flag as multiple options in python and the UI.
    *
    * \note These can't be animated so use with care.
@@ -322,7 +308,7 @@ typedef enum PropertyFlag {
  * FREE FLAGS: 2, 3, 4, 5, 6, 7, 8, 9, 12 and above.
  */
 typedef enum PropertyOverrideFlag {
-  /** Means the property can be overridden by a local 'proxy' of some linked datablock. */
+  /** Means that the property can be overridden by a local override of some linked datablock. */
   PROPOVERRIDE_OVERRIDABLE_LIBRARY = (1 << 0),
 
   /**

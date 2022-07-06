@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2004 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2004 Blender Foundation. All rights reserved. */
 
 #pragma once
 
@@ -27,6 +11,7 @@
 extern "C" {
 #endif
 
+struct Editing;
 struct ListBase;
 struct Scene;
 struct SeqCollection;
@@ -66,6 +51,11 @@ bool SEQ_transform_seqbase_shuffle_time(struct SeqCollection *strips_to_shuffle,
                                         struct Scene *evil_scene,
                                         struct ListBase *markers,
                                         bool use_sync_markers);
+
+void SEQ_transform_handle_overlap(struct Scene *scene,
+                                  struct ListBase *seqbasep,
+                                  struct SeqCollection *transformed_strips,
+                                  bool use_sync_markers);
 /**
  * Check if the selected seq's reference unselected seq's.
  */
@@ -82,6 +72,12 @@ void SEQ_transform_offset_after_frame(struct Scene *scene,
                                       struct ListBase *seqbase,
                                       int delta,
                                       int timeline_frame);
+
+/**
+ * Check if `seq` can be moved.
+ * This function also checks `SeqTimelineChannel` flag.
+ */
+bool SEQ_transform_is_locked(struct ListBase *channels, struct Sequence *seq);
 
 /* Image transformation. */
 
@@ -127,6 +123,22 @@ void SEQ_image_preview_unit_to_px(const struct Scene *scene,
 void SEQ_image_preview_unit_from_px(const struct Scene *scene,
                                     const float co_src[2],
                                     float co_dst[2]);
+
+/**
+ * Get viewport axis aligned bounding box from a collection of sequences.
+ * The collection must have one or more strips
+ *
+ * \param scene: Scene in which strips are located
+ * \param strips: Collection of strips to get the bounding box from
+ * \param apply_rotation: Include sequence rotation transform in the bounding box calculation
+ * \param r_min: Minimum x and y values
+ * \param r_max: Maximum x and y values
+ */
+void SEQ_image_transform_bounding_box_from_collection(struct Scene *scene,
+                                                      struct SeqCollection *strips,
+                                                      bool apply_rotation,
+                                                      float r_min[2],
+                                                      float r_max[2]);
 
 #ifdef __cplusplus
 }

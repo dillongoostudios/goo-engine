@@ -1,18 +1,5 @@
-/*
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-#pragma once
+/* SPDX-License-Identifier: Apache-2.0
+ * Licensed under the Apache License, Version 2.0 (the "License"); */
 
 CCL_NAMESPACE_BEGIN
 
@@ -96,16 +83,16 @@ ccl_device float4 point_attribute_float4(KernelGlobals kg,
 {
 #  ifdef __RAY_DIFFERENTIALS__
   if (dx)
-    *dx = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    *dx = zero_float4();
   if (dy)
-    *dy = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    *dy = zero_float4();
 #  endif
 
   if (desc.element == ATTR_ELEMENT_VERTEX) {
     return kernel_tex_fetch(__attributes_float4, desc.offset + sd->prim);
   }
   else {
-    return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    return zero_float4();
   }
 }
 

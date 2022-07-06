@@ -1,22 +1,5 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# The Original Code is Copyright (C) 2016, Blender Foundation
-# All rights reserved.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright 2016 Blender Foundation. All rights reserved.
 
 # Libraries configuration for any *nix system including Linux and Unix (excluding APPLE).
 
@@ -62,6 +45,9 @@ if(EXISTS ${LIBDIR})
   # which is a part of OpenCollada. They have different ABI, and we
   # do need to use the official one.
   set(CMAKE_PREFIX_PATH ${LIBDIR}/zlib ${LIB_SUBDIRS})
+
+  include(platform_old_libs_update)
+
   set(WITH_STATIC_LIBS ON)
   # OpenMP usually can't be statically linked into shared libraries,
   # due to not being compiled with position independent code.
@@ -385,6 +371,15 @@ if(WITH_PUGIXML)
   endif()
 endif()
 
+if(WITH_IMAGE_WEBP)
+  set(WEBP_ROOT_DIR ${LIBDIR}/webp)
+  find_package_wrapper(WebP)
+  if(NOT WEBP_FOUND)
+    set(WITH_IMAGE_WEBP OFF)
+    message(WARNING "WebP not found, disabling WITH_IMAGE_WEBP")
+  endif()
+endif()
+
 if(WITH_OPENIMAGEIO)
   find_package_wrapper(OpenImageIO)
   set(OPENIMAGEIO_LIBRARIES
@@ -402,6 +397,9 @@ if(WITH_OPENIMAGEIO)
   endif()
   if(WITH_IMAGE_OPENEXR)
     list(APPEND OPENIMAGEIO_LIBRARIES "${OPENEXR_LIBRARIES}")
+  endif()
+  if(WITH_IMAGE_WEBP)
+    list(APPEND OPENIMAGEIO_LIBRARIES "${WEBP_LIBRARIES}")
   endif()
 
   if(NOT OPENIMAGEIO_FOUND)
@@ -875,7 +873,7 @@ endif()
 # If atomic operations are possible without libatomic then linker flags are left as-is.
 function(CONFIGURE_ATOMIC_LIB_IF_NEEDED)
   # Source which is used to enforce situation when software emulation of atomics is required.
-  # Assume that using 64bit integer gives a definitive asnwer (as in, if 64bit atomic operations
+  # Assume that using 64bit integer gives a definitive answer (as in, if 64bit atomic operations
   # are possible using assembly/intrinsics 8, 16, and 32 bit operations will also be possible.
   set(_source
       "#include <atomic>

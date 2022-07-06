@@ -1,22 +1,5 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# The Original Code is Copyright (C) 2020, Blender Foundation
-# All rights reserved.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright 2020 Blender Foundation. All rights reserved.
 
 set(INC
   .
@@ -24,6 +7,8 @@ set(INC
   ../../blenlib
   ../../depsgraph
   ../../makesdna
+  ../../../../intern/guardedalloc
+  ../../../../extern/fast_float
 )
 
 set(INC_SYS
@@ -34,9 +19,14 @@ set(SRC
   intern/dupli_parent_finder.cc
   intern/dupli_persistent_id.cc
   intern/object_identifier.cc
+  intern/path_util.cc
+  intern/string_utils.cc
 
   IO_abstract_hierarchy_iterator.h
   IO_dupli_persistent_id.hh
+  IO_path_util.hh
+  IO_path_util_types.h
+  IO_string_utils.hh
   IO_types.h
   intern/dupli_parent_finder.hh
 )
@@ -55,6 +45,7 @@ if(WITH_GTESTS)
     intern/abstract_hierarchy_iterator_test.cc
     intern/hierarchy_context_order_test.cc
     intern/object_identifier_test.cc
+    intern/string_utils_test.cc
   )
   set(TEST_INC
     ../../blenloader

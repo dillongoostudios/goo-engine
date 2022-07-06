@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2006 Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2006 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bli
@@ -125,7 +109,7 @@ static pthread_mutex_t _fftw_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t _view3d_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_t mainid;
 static unsigned int thread_levels = 0; /* threads can be invoked inside threads */
-static int num_threads_override = 0;
+static int threads_override_num = 0;
 
 /* just a max for security reasons */
 #define RE_MAX_THREAD BLENDER_MAX_THREADS
@@ -298,8 +282,8 @@ int BLI_system_thread_count()
 {
   static int t = -1;
 
-  if (num_threads_override != 0) {
-    return num_threads_override;
+  if (threads_override_num != 0) {
+    return threads_override_num;
   }
   if (LIKELY(t != -1)) {
     return t;
@@ -332,12 +316,12 @@ int BLI_system_thread_count()
 
 void BLI_system_num_threads_override_set(int num)
 {
-  num_threads_override = num;
+  threads_override_num = num;
 }
 
 int BLI_system_num_threads_override_get()
 {
-  return num_threads_override;
+  return threads_override_num;
 }
 
 /* Global Mutex Locks */

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -79,7 +65,6 @@ class SocketRef : NonCopyable, NonMovable {
   bool is_input_;
   int id_;
   int index_;
-  PointerRNA rna_;
   Vector<LinkRef *> directly_linked_links_;
 
   /* These sockets are linked directly, i.e. with a single link in between. */
@@ -115,7 +100,7 @@ class SocketRef : NonCopyable, NonMovable {
   const InputSocketRef &as_input() const;
   const OutputSocketRef &as_output() const;
 
-  PointerRNA *rna() const;
+  PointerRNA rna() const;
 
   StringRefNull idname() const;
   StringRefNull name() const;
@@ -166,7 +151,6 @@ class NodeRef : NonCopyable, NonMovable {
  private:
   NodeTreeRef *tree_;
   bNode *bnode_;
-  PointerRNA rna_;
   int id_;
   Vector<InputSocketRef *> inputs_;
   Vector<OutputSocketRef *> outputs_;
@@ -197,7 +181,7 @@ class NodeRef : NonCopyable, NonMovable {
   bNode *bnode() const;
   bNodeTree *btree() const;
 
-  PointerRNA *rna() const;
+  PointerRNA rna() const;
   StringRefNull idname() const;
   StringRefNull name() const;
   StringRefNull label() const;
@@ -424,11 +408,6 @@ inline const OutputSocketRef &SocketRef::as_output() const
   return static_cast<const OutputSocketRef &>(*this);
 }
 
-inline PointerRNA *SocketRef::rna() const
-{
-  return const_cast<PointerRNA *>(&rna_);
-}
-
 inline StringRefNull SocketRef::idname() const
 {
   return bsocket_->idname;
@@ -583,11 +562,6 @@ inline bNode *NodeRef::bnode() const
 inline bNodeTree *NodeRef::btree() const
 {
   return tree_->btree();
-}
-
-inline PointerRNA *NodeRef::rna() const
-{
-  return const_cast<PointerRNA *>(&rna_);
 }
 
 inline StringRefNull NodeRef::idname() const

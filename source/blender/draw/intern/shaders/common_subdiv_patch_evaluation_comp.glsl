@@ -1,5 +1,5 @@
 
-/* To be compile with common_subdiv_lib.glsl */
+/* To be compiled with common_subdiv_lib.glsl */
 
 /* Source buffer. */
 layout(std430, binding = 0) buffer src_buffer
@@ -70,10 +70,12 @@ layout(std430, binding = 8) writeonly buffer outputVertices
   FDotVert output_verts[];
 };
 
+#  ifdef FDOTS_NORMALS
 layout(std430, binding = 9) writeonly buffer outputNormals
 {
   FDotNor output_nors[];
 };
+#  endif
 
 layout(std430, binding = 10) writeonly buffer outputFdotsIndices
 {
@@ -341,6 +343,11 @@ float get_face_flag(uint coarse_quad_index)
   return 0.0;
 }
 
+bool is_face_hidden(uint coarse_quad_index)
+{
+  return (extra_coarse_face_data[coarse_quad_index] & coarse_face_hidden_mask) != 0;
+}
+
 void main()
 {
   /* We execute for each coarse quad. */
@@ -370,8 +377,16 @@ void main()
   fnor.flag = get_face_flag(coarse_quad_index);
 
   output_verts[coarse_quad_index] = vert;
+#  ifdef FDOTS_NORMALS
   output_nors[coarse_quad_index] = fnor;
-  output_indices[coarse_quad_index] = coarse_quad_index;
+#  endif
+
+  if (is_face_hidden(coarse_quad_index)) {
+    output_indices[coarse_quad_index] = 0xffffffff;
+  }
+  else {
+    output_indices[coarse_quad_index] = coarse_quad_index;
+  }
 }
 #else
 void main()

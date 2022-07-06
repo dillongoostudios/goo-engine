@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <mutex>
 
@@ -34,18 +20,18 @@
 
 #include "attribute_access_intern.hh"
 
-#include "FN_cpp_type_make.hh"
+#include "BLI_cpp_type_make.hh"
 
 using blender::float4x4;
+using blender::GSpan;
 using blender::IndexMask;
 using blender::Map;
 using blender::MutableSpan;
 using blender::Set;
 using blender::Span;
 using blender::VectorSet;
-using blender::fn::GSpan;
 
-MAKE_CPP_TYPE(InstanceReference, InstanceReference, CPPTypeFlags::None)
+BLI_CPP_TYPE_MAKE(InstanceReference, InstanceReference, CPPTypeFlags::None)
 
 /* -------------------------------------------------------------------- */
 /** \name Geometry Component Implementation
@@ -178,7 +164,7 @@ void InstancesComponent::remove_instances(const IndexMask mask)
 
         GSpan src = *src_attributes.get_for_read(id);
         dst_attributes.create(id, meta_data.data_type);
-        fn::GMutableSpan dst = *dst_attributes.get_for_write(id);
+        GMutableSpan dst = *dst_attributes.get_for_write(id);
 
         attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
           using T = decltype(dummy);
@@ -452,18 +438,6 @@ class InstancePositionAttributeProvider final : public BuiltinAttributeProvider 
     return true;
   }
 };
-
-template<typename T>
-static GVArray make_array_read_attribute(const void *data, const int domain_size)
-{
-  return VArray<T>::ForSpan(Span<T>((const T *)data, domain_size));
-}
-
-template<typename T>
-static GVMutableArray make_array_write_attribute(void *data, const int domain_size)
-{
-  return VMutableArray<T>::ForSpan(MutableSpan<T>((T *)data, domain_size));
-}
 
 static ComponentAttributeProviders create_attribute_providers_for_instances()
 {

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup editors
@@ -36,6 +22,7 @@ struct wmOperator;
 struct wmOperatorType;
 
 /* undo.c */
+
 /**
  * Run from the main event loop, basic checks that undo is left in a correct state.
  */
@@ -105,7 +92,8 @@ struct Base **ED_undo_editmode_bases_from_view_layer(struct ViewLayer *view_laye
  */
 struct UndoStack *ED_undo_stack_get(void);
 
-/* helpers */
+/* Helpers. */
+
 void ED_undo_object_set_active_or_warn(struct Scene *scene,
                                        struct ViewLayer *view_layer,
                                        struct Object *ob,

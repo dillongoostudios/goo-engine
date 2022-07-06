@@ -31,6 +31,7 @@ layout(std140) uniform shader_data
   uint coarse_face_select_mask;
   uint coarse_face_smooth_mask;
   uint coarse_face_active_mask;
+  uint coarse_face_hidden_mask;
   uint coarse_face_loopstart_mask;
 
   /* Total number of elements to process. */
@@ -101,7 +102,7 @@ uint get_index(uint i)
  * the format. */
 struct PosNorLoop {
   float x, y, z;
-  /* TODO(kevindietrich) : figure how to compress properly as GLSL does not have char/short types,
+  /* TODO(@kevindietrich): figure how to compress properly as GLSL does not have char/short types,
    * bit operations get tricky. */
   float nx, ny, nz;
   float flag;

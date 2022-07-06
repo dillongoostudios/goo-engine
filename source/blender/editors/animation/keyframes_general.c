@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edanimation
@@ -134,11 +118,13 @@ void clear_fcurve_keys(FCurve *fcu)
 
 /* ---------------- */
 
-void duplicate_fcurve_keys(FCurve *fcu)
+bool duplicate_fcurve_keys(FCurve *fcu)
 {
+  bool changed = false;
+
   /* this can only work when there is an F-Curve, and also when there are some BezTriples */
   if (ELEM(NULL, fcu, fcu->bezt)) {
-    return;
+    return changed;
   }
 
   for (int i = 0; i < fcu->totvert; i++) {
@@ -151,7 +137,7 @@ void duplicate_fcurve_keys(FCurve *fcu)
       memcpy(newbezt + i + 1, fcu->bezt + i, sizeof(BezTriple));
       memcpy(newbezt + i + 2, fcu->bezt + i + 1, sizeof(BezTriple) * (fcu->totvert - (i + 1)));
       fcu->totvert++;
-
+      changed = true;
       /* reassign pointers... (free old, and add new) */
       MEM_freeN(fcu->bezt);
       fcu->bezt = newbezt;
@@ -164,6 +150,7 @@ void duplicate_fcurve_keys(FCurve *fcu)
       BEZT_SEL_ALL(&fcu->bezt[i]);
     }
   }
+  return changed;
 }
 
 /* **************************************************** */
@@ -393,6 +380,68 @@ void blend_to_neighbor_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const
   /* Blend each key individually. */
   for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
     fcu->bezt[i].vec[1][1] = interpf(target_bezt.vec[1][1], fcu->bezt[i].vec[1][1], blend_factor);
+  }
+}
+
+/* ---------------- */
+
+float get_default_rna_value(FCurve *fcu, PropertyRNA *prop, PointerRNA *ptr)
+{
+  const int len = RNA_property_array_length(ptr, prop);
+
+  float default_value = 0;
+  /* Find the default value of that property. */
+  switch (RNA_property_type(prop)) {
+    case PROP_BOOLEAN:
+      if (len) {
+        default_value = RNA_property_boolean_get_default_index(ptr, prop, fcu->array_index);
+      }
+      else {
+        default_value = RNA_property_boolean_get_default(ptr, prop);
+      }
+      break;
+    case PROP_INT:
+      if (len) {
+        default_value = RNA_property_int_get_default_index(ptr, prop, fcu->array_index);
+      }
+      else {
+        default_value = RNA_property_int_get_default(ptr, prop);
+      }
+      break;
+    case PROP_FLOAT:
+      if (len) {
+        default_value = RNA_property_float_get_default_index(ptr, prop, fcu->array_index);
+      }
+      else {
+        default_value = RNA_property_float_get_default(ptr, prop);
+      }
+      break;
+
+    default:
+      break;
+  }
+  return default_value;
+}
+
+/* This function blends the selected keyframes to the default value of the property the fcurve
+ * drives. */
+void blend_to_default_fcurve(PointerRNA *id_ptr, FCurve *fcu, const float factor)
+{
+  PointerRNA ptr;
+  PropertyRNA *prop;
+
+  /* Check if path is valid. */
+  if (!RNA_path_resolve_property(id_ptr, fcu->rna_path, &ptr, &prop)) {
+    return;
+  }
+
+  const float default_value = get_default_rna_value(fcu, prop, &ptr);
+
+  /* Blend selected keys to default */
+  for (int i = 0; i < fcu->totvert; i++) {
+    if (fcu->bezt[i].f2 & SELECT) {
+      fcu->bezt[i].vec[1][1] = interpf(default_value, fcu->bezt[i].vec[1][1], factor);
+    }
   }
 }
 

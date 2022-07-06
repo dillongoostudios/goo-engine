@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -113,7 +100,7 @@ class DeviceQueue {
    * based on number of cores and/or available memory. */
   virtual int num_concurrent_states(const size_t state_size) const = 0;
 
-  /* Number of states which keeps the device occupied with work without loosing performance.
+  /* Number of states which keeps the device occupied with work without losing performance.
    * The renderer will add more work (when available) when number of active paths falls below this
    * value. */
   virtual int num_concurrent_busy_states() const = 0;
@@ -124,9 +111,6 @@ class DeviceQueue {
    *
    * Use this method after device synchronization has finished before enqueueing any kernels. */
   virtual void init_execution() = 0;
-
-  /* Test if an optional device kernel is available. */
-  virtual bool kernel_available(DeviceKernel kernel) const = 0;
 
   /* Enqueue kernel execution.
    *

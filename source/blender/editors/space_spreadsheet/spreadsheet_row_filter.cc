@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <cstring>
 
@@ -56,7 +42,7 @@ static void apply_row_filter(const SpreadsheetRowFilter &row_filter,
                              Vector<int64_t> &new_indices)
 {
   const ColumnValues &column = *columns.lookup(row_filter.column_name);
-  const fn::GVArray &column_data = column.data();
+  const GVArray &column_data = column.data();
   if (column_data.type().is<float>()) {
     const float value = row_filter.value_float;
     switch (row_filter.operation) {
@@ -81,6 +67,35 @@ static void apply_row_filter(const SpreadsheetRowFilter &row_filter,
         apply_filter_operation(
             column_data.typed<float>(),
             [&](const float cell) { return cell < value; },
+            prev_mask,
+            new_indices);
+        break;
+      }
+    }
+  }
+  else if (column_data.type().is<int8_t>()) {
+    const int value = row_filter.value_int;
+    switch (row_filter.operation) {
+      case SPREADSHEET_ROW_FILTER_EQUAL: {
+        apply_filter_operation(
+            column_data.typed<int8_t>(),
+            [&](const int cell) { return cell == value; },
+            prev_mask,
+            new_indices);
+        break;
+      }
+      case SPREADSHEET_ROW_FILTER_GREATER: {
+        apply_filter_operation(
+            column_data.typed<int8_t>(),
+            [value](const int cell) { return cell > value; },
+            prev_mask,
+            new_indices);
+        break;
+      }
+      case SPREADSHEET_ROW_FILTER_LESS: {
+        apply_filter_operation(
+            column_data.typed<int8_t>(),
+            [&](const int cell) { return cell < value; },
             prev_mask,
             new_indices);
         break;
@@ -120,10 +135,10 @@ static void apply_row_filter(const SpreadsheetRowFilter &row_filter,
     const float2 value = row_filter.value_float2;
     switch (row_filter.operation) {
       case SPREADSHEET_ROW_FILTER_EQUAL: {
-        const float threshold_sq = row_filter.threshold;
+        const float threshold_sq = pow2f(row_filter.threshold);
         apply_filter_operation(
             column_data.typed<float2>(),
-            [&](const float2 cell) { return math::distance_squared(cell, value) > threshold_sq; },
+            [&](const float2 cell) { return math::distance_squared(cell, value) <= threshold_sq; },
             prev_mask,
             new_indices);
         break;
@@ -150,10 +165,10 @@ static void apply_row_filter(const SpreadsheetRowFilter &row_filter,
     const float3 value = row_filter.value_float3;
     switch (row_filter.operation) {
       case SPREADSHEET_ROW_FILTER_EQUAL: {
-        const float threshold_sq = row_filter.threshold;
+        const float threshold_sq = pow2f(row_filter.threshold);
         apply_filter_operation(
             column_data.typed<float3>(),
-            [&](const float3 cell) { return math::distance_squared(cell, value) > threshold_sq; },
+            [&](const float3 cell) { return math::distance_squared(cell, value) <= threshold_sq; },
             prev_mask,
             new_indices);
         break;
@@ -182,49 +197,51 @@ static void apply_row_filter(const SpreadsheetRowFilter &row_filter,
   }
   else if (column_data.type().is<ColorGeometry4f>()) {
     const ColorGeometry4f value = row_filter.value_color;
-    switch (row_filter.operation) {
-      case SPREADSHEET_ROW_FILTER_EQUAL: {
-        const float threshold_sq = row_filter.threshold;
-        apply_filter_operation(
-            column_data.typed<ColorGeometry4f>(),
-            [&](const ColorGeometry4f cell) {
-              return len_squared_v4v4(cell, value) > threshold_sq;
-            },
-            prev_mask,
-            new_indices);
-        break;
-      }
-    }
+    const float threshold_sq = pow2f(row_filter.threshold);
+    apply_filter_operation(
+        column_data.typed<ColorGeometry4f>(),
+        [&](const ColorGeometry4f cell) { return len_squared_v4v4(cell, value) <= threshold_sq; },
+        prev_mask,
+        new_indices);
+  }
+  else if (column_data.type().is<ColorGeometry4b>()) {
+    const ColorGeometry4b value = row_filter.value_byte_color;
+    const float4 value_floats = {(float)value.r, (float)value.g, (float)value.b, (float)value.a};
+    const float threshold_sq = pow2f(row_filter.threshold);
+    apply_filter_operation(
+        column_data.typed<ColorGeometry4b>(),
+        [&](const ColorGeometry4b cell) {
+          const float4 cell_floats = {(float)cell.r, (float)cell.g, (float)cell.b, (float)cell.a};
+          return len_squared_v4v4(value_floats, cell_floats) <= threshold_sq;
+        },
+        prev_mask,
+        new_indices);
   }
   else if (column_data.type().is<InstanceReference>()) {
     const StringRef value = row_filter.value_string;
-    switch (row_filter.operation) {
-      case SPREADSHEET_ROW_FILTER_EQUAL: {
-        apply_filter_operation(
-            column_data.typed<InstanceReference>(),
-            [&](const InstanceReference cell) {
-              switch (cell.type()) {
-                case InstanceReference::Type::Object: {
-                  return value == (reinterpret_cast<ID &>(cell.object()).name + 2);
-                }
-                case InstanceReference::Type::Collection: {
-                  return value == (reinterpret_cast<ID &>(cell.collection()).name + 2);
-                }
-                case InstanceReference::Type::GeometrySet: {
-                  return false;
-                }
-                case InstanceReference::Type::None: {
-                  return false;
-                }
-              }
-              BLI_assert_unreachable();
+
+    apply_filter_operation(
+        column_data.typed<InstanceReference>(),
+        [&](const InstanceReference cell) {
+          switch (cell.type()) {
+            case InstanceReference::Type::Object: {
+              return value == (reinterpret_cast<ID &>(cell.object()).name + 2);
+            }
+            case InstanceReference::Type::Collection: {
+              return value == (reinterpret_cast<ID &>(cell.collection()).name + 2);
+            }
+            case InstanceReference::Type::GeometrySet: {
               return false;
-            },
-            prev_mask,
-            new_indices);
-        break;
-      }
-    }
+            }
+            case InstanceReference::Type::None: {
+              return false;
+            }
+          }
+          BLI_assert_unreachable();
+          return false;
+        },
+        prev_mask,
+        new_indices);
   }
 }
 

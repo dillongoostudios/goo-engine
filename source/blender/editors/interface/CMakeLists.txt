@@ -1,19 +1,4 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   ../include
@@ -35,10 +20,12 @@ set(INC
   ../../windowmanager
   ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 set(SRC
-  interface.c
+  interface.cc
   interface_align.c
   interface_anim.c
   interface_button_group.c
@@ -59,17 +46,17 @@ set(SRC
   interface_layout.c
   interface_ops.c
   interface_panel.c
-  interface_query.c
-  interface_region_color_picker.c
-  interface_region_hud.c
-  interface_region_menu_pie.c
-  interface_region_menu_popup.c
-  interface_region_popover.c
-  interface_region_popup.c
+  interface_query.cc
+  interface_region_color_picker.cc
+  interface_region_hud.cc
+  interface_region_menu_pie.cc
+  interface_region_menu_popup.cc
+  interface_region_popover.cc
+  interface_region_popup.cc
   interface_region_search.cc
   interface_region_tooltip.c
-  interface_regions.c
-  interface_style.c
+  interface_regions.cc
+  interface_style.cc
   interface_template_asset_view.cc
   interface_template_attribute_search.cc
   interface_template_list.cc
@@ -77,16 +64,16 @@ set(SRC
   interface_template_search_operator.c
   interface_templates.c
   interface_undo.c
-  interface_utils.c
+  interface_utils.cc
   interface_view.cc
   interface_widgets.c
   resources.c
   tree_view.cc
-  view2d.c
-  view2d_draw.c
-  view2d_edge_pan.c
-  view2d_gizmo_navigate.c
-  view2d_ops.c
+  view2d.cc
+  view2d_draw.cc
+  view2d_edge_pan.cc
+  view2d_gizmo_navigate.cc
+  view2d_ops.cc
 
   interface_eyedropper_intern.h
   interface_intern.h
@@ -119,3 +106,6 @@ endif()
 
 
 blender_add_lib(bf_editor_interface "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+
+# RNA_prototypes.h
+add_dependencies(bf_editor_interface bf_rna)

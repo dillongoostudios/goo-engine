@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -44,17 +28,11 @@ static int node_shader_gpu_wireframe(GPUMaterial *mat,
   GPU_material_flag_set(mat, GPU_MATFLAG_BARYCENTRIC);
   /* node->custom1 is use_pixel_size */
   if (node->custom1) {
-    return GPU_stack_link(
-        mat, node, "node_wireframe_screenspace", in, out, GPU_builtin(GPU_BARYCENTRIC_TEXCO));
+    return GPU_stack_link(mat, node, "node_wireframe_screenspace", in, out);
   }
-
-  return GPU_stack_link(mat,
-                        node,
-                        "node_wireframe",
-                        in,
-                        out,
-                        GPU_builtin(GPU_BARYCENTRIC_TEXCO),
-                        GPU_builtin(GPU_BARYCENTRIC_DIST));
+  else {
+    return GPU_stack_link(mat, node, "node_wireframe", in, out);
+  }
 }
 
 }  // namespace blender::nodes::node_shader_wireframe_cc

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -25,6 +11,7 @@
 #include "BKE_scene.h"
 
 #include "BLI_path_util.h"
+#include "BLI_task.hh"
 #include "BLI_vector.hh"
 
 #include "DEG_depsgraph_query.h"
@@ -81,6 +68,17 @@ static void print_exception_error(const std::system_error &ex)
             << std::endl;
 }
 
+static bool is_curve_nurbs_compatible(const Nurb *nurb)
+{
+  while (nurb) {
+    if (nurb->type == CU_BEZIER || nurb->pntsv != 1) {
+      return false;
+    }
+    nurb = nurb->next;
+  }
+  return true;
+}
+
 /**
  * Filter supported objects from the Scene.
  *
@@ -101,12 +99,12 @@ filter_supported_objects(Depsgraph *depsgraph, const OBJExportParams &export_par
     }
     switch (object->type) {
       case OB_SURF:
-        /* Export in mesh form: vertices and polygons. */
-        ATTR_FALLTHROUGH;
+        /* Evaluated surface objects appear as mesh objects from the iterator. */
+        break;
       case OB_MESH:
         r_exportable_meshes.append(std::make_unique<OBJMesh>(depsgraph, export_params, object));
         break;
-      case OB_CURVE: {
+      case OB_CURVES_LEGACY: {
         Curve *curve = static_cast<Curve *>(object->data);
         Nurb *nurb{static_cast<Nurb *>(curve->nurb.first)};
         if (!nurb) {
@@ -117,27 +115,13 @@ filter_supported_objects(Depsgraph *depsgraph, const OBJExportParams &export_par
           }
           break;
         }
-        switch (nurb->type) {
-          case CU_NURBS:
-            if (export_params.export_curves_as_nurbs) {
-              /* Export in parameter form: control points. */
-              r_exportable_nurbs.append(
-                  std::make_unique<OBJCurve>(depsgraph, export_params, object));
-            }
-            else {
-              /* Export in mesh form: edges and vertices. */
-              r_exportable_meshes.append(
-                  std::make_unique<OBJMesh>(depsgraph, export_params, object));
-            }
-            break;
-          case CU_BEZIER:
-            /* Always export in mesh form: edges and vertices. */
-            r_exportable_meshes.append(
-                std::make_unique<OBJMesh>(depsgraph, export_params, object));
-            break;
-          default:
-            /* Other curve types are not supported. */
-            break;
+        if (export_params.export_curves_as_nurbs && is_curve_nurbs_compatible(nurb)) {
+          /* Export in parameter form: control points. */
+          r_exportable_nurbs.append(std::make_unique<OBJCurve>(depsgraph, export_params, object));
+        }
+        else {
+          /* Export in mesh form: edges and vertices. */
+          r_exportable_meshes.append(std::make_unique<OBJMesh>(depsgraph, export_params, object));
         }
         break;
       }
@@ -155,47 +139,100 @@ static void write_mesh_objects(Vector<std::unique_ptr<OBJMesh>> exportable_as_me
                                MTLWriter *mtl_writer,
                                const OBJExportParams &export_params)
 {
+  /* Parallelization is over meshes/objects, which means
+   * we have to have the output text buffer for each object,
+   * and write them all into the file at the end. */
+  size_t count = exportable_as_mesh.size();
+  std::vector<FormatHandler<eFileType::OBJ>> buffers(count);
+
+  /* Serial: gather material indices, ensure normals & edges. */
+  Vector<Vector<int>> mtlindices;
   if (mtl_writer) {
     obj_writer.write_mtllib_name(mtl_writer->mtl_file_path());
+    mtlindices.reserve(count);
+  }
+  for (auto &obj_mesh : exportable_as_mesh) {
+    OBJMesh &obj = *obj_mesh;
+    if (mtl_writer) {
+      mtlindices.append(mtl_writer->add_materials(obj));
+    }
+    if (export_params.export_normals) {
+      obj.ensure_mesh_normals();
+    }
+    obj.ensure_mesh_edges();
   }
 
-  /* Smooth groups and UV vertex indices may make huge memory allocations, so they should be freed
-   * right after they're written, instead of waiting for #blender::Vector to clean them up after
-   * all the objects are exported. */
-  for (auto &obj_mesh : exportable_as_mesh) {
-    obj_writer.write_object_name(*obj_mesh);
-    obj_writer.write_vertex_coords(*obj_mesh);
-    Vector<int> obj_mtlindices;
-
-    if (obj_mesh->tot_polygons() > 0) {
-      if (export_params.export_smooth_groups) {
-        obj_mesh->calc_smooth_groups(export_params.smooth_groups_bitflags);
-      }
-      if (export_params.export_materials) {
-        obj_mesh->calc_poly_order();
-      }
+  /* Parallel over meshes: store normal coords & indices, uv coords and indices. */
+  blender::threading::parallel_for(IndexRange(count), 1, [&](IndexRange range) {
+    for (const int i : range) {
+      OBJMesh &obj = *exportable_as_mesh[i];
       if (export_params.export_normals) {
-        obj_writer.write_poly_normals(*obj_mesh);
+        obj.store_normal_coords_and_indices();
       }
       if (export_params.export_uv) {
-        obj_writer.write_uv_coords(*obj_mesh);
+        obj.store_uv_coords_and_indices();
       }
-      if (mtl_writer) {
-        obj_mtlindices = mtl_writer->add_materials(*obj_mesh);
-      }
-      /* This function takes a 0-indexed slot index for the obj_mesh object and
-       * returns the material name that we are using in the .obj file for it. */
-      std::function<const char *(int)> matname_fn = [&](int s) -> const char * {
-        if (!mtl_writer || s < 0 || s >= obj_mtlindices.size()) {
-          return nullptr;
-        }
-        return mtl_writer->mtlmaterial_name(obj_mtlindices[s]);
-      };
-      obj_writer.write_poly_elements(*obj_mesh, matname_fn);
     }
-    obj_writer.write_edges_indices(*obj_mesh);
+  });
 
-    obj_writer.update_index_offsets(*obj_mesh);
+  /* Serial: calculate index offsets; these are sequentially added
+   * over all meshes, and requite normal/uv indices to be calculated. */
+  Vector<IndexOffsets> index_offsets;
+  index_offsets.reserve(count);
+  IndexOffsets offsets{0, 0, 0};
+  for (auto &obj_mesh : exportable_as_mesh) {
+    OBJMesh &obj = *obj_mesh;
+    index_offsets.append(offsets);
+    offsets.vertex_offset += obj.tot_vertices();
+    offsets.uv_vertex_offset += obj.tot_uv_vertices();
+    offsets.normal_offset += obj.tot_normal_indices();
+  }
+
+  /* Parallel over meshes: main result writing. */
+  blender::threading::parallel_for(IndexRange(count), 1, [&](IndexRange range) {
+    for (const int i : range) {
+      OBJMesh &obj = *exportable_as_mesh[i];
+      auto &fh = buffers[i];
+
+      obj_writer.write_object_name(fh, obj);
+      obj_writer.write_vertex_coords(fh, obj);
+
+      if (obj.tot_polygons() > 0) {
+        if (export_params.export_smooth_groups) {
+          obj.calc_smooth_groups(export_params.smooth_groups_bitflags);
+        }
+        if (export_params.export_materials) {
+          obj.calc_poly_order();
+        }
+        if (export_params.export_normals) {
+          obj_writer.write_poly_normals(fh, obj);
+        }
+        if (export_params.export_uv) {
+          obj_writer.write_uv_coords(fh, obj);
+        }
+        /* This function takes a 0-indexed slot index for the obj_mesh object and
+         * returns the material name that we are using in the .obj file for it. */
+        const auto *obj_mtlindices = mtlindices.is_empty() ? nullptr : &mtlindices[i];
+        std::function<const char *(int)> matname_fn = [&](int s) -> const char * {
+          if (!obj_mtlindices || s < 0 || s >= obj_mtlindices->size()) {
+            return nullptr;
+          }
+          return mtl_writer->mtlmaterial_name((*obj_mtlindices)[s]);
+        };
+        obj_writer.write_poly_elements(fh, index_offsets[i], obj, matname_fn);
+      }
+      obj_writer.write_edges_indices(fh, index_offsets[i], obj);
+
+      /* Nothing will need this object's data after this point, release
+       * various arrays here. */
+      obj.clear();
+    }
+  });
+
+  /* Write all the object text buffers into the output file. */
+  FILE *f = obj_writer.get_outfile();
+  for (auto &b : buffers) {
+    b.write_to_file(f);
   }
 }
 
@@ -205,11 +242,13 @@ static void write_mesh_objects(Vector<std::unique_ptr<OBJMesh>> exportable_as_me
 static void write_nurbs_curve_objects(const Vector<std::unique_ptr<OBJCurve>> &exportable_as_nurbs,
                                       const OBJWriter &obj_writer)
 {
+  FormatHandler<eFileType::OBJ> fh;
   /* #OBJCurve doesn't have any dynamically allocated memory, so it's fine
    * to wait for #blender::Vector to clean the objects up. */
   for (const std::unique_ptr<OBJCurve> &obj_curve : exportable_as_nurbs) {
-    obj_writer.write_nurbs_curve(*obj_curve);
+    obj_writer.write_nurbs_curve(fh, *obj_curve);
   }
+  fh.write_to_file(obj_writer.get_outfile());
 }
 
 void export_frame(Depsgraph *depsgraph, const OBJExportParams &export_params, const char *filepath)
@@ -245,7 +284,16 @@ void export_frame(Depsgraph *depsgraph, const OBJExportParams &export_params, co
       std::move(exportable_as_mesh), *frame_writer, mtl_writer.get(), export_params);
   if (mtl_writer) {
     mtl_writer->write_header(export_params.blen_filepath);
-    mtl_writer->write_materials();
+    char dest_dir[PATH_MAX];
+    if (export_params.file_base_for_tests[0] == '\0') {
+      BLI_split_dir_part(export_params.filepath, dest_dir, PATH_MAX);
+    }
+    else {
+      BLI_strncpy(dest_dir, export_params.file_base_for_tests, PATH_MAX);
+    }
+    BLI_path_slash_native(dest_dir);
+    BLI_path_normalize(nullptr, dest_dir);
+    mtl_writer->write_materials(export_params.blen_filepath, export_params.path_mode, dest_dir);
   }
   write_nurbs_curve_objects(std::move(exportable_as_nurbs), *frame_writer);
 }

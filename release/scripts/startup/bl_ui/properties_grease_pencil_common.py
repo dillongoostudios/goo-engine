@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 
@@ -267,7 +251,7 @@ class GPENCIL_MT_move_to_layer(Menu):
                     icon = 'GREASEPENCIL'
                 else:
                     icon = 'NONE'
-                layout.operator("gpencil.move_to_layer", text=gpl.info, icon=icon).layer = i
+                layout.operator("gpencil.move_to_layer", text=gpl.info, icon=icon, translate=False).layer = i
                 i -= 1
 
             layout.separator()
@@ -377,6 +361,10 @@ class GPENCIL_UL_annotation_layer(UIList):
             split.prop(gpl, "info", text="", emboss=False)
 
             row = layout.row(align=True)
+
+            icon_xray = 'XRAY' if gpl.show_in_front else 'FACESEL'
+            row.prop(gpl, "show_in_front", text="", icon=icon_xray, emboss=False)
+
             row.prop(gpl, "annotation_hide", text="", emboss=False)
         elif self.layout_type == 'GRID':
             layout.alignment = 'CENTER'
@@ -693,7 +681,7 @@ class GreasePencilSimplifyPanel:
 
         rd = context.scene.render
 
-        layout.active = rd.simplify_gpencil
+        layout.active = rd.use_simplify and rd.simplify_gpencil
 
         col = layout.column()
         col.prop(rd, "simplify_gpencil_onplay")

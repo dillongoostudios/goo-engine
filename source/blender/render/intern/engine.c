@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2006 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2006 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup render
@@ -73,6 +57,11 @@ ListBase R_engines = {NULL, NULL};
 void RE_engines_init(void)
 {
   DRW_engines_register();
+}
+
+void RE_engines_init_experimental()
+{
+  DRW_engines_register_experimental();
 }
 
 void RE_engines_exit(void)
@@ -838,14 +827,14 @@ bool RE_bake_engine(Render *re,
       type->update(engine, re->main, engine->depsgraph);
     }
 
-    for (int i = 0; i < targets->num_images; i++) {
+    for (int i = 0; i < targets->images_num; i++) {
       const BakeImage *image = targets->images + i;
 
       engine->bake.pixels = pixel_array + image->offset;
-      engine->bake.result = result + image->offset * targets->num_channels;
+      engine->bake.result = result + image->offset * targets->channels_num;
       engine->bake.width = image->width;
       engine->bake.height = image->height;
-      engine->bake.depth = targets->num_channels;
+      engine->bake.depth = targets->channels_num;
       engine->bake.object_id = object_id;
 
       type->bake(

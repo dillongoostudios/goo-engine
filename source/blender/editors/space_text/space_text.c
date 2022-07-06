@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup sptext
@@ -324,7 +308,7 @@ static bool text_drop_poll(bContext *UNUSED(C), wmDrag *drag, const wmEvent *UNU
   return false;
 }
 
-static void text_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void text_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   /* copy drag path to properties */
   RNA_string_set(drop->ptr, "filepath", drag->path);
@@ -335,7 +319,7 @@ static bool text_drop_paste_poll(bContext *UNUSED(C), wmDrag *drag, const wmEven
   return (drag->type == WM_DRAG_ID);
 }
 
-static void text_drop_paste(wmDrag *drag, wmDropBox *drop)
+static void text_drop_paste(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   char *text;
   ID *id = WM_drag_get_local_ID(drag, 0);

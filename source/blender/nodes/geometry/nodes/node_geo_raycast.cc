@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_mesh_types.h"
 
@@ -155,10 +141,13 @@ static void raycast_to_mesh(IndexMask mask,
 {
   BVHTreeFromMesh tree_data;
   BKE_bvhtree_from_mesh_get(&tree_data, &mesh, BVHTREE_FROM_LOOPTRI, 4);
+  BLI_SCOPED_DEFER([&]() { free_bvhtree_from_mesh(&tree_data); });
+
   if (tree_data.tree == nullptr) {
-    free_bvhtree_from_mesh(&tree_data);
     return;
   }
+  /* We shouldn't be rebuilding the BVH tree when calling this function in parallel. */
+  BLI_assert(tree_data.cached);
 
   for (const int i : mask) {
     const float ray_length = ray_lengths[i];
@@ -211,10 +200,6 @@ static void raycast_to_mesh(IndexMask mask,
       }
     }
   }
-
-  /* We shouldn't be rebuilding the BVH tree when calling this function in parallel. */
-  BLI_assert(tree_data.cached);
-  free_bvhtree_from_mesh(&tree_data);
 }
 
 class RaycastFunction : public fn::MultiFunction {
@@ -313,7 +298,7 @@ class RaycastFunction : public fn::MultiFunction {
       GMutableSpan result = params.uninitialized_single_output_if_required(7, "Attribute");
       if (!result.is_empty()) {
         MeshAttributeInterpolator interp(&mesh, hit_mask, hit_positions, hit_indices);
-        result.type().fill_assign_indices(result.type().default_value(), result.data(), mask);
+        result.type().value_initialize_indices(result.data(), mask);
         interp.sample_data(*target_data_, domain_, get_map_mode(mapping_), result);
       }
     }

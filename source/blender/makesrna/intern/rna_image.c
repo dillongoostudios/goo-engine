@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -27,6 +13,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_image.h"
+#include "BKE_image_format.h"
 #include "BKE_node_tree_update.h"
 
 #include "DEG_depsgraph.h"
@@ -252,8 +239,8 @@ static int rna_Image_file_format_get(PointerRNA *ptr)
 {
   Image *image = (Image *)ptr->data;
   ImBuf *ibuf = BKE_image_acquire_ibuf(image, NULL, NULL);
-  int imtype = BKE_image_ftype_to_imtype(ibuf ? ibuf->ftype : IMB_FTYPE_NONE,
-                                         ibuf ? &ibuf->foptions : NULL);
+  int imtype = BKE_ftype_to_imtype(ibuf ? ibuf->ftype : IMB_FTYPE_NONE,
+                                   ibuf ? &ibuf->foptions : NULL);
 
   BKE_image_release_ibuf(image, ibuf, NULL);
 
@@ -265,7 +252,7 @@ static void rna_Image_file_format_set(PointerRNA *ptr, int value)
   Image *image = (Image *)ptr->data;
   if (BKE_imtype_is_movie(value) == 0) { /* should be able to throw an error here */
     ImbFormatOptions options;
-    int ftype = BKE_image_imtype_to_ftype(value, &options);
+    int ftype = BKE_imtype_to_ftype(value, &options);
     BKE_image_file_format_set(image, ftype, &options);
   }
 }
@@ -1086,22 +1073,31 @@ static void rna_def_image(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Depth", "Image bit depth");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-  prop = RNA_def_int_vector(srna,
-                            "size",
-                            2,
-                            NULL,
-                            0,
-                            0,
-                            "Size",
-                            "Width and height in pixels, zero when image data can't be loaded",
-                            0,
-                            0);
+  prop = RNA_def_int_vector(
+      srna,
+      "size",
+      2,
+      NULL,
+      0,
+      0,
+      "Size",
+      "Width and height of the image buffer in pixels, zero when image data can't be loaded",
+      0,
+      0);
   RNA_def_property_subtype(prop, PROP_PIXEL);
   RNA_def_property_int_funcs(prop, "rna_Image_size_get", NULL, NULL);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-  prop = RNA_def_float_vector(
-      srna, "resolution", 2, NULL, 0, 0, "Resolution", "X/Y pixels per meter", 0, 0);
+  prop = RNA_def_float_vector(srna,
+                              "resolution",
+                              2,
+                              NULL,
+                              0,
+                              0,
+                              "Resolution",
+                              "X/Y pixels per meter, for the image buffer",
+                              0,
+                              0);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_float_funcs(prop, "rna_Image_resolution_get", "rna_Image_resolution_set", NULL);
 
@@ -1111,14 +1107,14 @@ static void rna_def_image(BlenderRNA *brna)
       prop, "Duration", "Duration (in frames) of the image (1 when not a video/sequence)");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
 
-  /* NOTE about pixels/channels/is_float:
+  /* NOTE: About pixels/channels/is_float:
    * These properties describe how the image is stored internally (inside of ImBuf),
    * not how it was saved to disk or how it'll be saved on disk.
    */
   prop = RNA_def_property(srna, "pixels", PROP_FLOAT, PROP_NONE);
   RNA_def_property_flag(prop, PROP_DYNAMIC);
   RNA_def_property_multi_array(prop, 1, NULL);
-  RNA_def_property_ui_text(prop, "Pixels", "Image pixels in floating-point values");
+  RNA_def_property_ui_text(prop, "Pixels", "Image buffer pixels in floating-point values");
   RNA_def_property_dynamic_array_funcs(prop, "rna_Image_pixels_get_length");
   RNA_def_property_float_funcs(prop, "rna_Image_pixels_get", "rna_Image_pixels_set", NULL);
 

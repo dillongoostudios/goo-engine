@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edsculpt
@@ -65,6 +49,7 @@ typedef struct CoNo {
 typedef bool (*StrokeGetLocation)(struct bContext *C, float location[3], const float mouse[2]);
 typedef bool (*StrokeTestStart)(struct bContext *C, struct wmOperator *op, const float mouse[2]);
 typedef void (*StrokeUpdateStep)(struct bContext *C,
+                                 struct wmOperator *op,
                                  struct PaintStroke *stroke,
                                  struct PointerRNA *itemptr);
 typedef void (*StrokeRedraw)(const struct bContext *C, struct PaintStroke *stroke, bool final);
@@ -78,7 +63,7 @@ struct PaintStroke *paint_stroke_new(struct bContext *C,
                                      StrokeRedraw redraw,
                                      StrokeDone done,
                                      int event_type);
-void paint_stroke_free(struct bContext *C, struct wmOperator *op);
+void paint_stroke_free(struct bContext *C, struct wmOperator *op, struct PaintStroke *stroke);
 
 /**
  * Returns zero if the stroke dots should not be spaced, non-zero otherwise.
@@ -100,9 +85,12 @@ bool paint_supports_jitter(enum ePaintMode mode);
  * Called in paint_ops.c, on each regeneration of key-maps.
  */
 struct wmKeyMap *paint_stroke_modal_keymap(struct wmKeyConfig *keyconf);
-int paint_stroke_modal(struct bContext *C, struct wmOperator *op, const struct wmEvent *event);
-int paint_stroke_exec(struct bContext *C, struct wmOperator *op);
-void paint_stroke_cancel(struct bContext *C, struct wmOperator *op);
+int paint_stroke_modal(struct bContext *C,
+                       struct wmOperator *op,
+                       const struct wmEvent *event,
+                       struct PaintStroke **stroke_p);
+int paint_stroke_exec(struct bContext *C, struct wmOperator *op, struct PaintStroke *stroke);
+void paint_stroke_cancel(struct bContext *C, struct wmOperator *op, struct PaintStroke *stroke);
 bool paint_stroke_flipped(struct PaintStroke *stroke);
 bool paint_stroke_inverted(struct PaintStroke *stroke);
 struct ViewContext *paint_stroke_view_context(struct PaintStroke *stroke);
@@ -145,7 +133,7 @@ void PAINT_OT_weight_gradient(struct wmOperatorType *ot);
 void PAINT_OT_vertex_paint_toggle(struct wmOperatorType *ot);
 void PAINT_OT_vertex_paint(struct wmOperatorType *ot);
 
-unsigned int vpaint_get_current_col(struct Scene *scene, struct VPaint *vp, bool secondary);
+unsigned int vpaint_get_current_color(struct Scene *scene, struct VPaint *vp, bool secondary);
 
 /* paint_vertex_color_utils.c */
 
@@ -206,6 +194,7 @@ void PAINT_OT_weight_sample(struct wmOperatorType *ot);
 void PAINT_OT_weight_sample_group(struct wmOperatorType *ot);
 
 /* paint_vertex_proj.c */
+
 struct VertProjHandle;
 struct VertProjHandle *ED_vpaint_proj_handle_create(struct Depsgraph *depsgraph,
                                                     struct Scene *scene,
@@ -219,6 +208,7 @@ void ED_vpaint_proj_handle_update(struct Depsgraph *depsgraph,
 void ED_vpaint_proj_handle_free(struct VertProjHandle *vp_handle);
 
 /* paint_image.c */
+
 typedef struct ImagePaintPartialRedraw {
   rcti dirty_region;
 } ImagePaintPartialRedraw;
@@ -281,6 +271,7 @@ void paint_brush_color_get(struct Scene *scene,
 bool paint_use_opacity_masking(struct Brush *brush);
 void paint_brush_init_tex(struct Brush *brush);
 void paint_brush_exit_tex(struct Brush *brush);
+bool image_paint_poll(struct bContext *C);
 
 void PAINT_OT_grab_clone(struct wmOperatorType *ot);
 void PAINT_OT_sample_color(struct wmOperatorType *ot);
@@ -293,6 +284,7 @@ void PAINT_OT_image_paint(struct wmOperatorType *ot);
 void PAINT_OT_add_simple_uvs(struct wmOperatorType *ot);
 
 /* paint_image_2d_curve_mask.cc */
+
 /**
  * \brief Caching structure for curve mask.
  *
@@ -493,6 +485,7 @@ void PAINT_OT_mask_box_gesture(struct wmOperatorType *ot);
 void PAINT_OT_mask_line_gesture(struct wmOperatorType *ot);
 
 /* paint_curve.c */
+
 void PAINTCURVE_OT_new(struct wmOperatorType *ot);
 void PAINTCURVE_OT_add_point(struct wmOperatorType *ot);
 void PAINTCURVE_OT_delete_point(struct wmOperatorType *ot);

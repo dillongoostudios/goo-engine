@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -115,7 +102,7 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
   /* Setup render buffers. */
   const int index = INTEGRATOR_STATE(state, path, render_pixel_index);
   const int pass_stride = kernel_data.film.pass_stride;
-  ccl_global float *buffer = render_buffer + index * pass_stride;
+  ccl_global float *buffer = render_buffer + (uint64_t)index * pass_stride;
 
   ccl_global float *primitive = buffer + kernel_data.film.pass_bake_primitive;
   ccl_global float *differential = buffer + kernel_data.film.pass_bake_differential;
@@ -205,6 +192,19 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
       Ng = normalize(transform_direction_transposed(&itfm, Ng));
     }
 
+    const int shader_index = shader & SHADER_MASK;
+    const int shader_flags = kernel_tex_fetch(__shaders, shader_index).flags;
+
+    /* Fast path for position and normal passes not affected by shaders. */
+    if (kernel_data.film.pass_position != PASS_UNUSED) {
+      kernel_write_pass_float3(buffer + kernel_data.film.pass_position, P);
+      return true;
+    }
+    else if (kernel_data.film.pass_normal != PASS_UNUSED && !(shader_flags & SD_HAS_BUMP)) {
+      kernel_write_pass_float3(buffer + kernel_data.film.pass_normal, N);
+      return true;
+    }
+
     /* Setup ray. */
     Ray ray ccl_optional_struct_init;
     ray.P = P + N;
@@ -241,9 +241,14 @@ ccl_device bool integrator_init_from_bake(KernelGlobals kg,
     integrator_state_write_isect(kg, state, &isect);
 
     /* Setup next kernel to execute. */
-    const int shader_index = shader & SHADER_MASK;
-    const int shader_flags = kernel_tex_fetch(__shaders, shader_index).flags;
-    if (shader_flags & SD_HAS_RAYTRACE) {
+    const bool use_caustics = kernel_data.integrator.use_caustics &&
+                              (object_flag & SD_OBJECT_CAUSTICS);
+    const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
+
+    if (use_caustics) {
+      INTEGRATOR_PATH_INIT_SORTED(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE, shader_index);
+    }
+    else if (use_raytrace_kernel) {
       INTEGRATOR_PATH_INIT_SORTED(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE, shader_index);
     }
     else {

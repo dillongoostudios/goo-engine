@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 from __future__ import annotations
@@ -979,21 +963,19 @@ class WM_OT_url_open(Operator):
         return {'FINISHED'}
 
 
-# NOTE: needed for Python 3.10 since there are name-space issues with annotations.
-# This can be moved into the class as a static-method once Python 3.9x is dropped.
-def _wm_url_open_preset_type_items(_self, _context):
-    return [item for (item, _) in WM_OT_url_open_preset.preset_items]
-
-
 class WM_OT_url_open_preset(Operator):
     """Open a preset website in the web browser"""
     bl_idname = "wm.url_open_preset"
     bl_label = "Open Preset Website"
     bl_options = {'INTERNAL'}
 
+    @staticmethod
+    def _wm_url_open_preset_type_items(_self, _context):
+        return [item for (item, _) in WM_OT_url_open_preset.preset_items]
+
     type: EnumProperty(
         name="Site",
-        items=_wm_url_open_preset_type_items,
+        items=WM_OT_url_open_preset._wm_url_open_preset_type_items,
     )
 
     id: StringProperty(
@@ -1013,11 +995,10 @@ class WM_OT_url_open_preset(Operator):
         return "https://www.blender.org/download/releases/%d-%d/" % bpy.app.version[:2]
 
     def _url_from_manual(self, _context):
-        if bpy.app.version_cycle in {"rc", "release"}:
-            manual_version = "%d.%d" % bpy.app.version[:2]
-        else:
-            manual_version = "dev"
-        return "https://docs.blender.org/manual/en/" + manual_version + "/"
+        return "https://docs.blender.org/manual/en/%d.%d/" % bpy.app.version[:2]
+
+    def _url_from_api(self, _context):
+        return "https://docs.blender.org/api/%d.%d/" % bpy.app.version[:2]
 
     # This list is: (enum_item, url) pairs.
     # Allow dynamically extending.
@@ -1032,9 +1013,12 @@ class WM_OT_url_open_preset(Operator):
         (('RELEASE_NOTES', "Release Notes",
           "Read about what's new in this version of Blender"),
          _url_from_release_notes),
-        (('MANUAL', "Manual",
+        (('MANUAL', "User Manual",
           "The reference manual for this version of Blender"),
          _url_from_manual),
+        (('API', "Python API Reference",
+          "The API reference manual for this version of Blender"),
+         _url_from_api),
 
         # Static URL's.
         (('FUND', "Development Fund",
@@ -1249,11 +1233,7 @@ class WM_OT_doc_view(Operator):
     bl_label = "View Documentation"
 
     doc_id: doc_id
-    if bpy.app.version_cycle in {"release", "rc", "beta"}:
-        _prefix = ("https://docs.blender.org/api/%d.%d" %
-                   (bpy.app.version[0], bpy.app.version[1]))
-    else:
-        _prefix = ("https://docs.blender.org/api/master")
+    _prefix = "https://docs.blender.org/api/%d.%d" % bpy.app.version[:2]
 
     def execute(self, _context):
         url = _wm_doc_get_id(self.doc_id, do_url=True, url_prefix=self._prefix, report=self.report)
@@ -1299,12 +1279,6 @@ rna_vector_subtype_items = (
 )
 
 
-# NOTE: needed for Python 3.10 since there are name-space issues with annotations.
-# This can be moved into the class as a static-method once Python 3.9x is dropped.
-def _wm_properties_edit_subtype_items(_self, _context):
-    return WM_OT_properties_edit.subtype_items
-
-
 class WM_OT_properties_edit(Operator):
     """Change a custom property's type, or adjust how it is displayed in the interface"""
     bl_idname = "wm.properties_edit"
@@ -1343,7 +1317,7 @@ class WM_OT_properties_edit(Operator):
         name="Array Length",
         default=3,
         min=1,
-        max=32, # 32 is the maximum size for RNA array properties.
+        max=32,  # 32 is the maximum size for RNA array properties.
     )
 
     # Integer properties.
@@ -1411,7 +1385,7 @@ class WM_OT_properties_edit(Operator):
     )
     subtype: EnumProperty(
         name="Subtype",
-        items=_wm_properties_edit_subtype_items,
+        items=WM_OT_properties_edit.subtype_items,
     )
 
     # String properties.
@@ -1537,7 +1511,7 @@ class WM_OT_properties_edit(Operator):
         elif self.property_type == 'STRING':
             self.default_string = rna_data["default"]
 
-        if self.property_type in { 'FLOAT_ARRAY', 'INT_ARRAY'}:
+        if self.property_type in {'FLOAT_ARRAY', 'INT_ARRAY'}:
             self.array_length = len(item[name])
 
         # The dictionary does not contain the description if it was empty.
@@ -2961,82 +2935,65 @@ class WM_MT_splash_quick_setup(Menu):
     bl_label = "Quick Setup"
 
     def draw(self, context):
-        wm = context.window_manager
-        # prefs = context.preferences
-
         layout = self.layout
-
         layout.operator_context = 'EXEC_DEFAULT'
 
         layout.label(text="Quick Setup")
 
-        split = layout.split(factor=0.25)
+        split = layout.split(factor=0.14)  # Left margin.
         split.label()
-        split = split.split(factor=2.0 / 3.0)
+        split = split.split(factor=0.73)  # Content width.
 
         col = split.column()
 
+        col.use_property_split = True
+        col.use_property_decorate = False
+
+        # Languages.
         if bpy.app.build_options.international:
-            sub = col.split(factor=0.35)
-            row = sub.row()
-            row.alignment = 'RIGHT'
-            row.label(text="Language")
             prefs = context.preferences
-            sub.prop(prefs.view, "language", text="")
+            col.prop(prefs.view, "language")
+            col.separator()
 
-        col.separator()
+        # Shortcuts.
+        wm = context.window_manager
+        kc = wm.keyconfigs.active
+        kc_prefs = kc.preferences
 
-        sub = col.split(factor=0.35)
-        row = sub.row()
-        row.alignment = 'RIGHT'
-        row.label(text="Shortcuts")
-        text = bpy.path.display_name(wm.keyconfigs.active.name)
+        sub = col.column(heading="Shortcuts")
+        text = bpy.path.display_name(kc.name)
         if not text:
             text = "Blender"
         sub.menu("USERPREF_MT_keyconfigs", text=text)
 
-        kc = wm.keyconfigs.active
-        kc_prefs = kc.preferences
         has_select_mouse = hasattr(kc_prefs, "select_mouse")
         if has_select_mouse:
-            sub = col.split(factor=0.35)
-            row = sub.row()
-            row.alignment = 'RIGHT'
-            row.label(text="Select With")
-            sub.row().prop(kc_prefs, "select_mouse", expand=True)
-            has_select_mouse = True
+            col.row().prop(kc_prefs, "select_mouse", text="Select With", expand=True)
 
         has_spacebar_action = hasattr(kc_prefs, "spacebar_action")
         if has_spacebar_action:
-            sub = col.split(factor=0.35)
-            row = sub.row()
-            row.alignment = 'RIGHT'
-            row.label(text="Spacebar")
-            sub.row().prop(kc_prefs, "spacebar_action", expand=True)
-            has_select_mouse = True
+            col.row().prop(kc_prefs, "spacebar_action", text="Spacebar")
 
         col.separator()
 
-        sub = col.split(factor=0.35)
-        row = sub.row()
-        row.alignment = 'RIGHT'
-        row.label(text="Theme")
+        # Themes.
+        sub = col.column(heading="Theme")
         label = bpy.types.USERPREF_MT_interface_theme_presets.bl_label
         if label == "Presets":
             label = "Blender Dark"
         sub.menu("USERPREF_MT_interface_theme_presets", text=label)
 
-        # Keep height constant
+        # Keep height constant.
         if not has_select_mouse:
             col.label()
         if not has_spacebar_action:
             col.label()
 
-        layout.label()
+        layout.separator(factor=2.0)
 
-        row = layout.row()
+        # Save settings buttons.
+        sub = layout.row()
 
-        sub = row.row()
         old_version = bpy.types.PREFERENCES_OT_copy_prev.previous_version()
         if bpy.types.PREFERENCES_OT_copy_prev.poll(context) and old_version:
             sub.operator("preferences.copy_prev", text=iface_("Load %d.%d Settings", "Operator") % old_version)
@@ -3046,8 +3003,7 @@ class WM_MT_splash_quick_setup(Menu):
             sub.label()
             sub.operator("wm.save_userpref", text="Next")
 
-        layout.separator()
-        layout.separator()
+        layout.separator(factor=2.4)
 
 
 class WM_MT_splash(Menu):

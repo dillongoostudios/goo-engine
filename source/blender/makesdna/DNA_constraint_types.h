@@ -1,25 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * Constraint DNA data
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup DNA
+ * Constraint DNA data.
  */
 
 #pragma once
@@ -714,8 +698,6 @@ typedef enum eBConstraint_Flags {
   CONSTRAINT_SPACEONCE = (1 << 6),
   /* influence ipo is on constraint itself, not in action channel */
   CONSTRAINT_OWN_IPO = (1 << 7),
-  /* indicates that constraint was added locally (i.e.  didn't come from the proxy-lib) */
-  CONSTRAINT_PROXY_LOCAL = (1 << 8),
   /* indicates that constraint is temporarily disabled (only used in GE) */
   CONSTRAINT_OFF = (1 << 9),
   /* use bbone curve shape when calculating headtail values (also used by dependency graph!) */
@@ -763,7 +745,7 @@ typedef enum eConstraint_EulerOrder {
 
 /* -------------------------------------- */
 
-/* bRotateLikeConstraint.flag */
+/** #bRotateLikeConstraint.flag */
 typedef enum eCopyRotation_Flags {
   ROTLIKE_X = (1 << 0),
   ROTLIKE_Y = (1 << 1),
@@ -777,7 +759,7 @@ typedef enum eCopyRotation_Flags {
   ROTLIKE_INVERT_ALL = (1 << 8),
 } eCopyRotation_Flags;
 
-/* bRotateLikeConstraint.mix_mode */
+/** #bRotateLikeConstraint.mix_mode */
 typedef enum eCopyRotation_MixMode {
   /* Replace rotation channel values. */
   ROTLIKE_MIX_REPLACE = 0,
@@ -791,7 +773,7 @@ typedef enum eCopyRotation_MixMode {
   ROTLIKE_MIX_AFTER = 4,
 } eCopyRotation_MixMode;
 
-/* bLocateLikeConstraint.flag */
+/** #bLocateLikeConstraint.flag */
 typedef enum eCopyLocation_Flags {
   LOCLIKE_X = (1 << 0),
   LOCLIKE_Y = (1 << 1),
@@ -804,7 +786,7 @@ typedef enum eCopyLocation_Flags {
   LOCLIKE_OFFSET = (1 << 7),
 } eCopyLocation_Flags;
 
-/* bSizeLikeConstraint.flag */
+/** #bSizeLikeConstraint.flag */
 typedef enum eCopyScale_Flags {
   SIZELIKE_X = (1 << 0),
   SIZELIKE_Y = (1 << 1),
@@ -814,13 +796,13 @@ typedef enum eCopyScale_Flags {
   SIZELIKE_UNIFORM = (1 << 5),
 } eCopyScale_Flags;
 
-/* bTransLikeConstraint.flag */
+/** #bTransLikeConstraint.flag */
 typedef enum eCopyTransforms_Flags {
   /* Remove shear from the target matrix. */
   TRANSLIKE_REMOVE_TARGET_SHEAR = (1 << 0),
 } eCopyTransforms_Flags;
 
-/* bTransLikeConstraint.mix_mode */
+/** #bTransLikeConstraint.mix_mode */
 typedef enum eCopyTransforms_MixMode {
   /* Replace rotation channel values. */
   TRANSLIKE_MIX_REPLACE = 0,
@@ -845,7 +827,7 @@ typedef enum eTransform_ToFrom {
   TRANS_SCALE = 2,
 } eTransform_ToFrom;
 
-/* bTransformConstraint.mix_mode_loc */
+/** #bTransformConstraint.mix_mode_loc */
 typedef enum eTransform_MixModeLoc {
   /* Add component values together (default). */
   TRANS_MIXLOC_ADD = 0,
@@ -853,7 +835,7 @@ typedef enum eTransform_MixModeLoc {
   TRANS_MIXLOC_REPLACE = 1,
 } eTransform_MixModeLoc;
 
-/* bTransformConstraint.mix_mode_rot */
+/** #bTransformConstraint.mix_mode_rot */
 typedef enum eTransform_MixModeRot {
   /* Add component values together (default). */
   TRANS_MIXROT_ADD = 0,
@@ -865,7 +847,7 @@ typedef enum eTransform_MixModeRot {
   TRANS_MIXROT_AFTER = 3,
 } eTransform_MixModeRot;
 
-/* bTransformConstraint.mix_mode_scale */
+/** #bTransformConstraint.mix_mode_scale */
 typedef enum eTransform_MixModeScale {
   /* Replace component values (default). */
   TRANS_MIXSCALE_REPLACE = 0,
@@ -873,14 +855,14 @@ typedef enum eTransform_MixModeScale {
   TRANS_MIXSCALE_MULTIPLY = 1,
 } eTransform_MixModeScale;
 
-/* bSameVolumeConstraint.free_axis */
+/** #bSameVolumeConstraint.free_axis */
 typedef enum eSameVolume_Axis {
   SAMEVOL_X = 0,
   SAMEVOL_Y = 1,
   SAMEVOL_Z = 2,
 } eSameVolume_Axis;
 
-/* bSameVolumeConstraint.mode */
+/** #bSameVolumeConstraint.mode */
 typedef enum eSameVolume_Mode {
   /* Strictly maintain the volume, overriding non-free axis scale. */
   SAMEVOL_STRICT = 0,
@@ -890,7 +872,7 @@ typedef enum eSameVolume_Mode {
   SAMEVOL_SINGLE_AXIS = 2,
 } eSameVolume_Mode;
 
-/* bActionConstraint.flag */
+/** #bActionConstraint.flag */
 typedef enum eActionConstraint_Flags {
   /* Bones use "object" part of target action, instead of "same bone name" part */
   ACTCON_BONE_USE_OBJECT_ACTION = (1 << 0),
@@ -898,7 +880,7 @@ typedef enum eActionConstraint_Flags {
   ACTCON_USE_EVAL_TIME = (1 << 1),
 } eActionConstraint_Flags;
 
-/* bActionConstraint.mix_mode */
+/** #bActionConstraint.mix_mode */
 typedef enum eActionConstraint_MixMode {
   /* Multiply the action transformation on the right. */
   ACTCON_MIX_AFTER_FULL = 0,

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2004 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2004 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spoutliner
@@ -32,9 +16,9 @@
 #include "DNA_camera_types.h"
 #include "DNA_collection_types.h"
 #include "DNA_constraint_types.h"
+#include "DNA_curves_types.h"
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
-#include "DNA_hair_types.h"
 #include "DNA_key_types.h"
 #include "DNA_light_types.h"
 #include "DNA_lightprobe_types.h"
@@ -90,8 +74,9 @@ using namespace blender::ed::outliner;
 /* prototypes */
 static int outliner_exclude_filter_get(const SpaceOutliner *space_outliner);
 
-/* ********************************************************* */
-/* Persistent Data */
+/* -------------------------------------------------------------------- */
+/** \name Persistent Data
+ * \{ */
 
 static void outliner_storage_cleanup(SpaceOutliner *space_outliner)
 {
@@ -191,8 +176,11 @@ static void check_persistent(
   BKE_outliner_treehash_add_element(space_outliner->runtime->treehash, tselem);
 }
 
-/* ********************************************************* */
-/* Tree Management */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Tree Management
+ * \{ */
 
 void outliner_free_tree(ListBase *tree)
 {
@@ -217,7 +205,7 @@ void outliner_free_tree_element(TreeElement *element, ListBase *parent_subtree)
   if (element->flag & TE_FREE_NAME) {
     MEM_freeN((void *)element->name);
   }
-  element->type = nullptr;
+  element->abstract_element = nullptr;
   MEM_delete(element);
 }
 
@@ -301,10 +289,6 @@ static void outliner_add_object_contents(SpaceOutliner *space_outliner,
 
   /* FIXME: add a special type for this. */
   outliner_add_element(space_outliner, &te->subtree, ob->poselib, te, TSE_SOME_ID, 0);
-
-  if (ob->proxy && !ID_IS_LINKED(ob)) {
-    outliner_add_element(space_outliner, &te->subtree, ob->proxy, te, TSE_PROXY, 0);
-  }
 
   outliner_add_element(space_outliner, &te->subtree, ob->data, te, TSE_SOME_ID, 0);
 
@@ -599,7 +583,7 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
        * would require going over all tfaces, sort images in use. etc... */
       break;
     }
-    case ID_CU: {
+    case ID_CU_LEGACY: {
       Curve *cu = (Curve *)id;
 
       if (outliner_animdata_test(cu->adt)) {
@@ -728,7 +712,8 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       else {
         /* do not extend Armature when we have posemode */
         tselem = TREESTORE(te->parent);
-        if (GS(tselem->id->name) == ID_OB && ((Object *)tselem->id)->mode & OB_MODE_POSE) {
+        if (TSE_IS_REAL_ID(tselem) && GS(tselem->id->name) == ID_OB &&
+            ((Object *)tselem->id)->mode & OB_MODE_POSE) {
           /* pass */
         }
         else {
@@ -777,10 +762,10 @@ static void outliner_add_id_contents(SpaceOutliner *space_outliner,
       }
       break;
     }
-    case ID_HA: {
-      Hair *hair = (Hair *)id;
-      if (outliner_animdata_test(hair->adt)) {
-        outliner_add_element(space_outliner, &te->subtree, hair, te, TSE_ANIM_DATA, 0);
+    case ID_CV: {
+      Curves *curves = (Curves *)id;
+      if (outliner_animdata_test(curves->adt)) {
+        outliner_add_element(space_outliner, &te->subtree, curves, te, TSE_ANIM_DATA, 0);
       }
       break;
     }
@@ -860,10 +845,10 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
   te->parent = parent;
   te->index = index; /* For data arrays. */
 
-  /* New C++ based type handle. Only some support this, eventually this should replace
-   * `TreeElement` entirely. */
-  te->type = AbstractTreeElement::createFromType(type, *te, idv);
-  if (te->type) {
+  /* New inheritance based element representation. Not all element types support this yet,
+   * eventually it should replace #TreeElement entirely. */
+  te->abstract_element = AbstractTreeElement::createFromType(type, *te, idv);
+  if (te->abstract_element) {
     /* Element types ported to the new design are expected to have their name set at this point! */
     BLI_assert(te->name != nullptr);
   }
@@ -887,12 +872,12 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
     /* pass */
   }
   else if (type == TSE_SOME_ID) {
-    if (!te->type) {
+    if (!te->abstract_element) {
       BLI_assert_msg(0, "Expected this ID type to be ported to new Outliner tree-element design");
     }
   }
   else if (ELEM(type, TSE_LIBRARY_OVERRIDE_BASE, TSE_LIBRARY_OVERRIDE)) {
-    if (!te->type) {
+    if (!te->abstract_element) {
       BLI_assert_msg(0,
                      "Expected override types to be ported to new Outliner tree-element design");
     }
@@ -903,20 +888,19 @@ TreeElement *outliner_add_element(SpaceOutliner *space_outliner,
 
     /* The new type design sets the name already, don't override that here. We need to figure out
      * how to deal with the idcode for non-TSE_SOME_ID types still. Some rely on it... */
-    if (!te->type) {
+    if (!te->abstract_element) {
       te->name = id->name + 2; /* Default, can be overridden by Library or non-ID data. */
     }
     te->idcode = GS(id->name);
   }
 
-  if (te->type && te->type->isExpandValid()) {
-    tree_element_expand(*te->type, *space_outliner);
+  if (te->abstract_element && te->abstract_element->isExpandValid()) {
+    tree_element_expand(*te->abstract_element, *space_outliner);
   }
   else if (type == TSE_SOME_ID) {
     /* ID types not (fully) ported to new design yet. */
-    if (te->type->expandPoll(*space_outliner)) {
+    if (te->abstract_element->expandPoll(*space_outliner)) {
       outliner_add_id_contents(space_outliner, te, tselem, id);
-      te->type->postExpand(*space_outliner);
     }
   }
   else if (ELEM(type,
@@ -980,10 +964,14 @@ TreeElement *outliner_add_collection_recursive(SpaceOutliner *space_outliner,
   return ten;
 }
 
+/** \} */
+
 /* ======================================================= */
 /* Generic Tree Building helpers - order these are called is top to bottom */
 
-/* Sorting ------------------------------------------------------ */
+/* -------------------------------------------------------------------- */
+/** \name Tree Sorting Helper
+ * \{ */
 
 struct tTreeSort {
   TreeElement *te;
@@ -1215,7 +1203,11 @@ static void outliner_collections_children_sort(ListBase *lb)
   }
 }
 
-/* Filtering ----------------------------------------------- */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Tree Filtering Helper
+ * \{ */
 
 struct OutlinerTreeElementFocus {
   TreeStoreElem *tselem;
@@ -1664,8 +1656,11 @@ static void outliner_clear_newid_from_main(Main *bmain)
   FOREACH_MAIN_ID_END;
 }
 
-/* ======================================================= */
-/* Main Tree Building API */
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Main Tree Building API
+ * \{ */
 
 void outliner_build_tree(Main *mainvar,
                          Scene *scene,
@@ -1727,3 +1722,5 @@ void outliner_build_tree(Main *mainvar,
    * as this expects valid IDs in this pointer, not random unknown data. */
   outliner_clear_newid_from_main(mainvar);
 }
+
+/** \} */

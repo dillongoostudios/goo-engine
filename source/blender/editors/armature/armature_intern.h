@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edarmature
@@ -27,6 +11,7 @@
 struct wmOperatorType;
 
 struct Base;
+struct GPUSelectResult;
 struct Object;
 struct Scene;
 struct bContext;
@@ -232,6 +217,7 @@ void POSELIB_OT_browse_interactive(struct wmOperatorType *ot);
 void POSELIB_OT_apply_pose(struct wmOperatorType *ot);
 
 /* pose_lib_2.c */
+
 void POSELIB_OT_apply_pose_asset(struct wmOperatorType *ot);
 void POSELIB_OT_blend_pose_asset(struct wmOperatorType *ot);
 
@@ -323,21 +309,21 @@ struct Bone *ED_armature_pick_bone(struct bContext *C,
 
 struct EditBone *ED_armature_pick_ebone_from_selectbuffer(struct Base **bases,
                                                           uint bases_len,
-                                                          const uint *buffer,
+                                                          const struct GPUSelectResult *buffer,
                                                           short hits,
                                                           bool findunsel,
                                                           bool do_nearest,
                                                           struct Base **r_base);
 struct bPoseChannel *ED_armature_pick_pchan_from_selectbuffer(struct Base **bases,
                                                               uint bases_len,
-                                                              const uint *buffer,
+                                                              const struct GPUSelectResult *buffer,
                                                               short hits,
                                                               bool findunsel,
                                                               bool do_nearest,
                                                               struct Base **r_base);
 struct Bone *ED_armature_pick_bone_from_selectbuffer(struct Base **bases,
                                                      uint bases_len,
-                                                     const uint *buffer,
+                                                     const struct GPUSelectResult *buffer,
                                                      short hits,
                                                      bool findunsel,
                                                      bool do_nearest,

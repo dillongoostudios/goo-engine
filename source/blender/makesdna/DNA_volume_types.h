@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup DNA
@@ -38,6 +24,11 @@ typedef struct Volume_Runtime {
 
   /** Default simplify level for volume grids loaded from files. */
   int default_simplify_level;
+
+  /* Names for scalar grids which would need to be merged to recompose the velocity grid. */
+  char velocity_x_grid[64];
+  char velocity_y_grid[64];
+  char velocity_z_grid[64];
 } Volume_Runtime;
 
 typedef struct VolumeDisplay {
@@ -88,6 +79,18 @@ typedef struct Volume {
   /* Render & Display Settings */
   VolumeRender render;
   VolumeDisplay display;
+
+  /* Velocity field name. */
+  char velocity_grid[64];
+
+  char _pad3[3];
+
+  /* Unit of time the velocity vectors are expressed in.
+   * This uses the same enumeration values as #CacheFile.velocity_unit. */
+  char velocity_unit;
+
+  /* Factor for velocity vector for artistic control. */
+  float velocity_scale;
 
   /* Draw Cache */
   void *batch_cache;

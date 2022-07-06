@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. */
 #include "testing/testing.h"
 
 #include "CLG_log.h"
@@ -92,7 +77,7 @@ class BPathTest : public testing::Test {
 
 TEST_F(BPathTest, rebase_on_relative)
 {
-  // Test on relative paths, should be modified.
+  /* Test on relative paths, should be modified. */
   Text *text = reinterpret_cast<Text *>(bmain->texts.first);
   text->filepath = BLI_strdup(TEXT_PATH_RELATIVE);
 
@@ -107,7 +92,7 @@ TEST_F(BPathTest, rebase_on_relative)
 
 TEST_F(BPathTest, rebase_on_absolute)
 {
-  // Test on absolute paths, should not be modified.
+  /* Test on absolute paths, should not be modified. */
   Text *text = reinterpret_cast<Text *>(bmain->texts.first);
   text->filepath = BLI_strdup(TEXT_PATH_ABSOLUTE);
 
@@ -130,9 +115,9 @@ TEST_F(BPathTest, convert_to_relative)
 
   BKE_bpath_relative_convert(bmain, BASE_DIR, nullptr);
 
-  // Already relative path should not be modified.
+  /* Already relative path should not be modified. */
   EXPECT_STREQ(text->filepath, TEXT_PATH_RELATIVE);
-  // Absolute path should be modified.
+  /* Absolute path should be modified. */
   EXPECT_STREQ(movie_clip->filepath, MOVIECLIP_PATH_ABSOLUTE_MADE_RELATIVE);
 }
 
@@ -146,9 +131,9 @@ TEST_F(BPathTest, convert_to_absolute)
 
   BKE_bpath_absolute_convert(bmain, BASE_DIR, nullptr);
 
-  // Relative path should be modified.
+  /* Relative path should be modified. */
   EXPECT_STREQ(text->filepath, TEXT_PATH_RELATIVE_MADE_ABSOLUTE);
-  // Already absolute path should not be modified.
+  /* Already absolute path should not be modified. */
   EXPECT_STREQ(movie_clip->filepath, MOVIECLIP_PATH_ABSOLUTE);
 }
 

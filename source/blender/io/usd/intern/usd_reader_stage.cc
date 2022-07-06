@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 Tangent Animation and
- * NVIDIA Corporation. All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Tangent Animation and. NVIDIA Corporation. All rights reserved. */
 
 #include "usd_reader_stage.h"
 #include "usd_reader_camera.h"
@@ -34,7 +18,13 @@
 #include <pxr/usd/usdGeom/nurbsCurves.h>
 #include <pxr/usd/usdGeom/scope.h>
 #include <pxr/usd/usdGeom/xform.h>
-#include <pxr/usd/usdLux/light.h>
+
+#if PXR_VERSION >= 2111
+#  include <pxr/usd/usdLux/boundableLightBase.h>
+#  include <pxr/usd/usdLux/nonboundableLightBase.h>
+#else
+#  include <pxr/usd/usdLux/light.h>
+#endif
 
 #include <iostream>
 
@@ -71,7 +61,12 @@ USDPrimReader *USDStageReader::create_reader_if_allowed(const pxr::UsdPrim &prim
   if (params_.import_meshes && prim.IsA<pxr::UsdGeomMesh>()) {
     return new USDMeshReader(prim, params_, settings_);
   }
+#if PXR_VERSION >= 2111
+  if (params_.import_lights && (prim.IsA<pxr::UsdLuxBoundableLightBase>() ||
+                                prim.IsA<pxr::UsdLuxNonboundableLightBase>())) {
+#else
   if (params_.import_lights && prim.IsA<pxr::UsdLuxLight>()) {
+#endif
     return new USDLightReader(prim, params_, settings_);
   }
   if (params_.import_volumes && prim.IsA<pxr::UsdVolVolume>()) {
@@ -98,7 +93,11 @@ USDPrimReader *USDStageReader::create_reader(const pxr::UsdPrim &prim)
   if (prim.IsA<pxr::UsdGeomMesh>()) {
     return new USDMeshReader(prim, params_, settings_);
   }
+#if PXR_VERSION >= 2111
+  if (prim.IsA<pxr::UsdLuxBoundableLightBase>() || prim.IsA<pxr::UsdLuxNonboundableLightBase>()) {
+#else
   if (prim.IsA<pxr::UsdLuxLight>()) {
+#endif
     return new USDLightReader(prim, params_, settings_);
   }
   if (prim.IsA<pxr::UsdVolVolume>()) {

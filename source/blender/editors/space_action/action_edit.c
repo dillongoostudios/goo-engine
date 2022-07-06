@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup spaction
@@ -658,7 +642,7 @@ static char *actkeys_paste_description(bContext *UNUSED(C),
 {
   /* Custom description if the 'flipped' option is used. */
   if (RNA_boolean_get(ptr, "flipped")) {
-    return BLI_strdup("Paste keyframes from mirrored bones if they exist");
+    return BLI_strdup(TIP_("Paste keyframes from mirrored bones if they exist"));
   }
 
   /* Use the default description in the other cases. */
@@ -894,11 +878,12 @@ void ACTION_OT_keyframe_insert(wmOperatorType *ot)
 
 /* ******************** Duplicate Keyframes Operator ************************* */
 
-static void duplicate_action_keys(bAnimContext *ac)
+static bool duplicate_action_keys(bAnimContext *ac)
 {
   ListBase anim_data = {NULL, NULL};
   bAnimListElem *ale;
   int filter;
+  bool changed = false;
 
   /* filter data */
   if (ELEM(ac->datatype, ANIMCONT_GPENCIL, ANIMCONT_MASK)) {
@@ -914,10 +899,11 @@ static void duplicate_action_keys(bAnimContext *ac)
   /* loop through filtered data and delete selected keys */
   for (ale = anim_data.first; ale; ale = ale->next) {
     if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE)) {
-      duplicate_fcurve_keys((FCurve *)ale->key_data);
+      changed |= duplicate_fcurve_keys((FCurve *)ale->key_data);
     }
     else if (ale->type == ANIMTYPE_GPLAYER) {
       ED_gpencil_layer_frames_duplicate((bGPDlayer *)ale->data);
+      changed |= ED_gpencil_layer_frame_select_check((bGPDlayer *)ale->data);
     }
     else if (ale->type == ANIMTYPE_MASKLAYER) {
       ED_masklayer_frames_duplicate((MaskLayer *)ale->data);
@@ -931,6 +917,8 @@ static void duplicate_action_keys(bAnimContext *ac)
 
   ANIM_animdata_update(ac, &anim_data);
   ANIM_animdata_freelist(&anim_data);
+
+  return changed;
 }
 
 /* ------------------- */
@@ -945,7 +933,9 @@ static int actkeys_duplicate_exec(bContext *C, wmOperator *UNUSED(op))
   }
 
   /* duplicate keyframes */
-  duplicate_action_keys(&ac);
+  if (!duplicate_action_keys(&ac)) {
+    return OPERATOR_CANCELLED;
+  }
 
   /* set notifier that keyframes have changed */
   WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_ADDED, NULL);
@@ -1390,6 +1380,7 @@ void ACTION_OT_interpolation_type(wmOperatorType *ot)
   /* id-props */
   ot->prop = RNA_def_enum(
       ot->srna, "type", rna_enum_beztriple_interpolation_mode_items, 0, "Type", "");
+  RNA_def_property_translation_context(ot->prop, BLT_I18NCONTEXT_ID_ACTION);
 }
 
 /* ******************** Set Easing Operator *********************** */
@@ -1721,8 +1712,8 @@ static const EnumPropertyItem prop_actkeys_snap_types[] = {
      "NEAREST_FRAME",
      0,
      "Selection to Nearest Frame",
-     "Snap selected keyframes to the nearest (whole) frame (use to fix accidental subframe "
-     "offsets)"},
+     "Snap selected keyframes to the nearest (whole) frame "
+     "(use to fix accidental sub-frame offsets)"},
     {ACTKEYS_SNAP_NEAREST_SECOND,
      "NEAREST_SECOND",
      0,

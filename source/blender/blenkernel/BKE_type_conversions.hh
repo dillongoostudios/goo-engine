@@ -1,26 +1,11 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
+#include "FN_field.hh"
 #include "FN_multi_function.hh"
 
 namespace blender::bke {
-
-using fn::CPPType;
 
 struct ConversionFunctions {
   const fn::MultiFunction *multi_function;
@@ -72,11 +57,11 @@ class DataTypeConversions {
                                 const void *from_value,
                                 void *to_value) const;
 
-  void convert_to_initialized_n(fn::GSpan from_span, fn::GMutableSpan to_span) const;
+  void convert_to_initialized_n(GSpan from_span, GMutableSpan to_span) const;
 
-  fn::GVArray try_convert(fn::GVArray varray, const CPPType &to_type) const;
-
-  fn::GVMutableArray try_convert(fn::GVMutableArray varray, const CPPType &to_type) const;
+  GVArray try_convert(GVArray varray, const CPPType &to_type) const;
+  GVMutableArray try_convert(GVMutableArray varray, const CPPType &to_type) const;
+  fn::GField try_convert(fn::GField field, const CPPType &to_type) const;
 };
 
 const DataTypeConversions &get_implicit_type_conversions();

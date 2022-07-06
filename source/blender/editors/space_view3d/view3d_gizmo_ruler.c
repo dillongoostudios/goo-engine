@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spview3d
@@ -703,10 +689,8 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
 
     immUniform1i("colors_len", 2); /* "advanced" mode */
     const float *col = is_act ? color_act : color_base;
-    immUniformArray4fv(
-        "colors",
-        (float *)(float[][4]){{0.67f, 0.67f, 0.67f, 1.0f}, {col[0], col[1], col[2], col[3]}},
-        2);
+    immUniform4f("color", 0.67f, 0.67f, 0.67f, 1.0f);
+    immUniform4f("color2", col[0], col[1], col[2], col[3]);
     immUniform1f("dash_width", 6.0f);
     immUniform1f("dash_factor", 0.5f);
 
@@ -774,10 +758,8 @@ static void gizmo_ruler_draw(const bContext *C, wmGizmo *gz)
 
     immUniform1i("colors_len", 2); /* "advanced" mode */
     const float *col = is_act ? color_act : color_base;
-    immUniformArray4fv(
-        "colors",
-        (float *)(float[][4]){{0.67f, 0.67f, 0.67f, 1.0f}, {col[0], col[1], col[2], col[3]}},
-        2);
+    immUniform4f("color", 0.67f, 0.67f, 0.67f, 1.0f);
+    immUniform4f("color2", col[0], col[1], col[2], col[3]);
     immUniform1f("dash_width", 6.0f);
     immUniform1f("dash_factor", 0.5f);
 
@@ -1096,7 +1078,8 @@ static int gizmo_ruler_invoke(bContext *C, wmGizmo *gz, const wmEvent *event)
 
   ARegion *region = ruler_info->region;
 
-  const float mval_fl[2] = {UNPACK2(event->mval)};
+  float mval_fl[2];
+  WM_event_drag_start_mval_fl(event, region, mval_fl);
 
 #ifdef USE_AXIS_CONSTRAINTS
   ruler_info->constrain_axis = CONSTRAIN_AXIS_NONE;
@@ -1325,13 +1308,17 @@ static int view3d_ruler_add_invoke(bContext *C, wmOperator *op, const wmEvent *e
     return OPERATOR_CANCELLED;
   }
 
+  int mval[2];
+  WM_event_drag_start_mval(event, region, mval);
+
   /* Create new line */
   RulerItem *ruler_item;
   ruler_item = ruler_item_add(gzgroup);
 
   /* This is a little weak, but there is no real good way to tweak directly. */
   WM_gizmo_highlight_set(gzmap, &ruler_item->gz);
-  if (WM_operator_name_call(C, "GIZMOGROUP_OT_gizmo_tweak", WM_OP_INVOKE_REGION_WIN, NULL) ==
+  if (WM_operator_name_call(
+          C, "GIZMOGROUP_OT_gizmo_tweak", WM_OP_INVOKE_REGION_WIN, NULL, event) ==
       OPERATOR_RUNNING_MODAL) {
     RulerInfo *ruler_info = gzgroup->customdata;
     RulerInteraction *inter = ruler_item->gz.interaction_data;
@@ -1343,7 +1330,7 @@ static int view3d_ruler_add_invoke(bContext *C, wmOperator *op, const wmEvent *e
                                   depsgraph,
                                   ruler_info,
                                   ruler_item,
-                                  event->mval,
+                                  mval,
                                   false
 #ifndef USE_SNAP_DETECT_FROM_KEYMAP_HACK
                                   ,
@@ -1358,7 +1345,7 @@ static int view3d_ruler_add_invoke(bContext *C, wmOperator *op, const wmEvent *e
     else {
       negate_v3_v3(inter->drag_start_co, rv3d->ofs);
       copy_v3_v3(ruler_item->co[0], inter->drag_start_co);
-      view3d_ruler_item_project(ruler_info, ruler_item->co[0], event->mval);
+      view3d_ruler_item_project(ruler_info, ruler_item->co[0], mval);
     }
 
     copy_v3_v3(ruler_item->co[2], ruler_item->co[0]);

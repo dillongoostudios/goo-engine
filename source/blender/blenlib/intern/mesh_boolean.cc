@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
@@ -36,7 +22,7 @@
 #  include "BLI_math_geom.h"
 #  include "BLI_math_mpq.hh"
 #  include "BLI_math_vec_mpq_types.hh"
-#  include "BLI_math_vec_types.hh"
+#  include "BLI_math_vector.hh"
 #  include "BLI_mesh_intersect.hh"
 #  include "BLI_set.hh"
 #  include "BLI_span.hh"
@@ -185,9 +171,9 @@ TriMeshTopology::TriMeshTopology(const IMesh &tm)
   /* If everything were manifold, `F+V-E=2` and `E=3F/2`.
    * So an likely overestimate, allowing for non-manifoldness, is `E=2F` and `V=F`. */
   const int estimate_num_edges = 2 * tm.face_size();
-  const int estimate_num_verts = tm.face_size();
+  const int estimate_verts_num = tm.face_size();
   edge_tri_.reserve(estimate_num_edges);
-  vert_edges_.reserve(estimate_num_verts);
+  vert_edges_.reserve(estimate_verts_num);
   for (int t : tm.face_index_range()) {
     const Face &tri = *tm.face(t);
     BLI_assert(tri.is_tri());
@@ -2199,7 +2185,7 @@ static void finish_patch_cell_graph(const IMesh &tm,
  * There will be a vector of \a nshapes winding numbers in each cell, one per
  * input shape.
  * As one crosses a patch into a new cell, the original shape (mesh part)
- * that that patch was part of dictates which winding number changes.
+ * that patch was part of dictates which winding number changes.
  * The shape_fn(triangle_number) function should return the shape that the
  * triangle is part of.
  * Also, as soon as the winding numbers for a cell are set, use bool_optype
@@ -2621,18 +2607,18 @@ static void test_tri_inside_shapes(const IMesh &tm,
    * Perturb their directions slightly to make it less likely to hit a seam.
    * Ray-cast assumes they have unit length, so use r1 near 1 and
    * ra near 0.5, and rb near .01, but normalized so `sqrt(r1^2 + ra^2 + rb^2) == 1`. */
-  constexpr int num_rays = 6;
+  constexpr int rays_num = 6;
   constexpr float r1 = 0.9987025295199663f;
   constexpr float ra = 0.04993512647599832f;
   constexpr float rb = 0.009987025295199663f;
-  const float test_rays[num_rays][3] = {
+  const float test_rays[rays_num][3] = {
       {r1, ra, rb}, {-r1, -ra, -rb}, {rb, r1, ra}, {-rb, -r1, -ra}, {ra, rb, r1}, {-ra, -rb, -r1}};
   InsideShapeTestData data(tm, shape_fn, nshapes);
   data.hit_parity = Array<int>(nshapes, 0);
   Array<int> count_insides(nshapes, 0);
   const float co[3] = {
       float(offset_test_point[0]), float(offset_test_point[1]), float(offset_test_point[2])};
-  for (int i = 0; i < num_rays; ++i) {
+  for (int i = 0; i < rays_num; ++i) {
     if (dbg_level > 0) {
       std::cout << "shoot ray " << i << "(" << test_rays[i][0] << "," << test_rays[i][1] << ","
                 << test_rays[i][2] << ")\n";
@@ -2657,7 +2643,7 @@ static void test_tri_inside_shapes(const IMesh &tm,
       in_shape[j] = 1.0f; /* Let's say a shape is always inside itself. */
     }
     else {
-      in_shape[j] = float(count_insides[j]) / float(num_rays);
+      in_shape[j] = float(count_insides[j]) / float(rays_num);
     }
     if (dbg_level > 0) {
       std::cout << "shape " << j << " inside = " << in_shape[j] << "\n";
@@ -3414,19 +3400,19 @@ static void dissolve_verts(IMesh *imesh, const Array<bool> dissolve, IMeshArena 
   for (int f : imesh->face_index_range()) {
     const Face &face = *imesh->face(f);
     face_pos_erase.clear();
-    int num_erase = 0;
+    int erase_num = 0;
     for (const Vert *v : face) {
       int v_index = imesh->lookup_vert(v);
       BLI_assert(v_index != NO_INDEX);
       if (dissolve[v_index]) {
         face_pos_erase.append(true);
-        ++num_erase;
+        ++erase_num;
       }
       else {
         face_pos_erase.append(false);
       }
     }
-    if (num_erase > 0) {
+    if (erase_num > 0) {
       any_faces_erased |= imesh->erase_face_positions(f, face_pos_erase, arena);
     }
   }
@@ -3489,8 +3475,8 @@ static IMesh polymesh_from_trimesh_with_dissolve(const IMesh &tm_out,
     if (dbg_level > 1) {
       std::cout << "merge tris for face " << in_f << "\n";
     }
-    int num_out_tris_for_face = face_output_tris.size();
-    if (num_out_tris_for_face == 0) {
+    int out_tris_for_face_num = face_output_tris.size();
+    if (out_tris_for_face_num == 0) {
       continue;
     }
     face_output_face[in_f] = merge_tris_for_face(face_output_tris[in_f], tm_out, imesh_in, arena);

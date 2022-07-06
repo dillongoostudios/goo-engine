@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "gpu_shader_create_info.hh"
 
@@ -54,7 +55,6 @@ GPU_SHADER_CREATE_INFO(workbench_volume_coba)
 
 GPU_SHADER_CREATE_INFO(workbench_volume_no_coba)
     .sampler(4, ImageType::FLOAT_3D, "shadowTexture")
-    .sampler(5, ImageType::UINT_2D, "transferTexture")
     .push_constant(Type::VEC3, "activeColor");
 
 /** \} */

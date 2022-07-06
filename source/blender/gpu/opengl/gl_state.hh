@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2020, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. */
 
 /** \file
  * \ingroup gpu
@@ -124,11 +109,20 @@ static inline GLbitfield to_gl(eGPUBarrier barrier_bits)
   if (barrier_bits & GPU_BARRIER_SHADER_IMAGE_ACCESS) {
     barrier |= GL_SHADER_IMAGE_ACCESS_BARRIER_BIT;
   }
+  if (barrier_bits & GPU_BARRIER_SHADER_STORAGE) {
+    barrier |= GL_SHADER_STORAGE_BARRIER_BIT;
+  }
   if (barrier_bits & GPU_BARRIER_TEXTURE_FETCH) {
     barrier |= GL_TEXTURE_FETCH_BARRIER_BIT;
   }
-  if (barrier_bits & GPU_BARRIER_SHADER_STORAGE) {
-    barrier |= GL_SHADER_STORAGE_BARRIER_BIT;
+  if (barrier_bits & GPU_BARRIER_TEXTURE_UPDATE) {
+    barrier |= GL_TEXTURE_UPDATE_BARRIER_BIT;
+  }
+  if (barrier_bits & GPU_BARRIER_COMMAND) {
+    barrier |= GL_COMMAND_BARRIER_BIT;
+  }
+  if (barrier_bits & GPU_BARRIER_FRAMEBUFFER) {
+    barrier |= GL_FRAMEBUFFER_BARRIER_BIT;
   }
   if (barrier_bits & GPU_BARRIER_VERTEX_ATTRIB_ARRAY) {
     barrier |= GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT;

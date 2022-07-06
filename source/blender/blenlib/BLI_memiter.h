@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -48,11 +34,12 @@ BLI_memiter *BLI_memiter_create(unsigned int chunk_size_min)
     ATTR_MALLOC ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL;
 void *BLI_memiter_alloc(BLI_memiter *mi, unsigned int size)
     /* WARNING: `ATTR_MALLOC` attribute on #BLI_memiter_alloc causes crash, see: D2756. */
-    ATTR_RETURNS_NONNULL ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL ATTR_NONNULL(1);
+    ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL ATTR_NONNULL(1);
 void BLI_memiter_alloc_from(BLI_memiter *mi, uint elem_size, const void *data_from)
     ATTR_NONNULL(1, 3);
-void *BLI_memiter_calloc(BLI_memiter *mi, unsigned int size)
-    ATTR_RETURNS_NONNULL ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL ATTR_NONNULL(1);
+void *BLI_memiter_calloc(BLI_memiter *mi,
+                         unsigned int size) ATTR_WARN_UNUSED_RESULT ATTR_RETURNS_NONNULL
+    ATTR_NONNULL(1);
 void BLI_memiter_destroy(BLI_memiter *mi) ATTR_NONNULL(1);
 void BLI_memiter_clear(BLI_memiter *mi) ATTR_NONNULL(1);
 unsigned int BLI_memiter_count(const BLI_memiter *mi) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL(1);

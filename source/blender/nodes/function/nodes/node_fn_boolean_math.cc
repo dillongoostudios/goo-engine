@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_listbase.h"
 #include "BLI_string.h"
@@ -84,23 +70,24 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 
 static const fn::MultiFunction *get_multi_function(bNode &bnode)
 {
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> and_fn{"And",
-                                                        [](bool a, bool b) { return a && b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> or_fn{"Or",
-                                                       [](bool a, bool b) { return a || b; }};
-  static fn::CustomMF_SI_SO<bool, bool> not_fn{"Not", [](bool a) { return !a; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nand_fn{"Not And",
-                                                         [](bool a, bool b) { return !(a && b); }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nor_fn{"Nor",
-                                                        [](bool a, bool b) { return !(a || b); }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xnor_fn{"Equal",
-                                                         [](bool a, bool b) { return a == b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xor_fn{"Not Equal",
-                                                        [](bool a, bool b) { return a != b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> imply_fn{"Imply",
-                                                          [](bool a, bool b) { return !a || b; }};
-  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nimply_fn{"Subtract",
-                                                           [](bool a, bool b) { return a && !b; }};
+  static auto exec_preset = fn::CustomMF_presets::AllSpanOrSingle();
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> and_fn{
+      "And", [](bool a, bool b) { return a && b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> or_fn{
+      "Or", [](bool a, bool b) { return a || b; }, exec_preset};
+  static fn::CustomMF_SI_SO<bool, bool> not_fn{"Not", [](bool a) { return !a; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nand_fn{
+      "Not And", [](bool a, bool b) { return !(a && b); }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nor_fn{
+      "Nor", [](bool a, bool b) { return !(a || b); }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xnor_fn{
+      "Equal", [](bool a, bool b) { return a == b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> xor_fn{
+      "Not Equal", [](bool a, bool b) { return a != b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> imply_fn{
+      "Imply", [](bool a, bool b) { return !a || b; }, exec_preset};
+  static fn::CustomMF_SI_SI_SO<bool, bool, bool> nimply_fn{
+      "Subtract", [](bool a, bool b) { return a && !b; }, exec_preset};
 
   switch (bnode.custom1) {
     case NODE_BOOLEAN_MATH_AND:

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edsculpt
@@ -126,6 +110,10 @@ void SCULPT_filter_cache_init(bContext *C, Object *ob, Sculpt *sd, const int und
 
   ss->filter_cache->random_seed = rand();
 
+  if (undo_type == SCULPT_UNDO_COLOR) {
+    BKE_pbvh_ensure_node_loops(ss->pbvh);
+  }
+
   const float center[3] = {0.0f};
   SculptSearchSphereData search_data = {
       .original = true,
@@ -190,6 +178,7 @@ void SCULPT_filter_cache_free(SculptSession *ss)
   MEM_SAFE_FREE(ss->filter_cache->sharpen_factor);
   MEM_SAFE_FREE(ss->filter_cache->detail_directions);
   MEM_SAFE_FREE(ss->filter_cache->limit_surface_co);
+  MEM_SAFE_FREE(ss->filter_cache->pre_smoothed_color);
   MEM_SAFE_FREE(ss->filter_cache);
 }
 
@@ -468,7 +457,7 @@ static void mesh_filter_task_cb(void *__restrict userdata,
     }
     copy_v3_v3(vd.co, final_pos);
     if (vd.mvert) {
-      vd.mvert->flag |= ME_VERT_PBVH_UPDATE;
+      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -613,7 +602,7 @@ static int sculpt_mesh_filter_modal(bContext *C, wmOperator *op, const wmEvent *
 
   if (event->type == LEFTMOUSE && event->val == KM_RELEASE) {
     SCULPT_filter_cache_free(ss);
-    SCULPT_undo_push_end();
+    SCULPT_undo_push_end(ob);
     SCULPT_flush_update_done(C, ob, SCULPT_UPDATE_COORDS);
     return OPERATOR_FINISHED;
   }
@@ -622,7 +611,7 @@ static int sculpt_mesh_filter_modal(bContext *C, wmOperator *op, const wmEvent *
     return OPERATOR_RUNNING_MODAL;
   }
 
-  const float len = event->prev_click_xy[0] - event->xy[0];
+  const float len = event->prev_press_xy[0] - event->xy[0];
   filter_strength = filter_strength * -len * 0.001f * UI_DPI_FAC;
 
   SCULPT_vertex_random_access_ensure(ss);

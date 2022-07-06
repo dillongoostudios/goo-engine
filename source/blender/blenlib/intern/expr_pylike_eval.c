@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2018 Blender Foundation, Alexander Gavrilov
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2018 Blender Foundation, Alexander Gavrilov. All rights reserved. */
 
 /** \file
  * \ingroup bli
@@ -845,18 +829,18 @@ static bool parse_unary(ExprParseState *state)
 
       /* Specially supported functions. */
       if (STREQ(state->tokenbuf, "min")) {
-        int cnt = parse_function_args(state);
-        CHECK_ERROR(cnt > 0);
+        int count = parse_function_args(state);
+        CHECK_ERROR(count > 0);
 
-        parse_add_op(state, OPCODE_MIN, 1 - cnt)->arg.ival = cnt;
+        parse_add_op(state, OPCODE_MIN, 1 - count)->arg.ival = count;
         return true;
       }
 
       if (STREQ(state->tokenbuf, "max")) {
-        int cnt = parse_function_args(state);
-        CHECK_ERROR(cnt > 0);
+        int count = parse_function_args(state);
+        CHECK_ERROR(count > 0);
 
-        parse_add_op(state, OPCODE_MAX, 1 - cnt)->arg.ival = cnt;
+        parse_add_op(state, OPCODE_MAX, 1 - count)->arg.ival = count;
         return true;
       }
 

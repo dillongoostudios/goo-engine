@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2015 Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2015 Blender Foundation. */
 
 /** \file
  * \ingroup spaction
@@ -40,6 +24,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "BKE_action.h"
 #include "BKE_context.h"
@@ -59,6 +44,8 @@
 #include "ED_markers.h"
 #include "ED_mask.h"
 #include "ED_screen.h"
+
+#include "DEG_depsgraph.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -349,6 +336,13 @@ static int action_pushdown_exec(bContext *C, wmOperator *op)
 
     /* action can be safely added */
     BKE_nla_action_pushdown(adt, ID_IS_OVERRIDE_LIBRARY(adt_id_owner));
+
+    struct Main *bmain = CTX_data_main(C);
+    DEG_id_tag_update_ex(bmain, adt_id_owner, ID_RECALC_ANIMATION);
+
+    /* The action needs updating too, as FCurve modifiers are to be reevaluated. They won't extend
+     * beyond the NLA strip after pushing down to the NLA. */
+    DEG_id_tag_update_ex(bmain, &adt->action->id, ID_RECALC_ANIMATION);
 
     /* Stop displaying this action in this editor
      * NOTE: The editor itself doesn't set a user...
@@ -675,7 +669,7 @@ static int action_unlink_invoke(bContext *C, wmOperator *op, const wmEvent *even
 {
   /* NOTE: this is hardcoded to match the behavior for the unlink button
    * (in interface_templates.c). */
-  RNA_boolean_set(op->ptr, "force_delete", event->shift != 0);
+  RNA_boolean_set(op->ptr, "force_delete", event->modifier & KM_SHIFT);
   return action_unlink_exec(C, op);
 }
 

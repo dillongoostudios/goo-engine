@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BKE_spline.hh"
 
@@ -72,21 +58,22 @@ static void scale_output_assign(const Span<T> input,
 template<class T>
 static void nurbs_to_bezier_assign(const Span<T> input,
                                    const MutableSpan<T> r_output,
-                                   const NURBSpline::KnotsMode knotsMode)
+                                   const KnotsMode knotsMode)
 {
   const int input_size = input.size();
   const int output_size = r_output.size();
 
   switch (knotsMode) {
-    case NURBSpline::KnotsMode::Bezier:
+    case NURBS_KNOT_MODE_BEZIER:
       scale_input_assign<T>(input, 3, 1, r_output);
       break;
-    case NURBSpline::KnotsMode::Normal:
+    case NURBS_KNOT_MODE_NORMAL:
       for (const int i : IndexRange(output_size)) {
         r_output[i] = input[(i + 1) % input_size];
       }
       break;
-    case NURBSpline::KnotsMode::EndPoint:
+    case NURBS_KNOT_MODE_ENDPOINT_BEZIER:
+    case NURBS_KNOT_MODE_ENDPOINT:
       for (const int i : IndexRange(1, output_size - 2)) {
         r_output[i] = input[i + 1];
       }
@@ -121,11 +108,11 @@ static void copy_attributes(const Spline &input_spline, Spline &output_spline, C
 }
 
 static Vector<float3> create_nurbs_to_bezier_handles(const Span<float3> nurbs_positions,
-                                                     const NURBSpline::KnotsMode knots_mode)
+                                                     const KnotsMode knots_mode)
 {
   const int nurbs_positions_size = nurbs_positions.size();
   Vector<float3> handle_positions;
-  if (knots_mode == NURBSpline::KnotsMode::Bezier) {
+  if (knots_mode == NURBS_KNOT_MODE_BEZIER) {
     for (const int i : IndexRange(nurbs_positions_size)) {
       if (i % 3 == 1) {
         continue;
@@ -141,7 +128,7 @@ static Vector<float3> create_nurbs_to_bezier_handles(const Span<float3> nurbs_po
     }
   }
   else {
-    const bool is_periodic = knots_mode == NURBSpline::KnotsMode::Normal;
+    const bool is_periodic = knots_mode == NURBS_KNOT_MODE_NORMAL;
     if (is_periodic) {
       handle_positions.append(nurbs_positions[1] +
                               ((nurbs_positions[0] - nurbs_positions[1]) / 3));
@@ -183,9 +170,9 @@ static Vector<float3> create_nurbs_to_bezier_handles(const Span<float3> nurbs_po
 
 static Array<float3> create_nurbs_to_bezier_positions(const Span<float3> nurbs_positions,
                                                       const Span<float3> handle_positions,
-                                                      const NURBSpline::KnotsMode knots_mode)
+                                                      const KnotsMode knots_mode)
 {
-  if (knots_mode == NURBSpline::KnotsMode::Bezier) {
+  if (knots_mode == NURBS_KNOT_MODE_BEZIER) {
     /* Every third NURBS position (starting from index 1) should be converted to Bezier position */
     const int scale = 3;
     const int offset = 1;
@@ -225,7 +212,7 @@ static SplinePtr poly_to_nurbs(const Spline &input)
   output->set_resolution(12);
   output->set_order(4);
   Spline::copy_base_settings(input, *output);
-  output->knots_mode = NURBSpline::KnotsMode::Bezier;
+  output->knots_mode = NURBS_KNOT_MODE_BEZIER;
   output->attributes = input.attributes;
   return output;
 }
@@ -253,7 +240,7 @@ static SplinePtr bezier_to_nurbs(const Spline &input)
   output->set_resolution(12);
   output->set_order(4);
   output->set_cyclic(input.is_cyclic());
-  output->knots_mode = NURBSpline::KnotsMode::Bezier;
+  output->knots_mode = NURBS_KNOT_MODE_BEZIER;
   output->attributes.reallocate(output->size());
   copy_attributes(input, *output, [](GSpan src, GMutableSpan dst) {
     attribute_math::convert_to_static_type(src.type(), [&](auto dummy) {
@@ -273,8 +260,8 @@ static SplinePtr poly_to_bezier(const Spline &input)
   output->positions().copy_from(input.positions());
   output->radii().copy_from(input.radii());
   output->tilts().copy_from(input.tilts());
-  output->handle_types_left().fill(BezierSpline::HandleType::Vector);
-  output->handle_types_right().fill(BezierSpline::HandleType::Vector);
+  output->handle_types_left().fill(BEZIER_HANDLE_VECTOR);
+  output->handle_types_right().fill(BEZIER_HANDLE_VECTOR);
   output->set_resolution(12);
   Spline::copy_base_settings(input, *output);
   output->attributes = input.attributes;
@@ -286,13 +273,13 @@ static SplinePtr nurbs_to_bezier(const Spline &input)
   const NURBSpline &nurbs_spline = static_cast<const NURBSpline &>(input);
   Span<float3> nurbs_positions;
   Vector<float3> nurbs_positions_vector;
-  NURBSpline::KnotsMode knots_mode;
+  KnotsMode knots_mode;
   if (nurbs_spline.is_cyclic()) {
     nurbs_positions_vector = nurbs_spline.positions();
     nurbs_positions_vector.append(nurbs_spline.positions()[0]);
     nurbs_positions_vector.append(nurbs_spline.positions()[1]);
     nurbs_positions = nurbs_positions_vector;
-    knots_mode = NURBSpline::KnotsMode::Normal;
+    knots_mode = NURBS_KNOT_MODE_NORMAL;
   }
   else {
     nurbs_positions = nurbs_spline.positions();
@@ -312,8 +299,8 @@ static SplinePtr nurbs_to_bezier(const Spline &input)
   nurbs_to_bezier_assign(nurbs_spline.tilts(), output->tilts(), knots_mode);
   scale_input_assign(handle_positions.as_span(), 2, 0, output->handle_positions_left());
   scale_input_assign(handle_positions.as_span(), 2, 1, output->handle_positions_right());
-  output->handle_types_left().fill(BezierSpline::HandleType::Align);
-  output->handle_types_right().fill(BezierSpline::HandleType::Align);
+  output->handle_types_left().fill(BEZIER_HANDLE_ALIGN);
+  output->handle_types_right().fill(BEZIER_HANDLE_ALIGN);
   output->set_resolution(nurbs_spline.resolution());
   Spline::copy_base_settings(nurbs_spline, *output);
   output->attributes.reallocate(output->size());
@@ -329,11 +316,11 @@ static SplinePtr nurbs_to_bezier(const Spline &input)
 static SplinePtr convert_to_bezier(const Spline &input, GeoNodeExecParams params)
 {
   switch (input.type()) {
-    case Spline::Type::Bezier:
+    case CURVE_TYPE_BEZIER:
       return input.copy();
-    case Spline::Type::Poly:
+    case CURVE_TYPE_POLY:
       return poly_to_bezier(input);
-    case Spline::Type::NURBS:
+    case CURVE_TYPE_NURBS:
       if (input.size() < 4) {
         params.error_message_add(
             NodeWarningType::Info,
@@ -341,6 +328,10 @@ static SplinePtr convert_to_bezier(const Spline &input, GeoNodeExecParams params
         return input.copy();
       }
       return nurbs_to_bezier(input);
+    case CURVE_TYPE_CATMULL_ROM: {
+      BLI_assert_unreachable();
+      return {};
+    }
   }
   BLI_assert_unreachable();
   return {};
@@ -349,12 +340,15 @@ static SplinePtr convert_to_bezier(const Spline &input, GeoNodeExecParams params
 static SplinePtr convert_to_nurbs(const Spline &input)
 {
   switch (input.type()) {
-    case Spline::Type::NURBS:
+    case CURVE_TYPE_NURBS:
       return input.copy();
-    case Spline::Type::Bezier:
+    case CURVE_TYPE_BEZIER:
       return bezier_to_nurbs(input);
-    case Spline::Type::Poly:
+    case CURVE_TYPE_POLY:
       return poly_to_nurbs(input);
+    case CURVE_TYPE_CATMULL_ROM:
+      BLI_assert_unreachable();
+      return {};
   }
   BLI_assert_unreachable();
   return {};
@@ -369,14 +363,17 @@ static void node_geo_exec(GeoNodeExecParams params)
   Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
 
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (!geometry_set.has_curve()) {
+    if (!geometry_set.has_curves()) {
       return;
     }
 
     const CurveComponent *curve_component = geometry_set.get_component_for_read<CurveComponent>();
-    const CurveEval &curve = *curve_component->get_for_read();
+    const std::unique_ptr<CurveEval> curve = curves_to_curve_eval(
+        *curve_component->get_for_read());
     GeometryComponentFieldContext field_context{*curve_component, ATTR_DOMAIN_CURVE};
     const int domain_size = curve_component->attribute_domain_size(ATTR_DOMAIN_CURVE);
+
+    Span<SplinePtr> src_splines = curve->splines();
 
     fn::FieldEvaluator selection_evaluator{field_context, domain_size};
     selection_evaluator.add(selection_field);
@@ -384,30 +381,30 @@ static void node_geo_exec(GeoNodeExecParams params)
     const VArray<bool> &selection = selection_evaluator.get_evaluated<bool>(0);
 
     std::unique_ptr<CurveEval> new_curve = std::make_unique<CurveEval>();
-    new_curve->resize(curve.splines().size());
+    new_curve->resize(src_splines.size());
 
-    threading::parallel_for(curve.splines().index_range(), 512, [&](IndexRange range) {
+    threading::parallel_for(src_splines.index_range(), 512, [&](IndexRange range) {
       for (const int i : range) {
         if (selection[i]) {
           switch (output_type) {
             case GEO_NODE_SPLINE_TYPE_POLY:
-              new_curve->splines()[i] = convert_to_poly_spline(*curve.splines()[i]);
+              new_curve->splines()[i] = convert_to_poly_spline(*src_splines[i]);
               break;
             case GEO_NODE_SPLINE_TYPE_BEZIER:
-              new_curve->splines()[i] = convert_to_bezier(*curve.splines()[i], params);
+              new_curve->splines()[i] = convert_to_bezier(*src_splines[i], params);
               break;
             case GEO_NODE_SPLINE_TYPE_NURBS:
-              new_curve->splines()[i] = convert_to_nurbs(*curve.splines()[i]);
+              new_curve->splines()[i] = convert_to_nurbs(*src_splines[i]);
               break;
           }
         }
         else {
-          new_curve->splines()[i] = curve.splines()[i]->copy();
+          new_curve->splines()[i] = src_splines[i]->copy();
         }
       }
     });
-    new_curve->attributes = curve.attributes;
-    geometry_set.replace_curve(new_curve.release());
+    new_curve->attributes = curve->attributes;
+    geometry_set.replace_curves(curve_eval_to_curves(*new_curve));
   });
 
   params.set_output("Curve", std::move(geometry_set));

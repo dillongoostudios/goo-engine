@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -84,10 +70,18 @@ class OBJMesh : NonCopyable {
    * Per-polygon-per-vertex UV vertex indices.
    */
   Vector<Vector<int>> uv_indices_;
+  /*
+   * UV vertices.
+   */
+  Vector<float2> uv_coords_;
   /**
    * Per-loop normal index.
    */
   Vector<int> loop_to_normal_index_;
+  /*
+   * Normal coords.
+   */
+  Vector<float3> normal_coords_;
   /*
    * Total number of normal indices (maximum entry, plus 1, in
    * the loop_to_norm_index_ vector).
@@ -114,11 +108,15 @@ class OBJMesh : NonCopyable {
   OBJMesh(Depsgraph *depsgraph, const OBJExportParams &export_params, Object *mesh_object);
   ~OBJMesh();
 
+  /* Clear various arrays to release potentially large memory allocations. */
+  void clear();
+
   int tot_vertices() const;
   int tot_polygons() const;
   int tot_uv_vertices() const;
   int tot_normal_indices() const;
   int tot_edges() const;
+  int tot_deform_groups() const;
   bool is_mirrored_transform() const
   {
     return mirrored_transform_;
@@ -175,10 +173,14 @@ class OBJMesh : NonCopyable {
   Vector<int> calc_poly_vertex_indices(int poly_index) const;
   /**
    * Calculate UV vertex coordinates of an Object.
-   *
-   * \note Also store the UV vertex indices in the member variable.
+   * Stores the coordinates and UV vertex indices in the member variables.
    */
-  void store_uv_coords_and_indices(Vector<std::array<float, 2>> &r_uv_coords);
+  void store_uv_coords_and_indices();
+  /* Get UV coordinates computed by store_uv_coords_and_indices. */
+  const Vector<float2> &get_uv_coords() const
+  {
+    return uv_coords_;
+  }
   Span<int> calc_poly_uv_indices(int poly_index) const;
   /**
    * Calculate polygon normal of a polygon at given index.
@@ -187,24 +189,31 @@ class OBJMesh : NonCopyable {
    */
   float3 calc_poly_normal(int poly_index) const;
   /**
-   * Find the unique normals of the mesh and return them in \a r_normal_coords.
-   * Store the indices into that vector with for each loop in this #OBJMesh.
+   * Find the unique normals of the mesh and stores them in a member variable.
+   * Also stores the indices into that vector with for each loop.
    */
-  void store_normal_coords_and_indices(Vector<float3> &r_normal_coords);
+  void store_normal_coords_and_indices();
+  /* Get normals calculate by store_normal_coords_and_indices. */
+  const Vector<float3> &get_normal_coords() const
+  {
+    return normal_coords_;
+  }
   /**
    * Calculate a polygon's polygon/loop normal indices.
-   * \param poly_index Index of the polygon to calculate indices for.
+   * \param poly_index: Index of the polygon to calculate indices for.
    * \return Vector of normal indices, aligned with vertices of polygon.
    */
   Vector<int> calc_poly_normal_indices(int poly_index) const;
   /**
-   * Find the index of the vertex group with the maximum number of vertices in a polygon.
-   * The index indices into the #Object.defbase.
+   * Find the most representative vertex group of a polygon.
    *
-   * If two or more groups have the same number of vertices (maximum), group name depends on the
-   * implementation of #std::max_element.
+   * This adds up vertex group weights, and the group with the largest
+   * weight sum across the polygon is the one returned.
+   *
+   * group_weights is temporary storage to avoid reallocations, it must
+   * be the size of amount of vertex groups in the object.
    */
-  int16_t get_poly_deform_group_index(int poly_index) const;
+  int16_t get_poly_deform_group_index(int poly_index, MutableSpan<float> group_weights) const;
   /**
    * Find the name of the vertex deform group at the given index.
    * The index indices into the #Object.defbase.

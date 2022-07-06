@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edasset
@@ -41,6 +27,7 @@
 #include "WM_api.h"
 
 /* XXX uses private header of file-space. */
+#include "../space_file/file_indexer.h"
 #include "../space_file/filelist.h"
 
 #include "ED_asset_handle.h"
@@ -54,7 +41,7 @@ namespace blender::ed::asset {
 /* -------------------------------------------------------------------- */
 /** \name Asset list API
  *
- *  Internally re-uses #FileList from the File Browser. It does all the heavy lifting already.
+ * Internally re-uses #FileList from the File Browser. It does all the heavy lifting already.
  * \{ */
 
 /**
@@ -170,7 +157,8 @@ void AssetList::setup()
       "",
       "");
 
-  filelist_setindexer(files, &file_indexer_asset);
+  const bool use_asset_indexer = !USER_EXPERIMENTAL_TEST(&U, no_asset_indexing);
+  filelist_setindexer(files, use_asset_indexer ? &file_indexer_asset : &file_indexer_noop);
 
   char path[FILE_MAXDIR] = "";
   if (user_library) {

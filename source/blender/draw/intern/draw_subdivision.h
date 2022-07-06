@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2021, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. */
 
 #pragma once
 
@@ -28,6 +13,7 @@ struct BMesh;
 struct GPUIndexBuf;
 struct GPUUniformBuf;
 struct GPUVertBuf;
+struct GPUVertFormat;
 struct Mesh;
 struct MeshBatchCache;
 struct MeshBufferCache;
@@ -118,8 +104,10 @@ typedef struct DRWSubdivCache {
   bool optimal_display;
   bool use_custom_loop_normals;
 
-  /* Coordinates used to evaluate patches for UVs, positions, and normals. */
+  /* Coordinates used to evaluate patches for positions and normals. */
   struct GPUVertBuf *patch_coords;
+  /* Coordinates used to evaluate patches for attributes. */
+  struct GPUVertBuf *corner_patch_coords;
   /* Coordinates used to evaluate patches for the face centers (or face dots) in edit-mode. */
   struct GPUVertBuf *fdots_patch_coords;
 
@@ -208,7 +196,6 @@ void DRW_create_subdivision(const struct Scene *scene,
                             const float obmat[4][4],
                             const bool do_final,
                             const bool do_uvedit,
-                            const bool use_subsurf_fdots,
                             const ToolSettings *ts,
                             const bool use_hide);
 
@@ -221,7 +208,7 @@ void draw_subdiv_init_mesh_render_data(DRWSubdivCache *cache,
                                        const struct ToolSettings *toolsettings);
 
 void draw_subdiv_init_origindex_buffer(struct GPUVertBuf *buffer,
-                                       int *vert_origindex,
+                                       int32_t *vert_origindex,
                                        uint num_loops,
                                        uint loose_len);
 
@@ -278,6 +265,7 @@ void draw_subdiv_build_lines_buffer(const DRWSubdivCache *cache,
 
 void draw_subdiv_build_lines_loose_buffer(const DRWSubdivCache *cache,
                                           struct GPUIndexBuf *lines_indices,
+                                          GPUVertBuf *lines_flags,
                                           uint num_loose_edges);
 
 void draw_subdiv_build_fdots_buffers(const DRWSubdivCache *cache,
@@ -298,6 +286,10 @@ void draw_subdiv_build_edituv_stretch_angle_buffer(const DRWSubdivCache *cache,
                                                    struct GPUVertBuf *uvs,
                                                    int uvs_offset,
                                                    struct GPUVertBuf *stretch_angles);
+
+/** Return the format used for the positions and normals VBO.
+ */
+struct GPUVertFormat *draw_subdiv_get_pos_nor_format(void);
 
 #ifdef __cplusplus
 }

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -470,29 +454,24 @@ static void mesh_cd_calc_active_mask_uv_layer(const Object *object,
   }
 }
 
-static void mesh_cd_calc_active_vcol_layer(const Object *object,
-                                           const Mesh *me,
-                                           DRW_MeshAttributes *attrs_used)
-{
-  const Mesh *me_final = editmesh_final_or_this(object, me);
-  const CustomData *cd_vdata = mesh_cd_vdata_get_from_mesh(me_final);
-
-  int layer = CustomData_get_active_layer(cd_vdata, CD_PROP_COLOR);
-  if (layer != -1) {
-    drw_mesh_attributes_add_request(attrs_used, CD_PROP_COLOR, layer, ATTR_DOMAIN_POINT);
-  }
-}
-
 static void mesh_cd_calc_active_mloopcol_layer(const Object *object,
                                                const Mesh *me,
                                                DRW_MeshCDMask *cd_used)
 {
   const Mesh *me_final = editmesh_final_or_this(object, me);
+  Mesh me_query = {0};
+
+  const CustomData *cd_vdata = mesh_cd_vdata_get_from_mesh(me_final);
   const CustomData *cd_ldata = mesh_cd_ldata_get_from_mesh(me_final);
 
-  int layer = CustomData_get_active_layer(cd_ldata, CD_MLOOPCOL);
-  if (layer != -1) {
-    cd_used->vcol |= (1 << layer);
+  BKE_id_attribute_copy_domains_temp(ID_ME, cd_vdata, NULL, cd_ldata, NULL, NULL, &me_query.id);
+
+  CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me_query.id);
+  int layer_i = BKE_id_attribute_to_index(
+      &me_query.id, layer, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+
+  if (layer_i != -1) {
+    cd_used->vcol |= (1UL << (uint)layer_i);
   }
 }
 
@@ -501,8 +480,9 @@ static bool custom_data_match_attribute(const CustomData *custom_data,
                                         int *r_layer_index,
                                         int *r_type)
 {
-  const int possible_attribute_types[6] = {
+  const int possible_attribute_types[7] = {
       CD_PROP_BOOL,
+      CD_PROP_INT8,
       CD_PROP_INT32,
       CD_PROP_FLOAT,
       CD_PROP_FLOAT2,
@@ -525,6 +505,53 @@ static bool custom_data_match_attribute(const CustomData *custom_data,
   return false;
 }
 
+static uint mesh_cd_calc_gpu_layers_vcol_used(const Mesh *me_query,
+                                              const CustomData *cd_vdata,
+                                              const CustomData *cd_ldata,
+                                              const char name[])
+{
+  CustomDataLayer *layer = NULL;
+  AttributeDomain domain;
+
+  if (name[0]) {
+    int layer_i = 0;
+
+    domain = ATTR_DOMAIN_POINT;
+    layer_i = CustomData_get_named_layer_index(cd_vdata, CD_PROP_COLOR, name);
+    layer_i = layer_i == -1 ?
+                  CustomData_get_named_layer_index(cd_vdata, CD_PROP_BYTE_COLOR, name) :
+                  layer_i;
+
+    if (layer_i == -1) {
+      domain = ATTR_DOMAIN_CORNER;
+      layer_i = layer_i == -1 ? CustomData_get_named_layer_index(cd_ldata, CD_PROP_COLOR, name) :
+                                layer_i;
+      layer_i = layer_i == -1 ?
+                    CustomData_get_named_layer_index(cd_ldata, CD_PROP_BYTE_COLOR, name) :
+                    layer_i;
+    }
+
+    /* Note: this is not the same as the layer_i below. */
+    if (layer_i != -1) {
+      layer = (domain == ATTR_DOMAIN_POINT ? cd_vdata : cd_ldata)->layers + layer_i;
+    }
+  }
+  else {
+    layer = BKE_id_attributes_render_color_get(&me_query->id);
+  }
+
+  if (!layer) {
+    return -1;
+  }
+
+  /* Note: this is the logical index into the color attribute list,
+   * not the customdata index. */
+  int vcol_i = BKE_id_attribute_to_index(
+      (ID *)me_query, layer, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+
+  return vcol_i;
+}
+
 static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Object *object,
                                                    const Mesh *me,
                                                    struct GPUMaterial **gpumat_array,
@@ -536,6 +563,13 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Object *object,
   const CustomData *cd_pdata = mesh_cd_pdata_get_from_mesh(me_final);
   const CustomData *cd_vdata = mesh_cd_vdata_get_from_mesh(me_final);
   const CustomData *cd_edata = mesh_cd_edata_get_from_mesh(me_final);
+
+  /* Create a mesh with final customdata domains
+   * we can query with attribute API. */
+  Mesh me_query = {0};
+
+  BKE_id_attribute_copy_domains_temp(
+      ID_ME, cd_vdata, cd_edata, cd_ldata, cd_pdata, NULL, &me_query.id);
 
   /* See: DM_vertex_attributes_from_gpu for similar logic */
   DRW_MeshCDMask cd_used;
@@ -562,8 +596,35 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Object *object,
             type = CD_MTFACE;
 
             if (layer == -1) {
-              layer = CustomData_get_named_layer(cd_ldata, CD_MLOOPCOL, name);
-              type = CD_MCOL;
+              layer = CustomData_get_named_layer(cd_vdata, CD_PROP_COLOR, name);
+              if (layer != -1) {
+                type = CD_PROP_COLOR;
+                domain = ATTR_DOMAIN_POINT;
+              }
+            }
+
+            if (layer == -1) {
+              layer = CustomData_get_named_layer(cd_ldata, CD_PROP_COLOR, name);
+              if (layer != -1) {
+                type = CD_PROP_COLOR;
+                domain = ATTR_DOMAIN_CORNER;
+              }
+            }
+
+            if (layer == -1) {
+              layer = CustomData_get_named_layer(cd_vdata, CD_PROP_BYTE_COLOR, name);
+              if (layer != -1) {
+                type = CD_PROP_BYTE_COLOR;
+                domain = ATTR_DOMAIN_POINT;
+              }
+            }
+
+            if (layer == -1) {
+              layer = CustomData_get_named_layer(cd_ldata, CD_PROP_BYTE_COLOR, name);
+              if (layer != -1) {
+                type = CD_PROP_BYTE_COLOR;
+                domain = ATTR_DOMAIN_CORNER;
+              }
             }
 
 #if 0 /* Tangents are always from UV's - this will never happen. */
@@ -634,28 +695,39 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Object *object,
             }
             break;
           }
-          case CD_MCOL: {
-            /* Vertex Color Data */
-            if (layer == -1) {
-              layer = (name[0] != '\0') ? CustomData_get_named_layer(cd_ldata, CD_MLOOPCOL, name) :
-                                          CustomData_get_render_layer(cd_ldata, CD_MLOOPCOL);
-            }
-            if (layer != -1) {
-              cd_used.vcol |= (1 << layer);
-            }
 
-            break;
-          }
           case CD_ORCO: {
             cd_used.orco = 1;
             break;
           }
+
+          /* Note: attr->type will always be CD_PROP_COLOR even for
+           * CD_PROP_BYTE_COLOR layers, see node_shader_gpu_vertex_color in
+           * node_shader_vertex_color.cc.
+           */
+          case CD_MCOL:
+          case CD_PROP_BYTE_COLOR:
+          case CD_PROP_COLOR: {
+            /* First check Color attributes, when not found check mesh attributes. Geometry nodes
+             * can generate those layers. */
+            int vcol_bit = mesh_cd_calc_gpu_layers_vcol_used(&me_query, cd_vdata, cd_ldata, name);
+
+            if (vcol_bit != -1) {
+              cd_used.vcol |= 1UL << (uint)vcol_bit;
+              break;
+            }
+
+            if (layer != -1 && domain != ATTR_DOMAIN_NUM) {
+              drw_mesh_attributes_add_request(attributes, type, layer, domain);
+            }
+            break;
+          }
+          case CD_PROP_FLOAT3:
           case CD_PROP_BOOL:
+          case CD_PROP_INT8:
           case CD_PROP_INT32:
           case CD_PROP_FLOAT:
-          case CD_PROP_FLOAT2:
-          case CD_PROP_FLOAT3:
-          case CD_PROP_COLOR: {
+          case CD_PROP_FLOAT2: {
             if (layer != -1 && domain != ATTR_DOMAIN_NUM) {
               drw_mesh_attributes_add_request(attributes, type, layer, domain);
             }
@@ -813,6 +885,17 @@ static bool mesh_batch_cache_valid(Object *object, Mesh *me)
     return false;
   }
 
+  if (object->sculpt && object->sculpt->pbvh) {
+    if (cache->pbvh_is_drawing != BKE_pbvh_is_drawing(object->sculpt->pbvh)) {
+      return false;
+    }
+
+    if (BKE_pbvh_is_drawing(object->sculpt->pbvh) &&
+        BKE_pbvh_draw_cache_invalid(object->sculpt->pbvh)) {
+      return false;
+    }
+  }
+
   if (cache->is_editmode != (me->edit_mesh != NULL)) {
     return false;
   }
@@ -840,6 +923,10 @@ static void mesh_batch_cache_init(Object *object, Mesh *me)
   }
 
   cache->is_editmode = me->edit_mesh != NULL;
+
+  if (object->sculpt && object->sculpt->pbvh) {
+    cache->pbvh_is_drawing = BKE_pbvh_is_drawing(object->sculpt->pbvh);
+  }
 
   if (cache->is_editmode == false) {
     // cache->edge_len = mesh_render_edges_len_get(me);
@@ -1134,14 +1221,28 @@ static void texpaint_request_active_vcol(MeshBatchCache *cache, Object *object, 
 
 static void sculpt_request_active_vcol(MeshBatchCache *cache, Object *object, Mesh *me)
 {
-  DRW_MeshAttributes attrs_needed;
-  drw_mesh_attributes_clear(&attrs_needed);
-  mesh_cd_calc_active_vcol_layer(object, me, &attrs_needed);
+  const Mesh *me_final = editmesh_final_or_this(object, me);
+  const CustomData *cd_vdata = mesh_cd_vdata_get_from_mesh(me_final);
+  const CustomData *cd_ldata = mesh_cd_ldata_get_from_mesh(me_final);
 
-  BLI_assert(attrs_needed.num_requests != 0 &&
-             "No MPropCol layer available in Sculpt, but batches requested anyway!");
+  Mesh me_query = {0};
+  BKE_id_attribute_copy_domains_temp(ID_ME, cd_vdata, NULL, cd_ldata, NULL, NULL, &me_query.id);
 
-  drw_mesh_attributes_merge(&cache->attr_needed, &attrs_needed, me->runtime.render_mutex);
+  CustomDataLayer *active = BKE_id_attributes_active_color_get(&me_query.id);
+  CustomDataLayer *render = BKE_id_attributes_render_color_get(&me_query.id);
+
+  int active_i = BKE_id_attribute_to_index(
+      &me_query.id, active, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+  int render_i = BKE_id_attribute_to_index(
+      &me_query.id, render, ATTR_DOMAIN_MASK_COLOR, CD_MASK_COLOR_ALL);
+
+  if (active_i >= 0) {
+    cache->cd_needed.vcol |= 1UL << (uint)active_i;
+  }
+
+  if (render_i >= 0) {
+    cache->cd_needed.vcol |= 1UL << (uint)render_i;
+  }
 }
 
 GPUBatch *DRW_mesh_batch_cache_get_all_verts(Mesh *me)
@@ -1162,6 +1263,7 @@ GPUBatch *DRW_mesh_batch_cache_get_surface(Mesh *me)
 {
   MeshBatchCache *cache = mesh_batch_cache_get(me);
   mesh_batch_cache_request_surface_batches(cache);
+
   return cache->batch.surface;
 }
 
@@ -1720,9 +1822,7 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
     do_uvcage = !editmesh_eval_final->runtime.is_original;
   }
 
-  const int required_mode = BKE_subsurf_modifier_eval_required_mode(DRW_state_is_scene_render(),
-                                                                    is_editmode);
-  const bool do_subdivision = BKE_subsurf_modifier_can_do_gpu_subdiv(scene, ob, me, required_mode);
+  const bool do_subdivision = BKE_subsurf_modifier_has_gpu_subdiv(me);
 
   MeshBufferList *mbuflist = &cache->final.buff;
 
@@ -2032,9 +2132,6 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
 
   MDEPS_ASSERT_MAP_INDEX(TRIS_PER_MAT_INDEX);
 
-  /* Meh loose Scene const correctness here. */
-  const bool use_subsurf_fdots = scene ? BKE_modifiers_uses_subsurf_facedots(scene, ob) : false;
-
   if (do_uvcage) {
     mesh_buffer_cache_create_requested(task_graph,
                                        cache,
@@ -2047,7 +2144,6 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
                                        ob->obmat,
                                        false,
                                        true,
-                                       false,
                                        scene,
                                        ts,
                                        true);
@@ -2065,7 +2161,6 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
                                        ob->obmat,
                                        false,
                                        false,
-                                       use_subsurf_fdots,
                                        scene,
                                        ts,
                                        true);
@@ -2083,7 +2178,6 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
                            ob->obmat,
                            true,
                            false,
-                           use_subsurf_fdots,
                            ts,
                            use_hide);
   }
@@ -2104,7 +2198,6 @@ void DRW_mesh_batch_cache_create_requested(struct TaskGraph *task_graph,
                                      ob->obmat,
                                      true,
                                      false,
-                                     use_subsurf_fdots,
                                      scene,
                                      ts,
                                      use_hide);

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup wm
@@ -24,7 +8,11 @@
  * (`WM_operator_properties_*` functions).
  */
 
+#include "DNA_ID_enums.h"
 #include "DNA_space_types.h"
+
+#include "BKE_lib_id.h"
+#include "BKE_main.h"
 
 #include "BLI_math_base.h"
 #include "BLI_rect.h"
@@ -34,6 +22,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "ED_select_utils.h"
 
@@ -73,12 +62,12 @@ static const EnumPropertyItem *wm_operator_properties_filesel_sort_items_itemf(
 }
 
 void WM_operator_properties_filesel(wmOperatorType *ot,
-                                    int filter,
-                                    short type,
-                                    short action,
-                                    short flag,
-                                    short display,
-                                    short sort)
+                                    const int filter,
+                                    const short type,
+                                    const eFileSel_Action action,
+                                    const eFileSel_Flag flag,
+                                    const short display,
+                                    const short sort)
 {
   PropertyRNA *prop;
 
@@ -235,6 +224,69 @@ void WM_operator_properties_filesel(wmOperatorType *ot,
   prop = RNA_def_enum(ot->srna, "sort_method", DummyRNA_NULL_items, sort, "File sorting mode", "");
   RNA_def_enum_funcs(prop, wm_operator_properties_filesel_sort_items_itemf);
   RNA_def_property_flag(prop, PROP_HIDDEN | PROP_SKIP_SAVE);
+}
+
+void WM_operator_properties_id_lookup_set_from_id(PointerRNA *ptr, const ID *id)
+{
+  PropertyRNA *prop_session_uuid = RNA_struct_find_property(ptr, "session_uuid");
+  PropertyRNA *prop_name = RNA_struct_find_property(ptr, "name");
+
+  if (prop_session_uuid) {
+    RNA_int_set(ptr, "session_uuid", (int)id->session_uuid);
+  }
+  else if (prop_name) {
+    RNA_string_set(ptr, "name", id->name + 2);
+  }
+  else {
+    BLI_assert_unreachable();
+  }
+}
+
+ID *WM_operator_properties_id_lookup_from_name_or_session_uuid(Main *bmain,
+                                                               PointerRNA *ptr,
+                                                               const ID_Type type)
+{
+  PropertyRNA *prop_name = RNA_struct_find_property(ptr, "name");
+  PropertyRNA *prop_session_uuid = RNA_struct_find_property(ptr, "session_uuid");
+
+  if (prop_name && RNA_property_is_set(ptr, prop_name)) {
+    char name[MAX_ID_NAME - 2];
+    RNA_property_string_get(ptr, prop_name, name);
+    return BKE_libblock_find_name(bmain, type, name);
+  }
+
+  if (prop_session_uuid && RNA_property_is_set(ptr, prop_session_uuid)) {
+    const uint32_t session_uuid = (uint32_t)RNA_property_int_get(ptr, prop_session_uuid);
+    return BKE_libblock_find_session_uuid(bmain, type, session_uuid);
+  }
+
+  return NULL;
+}
+
+void WM_operator_properties_id_lookup(wmOperatorType *ot, const bool add_name_prop)
+{
+  PropertyRNA *prop;
+
+  if (add_name_prop) {
+    prop = RNA_def_string(ot->srna,
+                          "name",
+                          NULL,
+                          MAX_ID_NAME - 2,
+                          "Name",
+                          "Name of the data-block to use by the operator");
+    RNA_def_property_flag(prop, (PropertyFlag)(PROP_SKIP_SAVE | PROP_HIDDEN));
+  }
+
+  prop = RNA_def_int(ot->srna,
+                     "session_uuid",
+                     0,
+                     INT32_MIN,
+                     INT32_MAX,
+                     "Session UUID",
+                     "Session UUID of the data-block to use by the operator",
+                     INT32_MIN,
+                     INT32_MAX);
+  RNA_def_property_flag(prop, (PropertyFlag)(PROP_SKIP_SAVE | PROP_HIDDEN));
 }
 
 static void wm_operator_properties_select_action_ex(wmOperatorType *ot,
@@ -398,7 +450,7 @@ void WM_operator_properties_select_operation(wmOperatorType *ot)
       {SEL_OP_SET, "SET", ICON_SELECT_SET, "Set", "Set a new selection"},
       {SEL_OP_ADD, "ADD", ICON_SELECT_EXTEND, "Extend", "Extend existing selection"},
       {SEL_OP_SUB, "SUB", ICON_SELECT_SUBTRACT, "Subtract", "Subtract existing selection"},
-      {SEL_OP_XOR, "XOR", ICON_SELECT_DIFFERENCE, "Difference", "Inverts existing selection"},
+      {SEL_OP_XOR, "XOR", ICON_SELECT_DIFFERENCE, "Difference", "Invert existing selection"},
       {SEL_OP_AND, "AND", ICON_SELECT_INTERSECT, "Intersect", "Intersect existing selection"},
       {0, NULL, 0, NULL, NULL},
   };
@@ -532,6 +584,14 @@ void WM_operator_properties_mouse_select(wmOperatorType *ot)
                          false,
                          "Deselect On Nothing",
                          "Deselect all when nothing under the cursor");
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+
+  /* TODO: currently only used for the 3D viewport. */
+  prop = RNA_def_boolean(ot->srna,
+                         "select_passthrough",
+                         false,
+                         "Only Select Unselected",
+                         "Ignore the select action when the element is already selected");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 }
 

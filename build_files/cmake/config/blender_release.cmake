@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
 # Turn everything ON that's expected for an official release builds.
 #
 # Example usage:
@@ -29,6 +31,7 @@ set(WITH_IMAGE_HDR           ON  CACHE BOOL "" FORCE)
 set(WITH_IMAGE_OPENEXR       ON  CACHE BOOL "" FORCE)
 set(WITH_IMAGE_OPENJPEG      ON  CACHE BOOL "" FORCE)
 set(WITH_IMAGE_TIFF          ON  CACHE BOOL "" FORCE)
+set(WITH_IMAGE_WEBP          ON  CACHE BOOL "" FORCE)
 set(WITH_INPUT_NDOF          ON  CACHE BOOL "" FORCE)
 set(WITH_INPUT_IME           ON  CACHE BOOL "" FORCE)
 set(WITH_INTERNATIONAL       ON  CACHE BOOL "" FORCE)

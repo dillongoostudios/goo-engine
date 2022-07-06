@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup collada
@@ -485,9 +471,9 @@ void MeshImporter::allocate_poly_data(COLLADAFW::Mesh *collada_mesh, Mesh *me)
             collada_mesh->getColors().getInputInfosArray()[i];
         COLLADAFW::String colname = extract_vcolname(info->mName);
         CustomData_add_layer_named(
-            &me->ldata, CD_MLOOPCOL, CD_DEFAULT, nullptr, me->totloop, colname.c_str());
+            &me->ldata, CD_PROP_BYTE_COLOR, CD_DEFAULT, nullptr, me->totloop, colname.c_str());
       }
-      me->mloopcol = (MLoopCol *)CustomData_get_layer_n(&me->ldata, CD_MLOOPCOL, 0);
+      me->mloopcol = (MLoopCol *)CustomData_get_layer_n(&me->ldata, CD_PROP_BYTE_COLOR, 0);
     }
   }
 }
@@ -738,7 +724,7 @@ void MeshImporter::read_polys(COLLADAFW::Mesh *collada_mesh, Mesh *me)
             COLLADAFW::IndexList &color_index_list = *mp->getColorIndices(vcolor_index);
             COLLADAFW::String colname = extract_vcolname(color_index_list.getName());
             MLoopCol *mloopcol = (MLoopCol *)CustomData_get_layer_named(
-                &me->ldata, CD_MLOOPCOL, colname.c_str());
+                &me->ldata, CD_PROP_BYTE_COLOR, colname.c_str());
             if (mloopcol == nullptr) {
               fprintf(stderr,
                       "Collada import: Mesh [%s] : Unknown reference to VCOLOR [#%s].\n",
@@ -1071,7 +1057,6 @@ Object *MeshImporter::create_mesh_object(
   Mesh *new_mesh = uid_mesh_map[*geom_uid];
 
   BKE_mesh_assign_object(m_bmain, ob, new_mesh);
-  BKE_mesh_calc_normals(new_mesh);
 
   /* Because BKE_mesh_assign_object would have already decreased it... */
   id_us_plus(&old_mesh->id);

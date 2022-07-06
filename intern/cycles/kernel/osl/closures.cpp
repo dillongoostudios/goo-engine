@@ -1,34 +1,10 @@
-/*
- * Adapted from Open Shading Language with this license:
+/* SPDX-License-Identifier: BSD-3-Clause
  *
+ * Adapted from Open Shading Language
  * Copyright (c) 2009-2010 Sony Pictures Imageworks Inc., et al.
  * All Rights Reserved.
  *
- * Modifications Copyright 2011-2018, Blender Foundation.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- * * Redistributions of source code must retain the above copyright
- *   notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- *   notice, this list of conditions and the following disclaimer in the
- *   documentation and/or other materials provided with the distribution.
- * * Neither the name of Sony Pictures Imageworks nor the names of its
- *   contributors may be used to endorse or promote products derived from
- *   this software without specific prior written permission.
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * Modifications Copyright 2011-2022 Blender Foundation. */
 
 #include <OSL/genclosure.h>
 #include <OSL/oslclosure.h>
@@ -204,6 +180,8 @@ class PrincipledSheenClosure : public CBSDFClosure {
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
     if (!skip(sd, path_flag, LABEL_DIFFUSE)) {
+      params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
       PrincipledSheenBsdf *bsdf = (PrincipledSheenBsdf *)bsdf_alloc_osl(
           sd, sizeof(PrincipledSheenBsdf), weight, &params);
       sd->flag |= (bsdf) ? bsdf_principled_sheen_setup(sd, bsdf) : 0;
@@ -247,6 +225,8 @@ class PrincipledHairClosure : public CBSDFClosure {
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
     if (!skip(sd, path_flag, LABEL_GLOSSY)) {
+      params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
       PrincipledHairBSDF *bsdf = (PrincipledHairBSDF *)alloc(sd, path_flag, weight);
       if (!bsdf) {
         return;
@@ -306,6 +286,7 @@ class PrincipledClearcoatClosure : public CBSDFClosure {
 
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -527,6 +508,8 @@ class MicrofacetClosure : public CBSDFClosure {
       return;
     }
 
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = (MicrofacetBsdf *)bsdf_alloc_osl(
         sd, sizeof(MicrofacetBsdf), weight, &params);
 
@@ -625,6 +608,8 @@ class MicrofacetGGXFresnelClosure : public MicrofacetFresnelClosure {
  public:
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -654,6 +639,8 @@ class MicrofacetGGXAnisoFresnelClosure : public MicrofacetFresnelClosure {
  public:
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -719,6 +706,8 @@ class MicrofacetMultiGGXClosure : public MicrofacetMultiClosure {
  public:
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -747,6 +736,8 @@ class MicrofacetMultiGGXAnisoClosure : public MicrofacetMultiClosure {
  public:
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -779,6 +770,8 @@ class MicrofacetMultiGGXGlassClosure : public MicrofacetMultiClosure {
 
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -843,6 +836,8 @@ class MicrofacetMultiGGXFresnelClosure : public MicrofacetMultiFresnelClosure {
  public:
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -873,6 +868,8 @@ class MicrofacetMultiGGXAnisoFresnelClosure : public MicrofacetMultiFresnelClosu
  public:
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;
@@ -907,6 +904,8 @@ class MicrofacetMultiGGXGlassFresnelClosure : public MicrofacetMultiFresnelClosu
 
   void setup(ShaderData *sd, uint32_t path_flag, float3 weight)
   {
+    params.N = ensure_valid_reflection(sd->Ng, sd->I, params.N);
+
     MicrofacetBsdf *bsdf = alloc(sd, path_flag, weight);
     if (!bsdf) {
       return;

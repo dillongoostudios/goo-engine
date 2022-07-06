@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edsculpt
@@ -241,7 +225,6 @@ static void SCULPT_dynamic_topology_disable_ex(
     /* Sync the visibility to vertices manually as the pmap is still not initialized. */
     for (int i = 0; i < me->totvert; i++) {
       me->mvert[i].flag &= ~ME_HIDE;
-      me->mvert[i].flag |= ME_VERT_PBVH_UPDATE;
     }
   }
 
@@ -291,7 +274,7 @@ void sculpt_dynamic_topology_disable_with_undo(Main *bmain,
     }
     SCULPT_dynamic_topology_disable_ex(bmain, depsgraph, scene, ob, NULL);
     if (use_undo) {
-      SCULPT_undo_push_end();
+      SCULPT_undo_push_end(ob);
     }
   }
 }
@@ -311,7 +294,7 @@ static void sculpt_dynamic_topology_enable_with_undo(Main *bmain,
     SCULPT_dynamic_topology_enable_ex(bmain, depsgraph, scene, ob);
     if (use_undo) {
       SCULPT_undo_push_node(ob, NULL, SCULPT_UNDO_DYNTOPO_BEGIN);
-      SCULPT_undo_push_end();
+      SCULPT_undo_push_end(ob);
     }
   }
 }

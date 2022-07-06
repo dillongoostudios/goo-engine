@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. */
 
 /** \file
  * \ingroup bke
@@ -218,8 +202,8 @@ static int stroke_march_next_point(const bGPDstroke *gps,
   int next_point_index = index_next_pt;
   bGPDspoint *pt = nullptr;
 
-  if (!(next_point_index < gps->totpoints)) {
-    return -1;
+  if (next_point_index == gps->totpoints) {
+    next_point_index = 0;
   }
 
   copy_v3_v3(step_start, current);
@@ -227,15 +211,34 @@ static int stroke_march_next_point(const bGPDstroke *gps,
   copy_v3_v3(point, &pt->x);
   remaining_till_next = len_v3v3(point, step_start);
 
-  while (remaining_till_next < remaining_march) {
+  while (remaining_till_next < remaining_march && next_point_index) {
     remaining_march -= remaining_till_next;
     pt = &gps->points[next_point_index];
+    if (pt->flag & GP_SPOINT_TEMP_TAG) {
+      pt = &gps->points[next_point_index];
+      copy_v3_v3(result, &pt->x);
+      *pressure = gps->points[next_point_index].pressure;
+      *strength = gps->points[next_point_index].strength;
+      memcpy(vert_color, gps->points[next_point_index].vert_color, sizeof(float[4]));
+
+      *index_from = next_point_index == 0 ? (gps->totpoints - 1) : (next_point_index - 1);
+      *index_to = next_point_index;
+      *ratio_result = 1.0f;
+      next_point_index++;
+      return next_point_index == 0 ? gps->totpoints : next_point_index;
+    }
+    next_point_index++;
     copy_v3_v3(point, &pt->x);
     copy_v3_v3(step_start, point);
-    next_point_index++;
     if (!(next_point_index < gps->totpoints)) {
-      next_point_index = gps->totpoints - 1;
-      break;
+      if (gps->flag & GP_STROKE_CYCLIC) {
+        next_point_index = 0;
+      }
+      else {
+        next_point_index = gps->totpoints - 1;
+        remaining_till_next = 0;
+        break;
+      }
     }
     pt = &gps->points[next_point_index];
     copy_v3_v3(point, &pt->x);
@@ -248,35 +251,40 @@ static int stroke_march_next_point(const bGPDstroke *gps,
     *strength = gps->points[next_point_index].strength;
     memcpy(vert_color, gps->points[next_point_index].vert_color, sizeof(float[4]));
 
-    *index_from = next_point_index - 1;
+    *index_from = next_point_index == 0 ? (gps->totpoints - 1) : (next_point_index - 1);
     *index_to = next_point_index;
     *ratio_result = 1.0f;
 
     return 0;
   }
 
+  *index_from = next_point_index == 0 ? (gps->totpoints - 1) : (next_point_index - 1);
+  *index_to = next_point_index;
+
   float ratio = remaining_march / remaining_till_next;
   interp_v3_v3v3(result, step_start, point, ratio);
-  *pressure = interpf(
-      gps->points[next_point_index].pressure, gps->points[next_point_index - 1].pressure, ratio);
-  *strength = interpf(
-      gps->points[next_point_index].strength, gps->points[next_point_index - 1].strength, ratio);
-  interp_v4_v4v4(vert_color,
-                 gps->points[next_point_index - 1].vert_color,
-                 gps->points[next_point_index].vert_color,
-                 ratio);
-
-  *index_from = next_point_index - 1;
-  *index_to = next_point_index;
   *ratio_result = ratio;
+  float d1 = len_v3v3(result, &gps->points[*index_from].x);
+  float d2 = len_v3v3(result, &gps->points[next_point_index].x);
+  float vratio = d1 / (d1 + d2);
 
-  return next_point_index;
+  *pressure = interpf(
+      gps->points[next_point_index].pressure, gps->points[*index_from].pressure, vratio);
+  *strength = interpf(
+      gps->points[next_point_index].strength, gps->points[*index_from].strength, vratio);
+  interp_v4_v4v4(vert_color,
+                 gps->points[*index_from].vert_color,
+                 gps->points[next_point_index].vert_color,
+                 vratio);
+
+  return next_point_index == 0 ? gps->totpoints : next_point_index;
 }
 
 static int stroke_march_next_point_no_interp(const bGPDstroke *gps,
                                              const int index_next_pt,
                                              const float *current,
                                              const float dist,
+                                             const float sharp_threshold,
                                              float *result)
 {
   float remaining_till_next = 0.0f;
@@ -286,8 +294,8 @@ static int stroke_march_next_point_no_interp(const bGPDstroke *gps,
   int next_point_index = index_next_pt;
   bGPDspoint *pt = nullptr;
 
-  if (!(next_point_index < gps->totpoints)) {
-    return -1;
+  if (next_point_index == gps->totpoints) {
+    next_point_index = 0;
   }
 
   copy_v3_v3(step_start, current);
@@ -295,15 +303,30 @@ static int stroke_march_next_point_no_interp(const bGPDstroke *gps,
   copy_v3_v3(point, &pt->x);
   remaining_till_next = len_v3v3(point, step_start);
 
-  while (remaining_till_next < remaining_march) {
+  while (remaining_till_next < remaining_march && next_point_index) {
     remaining_march -= remaining_till_next;
     pt = &gps->points[next_point_index];
+    if (next_point_index < gps->totpoints - 1 &&
+        angle_v3v3v3(&gps->points[next_point_index - 1].x,
+                     &gps->points[next_point_index].x,
+                     &gps->points[next_point_index + 1].x) < sharp_threshold) {
+      copy_v3_v3(result, &pt->x);
+      pt->flag |= GP_SPOINT_TEMP_TAG;
+      next_point_index++;
+      return next_point_index == 0 ? gps->totpoints : next_point_index;
+    }
+    next_point_index++;
     copy_v3_v3(point, &pt->x);
     copy_v3_v3(step_start, point);
-    next_point_index++;
     if (!(next_point_index < gps->totpoints)) {
-      next_point_index = gps->totpoints - 1;
-      break;
+      if (gps->flag & GP_STROKE_CYCLIC) {
+        next_point_index = 0;
+      }
+      else {
+        next_point_index = gps->totpoints - 1;
+        remaining_till_next = 0;
+        break;
+      }
     }
     pt = &gps->points[next_point_index];
     copy_v3_v3(point, &pt->x);
@@ -312,15 +335,16 @@ static int stroke_march_next_point_no_interp(const bGPDstroke *gps,
   if (remaining_till_next < remaining_march) {
     pt = &gps->points[next_point_index];
     copy_v3_v3(result, &pt->x);
+    /* Stroke marching only terminates here. */
     return 0;
   }
 
   float ratio = remaining_march / remaining_till_next;
   interp_v3_v3v3(result, step_start, point, ratio);
-  return next_point_index;
+  return next_point_index == 0 ? gps->totpoints : next_point_index;
 }
 
-static int stroke_march_count(const bGPDstroke *gps, const float dist)
+static int stroke_march_count(const bGPDstroke *gps, const float dist, const float sharp_threshold)
 {
   int point_count = 0;
   float point[3];
@@ -331,8 +355,13 @@ static int stroke_march_count(const bGPDstroke *gps, const float dist)
   copy_v3_v3(point, &pt->x);
   point_count++;
 
+  /* Sharp points will be tagged by the stroke_march_next_point_no_interp() call below. */
+  for (int i = 0; i < gps->totpoints; i++) {
+    gps->points[i].flag &= (~GP_SPOINT_TEMP_TAG);
+  }
+
   while ((next_point_index = stroke_march_next_point_no_interp(
-              gps, next_point_index, point, dist, point)) > -1) {
+              gps, next_point_index, point, dist, sharp_threshold, point)) > -1) {
     point_count++;
     if (next_point_index == 0) {
       break; /* last point finished */
@@ -410,7 +439,11 @@ static void stroke_interpolate_deform_weights(
   }
 }
 
-bool BKE_gpencil_stroke_sample(bGPdata *gpd, bGPDstroke *gps, const float dist, const bool select)
+bool BKE_gpencil_stroke_sample(bGPdata *gpd,
+                               bGPDstroke *gps,
+                               const float dist,
+                               const bool select,
+                               const float sharp_threshold)
 {
   bGPDspoint *pt = gps->points;
   bGPDspoint *pt1 = nullptr;
@@ -422,7 +455,11 @@ bool BKE_gpencil_stroke_sample(bGPdata *gpd, bGPDstroke *gps, const float dist, 
     return false;
   }
   /* TODO: Implement feature point preservation. */
-  int count = stroke_march_count(gps, dist);
+  int count = stroke_march_count(gps, dist, sharp_threshold);
+  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
+  if (is_cyclic) {
+    count--;
+  }
 
   bGPDspoint *new_pt = (bGPDspoint *)MEM_callocN(sizeof(bGPDspoint) * count,
                                                  "gp_stroke_points_sampled");
@@ -471,6 +508,9 @@ bool BKE_gpencil_stroke_sample(bGPdata *gpd, bGPDstroke *gps, const float dist, 
                                                      &ratio_result,
                                                      &index_from,
                                                      &index_to)) > -1) {
+    if (is_cyclic && next_point_index == 0) {
+      break; /* last point finished */
+    }
     pt2 = &new_pt[i];
     copy_v3_v3(&pt2->x, last_coord);
     new_pt[i].pressure = pressure;
@@ -505,6 +545,7 @@ bool BKE_gpencil_stroke_sample(bGPdata *gpd, bGPDstroke *gps, const float dist, 
     gps->dvert = new_dv;
   }
 
+  BLI_assert(i == count);
   gps->totpoints = i;
 
   /* Calc geometry data. */
@@ -536,11 +577,11 @@ static bool BKE_gpencil_stroke_extra_points(bGPDstroke *gps,
   bGPDspoint *new_pts = (bGPDspoint *)MEM_mallocN(sizeof(bGPDspoint) * new_count, __func__);
 
   for (int i = 0; i < count_before; i++) {
-    memcpy(&new_pts[i], &pts[0], sizeof(bGPDspoint));
+    new_pts[i] = blender::dna::shallow_copy(pts[0]);
   }
-  memcpy(&new_pts[count_before], pts, sizeof(bGPDspoint) * gps->totpoints);
+  memcpy(static_cast<void *>(&new_pts[count_before]), pts, sizeof(bGPDspoint) * gps->totpoints);
   for (int i = new_count - count_after; i < new_count; i++) {
-    memcpy(&new_pts[i], &pts[gps->totpoints - 1], sizeof(bGPDspoint));
+    new_pts[i] = blender::dna::shallow_copy(pts[gps->totpoints - 1]);
   }
 
   if (gps->dvert) {
@@ -773,7 +814,7 @@ bool BKE_gpencil_stroke_trim_points(bGPDstroke *gps, const int index_from, const
   }
 
   new_pt = (bGPDspoint *)MEM_mallocN(sizeof(bGPDspoint) * new_count, "gp_stroke_points_trimmed");
-  memcpy(new_pt, &pt[index_from], sizeof(bGPDspoint) * new_count);
+  memcpy(static_cast<void *>(new_pt), &pt[index_from], sizeof(bGPDspoint) * new_count);
 
   if (gps->dvert) {
     new_dv = (MDeformVert *)MEM_mallocN(sizeof(MDeformVert) * new_count,
@@ -830,7 +871,7 @@ bool BKE_gpencil_stroke_split(bGPdata *gpd,
       gpf, gps, gps->mat_nr, new_count, gps->thickness);
 
   new_pt = new_gps->points; /* Allocated from above. */
-  memcpy(new_pt, &pt[before_index], sizeof(bGPDspoint) * new_count);
+  memcpy(static_cast<void *>(new_pt), &pt[before_index], sizeof(bGPDspoint) * new_count);
 
   if (gps->dvert) {
     new_dv = (MDeformVert *)MEM_mallocN(sizeof(MDeformVert) * new_count,
@@ -944,74 +985,116 @@ bool BKE_gpencil_stroke_shrink(bGPDstroke *gps, const float dist, const short mo
 /** \name Stroke Smooth Positions
  * \{ */
 
-bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps, int i, float inf, const bool smooth_caps)
+bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps,
+                                     int point_index,
+                                     float influence,
+                                     int iterations,
+                                     const bool smooth_caps,
+                                     const bool keep_shape,
+                                     bGPDstroke *r_gps)
 {
-  bGPDspoint *pt = &gps->points[i];
-  float sco[3] = {0.0f};
-  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
-
-  /* Do nothing if not enough points to smooth out */
-  if (gps->totpoints <= 2) {
+  /* If nothing to do, return early */
+  if (gps->totpoints <= 2 || iterations <= 0) {
     return false;
   }
 
-  /* Only affect endpoints by a fraction of the normal strength,
-   * to prevent the stroke from shrinking too much
+  /* Overview of the algorithm here and in the following smooth functions:
+   *  The smooth functions return the new attribute in question for a single point.
+   *  The result is stored in r_gps->points[point_index], while the data is read from gps.
+   *  To get a correct result, duplicate the stroke point data and read from the copy,
+   *  while writing to the real stroke. Not doing that will result in acceptable, but
+   *  asymmetric results.
+   * This algorithm works as long as all points are being smoothed. If there is
+   * points that should not get smoothed, use the old repeat smooth pattern with
+   * the parameter "iterations" set to 1 or 2. (2 matches the old algorithm).
    */
-  if ((!smooth_caps) && (!is_cyclic && ELEM(i, 0, gps->totpoints - 1))) {
-    inf *= 0.1f;
+
+  const bGPDspoint *pt = &gps->points[point_index];
+  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
+  /* If smooth_caps is false, the caps will not be translated by smoothing. */
+  if (!smooth_caps && !is_cyclic && ELEM(point_index, 0, gps->totpoints - 1)) {
+    copy_v3_v3(&r_gps->points[point_index].x, &pt->x);
+    return true;
   }
 
-  /* Compute smoothed coordinate by taking the ones nearby */
-  /* XXX: This is potentially slow,
-   *      and suffers from accumulation error as earlier points are handled before later ones. */
-  {
-    /* XXX: this is hardcoded to look at 2 points on either side of the current one
-     * (i.e. 5 items total). */
-    const int steps = 2;
-    const float average_fac = 1.0f / (float)(steps * 2 + 1);
-    int step;
+  /* This function uses a binomial kernel, which is the discrete version of gaussian blur.
+   * The weight for a vertex at the relative index point_index is
+   * w = nCr(n, j + n/2) / 2^n = (n/1 * (n-1)/2 * ... * (n-j-n/2)/(j+n/2)) / 2^n
+   * All weights together sum up to 1
+   * This is equivalent to doing multiple iterations of averaging neighbors,
+   * where n = iterations * 2 and -n/2 <= j <= n/2
+   *
+   * Now the problem is that nCr(n, j + n/2) is very hard to compute for n > 500, since even
+   * double precision isn't sufficient. A very good robust approximation for n > 20 is
+   * nCr(n, j + n/2) / 2^n = sqrt(2/(pi*n)) * exp(-2*j*j/n)
+   *
+   * There is one more problem left: The old smooth algorithm was doing a more aggressive
+   * smooth. To solve that problem, choose a different n/2, which does not match the range and
+   * normalize the weights on finish. This may cause some artifacts at low values.
+   *
+   * keep_shape is a new option to stop the stroke from severely deforming.
+   * It uses different partially negative weights.
+   * w = 2 * (nCr(n, j + n/2) / 2^n) - (nCr(3*n, j + n) / 2^(3*n))
+   *   ~ 2 * sqrt(2/(pi*n)) * exp(-2*j*j/n) - sqrt(2/(pi*3*n)) * exp(-2*j*j/(3*n))
+   * All weights still sum up to 1.
+   * Note these weights only work because the averaging is done in relative coordinates.
+   */
+  float sco[3] = {0.0f, 0.0f, 0.0f};
+  float tmp[3];
+  const int n_half = keep_shape ? (iterations * iterations) / 8 + iterations :
+                                  (iterations * iterations) / 4 + 2 * iterations + 12;
+  double w = keep_shape ? 2.0 : 1.0;
+  double w2 = keep_shape ?
+                  (1.0 / M_SQRT3) * exp((2 * iterations * iterations) / (double)(n_half * 3)) :
+                  0.0;
+  double total_w = 0.0;
+  for (int step = iterations; step > 0; step--) {
+    int before = point_index - step;
+    int after = point_index + step;
+    float w_before = (float)(w - w2);
+    float w_after = (float)(w - w2);
 
-    /* add the point itself */
-    madd_v3_v3fl(sco, &pt->x, average_fac);
-
-    /* n-steps before/after current point */
-    /* XXX: review how the endpoints are treated by this algorithm. */
-    /* XXX: falloff measures should also introduce some weighting variations,
-     *      so that further-out points get less weight. */
-    for (step = 1; step <= steps; step++) {
-      bGPDspoint *pt1, *pt2;
-      int before = i - step;
-      int after = i + step;
-
-      if (is_cyclic) {
-        if (before < 0) {
-          /* Sub to end point (before is already negative). */
-          before = gps->totpoints + before;
-          CLAMP(before, 0, gps->totpoints - 1);
-        }
-        if (after > gps->totpoints - 1) {
-          /* Add to start point. */
-          after = after - gps->totpoints;
-          CLAMP(after, 0, gps->totpoints - 1);
-        }
-      }
-      else {
-        CLAMP_MIN(before, 0);
-        CLAMP_MAX(after, gps->totpoints - 1);
-      }
-
-      pt1 = &gps->points[before];
-      pt2 = &gps->points[after];
-
-      /* add both these points to the average-sum (s += p[i]/n) */
-      madd_v3_v3fl(sco, &pt1->x, average_fac);
-      madd_v3_v3fl(sco, &pt2->x, average_fac);
+    if (is_cyclic) {
+      before = (before % gps->totpoints + gps->totpoints) % gps->totpoints;
+      after = after % gps->totpoints;
     }
-  }
+    else {
+      if (before < 0) {
+        if (!smooth_caps) {
+          w_before *= -before / (float)point_index;
+        }
+        before = 0;
+      }
+      if (after > gps->totpoints - 1) {
+        if (!smooth_caps) {
+          w_after *= (after - (gps->totpoints - 1)) / (float)(gps->totpoints - 1 - point_index);
+        }
+        after = gps->totpoints - 1;
+      }
+    }
 
-  /* Based on influence factor, blend between original and optimal smoothed coordinate */
-  interp_v3_v3v3(&pt->x, &pt->x, sco, inf);
+    /* Add both these points in relative coordinates to the weighted average sum. */
+    sub_v3_v3v3(tmp, &gps->points[before].x, &pt->x);
+    madd_v3_v3fl(sco, tmp, w_before);
+    sub_v3_v3v3(tmp, &gps->points[after].x, &pt->x);
+    madd_v3_v3fl(sco, tmp, w_after);
+
+    total_w += w_before;
+    total_w += w_after;
+
+    w *= (n_half + step) / (double)(n_half + 1 - step);
+    w2 *= (n_half * 3 + step) / (double)(n_half * 3 + 1 - step);
+  }
+  total_w += w - w2;
+  /* The accumulated weight total_w should be
+   * ~sqrt(M_PI * n_half) * exp((iterations * iterations) / n_half) < 100
+   * here, but sometimes not quite. */
+  mul_v3_fl(sco, (float)(1.0 / total_w));
+  /* Shift back to global coordinates. */
+  add_v3_v3(sco, &pt->x);
+
+  /* Based on influence factor, blend between original and optimal smoothed coordinate. */
+  interp_v3_v3v3(&r_gps->points[point_index].x, &pt->x, sco, influence);
 
   return true;
 }
@@ -1022,74 +1105,54 @@ bool BKE_gpencil_stroke_smooth_point(bGPDstroke *gps, int i, float inf, const bo
 /** \name Stroke Smooth Strength
  * \{ */
 
-bool BKE_gpencil_stroke_smooth_strength(bGPDstroke *gps, int point_index, float influence)
+bool BKE_gpencil_stroke_smooth_strength(
+    bGPDstroke *gps, int point_index, float influence, int iterations, bGPDstroke *r_gps)
 {
-  bGPDspoint *ptb = &gps->points[point_index];
-  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
-
-  /* Do nothing if not enough points */
-  if ((gps->totpoints <= 2) || (point_index < 1)) {
+  /* If nothing to do, return early */
+  if (gps->totpoints <= 2 || iterations <= 0) {
     return false;
   }
-  /* Only affect endpoints by a fraction of the normal influence */
-  float inf = influence;
-  if (!is_cyclic && ELEM(point_index, 0, gps->totpoints - 1)) {
-    inf *= 0.01f;
-  }
-  /* Limit max influence to reduce pop effect. */
-  CLAMP_MAX(inf, 0.98f);
 
-  float total = 0.0f;
-  float max_strength = 0.0f;
-  const int steps = 4;
-  const float average_fac = 1.0f / (float)(steps * 2 + 1);
-  int step;
+  /* See BKE_gpencil_stroke_smooth_point for details on the algorithm. */
 
-  /* add the point itself */
-  total += ptb->strength * average_fac;
-  max_strength = ptb->strength;
-
-  /* n-steps before/after current point */
-  for (step = 1; step <= steps; step++) {
-    bGPDspoint *pt1, *pt2;
+  const bGPDspoint *pt = &gps->points[point_index];
+  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
+  float strength = 0.0f;
+  const int n_half = (iterations * iterations) / 4 + iterations;
+  double w = 1.0;
+  double total_w = 0.0;
+  for (int step = iterations; step > 0; step--) {
     int before = point_index - step;
     int after = point_index + step;
+    float w_before = (float)w;
+    float w_after = (float)w;
 
     if (is_cyclic) {
-      if (before < 0) {
-        /* Sub to end point (before is already negative). */
-        before = gps->totpoints + before;
-        CLAMP(before, 0, gps->totpoints - 1);
-      }
-      if (after > gps->totpoints - 1) {
-        /* Add to start point. */
-        after = after - gps->totpoints;
-        CLAMP(after, 0, gps->totpoints - 1);
-      }
+      before = (before % gps->totpoints + gps->totpoints) % gps->totpoints;
+      after = after % gps->totpoints;
     }
     else {
       CLAMP_MIN(before, 0);
       CLAMP_MAX(after, gps->totpoints - 1);
     }
-    pt1 = &gps->points[before];
-    pt2 = &gps->points[after];
 
-    /* add both these points to the average-sum (s += p[i]/n) */
-    total += pt1->strength * average_fac;
-    total += pt2->strength * average_fac;
-    /* Save max value. */
-    if (max_strength < pt1->strength) {
-      max_strength = pt1->strength;
-    }
-    if (max_strength < pt2->strength) {
-      max_strength = pt2->strength;
-    }
+    /* Add both these points in relative coordinates to the weighted average sum. */
+    strength += w_before * (gps->points[before].strength - pt->strength);
+    strength += w_after * (gps->points[after].strength - pt->strength);
+
+    total_w += w_before;
+    total_w += w_after;
+
+    w *= (n_half + step) / (double)(n_half + 1 - step);
   }
+  total_w += w;
+  /* The accumulated weight total_w should be
+   * ~sqrt(M_PI * n_half) * exp((iterations * iterations) / n_half) < 100
+   * here, but sometimes not quite. */
+  strength /= total_w;
 
   /* Based on influence factor, blend between original and optimal smoothed value. */
-  ptb->strength = interpf(ptb->strength, total, inf);
-  /* Clamp to maximum stroke strength to avoid weird results. */
-  CLAMP_MAX(ptb->strength, max_strength);
+  r_gps->points[point_index].strength = pt->strength + strength * influence;
 
   return true;
 }
@@ -1100,74 +1163,55 @@ bool BKE_gpencil_stroke_smooth_strength(bGPDstroke *gps, int point_index, float 
 /** \name Stroke Smooth Thickness
  * \{ */
 
-bool BKE_gpencil_stroke_smooth_thickness(bGPDstroke *gps, int point_index, float influence)
+bool BKE_gpencil_stroke_smooth_thickness(
+    bGPDstroke *gps, int point_index, float influence, int iterations, bGPDstroke *r_gps)
 {
-  bGPDspoint *ptb = &gps->points[point_index];
-  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
-
-  /* Do nothing if not enough points */
-  if ((gps->totpoints <= 2) || (point_index < 1)) {
+  /* If nothing to do, return early */
+  if (gps->totpoints <= 2 || iterations <= 0) {
     return false;
   }
-  /* Only affect endpoints by a fraction of the normal influence */
-  float inf = influence;
-  if (!is_cyclic && ELEM(point_index, 0, gps->totpoints - 1)) {
-    inf *= 0.01f;
-  }
-  /* Limit max influence to reduce pop effect. */
-  CLAMP_MAX(inf, 0.98f);
 
-  float total = 0.0f;
-  float max_pressure = 0.0f;
-  const int steps = 4;
-  const float average_fac = 1.0f / (float)(steps * 2 + 1);
-  int step;
+  /* See BKE_gpencil_stroke_smooth_point for details on the algorithm. */
 
-  /* add the point itself */
-  total += ptb->pressure * average_fac;
-  max_pressure = ptb->pressure;
-
-  /* n-steps before/after current point */
-  for (step = 1; step <= steps; step++) {
-    bGPDspoint *pt1, *pt2;
+  const bGPDspoint *pt = &gps->points[point_index];
+  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
+  float pressure = 0.0f;
+  const int n_half = (iterations * iterations) / 4 + iterations;
+  double w = 1.0;
+  double total_w = 0.0;
+  for (int step = iterations; step > 0; step--) {
     int before = point_index - step;
     int after = point_index + step;
+    float w_before = (float)w;
+    float w_after = (float)w;
 
     if (is_cyclic) {
-      if (before < 0) {
-        /* Sub to end point (before is already negative). */
-        before = gps->totpoints + before;
-        CLAMP(before, 0, gps->totpoints - 1);
-      }
-      if (after > gps->totpoints - 1) {
-        /* Add to start point. */
-        after = after - gps->totpoints;
-        CLAMP(after, 0, gps->totpoints - 1);
-      }
+      before = (before % gps->totpoints + gps->totpoints) % gps->totpoints;
+      after = after % gps->totpoints;
     }
     else {
       CLAMP_MIN(before, 0);
       CLAMP_MAX(after, gps->totpoints - 1);
     }
-    pt1 = &gps->points[before];
-    pt2 = &gps->points[after];
 
-    /* add both these points to the average-sum (s += p[i]/n) */
-    total += pt1->pressure * average_fac;
-    total += pt2->pressure * average_fac;
-    /* Save max value. */
-    if (max_pressure < pt1->pressure) {
-      max_pressure = pt1->pressure;
-    }
-    if (max_pressure < pt2->pressure) {
-      max_pressure = pt2->pressure;
-    }
+    /* Add both these points in relative coordinates to the weighted average sum. */
+    pressure += w_before * (gps->points[before].pressure - pt->pressure);
+    pressure += w_after * (gps->points[after].pressure - pt->pressure);
+
+    total_w += w_before;
+    total_w += w_after;
+
+    w *= (n_half + step) / (double)(n_half + 1 - step);
   }
+  total_w += w;
+  /* The accumulated weight total_w should be
+   * ~sqrt(M_PI * n_half) * exp((iterations * iterations) / n_half) < 100
+   * here, but sometimes not quite. */
+  pressure /= total_w;
 
   /* Based on influence factor, blend between original and optimal smoothed value. */
-  ptb->pressure = interpf(ptb->pressure, total, inf);
-  /* Clamp to maximum stroke thickness to avoid weird results. */
-  CLAMP_MAX(ptb->pressure, max_pressure);
+  r_gps->points[point_index].pressure = pt->pressure + pressure * influence;
+
   return true;
 }
 
@@ -1177,55 +1221,128 @@ bool BKE_gpencil_stroke_smooth_thickness(bGPDstroke *gps, int point_index, float
 /** \name Stroke Smooth UV
  * \{ */
 
-bool BKE_gpencil_stroke_smooth_uv(bGPDstroke *gps, int point_index, float influence)
+bool BKE_gpencil_stroke_smooth_uv(struct bGPDstroke *gps,
+                                  int point_index,
+                                  float influence,
+                                  int iterations,
+                                  struct bGPDstroke *r_gps)
 {
-  bGPDspoint *ptb = &gps->points[point_index];
-  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
-
-  /* Do nothing if not enough points */
-  if (gps->totpoints <= 2) {
+  /* If nothing to do, return early */
+  if (gps->totpoints <= 2 || iterations <= 0) {
     return false;
   }
 
-  /* Compute theoretical optimal value */
-  bGPDspoint *pta, *ptc;
-  int before = point_index - 1;
-  int after = point_index + 1;
+  /* See BKE_gpencil_stroke_smooth_point for details on the algorithm. */
 
-  if (is_cyclic) {
-    if (before < 0) {
-      /* Sub to end point (before is already negative). */
-      before = gps->totpoints + before;
-      CLAMP(before, 0, gps->totpoints - 1);
+  const bGPDspoint *pt = &gps->points[point_index];
+  const bool is_cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
+
+  /* If don't change the caps. */
+  if (!is_cyclic && ELEM(point_index, 0, gps->totpoints - 1)) {
+    r_gps->points[point_index].uv_rot = pt->uv_rot;
+    r_gps->points[point_index].uv_fac = pt->uv_fac;
+    return true;
+  }
+
+  float uv_rot = 0.0f;
+  float uv_fac = 0.0f;
+  const int n_half = iterations * iterations + iterations;
+  double w = 1.0;
+  double total_w = 0.0;
+  for (int step = iterations; step > 0; step--) {
+    int before = point_index - step;
+    int after = point_index + step;
+    float w_before = (float)w;
+    float w_after = (float)w;
+
+    if (is_cyclic) {
+      before = (before % gps->totpoints + gps->totpoints) % gps->totpoints;
+      after = after % gps->totpoints;
     }
-    if (after > gps->totpoints - 1) {
-      /* Add to start point. */
-      after = after - gps->totpoints;
-      CLAMP(after, 0, gps->totpoints - 1);
+    else {
+      if (before < 0) {
+        w_before *= -before / (float)point_index;
+        before = 0;
+      }
+      if (after > gps->totpoints - 1) {
+        w_after *= (after - (gps->totpoints - 1)) / (float)(gps->totpoints - 1 - point_index);
+        after = gps->totpoints - 1;
+      }
     }
-  }
-  else {
-    CLAMP_MIN(before, 0);
-    CLAMP_MAX(after, gps->totpoints - 1);
-  }
-  pta = &gps->points[before];
-  ptc = &gps->points[after];
 
-  /* the optimal value is the corresponding to the interpolation of the pressure
-   * at the distance of point b
-   */
-  float fac = line_point_factor_v3(&ptb->x, &pta->x, &ptc->x);
-  /* sometimes the factor can be wrong due stroke geometry, so use middle point */
-  if ((fac < 0.0f) || (fac > 1.0f)) {
-    fac = 0.5f;
-  }
-  float optimal = interpf(ptc->uv_rot, pta->uv_rot, fac);
+    /* Add both these points in relative coordinates to the weighted average sum. */
+    uv_rot += w_before * (gps->points[before].uv_rot - pt->uv_rot);
+    uv_rot += w_after * (gps->points[after].uv_rot - pt->uv_rot);
+    uv_fac += w_before * (gps->points[before].uv_fac - pt->uv_fac);
+    uv_fac += w_after * (gps->points[after].uv_fac - pt->uv_fac);
 
-  /* Based on influence factor, blend between original and optimal */
-  ptb->uv_rot = interpf(optimal, ptb->uv_rot, influence);
-  CLAMP(ptb->uv_rot, -M_PI_2, M_PI_2);
+    total_w += w_before;
+    total_w += w_after;
+
+    w *= (n_half + step) / (double)(n_half + 1 - step);
+  }
+  total_w += w;
+  /* The accumulated weight total_w should be
+   * ~sqrt(M_PI * n_half) * exp((iterations * iterations) / n_half) < 100
+   * here, but sometimes not quite. */
+  uv_rot /= total_w;
+  uv_fac /= total_w;
+
+  /* Based on influence factor, blend between original and optimal smoothed value. */
+  r_gps->points[point_index].uv_rot = pt->uv_rot + uv_rot * influence;
+  r_gps->points[point_index].uv_fac = pt->uv_fac + uv_fac * influence;
 
   return true;
+}
+
+void BKE_gpencil_stroke_smooth(bGPDstroke *gps,
+                               const float influence,
+                               const int iterations,
+                               const bool smooth_position,
+                               const bool smooth_strength,
+                               const bool smooth_thickness,
+                               const bool smooth_uv,
+                               const bool keep_shape,
+                               const float *weights)
+{
+  if (influence <= 0 || iterations <= 0) {
+    return;
+  }
+
+  /* Make a copy of the point data to avoid directionality of the smooth operation. */
+  bGPDstroke gps_old = blender::dna::shallow_copy(*gps);
+  gps_old.points = (bGPDspoint *)MEM_dupallocN(gps->points);
+
+  /* Smooth stroke. */
+  for (int i = 0; i < gps->totpoints; i++) {
+    float val = influence;
+    if (weights != nullptr) {
+      val *= weights[i];
+      if (val <= 0.0f) {
+        continue;
+      }
+    }
+
+    /* TODO: Currently the weights only control the influence, but is would be much better if they
+     * would control the distribution used in smooth, similar to how the ends are handled. */
+
+    /* Perform smoothing. */
+    if (smooth_position) {
+      BKE_gpencil_stroke_smooth_point(&gps_old, i, val, iterations, false, keep_shape, gps);
+    }
+    if (smooth_strength) {
+      BKE_gpencil_stroke_smooth_strength(&gps_old, i, val, iterations, gps);
+    }
+    if (smooth_thickness) {
+      BKE_gpencil_stroke_smooth_thickness(&gps_old, i, val, iterations, gps);
+    }
+    if (smooth_uv) {
+      BKE_gpencil_stroke_smooth_uv(&gps_old, i, val, iterations, gps);
+    }
+  }
+
+  /* Free the copied points array. */
+  MEM_freeN(gps_old.points);
 }
 
 void BKE_gpencil_stroke_2d_flat(const bGPDspoint *points,
@@ -1656,7 +1773,7 @@ bool BKE_gpencil_stroke_trim(bGPdata *gpd, bGPDstroke *gps)
       int idx = start + i;
       bGPDspoint *pt_src = &old_points[idx];
       bGPDspoint *pt_new = &gps->points[i];
-      memcpy(pt_new, pt_src, sizeof(bGPDspoint));
+      *pt_new = blender::dna::shallow_copy(*pt_src);
       if (gps->dvert != nullptr) {
         dvert_src = &old_dvert[idx];
         MDeformVert *dvert = &gps->dvert[i];
@@ -1821,7 +1938,7 @@ void BKE_gpencil_dissolve_points(bGPdata *gpd, bGPDframe *gpf, bGPDstroke *gps, 
     (gps->dvert != nullptr) ? dvert = gps->dvert : nullptr;
     for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
       if ((pt->flag & tag) == 0) {
-        *npt = *pt;
+        *npt = blender::dna::shallow_copy(*pt);
         npt++;
 
         if (gps->dvert != nullptr) {
@@ -1971,7 +2088,7 @@ void BKE_gpencil_stroke_simplify_adaptive(bGPdata *gpd, bGPDstroke *gps, float e
     bGPDspoint *pt = &gps->points[j];
 
     if ((marked[i]) || (i == 0) || (i == totpoints - 1)) {
-      memcpy(pt, pt_src, sizeof(bGPDspoint));
+      *pt = blender::dna::shallow_copy(*pt_src);
       if (gps->dvert != nullptr) {
         dvert_src = &old_dvert[i];
         MDeformVert *dvert = &gps->dvert[j];
@@ -2002,7 +2119,7 @@ void BKE_gpencil_stroke_simplify_adaptive(bGPdata *gpd, bGPDstroke *gps, float e
 
 void BKE_gpencil_stroke_simplify_fixed(bGPdata *gpd, bGPDstroke *gps)
 {
-  if (gps->totpoints < 5) {
+  if (gps->totpoints < 4) {
     return;
   }
 
@@ -2017,7 +2134,7 @@ void BKE_gpencil_stroke_simplify_fixed(bGPdata *gpd, bGPDstroke *gps)
 
   /* resize gps */
   int newtot = (gps->totpoints - 2) / 2;
-  if (((gps->totpoints - 2) % 2) > 0) {
+  if ((gps->totpoints % 2) != 0) {
     newtot++;
   }
   newtot += 2;
@@ -2033,7 +2150,7 @@ void BKE_gpencil_stroke_simplify_fixed(bGPdata *gpd, bGPDstroke *gps)
     bGPDspoint *pt = &gps->points[j];
 
     if ((i == 0) || (i == gps->totpoints - 1) || ((i % 2) > 0.0)) {
-      memcpy(pt, pt_src, sizeof(bGPDspoint));
+      *pt = blender::dna::shallow_copy(*pt_src);
       if (gps->dvert != nullptr) {
         dvert_src = &old_dvert[i];
         MDeformVert *dvert = &gps->dvert[j];
@@ -2068,27 +2185,30 @@ void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int 
   MDeformVert *dvert_final = nullptr;
   MDeformVert *dvert_next = nullptr;
   int totnewpoints, oldtotpoints;
-  int i2;
+
+  bool cyclic = (gps->flag & GP_STROKE_CYCLIC) != 0;
 
   for (int s = 0; s < level; s++) {
-    totnewpoints = gps->totpoints - 1;
+    totnewpoints = gps->totpoints;
+    if (!cyclic) {
+      totnewpoints--;
+    }
     /* duplicate points in a temp area */
-    temp_points = (bGPDspoint *)MEM_dupallocN(gps->points);
+    temp_points = gps->points;
     oldtotpoints = gps->totpoints;
 
     /* resize the points arrays */
     gps->totpoints += totnewpoints;
-    gps->points = (bGPDspoint *)MEM_recallocN(gps->points, sizeof(*gps->points) * gps->totpoints);
+    gps->points = (bGPDspoint *)MEM_malloc_arrayN(gps->totpoints, sizeof(*gps->points), __func__);
     if (gps->dvert != nullptr) {
-      temp_dverts = (MDeformVert *)MEM_dupallocN(gps->dvert);
-      gps->dvert = (MDeformVert *)MEM_recallocN(gps->dvert, sizeof(*gps->dvert) * gps->totpoints);
+      temp_dverts = gps->dvert;
+      gps->dvert = (MDeformVert *)MEM_malloc_arrayN(gps->totpoints, sizeof(*gps->dvert), __func__);
     }
 
     /* move points from last to first to new place */
-    i2 = gps->totpoints - 1;
-    for (int i = oldtotpoints - 1; i > 0; i--) {
+    for (int i = 0; i < oldtotpoints; i++) {
       bGPDspoint *pt = &temp_points[i];
-      bGPDspoint *pt_final = &gps->points[i2];
+      bGPDspoint *pt_final = &gps->points[i * 2];
 
       copy_v3_v3(&pt_final->x, &pt->x);
       pt_final->pressure = pt->pressure;
@@ -2101,18 +2221,16 @@ void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int 
 
       if (gps->dvert != nullptr) {
         dvert = &temp_dverts[i];
-        dvert_final = &gps->dvert[i2];
+        dvert_final = &gps->dvert[i * 2];
         dvert_final->totweight = dvert->totweight;
         dvert_final->dw = dvert->dw;
       }
-      i2 -= 2;
     }
     /* interpolate mid points */
-    i2 = 1;
-    for (int i = 0; i < oldtotpoints - 1; i++) {
-      bGPDspoint *pt = &temp_points[i];
-      bGPDspoint *next = &temp_points[i + 1];
-      bGPDspoint *pt_final = &gps->points[i2];
+    for (int i = cyclic ? 0 : 1, j = cyclic ? oldtotpoints - 1 : 0; i < oldtotpoints; j = i, i++) {
+      bGPDspoint *pt = &temp_points[j];
+      bGPDspoint *next = &temp_points[i];
+      bGPDspoint *pt_final = &gps->points[j * 2 + 1];
 
       /* add a half way point */
       interp_v3_v3v3(&pt_final->x, &pt->x, &next->x, 0.5f);
@@ -2125,9 +2243,9 @@ void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int 
       interp_v4_v4v4(pt_final->vert_color, pt->vert_color, next->vert_color, 0.5f);
 
       if (gps->dvert != nullptr) {
-        dvert = &temp_dverts[i];
-        dvert_next = &temp_dverts[i + 1];
-        dvert_final = &gps->dvert[i2];
+        dvert = &temp_dverts[j];
+        dvert_next = &temp_dverts[i];
+        dvert_final = &gps->dvert[j * 2 + 1];
 
         dvert_final->totweight = dvert->totweight;
         dvert_final->dw = (MDeformWeight *)MEM_dupallocN(dvert->dw);
@@ -2142,8 +2260,6 @@ void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int 
           }
         }
       }
-
-      i2 += 2;
     }
 
     MEM_SAFE_FREE(temp_points);
@@ -2151,20 +2267,18 @@ void BKE_gpencil_stroke_subdivide(bGPdata *gpd, bGPDstroke *gps, int level, int 
 
     /* Move points to smooth stroke (not simple type). */
     if (type != GP_SUBDIV_SIMPLE) {
-      /* duplicate points in a temp area with the new subdivide data */
-      temp_points = (bGPDspoint *)MEM_dupallocN(gps->points);
-
+      float mid[3];
       /* extreme points are not changed */
-      for (int i = 0; i < gps->totpoints - 2; i++) {
-        bGPDspoint *pt = &temp_points[i];
-        bGPDspoint *next = &temp_points[i + 1];
-        bGPDspoint *pt_final = &gps->points[i + 1];
+      for (int i = cyclic ? 0 : 2, j = cyclic ? gps->totpoints - 2 : 0; i < gps->totpoints - 2;
+           j = i, i += 2) {
+        bGPDspoint *prev = &gps->points[j + 1];
+        bGPDspoint *pt = &gps->points[i];
+        bGPDspoint *next = &gps->points[i + 1];
 
         /* move point */
-        interp_v3_v3v3(&pt_final->x, &pt->x, &next->x, 0.5f);
+        interp_v3_v3v3(mid, &prev->x, &next->x, 0.5f);
+        interp_v3_v3v3(&pt->x, mid, &pt->x, 0.5f);
       }
-      /* free temp memory */
-      MEM_SAFE_FREE(temp_points);
     }
   }
 
@@ -2313,7 +2427,7 @@ static int gpencil_walk_edge(GHash *v_table,
       gped_init = &gp_edges[edge];
       idx++;
 
-      /* Avoid to follow already visited vertice. */
+      /* Avoid following already visited vertices. */
       if (reverse) {
         if (BLI_ghash_haskey(v_table, POINTER_FROM_INT(gped->v1))) {
           edge = -1;
@@ -3052,7 +3166,7 @@ bGPDstroke *BKE_gpencil_stroke_delete_tagged_points(bGPdata *gpd,
       /* Copy over the relevant point data */
       new_stroke->points = (bGPDspoint *)MEM_callocN(sizeof(bGPDspoint) * new_stroke->totpoints,
                                                      "gp delete stroke fragment");
-      memcpy(new_stroke->points,
+      memcpy(static_cast<void *>(new_stroke->points),
              gps->points + island->start_idx,
              sizeof(bGPDspoint) * new_stroke->totpoints);
 
@@ -3365,13 +3479,13 @@ void BKE_gpencil_stroke_join(bGPDstroke *gps_a,
   /* don't visibly link the first and last points? */
   if (leave_gaps) {
     /* 1st: add one tail point to start invisible area */
-    point = gps_a->points[gps_a->totpoints - 1];
+    point = blender::dna::shallow_copy(gps_a->points[gps_a->totpoints - 1]);
     deltatime = point.time;
 
     gpencil_stroke_copy_point(gps_a, nullptr, &point, delta, 0.0f, 0.0f, 0.0f);
 
     /* 2nd: add one head point to finish invisible area */
-    point = gps_b->points[0];
+    point = blender::dna::shallow_copy(gps_b->points[0]);
     gpencil_stroke_copy_point(gps_a, nullptr, &point, delta, 0.0f, 0.0f, deltatime);
   }
 
@@ -3410,7 +3524,7 @@ void BKE_gpencil_stroke_join(bGPDstroke *gps_a,
     for (i = start; i < end; i++) {
       pt = &gps_a->points[i];
       pt->pressure += (avg_pressure - pt->pressure) * ratio;
-      BKE_gpencil_stroke_smooth_point(gps_a, i, ratio * 0.6f, false);
+      BKE_gpencil_stroke_smooth_point(gps_a, i, ratio * 0.6f, 2, false, true, gps_a);
 
       ratio += step;
       /* In the center, reverse the ratio. */
@@ -4095,7 +4209,14 @@ bGPDstroke *BKE_gpencil_stroke_perimeter_from_view(struct RegionView3D *rv3d,
   if (gps->totpoints == 0) {
     return nullptr;
   }
-  bGPDstroke *gps_temp = BKE_gpencil_stroke_duplicate(gps, true, false);
+  /* Duplicate only points and fill data. Weight and Curve are not needed. */
+  bGPDstroke *gps_temp = (bGPDstroke *)MEM_dupallocN(gps);
+  gps_temp->prev = gps_temp->next = nullptr;
+  gps_temp->triangles = (bGPDtriangle *)MEM_dupallocN(gps->triangles);
+  gps_temp->points = (bGPDspoint *)MEM_dupallocN(gps->points);
+  gps_temp->dvert = nullptr;
+  gps_temp->editcurve = nullptr;
+
   const bool cyclic = ((gps_temp->flag & GP_STROKE_CYCLIC) != 0);
 
   /* If Cyclic, add a new point. */

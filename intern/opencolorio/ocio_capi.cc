@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2012 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2012 Blender Foundation. All rights reserved. */
 
 #include "MEM_guardedalloc.h"
 
@@ -134,9 +118,9 @@ void OCIO_configGetDefaultLumaCoefs(OCIO_ConstConfigRcPtr *config, float *rgb)
   impl->configGetDefaultLumaCoefs(config, rgb);
 }
 
-void OCIO_configGetXYZtoRGB(OCIO_ConstConfigRcPtr *config, float xyz_to_rgb[3][3])
+void OCIO_configGetXYZtoSceneLinear(OCIO_ConstConfigRcPtr *config, float xyz_to_scene_linear[3][3])
 {
-  impl->configGetXYZtoRGB(config, xyz_to_rgb);
+  impl->configGetXYZtoSceneLinear(config, xyz_to_scene_linear);
 }
 
 int OCIO_configGetNumLooks(OCIO_ConstConfigRcPtr *config)
@@ -250,15 +234,27 @@ const char *OCIO_colorSpaceGetFamily(OCIO_ConstColorSpaceRcPtr *cs)
   return impl->colorSpaceGetFamily(cs);
 }
 
+int OCIO_colorSpaceGetNumAliases(OCIO_ConstColorSpaceRcPtr *cs)
+{
+  return impl->colorSpaceGetNumAliases(cs);
+}
+
+const char *OCIO_colorSpaceGetAlias(OCIO_ConstColorSpaceRcPtr *cs, const int index)
+{
+  return impl->colorSpaceGetAlias(cs, index);
+}
+
 OCIO_ConstProcessorRcPtr *OCIO_createDisplayProcessor(OCIO_ConstConfigRcPtr *config,
                                                       const char *input,
                                                       const char *view,
                                                       const char *display,
                                                       const char *look,
                                                       const float scale,
-                                                      const float exponent)
+                                                      const float exponent,
+                                                      const bool inverse)
 {
-  return impl->createDisplayProcessor(config, input, view, display, look, scale, exponent);
+  return impl->createDisplayProcessor(
+      config, input, view, display, look, scale, exponent, inverse);
 }
 
 OCIO_PackedImageDesc *OCIO_createOCIO_PackedImageDesc(float *data,

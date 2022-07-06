@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. */
 
 /** \file
  * \ingroup edgpencil
@@ -126,7 +110,9 @@ static void annotation_draw_stroke_arrow_buffer(uint pos,
   immEnd();
 }
 
-/* draw stroke defined in buffer (simple ogl lines/points for now, as dotted lines) */
+/**
+ * Draw stroke defined in buffer (simple GPU lines/points for now, as dotted lines).
+ */
 static void annotation_draw_stroke_buffer(bGPdata *gps,
                                           short thickness,
                                           short dflag,
@@ -314,7 +300,9 @@ static void annotation_draw_stroke_point(const bGPDspoint *points,
   immUnbindProgram();
 }
 
-/* draw a given stroke in 3d (i.e. in 3d-space), using simple ogl lines */
+/**
+ * Draw a given stroke in 3d (i.e. in 3d-space), using simple GPU lines.
+ */
 static void annotation_draw_stroke_3d(
     const bGPDspoint *points, int totpoints, short thickness, const float ink[4], bool cyclic)
 {

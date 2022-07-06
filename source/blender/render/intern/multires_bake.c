@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2012 by Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2012 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup render
@@ -67,7 +51,7 @@ typedef void (*MPassKnownData)(DerivedMesh *lores_dm,
                                const int x,
                                const int y);
 
-typedef void *(*MInitBakeData)(MultiresBakeRender *bkr, Image *ima);
+typedef void *(*MInitBakeData)(MultiresBakeRender *bkr, ImBuf *ibuf);
 typedef void (*MFreeBakeData)(void *bake_data);
 
 typedef struct MultiresBakeResult {
@@ -80,6 +64,7 @@ typedef struct {
   MPoly *mpoly;
   MLoop *mloop;
   MLoopUV *mloopuv;
+  float uv_offset[2];
   const MLoopTri *mlooptri;
   float *pvtangent;
   const float (*precomputed_normals)[3];
@@ -107,7 +92,6 @@ typedef struct {
 
 typedef struct {
   float *heights;
-  Image *ima;
   DerivedMesh *ssdm;
   const int *orig_index_mp_to_orig;
 } MHeightBakeData;
@@ -122,25 +106,25 @@ typedef struct BakeImBufuserData {
 } BakeImBufuserData;
 
 static void multiresbake_get_normal(const MResolvePixelData *data,
-                                    float norm[],
                                     const int tri_num,
-                                    const int vert_index)
+                                    const int vert_index,
+                                    float r_normal[3])
 {
   const int poly_index = data->mlooptri[tri_num].poly;
   const MPoly *mp = &data->mpoly[poly_index];
   const bool smoothnormal = (mp->flag & ME_SMOOTH) != 0;
 
-  if (!smoothnormal) { /* flat */
-    if (data->precomputed_normals) {
-      copy_v3_v3(norm, data->precomputed_normals[poly_index]);
-    }
-    else {
-      BKE_mesh_calc_poly_normal(mp, &data->mloop[mp->loopstart], data->mvert, norm);
-    }
+  if (smoothnormal) {
+    const int vi = data->mloop[data->mlooptri[tri_num].tri[vert_index]].v;
+    copy_v3_v3(r_normal, data->vert_normals[vi]);
   }
   else {
-    const int vi = data->mloop[data->mlooptri[tri_num].tri[vert_index]].v;
-    copy_v3_v3(norm, data->vert_normals[vi]);
+    if (data->precomputed_normals) {
+      copy_v3_v3(r_normal, data->precomputed_normals[poly_index]);
+    }
+    else {
+      BKE_mesh_calc_poly_normal(mp, &data->mloop[mp->loopstart], data->mvert, r_normal);
+    }
   }
 }
 
@@ -164,7 +148,8 @@ static void init_bake_rast(MBakeRast *bake_rast,
 
 static void flush_pixel(const MResolvePixelData *data, const int x, const int y)
 {
-  const float st[2] = {(x + 0.5f) / data->w, (y + 0.5f) / data->h};
+  const float st[2] = {(x + 0.5f) / data->w + data->uv_offset[0],
+                       (y + 0.5f) / data->h + data->uv_offset[1]};
   const float *st0, *st1, *st2;
   const float *tang0, *tang1, *tang2;
   float no0[3], no1[3], no2[3];
@@ -176,9 +161,9 @@ static void flush_pixel(const MResolvePixelData *data, const int x, const int y)
   st1 = data->mloopuv[data->mlooptri[data->tri_index].tri[1]].uv;
   st2 = data->mloopuv[data->mlooptri[data->tri_index].tri[2]].uv;
 
-  multiresbake_get_normal(data, no0, data->tri_index, 0); /* can optimize these 3 into one call */
-  multiresbake_get_normal(data, no1, data->tri_index, 1);
-  multiresbake_get_normal(data, no2, data->tri_index, 2);
+  multiresbake_get_normal(data, data->tri_index, 0, no0); /* can optimize these 3 into one call */
+  multiresbake_get_normal(data, data->tri_index, 1, no1);
+  multiresbake_get_normal(data, data->tri_index, 2, no2);
 
   resolve_tri_uv_v2(fUV, st, st0, st1, st2);
 
@@ -411,8 +396,12 @@ static void *do_multires_bake_thread(void *data_v)
 
     data->tri_index = tri_index;
 
-    bake_rasterize(
-        bake_rast, mloopuv[lt->tri[0]].uv, mloopuv[lt->tri[1]].uv, mloopuv[lt->tri[2]].uv);
+    float uv[3][2];
+    sub_v2_v2v2(uv[0], mloopuv[lt->tri[0]].uv, data->uv_offset);
+    sub_v2_v2v2(uv[1], mloopuv[lt->tri[1]].uv, data->uv_offset);
+    sub_v2_v2v2(uv[2], mloopuv[lt->tri[2]].uv, data->uv_offset);
+
+    bake_rasterize(bake_rast, uv[0], uv[1], uv[2]);
 
     /* tag image buffer for refresh */
     if (data->ibuf->rect_float) {
@@ -463,6 +452,8 @@ static void init_ccgdm_arrays(DerivedMesh *dm)
 
 static void do_multires_bake(MultiresBakeRender *bkr,
                              Image *ima,
+                             ImageTile *tile,
+                             ImBuf *ibuf,
                              bool require_tangent,
                              MPassKnownData passKnownData,
                              MInitBakeData initBakeData,
@@ -478,7 +469,6 @@ static void do_multires_bake(MultiresBakeRender *bkr,
     MultiresBakeThread *handles;
     MultiresBakeQueue queue;
 
-    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
     MVert *mvert = dm->getVertArray(dm);
     MPoly *mpoly = dm->getPolyArray(dm);
     MLoop *mloop = dm->getLoopArray(dm);
@@ -527,7 +517,7 @@ static void do_multires_bake(MultiresBakeRender *bkr,
 
     /* all threads shares the same custom bake data */
     if (initBakeData) {
-      bake_data = initBakeData(bkr, ima);
+      bake_data = initBakeData(bkr, ibuf);
     }
 
     if (tot_thread > 1) {
@@ -555,6 +545,7 @@ static void do_multires_bake(MultiresBakeRender *bkr,
       handle->data.mvert = mvert;
       handle->data.vert_normals = vert_normals;
       handle->data.mloopuv = mloopuv;
+      BKE_image_get_tile_uv(ima, tile->tile_number, handle->data.uv_offset);
       handle->data.mlooptri = mlooptri;
       handle->data.mloop = mloop;
       handle->data.pvtangent = pvtangent;
@@ -606,8 +597,6 @@ static void do_multires_bake(MultiresBakeRender *bkr,
     MEM_freeN(handles);
 
     BKE_id_free(NULL, temp_mesh);
-
-    BKE_image_release_ibuf(ima, ibuf, NULL);
   }
 }
 
@@ -774,10 +763,9 @@ static void interp_barycentric_mlooptri(DerivedMesh *dm,
 
 /* **************** Displacement Baker **************** */
 
-static void *init_heights_data(MultiresBakeRender *bkr, Image *ima)
+static void *init_heights_data(MultiresBakeRender *bkr, ImBuf *ibuf)
 {
   MHeightBakeData *height_data;
-  ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
   DerivedMesh *lodm = bkr->lores_dm;
   BakeImBufuserData *userdata = ibuf->userdata;
 
@@ -788,7 +776,6 @@ static void *init_heights_data(MultiresBakeRender *bkr, Image *ima)
 
   height_data = MEM_callocN(sizeof(MHeightBakeData), "MultiresBake heightData");
 
-  height_data->ima = ima;
   height_data->heights = userdata->displacement_buffer;
 
   if (!bkr->use_lores_mesh) {
@@ -809,8 +796,6 @@ static void *init_heights_data(MultiresBakeRender *bkr, Image *ima)
   }
 
   height_data->orig_index_mp_to_orig = lodm->getPolyDataArray(lodm, CD_ORIGINDEX);
-
-  BKE_image_release_ibuf(ima, ibuf, NULL);
 
   return (void *)height_data;
 }
@@ -919,7 +904,7 @@ static void apply_heights_callback(DerivedMesh *lores_dm,
 
 /* **************** Normal Maps Baker **************** */
 
-static void *init_normal_data(MultiresBakeRender *bkr, Image *UNUSED(ima))
+static void *init_normal_data(MultiresBakeRender *bkr, ImBuf *UNUSED(ibuf))
 {
   MNormalBakeData *normal_data;
   DerivedMesh *lodm = bkr->lores_dm;
@@ -1077,23 +1062,23 @@ static void create_ao_raytree(MultiresBakeRender *bkr, MAOBakeData *ao_data)
   RayFace *face;
   CCGElem **grid_data;
   CCGKey key;
-  int num_grids, grid_size /*, face_side */, num_faces;
+  int grids_num, grid_size /*, face_side */, faces_num;
   int i;
 
-  num_grids = hidm->getNumGrids(hidm);
+  grids_num = hidm->getNumGrids(hidm);
   grid_size = hidm->getGridSize(hidm);
   grid_data = hidm->getGridData(hidm);
   hidm->getGridKey(hidm, &key);
 
   /* face_side = (grid_size << 1) - 1; */ /* UNUSED */
-  num_faces = num_grids * (grid_size - 1) * (grid_size - 1);
+  faces_num = grids_num * (grid_size - 1) * (grid_size - 1);
 
   raytree = ao_data->raytree = RE_rayobject_create(
-      bkr->raytrace_structure, num_faces, bkr->octree_resolution);
-  face = ao_data->rayfaces = (RayFace *)MEM_callocN(num_faces * sizeof(RayFace),
+      bkr->raytrace_structure, faces_num, bkr->octree_resolution);
+  face = ao_data->rayfaces = (RayFace *)MEM_callocN(faces_num * sizeof(RayFace),
                                                     "ObjectRen faces");
 
-  for (i = 0; i < num_grids; i++) {
+  for (i = 0; i < grids_num; i++) {
     int x, y;
     for (x = 0; x < grid_size - 1; x++) {
       for (y = 0; y < grid_size - 1; y++) {
@@ -1115,7 +1100,7 @@ static void create_ao_raytree(MultiresBakeRender *bkr, MAOBakeData *ao_data)
   RE_rayobject_done(raytree);
 }
 
-static void *init_ao_data(MultiresBakeRender *bkr, Image *UNUSED(ima))
+static void *init_ao_data(MultiresBakeRender *bkr, ImBuf *UNUSED(ibuf))
 {
   MAOBakeData *ao_data;
   DerivedMesh *lodm = bkr->lores_dm;
@@ -1329,8 +1314,12 @@ static void apply_ao_callback(DerivedMesh *lores_dm,
 
 /* ******$***************** Post processing ************************* */
 
-static void bake_ibuf_filter(
-    ImBuf *ibuf, char *mask, const int margin, const char margin_type, DerivedMesh *dm)
+static void bake_ibuf_filter(ImBuf *ibuf,
+                             char *mask,
+                             const int margin,
+                             const char margin_type,
+                             DerivedMesh *dm,
+                             const float uv_offset[2])
 {
   /* must check before filtering */
   const bool is_new_alpha = (ibuf->planes != R_IMF_PLANES_RGBA) && BKE_imbuf_alpha_test(ibuf);
@@ -1338,7 +1327,7 @@ static void bake_ibuf_filter(
   if (margin) {
     switch (margin_type) {
       case R_BAKE_ADJACENT_FACES:
-        RE_generate_texturemargin_adjacentfaces_dm(ibuf, mask, margin, dm);
+        RE_generate_texturemargin_adjacentfaces_dm(ibuf, mask, margin, dm, uv_offset);
         break;
       default:
       /* fall through */
@@ -1443,38 +1432,54 @@ static void bake_images(MultiresBakeRender *bkr, MultiresBakeResult *result)
 
   for (link = bkr->image.first; link; link = link->next) {
     Image *ima = (Image *)link->data;
-    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
 
-    if (ibuf->x > 0 && ibuf->y > 0) {
-      BakeImBufuserData *userdata = MEM_callocN(sizeof(BakeImBufuserData),
-                                                "MultiresBake userdata");
-      userdata->mask_buffer = MEM_callocN(ibuf->y * ibuf->x, "MultiresBake imbuf mask");
-      ibuf->userdata = userdata;
+    LISTBASE_FOREACH (ImageTile *, tile, &ima->tiles) {
+      ImageUser iuser;
+      BKE_imageuser_default(&iuser);
+      iuser.tile = tile->tile_number;
 
-      switch (bkr->mode) {
-        case RE_BAKE_NORMALS:
-          do_multires_bake(
-              bkr, ima, true, apply_tangmat_callback, init_normal_data, free_normal_data, result);
-          break;
-        case RE_BAKE_DISPLACEMENT:
-          do_multires_bake(bkr,
-                           ima,
-                           false,
-                           apply_heights_callback,
-                           init_heights_data,
-                           free_heights_data,
-                           result);
-          break;
-/* TODO: restore ambient occlusion baking support. */
+      ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+
+      if (ibuf->x > 0 && ibuf->y > 0) {
+        BakeImBufuserData *userdata = MEM_callocN(sizeof(BakeImBufuserData),
+                                                  "MultiresBake userdata");
+        userdata->mask_buffer = MEM_callocN(ibuf->y * ibuf->x, "MultiresBake imbuf mask");
+        ibuf->userdata = userdata;
+
+        switch (bkr->mode) {
+          case RE_BAKE_NORMALS:
+            do_multires_bake(bkr,
+                             ima,
+                             tile,
+                             ibuf,
+                             true,
+                             apply_tangmat_callback,
+                             init_normal_data,
+                             free_normal_data,
+                             result);
+            break;
+          case RE_BAKE_DISPLACEMENT:
+            do_multires_bake(bkr,
+                             ima,
+                             tile,
+                             ibuf,
+                             false,
+                             apply_heights_callback,
+                             init_heights_data,
+                             free_heights_data,
+                             result);
+            break;
+            /* TODO: restore ambient occlusion baking support. */
 #if 0
-        case RE_BAKE_AO:
-          do_multires_bake(bkr, ima, false, apply_ao_callback, init_ao_data, free_ao_data, result);
-          break;
+          case RE_BAKE_AO:
+            do_multires_bake(bkr, ima, tile, ibuf, false, apply_ao_callback, init_ao_data, free_ao_data, result);
+            break;
 #endif
+        }
       }
-    }
 
-    BKE_image_release_ibuf(ima, ibuf, NULL);
+      BKE_image_release_ibuf(ima, ibuf, NULL);
+    }
 
     ima->id.tag |= LIB_TAG_DOIT;
   }
@@ -1487,48 +1492,62 @@ static void finish_images(MultiresBakeRender *bkr, MultiresBakeResult *result)
 
   for (link = bkr->image.first; link; link = link->next) {
     Image *ima = (Image *)link->data;
-    ImBuf *ibuf = BKE_image_acquire_ibuf(ima, NULL, NULL);
-    BakeImBufuserData *userdata = (BakeImBufuserData *)ibuf->userdata;
 
-    if (ibuf->x <= 0 || ibuf->y <= 0) {
-      continue;
-    }
+    LISTBASE_FOREACH (ImageTile *, tile, &ima->tiles) {
+      ImageUser iuser;
+      BKE_imageuser_default(&iuser);
+      iuser.tile = tile->tile_number;
 
-    if (use_displacement_buffer) {
-      bake_ibuf_normalize_displacement(ibuf,
-                                       userdata->displacement_buffer,
-                                       userdata->mask_buffer,
-                                       result->height_min,
-                                       result->height_max);
-    }
+      ImBuf *ibuf = BKE_image_acquire_ibuf(ima, &iuser, NULL);
+      BakeImBufuserData *userdata = (BakeImBufuserData *)ibuf->userdata;
 
-    bake_ibuf_filter(
-        ibuf, userdata->mask_buffer, bkr->bake_margin, bkr->bake_margin_type, bkr->lores_dm);
-
-    ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
-    BKE_image_mark_dirty(ima, ibuf);
-
-    if (ibuf->rect_float) {
-      ibuf->userflags |= IB_RECT_INVALID;
-    }
-
-    if (ibuf->mipmap[0]) {
-      ibuf->userflags |= IB_MIPMAP_INVALID;
-      imb_freemipmapImBuf(ibuf);
-    }
-
-    if (ibuf->userdata) {
-      if (userdata->displacement_buffer) {
-        MEM_freeN(userdata->displacement_buffer);
+      if (ibuf->x <= 0 || ibuf->y <= 0) {
+        continue;
       }
 
-      MEM_freeN(userdata->mask_buffer);
-      MEM_freeN(userdata);
-      ibuf->userdata = NULL;
-    }
+      if (use_displacement_buffer) {
+        bake_ibuf_normalize_displacement(ibuf,
+                                         userdata->displacement_buffer,
+                                         userdata->mask_buffer,
+                                         result->height_min,
+                                         result->height_max);
+      }
 
-    BKE_image_release_ibuf(ima, ibuf, NULL);
-    DEG_id_tag_update(&ima->id, 0);
+      float uv_offset[2];
+      BKE_image_get_tile_uv(ima, tile->tile_number, uv_offset);
+
+      bake_ibuf_filter(ibuf,
+                       userdata->mask_buffer,
+                       bkr->bake_margin,
+                       bkr->bake_margin_type,
+                       bkr->lores_dm,
+                       uv_offset);
+
+      ibuf->userflags |= IB_DISPLAY_BUFFER_INVALID;
+      BKE_image_mark_dirty(ima, ibuf);
+
+      if (ibuf->rect_float) {
+        ibuf->userflags |= IB_RECT_INVALID;
+      }
+
+      if (ibuf->mipmap[0]) {
+        ibuf->userflags |= IB_MIPMAP_INVALID;
+        imb_freemipmapImBuf(ibuf);
+      }
+
+      if (ibuf->userdata) {
+        if (userdata->displacement_buffer) {
+          MEM_freeN(userdata->displacement_buffer);
+        }
+
+        MEM_freeN(userdata->mask_buffer);
+        MEM_freeN(userdata);
+        ibuf->userdata = NULL;
+      }
+
+      BKE_image_release_ibuf(ima, ibuf, NULL);
+      DEG_id_tag_update(&ima->id, 0);
+    }
   }
 }
 

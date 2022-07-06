@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2015, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2015 Blender Foundation. */
 
 /** \file
  * \ingroup bpygpu
@@ -203,7 +188,13 @@ static PyObject *pygpu_offscreen_unbind(BPyGPUOffScreen *self, PyObject *args, P
   BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 
   static const char *_keywords[] = {"restore", NULL};
-  static _PyArg_Parser _parser = {"|$O&:unbind", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "|$" /* Optional keyword only arguments. */
+      "O&" /* `restore` */
+      ":unbind",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kwds, &_parser, PyC_ParseBool, &restore)) {
     return NULL;
   }
@@ -231,7 +222,15 @@ static PyObject *pygpu_offscreen__tp_new(PyTypeObject *UNUSED(self),
   char err_out[256];
 
   static const char *_keywords[] = {"width", "height", "format", NULL};
-  static _PyArg_Parser _parser = {"ii|$O&:GPUOffScreen.__new__", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "i"  /* `width` */
+      "i"  /* `height` */
+      "|$" /* Optional keyword only arguments. */
+      "O&" /* `format` */
+      ":GPUOffScreen.__new__",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(
           args, kwds, &_parser, &width, &height, PyC_ParseStringEnum, &pygpu_textureformat)) {
     return NULL;
@@ -324,16 +323,29 @@ static PyObject *pygpu_offscreen_draw_view3d(BPyGPUOffScreen *self, PyObject *ar
 
   BPY_GPU_OFFSCREEN_CHECK_OBJ(self);
 
-  static const char *_keywords[] = {"scene",
-                                    "view_layer",
-                                    "view3d",
-                                    "region",
-                                    "view_matrix",
-                                    "projection_matrix",
-                                    "do_color_management",
-                                    NULL};
-
-  static _PyArg_Parser _parser = {"OOOOO&O&|$O&:draw_view3d", _keywords, 0};
+  static const char *_keywords[] = {
+      "scene",
+      "view_layer",
+      "view3d",
+      "region",
+      "view_matrix",
+      "projection_matrix",
+      "do_color_management",
+      NULL,
+  };
+  static _PyArg_Parser _parser = {
+      "O"  /* `scene` */
+      "O"  /* `view_layer` */
+      "O"  /* `view3d` */
+      "O"  /* `region` */
+      "O&" /* `view_matrix` */
+      "O&" /* `projection_matrix` */
+      "|$" /* Optional keyword only arguments. */
+      "O&" /* `do_color_management` */
+      ":draw_view3d",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kwds,
                                         &_parser,

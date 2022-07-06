@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -31,6 +17,7 @@
 #include "BLI_listbase.h"
 #include "BLI_map.hh"
 #include "BLI_math.h"
+#include "BLI_sort.hh"
 
 #include "DEG_depsgraph_query.h"
 
@@ -46,7 +33,7 @@ OBJMesh::OBJMesh(Depsgraph *depsgraph, const OBJExportParams &export_params, Obj
 {
   /* We need to copy the object because it may be in temporary space. */
   Object *obj_eval = DEG_get_evaluated_object(depsgraph, mesh_object);
-  export_object_eval_ = *obj_eval;
+  export_object_eval_ = dna::shallow_copy(*obj_eval);
   export_mesh_eval_ = export_params.apply_modifiers ?
                           BKE_object_get_evaluated_mesh(&export_object_eval_) :
                           BKE_object_get_pre_modified_mesh(&export_object_eval_);
@@ -71,16 +58,29 @@ OBJMesh::OBJMesh(Depsgraph *depsgraph, const OBJExportParams &export_params, Obj
  */
 OBJMesh::~OBJMesh()
 {
-  free_mesh_if_needed();
-  if (poly_smooth_groups_) {
-    MEM_freeN(poly_smooth_groups_);
-  }
+  clear();
 }
 
 void OBJMesh::free_mesh_if_needed()
 {
   if (mesh_eval_needs_free_ && export_mesh_eval_) {
     BKE_id_free(nullptr, export_mesh_eval_);
+    export_mesh_eval_ = nullptr;
+    mesh_eval_needs_free_ = false;
+  }
+}
+
+void OBJMesh::clear()
+{
+  free_mesh_if_needed();
+  uv_indices_.clear_and_make_inline();
+  uv_coords_.clear_and_make_inline();
+  loop_to_normal_index_.clear_and_make_inline();
+  normal_coords_.clear_and_make_inline();
+  poly_order_.clear_and_make_inline();
+  if (poly_smooth_groups_) {
+    MEM_freeN(poly_smooth_groups_);
+    poly_smooth_groups_ = nullptr;
   }
 }
 
@@ -89,7 +89,7 @@ std::pair<Mesh *, bool> OBJMesh::triangulate_mesh_eval()
   if (export_mesh_eval_->totpoly <= 0) {
     return {export_mesh_eval_, false};
   }
-  const BMeshCreateParams bm_create_params = {0u};
+  const BMeshCreateParams bm_create_params = {false};
   BMeshFromMeshParams bm_convert_params{};
   bm_convert_params.calc_face_normal = true;
   bm_convert_params.calc_vert_normal = true;
@@ -209,7 +209,7 @@ void OBJMesh::calc_poly_order()
   }
   const MPoly *mpolys = export_mesh_eval_->mpoly;
   /* Sort polygons by their material index. */
-  std::sort(poly_order_.begin(), poly_order_.end(), [&](int a, int b) {
+  blender::parallel_sort(poly_order_.begin(), poly_order_.end(), [&](int a, int b) {
     int mat_a = mpolys[a].mat_nr;
     int mat_b = mpolys[b].mat_nr;
     if (mat_a != mat_b) {
@@ -284,7 +284,7 @@ Vector<int> OBJMesh::calc_poly_vertex_indices(const int poly_index) const
   return r_poly_vertex_indices;
 }
 
-void OBJMesh::store_uv_coords_and_indices(Vector<std::array<float, 2>> &r_uv_coords)
+void OBJMesh::store_uv_coords_and_indices()
 {
   const MPoly *mpoly = export_mesh_eval_->mpoly;
   const MLoop *mloop = export_mesh_eval_->mloop;
@@ -304,7 +304,7 @@ void OBJMesh::store_uv_coords_and_indices(Vector<std::array<float, 2>> &r_uv_coo
   uv_indices_.resize(totpoly);
   /* At least total vertices of a mesh will be present in its texture map. So
    * reserve minimum space early. */
-  r_uv_coords.reserve(totvert);
+  uv_coords_.reserve(totvert);
 
   tot_uv_vertices_ = 0;
   for (int vertex_index = 0; vertex_index < totvert; vertex_index++) {
@@ -316,11 +316,10 @@ void OBJMesh::store_uv_coords_and_indices(Vector<std::array<float, 2>> &r_uv_coo
       const int vertices_in_poly = mpoly[uv_vert->poly_index].totloop;
 
       /* Store UV vertex coordinates. */
-      r_uv_coords.resize(tot_uv_vertices_);
+      uv_coords_.resize(tot_uv_vertices_);
       const int loopstart = mpoly[uv_vert->poly_index].loopstart;
       Span<float> vert_uv_coords(mloopuv[loopstart + uv_vert->loop_of_poly_index].uv, 2);
-      r_uv_coords[tot_uv_vertices_ - 1][0] = vert_uv_coords[0];
-      r_uv_coords[tot_uv_vertices_ - 1][1] = vert_uv_coords[1];
+      uv_coords_[tot_uv_vertices_ - 1] = float2(vert_uv_coords[0], vert_uv_coords[1]);
 
       /* Store UV vertex indices. */
       uv_indices_[uv_vert->poly_index].resize(vertices_in_poly);
@@ -369,7 +368,7 @@ static float3 round_float3_to_n_digits(const float3 &v, int round_digits)
   return ans;
 }
 
-void OBJMesh::store_normal_coords_and_indices(Vector<float3> &r_normal_coords)
+void OBJMesh::store_normal_coords_and_indices()
 {
   /* We'll round normal components to 4 digits.
    * This will cover up some minor differences
@@ -383,8 +382,8 @@ void OBJMesh::store_normal_coords_and_indices(Vector<float3> &r_normal_coords)
   normal_to_index.reserve(export_mesh_eval_->totpoly);
   loop_to_normal_index_.resize(export_mesh_eval_->totloop);
   loop_to_normal_index_.fill(-1);
-  const float(*lnors)[3] = (const float(*)[3])(
-      CustomData_get_layer(&export_mesh_eval_->ldata, CD_NORMAL));
+  const float(
+      *lnors)[3] = (const float(*)[3])(CustomData_get_layer(&export_mesh_eval_->ldata, CD_NORMAL));
   for (int poly_index = 0; poly_index < export_mesh_eval_->totpoly; ++poly_index) {
     const MPoly &mpoly = export_mesh_eval_->mpoly[poly_index];
     bool need_per_loop_normals = lnors != nullptr || (mpoly.flag & ME_SMOOTH);
@@ -401,7 +400,7 @@ void OBJMesh::store_normal_coords_and_indices(Vector<float3> &r_normal_coords)
         if (loop_norm_index == -1) {
           loop_norm_index = cur_normal_index++;
           normal_to_index.add(rounded_loop_normal, loop_norm_index);
-          r_normal_coords.append(rounded_loop_normal);
+          normal_coords_.append(rounded_loop_normal);
         }
         loop_to_normal_index_[loop_index] = loop_norm_index;
       }
@@ -413,7 +412,7 @@ void OBJMesh::store_normal_coords_and_indices(Vector<float3> &r_normal_coords)
       if (poly_norm_index == -1) {
         poly_norm_index = cur_normal_index++;
         normal_to_index.add(rounded_poly_normal, poly_norm_index);
-        r_normal_coords.append(rounded_poly_normal);
+        normal_coords_.append(rounded_poly_normal);
       }
       for (int i = 0; i < mpoly.totloop; ++i) {
         int loop_index = mpoly.loopstart + i;
@@ -427,6 +426,9 @@ void OBJMesh::store_normal_coords_and_indices(Vector<float3> &r_normal_coords)
 
 Vector<int> OBJMesh::calc_poly_normal_indices(const int poly_index) const
 {
+  if (loop_to_normal_index_.is_empty()) {
+    return {};
+  }
   const MPoly &mpoly = export_mesh_eval_->mpoly[poly_index];
   const int totloop = mpoly.totloop;
   Vector<int> r_poly_normal_indices(totloop);
@@ -437,46 +439,47 @@ Vector<int> OBJMesh::calc_poly_normal_indices(const int poly_index) const
   return r_poly_normal_indices;
 }
 
-int16_t OBJMesh::get_poly_deform_group_index(const int poly_index) const
+int OBJMesh::tot_deform_groups() const
+{
+  if (!BKE_object_supports_vertex_groups(&export_object_eval_)) {
+    return 0;
+  }
+  return BKE_object_defgroup_count(&export_object_eval_);
+}
+
+int16_t OBJMesh::get_poly_deform_group_index(const int poly_index,
+                                             MutableSpan<float> group_weights) const
 {
   BLI_assert(poly_index < export_mesh_eval_->totpoly);
-  const MPoly &mpoly = export_mesh_eval_->mpoly[poly_index];
-  const MLoop *mloop = &export_mesh_eval_->mloop[mpoly.loopstart];
-  const Object *obj = &export_object_eval_;
-  const int tot_deform_groups = BKE_object_defgroup_count(obj);
-  /* Indices of the vector index into deform groups of an object; values are the]
-   * number of vertex members in one deform group. */
-  Vector<int16_t> deform_group_members(tot_deform_groups, 0);
-  /* Whether at least one vertex in the polygon belongs to any group. */
-  bool found_group = false;
+  BLI_assert(group_weights.size() == BKE_object_defgroup_count(&export_object_eval_));
 
-  const MDeformVert *dvert_orig = static_cast<MDeformVert *>(
+  const MDeformVert *dvert_layer = static_cast<MDeformVert *>(
       CustomData_get_layer(&export_mesh_eval_->vdata, CD_MDEFORMVERT));
-  if (!dvert_orig) {
+  if (!dvert_layer) {
     return NOT_FOUND;
   }
 
-  const MDeformWeight *curr_weight = nullptr;
-  const MDeformVert *dvert = nullptr;
-  for (int loop_index = 0; loop_index < mpoly.totloop; loop_index++) {
-    dvert = &dvert_orig[(mloop + loop_index)->v];
-    curr_weight = dvert->dw;
-    if (curr_weight) {
-      bDeformGroup *vertex_group = static_cast<bDeformGroup *>(
-          BLI_findlink(BKE_object_defgroup_list(obj), curr_weight->def_nr));
-      if (vertex_group) {
-        deform_group_members[curr_weight->def_nr] += 1;
-        found_group = true;
+  group_weights.fill(0);
+  bool found_any_group = false;
+  const MPoly &mpoly = export_mesh_eval_->mpoly[poly_index];
+  const MLoop *mloop = &export_mesh_eval_->mloop[mpoly.loopstart];
+  for (int loop_i = 0; loop_i < mpoly.totloop; ++loop_i, ++mloop) {
+    const MDeformVert &dvert = dvert_layer[mloop->v];
+    for (int weight_i = 0; weight_i < dvert.totweight; ++weight_i) {
+      const auto group = dvert.dw[weight_i].def_nr;
+      if (group < group_weights.size()) {
+        group_weights[group] += dvert.dw[weight_i].weight;
+        found_any_group = true;
       }
     }
   }
 
-  if (!found_group) {
+  if (!found_any_group) {
     return NOT_FOUND;
   }
   /* Index of the group with maximum vertices. */
-  int16_t max_idx = std::max_element(deform_group_members.begin(), deform_group_members.end()) -
-                    deform_group_members.begin();
+  int16_t max_idx = std::max_element(group_weights.begin(), group_weights.end()) -
+                    group_weights.begin();
   return max_idx;
 }
 

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -48,7 +34,7 @@ std::unique_ptr<TreeElementID> TreeElementID::createFromID(TreeElement &legacy_t
       return std::make_unique<TreeElementIDScene>(legacy_te, (Scene &)id);
     case ID_OB:
     case ID_ME:
-    case ID_CU:
+    case ID_CU_LEGACY:
     case ID_MB:
     case ID_MA:
     case ID_TE:
@@ -69,7 +55,7 @@ std::unique_ptr<TreeElementID> TreeElementID::createFromID(TreeElement &legacy_t
     case ID_LP:
     case ID_GD:
     case ID_WS:
-    case ID_HA:
+    case ID_CV:
     case ID_PT:
     case ID_VO:
     case ID_SIM:
@@ -105,17 +91,6 @@ TreeElementID::TreeElementID(TreeElement &legacy_te, ID &id)
   /* Default, some specific types override this. */
   legacy_te_.name = id.name + 2;
   legacy_te_.idcode = GS(id.name);
-}
-
-void TreeElementID::postExpand(SpaceOutliner &space_outliner) const
-{
-  const bool lib_overrides_visible = !SUPPORT_FILTER_OUTLINER(&space_outliner) ||
-                                     ((space_outliner.filter & SO_FILTER_NO_LIB_OVERRIDE) == 0);
-
-  if (lib_overrides_visible && ID_IS_OVERRIDE_LIBRARY_REAL(&id_)) {
-    outliner_add_element(
-        &space_outliner, &legacy_te_.subtree, &id_, &legacy_te_, TSE_LIBRARY_OVERRIDE_BASE, 0);
-  }
 }
 
 bool TreeElementID::expandPoll(const SpaceOutliner &space_outliner) const

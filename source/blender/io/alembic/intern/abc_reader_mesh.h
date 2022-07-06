@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 /** \file
@@ -29,8 +15,6 @@ namespace blender::io::alembic {
 class AbcMeshReader final : public AbcObjectReader {
   Alembic::AbcGeom::IPolyMeshSchema m_schema;
 
-  CDStreamConfig m_mesh_data;
-
  public:
   AbcMeshReader(const Alembic::Abc::IObject &object, ImportSettings &settings);
 
@@ -46,7 +30,7 @@ class AbcMeshReader final : public AbcObjectReader {
                          const char *velocity_name,
                          float velocity_scale,
                          const char **err_str) override;
-  bool topology_changed(Mesh *existing_mesh,
+  bool topology_changed(const Mesh *existing_mesh,
                         const Alembic::Abc::ISampleSelector &sample_sel) override;
 
  private:
@@ -62,8 +46,6 @@ class AbcMeshReader final : public AbcObjectReader {
 
 class AbcSubDReader final : public AbcObjectReader {
   Alembic::AbcGeom::ISubDSchema m_schema;
-
-  CDStreamConfig m_mesh_data;
 
  public:
   AbcSubDReader(const Alembic::Abc::IObject &object, ImportSettings &settings);

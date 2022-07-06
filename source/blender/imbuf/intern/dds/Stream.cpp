@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup imbdds
@@ -26,14 +12,14 @@
 static const char *msg_error_seek = "DDS: trying to seek beyond end of stream (corrupt file?)";
 static const char *msg_error_read = "DDS: trying to read beyond end of stream (corrupt file?)";
 
-inline bool is_read_within_bounds(const Stream &mem, unsigned int cnt)
+inline bool is_read_within_bounds(const Stream &mem, unsigned int count)
 {
   if (mem.pos >= mem.size) {
     /* No more data remained in the memory buffer. */
     return false;
   }
 
-  if (cnt > mem.size - mem.pos) {
+  if (count > mem.size - mem.pos) {
     /* Reading past the memory bounds. */
     return false;
   }
@@ -97,15 +83,15 @@ unsigned int mem_read(Stream &mem, unsigned char &i)
   return 1;
 }
 
-unsigned int mem_read(Stream &mem, unsigned char *i, unsigned int cnt)
+unsigned int mem_read(Stream &mem, unsigned char *i, unsigned int count)
 {
-  if (!is_read_within_bounds(mem, cnt)) {
+  if (!is_read_within_bounds(mem, count)) {
     mem.set_failed(msg_error_read);
     return 0;
   }
-  memcpy(i, mem.mem + mem.pos, cnt);
-  mem.pos += cnt;
-  return cnt;
+  memcpy(i, mem.mem + mem.pos, count);
+  mem.pos += count;
+  return count;
 }
 
 void Stream::set_failed(const char *msg)

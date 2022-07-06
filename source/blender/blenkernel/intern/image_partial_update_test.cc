@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 by Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. */
 #include "testing/testing.h"
 
 #include "CLG_log.h"
@@ -70,7 +55,7 @@ class ImagePartialUpdateTest : public testing::Test {
     IMB_init();
 
     bmain = BKE_main_new();
-    /* Creating an image generates a mem-leak during tests. */
+    /* Creating an image generates a memory-leak during tests. */
     image = create_test_image(1024, 1024);
     image_tile = BKE_image_get_tile(image, 0);
     image_buffer = BKE_image_acquire_ibuf(image, nullptr, nullptr);

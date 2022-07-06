@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -108,6 +94,9 @@ static void brush_copy_data(Main *UNUSED(bmain), ID *id_dst, const ID *id_src, c
     brush_dst->gpencil_settings->curve_rand_value = BKE_curvemapping_copy(
         brush_src->gpencil_settings->curve_rand_value);
   }
+  if (brush_src->curves_sculpt_settings != NULL) {
+    brush_dst->curves_sculpt_settings = MEM_dupallocN(brush_src->curves_sculpt_settings);
+  }
 
   /* enable fake user by default */
   id_fake_user_set(&brush_dst->id);
@@ -135,6 +124,9 @@ static void brush_free_data(ID *id)
 
     MEM_SAFE_FREE(brush->gpencil_settings);
   }
+  if (brush->curves_sculpt_settings != NULL) {
+    MEM_freeN(brush->curves_sculpt_settings);
+  }
 
   MEM_SAFE_FREE(brush->gradient);
 
@@ -158,10 +150,10 @@ static void brush_make_local(Main *bmain, ID *id, const int flags)
     /* FIXME: Recursive calls affecting other non-embedded IDs are really bad and should be avoided
      * in IDType callbacks. Higher-level ID management code usually does not expect such things and
      * does not deal properly with it. */
-    /* NOTE: assert below ensures that the comment above is valid, and that that exception is
+    /* NOTE: assert below ensures that the comment above is valid, and that exception is
      * acceptable for the time being. */
     BKE_lib_id_make_local(bmain, &brush->clone.image->id, 0);
-    BLI_assert(brush->clone.image->id.lib == NULL && brush->clone.image->id.newid == NULL);
+    BLI_assert(!ID_IS_LINKED(brush->clone.image) && brush->clone.image->id.newid == NULL);
   }
 
   if (force_local) {
@@ -250,6 +242,9 @@ static void brush_blend_write(BlendWriter *writer, ID *id, const void *id_addres
       BKE_curvemapping_blend_write(writer, brush->gpencil_settings->curve_rand_value);
     }
   }
+  if (brush->curves_sculpt_settings) {
+    BLO_write_struct(writer, BrushCurvesSculptSettings, brush->curves_sculpt_settings);
+  }
   if (brush->gradient) {
     BLO_write_struct(writer, ColorBand, brush->gradient);
   }
@@ -321,6 +316,8 @@ static void brush_blend_read_data(BlendDataReader *reader, ID *id)
       BKE_curvemapping_blend_read(reader, brush->gpencil_settings->curve_rand_value);
     }
   }
+
+  BLO_read_data_address(reader, &brush->curves_sculpt_settings);
 
   brush->preview = NULL;
   brush->icon_imbuf = NULL;
@@ -502,6 +499,10 @@ Brush *BKE_brush_add(Main *bmain, const char *name, const eObjectMode ob_mode)
   brush = BKE_id_new(bmain, ID_BR, name);
 
   brush->ob_mode = ob_mode;
+
+  if (ob_mode == OB_MODE_SCULPT_CURVES) {
+    BKE_brush_init_curves_sculpt_settings(brush);
+  }
 
   return brush;
 }
@@ -1551,6 +1552,17 @@ void BKE_brush_gpencil_weight_presets(Main *bmain, ToolSettings *ts, const bool 
   }
 }
 
+void BKE_brush_init_curves_sculpt_settings(Brush *brush)
+{
+  if (brush->curves_sculpt_settings == NULL) {
+    brush->curves_sculpt_settings = MEM_callocN(sizeof(BrushCurvesSculptSettings), __func__);
+  }
+  BrushCurvesSculptSettings *settings = brush->curves_sculpt_settings;
+  settings->add_amount = 1;
+  settings->minimum_length = 0.01f;
+  settings->curve_length = 0.3f;
+}
+
 struct Brush *BKE_brush_first_search(struct Main *bmain, const eObjectMode ob_mode)
 {
   Brush *brush;
@@ -1824,7 +1836,8 @@ void BKE_brush_sculpt_reset(Brush *br)
       br->tip_roundness = 1.0f;
       br->density = 1.0f;
       br->flag &= ~BRUSH_SPACE_ATTEN;
-      zero_v3(br->rgb);
+      copy_v3_fl(br->rgb, 1.0f);
+      zero_v3(br->secondary_rgb);
       break;
     case SCULPT_TOOL_SMEAR:
       br->alpha = 1.0f;
@@ -2016,7 +2029,7 @@ float BKE_brush_sample_tex_3d(const Scene *scene,
       /* leave the coordinates relative to the screen */
 
       /* use unadjusted size for tiled mode */
-      invradius = 1.0f / BKE_brush_size_get(scene, br);
+      invradius = 1.0f / ups->start_pixel_radius;
 
       x = point_2d[0];
       y = point_2d[1];
@@ -2129,7 +2142,7 @@ float BKE_brush_sample_masktex(
       /* leave the coordinates relative to the screen */
 
       /* use unadjusted size for tiled mode */
-      invradius = 1.0f / BKE_brush_size_get(scene, br);
+      invradius = 1.0f / ups->start_pixel_radius;
 
       x = point_2d[0];
       y = point_2d[1];

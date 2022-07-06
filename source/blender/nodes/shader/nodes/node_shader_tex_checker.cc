@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -77,9 +61,7 @@ class NodeTexChecker : public fn::MultiFunction {
     return signature.build();
   }
 
-  void call(blender::IndexMask mask,
-            fn::MFParams params,
-            fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
   {
     const VArray<float3> &vector = params.readonly_single_input<float3>(0, "Vector");
     const VArray<ColorGeometry4f> &color1 = params.readonly_single_input<ColorGeometry4f>(
@@ -110,8 +92,7 @@ class NodeTexChecker : public fn::MultiFunction {
   }
 };
 
-static void sh_node_tex_checker_build_multi_function(
-    blender::nodes::NodeMultiFunctionBuilder &builder)
+static void sh_node_tex_checker_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static NodeTexChecker fn;
   builder.set_matching_fn(fn);

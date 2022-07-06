@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -20,6 +6,8 @@
 
 #include "DNA_listBase.h"
 #include "DNA_space_types.h"
+
+#include "BLI_utildefines.h"
 
 #include "tree_display.hh"
 
@@ -42,13 +30,19 @@ std::unique_ptr<AbstractTreeDisplay> AbstractTreeDisplay::createFromDisplayMode(
     case SO_ID_ORPHANS:
       return std::make_unique<TreeDisplayIDOrphans>(space_outliner);
     case SO_OVERRIDES_LIBRARY:
-      return std::make_unique<TreeDisplayOverrideLibrary>(space_outliner);
+      switch ((eSpaceOutliner_LibOverrideViewMode)space_outliner.lib_override_view_mode) {
+        case SO_LIB_OVERRIDE_VIEW_PROPERTIES:
+          return std::make_unique<TreeDisplayOverrideLibraryProperties>(space_outliner);
+        case SO_LIB_OVERRIDE_VIEW_HIERARCHIES:
+          return std::make_unique<TreeDisplayOverrideLibraryHierarchies>(space_outliner);
+      }
+      break;
     case SO_VIEW_LAYER:
-      /* FIXME(Julian): this should not be the default! Return nullptr and handle that as valid
-       * case. */
-    default:
       return std::make_unique<TreeDisplayViewLayer>(space_outliner);
   }
+
+  BLI_assert_unreachable();
+  return nullptr;
 }
 
 bool AbstractTreeDisplay::hasWarnings() const

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -40,23 +24,20 @@ static int gpu_shader_vector_displacement(GPUMaterial *mat,
                                           GPUNodeStack *in,
                                           GPUNodeStack *out)
 {
-  if (node->custom1 == SHD_SPACE_TANGENT) {
-    return GPU_stack_link(mat,
-                          node,
-                          "node_vector_displacement_tangent",
-                          in,
-                          out,
-                          GPU_attribute(mat, CD_TANGENT, ""),
-                          GPU_builtin(GPU_WORLD_NORMAL),
-                          GPU_builtin(GPU_OBJECT_MATRIX),
-                          GPU_builtin(GPU_VIEW_MATRIX));
+  switch (node->custom1) {
+    case SHD_SPACE_TANGENT:
+      return GPU_stack_link(mat,
+                            node,
+                            "node_vector_displacement_tangent",
+                            in,
+                            out,
+                            GPU_attribute(mat, CD_TANGENT, ""));
+    case SHD_SPACE_OBJECT:
+      return GPU_stack_link(mat, node, "node_vector_displacement_object", in, out);
+    case SHD_SPACE_WORLD:
+    default:
+      return GPU_stack_link(mat, node, "node_vector_displacement_world", in, out);
   }
-  if (node->custom1 == SHD_SPACE_OBJECT) {
-    return GPU_stack_link(
-        mat, node, "node_vector_displacement_object", in, out, GPU_builtin(GPU_OBJECT_MATRIX));
-  }
-
-  return GPU_stack_link(mat, node, "node_vector_displacement_world", in, out);
 }
 
 }  // namespace blender::nodes::node_shader_vector_displacement_cc

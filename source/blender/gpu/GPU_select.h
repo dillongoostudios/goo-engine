@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2014 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2014 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -32,7 +16,7 @@ extern "C" {
 struct rcti;
 
 /** Flags for mode of operation. */
-enum {
+typedef enum eGPUSelectMode {
   GPU_SELECT_ALL = 1,
   /* gpu_select_query */
   GPU_SELECT_NEAREST_FIRST_PASS = 2,
@@ -40,13 +24,32 @@ enum {
   /* gpu_select_pick */
   GPU_SELECT_PICK_ALL = 4,
   GPU_SELECT_PICK_NEAREST = 5,
-};
+} eGPUSelectMode;
+
+/**
+ * The result of calling #GPU_select_begin & #GPU_select_end.
+ */
+typedef struct GPUSelectResult {
+  /** The selection identifier matching the value passed in by #GPU_select_load_id. */
+  unsigned int id;
+  /**
+   * The nearest depth.
+   * - Only supported by picking modes (#GPU_SELECT_PICK_ALL and #GPU_SELECT_PICK_NEAREST)
+   *   since occlusion quires don't provide a convenient way of accessing the depth-buffer.
+   * - OpenGL's `GL_SELECT` supported both near and far depths,
+   *   this has not been included as Blender doesn't need this however support could be added.
+   */
+  unsigned int depth;
+} GPUSelectResult;
 
 /**
  * Initialize and provide buffer for results.
  */
-void GPU_select_begin(
-    unsigned int *buffer, unsigned int bufsize, const struct rcti *input, char mode, int oldhits);
+void GPU_select_begin(GPUSelectResult *buffer,
+                      unsigned int buffer_len,
+                      const struct rcti *input,
+                      eGPUSelectMode mode,
+                      int oldhits);
 /**
  * Loads a new selection id and ends previous query, if any.
  * In second pass of selection it also returns
@@ -79,8 +82,8 @@ void GPU_select_cache_end(void);
  *
  * Note that comparing depth as uint is fine.
  */
-const uint *GPU_select_buffer_near(const uint *buffer, int hits);
-uint GPU_select_buffer_remove_by_id(uint *buffer, int hits, uint select_id);
+const GPUSelectResult *GPU_select_buffer_near(const GPUSelectResult *buffer, int hits);
+uint GPU_select_buffer_remove_by_id(GPUSelectResult *buffer, int hits, uint select_id);
 /**
  * Part of the solution copied from `rect_subregion_stride_calc`.
  */

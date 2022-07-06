@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. */
 
 /** \file
  * \ingroup edgpencil
@@ -1255,7 +1239,7 @@ static bool contract_shape(ImBuf *ibuf)
   const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   const int max_size = (ibuf->x * ibuf->y) - 1;
 
-  /* detect pixels and expand into red areas */
+  /* Detect if pixel is near of no green pixels and mark green pixel to be cleared. */
   for (int row = 0; row < ibuf->y; row++) {
     if (!is_row_filled(ibuf, row)) {
       continue;
@@ -1654,14 +1638,9 @@ static void gpencil_stroke_from_buffer(tGPDfill *tgpf)
     }
   }
 
-  /* smooth stroke */
-  float reduce = 0.0f;
-  float smoothfac = 1.0f;
-  for (int r = 0; r < 1; r++) {
-    for (int i = 0; i < gps->totpoints; i++) {
-      BKE_gpencil_stroke_smooth_point(gps, i, smoothfac - reduce, false);
-    }
-    reduce += 0.25f; /* reduce the factor */
+  /* Smooth stroke. No copy of the stroke since there only a minor improvement here. */
+  for (int i = 0; i < gps->totpoints; i++) {
+    BKE_gpencil_stroke_smooth_point(gps, i, 1.0f, 2, false, true, gps);
   }
 
   /* if axis locked, reproject to plane locked */
@@ -2197,7 +2176,8 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
   tgpf->on_back = RNA_boolean_get(op->ptr, "on_back");
 
   const bool is_brush_inv = brush_settings->fill_direction == BRUSH_DIR_IN;
-  const bool is_inverted = (is_brush_inv && !event->ctrl) || (!is_brush_inv && event->ctrl);
+  const bool is_inverted = (is_brush_inv && (event->modifier & KM_CTRL) == 0) ||
+                           (!is_brush_inv && (event->modifier & KM_CTRL) != 0);
   const bool is_multiedit = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(tgpf->gpd);
   const bool do_extend = (tgpf->fill_extend_fac > 0.0f);
   const bool help_lines = ((tgpf->flag & GP_BRUSH_FILL_SHOW_HELPLINES) ||
@@ -2242,7 +2222,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
             /* Hash of selected frames. */
             GHash *frame_list = BLI_ghash_int_new_ex(__func__, 64);
 
-            /* If not multiframe and there is no frame in CFRA for the active layer, create
+            /* If not multi-frame and there is no frame in CFRA for the active layer, create
              * a new frame. */
             if (!is_multiedit) {
               tgpf->gpf = BKE_gpencil_layer_frame_get(
@@ -2338,7 +2318,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
     case EVT_PAGEUPKEY:
     case WHEELUPMOUSE:
       if (tgpf->oldkey == 1) {
-        tgpf->fill_extend_fac -= (event->shift) ? 0.01f : 0.1f;
+        tgpf->fill_extend_fac -= (event->modifier & KM_SHIFT) ? 0.01f : 0.1f;
         CLAMP_MIN(tgpf->fill_extend_fac, 0.0f);
         gpencil_update_extend(tgpf);
       }
@@ -2346,7 +2326,7 @@ static int gpencil_fill_modal(bContext *C, wmOperator *op, const wmEvent *event)
     case EVT_PAGEDOWNKEY:
     case WHEELDOWNMOUSE:
       if (tgpf->oldkey == 1) {
-        tgpf->fill_extend_fac += (event->shift) ? 0.01f : 0.1f;
+        tgpf->fill_extend_fac += (event->modifier & KM_SHIFT) ? 0.01f : 0.1f;
         CLAMP_MAX(tgpf->fill_extend_fac, 100.0f);
         gpencil_update_extend(tgpf);
       }

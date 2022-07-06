@@ -1,32 +1,11 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup imbuf
- */
-
-/* ----------------------------------------------------------------------
  * Radiance High Dynamic Range image file IO
  * For description and code for reading/writing of radiance hdr files
  * by Greg Ward, refer to:
  * http://radsite.lbl.gov/radiance/refer/Notes/picture_format.html
- * ----------------------------------------------------------------------
  */
 
 #include "MEM_guardedalloc.h"
@@ -329,7 +308,7 @@ struct ImBuf *imb_loadhdr(const unsigned char *mem,
 static int fwritecolrs(
     FILE *file, int width, int channels, const unsigned char *ibufscan, const float *fpscan)
 {
-  int beg, c2, cnt = 0;
+  int beg, c2, count = 0;
   fCOLOR fcol;
   RGBE rgbe, *rgbe_scan;
 
@@ -368,14 +347,14 @@ static int fwritecolrs(
   putc((unsigned char)(width & 255), file);
   /* put components separately */
   for (size_t i = 0; i < 4; i++) {
-    for (size_t j = 0; j < width; j += cnt) { /* find next run */
-      for (beg = j; beg < width; beg += cnt) {
-        for (cnt = 1; (cnt < 127) && ((beg + cnt) < width) &&
-                      (rgbe_scan[beg + cnt][i] == rgbe_scan[beg][i]);
-             cnt++) {
+    for (size_t j = 0; j < width; j += count) { /* find next run */
+      for (beg = j; beg < width; beg += count) {
+        for (count = 1; (count < 127) && ((beg + count) < width) &&
+                        (rgbe_scan[beg + count][i] == rgbe_scan[beg][i]);
+             count++) {
           /* pass */
         }
-        if (cnt >= MINRUN) {
+        if (count >= MINRUN) {
           break; /* long enough */
         }
       }
@@ -399,12 +378,12 @@ static int fwritecolrs(
           putc(rgbe_scan[j++][i], file);
         }
       }
-      if (cnt >= MINRUN) { /* write out run */
-        putc((unsigned char)(128 + cnt), file);
+      if (count >= MINRUN) { /* write out run */
+        putc((unsigned char)(128 + count), file);
         putc(rgbe_scan[beg][i], file);
       }
       else {
-        cnt = 0;
+        count = 0;
       }
     }
   }

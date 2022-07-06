@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -557,4 +543,44 @@ Container &move_assign_container(Container &dst, Container &&src) noexcept(
   return dst;
 }
 
+/**
+ * Returns true if the value is different and was assigned.
+ */
+template<typename T> inline bool assign_if_different(T &old_value, T new_value)
+{
+  if (old_value != new_value) {
+    old_value = std::move(new_value);
+    return true;
+  }
+  return false;
+}
+
 }  // namespace blender
+
+namespace blender::detail {
+
+template<typename Func> struct ScopedDeferHelper {
+  Func func;
+
+  ~ScopedDeferHelper()
+  {
+    func();
+  }
+};
+
+}  // namespace blender::detail
+
+#define BLI_SCOPED_DEFER_NAME1(a, b) a##b
+#define BLI_SCOPED_DEFER_NAME2(a, b) BLI_SCOPED_DEFER_NAME1(a, b)
+#define BLI_SCOPED_DEFER_NAME(a) BLI_SCOPED_DEFER_NAME2(_scoped_defer_##a##_, __LINE__)
+
+/**
+ * Execute the given function when the current scope ends. This can be used to cheaply implement
+ * some RAII-like behavior for C types that don't support it. Long term, the types we want to use
+ * this with should either be converted to C++ or get a proper C++ API. Until then, this function
+ * can help avoid common resource leakages.
+ */
+#define BLI_SCOPED_DEFER(function_to_defer) \
+  auto BLI_SCOPED_DEFER_NAME(func) = (function_to_defer); \
+  blender::detail::ScopedDeferHelper<decltype(BLI_SCOPED_DEFER_NAME(func))> \
+      BLI_SCOPED_DEFER_NAME(helper){std::move(BLI_SCOPED_DEFER_NAME(func))};

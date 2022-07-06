@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <mutex>
 
@@ -20,6 +6,8 @@
 
 #include "BLI_dot_export.hh"
 #include "BLI_stack.hh"
+
+#include "RNA_prototypes.h"
 
 namespace blender::nodes {
 
@@ -33,7 +21,6 @@ NodeTreeRef::NodeTreeRef(bNodeTree *btree) : btree_(btree)
     node.tree_ = this;
     node.bnode_ = bnode;
     node.id_ = nodes_by_id_.append_and_get_index(&node);
-    RNA_pointer_create(&btree->id, &RNA_Node, bnode, &node.rna_);
 
     LISTBASE_FOREACH (bNodeSocket *, bsocket, &bnode->inputs) {
       InputSocketRef &socket = *allocator_.construct<InputSocketRef>().release();
@@ -42,7 +29,6 @@ NodeTreeRef::NodeTreeRef(bNodeTree *btree) : btree_(btree)
       socket.is_input_ = true;
       socket.bsocket_ = bsocket;
       socket.id_ = sockets_by_id_.append_and_get_index(&socket);
-      RNA_pointer_create(&btree->id, &RNA_NodeSocket, bsocket, &socket.rna_);
     }
 
     LISTBASE_FOREACH (bNodeSocket *, bsocket, &bnode->outputs) {
@@ -52,7 +38,6 @@ NodeTreeRef::NodeTreeRef(bNodeTree *btree) : btree_(btree)
       socket.is_input_ = false;
       socket.bsocket_ = bsocket;
       socket.id_ = sockets_by_id_.append_and_get_index(&socket);
-      RNA_pointer_create(&btree->id, &RNA_NodeSocket, bsocket, &socket.rna_);
     }
 
     LISTBASE_FOREACH (bNodeLink *, blink, &bnode->internal_links) {
@@ -674,6 +659,20 @@ const NodeTreeRef &get_tree_ref_from_map(NodeTreeRefMap &node_tree_refs, bNodeTr
 {
   return *node_tree_refs.lookup_or_add_cb(&btree,
                                           [&]() { return std::make_unique<NodeTreeRef>(&btree); });
+}
+
+PointerRNA NodeRef::rna() const
+{
+  PointerRNA rna;
+  RNA_pointer_create(&tree_->btree()->id, &RNA_Node, bnode_, &rna);
+  return rna;
+}
+
+PointerRNA SocketRef::rna() const
+{
+  PointerRNA rna;
+  RNA_pointer_create(&this->tree().btree()->id, &RNA_NodeSocket, bsocket_, &rna);
+  return rna;
 }
 
 }  // namespace blender::nodes

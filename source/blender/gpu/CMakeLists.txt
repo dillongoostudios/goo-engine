@@ -1,34 +1,18 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# The Original Code is Copyright (C) 2006, Blender Foundation
-# All rights reserved.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright 2006 Blender Foundation. All rights reserved.
 
 # WITH_OPENGL limits the visibility of the opengl headers to just GPU and bg_gpu,
-# to more easily highlight codepadths in other libraries that need to be refactored,
+# to more easily highlight code-paths in other libraries that need to be refactored,
 # bf_gpu is allowed to have opengl regardless of this option.
 
-if(NOT WITH_OPENGL)
+if(NOT WITH_OPENGL AND NOT WITH_METAL_BACKEND)
   add_definitions(-DWITH_OPENGL)
 endif()
 
 set(INC
   .
   intern
+  metal
   opengl
   ../blenkernel
   ../blenlib
@@ -45,6 +29,7 @@ set(INC
   ../nodes
   ../nodes/intern
 
+  ../../../intern/atomic
   ../../../intern/clog
   ../../../intern/ghost
   ../../../intern/glew-mx
@@ -62,7 +47,7 @@ set(SRC
   intern/gpu_batch_utils.c
   intern/gpu_buffers.c
   intern/gpu_capabilities.cc
-  intern/gpu_codegen.c
+  intern/gpu_codegen.cc
   intern/gpu_compute.cc
   intern/gpu_context.cc
   intern/gpu_debug.cc
@@ -73,7 +58,6 @@ set(SRC
   intern/gpu_index_buffer.cc
   intern/gpu_init_exit.c
   intern/gpu_material.c
-  intern/gpu_material_library.c
   intern/gpu_matrix.cc
   intern/gpu_node_graph.c
   intern/gpu_platform.cc
@@ -88,31 +72,12 @@ set(SRC
   intern/gpu_shader_interface.cc
   intern/gpu_shader_log.cc
   intern/gpu_state.cc
+  intern/gpu_storage_buffer.cc
   intern/gpu_texture.cc
   intern/gpu_uniform_buffer.cc
   intern/gpu_vertex_buffer.cc
   intern/gpu_vertex_format.cc
   intern/gpu_viewport.c
-
-  opengl/gl_backend.cc
-  opengl/gl_batch.cc
-  opengl/gl_compute.cc
-  opengl/gl_context.cc
-  opengl/gl_debug.cc
-  opengl/gl_debug_layer.cc
-  opengl/gl_drawlist.cc
-  opengl/gl_framebuffer.cc
-  opengl/gl_immediate.cc
-  opengl/gl_index_buffer.cc
-  opengl/gl_query.cc
-  opengl/gl_shader.cc
-  opengl/gl_shader_interface.cc
-  opengl/gl_shader_log.cc
-  opengl/gl_state.cc
-  opengl/gl_texture.cc
-  opengl/gl_uniform_buffer.cc
-  opengl/gl_vertex_array.cc
-  opengl/gl_vertex_buffer.cc
 
   GPU_batch.h
   GPU_batch_presets.h
@@ -139,6 +104,7 @@ set(SRC
   GPU_shader.h
   GPU_shader_shared.h
   GPU_state.h
+  GPU_storage_buffer.h
   GPU_texture.h
   GPU_uniform_buffer.h
   GPU_vertex_buffer.h
@@ -164,13 +130,39 @@ set(SRC
   intern/gpu_select_private.h
   intern/gpu_shader_create_info.hh
   intern/gpu_shader_create_info_private.hh
+  intern/gpu_shader_dependency_private.h
   intern/gpu_shader_interface.hh
   intern/gpu_shader_private.hh
   intern/gpu_state_private.hh
+  intern/gpu_storage_buffer_private.hh
   intern/gpu_texture_private.hh
   intern/gpu_uniform_buffer_private.hh
   intern/gpu_vertex_buffer_private.hh
   intern/gpu_vertex_format_private.h
+)
+
+set(OPENGL_SRC
+
+  opengl/gl_backend.cc
+  opengl/gl_batch.cc
+  opengl/gl_compute.cc
+  opengl/gl_context.cc
+  opengl/gl_debug.cc
+  opengl/gl_debug_layer.cc
+  opengl/gl_drawlist.cc
+  opengl/gl_framebuffer.cc
+  opengl/gl_immediate.cc
+  opengl/gl_index_buffer.cc
+  opengl/gl_query.cc
+  opengl/gl_shader.cc
+  opengl/gl_shader_interface.cc
+  opengl/gl_shader_log.cc
+  opengl/gl_state.cc
+  opengl/gl_storage_buffer.cc
+  opengl/gl_texture.cc
+  opengl/gl_uniform_buffer.cc
+  opengl/gl_vertex_array.cc
+  opengl/gl_vertex_buffer.cc
 
   opengl/gl_backend.hh
   opengl/gl_batch.hh
@@ -186,11 +178,36 @@ set(SRC
   opengl/gl_shader.hh
   opengl/gl_shader_interface.hh
   opengl/gl_state.hh
+  opengl/gl_storage_buffer.hh
   opengl/gl_texture.hh
   opengl/gl_uniform_buffer.hh
   opengl/gl_vertex_array.hh
   opengl/gl_vertex_buffer.hh
 )
+
+set(METAL_SRC
+  metal/mtl_backend.mm
+  metal/mtl_context.mm
+  metal/mtl_debug.mm
+  metal/mtl_texture.mm
+  metal/mtl_texture_util.mm
+
+  metal/mtl_backend.hh
+  metal/mtl_capabilities.hh
+  metal/mtl_common.hh
+  metal/mtl_context.hh
+  metal/mtl_debug.hh
+  metal/mtl_texture.hh
+)
+
+# Select Backend source based on availability
+if(WITH_OPENGL)
+  list(APPEND SRC ${OPENGL_SRC})
+endif()
+
+if(WITH_METAL_BACKEND)
+  list(APPEND SRC ${METAL_SRC})
+endif()
 
 set(LIB
   ${BLENDER_GL_LIBRARIES}
@@ -202,8 +219,21 @@ if(NOT WITH_SYSTEM_GLEW)
   )
 endif()
 
+set(MSL_SRC
+
+  metal/kernels/compute_texture_update.msl
+  metal/kernels/compute_texture_read.msl
+  metal/kernels/depth_2d_update_float_frag.glsl
+  metal/kernels/depth_2d_update_int24_frag.glsl
+  metal/kernels/depth_2d_update_int32_frag.glsl
+  metal/kernels/depth_2d_update_vert.glsl
+  metal/kernels/gpu_shader_fullscreen_blit_vert.glsl
+  metal/kernels/gpu_shader_fullscreen_blit_frag.glsl
+)
+
 set(GLSL_SRC
   GPU_shader_shared.h
+  shaders/opengl/glsl_shader_defines.glsl
 
   shaders/gpu_shader_depth_only_frag.glsl
   shaders/gpu_shader_uniform_color_frag.glsl
@@ -302,6 +332,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_glass.glsl
   shaders/material/gpu_shader_material_glossy.glsl
   shaders/material/gpu_shader_material_hair_info.glsl
+  shaders/material/gpu_shader_material_hair.glsl
   shaders/material/gpu_shader_material_hash.glsl
   shaders/material/gpu_shader_material_holdout.glsl
   shaders/material/gpu_shader_material_hue_sat_val.glsl
@@ -360,7 +391,6 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_velvet.glsl
   shaders/material/gpu_shader_material_vertex_color.glsl
   shaders/material/gpu_shader_material_volume_absorption.glsl
-  shaders/material/gpu_shader_material_volume_info.glsl
   shaders/material/gpu_shader_material_volume_principled.glsl
   shaders/material/gpu_shader_material_volume_scatter.glsl
   shaders/material/gpu_shader_material_wireframe.glsl
@@ -383,15 +413,22 @@ set(GLSL_SRC
   shaders/gpu_shader_cfg_world_clip_lib.glsl
   shaders/gpu_shader_colorspace_lib.glsl
 
-  shaders/gpu_shader_common_obinfos_lib.glsl
-
-  intern/gpu_shader_shared_utils.h
+  GPU_shader_shared_utils.h
 )
 
 set(GLSL_C)
 foreach(GLSL_FILE ${GLSL_SRC})
   data_to_c_simple(${GLSL_FILE} GLSL_C)
 endforeach()
+
+
+if(WITH_METAL_BACKEND)
+  set(MSL_C)
+  foreach(MSL_FILE ${MSL_SRC})
+    data_to_c_simple(${MSL_FILE} MSL_C)
+  endforeach()
+  list(APPEND GLSL_C ${MSL_C})
+endif()
 
 blender_add_lib(bf_gpu_shaders "${GLSL_C}" "" "" "")
 
@@ -411,7 +448,24 @@ file(GENERATE OUTPUT ${glsl_source_list_file} CONTENT "${GLSL_SOURCE_CONTENT}")
 list(APPEND SRC ${glsl_source_list_file})
 list(APPEND INC ${CMAKE_CURRENT_BINARY_DIR})
 
-set(SHADER_CREATE_INFOS
+set(SRC_SHADER_CREATE_INFOS
+  ../draw/engines/basic/shaders/infos/basic_depth_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_material_info.hh
+  ../draw/engines/gpencil/shaders/infos/gpencil_info.hh
+  ../draw/engines/gpencil/shaders/infos/gpencil_vfx_info.hh
+  ../draw/engines/overlay/shaders/infos/antialiasing_info.hh
+  ../draw/engines/overlay/shaders/infos/armature_info.hh
+  ../draw/engines/overlay/shaders/infos/background_info.hh
+  ../draw/engines/overlay/shaders/infos/edit_mode_info.hh
+  ../draw/engines/overlay/shaders/infos/extra_info.hh
+  ../draw/engines/overlay/shaders/infos/facing_info.hh
+  ../draw/engines/overlay/shaders/infos/grid_info.hh
+  ../draw/engines/overlay/shaders/infos/outline_info.hh
+  ../draw/engines/overlay/shaders/infos/paint_info.hh
+  ../draw/engines/overlay/shaders/infos/sculpt_info.hh
+  ../draw/engines/overlay/shaders/infos/volume_info.hh
+  ../draw/engines/overlay/shaders/infos/wireframe_info.hh
+  ../draw/engines/select/shaders/infos/select_id_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_composite_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_antialiasing_info.hh
   ../draw/engines/workbench/shaders/infos/workbench_effect_cavity_info.hh
@@ -424,9 +478,9 @@ set(SHADER_CREATE_INFOS
   ../draw/engines/workbench/shaders/infos/workbench_volume_info.hh
   ../draw/engines/image/shaders/infos/engine_image_info.hh
   ../draw/intern/shaders/draw_fullscreen_info.hh
+  ../draw/intern/shaders/draw_hair_refine_info.hh
   ../draw/intern/shaders/draw_object_infos_info.hh
   ../draw/intern/shaders/draw_view_info.hh
-  ../draw/intern/shaders/draw_hair_refine_info.hh
 
   shaders/infos/gpu_clip_planes_info.hh
   shaders/infos/gpu_shader_2D_area_borders_info.hh
@@ -447,22 +501,25 @@ set(SHADER_CREATE_INFOS
   shaders/infos/gpu_shader_2D_point_varying_size_varying_color_info.hh
   shaders/infos/gpu_shader_2D_smooth_color_info.hh
   shaders/infos/gpu_shader_2D_uniform_color_info.hh
+  shaders/infos/gpu_shader_2D_widget_info.hh
   shaders/infos/gpu_shader_3D_depth_only_info.hh
   shaders/infos/gpu_shader_3D_flat_color_info.hh
   shaders/infos/gpu_shader_3D_image_modulate_alpha_info.hh
   shaders/infos/gpu_shader_3D_point_info.hh
+  shaders/infos/gpu_shader_3D_polyline_info.hh
   shaders/infos/gpu_shader_3D_smooth_color_info.hh
   shaders/infos/gpu_shader_3D_uniform_color_info.hh
   shaders/infos/gpu_shader_gpencil_stroke_info.hh
   shaders/infos/gpu_shader_instance_varying_color_varying_size_info.hh
   shaders/infos/gpu_shader_keyframe_shape_info.hh
+  shaders/infos/gpu_shader_line_dashed_uniform_color_info.hh
   shaders/infos/gpu_shader_simple_lighting_info.hh
   shaders/infos/gpu_shader_text_info.hh
   shaders/infos/gpu_srgb_to_framebuffer_space_info.hh
 )
 
 set(SHADER_CREATE_INFOS_CONTENT "")
-foreach(DESCRIPTOR_FILE ${SHADER_CREATE_INFOS})
+foreach(DESCRIPTOR_FILE ${SRC_SHADER_CREATE_INFOS})
   string(APPEND SHADER_CREATE_INFOS_CONTENT "#include \"${DESCRIPTOR_FILE}\"\n")
 endforeach()
 
@@ -479,11 +536,20 @@ if(WITH_IMAGE_DDS)
   add_definitions(-DWITH_DDS)
 endif()
 
+if(WITH_OPENCOLORIO)
+  add_definitions(-DWITH_OCIO)
+endif()
+
 blender_add_lib(bf_gpu "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 target_link_libraries(bf_gpu PUBLIC
   bf_draw_shaders
   bf_gpu_shaders
 )
+
+if(WITH_OPENCOLORIO)
+  target_link_libraries(bf_gpu PUBLIC bf_ocio_shaders)
+endif()
+
 
 if(CXX_WARN_NO_SUGGEST_OVERRIDE)
   target_compile_options(bf_gpu PRIVATE $<$<COMPILE_LANGUAGE:CXX>:-Wsuggest-override>)
@@ -492,30 +558,57 @@ endif()
 
 
 if(WITH_GPU_SHADER_BUILDER)
-  add_executable(shader_builder
-    intern/gpu_shader_builder.cc
-    intern/gpu_shader_builder_stubs.cc
-    ${shader_create_info_list_file}
-  )
+  # TODO(@fclem) Fix this mess.
+  if(APPLE)
+    add_executable(shader_builder
+      intern/gpu_shader_builder.cc
+      ${shader_create_info_list_file}
+      )
 
-  target_link_libraries(shader_builder PUBLIC
-    bf_blenkernel
-    ${PLATFORM_LINKLIBS}
-  )
+    setup_platform_linker_flags(shader_builder)
+
+    target_link_libraries(shader_builder PUBLIC
+      bf_blenkernel
+      buildinfoobj
+    )
+  else()
+    if(WIN32)
+      # We can re-use the manifest from tests.exe here since it's
+      # rather generic and just selects the appropriate common
+      # controls version.
+      set(MANIFEST "${CMAKE_BINARY_DIR}/tests.exe.manifest")
+    endif()
+    add_executable(shader_builder
+      intern/gpu_shader_builder.cc
+      intern/gpu_shader_builder_stubs.cc
+      ${shader_create_info_list_file}
+      ${MANIFEST}
+    )
+
+    target_link_libraries(shader_builder PUBLIC
+      bf_blenkernel
+      ${PLATFORM_LINKLIBS}
+    )
+  endif()
+
   target_include_directories(shader_builder PRIVATE ${INC} ${CMAKE_CURRENT_BINARY_DIR})
 
-  set(BAKED_CREATE_INFOS_FILE ${CMAKE_CURRENT_BINARY_DIR}/shader_baked.hh)
+  set(SRC_BAKED_CREATE_INFOS_FILE ${CMAKE_CURRENT_BINARY_DIR}/shader_baked.hh)
 
   add_custom_command(
     OUTPUT
-    ${BAKED_CREATE_INFOS_FILE}
+    ${SRC_BAKED_CREATE_INFOS_FILE}
     COMMAND
-      "$<TARGET_FILE:shader_builder>" ${BAKED_CREATE_INFOS_FILE}
+      "$<TARGET_FILE:shader_builder>" ${SRC_BAKED_CREATE_INFOS_FILE}
     DEPENDS shader_builder
   )
   set(GPU_SHADER_INFO_SRC
     intern/gpu_shader_info_baked.cc
-    ${BAKED_CREATE_INFOS_FILE}
+    ${SRC_BAKED_CREATE_INFOS_FILE}
+
+    # For project files to be aware of these headers.
+    ${SRC_SHADER_CREATE_INFOS}
+    shaders/infos/gpu_interface_info.hh
   )
 
   blender_add_lib(bf_gpu_shader_infos "${GPU_SHADER_INFO_SRC}" "" "" "")

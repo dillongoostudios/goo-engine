@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 /** \file
  * \ingroup edanimation
@@ -675,7 +659,8 @@ void draw_fcurve_channel(AnimKeylistDrawList *draw_list,
 {
   const bool locked = (fcu->flag & FCURVE_PROTECTED) ||
                       ((fcu->grp) && (fcu->grp->flag & AGRP_PROTECTED)) ||
-                      ((adt && adt->action) && ID_IS_LINKED(adt->action));
+                      ((adt && adt->action) &&
+                       (ID_IS_LINKED(adt->action) || ID_IS_OVERRIDE_LIBRARY(adt->action)));
 
   AnimKeylistDrawListElem *draw_elem = ed_keylist_draw_list_add_elem(
       draw_list, ANIM_KEYLIST_FCURVE, ypos, yscale_fac, saction_flag);
@@ -692,7 +677,8 @@ void draw_agroup_channel(AnimKeylistDrawList *draw_list,
                          int saction_flag)
 {
   bool locked = (agrp->flag & AGRP_PROTECTED) ||
-                ((adt && adt->action) && ID_IS_LINKED(adt->action));
+                ((adt && adt->action) &&
+                 (ID_IS_LINKED(adt->action) || ID_IS_OVERRIDE_LIBRARY(adt->action)));
 
   AnimKeylistDrawListElem *draw_elem = ed_keylist_draw_list_add_elem(
       draw_list, ANIM_KEYLIST_AGROUP, ypos, yscale_fac, saction_flag);
@@ -708,7 +694,7 @@ void draw_action_channel(AnimKeylistDrawList *draw_list,
                          float yscale_fac,
                          int saction_flag)
 {
-  const bool locked = (act && ID_IS_LINKED(act));
+  const bool locked = (act && (ID_IS_LINKED(act) || ID_IS_OVERRIDE_LIBRARY(act)));
   saction_flag &= ~SACTION_SHOW_EXTREMES;
 
   AnimKeylistDrawListElem *draw_elem = ed_keylist_draw_list_add_elem(

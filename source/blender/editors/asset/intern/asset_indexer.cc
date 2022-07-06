@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edasset
@@ -53,7 +39,6 @@ using namespace blender::bke;
 using namespace blender::bke::idprop;
 
 /**
- * \file asset_indexer.cc
  * \brief Indexer for asset libraries.
  *
  * Indexes are stored per input file. Each index can contain zero to multiple asset entries.
@@ -508,15 +493,15 @@ struct AssetLibraryIndex {
       return;
     }
     struct direntry *dir_entries = nullptr;
-    int num_entries = BLI_filelist_dir_contents(index_path, &dir_entries);
-    for (int i = 0; i < num_entries; i++) {
+    const int dir_entries_num = BLI_filelist_dir_contents(index_path, &dir_entries);
+    for (int i = 0; i < dir_entries_num; i++) {
       struct direntry *entry = &dir_entries[i];
       if (BLI_str_endswith(entry->relname, ".index.json")) {
         unused_file_indices.add_as(std::string(entry->path));
       }
     }
 
-    BLI_filelist_free(dir_entries, num_entries);
+    BLI_filelist_free(dir_entries, dir_entries_num);
   }
 
   void mark_as_used(const std::string &filename)

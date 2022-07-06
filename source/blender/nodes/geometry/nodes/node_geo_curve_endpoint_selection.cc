@@ -1,20 +1,6 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_spline.hh"
+#include "BKE_curves.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -41,16 +27,6 @@ static void node_declare(NodeDeclarationBuilder &b)
           N_("The selection from the start and end of the splines based on the input sizes"));
 }
 
-static void select_by_spline(const int start, const int end, MutableSpan<bool> r_selection)
-{
-  const int size = r_selection.size();
-  const int start_use = std::min(start, size);
-  const int end_use = std::min(end, size);
-
-  r_selection.slice(0, start_use).fill(true);
-  r_selection.slice(size - end_use, end_use).fill(true);
-}
-
 class EndpointFieldInput final : public GeometryFieldInput {
   Field<int> start_size_;
   Field<int> end_size_;
@@ -73,38 +49,39 @@ class EndpointFieldInput final : public GeometryFieldInput {
     }
 
     const CurveComponent &curve_component = static_cast<const CurveComponent &>(component);
-    const CurveEval *curve = curve_component.get_for_read();
+    if (!curve_component.has_curves()) {
+      return nullptr;
+    }
 
-    Array<int> control_point_offsets = curve->control_point_offsets();
-
-    if (curve == nullptr || control_point_offsets.last() == 0) {
+    const Curves &curves_id = *curve_component.get_for_read();
+    const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
+    if (curves.points_num() == 0) {
       return nullptr;
     }
 
     GeometryComponentFieldContext size_context{curve_component, ATTR_DOMAIN_CURVE};
-    fn::FieldEvaluator evaluator{size_context, curve->splines().size()};
+    fn::FieldEvaluator evaluator{size_context, curves.curves_num()};
     evaluator.add(start_size_);
     evaluator.add(end_size_);
     evaluator.evaluate();
     const VArray<int> &start_size = evaluator.get_evaluated<int>(0);
     const VArray<int> &end_size = evaluator.get_evaluated<int>(1);
 
-    const int point_size = control_point_offsets.last();
-    Array<bool> selection(point_size, false);
-    int current_point = 0;
+    Array<bool> selection(curves.points_num(), false);
     MutableSpan<bool> selection_span = selection.as_mutable_span();
-    for (int i : IndexRange(curve->splines().size())) {
-      const SplinePtr &spline = curve->splines()[i];
-      if (start_size[i] <= 0 && end_size[i] <= 0) {
-        selection_span.slice(current_point, spline->size()).fill(false);
-      }
-      else {
-        int start_use = std::max(start_size[i], 0);
-        int end_use = std::max(end_size[i], 0);
-        select_by_spline(start_use, end_use, selection_span.slice(current_point, spline->size()));
-      }
-      current_point += spline->size();
-    }
+    devirtualize_varray2(start_size, end_size, [&](const auto &start_size, const auto &end_size) {
+      threading::parallel_for(curves.curves_range(), 1024, [&](IndexRange curves_range) {
+        for (const int i : curves_range) {
+          const IndexRange range = curves.points_for_curve(i);
+          const int start = std::max(start_size[i], 0);
+          const int end = std::max(end_size[i], 0);
+
+          selection_span.slice(range.take_front(start)).fill(true);
+          selection_span.slice(range.take_back(end)).fill(true);
+        }
+      });
+    });
+
     return VArray<bool>::ForContainer(std::move(selection));
   };
 

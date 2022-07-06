@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -195,17 +179,6 @@ static void extract_pos_nor_finish(const MeshRenderData *UNUSED(mr),
   MEM_freeN(data->normals);
 }
 
-static GPUVertFormat *get_pos_nor_format()
-{
-  static GPUVertFormat format = {0};
-  if (format.attr_len == 0) {
-    GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
-    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
-    GPU_vertformat_alias_add(&format, "vnor");
-  }
-  return &format;
-}
-
 static GPUVertFormat *get_normals_format()
 {
   static GPUVertFormat format = {0};
@@ -237,7 +210,7 @@ static void extract_pos_nor_init_subdiv(const DRWSubdivCache *subdiv_cache,
 
   /* Initialize the vertex buffer, it was already allocated. */
   GPU_vertbuf_init_build_on_device(
-      vbo, get_pos_nor_format(), subdiv_cache->num_subdiv_loops + loose_geom.loop_len);
+      vbo, draw_subdiv_get_pos_nor_format(), subdiv_cache->num_subdiv_loops + loose_geom.loop_len);
 
   if (subdiv_cache->num_subdiv_loops == 0) {
     return;
@@ -249,7 +222,7 @@ static void extract_pos_nor_init_subdiv(const DRWSubdivCache *subdiv_cache,
     Mesh *coarse_mesh = subdiv_cache->mesh;
     float(*lnors)[3] = static_cast<float(*)[3]>(
         CustomData_get_layer(&coarse_mesh->ldata, CD_NORMAL));
-    BLI_assert(lnors != NULL);
+    BLI_assert(lnors != nullptr);
 
     GPUVertBuf *src_custom_normals = GPU_vertbuf_calloc();
     GPU_vertbuf_init_with_format(src_custom_normals, get_custom_normals_format());
@@ -306,7 +279,7 @@ static void extract_pos_nor_loose_geom_subdiv(const DRWSubdivCache *subdiv_cache
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buffer);
   uint offset = subdiv_cache->num_subdiv_loops;
 
-  /* TODO(kevindietrich) : replace this when compressed normals are supported. */
+  /* TODO(@kevindietrich): replace this when compressed normals are supported. */
   struct SubdivPosNorLoop {
     float pos[3];
     float nor[3];

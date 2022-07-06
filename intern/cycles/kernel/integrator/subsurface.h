@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -184,7 +171,17 @@ ccl_device_inline bool subsurface_scatter(KernelGlobals kg, IntegratorState stat
 
   const int shader = intersection_get_shader(kg, &ss_isect.hits[0]);
   const int shader_flags = kernel_tex_fetch(__shaders, shader).flags;
-  if (shader_flags & SD_HAS_RAYTRACE) {
+  const int object_flags = intersection_get_object_flags(kg, &ss_isect.hits[0]);
+  const bool use_caustics = kernel_data.integrator.use_caustics &&
+                            (object_flags & SD_OBJECT_CAUSTICS);
+  const bool use_raytrace_kernel = (shader_flags & SD_HAS_RAYTRACE);
+
+  if (use_caustics) {
+    INTEGRATOR_PATH_NEXT_SORTED(DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE,
+                                DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE,
+                                shader);
+  }
+  else if (use_raytrace_kernel) {
     INTEGRATOR_PATH_NEXT_SORTED(DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE,
                                 DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE,
                                 shader);

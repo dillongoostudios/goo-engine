@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edinterface
@@ -47,6 +33,7 @@
 #include "interface_intern.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -215,7 +202,14 @@ static uiBlock *menu_add_shortcut(bContext *C, ARegion *region, void *arg)
   /* XXX this guess_opname can potentially return a different keymap
    * than being found on adding later... */
   wmKeyMap *km = WM_keymap_guess_opname(C, idname);
-  wmKeyMapItem *kmi = WM_keymap_add_item(km, idname, EVT_AKEY, KM_PRESS, 0, 0);
+  wmKeyMapItem *kmi = WM_keymap_add_item(km,
+                                         idname,
+                                         &(const KeyMapItem_Params){
+                                             .type = EVT_AKEY,
+                                             .value = KM_PRESS,
+                                             .modifier = 0,
+                                             .direction = KM_ANY,
+                                         });
   const int kmi_id = kmi->id;
 
   /* This takes ownership of prop, or prop can be NULL for reset. */
@@ -1050,7 +1044,7 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
 
     /* We do have a shortcut, but only keyboard ones are editable that way... */
     if (kmi) {
-      if (ISKEYBOARD(kmi->type)) {
+      if (ISKEYBOARD(kmi->type) || ISNDOF_BUTTON(kmi->type)) {
 #if 0 /* would rather use a block but, but gets weirdly positioned... */
         uiDefBlockBut(block,
                       menu_change_shortcut,

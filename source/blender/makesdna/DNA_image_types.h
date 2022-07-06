@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup DNA
@@ -228,7 +212,7 @@ typedef struct Image {
 
 /* **************** IMAGE ********************* */
 
-/* Image.flag */
+/** #Image.flag */
 enum {
   IMA_HIGH_BITDEPTH = (1 << 0),
   IMA_FLAG_UNUSED_1 = (1 << 1), /* cleared */
@@ -251,7 +235,7 @@ enum {
   IMA_FLAG_UNUSED_16 = (1 << 16), /* cleared */
 };
 
-/* Image.gpuflag */
+/** #Image.gpuflag */
 enum {
   /** All mipmap levels in OpenGL texture set? */
   IMA_GPU_MIPMAP_COMPLETE = (1 << 0),
@@ -284,7 +268,7 @@ typedef enum eImageType {
   IMA_TYPE_COMPOSITE = 5,
 } eImageType;
 
-/* Image.gen_type */
+/** #Image.gen_type */
 enum {
   IMA_GENTYPE_BLANK = 0,
   IMA_GENTYPE_GRID = 1,
@@ -294,12 +278,12 @@ enum {
 /* render */
 #define IMA_MAX_RENDER_TEXT (1 << 9)
 
-/* Image.gen_flag */
+/** #Image.gen_flag */
 enum {
   IMA_GEN_FLOAT = 1,
 };
 
-/* Image.alpha_mode */
+/** #Image.alpha_mode */
 enum {
   IMA_ALPHA_STRAIGHT = 0,
   IMA_ALPHA_PREMUL = 1,

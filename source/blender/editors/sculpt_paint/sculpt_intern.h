@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2006 by Nicholas Bishop
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2006 by Nicholas Bishop. All rights reserved. */
 
 /** \file
  * \ingroup edsculpt
@@ -27,22 +11,29 @@
 #include "DNA_key_types.h"
 #include "DNA_listBase.h"
 #include "DNA_meshdata_types.h"
+#include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
 #include "BLI_bitmap.h"
+#include "BLI_compiler_attrs.h"
 #include "BLI_compiler_compat.h"
 #include "BLI_gsqueue.h"
 #include "BLI_threads.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct AutomaskingCache;
+struct Image;
+struct ImageUser;
 struct KeyBlock;
 struct Object;
 struct SculptUndoNode;
 struct bContext;
-
-enum ePaintSymmetryFlags;
+struct PaintModeSettings;
 
 /* Updates */
 
@@ -55,6 +46,7 @@ typedef enum SculptUpdateType {
   SCULPT_UPDATE_MASK = 1 << 1,
   SCULPT_UPDATE_VISIBILITY = 1 << 2,
   SCULPT_UPDATE_COLOR = 1 << 3,
+  SCULPT_UPDATE_IMAGE = 1 << 4,
 } SculptUpdateType;
 
 typedef struct SculptCursorGeometryInfo {
@@ -155,9 +147,16 @@ typedef struct SculptUndoNode {
   float *mask;
   int totvert;
 
+  float (*loop_col)[4];
+  float (*orig_loop_col)[4];
+  int totloop;
+
   /* non-multires */
   int maxvert; /* to verify if totvert it still the same */
-  int *index;  /* to restore into right location */
+  int *index;  /* Unique vertex indices, to restore into right location */
+  int maxloop;
+  int *loop_index;
+
   BLI_bitmap *vert_hidden;
 
   /* multires */
@@ -206,13 +205,11 @@ struct SculptRakeData {
   float follow_co[3];
 };
 
-/*
-Generic thread data.  The size of this struct
-has gotten a little out of hand; normally we would
-split it up, but it might be better to see if we can't
-eliminate it altogether after moving to C++ (where
-we'll be able to use lambdas).
-*/
+/**
+ * Generic thread data. The size of this struct has gotten a little out of hand;
+ * normally we would split it up, but it might be better to see if we can't eliminate it
+ * altogether after moving to C++ (where we'll be able to use lambdas).
+ */
 typedef struct SculptThreadedTaskData {
   struct bContext *C;
   struct Sculpt *sd;
@@ -222,7 +219,6 @@ typedef struct SculptThreadedTaskData {
   int totnode;
 
   struct VPaint *vp;
-  struct VPaintData *vpd;
   struct WPaintData *wpd;
   struct WeightPaintInfo *wpi;
   unsigned int *lcol;
@@ -446,6 +442,9 @@ typedef struct FilterCache {
 
   /* Auto-masking. */
   AutomaskingCache *automasking;
+
+  /* Pre-smoothed colors used by sharpening. Colors are HSL. */
+  float (*pre_smoothed_color)[4];
 } FilterCache;
 
 /**
@@ -493,6 +492,7 @@ typedef struct StrokeCache {
   float mouse_event[2];
 
   float (*prev_colors)[4];
+  void *prev_colors_vpaint;
 
   /* Multires Displacement Smear. */
   float (*prev_displacement)[3];
@@ -782,7 +782,17 @@ bool SCULPT_mode_poll_view3d(struct bContext *C);
 bool SCULPT_poll(struct bContext *C);
 bool SCULPT_poll_view3d(struct bContext *C);
 
-bool SCULPT_vertex_colors_poll(struct bContext *C);
+/**
+ * Returns true if sculpt session can handle color attributes
+ * (BKE_pbvh_type(ss->pbvh) == PBVH_FACES).  If false an error
+ * message will be shown to the user.  Operators should return
+ * OPERATOR_CANCELLED in this case.
+ *
+ * NOTE: Does not check if a color attribute actually exists.
+ * Calling code must handle this itself; in most cases a call to
+ * BKE_sculpt_color_layer_create_if_needed() is sufficient.
+ */
+bool SCULPT_handles_colors_report(struct SculptSession *ss, struct ReportList *reports);
 
 /** \} */
 
@@ -873,7 +883,14 @@ const float *SCULPT_vertex_co_get(struct SculptSession *ss, int index);
 void SCULPT_vertex_normal_get(SculptSession *ss, int index, float no[3]);
 
 float SCULPT_vertex_mask_get(struct SculptSession *ss, int index);
-const float *SCULPT_vertex_color_get(SculptSession *ss, int index);
+void SCULPT_vertex_color_get(const SculptSession *ss, int index, float r_color[4]);
+void SCULPT_vertex_color_set(SculptSession *ss, int index, const float color[4]);
+
+/** Returns true if a color attribute exists in the current sculpt session. */
+bool SCULPT_has_colors(const SculptSession *ss);
+
+/** Returns true if the active color attribute is on loop (ATTR_DOMAIN_CORNER) domain. */
+bool SCULPT_has_loop_colors(const struct Object *ob);
 
 const float *SCULPT_vertex_persistent_co_get(SculptSession *ss, int index);
 void SCULPT_vertex_persistent_normal_get(SculptSession *ss, int index, float no[3]);
@@ -1121,10 +1138,10 @@ bool SCULPT_search_sphere_cb(PBVHNode *node, void *data_v);
 bool SCULPT_search_circle_cb(PBVHNode *node, void *data_v);
 
 /**
- * Initialize a point-in-brush test with a given falloff shape
+ * Initialize a point-in-brush test with a given falloff shape.
  *
- * \param falloff_shape PAINT_FALLOFF_SHAPE_SPHERE or PAINT_FALLOFF_SHAPE_TUBE
- * \return The brush falloff function
+ * \param falloff_shape: #PAINT_FALLOFF_SHAPE_SPHERE or #PAINT_FALLOFF_SHAPE_TUBE.
+ * \return The brush falloff function.
  */
 SculptBrushTestFn SCULPT_brush_test_init_with_falloff_shape(SculptSession *ss,
                                                             SculptBrushTest *test,
@@ -1431,9 +1448,14 @@ void SCULPT_cache_free(StrokeCache *cache);
 SculptUndoNode *SCULPT_undo_push_node(Object *ob, PBVHNode *node, SculptUndoType type);
 SculptUndoNode *SCULPT_undo_get_node(PBVHNode *node);
 SculptUndoNode *SCULPT_undo_get_first_node(void);
+
+/**
+ * NOTE: `name` must match operator name for
+ * redo panels to work.
+ */
 void SCULPT_undo_push_begin(struct Object *ob, const char *name);
-void SCULPT_undo_push_end(void);
-void SCULPT_undo_push_end_ex(bool use_nested_undo);
+void SCULPT_undo_push_end(struct Object *ob);
+void SCULPT_undo_push_end_ex(struct Object *ob, const bool use_nested_undo);
 
 /** \} */
 
@@ -1623,7 +1645,29 @@ void SCULPT_multiplane_scrape_preview_draw(uint gpuattr,
 void SCULPT_do_draw_face_sets_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);
 
 /* Paint Brush. */
-void SCULPT_do_paint_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);
+void SCULPT_do_paint_brush(struct PaintModeSettings *paint_mode_settings,
+                           Sculpt *sd,
+                           Object *ob,
+                           PBVHNode **nodes,
+                           int totnode) ATTR_NONNULL();
+
+/**
+ * @brief Get the image canvas for painting on the given object.
+ *
+ * @return #true if an image is found. The #r_image and #r_image_user fields are filled with the
+ * image and image user. Returns false when the image isn't found. In the later case the r_image
+ * and r_image_user are set to nullptr/NULL.
+ */
+bool SCULPT_paint_image_canvas_get(struct PaintModeSettings *paint_mode_settings,
+                                   struct Object *ob,
+                                   struct Image **r_image,
+                                   struct ImageUser **r_image_user) ATTR_NONNULL();
+void SCULPT_do_paint_brush_image(struct PaintModeSettings *paint_mode_settings,
+                                 Sculpt *sd,
+                                 Object *ob,
+                                 PBVHNode **nodes,
+                                 int totnode) ATTR_NONNULL();
+bool SCULPT_use_image_paint_brush(struct PaintModeSettings *settings, Object *ob) ATTR_NONNULL();
 
 /* Smear Brush. */
 void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, PBVHNode **nodes, int totnode);
@@ -1732,6 +1776,13 @@ void SCULPT_bmesh_topology_rake(
 /* end sculpt_brush_types.c */
 
 /* sculpt_ops.c */
+
 void SCULPT_OT_brush_stroke(struct wmOperatorType *ot);
 
 /* end sculpt_ops.c */
+
+#define SCULPT_TOOL_NEEDS_COLOR(tool) ELEM(tool, SCULPT_TOOL_PAINT, SCULPT_TOOL_SMEAR)
+
+#ifdef __cplusplus
+}
+#endif

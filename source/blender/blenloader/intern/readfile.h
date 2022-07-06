@@ -1,25 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * blenloader readfile private function prototypes
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup blenloader
+ * blenloader readfile private function prototypes.
  */
 
 #pragma once
@@ -144,14 +128,6 @@ FileData *blo_filedata_from_memfile(struct MemFile *memfile,
                                     const struct BlendFileReadParams *params,
                                     struct BlendFileReadReport *reports);
 
-/**
- * Lib linked proxy objects point to our local data, we need
- * to clear that pointer before reading the undo memfile since
- * the object might be removed, it is set again in reading
- * if the local object still exists.
- * This is only valid for local proxy objects though, linked ones should not be affected here.
- */
-void blo_clear_proxy_pointers_from_lib(struct Main *oldmain);
 void blo_make_packed_pointer_map(FileData *fd, struct Main *oldmain);
 /**
  * Set old main packed data to zero if it has been restored

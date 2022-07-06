@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -44,14 +30,16 @@ typedef struct IDProperty IDProperty;
 
 /* Function Callbacks */
 
-/** Update callback for an RNA property.
+/**
+ * Update callback for an RNA property.
  *
- *  \note This is NOT called automatically when writing into the property, it needs to be called
+ * \note This is NOT called automatically when writing into the property, it needs to be called
  * manually (through #RNA_property_update or #RNA_property_update_main) when needed.
  *
- *  \param bmain: the Main data-base to which `ptr` data belongs.
- *  \param active_scene: The current active scene (may be NULL in some cases).
- *  \param ptr: The RNA pointer data to update. */
+ * \param bmain: the Main data-base to which `ptr` data belongs.
+ * \param active_scene: The current active scene (may be NULL in some cases).
+ * \param ptr: The RNA pointer data to update.
+ */
 typedef void (*UpdateFunc)(struct Main *bmain, struct Scene *active_scene, struct PointerRNA *ptr);
 typedef void (*ContextPropUpdateFunc)(struct bContext *C,
                                       struct PointerRNA *ptr,

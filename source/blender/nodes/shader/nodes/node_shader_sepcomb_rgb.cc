@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2006 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2006 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup shdnodes
@@ -43,36 +27,34 @@ static int gpu_shader_seprgb(GPUMaterial *mat,
   return GPU_stack_link(mat, node, "separate_rgb", in, out);
 }
 
-class SeparateRGBFunction : public blender::fn::MultiFunction {
+class SeparateRGBFunction : public fn::MultiFunction {
  public:
   SeparateRGBFunction()
   {
-    static blender::fn::MFSignature signature = create_signature();
+    static fn::MFSignature signature = create_signature();
     this->set_signature(&signature);
   }
 
-  static blender::fn::MFSignature create_signature()
+  static fn::MFSignature create_signature()
   {
-    blender::fn::MFSignatureBuilder signature{"Separate RGB"};
-    signature.single_input<blender::ColorGeometry4f>("Color");
+    fn::MFSignatureBuilder signature{"Separate RGB"};
+    signature.single_input<ColorGeometry4f>("Color");
     signature.single_output<float>("R");
     signature.single_output<float>("G");
     signature.single_output<float>("B");
     return signature.build();
   }
 
-  void call(blender::IndexMask mask,
-            blender::fn::MFParams params,
-            blender::fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
   {
-    const blender::VArray<blender::ColorGeometry4f> &colors =
-        params.readonly_single_input<blender::ColorGeometry4f>(0, "Color");
-    blender::MutableSpan<float> rs = params.uninitialized_single_output<float>(1, "R");
-    blender::MutableSpan<float> gs = params.uninitialized_single_output<float>(2, "G");
-    blender::MutableSpan<float> bs = params.uninitialized_single_output<float>(3, "B");
+    const VArray<ColorGeometry4f> &colors = params.readonly_single_input<ColorGeometry4f>(0,
+                                                                                          "Color");
+    MutableSpan<float> rs = params.uninitialized_single_output<float>(1, "R");
+    MutableSpan<float> gs = params.uninitialized_single_output<float>(2, "G");
+    MutableSpan<float> bs = params.uninitialized_single_output<float>(3, "B");
 
     for (int64_t i : mask) {
-      blender::ColorGeometry4f color = colors[i];
+      ColorGeometry4f color = colors[i];
       rs[i] = color.r;
       gs[i] = color.g;
       bs[i] = color.b;
@@ -80,7 +62,7 @@ class SeparateRGBFunction : public blender::fn::MultiFunction {
   }
 };
 
-static void sh_node_seprgb_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+static void sh_node_seprgb_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   static SeparateRGBFunction fn;
   builder.set_matching_fn(fn);
@@ -122,11 +104,10 @@ static int gpu_shader_combrgb(GPUMaterial *mat,
   return GPU_stack_link(mat, node, "combine_rgb", in, out);
 }
 
-static void sh_node_combrgb_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+static void sh_node_combrgb_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
-  static blender::fn::CustomMF_SI_SI_SI_SO<float, float, float, blender::ColorGeometry4f> fn{
-      "Combine RGB",
-      [](float r, float g, float b) { return blender::ColorGeometry4f(r, g, b, 1.0f); }};
+  static fn::CustomMF_SI_SI_SI_SO<float, float, float, ColorGeometry4f> fn{
+      "Combine RGB", [](float r, float g, float b) { return ColorGeometry4f(r, g, b, 1.0f); }};
   builder.set_matching_fn(fn);
 }
 

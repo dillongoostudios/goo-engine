@@ -1,24 +1,6 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 by Janne Karhu.
- * All rights reserved.
- * Adaptive time step
- * Classical SPH
- * Copyright 2011-2012 AutoCRC
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Janne Karhu. All rights reserved.
+ *           2011-2012 AutoCRC (adaptive time step, Classical SPH). */
 
 #pragma once
 
@@ -244,7 +226,7 @@ typedef struct ParticleCollision {
 } ParticleCollision;
 
 typedef struct ParticleDrawData {
-  float *vdata, *vd;   /* vertice data */
+  float *vdata, *vd;   /* vertex data */
   float *ndata, *nd;   /* normal data */
   float *cdata, *cd;   /* color data */
   float *vedata, *ved; /* velocity data */
@@ -409,12 +391,12 @@ void psys_cache_child_paths(struct ParticleSimulationData *sim,
                             float cfra,
                             bool editupdate,
                             bool use_render_params);
-int do_guides(struct Depsgraph *depsgraph,
-              struct ParticleSettings *part,
-              struct ListBase *effectors,
-              ParticleKey *state,
-              int index,
-              float time);
+bool do_guides(struct Depsgraph *depsgraph,
+               struct ParticleSettings *part,
+               struct ListBase *effectors,
+               ParticleKey *state,
+               int index,
+               float time);
 void precalc_guides(struct ParticleSimulationData *sim, struct ListBase *effectors);
 float psys_get_timestep(struct ParticleSimulationData *sim);
 float psys_get_child_time(struct ParticleSystem *psys,

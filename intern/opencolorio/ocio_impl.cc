@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2012 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2012 Blender Foundation. All rights reserved. */
 
 #include <cassert>
 #include <iostream>
@@ -270,7 +254,12 @@ const char *OCIOImpl::configGetDisplayColorSpaceName(OCIO_ConstConfigRcPtr *conf
                                                      const char *view)
 {
   try {
-    return (*(ConstConfigRcPtr *)config)->getDisplayViewColorSpaceName(display, view);
+    const char *name = (*(ConstConfigRcPtr *)config)->getDisplayViewColorSpaceName(display, view);
+    /* OpenColorIO does not resolve this token for us, so do it ourselves. */
+    if (strcasecmp(name, "<USE_DISPLAY_NAME>") == 0) {
+      return display;
+    }
+    return name;
   }
   catch (Exception &exception) {
     OCIO_reportException(exception);
@@ -322,13 +311,14 @@ static bool to_scene_linear_matrix(ConstConfigRcPtr &config,
   return true;
 }
 
-void OCIOImpl::configGetXYZtoRGB(OCIO_ConstConfigRcPtr *config_, float xyz_to_rgb[3][3])
+void OCIOImpl::configGetXYZtoSceneLinear(OCIO_ConstConfigRcPtr *config_,
+                                         float xyz_to_scene_linear[3][3])
 {
   ConstConfigRcPtr config = (*(ConstConfigRcPtr *)config_);
 
   /* Default to ITU-BT.709 in case no appropriate transform found.
    * Note XYZ is defined here as having a D65 white point. */
-  memcpy(xyz_to_rgb, OCIO_XYZ_TO_LINEAR_SRGB, sizeof(OCIO_XYZ_TO_LINEAR_SRGB));
+  memcpy(xyz_to_scene_linear, OCIO_XYZ_TO_REC709, sizeof(OCIO_XYZ_TO_REC709));
 
   /* Get from OpenColorO config if it has the required roles. */
   if (!config->hasRole(ROLE_SCENE_LINEAR)) {
@@ -337,22 +327,17 @@ void OCIOImpl::configGetXYZtoRGB(OCIO_ConstConfigRcPtr *config_, float xyz_to_rg
 
   if (config->hasRole("aces_interchange")) {
     /* Standard OpenColorIO role, defined as ACES AP0 (ACES2065-1). */
-    float aces_to_rgb[3][3];
-    if (to_scene_linear_matrix(config, "aces_interchange", aces_to_rgb)) {
-      /* This is the OpenColorIO builtin transform:
-       * UTILITY - ACES-AP0_to_CIE-XYZ-D65_BFD. */
-      const float ACES_AP0_to_xyz_D65[3][3] = {{0.938280f, 0.337369f, 0.001174f},
-                                               {-0.004451f, 0.729522f, -0.003711f},
-                                               {0.016628f, -0.066890f, 1.091595f}};
+    float aces_to_scene_linear[3][3];
+    if (to_scene_linear_matrix(config, "aces_interchange", aces_to_scene_linear)) {
       float xyz_to_aces[3][3];
-      invert_m3_m3(xyz_to_aces, ACES_AP0_to_xyz_D65);
+      invert_m3_m3(xyz_to_aces, OCIO_ACES_TO_XYZ);
 
-      mul_m3_m3m3(xyz_to_rgb, aces_to_rgb, xyz_to_aces);
+      mul_m3_m3m3(xyz_to_scene_linear, aces_to_scene_linear, xyz_to_aces);
     }
   }
   else if (config->hasRole("XYZ")) {
     /* Custom role used before the standard existed. */
-    to_scene_linear_matrix(config, "XYZ", xyz_to_rgb);
+    to_scene_linear_matrix(config, "XYZ", xyz_to_scene_linear);
   }
 }
 
@@ -656,13 +641,23 @@ const char *OCIOImpl::colorSpaceGetFamily(OCIO_ConstColorSpaceRcPtr *cs)
   return (*(ConstColorSpaceRcPtr *)cs)->getFamily();
 }
 
+int OCIOImpl::colorSpaceGetNumAliases(OCIO_ConstColorSpaceRcPtr *cs)
+{
+  return (*(ConstColorSpaceRcPtr *)cs)->getNumAliases();
+}
+const char *OCIOImpl::colorSpaceGetAlias(OCIO_ConstColorSpaceRcPtr *cs, const int index)
+{
+  return (*(ConstColorSpaceRcPtr *)cs)->getAlias(index);
+}
+
 OCIO_ConstProcessorRcPtr *OCIOImpl::createDisplayProcessor(OCIO_ConstConfigRcPtr *config_,
                                                            const char *input,
                                                            const char *view,
                                                            const char *display,
                                                            const char *look,
                                                            const float scale,
-                                                           const float exponent)
+                                                           const float exponent,
+                                                           const bool inverse)
 
 {
   ConstConfigRcPtr config = *(ConstConfigRcPtr *)config_;
@@ -723,6 +718,10 @@ OCIO_ConstProcessorRcPtr *OCIOImpl::createDisplayProcessor(OCIO_ConstConfigRcPtr
     const double value[4] = {exponent, exponent, exponent, 1.0};
     et->setValue(value);
     group->appendTransform(et);
+  }
+
+  if (inverse) {
+    group->setDirection(TRANSFORM_DIR_INVERSE);
   }
 
   /* Create processor from transform. This is the moment were OCIO validates

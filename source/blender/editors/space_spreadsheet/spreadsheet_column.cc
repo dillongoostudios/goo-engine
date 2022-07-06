@@ -1,24 +1,11 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_space_types.h"
 
 #include "MEM_guardedalloc.h"
 
 #include "BLI_color.hh"
+#include "BLI_cpp_type.hh"
 #include "BLI_hash.hh"
 #include "BLI_math_vec_types.hh"
 #include "BLI_string.h"
@@ -26,17 +13,18 @@
 
 #include "BKE_geometry_set.hh"
 
-#include "FN_cpp_type.hh"
-
 #include "spreadsheet_column.hh"
 #include "spreadsheet_column_values.hh"
 
 namespace blender::ed::spreadsheet {
 
-eSpreadsheetColumnValueType cpp_type_to_column_type(const fn::CPPType &type)
+eSpreadsheetColumnValueType cpp_type_to_column_type(const CPPType &type)
 {
   if (type.is<bool>()) {
     return SPREADSHEET_VALUE_TYPE_BOOL;
+  }
+  if (type.is<int8_t>()) {
+    return SPREADSHEET_VALUE_TYPE_INT8;
   }
   if (type.is<int>()) {
     return SPREADSHEET_VALUE_TYPE_INT32;
@@ -58,6 +46,9 @@ eSpreadsheetColumnValueType cpp_type_to_column_type(const fn::CPPType &type)
   }
   if (type.is<InstanceReference>()) {
     return SPREADSHEET_VALUE_TYPE_INSTANCES;
+  }
+  if (type.is<ColorGeometry4b>()) {
+    return SPREADSHEET_VALUE_TYPE_BYTE_COLOR;
   }
 
   return SPREADSHEET_VALUE_TYPE_UNKNOWN;

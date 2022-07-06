@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pythonintern
@@ -41,6 +27,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h" /* for defining our own rna */
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -48,6 +35,11 @@
 
 #include "../generic/py_capi_rna.h"
 #include "../generic/py_capi_utils.h"
+
+/* Disabled duplicating strings because the array can still be freed and
+ * the strings from it referenced, for now we can't support dynamically
+ * created strings from Python. */
+// #define USE_ENUM_COPY_STRINGS
 
 /* -------------------------------------------------------------------- */
 /** \name Shared Enums & Doc-Strings
@@ -1868,7 +1860,7 @@ static bool py_long_as_int(PyObject *py_long, int *r_int)
   return false;
 }
 
-#if 0
+#ifdef USE_ENUM_COPY_STRINGS
 /* copies orig to buf, then sets orig to buf, returns copy length */
 static size_t strswapbufcpy(char *buf, const char **orig)
 {
@@ -1910,8 +1902,10 @@ static const EnumPropertyItem *enum_items_from_py(PyObject *seq_fast,
   PyObject *item;
   const Py_ssize_t seq_len = PySequence_Fast_GET_SIZE(seq_fast);
   PyObject **seq_fast_items = PySequence_Fast_ITEMS(seq_fast);
-  Py_ssize_t totbuf = 0;
   int i;
+#ifdef USE_ENUM_COPY_STRINGS
+  Py_ssize_t totbuf = 0;
+#endif
   short default_used = 0;
   const char *default_str_cmp = NULL;
   int default_int_cmp = 0;
@@ -2001,8 +1995,10 @@ static const EnumPropertyItem *enum_items_from_py(PyObject *seq_fast,
 
       items[i] = tmp;
 
-      /* calculate combine string length */
+#ifdef USE_ENUM_COPY_STRINGS
+      /* Calculate combine string length. */
       totbuf += id_str_size + name_str_size + desc_str_size + 3; /* 3 is for '\0's */
+#endif
     }
     else if (item == Py_None) {
       /* Only set since the rest is cleared. */
@@ -2047,13 +2043,9 @@ static const EnumPropertyItem *enum_items_from_py(PyObject *seq_fast,
     }
   }
 
-  /* disabled duplicating strings because the array can still be freed and
-   * the strings from it referenced, for now we can't support dynamically
-   * created strings from python. */
-#if 0
-  /* this would all work perfectly _but_ the python strings may be freed
-   * immediately after use, so we need to duplicate them, ugh.
-   * annoying because it works most of the time without this. */
+#ifdef USE_ENUM_COPY_STRINGS
+  /* This would all work perfectly _but_ the python strings may be freed immediately after use,
+   * so we need to duplicate them, ugh. annoying because it works most of the time without this. */
   {
     EnumPropertyItem *items_dup = MEM_mallocN((sizeof(EnumPropertyItem) * (seq_len + 1)) +
                                                   (sizeof(char) * totbuf),
@@ -2738,7 +2730,23 @@ static PyObject *BPy_BoolProperty(PyObject *self, PyObject *args, PyObject *kw)
       "set",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&|$ssO&O&O&O&O&OOO:BoolProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O&" /* `default` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":BoolProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -2870,7 +2878,24 @@ static PyObject *BPy_BoolVectorProperty(PyObject *self, PyObject *args, PyObject
       "set",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&|$ssOO&O&O&O&O&OOO:BoolVectorProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O"  /* `default` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O&" /* `size` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":BoolVectorProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3033,7 +3058,28 @@ static PyObject *BPy_IntProperty(PyObject *self, PyObject *args, PyObject *kw)
       "set",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&|$ssiiiiiiO&O&O&O&OOO:IntProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "i"  /* `default` */
+      "i"  /* `min` */
+      "i"  /* `max` */
+      "i"  /* `soft_min` */
+      "i"  /* `soft_max` */
+      "i"  /* `step` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":IntProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3186,7 +3232,29 @@ static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject 
       "set",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&|$ssOiiiiiO&O&O&O&O&OOO:IntVectorProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O"  /* `default` */
+      "i"  /* `min` */
+      "i"  /* `max` */
+      "i"  /* `soft_min` */
+      "i"  /* `soft_max` */
+      "i"  /* `step` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O&" /* `size` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":IntVectorProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3351,7 +3419,30 @@ static PyObject *BPy_FloatProperty(PyObject *self, PyObject *args, PyObject *kw)
       "soft_max", "step",   "precision",   "options", "override", "tags", "subtype",
       "unit",     "update", "get",         "set",     NULL,
   };
-  static _PyArg_Parser _parser = {"O&|$ssffffffiO&O&O&O&O&OOO:FloatProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "f"  /* `default` */
+      "f"  /* `min` */
+      "f"  /* `max` */
+      "f"  /* `soft_min` */
+      "f"  /* `soft_max` */
+      "f"  /* `step` */
+      "i"  /* `precision` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O&" /* `unit` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":FloatProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3501,7 +3592,30 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
       "unit",     "size", "update",      "get",     "set",      NULL,
   };
   static _PyArg_Parser _parser = {
-      "O&|$ssOfffffiO&O&O&O&O&O&OOO:FloatVectorProperty", _keywords, 0};
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O"  /* `default` */
+      "f"  /* `min` */
+      "f"  /* `max` */
+      "f"  /* `soft_min` */
+      "f"  /* `soft_max` */
+      "f"  /* `step` */
+      "i"  /* `precision` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O&" /* `unit` */
+      "O&" /* `size` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":FloatVectorProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3669,7 +3783,24 @@ static PyObject *BPy_StringProperty(PyObject *self, PyObject *args, PyObject *kw
       "set",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&|$sssiO&O&O&O&OOO:StringProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "s"  /* `default` */
+      "i"  /* `maxlen` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O&" /* `subtype` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":StringProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3839,7 +3970,23 @@ static PyObject *BPy_EnumProperty(PyObject *self, PyObject *args, PyObject *kw)
       "set",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&O|$ssOO&O&O&OOO:EnumProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "O"  /* `items` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O"  /* `default` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O"  /* `update` */
+      "O"  /* `get` */
+      "O"  /* `set` */
+      ":EnumProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -3964,6 +4111,8 @@ StructRNA *pointer_type_from_py(PyObject *value, const char *error_prefix)
     if (PyErr_Occurred()) {
       PyObject *msg = PyC_ExceptionBuffer();
       const char *msg_char = PyUnicode_AsUTF8(msg);
+      PyErr_Clear();
+
       PyErr_Format(
           PyExc_TypeError, "%.200s expected an RNA type, failed with: %s", error_prefix, msg_char);
       Py_DECREF(msg);
@@ -4039,7 +4188,21 @@ PyObject *BPy_PointerProperty(PyObject *self, PyObject *args, PyObject *kw)
       "update",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&O|$ssO&O&O&OO:PointerProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "O"  /* `type` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      "O"  /* `poll` */
+      "O"  /* `update` */
+      ":PointerProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -4159,7 +4322,19 @@ PyObject *BPy_CollectionProperty(PyObject *self, PyObject *args, PyObject *kw)
       "tags",
       NULL,
   };
-  static _PyArg_Parser _parser = {"O&O|$ssO&O&O&:CollectionProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `attr` */
+      "O"  /* `type` */
+      "|$" /* Optional, keyword only arguments. */
+      "s"  /* `name` */
+      "s"  /* `description` */
+      "O&" /* `options` */
+      "O&" /* `override` */
+      "O&" /* `tags` */
+      ":CollectionProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -4259,7 +4434,12 @@ static PyObject *BPy_RemoveProperty(PyObject *self, PyObject *args, PyObject *kw
       "attr",
       NULL,
   };
-  static _PyArg_Parser _parser = {"s:RemoveProperty", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "s" /* `attr` */
+      ":RemoveProperty",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, &id)) {
     return NULL;
   }

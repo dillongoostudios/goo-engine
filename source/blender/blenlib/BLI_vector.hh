@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -401,6 +387,16 @@ class Vector {
   }
 
   /**
+   * Reset the size of the vector so that it contains new_size elements.
+   * All existing elements are destructed, and not copied if the data must be reallocated.
+   */
+  void reinitialize(const int64_t new_size)
+  {
+    this->clear();
+    this->resize(new_size);
+  }
+
+  /**
    * Afterwards the vector has 0 elements, but will still have
    * memory to be refilled again.
    */
@@ -653,18 +649,20 @@ class Vector {
   }
 
   /**
-   * Return a reference to the last element in the vector.
-   * This invokes undefined behavior when the vector is empty.
+   * Return a reference to the nth last element.
+   * This invokes undefined behavior when the vector is too short.
    */
-  const T &last() const
+  const T &last(const int64_t n = 0) const
   {
-    BLI_assert(this->size() > 0);
-    return *(end_ - 1);
+    BLI_assert(n >= 0);
+    BLI_assert(n < this->size());
+    return *(end_ - 1 - n);
   }
-  T &last()
+  T &last(const int64_t n = 0)
   {
-    BLI_assert(this->size() > 0);
-    return *(end_ - 1);
+    BLI_assert(n >= 0);
+    BLI_assert(n < this->size());
+    return *(end_ - 1 - n);
   }
 
   /**

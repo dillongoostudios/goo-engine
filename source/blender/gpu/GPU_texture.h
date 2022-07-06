@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -191,7 +175,17 @@ typedef enum eGPUDataFormat {
   GPU_DATA_UINT_24_8,
   GPU_DATA_10_11_11_REV,
   GPU_DATA_2_10_10_10_REV,
+  GPU_DATA_HALF_FLOAT
 } eGPUDataFormat;
+
+typedef enum eGPUTextureUsage {
+  GPU_TEXTURE_USAGE_SHADER_READ = (1 << 0),
+  GPU_TEXTURE_USAGE_SHADER_WRITE = (1 << 1),
+  GPU_TEXTURE_USAGE_ATTACHMENT = (1 << 2),
+  GPU_TEXTURE_USAGE_GENERAL = 0xFF
+} eGPUTextureUsage;
+
+ENUM_OPERATORS(eGPUTextureUsage, GPU_TEXTURE_USAGE_GENERAL)
 
 unsigned int GPU_texture_memory_usage_get(void);
 
@@ -242,6 +236,21 @@ GPUTexture *GPU_texture_create_compressed_2d(
  * Create an error texture that will bind an invalid texture (pink) at draw time.
  */
 GPUTexture *GPU_texture_create_error(int dimension, bool array);
+/**
+ * Create an alias of the source texture data.
+ * If \a src is freed, the texture view will continue to be valid.
+ * If \a mip_start or \a mip_len is bigger than available mips they will be clamped.
+ * If \a cube_as_array is true, then the texture cube (array) becomes a 2D array texture.
+ * TODO(@fclem): Target conversion is not implemented yet.
+ */
+GPUTexture *GPU_texture_create_view(const char *name,
+                                    const GPUTexture *src,
+                                    eGPUTextureFormat format,
+                                    int mip_start,
+                                    int mip_len,
+                                    int layer_start,
+                                    int layer_len,
+                                    bool cube_as_array);
 
 void GPU_texture_update_mipmap(GPUTexture *tex,
                                int miplvl,
@@ -272,7 +281,8 @@ void *GPU_texture_read(GPUTexture *tex, eGPUDataFormat data_format, int miplvl);
  * Fills the whole texture with the same data for all pixels.
  * \warning Only work for 2D texture for now.
  * \warning Only clears the mip 0 of the texture.
- * \param data_format: data format of the pixel data. \note The format is float for unorm textures.
+ * \param data_format: data format of the pixel data.
+ * \note The format is float for unorm textures.
  * \param data: 1 pixel worth of data to fill the texture with.
  */
 void GPU_texture_clear(GPUTexture *tex, eGPUDataFormat data_format, const void *data);
@@ -301,9 +311,22 @@ void GPU_texture_filter_mode(GPUTexture *tex, bool use_filter);
 void GPU_texture_mipmap_mode(GPUTexture *tex, bool use_mipmap, bool use_filter);
 void GPU_texture_wrap_mode(GPUTexture *tex, bool use_repeat, bool use_clamp);
 void GPU_texture_swizzle_set(GPUTexture *tex, const char swizzle[4]);
+/**
+ * Set depth stencil texture sampling behavior. Can work on texture views.
+ * If stencil sampling is enabled, an unsigned integer sampler is required.
+ */
+void GPU_texture_stencil_texture_mode_set(GPUTexture *tex, bool use_stencil);
+
+/**
+ * Return the number of dimensions of the texture ignoring dimension of layers (1, 2 or 3).
+ * Cube textures are considered 2D.
+ */
+int GPU_texture_dimensions(const GPUTexture *tex);
 
 int GPU_texture_width(const GPUTexture *tex);
 int GPU_texture_height(const GPUTexture *tex);
+int GPU_texture_layer_count(const GPUTexture *tex);
+int GPU_texture_mip_count(const GPUTexture *tex);
 int GPU_texture_orig_width(const GPUTexture *tex);
 int GPU_texture_orig_height(const GPUTexture *tex);
 void GPU_texture_orig_size_set(GPUTexture *tex, int w, int h);

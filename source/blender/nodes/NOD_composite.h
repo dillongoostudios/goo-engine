@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup nodes
@@ -140,6 +124,8 @@ void register_node_type_cmp_pixelate(void);
 void register_node_type_cmp_trackpos(void);
 void register_node_type_cmp_planetrackdeform(void);
 void register_node_type_cmp_cornerpin(void);
+void register_node_type_cmp_separate_xyz(void);
+void register_node_type_cmp_combine_xyz(void);
 
 void node_cmp_rlayers_outputs(struct bNodeTree *ntree, struct bNode *node);
 void node_cmp_rlayers_register_pass(struct bNodeTree *ntree,
@@ -157,8 +143,6 @@ void ntreeCompositExecTree(struct Scene *scene,
                            struct RenderData *rd,
                            int rendering,
                            int do_previews,
-                           const struct ColorManagedViewSettings *view_settings,
-                           const struct ColorManagedDisplaySettings *display_settings,
                            const char *view_name);
 
 /**

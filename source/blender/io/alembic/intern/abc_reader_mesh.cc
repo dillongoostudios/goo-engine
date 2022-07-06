@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup balembic
@@ -135,7 +121,7 @@ struct AbcMeshData {
 static void read_mverts_interp(MVert *mverts,
                                const P3fArraySamplePtr &positions,
                                const P3fArraySamplePtr &ceil_positions,
-                               const float weight)
+                               const double weight)
 {
   float tmp[3];
   for (int i = 0; i < positions->size(); i++) {
@@ -143,7 +129,7 @@ static void read_mverts_interp(MVert *mverts,
     const Imath::V3f &floor_pos = (*positions)[i];
     const Imath::V3f &ceil_pos = (*ceil_positions)[i];
 
-    interp_v3_v3v3(tmp, floor_pos.getValue(), ceil_pos.getValue(), weight);
+    interp_v3_v3v3(tmp, floor_pos.getValue(), ceil_pos.getValue(), static_cast<float>(weight));
     copy_zup_from_yup(mvert.co, tmp);
 
     mvert.bweight = 0;
@@ -177,7 +163,7 @@ void read_mverts(Mesh &mesh, const P3fArraySamplePtr positions, const N3fArraySa
   }
   if (normals) {
     float(*vert_normals)[3] = BKE_mesh_vertex_normals_for_write(&mesh);
-    for (const int i : IndexRange(normals->size())) {
+    for (const int64_t i : IndexRange(normals->size())) {
       Imath::V3f nor_in = (*normals)[i];
       copy_zup_from_yup(vert_normals[i], nor_in.getValue());
     }
@@ -259,7 +245,7 @@ static void read_mpolys(CDStreamConfig &config, const AbcMeshData &mesh_data)
 static void process_no_normals(CDStreamConfig &config)
 {
   /* Absence of normals in the Alembic mesh is interpreted as 'smooth'. */
-  BKE_mesh_calc_normals(config.mesh);
+  BKE_mesh_normals_tag_dirty(config.mesh);
 }
 
 static void process_loop_normals(CDStreamConfig &config, const N3fArraySamplePtr loop_normals_ptr)
@@ -396,7 +382,7 @@ static void *add_customdata_cb(Mesh *mesh, const char *name, int data_type)
   int numloops;
 
   /* unsupported custom data type -- don't do anything. */
-  if (!ELEM(cd_data_type, CD_MLOOPUV, CD_MLOOPCOL)) {
+  if (!ELEM(cd_data_type, CD_MLOOPUV, CD_PROP_BYTE_COLOR)) {
     return nullptr;
   }
 
@@ -636,7 +622,7 @@ void AbcMeshReader::readObjectData(Main *bmain, const Alembic::Abc::ISampleSelec
   if (read_mesh != mesh) {
     /* XXX FIXME: after 2.80; mesh->flag isn't copied by #BKE_mesh_nomain_to_mesh(). */
     /* read_mesh can be freed by BKE_mesh_nomain_to_mesh(), so get the flag before that happens. */
-    short autosmooth = (read_mesh->flag & ME_AUTOSMOOTH);
+    uint16_t autosmooth = (read_mesh->flag & ME_AUTOSMOOTH);
     BKE_mesh_nomain_to_mesh(read_mesh, mesh, m_object, &CD_MASK_EVERYTHING, true);
     mesh->flag |= autosmooth;
   }
@@ -672,7 +658,7 @@ bool AbcMeshReader::accepts_object_type(
   return true;
 }
 
-bool AbcMeshReader::topology_changed(Mesh *existing_mesh, const ISampleSelector &sample_sel)
+bool AbcMeshReader::topology_changed(const Mesh *existing_mesh, const ISampleSelector &sample_sel)
 {
   IPolyMeshSchema::Sample sample;
   try {

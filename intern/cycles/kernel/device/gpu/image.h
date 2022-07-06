@@ -1,18 +1,5 @@
-/*
- * Copyright 2017 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2017-2022 Blender Foundation */
 
 #pragma once
 
@@ -69,7 +56,7 @@ ccl_device_noinline T kernel_tex_image_interp_bicubic(ccl_global const TextureIn
                                                       float x,
                                                       float y)
 {
-  ccl_gpu_tex_object tex = (ccl_gpu_tex_object)info.data;
+  ccl_gpu_tex_object_2D tex = (ccl_gpu_tex_object_2D)info.data;
 
   x = (x * info.width) - 0.5f;
   y = (y * info.height) - 0.5f;
@@ -98,7 +85,7 @@ template<typename T>
 ccl_device_noinline T
 kernel_tex_image_interp_tricubic(ccl_global const TextureInfo &info, float x, float y, float z)
 {
-  ccl_gpu_tex_object tex = (ccl_gpu_tex_object)info.data;
+  ccl_gpu_tex_object_3D tex = (ccl_gpu_tex_object_3D)info.data;
 
   x = (x * info.width) - 0.5f;
   y = (y * info.height) - 0.5f;
@@ -199,11 +186,11 @@ ccl_device float4 kernel_tex_image_interp(KernelGlobals kg, int id, float x, flo
   const int texture_type = info.data_type;
   if (texture_type == IMAGE_DATA_TYPE_FLOAT4 || texture_type == IMAGE_DATA_TYPE_BYTE4 ||
       texture_type == IMAGE_DATA_TYPE_HALF4 || texture_type == IMAGE_DATA_TYPE_USHORT4) {
-    if (info.interpolation == INTERPOLATION_CUBIC) {
+    if (info.interpolation == INTERPOLATION_CUBIC || info.interpolation == INTERPOLATION_SMART) {
       return kernel_tex_image_interp_bicubic<float4>(info, x, y);
     }
     else {
-      ccl_gpu_tex_object tex = (ccl_gpu_tex_object)info.data;
+      ccl_gpu_tex_object_2D tex = (ccl_gpu_tex_object_2D)info.data;
       return ccl_gpu_tex_object_read_2D<float4>(tex, x, y);
     }
   }
@@ -211,11 +198,11 @@ ccl_device float4 kernel_tex_image_interp(KernelGlobals kg, int id, float x, flo
   else {
     float f;
 
-    if (info.interpolation == INTERPOLATION_CUBIC) {
+    if (info.interpolation == INTERPOLATION_CUBIC || info.interpolation == INTERPOLATION_SMART) {
       f = kernel_tex_image_interp_bicubic<float>(info, x, y);
     }
     else {
-      ccl_gpu_tex_object tex = (ccl_gpu_tex_object)info.data;
+      ccl_gpu_tex_object_2D tex = (ccl_gpu_tex_object_2D)info.data;
       f = ccl_gpu_tex_object_read_2D<float>(tex, x, y);
     }
 
@@ -254,22 +241,22 @@ ccl_device float4 kernel_tex_image_interp_3d(KernelGlobals kg,
 #endif
   if (texture_type == IMAGE_DATA_TYPE_FLOAT4 || texture_type == IMAGE_DATA_TYPE_BYTE4 ||
       texture_type == IMAGE_DATA_TYPE_HALF4 || texture_type == IMAGE_DATA_TYPE_USHORT4) {
-    if (interpolation == INTERPOLATION_CUBIC) {
+    if (interpolation == INTERPOLATION_CUBIC || interpolation == INTERPOLATION_SMART) {
       return kernel_tex_image_interp_tricubic<float4>(info, x, y, z);
     }
     else {
-      ccl_gpu_tex_object tex = (ccl_gpu_tex_object)info.data;
+      ccl_gpu_tex_object_3D tex = (ccl_gpu_tex_object_3D)info.data;
       return ccl_gpu_tex_object_read_3D<float4>(tex, x, y, z);
     }
   }
   else {
     float f;
 
-    if (interpolation == INTERPOLATION_CUBIC) {
+    if (interpolation == INTERPOLATION_CUBIC || interpolation == INTERPOLATION_SMART) {
       f = kernel_tex_image_interp_tricubic<float>(info, x, y, z);
     }
     else {
-      ccl_gpu_tex_object tex = (ccl_gpu_tex_object)info.data;
+      ccl_gpu_tex_object_3D tex = (ccl_gpu_tex_object_3D)info.data;
       f = ccl_gpu_tex_object_read_3D<float>(tex, x, y, z);
     }
 

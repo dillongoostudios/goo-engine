@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2014 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2014 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -24,6 +8,7 @@
 #pragma once
 
 #include "BKE_customdata.h"
+#include "BLI_compiler_compat.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -48,18 +33,23 @@ enum {
   DT_TYPE_BWEIGHT_EDGE = 1 << 11,
   DT_TYPE_FREESTYLE_EDGE = 1 << 12,
 
-  DT_TYPE_VCOL = 1 << 16,
+  DT_TYPE_MPROPCOL_VERT = 1 << 16,
   DT_TYPE_LNOR = 1 << 17,
 
   DT_TYPE_UV = 1 << 24,
   DT_TYPE_SHARP_FACE = 1 << 25,
   DT_TYPE_FREESTYLE_FACE = 1 << 26,
-#define DT_TYPE_MAX 27
+  DT_TYPE_MLOOPCOL_VERT = 1 << 27,
+  DT_TYPE_MPROPCOL_LOOP = 1 << 28,
+  DT_TYPE_MLOOPCOL_LOOP = 1 << 29,
+  DT_TYPE_VCOL_ALL = (1 << 16) | (1 << 27) | (1 << 28) | (1 << 29),
+#define DT_TYPE_MAX 30
 
-  DT_TYPE_VERT_ALL = DT_TYPE_MDEFORMVERT | DT_TYPE_SHAPEKEY | DT_TYPE_SKIN | DT_TYPE_BWEIGHT_VERT,
+  DT_TYPE_VERT_ALL = DT_TYPE_MDEFORMVERT | DT_TYPE_SHAPEKEY | DT_TYPE_SKIN | DT_TYPE_BWEIGHT_VERT |
+                     DT_TYPE_MPROPCOL_VERT | DT_TYPE_MLOOPCOL_VERT,
   DT_TYPE_EDGE_ALL = DT_TYPE_SHARP_EDGE | DT_TYPE_SEAM | DT_TYPE_CREASE | DT_TYPE_BWEIGHT_EDGE |
                      DT_TYPE_FREESTYLE_EDGE,
-  DT_TYPE_LOOP_ALL = DT_TYPE_VCOL | DT_TYPE_LNOR | DT_TYPE_UV,
+  DT_TYPE_LOOP_ALL = DT_TYPE_LNOR | DT_TYPE_UV | DT_TYPE_MPROPCOL_LOOP | DT_TYPE_MLOOPCOL_LOOP,
   DT_TYPE_POLY_ALL = DT_TYPE_UV | DT_TYPE_SHARP_FACE | DT_TYPE_FREESTYLE_FACE,
 };
 
@@ -78,7 +68,13 @@ int BKE_object_data_transfer_dttype_to_cdtype(int dtdata_type);
 int BKE_object_data_transfer_dttype_to_srcdst_index(int dtdata_type);
 
 #define DT_DATATYPE_IS_VERT(_dt) \
-  ELEM(_dt, DT_TYPE_MDEFORMVERT, DT_TYPE_SHAPEKEY, DT_TYPE_SKIN, DT_TYPE_BWEIGHT_VERT)
+  ELEM(_dt, \
+       DT_TYPE_MDEFORMVERT, \
+       DT_TYPE_SHAPEKEY, \
+       DT_TYPE_SKIN, \
+       DT_TYPE_BWEIGHT_VERT, \
+       DT_TYPE_MLOOPCOL_VERT, \
+       DT_TYPE_MPROPCOL_VERT)
 #define DT_DATATYPE_IS_EDGE(_dt) \
   ELEM(_dt, \
        DT_TYPE_CREASE, \
@@ -86,19 +82,28 @@ int BKE_object_data_transfer_dttype_to_srcdst_index(int dtdata_type);
        DT_TYPE_SEAM, \
        DT_TYPE_BWEIGHT_EDGE, \
        DT_TYPE_FREESTYLE_EDGE)
-#define DT_DATATYPE_IS_LOOP(_dt) ELEM(_dt, DT_TYPE_UV, DT_TYPE_VCOL, DT_TYPE_LNOR)
+#define DT_DATATYPE_IS_LOOP(_dt) \
+  ELEM(_dt, DT_TYPE_UV, DT_TYPE_LNOR, DT_TYPE_MLOOPCOL_LOOP, DT_TYPE_MPROPCOL_LOOP)
 #define DT_DATATYPE_IS_POLY(_dt) ELEM(_dt, DT_TYPE_UV, DT_TYPE_SHARP_FACE, DT_TYPE_FREESTYLE_FACE)
 
 #define DT_DATATYPE_IS_MULTILAYERS(_dt) \
-  ELEM(_dt, DT_TYPE_MDEFORMVERT, DT_TYPE_SHAPEKEY, DT_TYPE_VCOL, DT_TYPE_UV)
+  ELEM(_dt, \
+       DT_TYPE_MDEFORMVERT, \
+       DT_TYPE_SHAPEKEY, \
+       DT_TYPE_MPROPCOL_VERT, \
+       DT_TYPE_MLOOPCOL_VERT, \
+       DT_TYPE_MPROPCOL_LOOP, \
+       DT_TYPE_MLOOPCOL_LOOP, \
+       DT_TYPE_UV)
 
 enum {
   DT_MULTILAYER_INDEX_INVALID = -1,
   DT_MULTILAYER_INDEX_MDEFORMVERT = 0,
   DT_MULTILAYER_INDEX_SHAPEKEY = 1,
-  DT_MULTILAYER_INDEX_VCOL = 2,
+  DT_MULTILAYER_INDEX_VCOL_LOOP = 2,
   DT_MULTILAYER_INDEX_UV = 3,
-  DT_MULTILAYER_INDEX_MAX = 4,
+  DT_MULTILAYER_INDEX_VCOL_VERT = 4,
+  DT_MULTILAYER_INDEX_MAX = 5,
 };
 
 /* Below we keep positive values for real layers idx (generated dynamically). */

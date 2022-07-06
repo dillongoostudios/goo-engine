@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 
@@ -103,6 +87,7 @@ class OperatorSpecEditMode:
     """
     Holds one operator and its parameters.
     """
+
     def __init__(
             self,
             operator_name: str,
@@ -222,7 +207,7 @@ class MeshTest(ABC):
         self.expected_object = self.evaluated_object
         self.expected_object.name = self.exp_object_name
         x, y, z = self.test_object.location
-        self.expected_object.location = (x, y+10, z)
+        self.expected_object.location = (x, y + 10, z)
         bpy.ops.wm.save_as_mainfile(filepath=bpy.data.filepath)
 
     def create_evaluated_object(self):
@@ -276,7 +261,6 @@ class MeshTest(ABC):
         # Check "success" is actually evaluated and is not the default True value.
         if not inside_loop_flag:
             success = False
-
 
         if success:
             self.print_passed_test_result(result)
@@ -336,7 +320,7 @@ class MeshTest(ABC):
 
         bm = bmesh.from_edit_mesh(mesh)
 
-        #bpy.ops.object.mode_set(mode='OBJECT')
+        # bpy.ops.object.mode_set(mode='OBJECT')
 
         bpy.context.tool_settings.mesh_select_mode = (select_mode == 'VERT',
                                                       select_mode == 'EDGE',

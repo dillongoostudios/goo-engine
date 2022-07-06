@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spoutliner
@@ -54,9 +40,6 @@ class AbstractTreeElement {
   {
     return true;
   }
-  virtual void postExpand(SpaceOutliner &) const
-  {
-  }
 
   /**
    * Just while transitioning to the new tree-element design: Some types are only partially ported,
@@ -66,6 +49,19 @@ class AbstractTreeElement {
   {
     return true;
   }
+
+  TreeElement &getLegacyElement()
+  {
+    return legacy_te_;
+  }
+
+  /**
+   * Expand this tree element if it is displayed for the first time (as identified by its
+   * tree-store element).
+   *
+   * Static for now to allow doing this from the legacy tree element.
+   */
+  static void uncollapse_by_default(TreeElement *legacy_te);
 
   friend void tree_element_expand(const AbstractTreeElement &tree_element,
                                   SpaceOutliner &space_outliner);
@@ -103,8 +99,8 @@ void tree_element_expand(const AbstractTreeElement &tree_element, SpaceOutliner 
 /**
  * Get actual warning data of a tree element, if any.
  *
- * \param r_icon The icon to display as warning.
- * \param r_message The message to display as warning.
+ * \param r_icon: The icon to display as warning.
+ * \param r_message: The message to display as warning.
  * \return true if there is a warning, false otherwise.
  */
 bool tree_element_warnings_get(struct TreeElement *te, int *r_icon, const char **r_message);

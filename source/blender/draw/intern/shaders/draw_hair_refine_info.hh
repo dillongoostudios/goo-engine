@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2022 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2022 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -25,11 +9,11 @@
 
 GPU_SHADER_CREATE_INFO(draw_hair_refine_compute)
     .local_group_size(1, 1)
-    .storage_buf(0, Qualifier::WRITE_ONLY, "vec4", "posTime[]")
+    .storage_buf(0, Qualifier::WRITE, "vec4", "posTime[]")
     .sampler(0, ImageType::FLOAT_BUFFER, "hairPointBuffer")
     .sampler(1, ImageType::UINT_BUFFER, "hairStrandBuffer")
     .sampler(2, ImageType::UINT_BUFFER, "hairStrandSegBuffer")
-    .push_constant(Type::VEC4, "hairDupliMatrix", 4)
+    .push_constant(Type::MAT4, "hairDupliMatrix")
     .push_constant(Type::BOOL, "hairCloseTip")
     .push_constant(Type::FLOAT, "hairRadShape")
     .push_constant(Type::FLOAT, "hairRadTip")
@@ -39,4 +23,27 @@ GPU_SHADER_CREATE_INFO(draw_hair_refine_compute)
     .push_constant(Type::INT, "hairStrandOffset")
     .compute_source("common_hair_refine_comp.glsl")
     .define("HAIR_PHASE_SUBDIV")
+    .do_static_compilation(true);
+
+GPU_SHADER_INTERFACE_INFO(draw_hair_refine_transform_feedback_workaround_iface, "")
+    .smooth(Type::VEC4, "finalColor");
+
+GPU_SHADER_CREATE_INFO(draw_hair_refine_transform_feedback_workaround)
+    .define("srgbTarget", "false")
+    .define("blender_srgb_to_framebuffer_space(a)", "a")
+    .define("HAIR_PHASE_SUBDIV")
+    .define("TF_WORKAROUND")
+
+    /* Move these to "draw_hair"? */
+    .sampler(0, ImageType::UINT_BUFFER, "hairStrandBuffer")
+    .sampler(1, ImageType::UINT_BUFFER, "hairStrandSegBuffer")
+
+    .push_constant(Type::INT, "targetWidth")
+    .push_constant(Type::INT, "targetHeight")
+    .push_constant(Type::INT, "idOffset")
+    .vertex_out(draw_hair_refine_transform_feedback_workaround_iface)
+    .fragment_out(0, Type::VEC4, "fragColor")
+    .vertex_source("common_hair_refine_vert.glsl")
+    .fragment_source("gpu_shader_3D_smooth_color_frag.glsl")
+    .additional_info("draw_hair")
     .do_static_compilation(true);

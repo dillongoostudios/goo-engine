@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup nodes
@@ -42,6 +26,7 @@
 #include "node_util.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "NOD_composite.h"
 #include "node_composite_util.hh"
@@ -221,14 +206,12 @@ void ntreeCompositExecTree(Scene *scene,
                            RenderData *rd,
                            int rendering,
                            int do_preview,
-                           const ColorManagedViewSettings *view_settings,
-                           const ColorManagedDisplaySettings *display_settings,
                            const char *view_name)
 {
 #ifdef WITH_COMPOSITOR
-  COM_execute(rd, scene, ntree, rendering, view_settings, display_settings, view_name);
+  COM_execute(rd, scene, ntree, rendering, view_name);
 #else
-  UNUSED_VARS(scene, ntree, rd, rendering, view_settings, display_settings, view_name);
+  UNUSED_VARS(scene, ntree, rd, rendering, view_name);
 #endif
 
   UNUSED_VARS(do_preview);

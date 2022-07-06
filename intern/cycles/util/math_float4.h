@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2017 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #ifndef __UTIL_MATH_FLOAT4_H__
 #define __UTIL_MATH_FLOAT4_H__
@@ -310,7 +297,7 @@ ccl_device_inline float4 cross(const float4 &a, const float4 &b)
 ccl_device_inline bool is_zero(const float4 &a)
 {
 #  ifdef __KERNEL_SSE__
-  return a == make_float4(0.0f);
+  return a == zero_float4();
 #  else
   return (a.x == 0.0f && a.y == 0.0f && a.z == 0.0f && a.w == 0.0f);
 #  endif
@@ -471,7 +458,7 @@ ccl_device_inline float4 select(const int4 &mask, const float4 &a, const float4 
 ccl_device_inline float4 mask(const int4 &mask, const float4 &a)
 {
   /* Replace elements of x with zero where mask isn't set. */
-  return select(mask, a, make_float4(0.0f));
+  return select(mask, a, zero_float4());
 }
 
 ccl_device_inline float4 reduce_min(const float4 &a)

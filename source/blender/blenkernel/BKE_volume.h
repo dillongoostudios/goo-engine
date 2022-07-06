@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -90,6 +76,11 @@ VolumeGrid *BKE_volume_grid_get_for_write(struct Volume *volume, int grid_index)
 const VolumeGrid *BKE_volume_grid_active_get_for_read(const struct Volume *volume);
 /* Tries to find a grid with the given name. Make sure that the volume has been loaded. */
 const VolumeGrid *BKE_volume_grid_find_for_read(const struct Volume *volume, const char *name);
+
+/* Tries to set the name of the velocity field. If no such grid exists with the given base name,
+ * this will try common post-fixes in order to detect velocity fields split into multiple grids.
+ * Return false if neither finding with the base name nor with the post-fixes succeeded. */
+bool BKE_volume_set_velocity_grid_by_name(struct Volume *volume, const char *base_name);
 
 /* Grid
  *

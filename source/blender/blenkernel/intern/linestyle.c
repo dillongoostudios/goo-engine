@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2010 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2010 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -800,7 +784,7 @@ static const char *modifier_name[LS_MODIFIER_NUM] = {
     "Noise",
     "Crease Angle",
     "Simplification",
-    "3D Curvature",
+    "Curvature 3D",
 };
 
 void BKE_linestyle_init(FreestyleLineStyle *linestyle)
@@ -2051,7 +2035,7 @@ bool BKE_linestyle_use_textures(FreestyleLineStyle *linestyle, const bool use_sh
 
 void BKE_linestyle_default_shader(const bContext *C, FreestyleLineStyle *linestyle)
 {
-  bNode *uv_along_stroke, *input_texure, *output_linestyle;
+  bNode *uv_along_stroke, *input_texture, *output_linestyle;
   bNodeSocket *fromsock, *tosock;
   bNodeTree *ntree;
 
@@ -2066,9 +2050,9 @@ void BKE_linestyle_default_shader(const bContext *C, FreestyleLineStyle *linesty
   uv_along_stroke->locy = 300.0f;
   uv_along_stroke->custom1 = 0; /* use_tips */
 
-  input_texure = nodeAddStaticNode(C, ntree, SH_NODE_TEX_IMAGE);
-  input_texure->locx = 200.0f;
-  input_texure->locy = 300.0f;
+  input_texture = nodeAddStaticNode(C, ntree, SH_NODE_TEX_IMAGE);
+  input_texture->locx = 200.0f;
+  input_texture->locy = 300.0f;
 
   output_linestyle = nodeAddStaticNode(C, ntree, SH_NODE_OUTPUT_LINESTYLE);
   output_linestyle->locx = 400.0f;
@@ -2076,15 +2060,15 @@ void BKE_linestyle_default_shader(const bContext *C, FreestyleLineStyle *linesty
   output_linestyle->custom1 = MA_RAMP_BLEND;
   output_linestyle->custom2 = 0; /* use_clamp */
 
-  nodeSetActive(ntree, input_texure);
+  nodeSetActive(ntree, input_texture);
 
   fromsock = BLI_findlink(&uv_along_stroke->outputs, 0); /* UV */
-  tosock = BLI_findlink(&input_texure->inputs, 0);       /* UV */
-  nodeAddLink(ntree, uv_along_stroke, fromsock, input_texure, tosock);
+  tosock = BLI_findlink(&input_texture->inputs, 0);      /* UV */
+  nodeAddLink(ntree, uv_along_stroke, fromsock, input_texture, tosock);
 
-  fromsock = BLI_findlink(&input_texure->outputs, 0);  /* Color */
+  fromsock = BLI_findlink(&input_texture->outputs, 0); /* Color */
   tosock = BLI_findlink(&output_linestyle->inputs, 0); /* Color */
-  nodeAddLink(ntree, input_texure, fromsock, output_linestyle, tosock);
+  nodeAddLink(ntree, input_texture, fromsock, output_linestyle, tosock);
 
   BKE_ntree_update_main_tree(CTX_data_main(C), ntree, NULL);
 }

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spnla
@@ -232,7 +216,6 @@ static void nla_main_region_draw(const bContext *C, ARegion *region)
   Scene *scene = CTX_data_scene(C);
   bAnimContext ac;
   View2D *v2d = &region->v2d;
-  short cfra_flag = 0;
 
   /* clear and setup matrix */
   UI_ThemeClearColor(TH_BACK);
@@ -254,11 +237,6 @@ static void nla_main_region_draw(const bContext *C, ARegion *region)
 
     /* text draw cached, in pixelspace now */
     UI_view2d_text_cache_draw(region);
-  }
-
-  /* current frame */
-  if (snla->flag & SNLA_DRAWTIME) {
-    cfra_flag |= DRAWCFRA_UNIT_SECONDS;
   }
 
   /* markers */
@@ -440,12 +418,6 @@ static void nla_main_region_message_subscribe(const wmRegionMessageSubscribePara
   /* Timeline depends on scene properties. */
   {
     bool use_preview = (scene->r.flag & SCER_PRV_RANGE);
-    extern PropertyRNA rna_Scene_frame_start;
-    extern PropertyRNA rna_Scene_frame_end;
-    extern PropertyRNA rna_Scene_frame_preview_start;
-    extern PropertyRNA rna_Scene_frame_preview_end;
-    extern PropertyRNA rna_Scene_use_preview_range;
-    extern PropertyRNA rna_Scene_frame_current;
     const PropertyRNA *props[] = {
         use_preview ? &rna_Scene_frame_preview_start : &rna_Scene_frame_start,
         use_preview ? &rna_Scene_frame_preview_end : &rna_Scene_frame_end,

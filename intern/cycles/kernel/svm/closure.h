@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -408,8 +395,10 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
             if (kernel_data.integrator.caustics_refractive || (path_flag & PATH_RAY_DIFFUSE) == 0)
 #  endif
             {
+              /* This is to prevent mnee from receiving a null bsdf. */
+              float refraction_fresnel = fmaxf(0.0001f, 1.0f - fresnel);
               ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-                  sd, sizeof(MicrofacetBsdf), base_color * glass_weight * (1.0f - fresnel));
+                  sd, sizeof(MicrofacetBsdf), base_color * glass_weight * refraction_fresnel);
               if (bsdf) {
                 bsdf->N = N;
                 bsdf->T = make_float3(0.0f, 0.0f, 0.0f);
@@ -687,8 +676,10 @@ ccl_device_noinline int svm_node_closure_bsdf(KernelGlobals kg,
       if (kernel_data.integrator.caustics_refractive || (path_flag & PATH_RAY_DIFFUSE) == 0)
 #endif
       {
+        /* This is to prevent mnee from receiving a null bsdf. */
+        float refraction_fresnel = fmaxf(0.0001f, 1.0f - fresnel);
         ccl_private MicrofacetBsdf *bsdf = (ccl_private MicrofacetBsdf *)bsdf_alloc(
-            sd, sizeof(MicrofacetBsdf), weight * (1.0f - fresnel));
+            sd, sizeof(MicrofacetBsdf), weight * refraction_fresnel);
 
         if (bsdf) {
           bsdf->N = N;
@@ -1120,7 +1111,8 @@ ccl_device_noinline int svm_node_principled_volume(KernelGlobals kg,
 
     if (intensity > CLOSURE_WEIGHT_CUTOFF) {
       float3 blackbody_tint = stack_load_float3(stack, node.w);
-      float3 bb = blackbody_tint * intensity * svm_math_blackbody_color(T);
+      float3 bb = blackbody_tint * intensity *
+                  rec709_to_rgb(kg, svm_math_blackbody_color_rec709(T));
       emission_setup(sd, bb);
     }
   }

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spnode
@@ -195,6 +179,8 @@ void NODE_OT_view_selected(wmOperatorType *ot)
 struct NodeViewMove {
   int mvalo[2];
   int xmin, ymin, xmax, ymax;
+  /** Original Offset for cancel. */
+  float xof_orig, yof_orig;
 };
 
 static int snode_bg_viewmove_modal(bContext *C, wmOperator *op, const wmEvent *event)
@@ -223,13 +209,24 @@ static int snode_bg_viewmove_modal(bContext *C, wmOperator *op, const wmEvent *e
 
     case LEFTMOUSE:
     case MIDDLEMOUSE:
-    case RIGHTMOUSE:
       if (event->val == KM_RELEASE) {
         MEM_freeN(nvm);
         op->customdata = nullptr;
         return OPERATOR_FINISHED;
       }
       break;
+    case EVT_ESCKEY:
+    case RIGHTMOUSE:
+      snode->xof = nvm->xof_orig;
+      snode->yof = nvm->yof_orig;
+      ED_region_tag_redraw(region);
+      WM_main_add_notifier(NC_NODE | ND_DISPLAY, nullptr);
+      WM_main_add_notifier(NC_SPACE | ND_SPACE_NODE_VIEW, nullptr);
+
+      MEM_freeN(nvm);
+      op->customdata = nullptr;
+
+      return OPERATOR_CANCELLED;
   }
 
   return OPERATOR_RUNNING_MODAL;
@@ -264,6 +261,9 @@ static int snode_bg_viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *
   nvm->xmax = (region->winx / 2) + (ibuf->x * (0.5f * snode->zoom)) - pad;
   nvm->ymin = -(region->winy / 2) - (ibuf->y * (0.5f * snode->zoom)) + pad;
   nvm->ymax = (region->winy / 2) + (ibuf->y * (0.5f * snode->zoom)) - pad;
+
+  nvm->xof_orig = snode->xof;
+  nvm->yof_orig = snode->yof;
 
   BKE_image_release_ibuf(ima, ibuf, lock);
 
@@ -643,6 +643,12 @@ static int sample_invoke(bContext *C, wmOperator *op, const wmEvent *event)
   ARegion *region = CTX_wm_region(C);
   ImageSampleInfo *info;
 
+  /* Don't handle events intended for nodes (which rely on click/drag distinction).
+   * which this operator would use since sampling is normally activated on press, see: T98191. */
+  if (node_or_socket_isect_event(C, event)) {
+    return OPERATOR_PASS_THROUGH;
+  }
+
   if (!ED_node_is_compositor(snode) || !(snode->flag & SNODE_BACKDRAW)) {
     return OPERATOR_CANCELLED;
   }
@@ -698,92 +704,6 @@ void NODE_OT_backimage_sample(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_BLOCKING;
-}
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name View Geometry Nodes Legacy Operator
- *
- *  This operator should be removed when the 2.93 legacy nodes are removed.
- * \{ */
-
-static int space_node_view_geometry_nodes_legacy(bContext *C, SpaceNode *snode, wmOperator *op)
-{
-  ARegion *region = CTX_wm_region(C);
-
-  /* Only use the node editor's active node tree. Otherwise this will be too complicated. */
-  bNodeTree *node_tree = snode->nodetree;
-  if (node_tree == nullptr || node_tree->type != NTREE_GEOMETRY) {
-    return OPERATOR_CANCELLED;
-  }
-
-  bool found_legacy_node = false;
-  LISTBASE_FOREACH_BACKWARD (bNode *, node, &node_tree->nodes) {
-    StringRef idname{node->idname};
-    if (idname.find("Legacy") == StringRef::not_found) {
-      node->flag &= ~NODE_SELECT;
-    }
-    else {
-      found_legacy_node = true;
-      node->flag |= NODE_SELECT;
-    }
-  }
-
-  if (!found_legacy_node) {
-    WM_report(RPT_INFO, "Legacy node not found, may be in nested node group");
-  }
-
-  const int smooth_viewtx = WM_operator_smooth_viewtx_get(op);
-  if (space_node_view_flag(*C, *snode, *region, NODE_SELECT, smooth_viewtx)) {
-    return OPERATOR_FINISHED;
-  }
-  return OPERATOR_CANCELLED;
-}
-
-static int geometry_node_view_legacy_exec(bContext *C, wmOperator *op)
-{
-  /* Allow running this operator directly in a specific node editor. */
-  if (SpaceNode *snode = CTX_wm_space_node(C)) {
-    return space_node_view_geometry_nodes_legacy(C, snode, op);
-  }
-
-  /* Since the operator is meant to be called from a button in the modifier panel, the node tree
-   * must be found from the screen, using the largest node editor if there is more than one. */
-  if (ScrArea *area = BKE_screen_find_big_area(CTX_wm_screen(C), SPACE_NODE, 0)) {
-    if (SpaceNode *snode = static_cast<SpaceNode *>(area->spacedata.first)) {
-      ScrArea *old_area = CTX_wm_area(C);
-      ARegion *old_region = CTX_wm_region(C);
-
-      /* Override the context since it is used by the View2D panning code. */
-      CTX_wm_area_set(C, area);
-      CTX_wm_region_set(C, static_cast<ARegion *>(area->regionbase.last));
-      const int result = space_node_view_geometry_nodes_legacy(C, snode, op);
-      CTX_wm_area_set(C, old_area);
-      CTX_wm_region_set(C, old_region);
-      return result;
-    }
-  }
-
-  return OPERATOR_CANCELLED;
-}
-
-static bool geometry_node_view_legacy_poll(bContext *C)
-{
-  /* Allow direct execution in a node editor, but also affecting any visible node editor. */
-  return ED_operator_node_active(C) || BKE_screen_find_big_area(CTX_wm_screen(C), SPACE_NODE, 0);
-}
-
-void NODE_OT_geometry_node_view_legacy(wmOperatorType *ot)
-{
-  ot->name = "View Deprecated Geometry Nodes";
-  ot->idname = "NODE_OT_geometry_node_view_legacy";
-  ot->description = "Select and view legacy geometry nodes in the node editor";
-
-  ot->exec = geometry_node_view_legacy_exec;
-  ot->poll = geometry_node_view_legacy_poll;
-
-  ot->flag = OPTYPE_INTERNAL;
 }
 
 /** \} */

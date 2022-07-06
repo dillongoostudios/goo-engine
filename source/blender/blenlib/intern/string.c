@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bli
@@ -930,14 +914,22 @@ size_t BLI_strnlen(const char *s, const size_t maxlen)
 /** \name String Case Conversion
  * \{ */
 
+char BLI_tolower_ascii(const char c)
+{
+  return (c >= 'A' && c <= 'Z') ? c + ('a' - 'A') : c;
+}
+
+char BLI_toupper_ascii(const char c)
+{
+  return (c >= 'a' && c <= 'z') ? c - ('a' - 'A') : c;
+}
+
 void BLI_str_tolower_ascii(char *str, const size_t len)
 {
   size_t i;
 
   for (i = 0; (i < len) && str[i]; i++) {
-    if (str[i] >= 'A' && str[i] <= 'Z') {
-      str[i] += 'a' - 'A';
-    }
+    str[i] = BLI_tolower_ascii(str[i]);
   }
 }
 
@@ -946,9 +938,7 @@ void BLI_str_toupper_ascii(char *str, const size_t len)
   size_t i;
 
   for (i = 0; (i < len) && str[i]; i++) {
-    if (str[i] >= 'a' && str[i] <= 'z') {
-      str[i] -= 'a' - 'A';
-    }
+    str[i] = BLI_toupper_ascii(str[i]);
   }
 }
 
@@ -1147,11 +1137,11 @@ void BLI_str_format_byte_unit(char dst[15], long long int bytes, const bool base
   const int base = base_10 ? 1000 : 1024;
   const char *units_base_10[] = {"B", "KB", "MB", "GB", "TB", "PB"};
   const char *units_base_2[] = {"B", "KiB", "MiB", "GiB", "TiB", "PiB"};
-  const int tot_units = ARRAY_SIZE(units_base_2);
+  const int units_num = ARRAY_SIZE(units_base_2);
 
   BLI_STATIC_ASSERT(ARRAY_SIZE(units_base_2) == ARRAY_SIZE(units_base_10), "array size mismatch");
 
-  while ((fabs(bytes_converted) >= base) && ((order + 1) < tot_units)) {
+  while ((fabs(bytes_converted) >= base) && ((order + 1) < units_num)) {
     bytes_converted /= base;
     order++;
   }
@@ -1171,9 +1161,9 @@ void BLI_str_format_attribute_domain_size(char dst[7], int number_to_format)
   int order = 0;
   const float base = 1000;
   const char *units[] = {"", "K", "M", "B"};
-  const int tot_units = ARRAY_SIZE(units);
+  const int units_num = ARRAY_SIZE(units);
 
-  while ((fabsf(number_to_format_converted) >= base) && ((order + 1) < tot_units)) {
+  while ((fabsf(number_to_format_converted) >= base) && ((order + 1) < units_num)) {
     number_to_format_converted /= base;
     order++;
   }

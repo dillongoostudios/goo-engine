@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup editors
@@ -57,7 +43,7 @@ typedef struct NumInput {
   int str_cur;
 } NumInput;
 
-/* NumInput.flag */
+/** #NumInput.flag */
 enum {
   NUM_AFFECT_ALL = (1 << 0),
   /* (1 << 9) and above are reserved for internal flags! */
@@ -80,14 +66,14 @@ struct UnitSettings;
  * \{ */
 
 /**
- * There are important things to note here for code using numinput:
+ * There are important things to note here for code using numeric-input:
  * - Values passed to #applyNumInput() should be valid and are stored as default ones (val_org),
  *   if it is not EDITED.
- * - bool returned by #applyNumInput should be used to decide whether to apply
- *   numinput-specific post-process to data.
+ * - `bool` returned by #applyNumInput should be used to decide whether to apply
+ *   numeric-input-specific post-process to data.
  * - Once #applyNumInput has been called,
- *   #hasNumInput returns a valid value to decide whether to use numinput as drawstr source or not
- *   (i.e. to call #outputNumInput).
+ *   #hasNumInput returns a valid value to decide whether to use numinput as `drawstr`
+ *   source or not (i.e. to call #outputNumInput).
  *
  * Those two steps have to be separated
  * (so do not use a common call to #hasNumInput() to do both in the same time!).

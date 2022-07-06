@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 by Mike Erwin.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 by Mike Erwin. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -117,7 +101,28 @@ static inline int image_binding(int32_t program,
   switch (type) {
     case GL_IMAGE_1D:
     case GL_IMAGE_2D:
-    case GL_IMAGE_3D: {
+    case GL_IMAGE_3D:
+    case GL_IMAGE_CUBE:
+    case GL_IMAGE_BUFFER:
+    case GL_IMAGE_1D_ARRAY:
+    case GL_IMAGE_2D_ARRAY:
+    case GL_IMAGE_CUBE_MAP_ARRAY:
+    case GL_INT_IMAGE_1D:
+    case GL_INT_IMAGE_2D:
+    case GL_INT_IMAGE_3D:
+    case GL_INT_IMAGE_CUBE:
+    case GL_INT_IMAGE_BUFFER:
+    case GL_INT_IMAGE_1D_ARRAY:
+    case GL_INT_IMAGE_2D_ARRAY:
+    case GL_INT_IMAGE_CUBE_MAP_ARRAY:
+    case GL_UNSIGNED_INT_IMAGE_1D:
+    case GL_UNSIGNED_INT_IMAGE_2D:
+    case GL_UNSIGNED_INT_IMAGE_3D:
+    case GL_UNSIGNED_INT_IMAGE_CUBE:
+    case GL_UNSIGNED_INT_IMAGE_BUFFER:
+    case GL_UNSIGNED_INT_IMAGE_1D_ARRAY:
+    case GL_UNSIGNED_INT_IMAGE_2D_ARRAY:
+    case GL_UNSIGNED_INT_IMAGE_CUBE_MAP_ARRAY: {
       /* For now just assign a consecutive index. In the future, we should set it in
        * the shader using layout(binding = i) and query its value. */
       int binding = *image_len;
@@ -298,6 +303,7 @@ GLShaderInterface::GLShaderInterface(GLuint program)
     input->binding = input->location = binding;
 
     name_buffer_offset += this->set_input_name(input, name, name_len);
+    enabled_ssbo_mask_ |= (input->binding != -1) ? (1lu << input->binding) : 0lu;
   }
 
   /* Builtin Uniforms */
@@ -457,7 +463,7 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
     if (res.bind_type == ShaderCreateInfo::Resource::BindType::STORAGE_BUFFER) {
       copy_input_name(input, res.storagebuf.name, name_buffer_, name_buffer_offset);
       input->location = input->binding = res.slot;
-      enabled_ubo_mask_ |= (1 << input->binding);
+      enabled_ssbo_mask_ |= (1 << input->binding);
       input++;
     }
   }
@@ -499,7 +505,7 @@ GLShaderInterface::~GLShaderInterface()
 void GLShaderInterface::ref_add(GLVaoCache *ref)
 {
   for (int i = 0; i < refs_.size(); i++) {
-    if (refs_[i] == NULL) {
+    if (refs_[i] == nullptr) {
       refs_[i] = ref;
       return;
     }
@@ -511,7 +517,7 @@ void GLShaderInterface::ref_remove(GLVaoCache *ref)
 {
   for (int i = 0; i < refs_.size(); i++) {
     if (refs_[i] == ref) {
-      refs_[i] = NULL;
+      refs_[i] = nullptr;
       break; /* cannot have duplicates */
     }
   }

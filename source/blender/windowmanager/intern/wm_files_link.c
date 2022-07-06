@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup wm
@@ -772,10 +756,10 @@ static int wm_lib_relocate_exec_do(bContext *C, wmOperator *op, bool do_reload)
       }
     }
 
-    if (do_reload) {
-      BKE_blendfile_link_append_context_flag_set(
-          lapp_context, BLO_LIBLINK_USE_PLACEHOLDERS | BLO_LIBLINK_FORCE_INDIRECT, true);
-    }
+    BKE_blendfile_link_append_context_flag_set(lapp_context,
+                                               BLO_LIBLINK_FORCE_INDIRECT |
+                                                   (do_reload ? BLO_LIBLINK_USE_PLACEHOLDERS : 0),
+                                               true);
 
     BKE_blendfile_library_relocate(lapp_context, op->reports, lib, do_reload);
 

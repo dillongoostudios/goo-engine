@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -34,7 +20,7 @@
 
 #include "MEM_guardedalloc.h"
 
-/* General note on iterating vers/loops/edges/polys and end mode.
+/* General note on iterating verts/loops/edges/polys and end mode.
  *
  * The edit mesh pointer is set for both final and cage meshes in both cases when there are
  * modifiers applied and not. This helps consistency of checks in the draw manager, where the
@@ -324,6 +310,8 @@ void BKE_mesh_foreach_mapped_subdiv_face_center(
                                       BKE_mesh_vertex_normals_ensure(mesh) :
                                       NULL;
   const int *index = CustomData_get_layer(&mesh->pdata, CD_ORIGINDEX);
+  const BLI_bitmap *facedot_tags = mesh->runtime.subsurf_face_dot_tags;
+  BLI_assert(facedot_tags != NULL);
 
   if (index) {
     for (int i = 0; i < mesh->totpoly; i++, mp++) {
@@ -334,8 +322,7 @@ void BKE_mesh_foreach_mapped_subdiv_face_center(
       ml = &mesh->mloop[mp->loopstart];
       for (int j = 0; j < mp->totloop; j++, ml++) {
         mv = &mesh->mvert[ml->v];
-        if (mv->flag & ME_VERT_FACEDOT) {
-
+        if (BLI_BITMAP_TEST(facedot_tags, ml->v)) {
           func(userData,
                orig,
                mv->co,
@@ -349,7 +336,7 @@ void BKE_mesh_foreach_mapped_subdiv_face_center(
       ml = &mesh->mloop[mp->loopstart];
       for (int j = 0; j < mp->totloop; j++, ml++) {
         mv = &mesh->mvert[ml->v];
-        if (mv->flag & ME_VERT_FACEDOT) {
+        if (BLI_BITMAP_TEST(facedot_tags, ml->v)) {
           func(userData, i, mv->co, (flag & MESH_FOREACH_USE_NORMAL) ? vert_normals[ml->v] : NULL);
         }
       }

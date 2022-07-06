@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bgpencil
@@ -56,10 +40,10 @@
 namespace blender ::io ::gpencil {
 
 /* Constructor. */
-GpencilExporterSVG::GpencilExporterSVG(const char *filename, const GpencilIOParams *iparams)
+GpencilExporterSVG::GpencilExporterSVG(const char *filepath, const GpencilIOParams *iparams)
     : GpencilExporter(iparams)
 {
-  filename_set(filename);
+  filepath_set(filepath);
 
   invert_axis_[0] = false;
   invert_axis_[1] = true;
@@ -82,16 +66,16 @@ bool GpencilExporterSVG::write()
   bool result = true;
 /* Support unicode character paths on Windows. */
 #ifdef WIN32
-  char filename_cstr[FILE_MAX];
-  BLI_strncpy(filename_cstr, filename_, FILE_MAX);
+  char filepath_cstr[FILE_MAX];
+  BLI_strncpy(filepath_cstr, filepath_, FILE_MAX);
 
-  UTF16_ENCODE(filename_cstr);
-  std::wstring wstr(filename_cstr_16);
+  UTF16_ENCODE(filepath_cstr);
+  std::wstring wstr(filepath_cstr_16);
   result = main_doc_.save_file(wstr.c_str());
 
-  UTF16_UN_ENCODE(filename_cstr);
+  UTF16_UN_ENCODE(filepath_cstr);
 #else
-  result = main_doc_.save_file(filename_);
+  result = main_doc_.save_file(filepath_);
 #endif
 
   return result;
@@ -237,7 +221,7 @@ void GpencilExporterSVG::export_gpencil_layers()
 
             /* Sample stroke. */
             if (params_.stroke_sample > 0.0f) {
-              BKE_gpencil_stroke_sample(gpd_eval, gps_perimeter, params_.stroke_sample, false);
+              BKE_gpencil_stroke_sample(gpd_eval, gps_perimeter, params_.stroke_sample, false, 0);
             }
 
             export_stroke_to_path(gpl, gps_perimeter, node_gpl, false);
@@ -308,7 +292,7 @@ void GpencilExporterSVG::export_stroke_to_polyline(bGPDlayer *gpl,
   /* Get the thickness in pixels using a simple 1 point stroke. */
   bGPDstroke *gps_temp = BKE_gpencil_stroke_duplicate(gps, false, false);
   gps_temp->totpoints = 1;
-  gps_temp->points = MEM_cnew<bGPDspoint>("gp_stroke_points");
+  gps_temp->points = MEM_new<bGPDspoint>("gp_stroke_points");
   bGPDspoint *pt_src = &gps->points[0];
   bGPDspoint *pt_dst = &gps_temp->points[0];
   copy_v3_v3(&pt_dst->x, &pt_src->x);

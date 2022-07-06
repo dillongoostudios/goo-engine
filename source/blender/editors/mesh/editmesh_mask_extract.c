@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2019 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2019 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edmesh
@@ -245,8 +229,6 @@ static int geometry_extract_apply(bContext *C,
       sfmd->offset = -0.05f;
     }
   }
-
-  BKE_mesh_calc_normals(new_ob->data);
 
   WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, new_ob);
   BKE_mesh_batch_cache_dirty_tag(new_ob->data, BKE_MESH_BATCH_DIRTY_ALL);
@@ -567,7 +549,6 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
     CustomData_free_layers(&new_ob_mesh->vdata, CD_PAINT_MASK, new_ob_mesh->totvert);
 
     BKE_mesh_nomain_to_mesh(new_ob_mesh, new_ob->data, new_ob, &CD_MASK_MESH, true);
-    BKE_mesh_calc_normals(new_ob->data);
     BKE_mesh_copy_parameters_for_eval(new_ob->data, mesh);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, new_ob);
     BKE_mesh_batch_cache_dirty_tag(new_ob->data, BKE_MESH_BATCH_DIRTY_ALL);
@@ -577,7 +558,6 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
   }
 
   BKE_mesh_nomain_to_mesh(new_mesh, ob->data, ob, &CD_MASK_MESH, true);
-  BKE_mesh_calc_normals(ob->data);
 
   if (ob->mode == OB_MODE_SCULPT) {
     SculptSession *ss = ob->sculpt;

@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -36,6 +23,7 @@ typedef struct LightSample {
   int prim;       /* primitive id for triangle/curve lights */
   int shader;     /* shader id */
   int lamp;       /* lamp id */
+  int group;      /* lightgroup */
   LightType type; /* type of light */
 } LightSample;
 
@@ -65,6 +53,7 @@ ccl_device_inline bool light_sample(KernelGlobals kg,
   ls->lamp = lamp;
   ls->u = randu;
   ls->v = randv;
+  ls->group = lamp_lightgroup(kg, lamp);
 
   if (in_volume_segment && (type == LIGHT_DISTANT || type == LIGHT_BACKGROUND)) {
     /* Distant lights in a volume get a dummy sample, position will not actually
@@ -259,6 +248,15 @@ ccl_device bool lights_intersect(KernelGlobals kg,
       if (!(klight->shader_id & SHADER_USE_MIS)) {
         continue;
       }
+
+#ifdef __MNEE__
+      /* This path should have been resolved with mnee, it will
+       * generate a firefly for small lights since it is improbable. */
+      if ((INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_CULL_LIGHT_CONNECTION) &&
+          klight->use_caustics) {
+        continue;
+      }
+#endif
     }
 
     if (path_flag & PATH_RAY_SHADOW_CATCHER_PASS) {
@@ -417,6 +415,7 @@ ccl_device bool light_sample_from_distant_ray(KernelGlobals kg,
   ls->P = -ray_D;
   ls->Ng = -ray_D;
   ls->D = ray_D;
+  ls->group = lamp_lightgroup(kg, lamp);
 
   /* compute pdf */
   float invarea = klight->distant.invarea;
@@ -445,13 +444,14 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
   ls->t = isect->t;
   ls->P = ray_P + ray_D * ls->t;
   ls->D = ray_D;
+  ls->group = lamp_lightgroup(kg, lamp);
 
   if (type == LIGHT_SPOT) {
     const float3 center = make_float3(klight->co[0], klight->co[1], klight->co[2]);
     const float3 dir = make_float3(klight->spot.dir[0], klight->spot.dir[1], klight->spot.dir[2]);
     /* the normal of the oriented disk */
     const float3 lightN = normalize(ray_P - center);
-    /* we set the light normal to the outgoing direction to support texturing*/
+    /* We set the light normal to the outgoing direction to support texturing. */
     ls->Ng = -ls->D;
 
     float invarea = klight->spot.invarea;
@@ -480,7 +480,7 @@ ccl_device bool light_sample_from_intersection(KernelGlobals kg,
     const float3 center = make_float3(klight->co[0], klight->co[1], klight->co[2]);
     const float3 lighN = normalize(ray_P - center);
 
-    /* we set the light normal to the outgoing direction to support texturing*/
+    /* We set the light normal to the outgoing direction to support texturing. */
     ls->Ng = -ls->D;
 
     float invarea = klight->spot.invarea;
@@ -710,6 +710,7 @@ ccl_device_forceinline void triangle_light_sample(KernelGlobals kg,
   ls->lamp = LAMP_NONE;
   ls->shader |= SHADER_USE_MIS;
   ls->type = LIGHT_TRIANGLE;
+  ls->group = object_lightgroup(kg, object);
 
   float distance_to_plane = fabsf(dot(N0, V[0] - P) / dot(N0, N0));
 

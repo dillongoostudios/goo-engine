@@ -1,22 +1,5 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# The Original Code is Copyright (C) 2006, Blender Foundation
-# All rights reserved.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright 2006 Blender Foundation. All rights reserved.
 
 blender_include_dirs(
   ../../intern/clog
@@ -336,16 +319,23 @@ elseif(WIN32)
 elseif(APPLE)
   if(WITH_PYTHON_MODULE)
     if(WITH_INSTALL_PORTABLE)
+      set(BPY_INSTALL_DIR)
       set(TARGETDIR_VER $<TARGET_FILE_DIR:blender>/../Resources/${BLENDER_VERSION})
       # Keep the `BLENDER_VERSION` folder and bpy.so in the build folder.
       set(INSTALL_BPY_TO_SITE_PACKAGES OFF)
     else()
-      set(TARGETDIR_VER "${PYTHON_LIBPATH}/Resources/${BLENDER_VERSION}")
+      # Parent directory of bpy.so for installation.
+      set(BPY_INSTALL_DIR ${PYTHON_LIBPATH}/site-packages)
+      # Defined in terms of site-packages since the site-packages
+      # directory can be a symlink (brew for example).
+      set(TARGETDIR_VER "${BPY_INSTALL_DIR}/../Resources/${BLENDER_VERSION}")
       set(INSTALL_BPY_TO_SITE_PACKAGES ON)
     endif()
   else()
     set(TARGETDIR_VER Blender.app/Contents/Resources/${BLENDER_VERSION})
   endif()
+  # License, copyright, readme files.
+  set(BLENDER_TEXT_FILES_DESTINATION "${TARGETDIR_VER}/../text")
   set(MAC_BLENDER_TARGET_DYLIBS_DIR "${TARGETDIR_VER}/lib")
   # Skip relinking on cpack / install
   set_target_properties(blender PROPERTIES BUILD_WITH_INSTALL_RPATH true)
@@ -906,16 +896,32 @@ elseif(WIN32)
   endif()
 
   if(WITH_CODEC_FFMPEG)
-    install(
-      FILES
-        ${LIBDIR}/ffmpeg/lib/avcodec-58.dll
-        ${LIBDIR}/ffmpeg/lib/avformat-58.dll
-        ${LIBDIR}/ffmpeg/lib/avdevice-58.dll
-        ${LIBDIR}/ffmpeg/lib/avutil-56.dll
-        ${LIBDIR}/ffmpeg/lib/swscale-5.dll
-        ${LIBDIR}/ffmpeg/lib/swresample-3.dll
-      DESTINATION "."
-    )
+    # Filenames change slightly between ffmpeg versions
+    # check both 5.0 and fallback to 4.4 to ease the transition
+    # between versions.
+    if(EXISTS "${LIBDIR}/ffmpeg/lib/avcodec-59.dll")
+      install(
+        FILES
+          ${LIBDIR}/ffmpeg/lib/avcodec-59.dll
+          ${LIBDIR}/ffmpeg/lib/avformat-59.dll
+          ${LIBDIR}/ffmpeg/lib/avdevice-59.dll
+          ${LIBDIR}/ffmpeg/lib/avutil-57.dll
+          ${LIBDIR}/ffmpeg/lib/swscale-6.dll
+          ${LIBDIR}/ffmpeg/lib/swresample-4.dll
+        DESTINATION "."
+      )
+    else()
+      install(
+        FILES
+          ${LIBDIR}/ffmpeg/lib/avcodec-58.dll
+          ${LIBDIR}/ffmpeg/lib/avformat-58.dll
+          ${LIBDIR}/ffmpeg/lib/avdevice-58.dll
+          ${LIBDIR}/ffmpeg/lib/avutil-56.dll
+          ${LIBDIR}/ffmpeg/lib/swscale-5.dll
+          ${LIBDIR}/ffmpeg/lib/swresample-3.dll
+        DESTINATION "."
+      )
+    endif()
   endif()
   if(WITH_TBB)
     install(
@@ -1069,9 +1075,6 @@ elseif(APPLE)
     DESTINATION "."
   )
 
-  # install release and app files
-  set(BLENDER_TEXT_FILES_DESTINATION Blender.app/Contents/Resources/text)
-
   install(
     FILES ${OSX_APP_SOURCEDIR}/Contents/PkgInfo
     DESTINATION Blender.app/Contents
@@ -1081,6 +1084,13 @@ elseif(APPLE)
     ${OSX_APP_SOURCEDIR}/Contents/Resources
     Blender.app/Contents/
   )
+
+  if(WITH_BLENDER_THUMBNAILER)
+      install(
+        TARGETS blender-thumbnailer
+        DESTINATION Blender.app/Contents/MacOS/
+      )
+  endif()
 
   if(WITH_OPENMP AND OPENMP_CUSTOM)
     install(
@@ -1118,11 +1128,12 @@ elseif(APPLE)
     )
     unset(_py_inc_suffix)
   endif()
+
   if(WITH_PYTHON_MODULE)
     if(INSTALL_BPY_TO_SITE_PACKAGES)
       install(
         TARGETS blender
-        LIBRARY DESTINATION ${PYTHON_LIBPATH}/site-packages
+        LIBRARY DESTINATION ${BPY_INSTALL_DIR}
       )
     endif()
   endif()
@@ -1140,15 +1151,9 @@ endif()
 
 if(DEFINED BLENDER_TEXT_FILES_DESTINATION)
 
-  install(
-    CODE
-    "
-    file(READ \"${CMAKE_SOURCE_DIR}/release/text/readme.html\" DATA_SRC)
-    string(REGEX REPLACE \"BLENDER_VERSION\" \"${BLENDER_VERSION}\" DATA_DST \"\${DATA_SRC}\")
-    file(WRITE \"${CMAKE_BINARY_DIR}/release/text/readme.html\" \"\${DATA_DST}\")
-    unset(DATA_SRC)
-    unset(DATA_DST)
-    "
+  configure_file(${CMAKE_SOURCE_DIR}/release/text/readme.html
+                 ${CMAKE_BINARY_DIR}/release/text/readme.html
+                 @ONLY
   )
   list(APPEND BLENDER_TEXT_FILES
     ${CMAKE_BINARY_DIR}/release/text/readme.html

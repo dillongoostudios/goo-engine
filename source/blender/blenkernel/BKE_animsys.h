@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 #pragma once
 
@@ -23,6 +7,7 @@
  * \ingroup bke
  */
 
+#include "BLI_bitmap.h"
 #include "BLI_sys_types.h" /* for bool */
 
 #ifdef __cplusplus
@@ -274,16 +259,20 @@ struct NlaKeyframingContext *BKE_animsys_get_nla_keyframing_context(
  * \param count: Number of values in the array.
  * \param index: Index of the element about to be updated, or -1.
  * \param[out] r_force_all: Set to true if all channels must be inserted. May be NULL.
- * \return False if correction fails due to a division by zero,
- * or null r_force_all when all channels are required.
+ * \param[out] r_successful_remaps: Bits will be enabled for indices that are both intended to be
+ * remapped and succeeded remapping. With both, it allows caller to check successfully remapped
+ * indices without having to explicitly check whether the index was intended to be remapped.
  */
-bool BKE_animsys_nla_remap_keyframe_values(struct NlaKeyframingContext *context,
+void BKE_animsys_nla_remap_keyframe_values(struct NlaKeyframingContext *context,
                                            struct PointerRNA *prop_ptr,
                                            struct PropertyRNA *prop,
                                            float *values,
                                            int count,
                                            int index,
-                                           bool *r_force_all);
+                                           const struct AnimationEvalContext *anim_eval_context,
+                                           bool *r_force_all,
+                                           BLI_bitmap *r_successful_remaps);
+
 /**
  * Free all cached contexts from the list.
  */

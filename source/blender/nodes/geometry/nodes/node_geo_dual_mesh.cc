@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_task.hh"
 
@@ -641,7 +627,7 @@ static void calc_dual_mesh(GeometrySet &geometry_set,
   calc_boundaries(mesh_in, vertex_types, edge_types);
   /* Stores the indices of the polygons connected to the vertex. Because the polygons are looped
    * over in order of their indices, the polygon's indices will be sorted in ascending order.
-   (This can change once they are sorted using `sort_vertex_polys`). */
+   * (This can change once they are sorted using `sort_vertex_polys`). */
   Array<Vector<int>> vertex_poly_indices(mesh_in.totvert);
   Array<Array<int>> vertex_shared_edges(mesh_in.totvert);
   Array<Array<int>> vertex_corners(mesh_in.totvert);
@@ -660,13 +646,13 @@ static void calc_dual_mesh(GeometrySet &geometry_set,
         Array<int> shared_edges(loop_indices.size());
         vertex_ok = sort_vertex_polys(
             mesh_in, i, false, edge_types, loop_indices, shared_edges, sorted_corners);
-        vertex_shared_edges[i] = shared_edges;
+        vertex_shared_edges[i] = std::move(shared_edges);
       }
       else {
         Array<int> shared_edges(loop_indices.size() - 1);
         vertex_ok = sort_vertex_polys(
             mesh_in, i, true, edge_types, loop_indices, shared_edges, sorted_corners);
-        vertex_shared_edges[i] = shared_edges;
+        vertex_shared_edges[i] = std::move(shared_edges);
       }
       if (!vertex_ok) {
         /* The sorting failed which means that the vertex is non-manifold and should be ignored
@@ -674,7 +660,7 @@ static void calc_dual_mesh(GeometrySet &geometry_set,
         vertex_types[i] = VertexType::NonManifold;
         continue;
       }
-      vertex_corners[i] = sorted_corners;
+      vertex_corners[i] = std::move(sorted_corners);
     }
   });
 
@@ -911,7 +897,6 @@ static void calc_dual_mesh(GeometrySet &geometry_set,
     copy_v3_v3(mesh_out->mvert[i].co, vertex_positions[i]);
   }
   memcpy(mesh_out->medge, new_edges.data(), sizeof(MEdge) * new_edges.size());
-  BKE_mesh_normals_tag_dirty(mesh_out);
   geometry_set.replace_mesh(mesh_out);
 }
 

@@ -1,22 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * allocimbuf.c
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup imbuf
@@ -532,7 +515,7 @@ void IMB_rectblend(ImBuf *dbuf,
   const unsigned short *cmaskrect = curvemask, *cmr;
   unsigned short *dmaskrect = dmask, *dmr;
   const unsigned short *texmaskrect = texmask, *tmr;
-  int do_float, do_char, srcskip, destskip, origskip, x;
+  int srcskip, destskip, origskip, x;
   IMB_blend_func func = NULL;
   IMB_blend_func_float func_float = NULL;
 
@@ -552,8 +535,8 @@ void IMB_rectblend(ImBuf *dbuf,
     return;
   }
 
-  do_char = (sbuf && sbuf->rect && dbuf->rect && obuf->rect);
-  do_float = (sbuf && sbuf->rect_float && dbuf->rect_float && obuf->rect_float);
+  const bool do_char = (sbuf && sbuf->rect && dbuf->rect && obuf->rect);
+  const bool do_float = (sbuf && sbuf->rect_float && dbuf->rect_float && obuf->rect_float);
 
   if (do_char) {
     drect = dbuf->rect + ((size_t)desty) * dbuf->x + destx;

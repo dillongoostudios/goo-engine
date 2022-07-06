@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edsculpt
@@ -430,7 +416,7 @@ void PAINT_OT_weight_sample_group(wmOperatorType *ot)
 
   /* Group to use (dynamic enum). */
   prop = RNA_def_enum(
-      ot->srna, "group", DummyRNA_DEFAULT_items, 0, "Group", "Vertex group to set as active");
+      ot->srna, "group", DummyRNA_NULL_items, 0, "Group", "Vertex group to set as active");
   RNA_def_enum_funcs(prop, weight_paint_sample_enum_itemf);
   RNA_def_property_flag(prop, PROP_ENUM_NO_TRANSLATE);
   ot->prop = prop;

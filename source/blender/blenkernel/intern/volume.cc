@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -74,6 +60,7 @@ using blender::float3;
 using blender::float4x4;
 using blender::IndexRange;
 using blender::StringRef;
+using blender::StringRefNull;
 
 #ifdef WITH_OPENVDB
 #  include <atomic>
@@ -531,6 +518,8 @@ static void volume_init_data(ID *id)
   MEMCPY_STRUCT_AFTER(volume, DNA_struct_default_get(Volume), id);
 
   BKE_volume_init_grids(volume);
+
+  BLI_strncpy(volume->velocity_grid, "velocity", sizeof(volume->velocity_grid));
 }
 
 static void volume_copy_data(Main *UNUSED(bmain),
@@ -583,8 +572,7 @@ static void volume_foreach_cache(ID *id,
   Volume *volume = (Volume *)id;
   IDCacheKey key = {
       /* id_session_uuid */ id->session_uuid,
-      /*offset_in_ID*/ offsetof(Volume, runtime.grids),
-      /* cache_v */ volume->runtime.grids,
+      /* offset_in_ID */ offsetof(Volume, runtime.grids),
   };
 
   function_callback(id, &key, (void **)&volume->runtime.grids, 0, user_data);
@@ -809,6 +797,57 @@ bool BKE_volume_is_loaded(const Volume *volume)
 #endif
 }
 
+bool BKE_volume_set_velocity_grid_by_name(Volume *volume, const char *base_name)
+{
+  const StringRefNull ref_base_name = base_name;
+
+  if (BKE_volume_grid_find_for_read(volume, base_name)) {
+    BLI_strncpy(volume->velocity_grid, base_name, sizeof(volume->velocity_grid));
+    volume->runtime.velocity_x_grid[0] = '\0';
+    volume->runtime.velocity_y_grid[0] = '\0';
+    volume->runtime.velocity_z_grid[0] = '\0';
+    return true;
+  }
+
+  /* It could be that the velocity grid is split in multiple grids, try with known postfixes. */
+  const StringRefNull postfixes[][3] = {{"x", "y", "z"}, {".x", ".y", ".z"}, {"_x", "_y", "_z"}};
+
+  for (const StringRefNull *postfix : postfixes) {
+    bool found = true;
+    for (int i = 0; i < 3; i++) {
+      std::string post_fixed_name = ref_base_name + postfix[i];
+      if (!BKE_volume_grid_find_for_read(volume, post_fixed_name.c_str())) {
+        found = false;
+        break;
+      }
+    }
+
+    if (!found) {
+      continue;
+    }
+
+    /* Save the base name as well. */
+    BLI_strncpy(volume->velocity_grid, base_name, sizeof(volume->velocity_grid));
+    BLI_strncpy(volume->runtime.velocity_x_grid,
+                (ref_base_name + postfix[0]).c_str(),
+                sizeof(volume->runtime.velocity_x_grid));
+    BLI_strncpy(volume->runtime.velocity_y_grid,
+                (ref_base_name + postfix[1]).c_str(),
+                sizeof(volume->runtime.velocity_y_grid));
+    BLI_strncpy(volume->runtime.velocity_z_grid,
+                (ref_base_name + postfix[2]).c_str(),
+                sizeof(volume->runtime.velocity_z_grid));
+    return true;
+  }
+
+  /* Reset to avoid potential issues. */
+  volume->velocity_grid[0] = '\0';
+  volume->runtime.velocity_x_grid[0] = '\0';
+  volume->runtime.velocity_y_grid[0] = '\0';
+  volume->runtime.velocity_z_grid[0] = '\0';
+  return false;
+}
+
 bool BKE_volume_load(const Volume *volume, const Main *bmain)
 {
 #ifdef WITH_OPENVDB
@@ -869,6 +908,14 @@ bool BKE_volume_load(const Volume *volume, const Main *bmain)
     if (vdb_grid) {
       VolumeFileCache::Entry template_entry(filepath, vdb_grid);
       grids.emplace_back(template_entry, volume->runtime.default_simplify_level);
+    }
+  }
+
+  /* Try to detect the velocity grid. */
+  const char *common_velocity_names[] = {"velocity", "vel", "v"};
+  for (const char *common_velocity_name : common_velocity_names) {
+    if (BKE_volume_set_velocity_grid_by_name(const_cast<Volume *>(volume), common_velocity_name)) {
+      break;
     }
   }
 

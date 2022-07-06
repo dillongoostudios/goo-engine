@@ -1,19 +1,6 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_generic_array.hh"
 #include "BLI_kdopbvh.h"
 #include "BLI_task.hh"
 
@@ -26,8 +13,6 @@
 #include "BKE_mesh_runtime.h"
 #include "BKE_mesh_sample.hh"
 
-#include "FN_generic_array.hh"
-
 #include "UI_interface.h"
 #include "UI_resources.h"
 
@@ -38,7 +23,6 @@
 namespace blender::nodes::node_geo_transfer_attribute_cc {
 
 using namespace blender::bke::mesh_surface_sample;
-using blender::fn::GArray;
 
 NODE_STORAGE_FUNCS(NodeGeometryTransferAttribute)
 
@@ -509,7 +493,7 @@ class NearestTransferFunction : public fn::MultiFunction {
     GMutableSpan dst = params.uninitialized_single_output_if_required(1, "Attribute");
 
     if (!use_mesh_ && !use_points_) {
-      dst.type().fill_construct_indices(dst.type().default_value(), dst.data(), mask);
+      dst.type().value_initialize_indices(dst.data(), mask);
       return;
     }
 
@@ -689,7 +673,7 @@ class IndexTransferFunction : public fn::MultiFunction {
 
     const CPPType &type = dst.type();
     if (src_data_ == nullptr) {
-      type.fill_construct_indices(type.default_value(), dst.data(), mask);
+      type.value_initialize_indices(dst.data(), mask);
       return;
     }
 
@@ -792,7 +776,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case GEO_NODE_ATTRIBUTE_TRANSFER_NEAREST: {
-      if (geometry.has_curve() && !geometry.has_mesh() && !geometry.has_pointcloud()) {
+      if (geometry.has_curves() && !geometry.has_mesh() && !geometry.has_pointcloud()) {
         params.error_message_add(NodeWarningType::Error,
                                  TIP_("The source geometry must contain a mesh or a point cloud"));
         return return_default();

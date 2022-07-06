@@ -1,20 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
+#include "BLI_generic_virtual_array.hh"
 #include "BLI_span.hh"
 #include "BLI_task.hh"
 #include "BLI_timeit.hh"
@@ -23,21 +10,19 @@
 #include "BKE_attribute_math.hh"
 #include "BKE_spline.hh"
 
-#include "FN_generic_virtual_array.hh"
-
 using blender::Array;
 using blender::float3;
+using blender::GMutableSpan;
+using blender::GSpan;
+using blender::GVArray;
 using blender::IndexRange;
 using blender::MutableSpan;
 using blender::Span;
 using blender::VArray;
 using blender::attribute_math::convert_to_static_type;
 using blender::bke::AttributeIDRef;
-using blender::fn::GMutableSpan;
-using blender::fn::GSpan;
-using blender::fn::GVArray;
 
-Spline::Type Spline::type() const
+CurveType Spline::type() const
 {
   return type_;
 }
@@ -48,15 +33,18 @@ void Spline::copy_base_settings(const Spline &src, Spline &dst)
   dst.is_cyclic_ = src.is_cyclic_;
 }
 
-static SplinePtr create_spline(const Spline::Type type)
+static SplinePtr create_spline(const CurveType type)
 {
   switch (type) {
-    case Spline::Type::Poly:
+    case CURVE_TYPE_POLY:
       return std::make_unique<PolySpline>();
-    case Spline::Type::Bezier:
+    case CURVE_TYPE_BEZIER:
       return std::make_unique<BezierSpline>();
-    case Spline::Type::NURBS:
+    case CURVE_TYPE_NURBS:
       return std::make_unique<NURBSpline>();
+    case CURVE_TYPE_CATMULL_ROM:
+      BLI_assert_unreachable();
+      return {};
   }
   BLI_assert_unreachable();
   return {};
@@ -111,7 +99,7 @@ void Spline::reverse()
 
   this->attributes.foreach_attribute(
       [&](const AttributeIDRef &id, const AttributeMetaData &meta_data) {
-        std::optional<blender::fn::GMutableSpan> attribute = this->attributes.get_for_write(id);
+        std::optional<blender::GMutableSpan> attribute = this->attributes.get_for_write(id);
         if (!attribute) {
           BLI_assert_unreachable();
           return false;
@@ -389,17 +377,12 @@ Span<float3> Spline::evaluated_normals() const
 
   /* Only Z up normals are supported at the moment. */
   switch (this->normal_mode) {
-    case ZUp: {
+    case NORMAL_MODE_Z_UP: {
       calculate_normals_z_up(tangents, normals);
       break;
     }
-    case Minimum: {
+    case NORMAL_MODE_MINIMUM_TWIST: {
       calculate_normals_minimum(tangents, is_cyclic_, normals);
-      break;
-    }
-    case Tangent: {
-      /* Tangent mode is not yet supported. */
-      calculate_normals_z_up(tangents, normals);
       break;
     }
   }

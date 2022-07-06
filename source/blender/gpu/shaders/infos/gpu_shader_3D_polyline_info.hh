@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2022 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2022 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -24,9 +8,49 @@
 #include "gpu_interface_info.hh"
 #include "gpu_shader_create_info.hh"
 
-/* TODO(jbakker): Skipped as it needs a uniform/storage buffer. */
-GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline_uniform_color)
+GPU_SHADER_INTERFACE_INFO(gpu_shader_3D_polyline_iface, "interp")
+    .smooth(Type::VEC4, "color")
+    .smooth(Type::FLOAT, "clip")
+    .no_perspective(Type::FLOAT, "smoothline");
+
+GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline)
+    .define("SMOOTH_WIDTH", "1.0")
+    .push_constant(Type::MAT4, "ModelViewProjectionMatrix")
+    .push_constant(Type::VEC2, "viewportSize")
+    .push_constant(Type::FLOAT, "lineWidth")
+    .push_constant(Type::BOOL, "lineSmooth")
+    .vertex_in(0, Type::VEC3, "pos")
+    .vertex_out(gpu_shader_3D_polyline_iface)
+    .geometry_layout(PrimitiveIn::LINES, PrimitiveOut::TRIANGLE_STRIP, 4)
+    .geometry_out(gpu_shader_3D_polyline_iface)
+    .fragment_out(0, Type::VEC4, "fragColor")
     .vertex_source("gpu_shader_3D_polyline_vert.glsl")
     .geometry_source("gpu_shader_3D_polyline_geom.glsl")
     .fragment_source("gpu_shader_3D_polyline_frag.glsl")
-    .do_static_compilation(true);
+    .additional_info("gpu_srgb_to_framebuffer_space");
+
+GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline_uniform_color)
+    .do_static_compilation(true)
+    .define("UNIFORM")
+    .push_constant(Type::VEC4, "color")
+    .additional_info("gpu_shader_3D_polyline");
+
+GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline_uniform_color_clipped)
+    .do_static_compilation(true)
+    /* TODO(fclem): Put in an UBO to fit the 128byte requirement. */
+    .push_constant(Type::MAT4, "ModelMatrix")
+    .push_constant(Type::VEC4, "ClipPlane")
+    .define("CLIP")
+    .additional_info("gpu_shader_3D_polyline_uniform_color");
+
+GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline_flat_color)
+    .do_static_compilation(true)
+    .define("FLAT")
+    .vertex_in(1, Type::VEC4, "color")
+    .additional_info("gpu_shader_3D_polyline");
+
+GPU_SHADER_CREATE_INFO(gpu_shader_3D_polyline_smooth_color)
+    .do_static_compilation(true)
+    .define("SMOOTH")
+    .vertex_in(1, Type::VEC4, "color")
+    .additional_info("gpu_shader_3D_polyline");

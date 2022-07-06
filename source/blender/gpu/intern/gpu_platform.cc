@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -81,6 +65,7 @@ void GPUPlatformGlobal::init(eGPUDeviceType gpu_device,
                              eGPUOSType os_type,
                              eGPUDriverType driver_type,
                              eGPUSupportLevel gpu_support_level,
+                             eGPUBackendType backend,
                              const char *vendor_str,
                              const char *renderer_str,
                              const char *version_str)
@@ -99,6 +84,7 @@ void GPUPlatformGlobal::init(eGPUDeviceType gpu_device,
   this->version = BLI_strdup(version_str);
   this->support_key = create_key(gpu_support_level, vendor_str, renderer_str, version_str);
   this->gpu_name = create_gpu_name(vendor_str, renderer_str, version_str);
+  this->backend = backend;
 }
 
 void GPUPlatformGlobal::clear()
@@ -159,8 +145,17 @@ const char *GPU_platform_gpu_name()
 
 bool GPU_type_matches(eGPUDeviceType device, eGPUOSType os, eGPUDriverType driver)
 {
+  return GPU_type_matches_ex(device, os, driver, GPU_BACKEND_ANY);
+}
+
+bool GPU_type_matches_ex(eGPUDeviceType device,
+                         eGPUOSType os,
+                         eGPUDriverType driver,
+                         eGPUBackendType backend)
+{
   BLI_assert(GPG.initialized);
-  return (GPG.device & device) && (GPG.os & os) && (GPG.driver & driver);
+  return (GPG.device & device) && (GPG.os & os) && (GPG.driver & driver) &&
+         (GPG.backend & backend);
 }
 
 /** \} */

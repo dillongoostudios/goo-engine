@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -1137,6 +1121,14 @@ void BKE_libblock_init_empty(ID *id)
   BLI_assert_msg(0, "IDType Missing IDTypeInfo");
 }
 
+void BKE_libblock_runtime_reset_remapping_status(ID *id)
+{
+  id->runtime.remap.status = 0;
+  id->runtime.remap.skipped_refcounted = 0;
+  id->runtime.remap.skipped_direct = 0;
+  id->runtime.remap.skipped_indirect = 0;
+}
+
 /* ********** ID session-wise UUID management. ********** */
 static uint global_session_uuid = 0;
 
@@ -1883,7 +1875,7 @@ void BKE_library_make_local(Main *bmain,
   for (int a = set_listbasepointers(bmain, lbarray); a--;) {
     ID *id = lbarray[a]->first;
 
-    /* Do not explicitly make local non-linkable IDs (shapekeys, in fact),
+    /* Do not explicitly make local non-linkable IDs (shape-keys, in fact),
      * they are assumed to be handled by real data-blocks responsible of them. */
     const bool do_skip = (id && !BKE_idtype_idcode_is_linkable(GS(id->name)));
 
@@ -1910,15 +1902,14 @@ void BKE_library_make_local(Main *bmain,
        * to discover all your links are lost after appending).
        * Also, never ever make proxified objects local, would not make any sense. */
       /* Some more notes:
-       *   - Shapekeys are never tagged here (since they are not linkable).
-       *   - Nodetrees used in materials etc. have to be tagged manually,
+       *   - Shape-keys are never tagged here (since they are not linkable).
+       *   - Node-trees used in materials etc. have to be tagged manually,
        *     since they do not exist in Main (!).
        * This is ok-ish on 'make local' side of things
        * (since those are handled by their 'owner' IDs),
        * but complicates slightly the pre-processing of relations between IDs at step 2... */
       else if (!do_skip && id->tag & (LIB_TAG_EXTERN | LIB_TAG_INDIRECT | LIB_TAG_NEW) &&
                ELEM(lib, NULL, id->lib) &&
-               !(GS(id->name) == ID_OB && ((Object *)id)->proxy_from != NULL) &&
                ((untagged_only == false) || !(id->tag & LIB_TAG_PRE_EXISTING))) {
         BLI_linklist_prepend_arena(&todo_ids, id, linklist_mem);
         id->tag |= LIB_TAG_DOIT;
@@ -1982,12 +1973,8 @@ void BKE_library_make_local(Main *bmain,
       }
     }
     else {
-      /* In this specific case, we do want to make ID local even if it has no local usage yet...
-       * Note that for objects, we don't want proxy pointers to be cleared yet. This will happen
-       * down the road in this function.
-       */
-      BKE_lib_id_make_local(
-          bmain, id, LIB_ID_MAKELOCAL_FULL_LIBRARY | LIB_ID_MAKELOCAL_OBJECT_NO_PROXY_CLEARING);
+      /* In this specific case, we do want to make ID local even if it has no local usage yet... */
+      BKE_lib_id_make_local(bmain, id, LIB_ID_MAKELOCAL_FULL_LIBRARY);
 
       if (id->newid) {
         if (GS(id->newid->name) == ID_OB) {
@@ -2046,62 +2033,6 @@ void BKE_library_make_local(Main *bmain,
 
 #ifdef DEBUG_TIME
   printf("Step 4: Remap local usages of old (linked) ID to new (local) ID: Done.\n");
-  TIMEIT_VALUE_PRINT(make_local);
-#endif
-
-  /* Step 5: proxy 'remapping' hack. */
-  for (LinkNode *it = copied_ids; it; it = it->next) {
-    ID *id = it->link;
-
-    /* Attempt to re-link copied proxy objects. This allows appending of an entire scene
-     * from another blend file into this one, even when that blend file contains proxified
-     * armatures that have local references. Since the proxified object needs to be linked
-     * (not local), this will only work when the "Localize all" checkbox is disabled.
-     * TL;DR: this is a dirty hack on top of an already weak feature (proxies). */
-    if (GS(id->name) == ID_OB && ((Object *)id)->proxy != NULL) {
-      Object *ob = (Object *)id;
-      Object *ob_new = (Object *)id->newid;
-      bool is_local = false, is_lib = false;
-
-      /* Proxies only work when the proxified object is linked-in from a library. */
-      if (!ID_IS_LINKED(ob->proxy)) {
-        CLOG_WARN(&LOG,
-                  "proxy object %s will lose its link to %s, because the "
-                  "proxified object is local.",
-                  id->newid->name,
-                  ob->proxy->id.name);
-        continue;
-      }
-
-      BKE_library_ID_test_usages(bmain, id, &is_local, &is_lib);
-
-      /* We can only switch the proxy'ing to a made-local proxy if it is no longer
-       * referred to from a library. Not checking for local use; if new local proxy
-       * was not used locally would be a nasty bug! */
-      if (is_local || is_lib) {
-        CLOG_WARN(&LOG,
-                  "made-local proxy object %s will lose its link to %s, "
-                  "because the linked-in proxy is referenced (is_local=%i, is_lib=%i).",
-                  id->newid->name,
-                  ob->proxy->id.name,
-                  is_local,
-                  is_lib);
-      }
-      else {
-        /* we can switch the proxy'ing from the linked-in to the made-local proxy.
-         * BKE_object_make_proxy() shouldn't be used here, as it allocates memory that
-         * was already allocated by object_make_local() (which called BKE_object_copy). */
-        ob_new->proxy = ob->proxy;
-        ob_new->proxy_group = ob->proxy_group;
-        ob_new->proxy_from = ob->proxy_from;
-        ob_new->proxy->proxy_from = ob_new;
-        ob->proxy = ob->proxy_from = ob->proxy_group = NULL;
-      }
-    }
-  }
-
-#ifdef DEBUG_TIME
-  printf("Step 5: Proxy 'remapping' hack: Done.\n");
   TIMEIT_VALUE_PRINT(make_local);
 #endif
 
@@ -2232,6 +2163,11 @@ bool BKE_id_can_be_asset(const ID *id)
 {
   return !ID_IS_LINKED(id) && !ID_IS_OVERRIDE_LIBRARY(id) &&
          BKE_idtype_idcode_is_linkable(GS(id->name));
+}
+
+bool BKE_id_is_editable(Main *bmain, ID *id)
+{
+  return !(ID_IS_LINKED(id) || BKE_lib_override_library_is_system_defined(bmain, id));
 }
 
 /************************* Datablock order in UI **************************/

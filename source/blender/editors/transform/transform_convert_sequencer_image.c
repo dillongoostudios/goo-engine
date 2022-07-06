@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edtransform
@@ -31,6 +15,7 @@
 #include "BKE_context.h"
 #include "BKE_report.h"
 
+#include "SEQ_channels.h"
 #include "SEQ_iterator.h"
 #include "SEQ_relations.h"
 #include "SEQ_sequencer.h"
@@ -43,6 +28,7 @@
 #include "UI_view2d.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "transform.h"
 #include "transform_convert.h"
@@ -136,7 +122,8 @@ void createTransSeqImageData(TransInfo *t)
   }
 
   ListBase *seqbase = SEQ_active_seqbase_get(ed);
-  SeqCollection *strips = SEQ_query_rendered_strips(seqbase, t->scene->r.cfra, 0);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
+  SeqCollection *strips = SEQ_query_rendered_strips(channels, seqbase, t->scene->r.cfra, 0);
   SEQ_filter_selected_strips(strips);
 
   const int count = SEQ_collection_len(strips);

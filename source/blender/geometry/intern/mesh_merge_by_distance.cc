@@ -1,22 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_kdtree.h"
+#include "BLI_math_vector.h"
 #include "BLI_math_vector.hh"
 #include "BLI_vector.hh"
 
@@ -117,7 +104,7 @@ struct WeldMesh {
   /* References all polygons and loops that will be affected. */
   Vector<WeldLoop> wloop;
   Vector<WeldPoly> wpoly;
-  WeldPoly *wpoly_new;
+  MutableSpan<WeldPoly> wpoly_new;
   int wloop_len;
   int wpoly_len;
   int wpoly_new_len;
@@ -819,11 +806,9 @@ static void weld_poly_loop_ctx_alloc(Span<MPoly> mpoly,
     wpoly.resize(wpoly_len + maybe_new_poly);
   }
 
-  WeldPoly *poly_new = wpoly.data() + wpoly_len;
-
   r_weld_mesh->wloop = std::move(wloop);
   r_weld_mesh->wpoly = std::move(wpoly);
-  r_weld_mesh->wpoly_new = poly_new;
+  r_weld_mesh->wpoly_new = r_weld_mesh->wpoly.as_mutable_span().drop_front(wpoly_len);
   r_weld_mesh->wloop_len = wloop_len;
   r_weld_mesh->wpoly_len = wpoly_len;
   r_weld_mesh->wpoly_new_len = 0;
@@ -843,133 +828,134 @@ static void weld_poly_split_recursive(Span<int> vert_dest_map,
                                       int *r_loop_kill)
 {
   int poly_len = r_wp->len;
-  if (poly_len > 3 && ctx_verts_len > 1) {
-    const int ctx_loops_len = r_wp->loops.len;
-    const int ctx_loops_ofs = r_wp->loops.ofs;
-    MutableSpan<WeldLoop> wloop = r_weld_mesh->wloop;
-    WeldPoly *wpoly_new = r_weld_mesh->wpoly_new;
+  if (poly_len < 3 || ctx_verts_len < 1) {
+    return;
+  }
 
-    int loop_kill = 0;
+  const int ctx_loops_len = r_wp->loops.len;
+  const int ctx_loops_ofs = r_wp->loops.ofs;
+  MutableSpan<WeldLoop> wloop = r_weld_mesh->wloop;
 
-    WeldLoop *poly_loops = &wloop[ctx_loops_ofs];
-    WeldLoop *wla = &poly_loops[0];
-    WeldLoop *wla_prev = &poly_loops[ctx_loops_len - 1];
-    while (wla_prev->flag == ELEM_COLLAPSED) {
-      wla_prev--;
+  int loop_kill = 0;
+
+  WeldLoop *poly_loops = &wloop[ctx_loops_ofs];
+  WeldLoop *wla = &poly_loops[0];
+  WeldLoop *wla_prev = &poly_loops[ctx_loops_len - 1];
+  while (wla_prev->flag == ELEM_COLLAPSED) {
+    wla_prev--;
+  }
+  const int la_len = ctx_loops_len - 1;
+  for (int la = 0; la < la_len; la++, wla++) {
+  wa_continue:
+    if (wla->flag == ELEM_COLLAPSED) {
+      continue;
     }
-    const int la_len = ctx_loops_len - 1;
-    for (int la = 0; la < la_len; la++, wla++) {
-    wa_continue:
-      if (wla->flag == ELEM_COLLAPSED) {
-        continue;
-      }
-      int vert_a = wla->vert;
-      /* Only test vertices that will be merged. */
-      if (vert_dest_map[vert_a] != OUT_OF_CONTEXT) {
-        int lb = la + 1;
-        WeldLoop *wlb = wla + 1;
-        WeldLoop *wlb_prev = wla;
-        int killed_ab = 0;
-        ctx_verts_len = 1;
-        for (; lb < ctx_loops_len; lb++, wlb++) {
-          BLI_assert(wlb->loop_skip_to == OUT_OF_CONTEXT);
-          if (wlb->flag == ELEM_COLLAPSED) {
-            killed_ab++;
-            continue;
-          }
-          int vert_b = wlb->vert;
-          if (vert_dest_map[vert_b] != OUT_OF_CONTEXT) {
-            ctx_verts_len++;
-          }
-          if (vert_a == vert_b) {
-            const int dist_a = wlb->loop_orig - wla->loop_orig - killed_ab;
-            const int dist_b = poly_len - dist_a;
+    int vert_a = wla->vert;
+    /* Only test vertices that will be merged. */
+    if (vert_dest_map[vert_a] != OUT_OF_CONTEXT) {
+      int lb = la + 1;
+      WeldLoop *wlb = wla + 1;
+      WeldLoop *wlb_prev = wla;
+      int killed_ab = 0;
+      ctx_verts_len = 1;
+      for (; lb < ctx_loops_len; lb++, wlb++) {
+        BLI_assert(wlb->loop_skip_to == OUT_OF_CONTEXT);
+        if (wlb->flag == ELEM_COLLAPSED) {
+          killed_ab++;
+          continue;
+        }
+        int vert_b = wlb->vert;
+        if (vert_dest_map[vert_b] != OUT_OF_CONTEXT) {
+          ctx_verts_len++;
+        }
+        if (vert_a == vert_b) {
+          const int dist_a = wlb->loop_orig - wla->loop_orig - killed_ab;
+          const int dist_b = poly_len - dist_a;
 
-            BLI_assert(dist_a != 0 && dist_b != 0);
-            if (dist_a == 1 || dist_b == 1) {
-              BLI_assert(dist_a != dist_b);
-              BLI_assert((wla->flag == ELEM_COLLAPSED) || (wlb->flag == ELEM_COLLAPSED));
+          BLI_assert(dist_a != 0 && dist_b != 0);
+          if (dist_a == 1 || dist_b == 1) {
+            BLI_assert(dist_a != dist_b);
+            BLI_assert((wla->flag == ELEM_COLLAPSED) || (wlb->flag == ELEM_COLLAPSED));
+          }
+          else {
+            WeldLoop *wl_tmp = nullptr;
+            if (dist_a == 2) {
+              wl_tmp = wlb_prev;
+              BLI_assert(wla->flag != ELEM_COLLAPSED);
+              BLI_assert(wl_tmp->flag != ELEM_COLLAPSED);
+              wla->flag = ELEM_COLLAPSED;
+              wl_tmp->flag = ELEM_COLLAPSED;
+              loop_kill += 2;
+              poly_len -= 2;
             }
-            else {
-              WeldLoop *wl_tmp = nullptr;
-              if (dist_a == 2) {
-                wl_tmp = wlb_prev;
-                BLI_assert(wla->flag != ELEM_COLLAPSED);
+            if (dist_b == 2) {
+              if (wl_tmp != nullptr) {
+                r_wp->flag = ELEM_COLLAPSED;
+                *r_poly_kill += 1;
+              }
+              else {
+                wl_tmp = wla_prev;
+                BLI_assert(wlb->flag != ELEM_COLLAPSED);
                 BLI_assert(wl_tmp->flag != ELEM_COLLAPSED);
-                wla->flag = ELEM_COLLAPSED;
+                wlb->flag = ELEM_COLLAPSED;
                 wl_tmp->flag = ELEM_COLLAPSED;
-                loop_kill += 2;
-                poly_len -= 2;
               }
-              if (dist_b == 2) {
-                if (wl_tmp != nullptr) {
-                  r_wp->flag = ELEM_COLLAPSED;
-                  *r_poly_kill += 1;
-                }
-                else {
-                  wl_tmp = wla_prev;
-                  BLI_assert(wlb->flag != ELEM_COLLAPSED);
-                  BLI_assert(wl_tmp->flag != ELEM_COLLAPSED);
-                  wlb->flag = ELEM_COLLAPSED;
-                  wl_tmp->flag = ELEM_COLLAPSED;
-                }
-                loop_kill += 2;
-                poly_len -= 2;
-              }
-              if (wl_tmp == nullptr) {
-                const int new_loops_len = lb - la;
-                const int new_loops_ofs = ctx_loops_ofs + la;
-
-                WeldPoly *new_wp = &wpoly_new[r_weld_mesh->wpoly_new_len++];
-                new_wp->poly_dst = OUT_OF_CONTEXT;
-                new_wp->poly_orig = r_wp->poly_orig;
-                new_wp->loops.len = new_loops_len;
-                new_wp->loops.ofs = new_loops_ofs;
-                new_wp->loop_start = wla->loop_orig;
-                new_wp->loop_end = wlb_prev->loop_orig;
-                new_wp->len = dist_a;
-                weld_poly_split_recursive(vert_dest_map,
-#ifdef USE_WELD_DEBUG
-                                          mloop,
-#endif
-                                          ctx_verts_len,
-                                          new_wp,
-                                          r_weld_mesh,
-                                          r_poly_kill,
-                                          r_loop_kill);
-                BLI_assert(dist_b == poly_len - dist_a);
-                poly_len = dist_b;
-                if (wla_prev->loop_orig > wla->loop_orig) {
-                  /* New start. */
-                  r_wp->loop_start = wlb->loop_orig;
-                }
-                else {
-                  /* The `loop_start` doesn't change but some loops must be skipped. */
-                  wla_prev->loop_skip_to = wlb->loop_orig;
-                }
-                wla = wlb;
-                la = lb;
-                goto wa_continue;
-              }
-              break;
+              loop_kill += 2;
+              poly_len -= 2;
             }
-          }
-          if (wlb->flag != ELEM_COLLAPSED) {
-            wlb_prev = wlb;
+            if (wl_tmp == nullptr) {
+              const int new_loops_len = lb - la;
+              const int new_loops_ofs = ctx_loops_ofs + la;
+
+              WeldPoly *new_wp = &r_weld_mesh->wpoly_new[r_weld_mesh->wpoly_new_len++];
+              new_wp->poly_dst = OUT_OF_CONTEXT;
+              new_wp->poly_orig = r_wp->poly_orig;
+              new_wp->loops.len = new_loops_len;
+              new_wp->loops.ofs = new_loops_ofs;
+              new_wp->loop_start = wla->loop_orig;
+              new_wp->loop_end = wlb_prev->loop_orig;
+              new_wp->len = dist_a;
+              weld_poly_split_recursive(vert_dest_map,
+#ifdef USE_WELD_DEBUG
+                                        mloop,
+#endif
+                                        ctx_verts_len,
+                                        new_wp,
+                                        r_weld_mesh,
+                                        r_poly_kill,
+                                        r_loop_kill);
+              BLI_assert(dist_b == poly_len - dist_a);
+              poly_len = dist_b;
+              if (wla_prev->loop_orig > wla->loop_orig) {
+                /* New start. */
+                r_wp->loop_start = wlb->loop_orig;
+              }
+              else {
+                /* The `loop_start` doesn't change but some loops must be skipped. */
+                wla_prev->loop_skip_to = wlb->loop_orig;
+              }
+              wla = wlb;
+              la = lb;
+              goto wa_continue;
+            }
+            break;
           }
         }
-      }
-      if (wla->flag != ELEM_COLLAPSED) {
-        wla_prev = wla;
+        if (wlb->flag != ELEM_COLLAPSED) {
+          wlb_prev = wlb;
+        }
       }
     }
-    r_wp->len = poly_len;
-    *r_loop_kill += loop_kill;
+    if (wla->flag != ELEM_COLLAPSED) {
+      wla_prev = wla;
+    }
+  }
+  r_wp->len = poly_len;
+  *r_loop_kill += loop_kill;
 
 #ifdef USE_WELD_DEBUG
-    weld_assert_poly_no_vert_repetition(*r_wp, wloop, mloop, r_weld_mesh->loop_map);
+  weld_assert_poly_no_vert_repetition(*r_wp, wloop, mloop, r_weld_mesh->loop_map);
 #endif
-  }
 }
 
 static void weld_poly_loop_ctx_setup(Span<MLoop> mloop,
@@ -984,7 +970,6 @@ static void weld_poly_loop_ctx_setup(Span<MLoop> mloop,
 {
   MutableSpan<WeldPoly> wpoly = r_weld_mesh->wpoly;
   MutableSpan<WeldLoop> wloop = r_weld_mesh->wloop;
-  WeldPoly *wpoly_new = r_weld_mesh->wpoly_new;
   int wpoly_len = r_weld_mesh->wpoly_len;
   int wpoly_new_len = 0;
   int poly_kill_len = 0;
@@ -1047,7 +1032,7 @@ static void weld_poly_loop_ctx_setup(Span<MLoop> mloop,
 
 #ifdef USE_WELD_DEBUG
     weld_assert_poly_and_loop_kill_len(wpoly,
-                                       {wpoly_new, wpoly_new_len},
+                                       r_weld_mesh->wpoly_new,
                                        wloop,
                                        mloop,
                                        loop_map,
@@ -1183,7 +1168,7 @@ static void weld_poly_loop_ctx_setup(Span<MLoop> mloop,
 
 #ifdef USE_WELD_DEBUG
   weld_assert_poly_and_loop_kill_len(wpoly,
-                                     {wpoly_new, wpoly_new_len},
+                                     r_weld_mesh->wpoly_new,
                                      wloop,
                                      mloop,
                                      loop_map,
@@ -1193,7 +1178,6 @@ static void weld_poly_loop_ctx_setup(Span<MLoop> mloop,
                                      loop_kill_len);
 #endif
 
-  r_weld_mesh->wpoly_new = wpoly_new;
   r_weld_mesh->poly_kill_len = poly_kill_len;
   r_weld_mesh->loop_kill_len = loop_kill_len;
 }
@@ -1595,10 +1579,6 @@ static Mesh *create_merged_mesh(const Mesh &mesh,
 
   BLI_assert((int)r_i == result_npolys);
   BLI_assert(loop_cur == result_nloops);
-
-  /* We could only update the normals of the elements in context, but the next modifier can make it
-   * dirty anyway which would make the work useless. */
-  BKE_mesh_normals_tag_dirty(result);
 
   return result;
 }

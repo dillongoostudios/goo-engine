@@ -1,22 +1,5 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# The Original Code is Copyright (C) 2021, Blender Foundation
-# All rights reserved.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright 2021 Blender Foundation. All rights reserved.
 
 set(INC
   .
@@ -36,6 +19,8 @@ set(INC
   ../../windowmanager
   ../../../../intern/guardedalloc
   ../../../../intern/sky/include
+  # RNA_prototypes.h
+  ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
 
 
@@ -152,6 +137,7 @@ set(SRC
 set(LIB
   bf_functions
   bf_intern_sky
+  bf_nodes
 )
 
 if(WITH_PYTHON)
@@ -168,10 +154,6 @@ if(WITH_PYTHON)
   add_definitions(-DWITH_PYTHON)
 endif()
 
-if(WITH_INTERNATIONAL)
-  add_definitions(-DWITH_INTERNATIONAL)
-endif()
-
 if(WITH_FREESTYLE)
   add_definitions(-DWITH_FREESTYLE)
 endif()
@@ -182,3 +164,6 @@ if(WITH_UNITY_BUILD)
   set_target_properties(bf_nodes_shader PROPERTIES UNITY_BUILD ON)
   set_target_properties(bf_nodes_shader PROPERTIES UNITY_BUILD_BATCH_SIZE 10)
 endif()
+
+# RNA_prototypes.h
+add_dependencies(bf_nodes_shader bf_rna)

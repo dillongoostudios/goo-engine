@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -20,7 +6,7 @@
  * \ingroup fn
  */
 
-#include "FN_cpp_type_make.hh"
+#include "BLI_cpp_type_make.hh"
 #include "FN_field.hh"
 
 namespace blender::fn {
@@ -141,16 +127,14 @@ class ValueOrFieldCPPType : public CPPType {
 }  // namespace blender::fn
 
 #define MAKE_FIELD_CPP_TYPE(DEBUG_NAME, FIELD_TYPE) \
-  template<> \
-  const blender::fn::CPPType &blender::fn::CPPType::get_impl<blender::fn::Field<FIELD_TYPE>>() \
+  template<> const blender::CPPType &blender::CPPType::get_impl<blender::fn::Field<FIELD_TYPE>>() \
   { \
     static blender::fn::FieldCPPType cpp_type{ \
         blender::fn::FieldCPPTypeParam<blender::fn::Field<FIELD_TYPE>>(), STRINGIFY(DEBUG_NAME)}; \
     return cpp_type; \
   } \
   template<> \
-  const blender::fn::CPPType & \
-  blender::fn::CPPType::get_impl<blender::fn::ValueOrField<FIELD_TYPE>>() \
+  const blender::CPPType &blender::CPPType::get_impl<blender::fn::ValueOrField<FIELD_TYPE>>() \
   { \
     static blender::fn::ValueOrFieldCPPType cpp_type{ \
         blender::fn::FieldCPPTypeParam<blender::fn::ValueOrField<FIELD_TYPE>>(), \

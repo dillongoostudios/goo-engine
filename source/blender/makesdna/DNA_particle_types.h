@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 by Janne Karhu.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 by Janne Karhu. All rights reserved. */
 
 /** \file
  * \ingroup DNA
@@ -125,7 +109,12 @@ typedef struct ParticleData {
 
   /** Die-time is not necessarily time+lifetime as. */
   float time, lifetime;
-  /** Particles can die unnaturally (collision). */
+  /**
+   * Particles can die unnaturally (collision).
+   *
+   * \note Particles die on this frame, be sure to add 1 when clamping the lifetime of particles
+   * to inclusive ranges such as the scenes end frame. See: T68290.
+   */
   float dietime;
 
   /**
@@ -242,7 +231,7 @@ typedef struct ParticleSettings {
   /* children */
   int child_flag;
   char _pad3[4];
-  int child_nbr, ren_child_nbr;
+  int child_percent, child_render_percent;
   float parents, childsize, childrandsize;
   float childrad, childflat;
   /* clumping */

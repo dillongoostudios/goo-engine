@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edinterface
@@ -52,6 +36,7 @@
 #include "DNA_space_types.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "BKE_appdir.h"
 #include "BKE_context.h"
@@ -480,6 +465,32 @@ DEF_ICON_STRIP_COLOR_DRAW(09, SEQUENCE_COLOR_09);
 
 #  undef DEF_ICON_STRIP_COLOR_DRAW
 
+#  define ICON_INDIRECT_DATA_ALPHA 0.6f
+
+static void vicon_strip_color_draw_library_data_indirect(
+    int x, int y, int w, int UNUSED(h), float alpha)
+{
+  const float aspect = (float)ICON_DEFAULT_WIDTH / (float)w;
+
+  UI_icon_draw_ex(
+      x, y, ICON_LIBRARY_DATA_DIRECT, aspect, ICON_INDIRECT_DATA_ALPHA * alpha, 0.0f, NULL, false);
+}
+
+static void vicon_strip_color_draw_library_data_override_noneditable(
+    int x, int y, int w, int UNUSED(h), float alpha)
+{
+  const float aspect = (float)ICON_DEFAULT_WIDTH / (float)w;
+
+  UI_icon_draw_ex(x,
+                  y,
+                  ICON_LIBRARY_DATA_OVERRIDE,
+                  aspect,
+                  ICON_INDIRECT_DATA_ALPHA * alpha * 0.75f,
+                  0.0f,
+                  NULL,
+                  false);
+}
+
 /* Dynamically render icon instead of rendering a plain color to a texture/buffer
  * This is not strictly a "vicon", as it needs access to icon->obj to get the color info,
  * but it works in a very similar way.
@@ -588,18 +599,6 @@ int UI_icon_from_event_type(short event_type, short event_value)
   }
   else if (event_type == EVT_RIGHTALTKEY) {
     event_type = EVT_LEFTALTKEY;
-  }
-  else if (event_type == EVT_TWEAK_L) {
-    event_type = LEFTMOUSE;
-    event_value = KM_CLICK_DRAG;
-  }
-  else if (event_type == EVT_TWEAK_M) {
-    event_type = MIDDLEMOUSE;
-    event_value = KM_CLICK_DRAG;
-  }
-  else if (event_type == EVT_TWEAK_R) {
-    event_type = RIGHTMOUSE;
-    event_value = KM_CLICK_DRAG;
   }
 
   DrawInfo *di = g_di_event_list;
@@ -1001,6 +1000,10 @@ static void init_internal_icons(void)
   def_internal_vicon(ICON_SEQUENCE_COLOR_07, vicon_strip_color_draw_07);
   def_internal_vicon(ICON_SEQUENCE_COLOR_08, vicon_strip_color_draw_08);
   def_internal_vicon(ICON_SEQUENCE_COLOR_09, vicon_strip_color_draw_09);
+
+  def_internal_vicon(ICON_LIBRARY_DATA_INDIRECT, vicon_strip_color_draw_library_data_indirect);
+  def_internal_vicon(ICON_LIBRARY_DATA_OVERRIDE_NONEDITABLE,
+                     vicon_strip_color_draw_library_data_override_noneditable);
 }
 
 static void init_iconfile_list(struct ListBase *list)
@@ -1415,19 +1418,17 @@ static void icon_set_image(const bContext *C,
 
   const bool delay = prv_img->rect[size] != NULL;
   icon_create_rect(prv_img, size);
-  prv_img->flag[size] |= PRV_RENDERING;
 
   if (use_job && (!id || BKE_previewimg_id_supports_jobs(id))) {
     /* Job (background) version */
-    ED_preview_icon_job(
-        C, prv_img, id, prv_img->rect[size], prv_img->w[size], prv_img->h[size], delay);
+    ED_preview_icon_job(C, prv_img, id, size, delay);
   }
   else {
     if (!scene) {
       scene = CTX_data_scene(C);
     }
     /* Immediate version */
-    ED_preview_icon_render(C, scene, id, prv_img->rect[size], prv_img->w[size], prv_img->h[size]);
+    ED_preview_icon_render(C, scene, prv_img, id, size);
   }
 }
 
@@ -1583,10 +1584,10 @@ static void icon_draw_cache_texture_flush_ex(GPUTexture *texture,
   GPUShader *shader = GPU_shader_get_builtin_shader(GPU_SHADER_2D_IMAGE_MULTI_RECT_COLOR);
   GPU_shader_bind(shader);
 
-  const int data_loc = GPU_shader_get_uniform_block(shader, "multi_rect_data");
+  const int data_binding = GPU_shader_get_uniform_block_binding(shader, "multi_rect_data");
   GPUUniformBuf *ubo = GPU_uniformbuf_create_ex(
       sizeof(struct MultiRectCallData), texture_draw_calls->drawcall_cache, __func__);
-  GPU_uniformbuf_bind(ubo, data_loc);
+  GPU_uniformbuf_bind(ubo, data_binding);
 
   const int img_binding = GPU_shader_get_texture_binding(shader, "image");
   GPU_texture_bind_ex(texture, GPU_SAMPLER_ICON, img_binding, false);
@@ -2208,6 +2209,10 @@ int UI_icon_from_library(const ID *id)
     return ICON_LIBRARY_DATA_DIRECT;
   }
   if (ID_IS_OVERRIDE_LIBRARY(id)) {
+    if (!ID_IS_OVERRIDE_LIBRARY_REAL(id) ||
+        (id->override_library->flag & IDOVERRIDE_LIBRARY_FLAG_SYSTEM_DEFINED) != 0) {
+      return ICON_LIBRARY_DATA_OVERRIDE_NONEDITABLE;
+    }
     return ICON_LIBRARY_DATA_OVERRIDE;
   }
   if (ID_IS_ASSET(id)) {
@@ -2287,7 +2292,7 @@ int UI_icon_from_idcode(const int idcode)
       return ICON_CAMERA_DATA;
     case ID_CF:
       return ICON_FILE;
-    case ID_CU:
+    case ID_CU_LEGACY:
       return ICON_CURVE_DATA;
     case ID_GD:
       return ICON_OUTLINER_DATA_GREASEPENCIL;
@@ -2335,8 +2340,8 @@ int UI_icon_from_idcode(const int idcode)
       return ICON_TEXT;
     case ID_VF:
       return ICON_FONT_DATA;
-    case ID_HA:
-      return ICON_HAIR_DATA;
+    case ID_CV:
+      return ICON_CURVES_DATA;
     case ID_PT:
       return ICON_POINTCLOUD_DATA;
     case ID_VO:
@@ -2370,6 +2375,7 @@ int UI_icon_from_object_mode(const int mode)
       return ICON_EDITMODE_HLT;
     case OB_MODE_SCULPT:
     case OB_MODE_SCULPT_GPENCIL:
+    case OB_MODE_SCULPT_CURVES:
       return ICON_SCULPTMODE_HLT;
     case OB_MODE_VERTEX_PAINT:
     case OB_MODE_VERTEX_GPENCIL:

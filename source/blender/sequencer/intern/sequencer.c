@@ -1,24 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * - Blender Foundation, 2003-2009
- * - Peter Schlaile <peter [at] schlaile [dot] de> 2005/2006
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved.
+ *           2003-2009 Blender Foundation.
+ *           2005-2006 Peter Schlaile <peter [at] schlaile [dot] de> */
 
 /** \file
  * \ingroup bke
@@ -44,6 +27,7 @@
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 
+#include "SEQ_channels.h"
 #include "SEQ_edit.h"
 #include "SEQ_effects.h"
 #include "SEQ_iterator.h"
@@ -85,6 +69,7 @@ static Strip *seq_strip_alloc(int type)
     strip->transform->scale_y = 1;
     strip->transform->origin[0] = 0.5f;
     strip->transform->origin[1] = 0.5f;
+    strip->transform->filter = SEQ_TRANSFORM_FILTER_BILINEAR;
     strip->crop = MEM_callocN(sizeof(struct StripCrop), "StripCrop");
   }
 
@@ -150,6 +135,10 @@ Sequence *SEQ_sequence_alloc(ListBase *lb, int timeline_frame, int machine, int 
   seq->stereo3d_format = MEM_callocN(sizeof(Stereo3dFormat), "Sequence Stereo Format");
 
   seq->color_tag = SEQUENCE_COLOR_NONE;
+
+  if (seq->type == SEQ_TYPE_META) {
+    SEQ_channels_ensure(&seq->channels);
+  }
 
   SEQ_relations_session_uuid_generate(seq);
 
@@ -217,6 +206,9 @@ static void seq_sequence_free_ex(Scene *scene,
       SEQ_relations_invalidate_cache_raw(scene, seq);
     }
   }
+  if (seq->type == SEQ_TYPE_META) {
+    SEQ_channels_free(&seq->channels);
+  }
 
   MEM_freeN(seq);
 }
@@ -253,6 +245,8 @@ Editing *SEQ_editing_ensure(Scene *scene)
     ed->cache = NULL;
     ed->cache_flag = SEQ_CACHE_STORE_FINAL_OUT;
     ed->cache_flag |= SEQ_CACHE_STORE_RAW;
+    ed->displayed_channels = &ed->channels;
+    SEQ_channels_ensure(ed->displayed_channels);
   }
 
   return scene->ed;
@@ -276,6 +270,7 @@ void SEQ_editing_free(Scene *scene, const bool do_id_user)
 
   BLI_freelistN(&ed->metastack);
   SEQ_sequence_lookup_free(scene);
+  SEQ_channels_free(&ed->channels);
   MEM_freeN(ed);
 
   scene->ed = NULL;
@@ -402,6 +397,7 @@ MetaStack *SEQ_meta_stack_alloc(Editing *ed, Sequence *seq_meta)
   BLI_addtail(&ed->metastack, ms);
   ms->parseq = seq_meta;
   ms->oldbasep = ed->seqbasep;
+  ms->old_channels = ed->displayed_channels;
   copy_v2_v2_int(ms->disp_range, &ms->parseq->startdisp);
   return ms;
 }
@@ -476,6 +472,9 @@ static Sequence *seq_dupli(const Scene *scene_src,
     BLI_listbase_clear(&seqn->seqbase);
     /* WARNING: This meta-strip is not recursively duplicated here - do this after! */
     // seq_dupli_recursive(&seq->seqbase, &seqn->seqbase);
+
+    BLI_listbase_clear(&seqn->channels);
+    SEQ_channels_duplicate(&seqn->channels, &seq->channels);
   }
   else if (seq->type == SEQ_TYPE_SCENE) {
     seqn->strip->stripdata = NULL;
@@ -702,6 +701,10 @@ static bool seq_write_data_cb(Sequence *seq, void *userdata)
   }
 
   SEQ_modifier_blend_write(writer, &seq->modifiers);
+
+  LISTBASE_FOREACH (SeqTimelineChannel *, channel, &seq->channels) {
+    BLO_write_struct(writer, SeqTimelineChannel, channel);
+  }
   return true;
 }
 
@@ -769,6 +772,8 @@ static bool seq_read_data_cb(Sequence *seq, void *user_data)
   }
 
   SEQ_modifier_blend_read_data(reader, &seq->modifiers);
+
+  BLO_read_list(reader, &seq->channels);
   return true;
 }
 void SEQ_blend_read(BlendDataReader *reader, ListBase *seqbase)

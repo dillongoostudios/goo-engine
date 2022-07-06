@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edutil
@@ -35,6 +19,8 @@
 
 #include "BKE_collection.h"
 #include "BKE_global.h"
+#include "BKE_layer.h"
+#include "BKE_lib_id.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
@@ -140,8 +126,9 @@ void ED_editors_init(bContext *C)
     if (obact == NULL || ob->type != obact->type) {
       continue;
     }
-    /* Object mode is enforced for linked data (or their obdata). */
-    if (ID_IS_LINKED(ob) || (ob_data != NULL && ID_IS_LINKED(ob_data))) {
+    /* Object mode is enforced for non-editable data (or their obdata). */
+    if (!BKE_id_is_editable(bmain, &ob->id) ||
+        (ob_data != NULL && !BKE_id_is_editable(bmain, ob_data))) {
       continue;
     }
 
@@ -151,8 +138,12 @@ void ED_editors_init(bContext *C)
       ED_object_posemode_enter_ex(bmain, ob);
     }
 
-    /* Other edit/paint/etc. modes are only settable for objects in active scene currently. */
-    if (!BKE_collection_has_object_recursive(scene->master_collection, ob)) {
+    /* Other edit/paint/etc. modes are only settable for objects visible in active scene currently.
+     * Otherwise, they (and their obdata) may not be (fully) evaluated, which is mandatory for some
+     * modes like Sculpt.
+     * Ref. T98225. */
+    if (!BKE_collection_has_object_recursive(scene->master_collection, ob) ||
+        !BKE_scene_has_object(scene, ob) || (ob->visibility_flag & OB_HIDE_VIEWPORT) != 0) {
       continue;
     }
 
@@ -322,7 +313,7 @@ bool ED_editors_flush_edits(Main *bmain)
 /* ***** XXX: functions are using old blender names, cleanup later ***** */
 
 void apply_keyb_grid(
-    int shift, int ctrl, float *val, float fac1, float fac2, float fac3, int invert)
+    bool shift, bool ctrl, float *val, float fac1, float fac2, float fac3, int invert)
 {
   /* fac1 is for 'nothing', fac2 for CTRL, fac3 for SHIFT */
   if (invert) {

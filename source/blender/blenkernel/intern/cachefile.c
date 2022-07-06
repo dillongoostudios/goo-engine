@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -411,8 +395,8 @@ bool BKE_cachefile_filepath_get(const Main *bmain,
   if (cache_file->is_sequence && BLI_path_frame_get(r_filepath, &fframe, &frame_len)) {
     Scene *scene = DEG_get_evaluated_scene(depsgraph);
     const float ctime = BKE_scene_ctime_get(scene);
-    const float fps = (((double)scene->r.frs_sec) / (double)scene->r.frs_sec_base);
-    const float frame = BKE_cachefile_time_offset(cache_file, ctime, fps);
+    const double fps = (((double)scene->r.frs_sec) / (double)scene->r.frs_sec_base);
+    const int frame = (int)BKE_cachefile_time_offset(cache_file, (double)ctime, fps);
 
     char ext[32];
     BLI_path_frame_strip(r_filepath, ext);
@@ -426,16 +410,14 @@ bool BKE_cachefile_filepath_get(const Main *bmain,
   return true;
 }
 
-float BKE_cachefile_time_offset(const CacheFile *cache_file, const float time, const float fps)
+double BKE_cachefile_time_offset(const CacheFile *cache_file, const double time, const double fps)
 {
-  const float time_offset = cache_file->frame_offset / fps;
-  const float frame = (cache_file->override_frame ? cache_file->frame : time);
+  const double time_offset = (double)cache_file->frame_offset / fps;
+  const double frame = (cache_file->override_frame ? (double)cache_file->frame : time);
   return cache_file->is_sequence ? frame : frame / fps - time_offset;
 }
 
-bool BKE_cache_file_uses_render_procedural(const CacheFile *cache_file,
-                                           Scene *scene,
-                                           const int dag_eval_mode)
+bool BKE_cache_file_uses_render_procedural(const CacheFile *cache_file, Scene *scene)
 {
   RenderEngineType *render_engine_type = RE_engines_find(scene->r.engine);
 
@@ -444,9 +426,7 @@ bool BKE_cache_file_uses_render_procedural(const CacheFile *cache_file,
     return false;
   }
 
-  /* The render time procedural is only enabled during viewport rendering. */
-  const bool is_final_render = (eEvaluationMode)dag_eval_mode == DAG_EVAL_RENDER;
-  return cache_file->use_render_procedural && !is_final_render;
+  return cache_file->use_render_procedural;
 }
 
 CacheFileLayer *BKE_cachefile_add_layer(CacheFile *cache_file, const char filename[1024])

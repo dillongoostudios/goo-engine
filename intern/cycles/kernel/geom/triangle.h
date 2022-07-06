@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 /* Triangle Primitive
  *
@@ -351,9 +338,9 @@ ccl_device float4 triangle_attribute_float4(KernelGlobals kg,
   else {
 #ifdef __RAY_DIFFERENTIALS__
     if (dx)
-      *dx = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+      *dx = zero_float4();
     if (dy)
-      *dy = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+      *dy = zero_float4();
 #endif
 
     if (desc.element & (ATTR_ELEMENT_FACE | ATTR_ELEMENT_OBJECT | ATTR_ELEMENT_MESH)) {
@@ -362,7 +349,7 @@ ccl_device float4 triangle_attribute_float4(KernelGlobals kg,
       return kernel_tex_fetch(__attributes_float4, offset);
     }
     else {
-      return make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+      return zero_float4();
     }
   }
 }

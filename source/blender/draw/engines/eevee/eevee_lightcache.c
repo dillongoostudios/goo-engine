@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2016, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -980,7 +965,7 @@ static void eevee_lightbake_cache_create(EEVEE_Data *vedata, EEVEE_LightBake *lb
   txl->color = NULL;
 
   DRW_render_instance_buffer_finish();
-  DRW_hair_update();
+  DRW_curves_update();
 }
 
 static void eevee_lightbake_copy_irradiance(EEVEE_LightBake *lbake, LightCache *lcache)
@@ -1478,9 +1463,6 @@ void EEVEE_lightbake_job(void *custom_data, short *stop, short *do_update, float
   }
 
   eevee_lightbake_delete_resources(lbake);
-
-  /* Free GPU smoke textures and the smoke domain list correctly: See also T73921. */
-  EEVEE_volumes_free_smoke_textures();
 }
 
 void EEVEE_lightbake_update_world_quick(EEVEE_ViewLayerData *sldata,

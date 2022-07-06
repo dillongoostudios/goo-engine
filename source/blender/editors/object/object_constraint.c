@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edobj
@@ -66,6 +50,7 @@
 #include "RNA_access.h"
 #include "RNA_define.h"
 #include "RNA_enum_types.h"
+#include "RNA_prototypes.h"
 
 #include "ED_keyframing.h"
 #include "ED_object.h"
@@ -527,7 +512,7 @@ static void test_constraint(
            *
            * In other cases it should be impossible to have a type mismatch.
            */
-          if (ct->tar->type != OB_CURVE) {
+          if (ct->tar->type != OB_CURVES_LEGACY) {
             con->flag |= CONSTRAINT_DISABLE;
           }
           else {
@@ -1356,15 +1341,6 @@ void ED_object_constraint_update(Main *bmain, Object *ob)
 static void object_pose_tag_update(Main *bmain, Object *ob)
 {
   BKE_pose_tag_recalc(bmain, ob->pose); /* Checks & sort pose channels. */
-  if (ob->proxy && ob->adt) {
-    /* We need to make use of ugly #POSE_ANIMATION_WORKAROUND here too,
-     * else anim data are not reloaded after calling `BKE_pose_rebuild()`,
-     * which causes T43872.
-     * Note that this is a bit wide here, since we cannot be sure whether there are some locked
-     * proxy bones or not.
-     * XXX Temp hack until new depsgraph hopefully solves this. */
-    DEG_id_tag_update(&ob->id, ID_RECALC_ANIMATION);
-  }
 }
 
 void ED_object_constraint_dependency_update(Main *bmain, Object *ob)
@@ -1468,6 +1444,11 @@ static int constraint_delete_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Object *ob = ED_object_active_context(C);
   bConstraint *con = edit_constraint_property_get(C, op, ob, 0);
+
+  if (con == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
   ListBase *lb = ED_object_constraint_list_from_constraint(ob, con, NULL);
 
   /* Store name temporarily for report. */
@@ -1535,6 +1516,11 @@ static int constraint_apply_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Object *ob = ED_object_active_context(C);
   bConstraint *con = edit_constraint_property_get(C, op, ob, 0);
+
+  if (con == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
   bPoseChannel *pchan;
   ListBase *constraints = ED_object_constraint_list_from_constraint(ob, con, &pchan);
 
@@ -1627,6 +1613,11 @@ static int constraint_copy_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Object *ob = ED_object_active_context(C);
   bConstraint *con = edit_constraint_property_get(C, op, ob, 0);
+
+  if (con == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
   bPoseChannel *pchan;
   ListBase *constraints = ED_object_constraint_list_from_constraint(ob, con, &pchan);
 
@@ -1707,6 +1698,11 @@ static int constraint_copy_to_selected_exec(bContext *C, wmOperator *op)
   Main *bmain = CTX_data_main(C);
   Object *obact = ED_object_active_context(C);
   bConstraint *con = edit_constraint_property_get(C, op, obact, 0);
+
+  if (con == NULL) {
+    return OPERATOR_CANCELLED;
+  }
+
   bPoseChannel *pchan;
   ED_object_constraint_list_from_constraint(obact, con, &pchan);
 
@@ -2300,7 +2296,8 @@ static bool get_new_constraint_target(
 
           break;
         }
-        if (((!only_curve) || (ob->type == OB_CURVE)) && ((!only_mesh) || (ob->type == OB_MESH))) {
+        if (((!only_curve) || (ob->type == OB_CURVES_LEGACY)) &&
+            ((!only_mesh) || (ob->type == OB_MESH))) {
           /* set target */
           *tar_ob = ob;
           found = true;
@@ -2453,12 +2450,6 @@ static int constraint_add_exec(
 
   if ((ob->type == OB_ARMATURE) && (pchan)) {
     BKE_pose_tag_recalc(bmain, ob->pose); /* sort pose channels */
-    if (BKE_constraints_proxylocked_owner(ob, pchan) && ob->adt) {
-      /* We need to make use of ugly POSE_ANIMATION_WORKAROUND here too,
-       * else anim data are not reloaded after calling `BKE_pose_rebuild()`, which causes T43872.
-       * XXX Temp hack until new depsgraph hopefully solves this. */
-      DEG_id_tag_update(&ob->id, ID_RECALC_ANIMATION);
-    }
     DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY | ID_RECALC_TRANSFORM);
   }
   else {

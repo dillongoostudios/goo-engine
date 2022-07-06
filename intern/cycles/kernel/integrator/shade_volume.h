@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -666,7 +653,8 @@ ccl_device_forceinline void volume_integrate_heterogeneous(
 
   /* Write accumulated emission. */
   if (!is_zero(accum_emission)) {
-    kernel_accum_emission(kg, state, accum_emission, render_buffer);
+    kernel_accum_emission(
+        kg, state, accum_emission, render_buffer, object_lightgroup(kg, sd->object));
   }
 
 #  ifdef __DENOISING_FEATURES__
@@ -845,6 +833,12 @@ ccl_device_forceinline void integrate_volume_direct_light(
   if (kernel_data.kernel_features & KERNEL_FEATURE_SHADOW_PASS) {
     INTEGRATOR_STATE_WRITE(shadow_state, shadow_path, unshadowed_throughput) = throughput;
   }
+
+  /* Write Lightgroup, +1 as lightgroup is int but we need to encode into a uint8_t. */
+  INTEGRATOR_STATE_WRITE(
+      shadow_state, shadow_path, lightgroup) = (ls->type != LIGHT_BACKGROUND) ?
+                                                   ls->group + 1 :
+                                                   kernel_data.background.lightgroup + 1;
 
   integrator_state_copy_volume_stack_to_shadow(kg, shadow_state, state);
 }

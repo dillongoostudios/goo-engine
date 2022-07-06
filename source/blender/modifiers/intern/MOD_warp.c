@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup modifiers
@@ -53,6 +39,7 @@
 #include "BLO_read_write.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_query.h"
@@ -116,9 +103,7 @@ static void matrix_from_obj_pchan(float mat[4][4],
   }
 }
 
-static bool dependsOnTime(struct Scene *UNUSED(scene),
-                          ModifierData *md,
-                          const int UNUSED(dag_eval_mode))
+static bool dependsOnTime(struct Scene *UNUSED(scene), ModifierData *md)
 {
   WarpModifierData *wmd = (WarpModifierData *)md;
 
@@ -194,7 +179,7 @@ static void warpModifier_do(WarpModifierData *wmd,
                             const ModifierEvalContext *ctx,
                             Mesh *mesh,
                             float (*vertexCos)[3],
-                            int numVerts)
+                            int verts_num)
 {
   Object *ob = ctx->object;
   float obinv[4][4];
@@ -258,13 +243,13 @@ static void warpModifier_do(WarpModifierData *wmd,
 
   Tex *tex_target = wmd->texture;
   if (mesh != NULL && tex_target != NULL) {
-    tex_co = MEM_malloc_arrayN(numVerts, sizeof(*tex_co), "warpModifier_do tex_co");
+    tex_co = MEM_malloc_arrayN(verts_num, sizeof(*tex_co), "warpModifier_do tex_co");
     MOD_get_texture_coords((MappingInfoModifierData *)wmd, ctx, ob, mesh, vertexCos, tex_co);
 
     MOD_init_texture((MappingInfoModifierData *)wmd, ctx);
   }
 
-  for (i = 0; i < numVerts; i++) {
+  for (i = 0; i < verts_num; i++) {
     float *co = vertexCos[i];
 
     if (wmd->falloff_type == eWarp_Falloff_None ||
@@ -357,17 +342,17 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   WarpModifierData *wmd = (WarpModifierData *)md;
   Mesh *mesh_src = NULL;
 
   if (wmd->defgrp_name[0] != '\0' || wmd->texture != NULL) {
     /* mesh_src is only needed for vgroups and textures. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false, false);
   }
 
-  warpModifier_do(wmd, ctx, mesh_src, vertexCos, numVerts);
+  warpModifier_do(wmd, ctx, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -379,14 +364,14 @@ static void deformVertsEM(ModifierData *md,
                           struct BMEditMesh *em,
                           Mesh *mesh,
                           float (*vertexCos)[3],
-                          int numVerts)
+                          int verts_num)
 {
   WarpModifierData *wmd = (WarpModifierData *)md;
   Mesh *mesh_src = NULL;
 
   if (wmd->defgrp_name[0] != '\0' || wmd->texture != NULL) {
     /* mesh_src is only needed for vgroups and textures. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, em, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, em, mesh, NULL, verts_num, false, false);
   }
 
   /* TODO(Campbell): use edit-mode data only (remove this line). */
@@ -394,7 +379,7 @@ static void deformVertsEM(ModifierData *md,
     BKE_mesh_wrapper_ensure_mdata(mesh_src);
   }
 
-  warpModifier_do(wmd, ctx, mesh_src, vertexCos, numVerts);
+  warpModifier_do(wmd, ctx, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -506,20 +491,20 @@ static void panelRegister(ARegionType *region_type)
 
 static void blendWrite(BlendWriter *writer, const ModifierData *md)
 {
-  const WarpModifierData *tmd = (const WarpModifierData *)md;
+  const WarpModifierData *wmd = (const WarpModifierData *)md;
 
-  if (tmd->curfalloff) {
-    BKE_curvemapping_blend_write(writer, tmd->curfalloff);
+  if (wmd->curfalloff) {
+    BKE_curvemapping_blend_write(writer, wmd->curfalloff);
   }
 }
 
 static void blendRead(BlendDataReader *reader, ModifierData *md)
 {
-  WarpModifierData *tmd = (WarpModifierData *)md;
+  WarpModifierData *wmd = (WarpModifierData *)md;
 
-  BLO_read_data_address(reader, &tmd->curfalloff);
-  if (tmd->curfalloff) {
-    BKE_curvemapping_blend_read(reader, tmd->curfalloff);
+  BLO_read_data_address(reader, &wmd->curfalloff);
+  if (wmd->curfalloff) {
+    BKE_curvemapping_blend_read(reader, wmd->curfalloff);
   }
 }
 
@@ -539,7 +524,6 @@ ModifierTypeInfo modifierType_Warp = {
     /* deformVertsEM */ deformVertsEM,
     /* deformMatricesEM */ NULL,
     /* modifyMesh */ NULL,
-    /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
 
     /* initData */ initData,

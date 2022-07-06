@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2004 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2004 Blender Foundation. All rights reserved. */
 
 #pragma once
 
@@ -34,12 +18,12 @@ void BM_mesh_cd_flag_apply(BMesh *bm, char cd_flag);
 char BM_mesh_cd_flag_from_bmesh(BMesh *bm);
 
 struct BMeshFromMeshParams {
-  uint calc_face_normal : 1;
-  uint calc_vert_normal : 1;
+  bool calc_face_normal;
+  bool calc_vert_normal;
   /* add a vertex CD_SHAPE_KEYINDEX layer */
-  uint add_key_index : 1;
+  bool add_key_index;
   /* set vertex coordinates from the shapekey */
-  uint use_shapekey : 1;
+  bool use_shapekey;
   /* define the active shape key (index + 1) */
   int active_shapekey;
   struct CustomData_MeshMasks cd_mask_extra;
@@ -59,7 +43,7 @@ void BM_mesh_bm_from_me(BMesh *bm, const struct Mesh *me, const struct BMeshFrom
 
 struct BMeshToMeshParams {
   /** Update object hook indices & vertex parents. */
-  uint calc_object_remap : 1;
+  bool calc_object_remap;
   /**
    * This re-assigns shape-key indices. Only do if the BMesh will have continued use
    * to update the mesh & shape key in the future.
@@ -69,12 +53,12 @@ struct BMeshToMeshParams {
    * so a second flush or edit-mode exit doesn't run with indices
    * that have become invalid from updating the shape-key, see T71865.
    */
-  uint update_shapekey_indices : 1;
+  bool update_shapekey_indices;
   /**
    * Instead of copying the basis shape-key into the #MVert array,
    * copy the #BMVert.co directly to #MVert.co (used for reading undo data).
    */
-  uint active_shapekey_to_mvert : 1;
+  bool active_shapekey_to_mvert;
   struct CustomData_MeshMasks cd_mask_extra;
 };
 /**

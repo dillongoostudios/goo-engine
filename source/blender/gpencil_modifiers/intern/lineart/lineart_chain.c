@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2019 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2019 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -1000,7 +984,7 @@ void MOD_lineart_smooth_chains(LineartRenderBuffer *rb, float tolerance)
       /* No need to care for different line types/occlusion and so on, because at this stage they
        * are all the same within a chain. */
 
-      /* If p3 is within the p1-p2 segment of a width of "tolerance"  */
+      /* If p3 is within the p1-p2 segment of a width of "tolerance". */
       if (dist_to_line_segment_v2(eci3->pos, eci->pos, eci2->pos) < tolerance) {
         /* And if p4 is on the extension of p1-p2 , we remove p3. */
         if ((eci4 = eci3->next) && (dist_to_line_v2(eci4->pos, eci->pos, eci2->pos) < tolerance)) {

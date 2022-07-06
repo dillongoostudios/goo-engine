@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spgraph
@@ -177,6 +161,18 @@ static void reset_bezts(tGraphSliderOp *gso)
   }
 
   ANIM_animdata_freelist(&anim_data);
+}
+
+/**
+ * Get factor value and store it in RNA property.
+ * Custom data of #wmOperator needs to contain #tGraphSliderOp.
+ */
+static float slider_factor_get_and_remember(wmOperator *op)
+{
+  tGraphSliderOp *gso = op->customdata;
+  const float factor = ED_slider_factor_get(gso->slider);
+  RNA_property_float_set(op->ptr, gso->factor_prop, factor);
+  return factor;
 }
 
 /** \} */
@@ -394,8 +390,7 @@ static void decimate_modal_update(bContext *C, wmOperator *op)
   reset_bezts(gso);
 
   /* Apply... */
-  float factor = ED_slider_factor_get(gso->slider);
-  RNA_property_float_set(op->ptr, gso->factor_prop, factor);
+  const float factor = slider_factor_get_and_remember(op);
   /* We don't want to limit the decimation to a certain error margin. */
   const float error_sq_max = FLT_MAX;
   decimate_graph_keys(&gso->ac, factor, error_sq_max);
@@ -483,7 +478,7 @@ static char *decimate_desc(bContext *UNUSED(C), wmOperatorType *UNUSED(op), Poin
 
   if (RNA_enum_get(ptr, "mode") == DECIM_ERROR) {
     return BLI_strdup(
-        "Decimate F-Curves by specifying how much it can deviate from the original curve");
+        TIP_("Decimate F-Curves by specifying how much they can deviate from the original curve"));
   }
 
   /* Use default description. */
@@ -555,7 +550,7 @@ void GRAPH_OT_decimate(wmOperatorType *ot)
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Blend To Neighbor Operator
+/** \name Blend to Neighbor Operator
  * \{ */
 
 static void blend_to_neighbor_graph_keys(bAnimContext *ac, float factor)
@@ -589,7 +584,7 @@ static void blend_to_neighbor_draw_status_header(bContext *C, tGraphSliderOp *gs
 
   ED_slider_status_string_get(gso->slider, slider_string, UI_MAX_DRAW_STR);
 
-  strcpy(mode_str, TIP_("Blend To Neighbor"));
+  strcpy(mode_str, TIP_("Blend to Neighbor"));
 
   if (hasNumInput(&gso->num)) {
     char str_ofs[NUM_STR_REP_LEN];
@@ -614,8 +609,7 @@ static void blend_to_neighbor_modal_update(bContext *C, wmOperator *op)
   /* Reset keyframe data to the state at invoke. */
   reset_bezts(gso);
 
-  const float factor = ED_slider_factor_get(gso->slider);
-  RNA_property_float_set(op->ptr, gso->factor_prop, factor);
+  const float factor = slider_factor_get_and_remember(op);
   blend_to_neighbor_graph_keys(&gso->ac, factor);
 
   WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
@@ -658,7 +652,7 @@ static int blend_to_neighbor_exec(bContext *C, wmOperator *op)
 void GRAPH_OT_blend_to_neighbor(wmOperatorType *ot)
 {
   /* Identifiers. */
-  ot->name = "Blend To Neighbor";
+  ot->name = "Blend to Neighbor";
   ot->idname = "GRAPH_OT_blend_to_neighbor";
   ot->description = "Blend selected keyframes to their left or right neighbor";
 
@@ -741,7 +735,8 @@ static void breakdown_modal_update(bContext *C, wmOperator *op)
 
   /* Reset keyframe data to the state at invoke. */
   reset_bezts(gso);
-  breakdown_graph_keys(&gso->ac, ED_slider_factor_get(gso->slider));
+  const float factor = slider_factor_get_and_remember(op);
+  breakdown_graph_keys(&gso->ac, factor);
   WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
 }
 
@@ -755,6 +750,7 @@ static int breakdown_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   tGraphSliderOp *gso = op->customdata;
   gso->modal_update = breakdown_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
   breakdown_draw_status_header(C, gso);
 
   return invoke_result;
@@ -805,4 +801,132 @@ void GRAPH_OT_breakdown(wmOperatorType *ot)
                        1.0f);
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Blend to Default Value Operator
+ * \{ */
+
+static void blend_to_default_graph_keys(bAnimContext *ac, const float factor)
+{
+  ListBase anim_data = {NULL, NULL};
+  ANIM_animdata_filter(ac, &anim_data, OPERATOR_DATA_FILTER, ac->data, ac->datatype);
+
+  LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
+    FCurve *fcu = (FCurve *)ale->key_data;
+
+    /* Check if the curves actually have any points. */
+    if (fcu == NULL || fcu->bezt == NULL || fcu->totvert == 0) {
+      continue;
+    }
+
+    PointerRNA id_ptr;
+    RNA_id_pointer_create(ale->id, &id_ptr);
+
+    blend_to_default_fcurve(&id_ptr, fcu, factor);
+    ale->update |= ANIM_UPDATE_DEFAULT;
+  }
+
+  ANIM_animdata_update(ac, &anim_data);
+  ANIM_animdata_freelist(&anim_data);
+}
+
+static void blend_to_default_draw_status_header(bContext *C, tGraphSliderOp *gso)
+{
+  char status_str[UI_MAX_DRAW_STR];
+  char mode_str[32];
+  char slider_string[UI_MAX_DRAW_STR];
+
+  ED_slider_status_string_get(gso->slider, slider_string, UI_MAX_DRAW_STR);
+
+  strcpy(mode_str, TIP_("Blend to Default Value"));
+
+  if (hasNumInput(&gso->num)) {
+    char str_ofs[NUM_STR_REP_LEN];
+
+    outputNumInput(&gso->num, str_ofs, &gso->scene->unit);
+
+    BLI_snprintf(status_str, sizeof(status_str), "%s: %s", mode_str, str_ofs);
+  }
+  else {
+    BLI_snprintf(status_str, sizeof(status_str), "%s: %s", mode_str, slider_string);
+  }
+
+  ED_workspace_status_text(C, status_str);
+}
+
+static void blend_to_default_modal_update(bContext *C, wmOperator *op)
+{
+  tGraphSliderOp *gso = op->customdata;
+
+  blend_to_default_draw_status_header(C, gso);
+
+  /* Set notifier that keyframes have changed. */
+  reset_bezts(gso);
+  const float factor = ED_slider_factor_get(gso->slider);
+  RNA_property_float_set(op->ptr, gso->factor_prop, factor);
+  blend_to_default_graph_keys(&gso->ac, factor);
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+}
+
+static int blend_to_default_invoke(bContext *C, wmOperator *op, const wmEvent *event)
+{
+  const int invoke_result = graph_slider_invoke(C, op, event);
+
+  if (invoke_result == OPERATOR_CANCELLED) {
+    return invoke_result;
+  }
+
+  tGraphSliderOp *gso = op->customdata;
+  gso->modal_update = blend_to_default_modal_update;
+  gso->factor_prop = RNA_struct_find_property(op->ptr, "factor");
+  blend_to_default_draw_status_header(C, gso);
+
+  return invoke_result;
+}
+
+static int blend_to_default_exec(bContext *C, wmOperator *op)
+{
+  bAnimContext ac;
+
+  if (ANIM_animdata_get_context(C, &ac) == 0) {
+    return OPERATOR_CANCELLED;
+  }
+
+  const float factor = RNA_float_get(op->ptr, "factor");
+
+  blend_to_default_graph_keys(&ac, factor);
+
+  /* Set notifier that keyframes have changed. */
+  WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME | NA_EDITED, NULL);
+
+  return OPERATOR_FINISHED;
+}
+
+void GRAPH_OT_blend_to_default(wmOperatorType *ot)
+{
+  /* Identifiers. */
+  ot->name = "Blend to Default Value";
+  ot->idname = "GRAPH_OT_blend_to_default";
+  ot->description = "Blend selected keys to their default value from their current position";
+
+  /* API callbacks. */
+  ot->invoke = blend_to_default_invoke;
+  ot->modal = graph_slider_modal;
+  ot->exec = blend_to_default_exec;
+  ot->poll = graphop_editable_keyframes_poll;
+
+  /* Flags. */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+
+  RNA_def_float_factor(ot->srna,
+                       "factor",
+                       1.0f / 3.0f,
+                       -FLT_MAX,
+                       FLT_MAX,
+                       "Factor",
+                       "How much to blend to the default value",
+                       0.0f,
+                       1.0f);
+}
 /** \} */

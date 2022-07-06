@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -40,29 +24,17 @@ static int node_shader_gpu_geometry(GPUMaterial *mat,
                                     GPUNodeStack *in,
                                     GPUNodeStack *out)
 {
-  /* HACK: Don't request GPU_BARYCENTRIC_TEXCO if not used because it will
+  /* HACK: Don't request GPU_MATFLAG_BARYCENTRIC if not used because it will
    * trigger the use of geometry shader (and the performance penalty it implies). */
-  const float val[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-  GPUNodeLink *bary_link = (!out[5].hasoutput) ? GPU_constant(val) :
-                                                 GPU_builtin(GPU_BARYCENTRIC_TEXCO);
   if (out[5].hasoutput) {
     GPU_material_flag_set(mat, GPU_MATFLAG_BARYCENTRIC);
   }
   /* Opti: don't request orco if not needed. */
+  const float val[4] = {0.0f, 0.0f, 0.0f, 0.0f};
   GPUNodeLink *orco_link = (!out[2].hasoutput) ? GPU_constant(val) :
                                                  GPU_attribute(mat, CD_ORCO, "");
 
-  const bool success = GPU_stack_link(mat,
-                                      node,
-                                      "node_geometry",
-                                      in,
-                                      out,
-                                      GPU_builtin(GPU_VIEW_POSITION),
-                                      GPU_builtin(GPU_WORLD_NORMAL),
-                                      orco_link,
-                                      GPU_builtin(GPU_OBJECT_MATRIX),
-                                      GPU_builtin(GPU_INVERSE_VIEW_MATRIX),
-                                      bary_link);
+  const bool success = GPU_stack_link(mat, node, "node_geometry", in, out, orco_link);
 
   int i;
   LISTBASE_FOREACH_INDEX (bNodeSocket *, sock, &node->outputs, i) {
@@ -71,7 +43,7 @@ static int node_shader_gpu_geometry(GPUMaterial *mat,
      * This is the case for interpolated, non linear functions.
      * The resulting vector can still be a bit wrong but not as much.
      * (see T70644) */
-    if (node->branch_tag != 0 && ELEM(i, 1, 2, 4)) {
+    if (ELEM(i, 1, 2, 4)) {
       GPU_link(mat,
                "vector_math_normalize",
                out[i].link,

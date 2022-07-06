@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pymathutils
@@ -1049,7 +1035,7 @@ static PyObject *Quaternion_matmul(PyObject *q1, PyObject *q2)
       VectorObject *vec2 = (VectorObject *)q2;
       float tvec[3];
 
-      if (vec2->size != 3) {
+      if (vec2->vec_num != 3) {
         PyErr_SetString(PyExc_ValueError,
                         "Vector multiplication: "
                         "only 3D vector rotations (with quats) "

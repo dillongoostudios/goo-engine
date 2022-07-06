@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -159,7 +143,7 @@ static void text_copy_data(Main *UNUSED(bmain),
 /** Free (or release) any data used by this text (does not free the text itself). */
 static void text_free_data(ID *id)
 {
-  /* No animdata here. */
+  /* No animation-data here. */
   Text *text = (Text *)id;
 
   BKE_text_free_lines(text);
@@ -470,7 +454,10 @@ bool BKE_text_reload(Text *text)
   return true;
 }
 
-Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const bool is_internal)
+Text *BKE_text_load_ex(Main *bmain,
+                       const char *filepath,
+                       const char *relbase,
+                       const bool is_internal)
 {
   unsigned char *buffer;
   size_t buffer_len;
@@ -478,10 +465,8 @@ Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const
   char filepath_abs[FILE_MAX];
   BLI_stat_t st;
 
-  BLI_strncpy(filepath_abs, file, FILE_MAX);
-  if (relpath) { /* Can be NULL (background mode). */
-    BLI_path_abs(filepath_abs, relpath);
-  }
+  BLI_strncpy(filepath_abs, filepath, FILE_MAX);
+  BLI_path_abs(filepath_abs, relbase);
 
   buffer = BLI_file_read_text_as_mem(filepath_abs, 0, &buffer_len);
   if (buffer == NULL) {
@@ -500,8 +485,9 @@ Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const
   }
 
   if (is_internal == false) {
-    ta->filepath = MEM_mallocN(strlen(file) + 1, "text_name");
-    strcpy(ta->filepath, file);
+    const size_t filepath_len = strlen(filepath);
+    ta->filepath = MEM_mallocN(filepath_len + 1, "text_name");
+    memcpy(ta->filepath, filepath, filepath_len + 1);
   }
   else {
     ta->flags |= TXT_ISMEM | TXT_ISDIRTY;
@@ -522,9 +508,9 @@ Text *BKE_text_load_ex(Main *bmain, const char *file, const char *relpath, const
   return ta;
 }
 
-Text *BKE_text_load(Main *bmain, const char *file, const char *relpath)
+Text *BKE_text_load(Main *bmain, const char *filepath, const char *relbase)
 {
-  return BKE_text_load_ex(bmain, file, relpath, false);
+  return BKE_text_load_ex(bmain, filepath, relbase, false);
 }
 
 void BKE_text_clear(Text *text) /* called directly from rna */
@@ -534,9 +520,9 @@ void BKE_text_clear(Text *text) /* called directly from rna */
   txt_make_dirty(text);
 }
 
-void BKE_text_write(Text *text, const char *str) /* called directly from rna */
+void BKE_text_write(Text *text, const char *str, int str_len) /* called directly from rna */
 {
-  txt_insert_buf(text, str);
+  txt_insert_buf(text, str, str_len);
   txt_move_eof(text, 0);
   txt_make_dirty(text);
 }
@@ -545,20 +531,20 @@ int BKE_text_file_modified_check(Text *text)
 {
   BLI_stat_t st;
   int result;
-  char file[FILE_MAX];
+  char filepath[FILE_MAX];
 
   if (!text->filepath) {
     return 0;
   }
 
-  BLI_strncpy(file, text->filepath, FILE_MAX);
-  BLI_path_abs(file, ID_BLEND_PATH_FROM_GLOBAL(&text->id));
+  BLI_strncpy(filepath, text->filepath, FILE_MAX);
+  BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&text->id));
 
-  if (!BLI_exists(file)) {
+  if (!BLI_exists(filepath)) {
     return 2;
   }
 
-  result = BLI_stat(file, &st);
+  result = BLI_stat(filepath, &st);
 
   if (result == -1) {
     return -1;
@@ -579,20 +565,20 @@ void BKE_text_file_modified_ignore(Text *text)
 {
   BLI_stat_t st;
   int result;
-  char file[FILE_MAX];
+  char filepath[FILE_MAX];
 
   if (!text->filepath) {
     return;
   }
 
-  BLI_strncpy(file, text->filepath, FILE_MAX);
-  BLI_path_abs(file, ID_BLEND_PATH_FROM_GLOBAL(&text->id));
+  BLI_strncpy(filepath, text->filepath, FILE_MAX);
+  BLI_path_abs(filepath, ID_BLEND_PATH_FROM_GLOBAL(&text->id));
 
-  if (!BLI_exists(file)) {
+  if (!BLI_exists(filepath)) {
     return;
   }
 
-  result = BLI_stat(file, &st);
+  result = BLI_stat(filepath, &st);
 
   if (result == -1 || (st.st_mode & S_IFMT) != S_IFREG) {
     return;
@@ -621,40 +607,27 @@ static void make_new_line(TextLine *line, char *newline)
   line->format = NULL;
 }
 
-static TextLine *txt_new_line(const char *str)
+static TextLine *txt_new_linen(const char *str, int str_len)
 {
   TextLine *tmp;
 
-  if (!str) {
-    str = "";
-  }
-
   tmp = (TextLine *)MEM_mallocN(sizeof(TextLine), "textline");
-  tmp->line = MEM_mallocN(strlen(str) + 1, "textline_string");
+  tmp->line = MEM_mallocN(str_len + 1, "textline_string");
   tmp->format = NULL;
 
-  strcpy(tmp->line, str);
-
-  tmp->len = strlen(str);
+  memcpy(tmp->line, str, str_len);
+  tmp->line[str_len] = '\0';
+  tmp->len = str_len;
   tmp->next = tmp->prev = NULL;
+
+  BLI_assert(strlen(tmp->line) == str_len);
 
   return tmp;
 }
 
-static TextLine *txt_new_linen(const char *str, int n)
+static TextLine *txt_new_line(const char *str)
 {
-  TextLine *tmp;
-
-  tmp = (TextLine *)MEM_mallocN(sizeof(TextLine), "textline");
-  tmp->line = MEM_mallocN(n + 1, "textline_string");
-  tmp->format = NULL;
-
-  BLI_strncpy(tmp->line, (str) ? str : "", n + 1);
-
-  tmp->len = strlen(tmp->line);
-  tmp->next = tmp->prev = NULL;
-
-  return tmp;
+  return txt_new_linen(str, strlen(str));
 }
 
 void txt_clean_text(Text *text)
@@ -666,7 +639,7 @@ void txt_clean_text(Text *text)
       text->lines.first = text->lines.last;
     }
     else {
-      text->lines.first = text->lines.last = txt_new_line(NULL);
+      text->lines.first = text->lines.last = txt_new_line("");
     }
   }
 
@@ -1250,8 +1223,8 @@ static void txt_delete_sel(Text *text)
 
   buf = MEM_mallocN(text->curc + (text->sell->len - text->selc) + 1, "textline_string");
 
-  strncpy(buf, text->curl->line, text->curc);
-  strcpy(buf + text->curc, text->sell->line + text->selc);
+  memcpy(buf, text->curl->line, text->curc);
+  memcpy(buf + text->curc, text->sell->line + text->selc, text->sell->len - text->selc);
   buf[text->curc + (text->sell->len - text->selc)] = 0;
 
   make_new_line(text->curl, buf);
@@ -1365,7 +1338,7 @@ void txt_sel_set(Text *text, int startl, int startc, int endl, int endc)
  * - Are not null terminated.
  * \{ */
 
-char *txt_to_buf_for_undo(Text *text, int *r_buf_len)
+char *txt_to_buf_for_undo(Text *text, size_t *r_buf_len)
 {
   int buf_len = 0;
   LISTBASE_FOREACH (const TextLine *, l, &text->lines) {
@@ -1382,7 +1355,7 @@ char *txt_to_buf_for_undo(Text *text, int *r_buf_len)
   return buf;
 }
 
-void txt_from_buf_for_undo(Text *text, const char *buf, int buf_len)
+void txt_from_buf_for_undo(Text *text, const char *buf, size_t buf_len)
 {
   const char *buf_end = buf + buf_len;
   const char *buf_step = buf;
@@ -1450,87 +1423,38 @@ void txt_from_buf_for_undo(Text *text, const char *buf, int buf_len)
 /** \name Cut and Paste Functions
  * \{ */
 
-char *txt_to_buf(Text *text, int *r_buf_strlen)
+char *txt_to_buf(Text *text, size_t *r_buf_strlen)
 {
-  int length;
-  TextLine *tmp, *linef, *linel;
-  int charf, charl;
-  char *buf;
-
-  if (r_buf_strlen) {
-    *r_buf_strlen = 0;
+  const bool has_data = !BLI_listbase_is_empty(&text->lines);
+  /* Identical to #txt_to_buf_for_undo except that the string is nil terminated. */
+  size_t buf_len = 0;
+  LISTBASE_FOREACH (const TextLine *, l, &text->lines) {
+    buf_len += l->len + 1;
   }
-
-  if (!text->curl) {
-    return NULL;
+  if (has_data) {
+    buf_len -= 1;
   }
-  if (!text->sell) {
-    return NULL;
+  char *buf = MEM_mallocN(buf_len + 1, __func__);
+  char *buf_step = buf;
+  LISTBASE_FOREACH (const TextLine *, l, &text->lines) {
+    memcpy(buf_step, l->line, l->len);
+    buf_step += l->len;
+    *buf_step++ = '\n';
   }
-  if (!text->lines.first) {
-    return NULL;
+  /* Remove the trailing new-line so a round-trip doesn't add a newline:
+   * Python for e.g. `text.from_string(text.as_string())`. */
+  if (has_data) {
+    buf_step--;
   }
-
-  linef = text->lines.first;
-  charf = 0;
-
-  linel = text->lines.last;
-  charl = linel->len;
-
-  if (linef == text->lines.last) {
-    length = charl - charf;
-
-    buf = MEM_mallocN(length + 2, "text buffer");
-
-    BLI_strncpy(buf, linef->line + charf, length + 1);
-    buf[length] = 0;
-  }
-  else {
-    length = linef->len - charf;
-    length += charl;
-    length += 2; /* For the 2 '\n' */
-
-    tmp = linef->next;
-    while (tmp && tmp != linel) {
-      length += tmp->len + 1;
-      tmp = tmp->next;
-    }
-
-    buf = MEM_mallocN(length + 1, "cut buffer");
-
-    strncpy(buf, linef->line + charf, linef->len - charf);
-    length = linef->len - charf;
-
-    buf[length++] = '\n';
-
-    tmp = linef->next;
-    while (tmp && tmp != linel) {
-      strncpy(buf + length, tmp->line, tmp->len);
-      length += tmp->len;
-
-      buf[length++] = '\n';
-
-      tmp = tmp->next;
-    }
-    strncpy(buf + length, linel->line, charl);
-    length += charl;
-
-    /* python compiler wants an empty end line */
-    buf[length++] = '\n';
-    buf[length] = 0;
-  }
-
-  if (r_buf_strlen) {
-    *r_buf_strlen = length;
-  }
-
+  *buf_step = '\0';
+  *r_buf_strlen = buf_len;
   return buf;
 }
 
-char *txt_sel_to_buf(Text *text, int *r_buf_strlen)
+char *txt_sel_to_buf(Text *text, size_t *r_buf_strlen)
 {
   char *buf;
-  int length = 0;
+  size_t length = 0;
   TextLine *tmp, *linef, *linel;
   int charf, charl;
 
@@ -1574,42 +1498,33 @@ char *txt_sel_to_buf(Text *text, int *r_buf_strlen)
 
   if (linef == linel) {
     length = charl - charf;
-
     buf = MEM_mallocN(length + 1, "sel buffer");
-
-    BLI_strncpy(buf, linef->line + charf, length + 1);
+    memcpy(buf, linef->line + charf, length);
+    buf[length] = '\0';
   }
   else {
-    length += linef->len - charf;
-    length += charl;
-    length++; /* For the '\n' */
+    /* Add 1 for the '\n' */
+    length = (linef->len - charf) + charl + 1;
 
-    tmp = linef->next;
-    while (tmp && tmp != linel) {
+    for (tmp = linef->next; tmp && tmp != linel; tmp = tmp->next) {
       length += tmp->len + 1;
-      tmp = tmp->next;
     }
 
     buf = MEM_mallocN(length + 1, "sel buffer");
 
-    strncpy(buf, linef->line + charf, linef->len - charf);
+    memcpy(buf, linef->line + charf, linef->len - charf);
     length = linef->len - charf;
-
     buf[length++] = '\n';
 
-    tmp = linef->next;
-    while (tmp && tmp != linel) {
-      strncpy(buf + length, tmp->line, tmp->len);
+    for (tmp = linef->next; tmp && tmp != linel; tmp = tmp->next) {
+      memcpy(buf + length, tmp->line, tmp->len);
       length += tmp->len;
-
       buf[length++] = '\n';
-
-      tmp = tmp->next;
     }
-    strncpy(buf + length, linel->line, charl);
-    length += charl;
 
-    buf[length] = 0;
+    memcpy(buf + length, linel->line, charl);
+    length += charl;
+    buf[length] = '\0';
   }
 
   if (r_buf_strlen) {
@@ -1619,33 +1534,30 @@ char *txt_sel_to_buf(Text *text, int *r_buf_strlen)
   return buf;
 }
 
-void txt_insert_buf(Text *text, const char *in_buffer)
+void txt_insert_buf(Text *text, const char *in_buffer, int in_buffer_len)
 {
-  int l = 0, len;
+  BLI_assert(in_buffer_len == strlen(in_buffer));
+
+  int l = 0;
   size_t i = 0, j;
   TextLine *add;
   char *buffer;
 
-  if (!in_buffer) {
-    return;
-  }
-
   txt_delete_sel(text);
 
-  len = strlen(in_buffer);
-  buffer = BLI_strdupn(in_buffer, len);
-  len += txt_extended_ascii_as_utf8(&buffer);
+  buffer = BLI_strdupn(in_buffer, in_buffer_len);
+  in_buffer_len += txt_extended_ascii_as_utf8(&buffer);
 
   /* Read the first line (or as close as possible */
   while (buffer[i] && buffer[i] != '\n') {
-    txt_add_raw_char(text, BLI_str_utf8_as_unicode_step(buffer, len, &i));
+    txt_add_raw_char(text, BLI_str_utf8_as_unicode_step(buffer, in_buffer_len, &i));
   }
 
   if (buffer[i] == '\n') {
     txt_split_curline(text);
     i++;
 
-    while (i < len) {
+    while (i < in_buffer_len) {
       l = 0;
 
       while (buffer[i] && buffer[i] != '\n') {
@@ -1659,8 +1571,8 @@ void txt_insert_buf(Text *text, const char *in_buffer)
         i++;
       }
       else {
-        for (j = i - l; j < i && j < len;) {
-          txt_add_raw_char(text, BLI_str_utf8_as_unicode_step(buffer, len, &j));
+        for (j = i - l; j < i && j < in_buffer_len;) {
+          txt_add_raw_char(text, BLI_str_utf8_as_unicode_step(buffer, in_buffer_len, &j));
         }
         break;
       }
@@ -1958,7 +1870,7 @@ static void txt_convert_tab_to_spaces(Text *text)
    * to multiples of TXT_TABSIZE)
    */
   const char *sb = &tab_to_spaces[text->curc % TXT_TABSIZE];
-  txt_insert_buf(text, sb);
+  txt_insert_buf(text, sb, strlen(sb));
 }
 
 static bool txt_add_char_intern(Text *text, unsigned int add, bool replace_tabs)

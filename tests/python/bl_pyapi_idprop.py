@@ -1,4 +1,4 @@
-# Apache License, Version 2.0
+# SPDX-License-Identifier: Apache-2.0
 
 # ./blender.bin --background -noaudio --python tests/python/bl_pyapi_idprop.py -- --verbose
 import bpy
@@ -11,6 +11,7 @@ try:
     import numpy as np
 except ImportError:
     np = None
+
 
 class TestHelper:
 
@@ -178,7 +179,6 @@ class TestIdPropertyGroupView(TestHelper, unittest.TestCase):
 
         self.assertEqual(len(group), len(text))
         self.assertEqual(list(iter(group)), text)
-
 
     def test_contains(self):
         # Check `idprop.types.IDPropertyGroupView{Keys/Values/Items}.__contains__`

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -177,16 +163,30 @@ class IndexMask {
    */
   template<typename CallbackT> void foreach_index(const CallbackT &callback) const
   {
-    if (this->is_range()) {
-      IndexRange range = this->as_range();
-      for (int64_t i : range) {
+    this->to_best_mask_type([&](const auto &mask) {
+      for (const int64_t i : mask) {
         callback(i);
       }
+    });
+  }
+
+  /**
+   * Often an #IndexMask wraps a range of indices without any gaps. In this case, it is more
+   * efficient to compute the indices in a loop on-the-fly instead of reading them from memory.
+   * This method makes it easy to generate code for both cases.
+   *
+   * The given function is expected to take one parameter that can either be of type #IndexRange or
+   * #Span<int64_t>.
+   */
+  template<typename Fn> void to_best_mask_type(const Fn &fn) const
+  {
+    if (this->is_range()) {
+      const IndexRange masked_range = this->as_range();
+      fn(masked_range);
     }
     else {
-      for (int64_t i : indices_) {
-        callback(i);
-      }
+      const Span<int64_t> masked_indices = indices_;
+      fn(masked_indices);
     }
   }
 
@@ -223,6 +223,18 @@ class IndexMask {
     return indices_.is_empty();
   }
 
+  bool contained_in(const IndexRange range) const
+  {
+    if (indices_.is_empty()) {
+      return true;
+    }
+    if (range.size() < indices_.size()) {
+      return false;
+    }
+    return indices_.first() >= range.first() && indices_.last() <= range.last();
+  }
+
+  IndexMask slice(int64_t start, int64_t size) const;
   IndexMask slice(IndexRange slice) const;
   /**
    * Create a sub-mask that is also shifted to the beginning.
@@ -243,6 +255,30 @@ class IndexMask {
    * so that the first index in the output is zero.
    */
   IndexMask slice_and_offset(IndexRange slice, Vector<int64_t> &r_new_indices) const;
+
+  /**
+   * Get a new mask that contains all the indices that are not in the current mask.
+   * If necessary, the indices referenced by the new mask are inserted in #r_new_indices.
+   */
+  IndexMask invert(const IndexRange full_range, Vector<int64_t> &r_new_indices) const;
+
+  /**
+   * Get all contiguous index ranges within the mask.
+   */
+  Vector<IndexRange> extract_ranges() const;
+
+  /**
+   * Similar to #extract ranges, but works on the inverted mask. So the returned ranges are
+   * in-between the indices in the mask.
+   *
+   * Using this method is generally more efficient than first inverting the index mask and then
+   * extracting the ranges.
+   *
+   * If #r_skip_amounts is passed in, it will contain the number of indices that have been skipped
+   * before each range in the return value starts.
+   */
+  Vector<IndexRange> extract_ranges_invert(const IndexRange full_range,
+                                           Vector<int64_t> *r_skip_amounts) const;
 };
 
 }  // namespace blender

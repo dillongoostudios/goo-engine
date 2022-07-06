@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bgpencil
@@ -177,32 +161,32 @@ static bool gpencil_io_export_frame_svg(GpencilExporterSVG *exporter,
 }
 #endif
 
-bool gpencil_io_import(const char *filename, GpencilIOParams *iparams)
+bool gpencil_io_import(const char *filepath, GpencilIOParams *iparams)
 {
-  GpencilImporterSVG importer = GpencilImporterSVG(filename, iparams);
+  GpencilImporterSVG importer = GpencilImporterSVG(filepath, iparams);
 
   return gpencil_io_import_frame(&importer, *iparams);
 }
 
-bool gpencil_io_export(const char *filename, GpencilIOParams *iparams)
+bool gpencil_io_export(const char *filepath, GpencilIOParams *iparams)
 {
   Depsgraph *depsgraph_ = CTX_data_depsgraph_pointer(iparams->C);
   Scene *scene_ = CTX_data_scene(iparams->C);
   Object *ob = CTX_data_active_object(iparams->C);
 
-  UNUSED_VARS(filename, depsgraph_, scene_, ob);
+  UNUSED_VARS(filepath, depsgraph_, scene_, ob);
 
   switch (iparams->mode) {
 #ifdef WITH_PUGIXML
     case GP_EXPORT_TO_SVG: {
-      GpencilExporterSVG exporter = GpencilExporterSVG(filename, iparams);
+      GpencilExporterSVG exporter = GpencilExporterSVG(filepath, iparams);
       return gpencil_io_export_frame_svg(&exporter, scene_, iparams, true, true, true);
       break;
     }
 #endif
 #ifdef WITH_HARU
     case GP_EXPORT_TO_PDF: {
-      GpencilExporterPDF exporter = GpencilExporterPDF(filename, iparams);
+      GpencilExporterPDF exporter = GpencilExporterPDF(filepath, iparams);
       return gpencil_io_export_pdf(depsgraph_, scene_, ob, &exporter, iparams);
       break;
     }

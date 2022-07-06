@@ -1,23 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: some of this file.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bli
@@ -312,46 +294,108 @@ float dist_to_line_segment_v2(const float p[2], const float l1[2], const float l
   return sqrtf(dist_squared_to_line_segment_v2(p, l1, l2));
 }
 
-void closest_to_line_segment_v2(float r_close[2],
-                                const float p[2],
-                                const float l1[2],
-                                const float l2[2])
+float closest_seg_seg_v2(float r_closest_a[2],
+                         float r_closest_b[2],
+                         float *r_lambda_a,
+                         float *r_lambda_b,
+                         const float a1[2],
+                         const float a2[2],
+                         const float b1[2],
+                         const float b2[2])
+{
+  if (isect_seg_seg_v2_simple(a1, a2, b1, b2)) {
+    float intersection[2];
+    isect_line_line_v2_point(a1, a2, b1, b2, intersection);
+    copy_v2_v2(r_closest_a, intersection);
+    copy_v2_v2(r_closest_b, intersection);
+    float tmp[2];
+    *r_lambda_a = closest_to_line_v2(tmp, intersection, a1, a2);
+    *r_lambda_b = closest_to_line_v2(tmp, intersection, b1, b2);
+    const float min_dist_sq = len_squared_v2v2(r_closest_a, r_closest_b);
+    return min_dist_sq;
+  }
+
+  float p1[2], p2[2], p3[2], p4[2];
+  const float lambda1 = closest_to_line_segment_v2(p1, a1, b1, b2);
+  const float lambda2 = closest_to_line_segment_v2(p2, a2, b1, b2);
+  const float lambda3 = closest_to_line_segment_v2(p3, b1, a1, a2);
+  const float lambda4 = closest_to_line_segment_v2(p4, b2, a1, a2);
+  const float dist_sq1 = len_squared_v2v2(p1, a1);
+  const float dist_sq2 = len_squared_v2v2(p2, a2);
+  const float dist_sq3 = len_squared_v2v2(p3, b1);
+  const float dist_sq4 = len_squared_v2v2(p4, b2);
+
+  const float min_dist_sq = min_ffff(dist_sq1, dist_sq2, dist_sq3, dist_sq4);
+  if (min_dist_sq == dist_sq1) {
+    copy_v2_v2(r_closest_a, a1);
+    copy_v2_v2(r_closest_b, p1);
+    *r_lambda_a = 0.0f;
+    *r_lambda_b = lambda1;
+  }
+  else if (min_dist_sq == dist_sq2) {
+    copy_v2_v2(r_closest_a, a2);
+    copy_v2_v2(r_closest_b, p2);
+    *r_lambda_a = 1.0f;
+    *r_lambda_b = lambda2;
+  }
+  else if (min_dist_sq == dist_sq3) {
+    copy_v2_v2(r_closest_a, p3);
+    copy_v2_v2(r_closest_b, b1);
+    *r_lambda_a = lambda3;
+    *r_lambda_b = 0.0f;
+  }
+  else {
+    BLI_assert(min_dist_sq == dist_sq4);
+    copy_v2_v2(r_closest_a, p4);
+    copy_v2_v2(r_closest_b, b2);
+    *r_lambda_a = lambda4;
+    *r_lambda_b = 1.0f;
+  }
+  return min_dist_sq;
+}
+
+float closest_to_line_segment_v2(float r_close[2],
+                                 const float p[2],
+                                 const float l1[2],
+                                 const float l2[2])
 {
   float lambda, cp[2];
 
   lambda = closest_to_line_v2(cp, p, l1, l2);
 
   /* flip checks for !finite case (when segment is a point) */
-  if (!(lambda > 0.0f)) {
+  if (lambda <= 0.0f) {
     copy_v2_v2(r_close, l1);
+    return 0.0f;
   }
-  else if (!(lambda < 1.0f)) {
+  if (lambda >= 1.0f) {
     copy_v2_v2(r_close, l2);
+    return 1.0f;
   }
-  else {
-    copy_v2_v2(r_close, cp);
-  }
+  copy_v2_v2(r_close, cp);
+  return lambda;
 }
 
-void closest_to_line_segment_v3(float r_close[3],
-                                const float p[3],
-                                const float l1[3],
-                                const float l2[3])
+float closest_to_line_segment_v3(float r_close[3],
+                                 const float p[3],
+                                 const float l1[3],
+                                 const float l2[3])
 {
   float lambda, cp[3];
 
   lambda = closest_to_line_v3(cp, p, l1, l2);
 
   /* flip checks for !finite case (when segment is a point) */
-  if (!(lambda > 0.0f)) {
+  if (lambda <= 0.0f) {
     copy_v3_v3(r_close, l1);
+    return 0.0f;
   }
-  else if (!(lambda < 1.0f)) {
+  if (lambda >= 1.0f) {
     copy_v3_v3(r_close, l2);
+    return 1.0f;
   }
-  else {
-    copy_v3_v3(r_close, cp);
-  }
+  copy_v3_v3(r_close, cp);
+  return lambda;
 }
 
 void closest_to_plane_v3(float r_close[3], const float plane[4], const float pt[3])
@@ -920,6 +964,18 @@ float dist_squared_to_projected_aabb_simple(const float projmat[4][4],
 }
 
 /** \} */
+
+float dist_seg_seg_v2(const float a1[3], const float a2[3], const float b1[3], const float b2[3])
+{
+  if (isect_seg_seg_v2_simple(a1, a2, b1, b2)) {
+    return 0.0f;
+  }
+  const float d1 = dist_squared_to_line_segment_v2(a1, b1, b2);
+  const float d2 = dist_squared_to_line_segment_v2(a2, b1, b2);
+  const float d3 = dist_squared_to_line_segment_v2(b1, a1, a2);
+  const float d4 = dist_squared_to_line_segment_v2(b2, a1, a2);
+  return sqrtf(min_ffff(d1, d2, d3, d4));
+}
 
 void closest_on_tri_to_point_v3(
     float r[3], const float p[3], const float v1[3], const float v2[3], const float v3[3])
@@ -3299,8 +3355,8 @@ static bool point_in_slice(const float p[3],
   return (h >= 0.0f && h <= 1.0f);
 }
 
-/* adult sister defining the slice planes by the origin and the normal
- * NOTE |normal| may not be 1 but defining the thickness of the slice */
+/* Adult sister defining the slice planes by the origin and the normal.
+ * NOTE: |normal| may not be 1 but defining the thickness of the slice. */
 static bool point_in_slice_as(const float p[3], const float origin[3], const float normal[3])
 {
   float h, rp[3];
@@ -3408,7 +3464,7 @@ bool clip_segment_v3_plane(
 bool clip_segment_v3_plane_n(const float p1[3],
                              const float p2[3],
                              const float plane_array[][4],
-                             const int plane_tot,
+                             const int plane_num,
                              float r_p1[3],
                              float r_p2[3])
 {
@@ -3418,7 +3474,7 @@ bool clip_segment_v3_plane_n(const float p1[3],
   float dp[3];
   sub_v3_v3v3(dp, p2, p1);
 
-  for (int i = 0; i < plane_tot; i++) {
+  for (int i = 0; i < plane_num; i++) {
     const float *plane = plane_array[i];
     const float div = dot_v3v3(dp, plane);
 

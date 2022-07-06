@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edinterface
@@ -543,7 +527,10 @@ static uiTooltipData *ui_tooltip_data_from_tool(bContext *C, uiBut *but, bool is
       const char *tool_attr = BKE_paint_get_tool_prop_id_from_paintmode(paint_mode);
       if (tool_attr != NULL) {
         const EnumPropertyItem *items = BKE_paint_get_tool_enum_from_paintmode(paint_mode);
-        const int i = RNA_enum_from_name(items, tool_id);
+        const char *tool_id_lstrip = strrchr(tool_id, '.');
+        const int tool_id_offset = tool_id_lstrip ? ((tool_id_lstrip - tool_id) + 1) : 0;
+        const int i = RNA_enum_from_name(items, tool_id + tool_id_offset);
+
         if (i != -1) {
           wmOperatorType *ot = WM_operatortype_find("paint.brush_select", true);
           PointerRNA op_props;
@@ -717,7 +704,7 @@ static uiTooltipData *ui_tooltip_data_from_tool(bContext *C, uiBut *but, bool is
   /* Keymap */
 
   /* This is too handy not to expose somehow, let's be sneaky for now. */
-  if ((is_label == false) && CTX_wm_window(C)->eventstate->shift) {
+  if ((is_label == false) && CTX_wm_window(C)->eventstate->modifier & KM_SHIFT) {
     const char *expr_imports[] = {"bpy", "bl_ui", NULL};
     char expr[256];
     SNPRINTF(expr,
@@ -804,8 +791,10 @@ static uiTooltipData *ui_tooltip_data_from_button_or_extra_icon(bContext *C,
   }
 
   /* Tip Label (only for buttons not already showing the label).
-   * Check prefix instead of comparing because the button may include the shortcut. */
-  if (but_label.strinfo && !STRPREFIX(but->drawstr, but_label.strinfo)) {
+   * Check prefix instead of comparing because the button may include the shortcut.
+   * Buttons with dynamic tooltips also don't get their default label here since they
+   * can already provide more accurate and specific tooltip content. */
+  if (but_label.strinfo && !STRPREFIX(but->drawstr, but_label.strinfo) && !but->tip_func) {
     uiTooltipField *field = text_field_add(data,
                                            &(uiTooltipFormat){
                                                .style = UI_TIP_STYLE_HEADER,

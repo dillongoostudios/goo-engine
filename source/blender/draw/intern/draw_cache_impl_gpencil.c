@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. */
 
 /** \file
  * \ingroup draw
@@ -43,6 +27,8 @@
 
 #include "draw_cache.h"
 #include "draw_cache_impl.h"
+
+#include "../engines/gpencil/gpencil_defines.h"
 
 #define BEZIER_HANDLE (1 << 3)
 #define COLOR_SHIFT 5
@@ -337,7 +323,7 @@ static void gpencil_buffer_add_point(gpStrokeVert *verts,
   vert->point_id = v;
   vert->thickness = max_ff(0.0f, gps->thickness * pt->pressure) * (round_cap1 ? 1.0f : -1.0f);
   /* Tag endpoint material to -1 so they get discarded by vertex shader. */
-  vert->mat = (is_endpoint) ? -1 : (gps->mat_nr % GP_MATERIAL_BUFFER_LEN);
+  vert->mat = (is_endpoint) ? -1 : (gps->mat_nr % GPENCIL_MATERIAL_BUFFER_LEN);
 
   float aspect_ratio = gps->aspect_ratio[0] / max_ff(gps->aspect_ratio[1], 1e-8);
 
@@ -966,6 +952,11 @@ GPUBatch *DRW_cache_gpencil_edit_curve_points_get(Object *ob, int cfra)
   gpencil_edit_batches_ensure(ob, cache, cfra);
 
   return cache->edit_curve_points_batch;
+}
+
+int DRW_gpencil_material_count_get(bGPdata *gpd)
+{
+  return max_ii(1, gpd->totcol);
 }
 
 /** \} */

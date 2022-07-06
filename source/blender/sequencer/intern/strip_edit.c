@@ -1,24 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * - Blender Foundation, 2003-2009
- * - Peter Schlaile <peter [at] schlaile [dot] de> 2005/2006
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved.
+ *           2003-2009 Blender Foundation.
+ *           2005-2006 Peter Schlaile <peter [at] schlaile [dot] de> */
 
 /** \file
  * \ingroup bke
@@ -48,6 +31,7 @@
 #include "SEQ_effects.h"
 #include "SEQ_iterator.h"
 #include "SEQ_relations.h"
+#include "SEQ_render.h"
 #include "SEQ_sequencer.h"
 #include "SEQ_time.h"
 #include "SEQ_transform.h"
@@ -108,7 +92,10 @@ int SEQ_edit_sequence_swap(Sequence *seq_a, Sequence *seq_b, const char **error_
   return 1;
 }
 
-static void seq_update_muting_recursive(ListBase *seqbasep, Sequence *metaseq, int mute)
+static void seq_update_muting_recursive(ListBase *channels,
+                                        ListBase *seqbasep,
+                                        Sequence *metaseq,
+                                        int mute)
 {
   Sequence *seq;
   int seqmute;
@@ -116,7 +103,7 @@ static void seq_update_muting_recursive(ListBase *seqbasep, Sequence *metaseq, i
   /* For sound we go over full meta tree to update muted state,
    * since sound is played outside of evaluating the imbufs. */
   for (seq = seqbasep->first; seq; seq = seq->next) {
-    seqmute = (mute || (seq->flag & SEQ_MUTE));
+    seqmute = (mute || SEQ_render_is_muted(channels, seq));
 
     if (seq->type == SEQ_TYPE_META) {
       /* if this is the current meta sequence, unmute because
@@ -125,7 +112,7 @@ static void seq_update_muting_recursive(ListBase *seqbasep, Sequence *metaseq, i
         seqmute = 0;
       }
 
-      seq_update_muting_recursive(&seq->seqbase, metaseq, seqmute);
+      seq_update_muting_recursive(&seq->channels, &seq->seqbase, metaseq, seqmute);
     }
     else if (ELEM(seq->type, SEQ_TYPE_SOUND_RAM, SEQ_TYPE_SCENE)) {
       if (seq->scene_sound) {
@@ -142,10 +129,10 @@ void SEQ_edit_update_muting(Editing *ed)
     MetaStack *ms = ed->metastack.last;
 
     if (ms) {
-      seq_update_muting_recursive(&ed->seqbase, ms->parseq, 1);
+      seq_update_muting_recursive(&ed->channels, &ed->seqbase, ms->parseq, 1);
     }
     else {
-      seq_update_muting_recursive(&ed->seqbase, NULL, 0);
+      seq_update_muting_recursive(&ed->channels, &ed->seqbase, NULL, 0);
     }
   }
 }
@@ -167,8 +154,7 @@ static void sequencer_flag_users_for_removal(Scene *scene, ListBase *seqbase, Se
     }
 
     /* Remove effects, that use seq. */
-    if ((user_seq->seq1 && user_seq->seq1 == seq) || (user_seq->seq2 && user_seq->seq2 == seq) ||
-        (user_seq->seq3 && user_seq->seq3 == seq)) {
+    if (SEQ_relation_is_effect_of_strip(user_seq, seq)) {
       user_seq->flag |= SEQ_FLAG_DELETE;
       /* Strips can be used as mask even if not in same seqbase. */
       sequencer_flag_users_for_removal(scene, &scene->ed->seqbase, user_seq);
@@ -474,11 +460,18 @@ Sequence *SEQ_edit_strip_split(Main *bmain,
     return NULL;
   }
 
-  /* Move strips in collection from seqbase to new ListBase. */
+  /* Store `F-Curves`, so original ones aren't renamed. */
+  ListBase fcurves_original_backup = {NULL, NULL};
+  SEQ_animation_backup_original(scene, &fcurves_original_backup);
+
   ListBase left_strips = {NULL, NULL};
   SEQ_ITERATOR_FOREACH (seq, collection) {
+    /* Move strips in collection from seqbase to new ListBase. */
     BLI_remlink(seqbase, seq);
     BLI_addtail(&left_strips, seq);
+
+    /* Duplicate curves from backup, so they can be renamed along with split strips. */
+    SEQ_animation_duplicate(scene, seq, &fcurves_original_backup);
   }
 
   SEQ_collection_free(collection);
@@ -527,6 +520,8 @@ Sequence *SEQ_edit_strip_split(Main *bmain,
   for (; seq_rename; seq_rename = seq_rename->next) {
     SEQ_ensure_unique_name(seq_rename, scene);
   }
+
+  SEQ_animation_restore_original(scene, &fcurves_original_backup);
 
   return return_seq;
 }

@@ -1,20 +1,6 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_spline.hh"
+#include "BKE_curves.hh"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -45,51 +31,51 @@ static void node_init(bNodeTree *UNUSED(tree), bNode *node)
   node->storage = data;
 }
 
-static BezierSpline::HandleType handle_type_from_input_type(const GeometryNodeCurveHandleType type)
+static HandleType handle_type_from_input_type(const GeometryNodeCurveHandleType type)
 {
   switch (type) {
     case GEO_NODE_CURVE_HANDLE_AUTO:
-      return BezierSpline::HandleType::Auto;
+      return BEZIER_HANDLE_AUTO;
     case GEO_NODE_CURVE_HANDLE_ALIGN:
-      return BezierSpline::HandleType::Align;
+      return BEZIER_HANDLE_ALIGN;
     case GEO_NODE_CURVE_HANDLE_FREE:
-      return BezierSpline::HandleType::Free;
+      return BEZIER_HANDLE_FREE;
     case GEO_NODE_CURVE_HANDLE_VECTOR:
-      return BezierSpline::HandleType::Vector;
+      return BEZIER_HANDLE_VECTOR;
   }
   BLI_assert_unreachable();
-  return BezierSpline::HandleType::Auto;
+  return BEZIER_HANDLE_AUTO;
 }
 
-static void select_by_handle_type(const CurveEval &curve,
-                                  const BezierSpline::HandleType type,
+static void select_by_handle_type(const bke::CurvesGeometry &curves,
+                                  const HandleType type,
                                   const GeometryNodeCurveHandleMode mode,
                                   const MutableSpan<bool> r_selection)
 {
-  int offset = 0;
-  for (const SplinePtr &spline : curve.splines()) {
-    if (spline->type() != Spline::Type::Bezier) {
-      r_selection.slice(offset, spline->size()).fill(false);
-      offset += spline->size();
+  VArray<int8_t> curve_types = curves.curve_types();
+  VArray<int8_t> left = curves.handle_types_left();
+  VArray<int8_t> right = curves.handle_types_right();
+
+  for (const int i_curve : curves.curves_range()) {
+    const IndexRange points = curves.points_for_curve(i_curve);
+    if (curve_types[i_curve] != CURVE_TYPE_BEZIER) {
+      r_selection.slice(points).fill(false);
     }
     else {
-      BezierSpline *b = static_cast<BezierSpline *>(spline.get());
-      for (int i : IndexRange(b->size())) {
-        r_selection[offset++] = (mode & GEO_NODE_CURVE_HANDLE_LEFT &&
-                                 b->handle_types_left()[i] == type) ||
-                                (mode & GEO_NODE_CURVE_HANDLE_RIGHT &&
-                                 b->handle_types_right()[i] == type);
+      for (const int i_point : points) {
+        r_selection[i_point] = (mode & GEO_NODE_CURVE_HANDLE_LEFT && left[i_point] == type) ||
+                               (mode & GEO_NODE_CURVE_HANDLE_RIGHT && right[i_point] == type);
       }
     }
   }
 }
 
 class HandleTypeFieldInput final : public GeometryFieldInput {
-  BezierSpline::HandleType type_;
+  HandleType type_;
   GeometryNodeCurveHandleMode mode_;
 
  public:
-  HandleTypeFieldInput(BezierSpline::HandleType type, GeometryNodeCurveHandleMode mode)
+  HandleTypeFieldInput(HandleType type, GeometryNodeCurveHandleMode mode)
       : GeometryFieldInput(CPPType::get<bool>(), "Handle Type Selection node"),
         type_(type),
         mode_(mode)
@@ -101,22 +87,19 @@ class HandleTypeFieldInput final : public GeometryFieldInput {
                                  const AttributeDomain domain,
                                  IndexMask mask) const final
   {
-    if (component.type() != GEO_COMPONENT_TYPE_CURVE) {
+    if (component.type() != GEO_COMPONENT_TYPE_CURVE || domain != ATTR_DOMAIN_POINT) {
       return {};
     }
 
     const CurveComponent &curve_component = static_cast<const CurveComponent &>(component);
-    const CurveEval *curve = curve_component.get_for_read();
-    if (curve == nullptr) {
+    const Curves *curves_id = curve_component.get_for_read();
+    if (curves_id == nullptr) {
       return {};
     }
 
-    if (domain == ATTR_DOMAIN_POINT) {
-      Array<bool> selection(mask.min_array_size());
-      select_by_handle_type(*curve, type_, mode_, selection);
-      return VArray<bool>::ForContainer(std::move(selection));
-    }
-    return {};
+    Array<bool> selection(mask.min_array_size());
+    select_by_handle_type(bke::CurvesGeometry::wrap(curves_id->geometry), type_, mode_, selection);
+    return VArray<bool>::ForContainer(std::move(selection));
   }
 
   uint64_t hash() const override
@@ -137,7 +120,7 @@ class HandleTypeFieldInput final : public GeometryFieldInput {
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const NodeGeometryCurveSelectHandles &storage = node_storage(params.node());
-  const BezierSpline::HandleType handle_type = handle_type_from_input_type(
+  const HandleType handle_type = handle_type_from_input_type(
       (GeometryNodeCurveHandleType)storage.handle_type);
   const GeometryNodeCurveHandleMode mode = (GeometryNodeCurveHandleMode)storage.mode;
 

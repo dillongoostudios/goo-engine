@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -46,8 +32,10 @@
 #include "BKE_collection.h"
 #include "BKE_context.h"
 #include "BKE_fcurve.h"
+#include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
+#include "BKE_lib_override.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
 #include "BKE_report.h"
@@ -174,7 +162,7 @@ void RNA_pointer_create(ID *id, StructRNA *type, void *data, PointerRNA *r_ptr)
 
 bool RNA_pointer_is_null(const PointerRNA *ptr)
 {
-  return !((ptr->data != NULL) && (ptr->owner_id != NULL) && (ptr->type != NULL));
+  return (ptr->data == NULL) || (ptr->owner_id == NULL) || (ptr->type == NULL);
 }
 
 static void rna_pointer_inherit_id(StructRNA *type, PointerRNA *parent, PointerRNA *ptr)
@@ -414,28 +402,28 @@ static bool rna_idproperty_verify_valid(PointerRNA *ptr, PropertyRNA *prop, IDPr
 }
 
 static PropertyRNA *typemap[IDP_NUMTYPES] = {
-    (PropertyRNA *)&rna_PropertyGroupItem_string,
-    (PropertyRNA *)&rna_PropertyGroupItem_int,
-    (PropertyRNA *)&rna_PropertyGroupItem_float,
+    &rna_PropertyGroupItem_string,
+    &rna_PropertyGroupItem_int,
+    &rna_PropertyGroupItem_float,
     NULL,
     NULL,
     NULL,
-    (PropertyRNA *)&rna_PropertyGroupItem_group,
-    (PropertyRNA *)&rna_PropertyGroupItem_id,
-    (PropertyRNA *)&rna_PropertyGroupItem_double,
-    (PropertyRNA *)&rna_PropertyGroupItem_idp_array,
+    &rna_PropertyGroupItem_group,
+    &rna_PropertyGroupItem_id,
+    &rna_PropertyGroupItem_double,
+    &rna_PropertyGroupItem_idp_array,
 };
 
 static PropertyRNA *arraytypemap[IDP_NUMTYPES] = {
     NULL,
-    (PropertyRNA *)&rna_PropertyGroupItem_int_array,
-    (PropertyRNA *)&rna_PropertyGroupItem_float_array,
+    &rna_PropertyGroupItem_int_array,
+    &rna_PropertyGroupItem_float_array,
     NULL,
     NULL,
     NULL,
-    (PropertyRNA *)&rna_PropertyGroupItem_collection,
+    &rna_PropertyGroupItem_collection,
     NULL,
-    (PropertyRNA *)&rna_PropertyGroupItem_double_array,
+    &rna_PropertyGroupItem_double_array,
 };
 
 void rna_property_rna_or_id_get(PropertyRNA *prop,
@@ -1912,59 +1900,75 @@ int RNA_property_ui_icon(const PropertyRNA *prop)
   return rna_ensure_property((PropertyRNA *)prop)->icon;
 }
 
-bool RNA_property_editable(PointerRNA *ptr, PropertyRNA *prop_orig)
+static bool rna_property_editable_do(PointerRNA *ptr,
+                                     PropertyRNA *prop_orig,
+                                     const int index,
+                                     const char **r_info)
 {
   ID *id = ptr->owner_id;
-  int flag;
-  const char *dummy_info;
 
   PropertyRNA *prop = rna_ensure_property(prop_orig);
-  flag = prop->editable ? prop->editable(ptr, &dummy_info) : prop->flag;
 
-  return (
-      (flag & PROP_EDITABLE) && (flag & PROP_REGISTER) == 0 &&
-      (!id || ((!ID_IS_LINKED(id) || (prop->flag & PROP_LIB_EXCEPTION)) &&
-               (!ID_IS_OVERRIDE_LIBRARY(id) || RNA_property_overridable_get(ptr, prop_orig)))));
+  const char *info = "";
+  const int flag = (prop->itemeditable != NULL && index >= 0) ?
+                       prop->itemeditable(ptr, index) :
+                       (prop->editable != NULL ? prop->editable(ptr, &info) : prop->flag);
+  if (r_info != NULL) {
+    *r_info = info;
+  }
+
+  /* Early return if the property itself is not editable. */
+  if ((flag & PROP_EDITABLE) == 0 || (flag & PROP_REGISTER) != 0) {
+    if (r_info != NULL && (*r_info)[0] == '\0') {
+      *r_info = N_("This property is for internal use only and can't be edited");
+    }
+    return false;
+  }
+
+  /* If there is no owning ID, the property is editable at this point. */
+  if (id == NULL) {
+    return true;
+  }
+
+  /* Handle linked or liboverride ID cases. */
+  const bool is_linked_prop_exception = (prop->flag & PROP_LIB_EXCEPTION) != 0;
+  if (ID_IS_LINKED(id)) {
+    if (is_linked_prop_exception) {
+      return true;
+    }
+    if (r_info != NULL && (*r_info)[0] == '\0') {
+      *r_info = N_("Can't edit this property from a linked data-block");
+    }
+    return false;
+  }
+  if (ID_IS_OVERRIDE_LIBRARY(id)) {
+    const bool is_liboverride_system = BKE_lib_override_library_is_system_defined(G_MAIN, id);
+    if (!RNA_property_overridable_get(ptr, prop_orig)) {
+      if (r_info != NULL && (*r_info)[0] == '\0') {
+        *r_info = N_("Can't edit this property from an override data-block");
+      }
+      return false;
+    }
+    if (is_liboverride_system && !is_linked_prop_exception) {
+      if (r_info != NULL && (*r_info)[0] == '\0') {
+        *r_info = N_("Can't edit this property from a system override data-block");
+      }
+      return false;
+    }
+  }
+
+  /* At this point, property is owned by a local ID and therefore fully editable. */
+  return true;
+}
+
+bool RNA_property_editable(PointerRNA *ptr, PropertyRNA *prop)
+{
+  return rna_property_editable_do(ptr, prop, -1, NULL);
 }
 
 bool RNA_property_editable_info(PointerRNA *ptr, PropertyRNA *prop, const char **r_info)
 {
-  ID *id = ptr->owner_id;
-  int flag;
-
-  PropertyRNA *prop_type = rna_ensure_property(prop);
-  *r_info = "";
-
-  /* get flag */
-  if (prop_type->editable) {
-    flag = prop_type->editable(ptr, r_info);
-  }
-  else {
-    flag = prop_type->flag;
-    if ((flag & PROP_EDITABLE) == 0 || (flag & PROP_REGISTER)) {
-      *r_info = N_("This property is for internal use only and can't be edited");
-    }
-  }
-
-  /* property from linked data-block */
-  if (id) {
-    if (ID_IS_LINKED(id) && (prop_type->flag & PROP_LIB_EXCEPTION) == 0) {
-      if (!(*r_info)[0]) {
-        *r_info = N_("Can't edit this property from a linked data-block");
-      }
-      return false;
-    }
-    if (ID_IS_OVERRIDE_LIBRARY(id)) {
-      if (!RNA_property_overridable_get(ptr, prop)) {
-        if (!(*r_info)[0]) {
-          *r_info = N_("Can't edit this property from an override data-block");
-        }
-        return false;
-      }
-    }
-  }
-
-  return ((flag & PROP_EDITABLE) && (flag & PROP_REGISTER) == 0);
+  return rna_property_editable_do(ptr, prop, -1, r_info);
 }
 
 bool RNA_property_editable_flag(PointerRNA *ptr, PropertyRNA *prop)
@@ -1977,29 +1981,11 @@ bool RNA_property_editable_flag(PointerRNA *ptr, PropertyRNA *prop)
   return (flag & PROP_EDITABLE) != 0;
 }
 
-bool RNA_property_editable_index(PointerRNA *ptr, PropertyRNA *prop, int index)
+bool RNA_property_editable_index(PointerRNA *ptr, PropertyRNA *prop, const int index)
 {
-  ID *id;
-  int flag;
-
   BLI_assert(index >= 0);
 
-  prop = rna_ensure_property(prop);
-
-  flag = prop->flag;
-
-  if (prop->editable) {
-    const char *dummy_info;
-    flag &= prop->editable(ptr, &dummy_info);
-  }
-
-  if (prop->itemeditable) {
-    flag &= prop->itemeditable(ptr, index);
-  }
-
-  id = ptr->owner_id;
-
-  return (flag & PROP_EDITABLE) && (!id || !ID_IS_LINKED(id) || (prop->flag & PROP_LIB_EXCEPTION));
+  return rna_property_editable_do(ptr, prop, index, NULL);
 }
 
 bool RNA_property_animateable(PointerRNA *ptr, PropertyRNA *prop)
@@ -2465,7 +2451,7 @@ void RNA_property_int_set(PointerRNA *ptr, PropertyRNA *prop, int value)
   BLI_assert(RNA_property_type(prop) == PROP_INT);
   BLI_assert(RNA_property_array_check(prop) == false);
   /* useful to check on bad values but set function should clamp */
-  /* BLI_assert(RNA_property_int_clamp(ptr, prop, &value) == 0); */
+  // BLI_assert(RNA_property_int_clamp(ptr, prop, &value) == 0);
 
   if ((idprop = rna_idproperty_check(&prop, ptr))) {
     RNA_property_int_clamp(ptr, prop, &value);
@@ -3767,6 +3753,16 @@ int RNA_property_collection_length(PointerRNA *ptr, PropertyRNA *prop)
   return length;
 }
 
+bool RNA_property_collection_is_empty(PointerRNA *ptr, PropertyRNA *prop)
+{
+  BLI_assert(RNA_property_type(prop) == PROP_COLLECTION);
+  CollectionPropertyIterator iter;
+  RNA_property_collection_begin(ptr, prop, &iter);
+  bool test = iter.valid;
+  RNA_property_collection_end(&iter);
+  return !test;
+}
+
 /* This helper checks whether given collection property itself is editable (we only currently
  * support a limited set of operations, insertion of new items, and re-ordering of those new items
  * exclusively). */
@@ -3830,7 +3826,7 @@ void RNA_property_collection_add(PointerRNA *ptr, PropertyRNA *prop, PointerRNA 
     }
     IDP_AppendArray(idprop, item);
     /* IDP_AppendArray does a shallow copy (memcpy), only free memory. */
-    /* IDP_FreePropertyContent(item); */
+    // IDP_FreePropertyContent(item);
     MEM_freeN(item);
     rna_idproperty_touch(idprop);
   }
@@ -4922,7 +4918,7 @@ static char *rna_path_token_in_brackets(const char **path,
 }
 
 /**
- * \return true when when the key in the path is correctly parsed and found in the collection
+ * \return true when the key in the path is correctly parsed and found in the collection
  * or when the path is empty.
  */
 static bool rna_path_parse_collection_key(const char **path,
@@ -5097,15 +5093,16 @@ static bool rna_path_parse_array_index(const char **path,
  * \param r_ptr: The final RNA data holding the last property in \a path.
  * \param r_prop: The final property of \a r_ptr, from \a path.
  * \param r_index: The final index in the \a r_prop, if defined by \a path.
- * \param r_item_ptr: Only valid for Pointer and Collection,
- * return the actual value of the pointer, or of the collection item.
- * Mutually exclusive with \a eval_pointer option.
- * \param r_elements: A list of \a PropertyElemRNA items
- * (pairs of \a PointerRNA, \a PropertyRNA that represent the whole given \a path).
- * \param eval_pointer: If \a true, and \a path leads to a Pointer property,
- * or an item in a Collection property,
- * \a r_ptr will be set to the value of that property, and \a r_prop will be NULL.
- * Mutually exclusive with \a r_item_ptr.
+ * \param r_item_ptr: Only valid for Pointer and Collection, return the actual value of the
+ *                    pointer, or of the collection item.
+ *                    Mutually exclusive with \a eval_pointer option.
+ * \param r_elements: A list of \a PropertyElemRNA items(pairs of \a PointerRNA, \a PropertyRNA
+ *                    that represent the whole given \a path).
+ * \param eval_pointer: If \a true, and \a path leads to a Pointer property, or an item in a
+ *                      Collection property, \a r_ptr will be set to the value of that property,
+ *                      and \a r_prop will be NULL.
+ *                      Mutually exclusive with \a r_item_ptr.
+ *
  * \return \a true on success, \a false if the path is somehow invalid.
  */
 static bool rna_path_parse(PointerRNA *ptr,
@@ -5549,7 +5546,12 @@ static char *rna_idp_path(PointerRNA *ptr,
     if (iter->type == IDP_GROUP) {
       if (prop->type == PROP_POINTER) {
         PointerRNA child_ptr = RNA_property_pointer_get(ptr, prop);
-        BLI_assert(!RNA_pointer_is_null(&child_ptr));
+        if (RNA_pointer_is_null(&child_ptr)) {
+          /* Pointer ID prop might be a 'leaf' in the IDProp group hierarchy, in which case a NULL
+           * value is perfectly valid. Just means it won't match the searched needle. */
+          continue;
+        }
+
         link.name = iter->name;
         link.index = -1;
         if ((path = rna_idp_path(&child_ptr, iter, needle, &link))) {
@@ -5571,7 +5573,11 @@ static char *rna_idp_path(PointerRNA *ptr,
         for (j = 0; j < iter->len; j++, array++) {
           PointerRNA child_ptr;
           if (RNA_property_collection_lookup_int(ptr, prop, j, &child_ptr)) {
-            BLI_assert(!RNA_pointer_is_null(&child_ptr));
+            if (RNA_pointer_is_null(&child_ptr)) {
+              /* Array item ID prop might be a 'leaf' in the IDProp group hierarchy, in which case
+               * a NULL value is perfectly valid. Just means it won't match the searched needle. */
+              continue;
+            }
             link.index = j;
             if ((path = rna_idp_path(&child_ptr, array, needle, &link))) {
               break;
@@ -6030,13 +6036,29 @@ char *RNA_path_struct_property_py(PointerRNA *ptr, PropertyRNA *prop, int index)
 
 char *RNA_path_property_py(const PointerRNA *UNUSED(ptr), PropertyRNA *prop, int index)
 {
+  const bool is_rna = (prop->magic == RNA_MAGIC);
+  const char *propname = RNA_property_identifier(prop);
   char *ret;
 
   if ((index == -1) || (RNA_property_array_check(prop) == false)) {
-    ret = BLI_sprintfN("%s", RNA_property_identifier(prop));
+    if (is_rna) {
+      ret = BLI_strdup(propname);
+    }
+    else {
+      char propname_esc[MAX_IDPROP_NAME * 2];
+      BLI_str_escape(propname_esc, propname, sizeof(propname_esc));
+      ret = BLI_sprintfN("[\"%s\"]", propname_esc);
+    }
   }
   else {
-    ret = BLI_sprintfN("%s[%d]", RNA_property_identifier(prop), index);
+    if (is_rna) {
+      ret = BLI_sprintfN("%s[%d]", propname, index);
+    }
+    else {
+      char propname_esc[MAX_IDPROP_NAME * 2];
+      BLI_str_escape(propname_esc, propname, sizeof(propname_esc));
+      ret = BLI_sprintfN("[\"%s\"][%d]", propname_esc, index);
+    }
   }
 
   return ret;
@@ -6429,6 +6451,17 @@ int RNA_collection_length(PointerRNA *ptr, const char *name)
   }
   printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
   return 0;
+}
+
+bool RNA_collection_is_empty(PointerRNA *ptr, const char *name)
+{
+  PropertyRNA *prop = RNA_struct_find_property(ptr, name);
+
+  if (prop) {
+    return RNA_property_collection_is_empty(ptr, prop);
+  }
+  printf("%s: %s.%s not found.\n", __func__, ptr->type->identifier, name);
+  return false;
 }
 
 bool RNA_property_is_set_ex(PointerRNA *ptr, PropertyRNA *prop, bool use_ghost)

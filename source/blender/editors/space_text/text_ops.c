@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup sptext
@@ -113,8 +97,9 @@ static char text_closing_character_pair_get(const char character)
  * This function converts the indentation tabs from a buffer to spaces.
  * \param in_buf: A pointer to a cstring.
  * \param tab_size: The size, in spaces, of the tab character.
+ * \param r_out_buf_len: The #strlen of the returned buffer.
  */
-static char *buf_tabs_to_spaces(const char *in_buf, const int tab_size)
+static char *buf_tabs_to_spaces(const char *in_buf, const int tab_size, int *r_out_buf_len)
 {
   /* Get the number of tab characters in buffer. */
   bool line_start = true;
@@ -164,6 +149,7 @@ static char *buf_tabs_to_spaces(const char *in_buf, const int tab_size)
   }
 
   out_buf[out_offset] = '\0';
+  *r_out_buf_len = out_offset;
   return out_buf;
 }
 
@@ -181,7 +167,7 @@ BLI_INLINE int text_pixel_x_to_column(SpaceText *st, const int x)
 
 static bool text_new_poll(bContext *UNUSED(C))
 {
-  return 1;
+  return true;
 }
 
 static bool text_data_poll(bContext *C)
@@ -198,15 +184,15 @@ static bool text_edit_poll(bContext *C)
   Text *text = CTX_data_edit_text(C);
 
   if (!text) {
-    return 0;
+    return false;
   }
 
-  if (ID_IS_LINKED(text)) {
+  if (!BKE_id_is_editable(CTX_data_main(C), &text->id)) {
     // BKE_report(op->reports, RPT_ERROR, "Cannot edit external library data");
-    return 0;
+    return false;
   }
 
-  return 1;
+  return true;
 }
 
 bool text_space_edit_poll(bContext *C)
@@ -215,15 +201,15 @@ bool text_space_edit_poll(bContext *C)
   Text *text = CTX_data_edit_text(C);
 
   if (!st || !text) {
-    return 0;
+    return false;
   }
 
-  if (ID_IS_LINKED(text)) {
+  if (!BKE_id_is_editable(CTX_data_main(C), &text->id)) {
     // BKE_report(op->reports, RPT_ERROR, "Cannot edit external library data");
-    return 0;
+    return false;
   }
 
-  return 1;
+  return true;
 }
 
 static bool text_region_edit_poll(bContext *C)
@@ -233,19 +219,19 @@ static bool text_region_edit_poll(bContext *C)
   ARegion *region = CTX_wm_region(C);
 
   if (!st || !text) {
-    return 0;
+    return false;
   }
 
   if (!region || region->regiontype != RGN_TYPE_WINDOW) {
-    return 0;
+    return false;
   }
 
-  if (ID_IS_LINKED(text)) {
+  if (!BKE_id_is_editable(CTX_data_main(C), &text->id)) {
     // BKE_report(op->reports, RPT_ERROR, "Cannot edit external library data");
-    return 0;
+    return false;
   }
 
-  return 1;
+  return true;
 }
 
 /** \} */
@@ -665,13 +651,13 @@ static int text_save_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static int text_save_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+static int text_save_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Text *text = CTX_data_edit_text(C);
 
   /* Internal and texts without a filepath will go to "Save As". */
   if (text->filepath == NULL || (text->flags & TXT_ISMEM)) {
-    WM_operator_name_call(C, "TEXT_OT_save_as", WM_OP_INVOKE_DEFAULT, NULL);
+    WM_operator_name_call(C, "TEXT_OT_save_as", WM_OP_INVOKE_DEFAULT, NULL, event);
     return OPERATOR_CANCELLED;
   }
   return text_save_exec(C, op);
@@ -804,9 +790,7 @@ static int text_run_script(bContext *C, ReportList *reports)
       }
     }
 
-    BKE_report(
-        reports, RPT_ERROR, "Python script failed, check the message in the system console");
-
+    /* No need to report the error, this has already been handled by #BPY_run_text. */
     return OPERATOR_FINISHED;
   }
 #else
@@ -934,12 +918,12 @@ static int text_paste_exec(bContext *C, wmOperator *op)
 
   /* Convert clipboard content indentation to spaces if specified */
   if (text->flags & TXT_TABSTOSPACES) {
-    char *new_buf = buf_tabs_to_spaces(buf, TXT_TABSIZE);
+    char *new_buf = buf_tabs_to_spaces(buf, TXT_TABSIZE, &buf_len);
     MEM_freeN(buf);
     buf = new_buf;
   }
 
-  txt_insert_buf(text, buf);
+  txt_insert_buf(text, buf, buf_len);
   text_update_edited(text);
 
   MEM_freeN(buf);
@@ -1114,10 +1098,10 @@ static int text_indent_or_autocomplete_exec(bContext *C, wmOperator *UNUSED(op))
   TextLine *line = text->curl;
   bool text_before_cursor = text->curc != 0 && !ELEM(line->line[text->curc - 1], ' ', '\t');
   if (text_before_cursor && (txt_has_sel(text) == false)) {
-    WM_operator_name_call(C, "TEXT_OT_autocomplete", WM_OP_INVOKE_DEFAULT, NULL);
+    WM_operator_name_call(C, "TEXT_OT_autocomplete", WM_OP_INVOKE_DEFAULT, NULL, NULL);
   }
   else {
-    WM_operator_name_call(C, "TEXT_OT_indent", WM_OP_EXEC_DEFAULT, NULL);
+    WM_operator_name_call(C, "TEXT_OT_indent", WM_OP_EXEC_DEFAULT, NULL, NULL);
   }
   return OPERATOR_FINISHED;
 }
@@ -3477,12 +3461,6 @@ static int text_insert_exec(bContext *C, wmOperator *op)
     while (str[i]) {
       code = BLI_str_utf8_as_unicode_step(str, str_len, &i);
       done |= txt_add_char(text, code);
-      if (U.text_flag & USER_TEXT_EDIT_AUTO_CLOSE) {
-        if (text_closing_character_pair_get(code)) {
-          done |= txt_add_char(text, text_closing_character_pair_get(code));
-          txt_move_left(text, false);
-        }
-      }
     }
   }
 
@@ -3502,6 +3480,7 @@ static int text_insert_exec(bContext *C, wmOperator *op)
 
 static int text_insert_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  uint auto_close_char = 0;
   int ret;
 
   /* NOTE: the "text" property is always set from key-map,
@@ -3511,7 +3490,7 @@ static int text_insert_invoke(bContext *C, wmOperator *op, const wmEvent *event)
      * (when input method are used for utf8 inputs, the user may assign key event
      * including alt/ctrl/super like ctrl+m to commit utf8 string.  in such case,
      * the modifiers in the utf8 character event make no sense.) */
-    if ((event->ctrl || event->oskey) && !event->utf8_buf[0]) {
+    if ((event->modifier & (KM_CTRL | KM_OSKEY)) && !event->utf8_buf[0]) {
       return OPERATOR_PASS_THROUGH;
     }
 
@@ -3528,9 +3507,22 @@ static int text_insert_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     }
     str[len] = '\0';
     RNA_string_set(op->ptr, "text", str);
+
+    if (U.text_flag & USER_TEXT_EDIT_AUTO_CLOSE) {
+      auto_close_char = BLI_str_utf8_as_unicode(str);
+    }
   }
 
   ret = text_insert_exec(C, op);
+
+  if ((ret == OPERATOR_FINISHED) && (auto_close_char != 0)) {
+    const uint auto_close_match = text_closing_character_pair_get(auto_close_char);
+    if (auto_close_match != 0) {
+      Text *text = CTX_data_edit_text(C);
+      txt_add_char(text, auto_close_match);
+      txt_move_left(text, false);
+    }
+  }
 
   /* run the script while editing, evil but useful */
   if (ret == OPERATOR_FINISHED && CTX_wm_space_text(C)->live_edit) {
@@ -3605,7 +3597,7 @@ static int text_find_and_replace(bContext *C, wmOperator *op, short mode)
     if (found) {
       if (mode == TEXT_REPLACE) {
         ED_text_undo_push_init(C);
-        txt_insert_buf(text, st->replacestr);
+        txt_insert_buf(text, st->replacestr, strlen(st->replacestr));
         if (text->curl && text->curl->format) {
           MEM_freeN(text->curl->format);
           text->curl->format = NULL;
@@ -3689,7 +3681,7 @@ static int text_replace_all(bContext *C)
     ED_text_undo_push_init(C);
 
     do {
-      txt_insert_buf(text, st->replacestr);
+      txt_insert_buf(text, st->replacestr, strlen(st->replacestr));
       if (text->curl && text->curl->format) {
         MEM_freeN(text->curl->format);
         text->curl->format = NULL;

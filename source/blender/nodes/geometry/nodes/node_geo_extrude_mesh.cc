@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_disjoint_set.hh"
 #include "BLI_task.hh"
@@ -39,7 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_input<decl::Geometry>("Mesh").supported_type(GEO_COMPONENT_TYPE_MESH);
   b.add_input<decl::Bool>(N_("Selection")).default_value(true).supports_field().hide_value();
   b.add_input<decl::Vector>(N_("Offset")).subtype(PROP_TRANSLATION).implicit_field().hide_value();
-  b.add_input<decl::Float>(N_("Offset Scale")).default_value(1.0f).min(0.0f).supports_field();
+  b.add_input<decl::Float>(N_("Offset Scale")).default_value(1.0f).supports_field();
   b.add_input<decl::Bool>(N_("Individual")).default_value(true);
   b.add_output<decl::Geometry>("Mesh");
   b.add_output<decl::Bool>(N_("Top")).field_source();
@@ -157,6 +143,34 @@ static void expand_mesh(Mesh &mesh,
     CustomData_realloc(&mesh.ldata, mesh.totloop);
   }
   BKE_mesh_update_customdata_pointers(&mesh, false);
+}
+
+static CustomData &get_customdata(Mesh &mesh, const AttributeDomain domain)
+{
+  switch (domain) {
+    case ATTR_DOMAIN_POINT:
+      return mesh.vdata;
+    case ATTR_DOMAIN_EDGE:
+      return mesh.edata;
+    case ATTR_DOMAIN_FACE:
+      return mesh.pdata;
+    case ATTR_DOMAIN_CORNER:
+      return mesh.ldata;
+    default:
+      BLI_assert_unreachable();
+      return mesh.vdata;
+  }
+}
+
+static MutableSpan<int> get_orig_index_layer(Mesh &mesh, const AttributeDomain domain)
+{
+  MeshComponent component;
+  component.replace(&mesh, GeometryOwnershipType::ReadOnly);
+  CustomData &custom_data = get_customdata(mesh, domain);
+  if (int *orig_indices = static_cast<int *>(CustomData_get_layer(&custom_data, CD_ORIGINDEX))) {
+    return {orig_indices, component.attribute_domain_size(domain)};
+  }
+  return {};
 }
 
 static MEdge new_edge(const int v1, const int v2)
@@ -305,6 +319,9 @@ static void extrude_mesh_vertices(MeshComponent &component,
       }
     });
   });
+
+  MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
+  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
 
   if (attribute_outputs.top_id) {
     save_selection_as_attribute(
@@ -537,7 +554,7 @@ static void extrude_mesh_edges(MeshComponent &component,
         }
         case ATTR_DOMAIN_FACE: {
           /* Attribute values for new faces are a mix of the values of faces connected to the its
-           * original edge.  */
+           * original edge. */
           copy_with_mixing(data.slice(new_poly_range), data.as_span(), [&](const int i) {
             return edge_to_poly_map[edge_selection[i]].as_span();
           });
@@ -628,6 +645,13 @@ static void extrude_mesh_edges(MeshComponent &component,
       }
     });
   }
+
+  MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
+  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+
+  MutableSpan<int> edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
+  edge_orig_indices.slice(connect_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice(duplicate_edge_range).fill(ORIGINDEX_NONE);
 
   if (attribute_outputs.top_id) {
     save_selection_as_attribute(
@@ -997,6 +1021,17 @@ static void extrude_mesh_face_regions(MeshComponent &component,
         });
   }
 
+  MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
+  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+
+  MutableSpan<int> edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
+  edge_orig_indices.slice(connect_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice(new_inner_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice(boundary_edge_range).fill(ORIGINDEX_NONE);
+
+  MutableSpan<int> poly_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_FACE);
+  poly_orig_indices.slice(side_poly_range).fill(ORIGINDEX_NONE);
+
   if (attribute_outputs.top_id) {
     save_selection_as_attribute(
         component, attribute_outputs.top_id.get(), ATTR_DOMAIN_FACE, poly_selection);
@@ -1246,6 +1281,16 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
     }
   });
 
+  MutableSpan<int> vert_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_POINT);
+  vert_orig_indices.slice(new_vert_range).fill(ORIGINDEX_NONE);
+
+  MutableSpan<int> edge_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_EDGE);
+  edge_orig_indices.slice(connect_edge_range).fill(ORIGINDEX_NONE);
+  edge_orig_indices.slice(duplicate_edge_range).fill(ORIGINDEX_NONE);
+
+  MutableSpan<int> poly_orig_indices = get_orig_index_layer(mesh, ATTR_DOMAIN_FACE);
+  poly_orig_indices.slice(side_poly_range).fill(ORIGINDEX_NONE);
+
   /* Finally update each extruded polygon's loops to point to the new edges and vertices.
    * This must be done last, because they were used to find original indices for attribute
    * interpolation before. Alternatively an original index array could be built for each domain. */
@@ -1288,7 +1333,9 @@ static void node_geo_exec(GeoNodeExecParams params)
   /* Create a combined field from the offset and the scale so the field evaluator
    * can take care of the multiplication and to simplify each extrude function. */
   static fn::CustomMF_SI_SI_SO<float3, float, float3> multiply_fn{
-      "Scale", [](const float3 &offset, const float scale) { return offset * scale; }};
+      "Scale",
+      [](const float3 &offset, const float scale) { return offset * scale; },
+      fn::CustomMF_presets::AllSpanOrSingle()};
   std::shared_ptr<FieldOperation> multiply_op = std::make_shared<FieldOperation>(
       FieldOperation(multiply_fn, {std::move(offset_field), std::move(scale_field)}));
   const Field<float3> final_offset{std::move(multiply_op)};

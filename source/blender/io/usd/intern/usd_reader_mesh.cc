@@ -1,23 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
+/* SPDX-License-Identifier: GPL-2.0-or-later
  * Adapted from the Blender Alembic importer implementation.
- *
- * Modifications Copyright (C) 2021 Tangent Animation and
- * NVIDIA Corporation.  All rights reserved.
- */
+ * Modifications Copyright 2021 Tangent Animation and
+ * NVIDIA Corporation. All rights reserved. */
 
 #include "usd_reader_mesh.h"
 #include "usd_reader_material.h"
@@ -165,7 +149,7 @@ static void *add_customdata_cb(Mesh *mesh, const char *name, const int data_type
   int numloops;
 
   /* unsupported custom data type -- don't do anything. */
-  if (!ELEM(cd_data_type, CD_MLOOPUV, CD_MLOOPCOL)) {
+  if (!ELEM(cd_data_type, CD_MLOOPUV, CD_PROP_BYTE_COLOR)) {
     return nullptr;
   }
 
@@ -216,7 +200,7 @@ void USDMeshReader::read_object_data(Main *bmain, const double motionSampleTime)
   if (read_mesh != mesh) {
     /* FIXME: after 2.80; `mesh->flag` isn't copied by #BKE_mesh_nomain_to_mesh() */
     /* read_mesh can be freed by BKE_mesh_nomain_to_mesh(), so get the flag before that happens. */
-    short autosmooth = (read_mesh->flag & ME_AUTOSMOOTH);
+    uint16_t autosmooth = (read_mesh->flag & ME_AUTOSMOOTH);
     BKE_mesh_nomain_to_mesh(read_mesh, mesh, object_, &CD_MASK_MESH, true);
     mesh->flag |= autosmooth;
   }
@@ -248,7 +232,7 @@ bool USDMeshReader::valid() const
   return static_cast<bool>(mesh_prim_);
 }
 
-bool USDMeshReader::topology_changed(Mesh *existing_mesh, const double motionSampleTime)
+bool USDMeshReader::topology_changed(const Mesh *existing_mesh, const double motionSampleTime)
 {
   /* TODO(makowalski): Is it the best strategy to cache the mesh
    * geometry in this function?  This needs to be revisited. */
@@ -473,7 +457,7 @@ void USDMeshReader::read_colors(Mesh *mesh, const double motionSampleTime)
     return;
   }
 
-  void *cd_ptr = add_customdata_cb(mesh, "displayColors", CD_MLOOPCOL);
+  void *cd_ptr = add_customdata_cb(mesh, "displayColors", CD_PROP_BYTE_COLOR);
 
   if (!cd_ptr) {
     std::cerr << "WARNING: Couldn't add displayColors custom data.\n";

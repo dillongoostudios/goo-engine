@@ -1,23 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: some of this file.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 #pragma once
 
@@ -203,9 +185,6 @@ MINLINE void rgba_float_args_set(float col[4], float r, float g, float b, float 
 MINLINE void rgba_uchar_args_test_set(
     unsigned char col[4], unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 MINLINE void cpack_cpy_3ub(unsigned char r_col[3], unsigned int pack);
-
-void blackbody_temperature_to_rgb_table(float *r_table, int width, float min, float max);
-void wavelength_to_xyz_table(float *r_table, int width);
 
 /** \} */
 

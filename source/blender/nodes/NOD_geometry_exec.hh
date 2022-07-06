@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -20,6 +6,7 @@
 #include "FN_multi_function_builder.hh"
 
 #include "BKE_attribute_access.hh"
+#include "BKE_geometry_fields.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
 
@@ -46,22 +33,14 @@ using bke::ReadAttributeLookup;
 using bke::StrongAnonymousAttributeID;
 using bke::WeakAnonymousAttributeID;
 using bke::WriteAttributeLookup;
-using fn::CPPType;
 using fn::Field;
 using fn::FieldContext;
 using fn::FieldEvaluator;
 using fn::FieldInput;
 using fn::FieldOperation;
 using fn::GField;
-using fn::GMutablePointer;
-using fn::GMutableSpan;
-using fn::GPointer;
-using fn::GSpan;
-using fn::GVArray;
-using fn::GVArray_GSpan;
-using fn::GVMutableArray;
-using fn::GVMutableArray_GSpan;
 using fn::ValueOrField;
+using geometry_nodes_eval_log::NamedAttributeUsage;
 using geometry_nodes_eval_log::NodeWarningType;
 
 /**
@@ -363,6 +342,8 @@ class GeoNodeExecParams {
   std::string attribute_producer_name() const;
 
   void set_default_remaining_outputs();
+
+  void used_named_attribute(std::string attribute_name, NamedAttributeUsage usage);
 
  private:
   /* Utilities for detecting common errors at when using this class. */

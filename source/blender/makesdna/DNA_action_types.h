@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup DNA
@@ -120,12 +104,14 @@ typedef struct bAnimVizSettings {
   short path_type;
   /** Number of frames between points indicated on the paths. */
   short path_step;
+  /** #eMotionPath_Ranges. */
+  short path_range;
 
   /** #eMotionPaths_ViewFlag. */
   short path_viewflag;
   /** #eMotionPaths_BakeFlag. */
   short path_bakeflag;
-  char _pad[6];
+  char _pad[4];
 
   /** Start and end frames of path-calculation range. */
   int path_sf, path_ef;
@@ -146,6 +132,14 @@ typedef enum eMotionPaths_Types {
   /* only show the parts of the paths around the current frame */
   MOTIONPATH_TYPE_ACFRA = 1,
 } eMotionPath_Types;
+
+/* bAnimVizSettings->path_range */
+typedef enum eMotionPath_Ranges {
+  /* Default is scene */
+  MOTIONPATH_RANGE_SCENE = 0,
+  MOTIONPATH_RANGE_KEYS_SELECTED = 1,
+  MOTIONPATH_RANGE_KEYS_ALL = 2,
+} eMotionPath_Ranges;
 
 /* bAnimVizSettings->path_viewflag */
 typedef enum eMotionPaths_ViewFlag {
@@ -478,9 +472,6 @@ typedef struct bPose {
 
   short flag;
   char _pad[2];
-  /** Proxy layer: copy from armature, gets synced. */
-  unsigned int proxy_layer;
-  char _pad1[4];
 
   /** Local action time of this pose. */
   float ctime;
@@ -503,8 +494,6 @@ typedef struct bPose {
 
   /** Settings for visualization of bone animation. */
   bAnimVizSettings avs;
-  /** Proxy active bone name, MAXBONENAME. */
-  char proxy_act_bone[64];
 } bPose;
 
 /* Pose->flag */
@@ -886,27 +875,27 @@ typedef enum eSAction_Flag {
   SACTION_SHOW_MARKERS = (1 << 14),
 } eSAction_Flag;
 
-/* SpaceAction_Runtime.flag */
+/** #SpaceAction_Runtime.flag */
 typedef enum eSAction_Runtime_Flag {
   /** Temporary flag to force channel selections to be synced with main */
   SACTION_RUNTIME_FLAG_NEED_CHAN_SYNC = (1 << 0),
 } eSAction_Runtime_Flag;
 
-/* SpaceAction Mode Settings */
+/** #SpaceAction.mode */
 typedef enum eAnimEdit_Context {
-  /* action on the active object */
+  /** Action on the active object. */
   SACTCONT_ACTION = 0,
-  /* list of all shapekeys on the active object, linked with their F-Curves */
+  /** List of all shape-keys on the active object, linked with their F-Curves. */
   SACTCONT_SHAPEKEY = 1,
-  /* editing of gpencil data */
+  /** Editing of grease-pencil data. */
   SACTCONT_GPENCIL = 2,
-  /* dopesheet (default) */
+  /** Dope-sheet (default). */
   SACTCONT_DOPESHEET = 3,
-  /* mask */
+  /** Mask. */
   SACTCONT_MASK = 4,
-  /* cache file */
+  /** Cache file */
   SACTCONT_CACHEFILE = 5,
-  /* timeline - replacement for the standalone "timeline editor" */
+  /** Timeline - replacement for the standalone "timeline editor". */
   SACTCONT_TIMELINE = 6,
 } eAnimEdit_Context;
 

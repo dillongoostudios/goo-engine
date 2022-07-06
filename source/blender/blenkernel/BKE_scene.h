@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 #pragma once
 
 /** \file
@@ -241,7 +225,7 @@ bool BKE_scene_remove_render_view(struct Scene *scene, struct SceneRenderView *s
 /* Render profile. */
 
 int get_render_subsurf_level(const struct RenderData *r, int lvl, bool for_render);
-int get_render_child_particle_number(const struct RenderData *r, int num, bool for_render);
+int get_render_child_particle_number(const struct RenderData *r, int child_num, bool for_render);
 
 bool BKE_scene_use_shading_nodes_custom(struct Scene *scene);
 bool BKE_scene_use_spherical_stereo(struct Scene *scene);
@@ -298,7 +282,7 @@ struct SceneRenderView *BKE_scene_multiview_render_view_findindex(const struct R
                                                                   int view_id);
 const char *BKE_scene_multiview_render_view_name_get(const struct RenderData *rd, int view_id);
 int BKE_scene_multiview_view_id_get(const struct RenderData *rd, const char *viewname);
-void BKE_scene_multiview_filepath_get(struct SceneRenderView *srv,
+void BKE_scene_multiview_filepath_get(const struct SceneRenderView *srv,
                                       const char *filepath,
                                       char *r_filepath);
 /**

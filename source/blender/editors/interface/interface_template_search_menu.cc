@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edinterface
@@ -55,6 +41,7 @@
 #include "ED_screen.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -965,7 +952,7 @@ static void menu_search_exec_fn(bContext *C, void *UNUSED(arg1), void *arg2)
     case MenuSearch_Item::Type::Operator: {
       CTX_store_set(C, item->op.context);
       WM_operator_name_call_ptr_with_depends_on_cursor(
-          C, item->op.type, item->op.opcontext, item->op.opptr, item->drawstr);
+          C, item->op.type, item->op.opcontext, item->op.opptr, nullptr, item->drawstr);
       CTX_store_set(C, nullptr);
       break;
     }

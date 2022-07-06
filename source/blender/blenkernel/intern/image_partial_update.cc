@@ -1,30 +1,15 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2021, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. */
 /**
- * \file image_gpu_partial_update.cc
+ * \file
  * \ingroup bke
  *
  * To reduce the overhead of image processing this file contains a mechanism to detect areas of the
  * image that are changed. These areas are organized in chunks. Changes that happen over time are
  * organized in changesets.
  *
- * A common usecase is to update GPUTexture for drawing where only that part is uploaded that only
- * changed.
+ * A common use case is to update #GPUTexture for drawing where only that part is uploaded that
+ * only changed.
  *
  * Usage:
  *
@@ -105,8 +90,8 @@ static int chunk_number_for_pixel(int pixel_offset)
   return chunk_offset;
 }
 
-struct PartialUpdateUserImpl;
 struct PartialUpdateRegisterImpl;
+struct PartialUpdateUserImpl;
 
 /**
  * Wrap PartialUpdateUserImpl to its C-struct (PartialUpdateUser).
@@ -273,7 +258,8 @@ struct TileChangeset {
     const int previous_chunk_len = chunk_dirty_flags_.size();
 
     chunk_dirty_flags_.resize(chunk_len);
-    /* Fast exit. When the changeset was already empty no need to re-init the chunk_validity. */
+    /* Fast exit. When the changeset was already empty no need to
+     * re-initialize the chunk_validity. */
     if (!has_dirty_chunks()) {
       return;
     }

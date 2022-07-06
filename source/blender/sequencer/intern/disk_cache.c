@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup sequencer
@@ -176,10 +160,11 @@ static DiskCacheFile *seq_disk_cache_add_file_to_list(SeqDiskCache *disk_cache, 
 static void seq_disk_cache_get_files(SeqDiskCache *disk_cache, char *path)
 {
   struct direntry *filelist, *fl;
-  uint nbr, i;
+  uint i;
   disk_cache->size_total = 0;
 
-  i = nbr = BLI_filelist_dir_contents(path, &filelist);
+  const int filelist_num = BLI_filelist_dir_contents(path, &filelist);
+  i = filelist_num;
   fl = filelist;
   while (i--) {
     /* Don't follow links. */
@@ -210,7 +195,7 @@ static void seq_disk_cache_get_files(SeqDiskCache *disk_cache, char *path)
     }
     fl++;
   }
-  BLI_filelist_free(filelist, nbr);
+  BLI_filelist_free(filelist, filelist_num);
 }
 
 static DiskCacheFile *seq_disk_cache_get_oldest_file(SeqDiskCache *disk_cache)

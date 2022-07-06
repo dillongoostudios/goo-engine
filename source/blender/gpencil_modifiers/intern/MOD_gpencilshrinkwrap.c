@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. */
 
 /** \file
  * \ingroup modifiers
@@ -123,15 +107,13 @@ static void deformStroke(GpencilModifierData *md,
   pt = gps->points;
   for (i = 0; i < gps->totpoints; i++, pt++) {
     copy_v3_v3(&pt->x, vert_coords[i]);
-    /* Smooth stroke. */
-    if (mmd->smooth_factor > 0.0f) {
-      for (int r = 0; r < mmd->smooth_step; r++) {
-        BKE_gpencil_stroke_smooth_point(gps, i, mmd->smooth_factor, true);
-      }
-    }
   }
 
   MEM_freeN(vert_coords);
+
+  /* Smooth stroke. */
+  BKE_gpencil_stroke_smooth(
+      gps, mmd->smooth_factor, mmd->smooth_step, true, false, false, false, true, NULL);
 
   /* Calc geometry data. */
   BKE_gpencil_stroke_geometry_update(gpd, gps);

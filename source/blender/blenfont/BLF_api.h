@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup blf
@@ -60,7 +44,7 @@ int BLF_load_mem_unique(const char *name, const unsigned char *mem, int mem_size
 void BLF_unload(const char *name) ATTR_NONNULL();
 void BLF_unload_id(int fontid);
 
-char *BLF_display_name_from_file(const char *filename);
+char *BLF_display_name_from_file(const char *filepath);
 
 /**
  * Check if font supports a particular glyph.
@@ -125,7 +109,7 @@ typedef bool (*BLF_GlyphBoundsFn)(const char *str,
                                   size_t str_step_ofs,
                                   const struct rcti *glyph_step_bounds,
                                   int glyph_advance_x,
-                                  const struct rctf *glyph_bounds,
+                                  const struct rcti *glyph_bounds,
                                   const int glyph_bearing[2],
                                   void *user_data);
 
@@ -167,9 +151,9 @@ size_t BLF_width_to_rstrlen(
 void BLF_boundbox_ex(int fontid,
                      const char *str,
                      size_t str_len,
-                     struct rctf *box,
+                     struct rcti *box,
                      struct ResultBLF *r_info) ATTR_NONNULL(2);
-void BLF_boundbox(int fontid, const char *str, size_t str_len, struct rctf *box) ATTR_NONNULL();
+void BLF_boundbox(int fontid, const char *str, size_t str_len, struct rcti *box) ATTR_NONNULL();
 
 /**
  * The next both function return the width and height
@@ -189,9 +173,9 @@ float BLF_height(int fontid, const char *str, size_t str_len) ATTR_WARN_UNUSED_R
  * Return dimensions of the font without any sample text.
  */
 int BLF_height_max(int fontid) ATTR_WARN_UNUSED_RESULT;
-float BLF_width_max(int fontid) ATTR_WARN_UNUSED_RESULT;
-float BLF_descender(int fontid) ATTR_WARN_UNUSED_RESULT;
-float BLF_ascender(int fontid) ATTR_WARN_UNUSED_RESULT;
+int BLF_width_max(int fontid) ATTR_WARN_UNUSED_RESULT;
+int BLF_descender(int fontid) ATTR_WARN_UNUSED_RESULT;
+int BLF_ascender(int fontid) ATTR_WARN_UNUSED_RESULT;
 
 /**
  * The following function return the width and height of the string, but
@@ -211,7 +195,7 @@ float BLF_fixed_width(int fontid) ATTR_WARN_UNUSED_RESULT;
  * have to be enable/disable using BLF_enable/disable.
  */
 void BLF_rotation(int fontid, float angle);
-void BLF_clipping(int fontid, float xmin, float ymin, float xmax, float ymax);
+void BLF_clipping(int fontid, int xmin, int ymin, int xmax, int ymax);
 void BLF_wordwrap(int fontid, int wrap_width);
 
 #if BLF_BLUR_ENABLE
@@ -295,7 +279,7 @@ void BLF_dir_free(char **dirs, int count) ATTR_NONNULL();
  *
  * \note called from a thread, so it bypasses the normal BLF_* api (which isn't thread-safe).
  */
-void BLF_thumb_preview(const char *filename,
+void BLF_thumb_preview(const char *filepath,
                        const char **draw_str,
                        const char **i18n_draw_str,
                        unsigned char draw_str_lines,
@@ -309,7 +293,7 @@ void BLF_thumb_preview(const char *filename,
 /* blf_default.c */
 
 void BLF_default_dpi(int dpi);
-void BLF_default_size(int size);
+void BLF_default_size(float size);
 void BLF_default_set(int fontid);
 /**
  * Get default font ID so we can pass it to other functions.

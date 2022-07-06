@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup GHOST
@@ -248,7 +234,7 @@ static void calc_node_transforms(const tinygltf::Node &gltf_node,
                      {(float)dm[4], (float)dm[5], (float)dm[6], (float)dm[7]},
                      {(float)dm[8], (float)dm[9], (float)dm[10], (float)dm[11]},
                      {(float)dm[12], (float)dm[13], (float)dm[14], (float)dm[15]}};
-    memcpy(r_local_transform, m, sizeof(float) * 16);
+    memcpy(r_local_transform, m, sizeof(float[4][4]));
   }
   else {
     /* No matrix is present, so construct a matrix from the TRS values (each one is optional). */

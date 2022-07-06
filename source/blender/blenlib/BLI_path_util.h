@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 #pragma once
 
 /** \file
@@ -220,12 +204,12 @@ bool BLI_path_filename_ensure(char *filepath, size_t maxlen, const char *filenam
  * or before dot if no digits.
  * \param tail: Optional area to return copy of part of string following digits,
  * or from dot if no digits.
- * \param r_num_len: Optional to return number of digits found.
+ * \param r_digits_len: Optional to return number of digits found.
  */
 int BLI_path_sequence_decode(const char *string,
                              char *head,
                              char *tail,
-                             unsigned short *r_num_len);
+                             unsigned short *r_digits_len);
 /**
  * Returns in area pointed to by string a string of the form `<head><pic><tail>`,
  * where pic is formatted as `numlen` digits with leading zeroes.
@@ -314,7 +298,7 @@ bool BLI_path_parent_dir_until_exists(char *path) ATTR_NONNULL();
 bool BLI_path_abs(char *path, const char *basepath) ATTR_NONNULL();
 /**
  * Replaces "#" character sequence in last slash-separated component of `path`
- * with frame as decimal integer, with leading zeroes as necessary, to make digits digits.
+ * with frame as decimal integer, with leading zeroes as necessary, to make digits.
  */
 bool BLI_path_frame(char *path, int frame, int digits) ATTR_NONNULL();
 /**
@@ -326,7 +310,7 @@ bool BLI_path_frame_range(char *path, int sta, int end, int digits) ATTR_NONNULL
 /**
  * Get the frame from a filename formatted by blender's frame scheme
  */
-bool BLI_path_frame_get(char *path, int *r_frame, int *numdigits) ATTR_NONNULL();
+bool BLI_path_frame_get(char *path, int *r_frame, int *r_digits_len) ATTR_NONNULL();
 /**
  * Given a `path` with digits representing frame numbers, replace the digits with the '#'
  * character and extract the extension.

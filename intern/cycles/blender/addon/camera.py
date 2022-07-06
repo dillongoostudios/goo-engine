@@ -1,27 +1,17 @@
-#
-# Copyright 2011-2021 Blender Foundation
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-#
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2011-2022 Blender Foundation
 
 # <pep8 compliant>
 
 # Fit to match default projective camera with focal_length 50 and sensor_width 36.
-default_fisheye_polynomial = [-1.1735143712967577e-05,
-                              -0.019988736953434998,
-                              -3.3525322965709175e-06,
-                              3.099275275886036e-06,
-                              -2.6064646454854524e-08]
+default_fisheye_polynomial = [
+    -1.1735143712967577e-05,
+    -0.019988736953434998,
+    -3.3525322965709175e-06,
+    3.099275275886036e-06,
+    -2.6064646454854524e-08,
+]
+
 
 # Utilities to generate lens polynomials to match built-in camera types, only here
 # for reference at the moment, not used by the code.
@@ -64,7 +54,9 @@ def fisheye_lens_polynomial_from_equidistant(fov=180, sensor_width=36, sensor_he
     return [0, -np.radians(fov) / sensor_width, 0, 0, 0]
 
 
-def fisheye_lens_polynomial_from_distorted_projective_polynomial(k1, k2, k3, focal_length=50, sensor_width=36, sensor_height=None):
+def fisheye_lens_polynomial_from_distorted_projective_polynomial(
+        k1, k2, k3, focal_length=50, sensor_width=36, sensor_height=None,
+):
     import numpy as np
     rr = create_grid(sensor_height, sensor_width)
     r2 = (rr / focal_length) ** 2
@@ -74,7 +66,10 @@ def fisheye_lens_polynomial_from_distorted_projective_polynomial(k1, k2, k3, foc
     polynomial = np.polyfit(rr.flat, (-np.arctan(rr / focal_length * r_coeff)).flat, 4)
     return list(reversed(polynomial))
 
-def fisheye_lens_polynomial_from_distorted_projective_divisions(k1, k2, focal_length=50, sensor_width=36, sensor_height=None):
+
+def fisheye_lens_polynomial_from_distorted_projective_divisions(
+        k1, k2, focal_length=50, sensor_width=36, sensor_height=None,
+):
     import numpy as np
     rr = create_grid(sensor_height, sensor_width)
     r2 = (rr / focal_length) ** 2

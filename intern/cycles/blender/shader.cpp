@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #include "scene/shader.h"
 #include "scene/background.h"
@@ -284,6 +271,7 @@ static ShaderNode *add_node(Scene *scene,
     curves->set_min_x(min_x);
     curves->set_max_x(max_x);
     curves->set_curves(curve_mapping_curves);
+    curves->set_extrapolate(mapping.extend() == mapping.extend_EXTRAPOLATED);
     node = curves;
   }
   if (b_node.is_a(&RNA_ShaderNodeVectorCurve)) {
@@ -297,6 +285,7 @@ static ShaderNode *add_node(Scene *scene,
     curves->set_min_x(min_x);
     curves->set_max_x(max_x);
     curves->set_curves(curve_mapping_curves);
+    curves->set_extrapolate(mapping.extend() == mapping.extend_EXTRAPOLATED);
     node = curves;
   }
   else if (b_node.is_a(&RNA_ShaderNodeFloatCurve)) {
@@ -310,6 +299,7 @@ static ShaderNode *add_node(Scene *scene,
     curve->set_min_x(min_x);
     curve->set_max_x(max_x);
     curve->set_curve(curve_mapping_curve);
+    curve->set_extrapolate(mapping.extend() == mapping.extend_EXTRAPOLATED);
     node = curve;
   }
   else if (b_node.is_a(&RNA_ShaderNodeValToRGB)) {
@@ -1541,6 +1531,8 @@ void BlenderSync::sync_world(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d,
 
   background->set_use_shader(view_layer.use_background_shader ||
                              viewport_parameters.use_custom_shader());
+
+  background->set_lightgroup(ustring(b_world ? b_world.lightgroup() : ""));
 
   background->tag_update(scene);
 }

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bke
@@ -58,6 +44,7 @@
 #include "BKE_dynamicpaint.h"
 #include "BKE_effect.h"
 #include "BKE_image.h"
+#include "BKE_image_format.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_material.h"
@@ -349,7 +336,7 @@ bool dynamicPaint_outputLayerExists(struct DynamicPaintSurface *surface, Object 
   if (surface->format == MOD_DPAINT_SURFACE_F_VERTEX) {
     if (surface->type == MOD_DPAINT_SURFACE_T_PAINT) {
       Mesh *me = ob->data;
-      return (CustomData_get_named_layer_index(&me->ldata, CD_MLOOPCOL, name) != -1);
+      return (CustomData_get_named_layer_index(&me->ldata, CD_PROP_BYTE_COLOR, name) != -1);
     }
     if (surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
       return (BKE_object_defgroup_name_index(ob, name) != -1);
@@ -1677,7 +1664,7 @@ static void dynamicPaint_setInitialColor(const Scene *scene, DynamicPaintSurface
       const MLoop *mloop = mesh->mloop;
       const int totloop = mesh->totloop;
       const MLoopCol *col = CustomData_get_layer_named(
-          &mesh->ldata, CD_MLOOPCOL, surface->init_layername);
+          &mesh->ldata, CD_PROP_BYTE_COLOR, surface->init_layername);
       if (!col) {
         return;
       }
@@ -1689,7 +1676,7 @@ static void dynamicPaint_setInitialColor(const Scene *scene, DynamicPaintSurface
     else if (surface->format == MOD_DPAINT_SURFACE_F_IMAGESEQ) {
       const MLoopTri *mlooptri = BKE_mesh_runtime_looptri_ensure(mesh);
       MLoopCol *col = CustomData_get_layer_named(
-          &mesh->ldata, CD_MLOOPCOL, surface->init_layername);
+          &mesh->ldata, CD_PROP_BYTE_COLOR, surface->init_layername);
       if (!col) {
         return;
       }
@@ -1912,7 +1899,6 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
       pmd->type == MOD_DYNAMICPAINT_TYPE_CANVAS) {
 
     DynamicPaintSurface *surface;
-    bool update_normals = false;
 
     /* loop through surfaces */
     for (surface = pmd->canvas->surfaces.first; surface; surface = surface->next) {
@@ -1954,20 +1940,28 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
 
             /* paint layer */
             MLoopCol *mloopcol = CustomData_get_layer_named(
-                &result->ldata, CD_MLOOPCOL, surface->output_name);
+                &result->ldata, CD_PROP_BYTE_COLOR, surface->output_name);
             /* if output layer is lost from a constructive modifier, re-add it */
             if (!mloopcol && dynamicPaint_outputLayerExists(surface, ob, 0)) {
-              mloopcol = CustomData_add_layer_named(
-                  &result->ldata, CD_MLOOPCOL, CD_CALLOC, NULL, totloop, surface->output_name);
+              mloopcol = CustomData_add_layer_named(&result->ldata,
+                                                    CD_PROP_BYTE_COLOR,
+                                                    CD_CALLOC,
+                                                    NULL,
+                                                    totloop,
+                                                    surface->output_name);
             }
 
             /* wet layer */
             MLoopCol *mloopcol_wet = CustomData_get_layer_named(
-                &result->ldata, CD_MLOOPCOL, surface->output_name2);
+                &result->ldata, CD_PROP_BYTE_COLOR, surface->output_name2);
             /* if output layer is lost from a constructive modifier, re-add it */
             if (!mloopcol_wet && dynamicPaint_outputLayerExists(surface, ob, 1)) {
-              mloopcol_wet = CustomData_add_layer_named(
-                  &result->ldata, CD_MLOOPCOL, CD_CALLOC, NULL, totloop, surface->output_name2);
+              mloopcol_wet = CustomData_add_layer_named(&result->ldata,
+                                                        CD_PROP_BYTE_COLOR,
+                                                        CD_CALLOC,
+                                                        NULL,
+                                                        totloop,
+                                                        surface->output_name2);
             }
 
             data.ob = ob;
@@ -1985,9 +1979,6 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             }
 
             MEM_freeN(fcolor);
-
-            /* Mark tessellated CD layers as dirty. */
-            // result->dirty |= DM_DIRTY_TESS_CDLAYERS;
           }
           /* vertex group paint */
           else if (surface->type == MOD_DPAINT_SURFACE_T_WEIGHT) {
@@ -2034,20 +2025,16 @@ static Mesh *dynamicPaint_Modifier_apply(DynamicPaintModifierData *pmd, Object *
             settings.use_threading = (sData->total_points > 1000);
             BLI_task_parallel_range(
                 0, sData->total_points, &data, dynamic_paint_apply_surface_wave_cb, &settings);
-            update_normals = true;
+            BKE_mesh_normals_tag_dirty(mesh);
           }
 
           /* displace */
           if (surface->type == MOD_DPAINT_SURFACE_T_DISPLACE) {
             dynamicPaint_applySurfaceDisplace(surface, result);
-            update_normals = true;
+            BKE_mesh_normals_tag_dirty(mesh);
           }
         }
       }
-    }
-
-    if (update_normals) {
-      BKE_mesh_normals_tag_dirty(result);
     }
   }
   /* make a copy of mesh to use as brush data */
@@ -3282,7 +3269,7 @@ static void dynamic_paint_output_surface_image_wetmap_cb(
 }
 
 void dynamicPaint_outputSurfaceImage(DynamicPaintSurface *surface,
-                                     char *filename,
+                                     const char *filepath,
                                      short output_layer)
 {
   ImBuf *ibuf = NULL;
@@ -3302,7 +3289,7 @@ void dynamicPaint_outputSurfaceImage(DynamicPaintSurface *surface,
     format = R_IMF_IMTYPE_PNG;
   }
 #endif
-  BLI_strncpy(output_file, filename, sizeof(output_file));
+  BLI_strncpy(output_file, filepath, sizeof(output_file));
   BKE_image_path_ensure_ext_from_imtype(output_file, format);
 
   /* Validate output file path */
@@ -4034,7 +4021,7 @@ static void dynamic_paint_paint_mesh_cell_point_cb_ex(
               treeData->tree, ray_start, ray_dir, 0.0f, &hit, mesh_tris_spherecast_dp, treeData);
 
           if (hit.index != -1) {
-            /* Add factor on supersample filter */
+            /* Add factor on super-sample filter. */
             volume_factor = 1.0f;
             hit_found = HIT_VOLUME;
 
@@ -5261,7 +5248,6 @@ static void dynamic_paint_effect_shrink_cb(void *__restrict userdata,
   PaintPoint *pPoint = &((PaintPoint *)sData->type_data)[index];
   const PaintPoint *prevPoint = data->prevPoint;
   const float eff_scale = data->eff_scale;
-  float totalAlpha = 0.0f;
 
   const int *n_index = sData->adj_data->n_index;
   const int *n_target = sData->adj_data->n_target;
@@ -5273,8 +5259,6 @@ static void dynamic_paint_effect_shrink_cb(void *__restrict userdata,
                                                                   eff_scale / bNeighs[n_idx].dist;
     const PaintPoint *pPoint_prev = &prevPoint[n_target[n_idx]];
     float a_factor, ea_factor, w_factor;
-
-    totalAlpha += pPoint_prev->e_color[3];
 
     /* Check if neighboring point has lower alpha,
      * if so, decrease this point's alpha as well. */
@@ -6159,7 +6143,7 @@ static bool dynamicPaint_generateBakeData(DynamicPaintSurface *surface,
 
   /* generate surface space partitioning grid */
   surfaceGenerateGrid(surface);
-  /* calculate current frame adjacency point distances and global dirs */
+  /* Calculate current frame adjacency point distances and global directions. */
   dynamicPaint_prepareAdjacencyData(surface, false);
 
   /* Copy current frame vertices to check against in next frame */

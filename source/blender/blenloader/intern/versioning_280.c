@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup blenloader
@@ -648,13 +634,6 @@ static ARegion *do_versions_find_region(ListBase *regionbase, int regiontype)
   if (region == NULL) {
     BLI_assert_msg(0, "Did not find expected region in versioning");
   }
-  return region;
-}
-
-static ARegion *do_versions_add_region(int regiontype, const char *name)
-{
-  ARegion *region = MEM_callocN(sizeof(ARegion), name);
-  region->regiontype = regiontype;
   return region;
 }
 
@@ -1564,7 +1543,7 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
 
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 69)) {
     /* Unify DOF settings (EEVEE part only) */
-    const int SCE_EEVEE_DOF_ENABLED = (1 << 7);
+    enum { SCE_EEVEE_DOF_ENABLED = (1 << 7) };
     LISTBASE_FOREACH (Scene *, scene, &bmain->scenes) {
       if (STREQ(scene->r.engine, RE_engine_id_BLENDER_EEVEE)) {
         if (scene->eevee.flag & SCE_EEVEE_DOF_ENABLED) {
@@ -1641,11 +1620,6 @@ void do_versions_after_linking_280(Main *bmain, ReportList *UNUSED(reports))
 
       /* Deprecated, only kept for conversion. */
       BKE_mesh_tessface_clear(me);
-
-      /* Moved from do_versions because we need updated polygons for calculating normals. */
-      if (!MAIN_VERSION_ATLEAST(bmain, 256, 6)) {
-        BKE_mesh_calc_normals(me);
-      }
     }
   }
 
@@ -1952,7 +1926,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
         }
       }
 
-      /* Grease pencil multiframe falloff curve */
+      /* Grease pencil multi-frame falloff curve. */
       if (!DNA_struct_elem_find(
               fd->filesdna, "GP_Sculpt_Settings", "CurveMapping", "cur_falloff")) {
         for (Scene *scene = bmain->scenes.first; scene; scene = scene->id.next) {
@@ -2326,7 +2300,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
     } \
   } \
   ((void)0)
-        const int SCE_EEVEE_DOF_ENABLED = (1 << 7);
+        enum { SCE_EEVEE_DOF_ENABLED = (1 << 7) };
         IDProperty *props = IDP_GetPropertyFromGroup(scene->layer_properties,
                                                      RE_engine_id_BLENDER_EEVEE);
         // EEVEE_GET_BOOL(props, volumetric_enable, SCE_EEVEE_VOLUMETRIC_ENABLED);
@@ -4046,7 +4020,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 70)) {
     /* New image alpha modes. */
     LISTBASE_FOREACH (Image *, image, &bmain->images) {
-      const int IMA_IGNORE_ALPHA = (1 << 12);
+      enum { IMA_IGNORE_ALPHA = (1 << 12) };
       if (image->flag & IMA_IGNORE_ALPHA) {
         image->alpha_mode = IMA_ALPHA_IGNORE;
         image->flag &= ~IMA_IGNORE_ALPHA;
@@ -4511,7 +4485,7 @@ void blo_do_versions_280(FileData *fd, Library *UNUSED(lib), Main *bmain)
           clmd->sim_parms->max_internal_tension = 15.0f;
           clmd->sim_parms->internal_compression = 15.0f;
           clmd->sim_parms->max_internal_compression = 15.0f;
-          clmd->sim_parms->internal_spring_max_diversion = M_PI / 4.0f;
+          clmd->sim_parms->internal_spring_max_diversion = M_PI_4;
         }
       }
     }

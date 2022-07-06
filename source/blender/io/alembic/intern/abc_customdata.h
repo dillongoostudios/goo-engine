@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Kévin Dietrich.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Kévin Dietrich. All rights reserved. */
 #pragma once
 
 /** \file
@@ -64,8 +48,8 @@ struct CDStreamConfig {
   Mesh *mesh;
   void *(*add_customdata_cb)(Mesh *mesh, const char *name, int data_type);
 
-  float weight;
-  float time;
+  double weight;
+  Alembic::Abc::chrono_t time;
   int timesample_index;
   bool use_vertex_interpolation;
   Alembic::AbcGeom::index_t index;
@@ -95,8 +79,8 @@ struct CDStreamConfig {
         pack_uvs(false),
         mesh(NULL),
         add_customdata_cb(NULL),
-        weight(0.0f),
-        time(0.0f),
+        weight(0.0),
+        time(0.0),
         index(0),
         ceil_index(0),
         modifier_error_message(NULL)

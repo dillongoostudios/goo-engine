@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup edtransform
@@ -26,6 +10,7 @@
 #include "BLI_math.h"
 
 #include "BKE_context.h"
+#include "BKE_lib_id.h"
 #include "BKE_paint.h"
 #include "BKE_report.h"
 
@@ -43,7 +28,7 @@ void createTransSculpt(bContext *C, TransInfo *t)
   TransData *td;
 
   Scene *scene = t->scene;
-  if (ID_IS_LINKED(scene)) {
+  if (!BKE_id_is_editable(CTX_data_main(C), &scene->id)) {
     BKE_report(t->reports, RPT_ERROR, "Linked data can't text-space transform");
     return;
   }
@@ -118,7 +103,7 @@ void recalcData_sculpt(TransInfo *t)
 void special_aftertrans_update__sculpt(bContext *C, TransInfo *t)
 {
   Scene *scene = t->scene;
-  if (ID_IS_LINKED(scene)) {
+  if (!BKE_id_is_editable(CTX_data_main(C), &scene->id)) {
     /* `ED_sculpt_init_transform` was not called in this case. */
     return;
   }

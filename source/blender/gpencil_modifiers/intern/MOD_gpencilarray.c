@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. */
 
 /** \file
  * \ingroup modifiers
@@ -148,13 +132,13 @@ static void generate_geometry(GpencilModifierData *md,
   /* Get bounbox for relative offset. */
   float size[3] = {0.0f, 0.0f, 0.0f};
   if (mmd->flag & GP_ARRAY_USE_RELATIVE) {
-    BoundBox *bb = BKE_object_boundbox_get(ob);
-    const float min[3] = {-1.0f, -1.0f, -1.0f}, max[3] = {1.0f, 1.0f, 1.0f};
-    BKE_boundbox_init_from_minmax(bb, min, max);
-    BKE_boundbox_calc_size_aabb(bb, size);
-    mul_v3_fl(size, 2.0f);
-    /* Need a minimum size (for flat drawings). */
-    CLAMP3_MIN(size, 0.01f);
+    float min[3];
+    float max[3];
+    if (BKE_gpencil_data_minmax(gpd, min, max)) {
+      sub_v3_v3v3(size, max, min);
+      /* Need a minimum size (for flat drawings). */
+      CLAMP3_MIN(size, 0.01f);
+    }
   }
 
   int seed = mmd->seed;

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 #pragma once
 
@@ -271,7 +255,7 @@ size_t BLI_str_unescape(char *__restrict dst, const char *__restrict src, size_t
  *
  * \param str: Typically this is the first character in a quoted string.
  * Where the character before `*str` would be `"`.
-
+ *
  * \return The pointer to the first un-escaped quote.
  */
 const char *BLI_str_escape_find_quote(const char *str) ATTR_NONNULL();
@@ -359,8 +343,16 @@ int BLI_strcmp_ignore_pad(const char *str1, const char *str2, char pad) ATTR_WAR
  */
 size_t BLI_strnlen(const char *str, size_t maxlen) ATTR_WARN_UNUSED_RESULT ATTR_NONNULL();
 
+/**
+ * String case conversion, not affected by locale.
+ */
+
 void BLI_str_tolower_ascii(char *str, size_t len) ATTR_NONNULL();
 void BLI_str_toupper_ascii(char *str, size_t len) ATTR_NONNULL();
+
+char BLI_tolower_ascii(const char c);
+char BLI_toupper_ascii(const char c);
+
 /**
  * Strip white-space from end of the string.
  */

@@ -1,25 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2015, Blender Foundation
- * This is a new part of Blender
- * Brush based operators for editing Grease Pencil strokes
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2015 Blender Foundation. */
 
 /** \file
  * \ingroup edgpencil
+ * Brush based operators for editing Grease Pencil strokes.
  */
 
 #include "MEM_guardedalloc.h"
@@ -50,6 +34,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_prototypes.h"
 
 #include "UI_view2d.h"
 
@@ -337,7 +322,7 @@ static bool gpencil_weightpaint_brush_init(bContext *C, wmOperator *op)
 
   gso->region = CTX_wm_region(C);
 
-  /* Multiframe settings. */
+  /* Multi-frame settings. */
   gso->is_multiframe = (bool)GPENCIL_MULTIEDIT_SESSIONS_ON(gso->gpd);
   gso->use_multiframe_falloff = (ts->gp_sculpt.flag & GP_SCULPT_SETT_FLAG_FRAME_FALLOFF) != 0;
 
@@ -714,7 +699,7 @@ static void gpencil_weightpaint_brush_apply_event(bContext *C,
   RNA_collection_add(op->ptr, "stroke", &itemptr);
 
   RNA_float_set_array(&itemptr, "mouse", mouse);
-  RNA_boolean_set(&itemptr, "pen_flip", event->ctrl != false);
+  RNA_boolean_set(&itemptr, "pen_flip", event->modifier & KM_CTRL);
   RNA_boolean_set(&itemptr, "is_start", gso->first);
 
   /* Handle pressure sensitivity (which is supplied by tablets). */

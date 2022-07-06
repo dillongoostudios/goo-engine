@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2016, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -129,7 +114,9 @@ void EEVEE_motion_blur_data_free(EEVEE_MotionBlurData *mb)
   }
 }
 
-EEVEE_ObjectMotionData *EEVEE_motion_blur_object_data_get(EEVEE_MotionBlurData *mb, Object *ob)
+EEVEE_ObjectMotionData *EEVEE_motion_blur_object_data_get(EEVEE_MotionBlurData *mb,
+                                                          Object *ob,
+                                                          bool is_psys)
 {
   if (mb->object == NULL) {
     return NULL;
@@ -138,14 +125,16 @@ EEVEE_ObjectMotionData *EEVEE_motion_blur_object_data_get(EEVEE_MotionBlurData *
   EEVEE_ObjectKey key, *key_p;
   /* Assumes that all instances have the same object pointer. This is currently the case because
    * instance objects are temporary objects on the stack. */
-  key.ob = ob;
+  /* WORKAROUND: Duplicate object key for particle system (hairs) to be able to store dupli offset
+   * matrix along with the emitter obmat. (see T97380) */
+  key.ob = (void *)((char *)ob + is_psys);
   DupliObject *dup = DRW_object_get_dupli(ob);
   if (dup) {
     key.parent = DRW_object_get_dupli_parent(ob);
     memcpy(key.id, dup->persistent_id, sizeof(key.id));
   }
   else {
-    key.parent = key.ob;
+    key.parent = ob;
     memset(key.id, 0, sizeof(key.id));
   }
 
@@ -175,10 +164,22 @@ EEVEE_HairMotionData *EEVEE_motion_blur_hair_data_get(EEVEE_ObjectMotionData *mb
 {
   if (mb_data->hair_data == NULL) {
     /* Ugly, we allocate for each modifiers and just fill based on modifier index in the list. */
-    int psys_len = (ob->type != OB_HAIR) ? BLI_listbase_count(&ob->modifiers) : 1;
+    int psys_len = BLI_listbase_count(&ob->modifiers);
     EEVEE_HairMotionData *hair_step = MEM_callocN(
         sizeof(EEVEE_HairMotionData) + sizeof(hair_step->psys[0]) * psys_len, __func__);
     hair_step->psys_len = psys_len;
+    hair_step->type = EEVEE_MOTION_DATA_HAIR;
+    mb_data->hair_data = hair_step;
+  }
+  return mb_data->hair_data;
+}
+
+EEVEE_HairMotionData *EEVEE_motion_blur_curves_data_get(EEVEE_ObjectMotionData *mb_data)
+{
+  if (mb_data->hair_data == NULL) {
+    EEVEE_HairMotionData *hair_step = MEM_callocN(
+        sizeof(EEVEE_HairMotionData) + sizeof(hair_step->psys[0]), __func__);
+    hair_step->psys_len = 1;
     hair_step->type = EEVEE_MOTION_DATA_HAIR;
     mb_data->hair_data = hair_step;
   }

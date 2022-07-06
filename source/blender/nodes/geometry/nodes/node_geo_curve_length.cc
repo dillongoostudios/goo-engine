@@ -1,20 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_spline.hh"
+#include "BKE_curves.hh"
+
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_curve_length_cc {
@@ -28,15 +15,22 @@ static void node_declare(NodeDeclarationBuilder &b)
 static void node_geo_exec(GeoNodeExecParams params)
 {
   GeometrySet curve_set = params.extract_input<GeometrySet>("Curve");
-  if (!curve_set.has_curve()) {
+  if (!curve_set.has_curves()) {
     params.set_default_remaining_outputs();
     return;
   }
-  const CurveEval &curve = *curve_set.get_curve_for_read();
+
+  const Curves &curves_id = *curve_set.get_curves_for_read();
+  const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
+  const VArray<bool> cyclic = curves.cyclic();
+
+  curves.ensure_evaluated_lengths();
+
   float length = 0.0f;
-  for (const SplinePtr &spline : curve.splines()) {
-    length += spline->length();
+  for (const int i : curves.curves_range()) {
+    length += curves.evaluated_length_total_for_curve(i, cyclic[i]);
   }
+
   params.set_output("Length", length);
 }
 

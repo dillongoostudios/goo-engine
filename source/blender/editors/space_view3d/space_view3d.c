@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spview3d
@@ -24,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "DNA_collection_types.h"
 #include "DNA_defaults.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_lightprobe_types.h"
@@ -63,6 +48,7 @@
 #include "ED_screen.h"
 #include "ED_space_api.h"
 #include "ED_transform.h"
+#include "ED_undo.h"
 
 #include "GPU_matrix.h"
 
@@ -89,6 +75,7 @@
 #include "DEG_depsgraph_build.h"
 
 #include "view3d_intern.h" /* own include */
+#include "view3d_navigate.h"
 
 /* ******************** manage regions ********************* */
 
@@ -428,6 +415,9 @@ static void view3d_main_region_init(wmWindowManager *wm, ARegion *region)
   keymap = WM_keymap_ensure(wm->defaultconf, "Particle", 0, 0);
   WM_event_add_keymap_handler(&region->handlers, keymap);
 
+  keymap = WM_keymap_ensure(wm->defaultconf, "Sculpt Curves", 0, 0);
+  WM_event_add_keymap_handler(&region->handlers, keymap);
+
   /* editfont keymap swallows all... */
   keymap = WM_keymap_ensure(wm->defaultconf, "Font", 0, 0);
   WM_event_add_keymap_handler(&region->handlers, keymap);
@@ -574,6 +564,24 @@ static bool view3d_collection_drop_poll(bContext *C, wmDrag *drag, const wmEvent
   return view3d_drop_id_in_main_region_poll(C, drag, event, ID_GR);
 }
 
+static bool view3d_collection_drop_poll_local_id(bContext *C, wmDrag *drag, const wmEvent *event)
+{
+  if (!view3d_collection_drop_poll(C, drag, event) || (drag->type != WM_DRAG_ID)) {
+    return false;
+  }
+  return true;
+}
+
+static bool view3d_collection_drop_poll_external_asset(bContext *C,
+                                                       wmDrag *drag,
+                                                       const wmEvent *event)
+{
+  if (!view3d_collection_drop_poll(C, drag, event) || (drag->type != WM_DRAG_ASSET)) {
+    return false;
+  }
+  return true;
+}
+
 static bool view3d_mat_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
 {
   return view3d_drop_id_in_main_region_poll(C, drag, event, ID_MA);
@@ -582,16 +590,15 @@ static bool view3d_mat_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event
 static char *view3d_mat_drop_tooltip(bContext *C,
                                      wmDrag *drag,
                                      const int xy[2],
-                                     struct wmDropBox *drop)
+                                     wmDropBox *UNUSED(drop))
 {
   const char *name = WM_drag_get_item_name(drag);
   ARegion *region = CTX_wm_region(C);
-  RNA_string_set(drop->ptr, "name", name);
   int mval[2] = {
       xy[0] - region->winrct.xmin,
       xy[1] - region->winrct.ymin,
   };
-  return ED_object_ot_drop_named_material_tooltip(C, drop->ptr, mval);
+  return ED_object_ot_drop_named_material_tooltip(C, name, mval);
 }
 
 static bool view3d_world_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
@@ -684,9 +691,9 @@ static void view3d_ob_drop_matrix_from_snap(V3DSnapCursorState *snap_state,
                                             Object *ob,
                                             float obmat_final[4][4])
 {
-  V3DSnapCursorData *snap_data;
-  snap_data = ED_view3d_cursor_snap_data_get(snap_state, NULL, 0, 0);
+  V3DSnapCursorData *snap_data = ED_view3d_cursor_snap_data_get();
   BLI_assert(snap_state->draw_box || snap_state->draw_plane);
+  UNUSED_VARS_NDEBUG(snap_state);
   copy_m4_m3(obmat_final, snap_data->plane_omat);
   copy_v3_v3(obmat_final[3], snap_data->loc);
 
@@ -694,7 +701,7 @@ static void view3d_ob_drop_matrix_from_snap(V3DSnapCursorState *snap_state,
   mat4_to_size(scale, ob->obmat);
   rescale_m4(obmat_final, scale);
 
-  BoundBox *bb = BKE_object_boundbox_get(ob);
+  const BoundBox *bb = BKE_object_boundbox_get(ob);
   if (bb) {
     float offset[3];
     BKE_boundbox_calc_center_aabb(bb, offset);
@@ -704,11 +711,11 @@ static void view3d_ob_drop_matrix_from_snap(V3DSnapCursorState *snap_state,
   }
 }
 
-static void view3d_ob_drop_copy_local_id(wmDrag *drag, wmDropBox *drop)
+static void view3d_ob_drop_copy_local_id(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID(drag, ID_OB);
 
-  RNA_string_set(drop->ptr, "name", id->name + 2);
+  RNA_int_set(drop->ptr, "session_uuid", id->session_uuid);
   /* Don't duplicate ID's which were just imported. Only do that for existing, local IDs. */
   BLI_assert(drag->type != WM_DRAG_ASSET);
 
@@ -720,7 +727,9 @@ static void view3d_ob_drop_copy_local_id(wmDrag *drag, wmDropBox *drop)
   RNA_float_set_array(drop->ptr, "matrix", &obmat_final[0][0]);
 }
 
-static void view3d_ob_drop_copy_external_asset(wmDrag *drag, wmDropBox *drop)
+/* Mostly the same logic as #view3d_collection_drop_copy_external_asset(), just different enough to
+ * make sharing code a bit difficult. */
+static void view3d_ob_drop_copy_external_asset(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   /* NOTE(@campbellbarton): Selection is handled here, de-selecting objects before append,
    * using auto-select to ensure the new objects are selected.
@@ -741,7 +750,7 @@ static void view3d_ob_drop_copy_external_asset(wmDrag *drag, wmDropBox *drop)
   DEG_relations_tag_update(CTX_data_main(C));
   WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
 
-  RNA_string_set(drop->ptr, "name", id->name + 2);
+  RNA_int_set(drop->ptr, "session_uuid", id->session_uuid);
 
   Base *base = BKE_view_layer_base_find(view_layer, (Object *)id);
   if (base != NULL) {
@@ -761,34 +770,75 @@ static void view3d_ob_drop_copy_external_asset(wmDrag *drag, wmDropBox *drop)
   }
 }
 
-static void view3d_collection_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void view3d_collection_drop_copy_local_id(bContext *UNUSED(C),
+                                                 wmDrag *drag,
+                                                 wmDropBox *drop)
 {
-  ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, ID_GR);
-
+  ID *id = WM_drag_get_local_ID(drag, ID_GR);
   RNA_int_set(drop->ptr, "session_uuid", (int)id->session_uuid);
 }
 
-static void view3d_id_drop_copy(wmDrag *drag, wmDropBox *drop)
+/* Mostly the same logic as #view3d_ob_drop_copy_external_asset(), just different enough to make
+ * sharing code a bit difficult. */
+static void view3d_collection_drop_copy_external_asset(bContext *UNUSED(C),
+                                                       wmDrag *drag,
+                                                       wmDropBox *drop)
 {
-  ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
+  BLI_assert(drag->type == WM_DRAG_ASSET);
 
-  RNA_string_set(drop->ptr, "name", id->name + 2);
+  wmDragAsset *asset_drag = WM_drag_get_asset_data(drag, 0);
+  bContext *C = asset_drag->evil_C;
+  Scene *scene = CTX_data_scene(C);
+  ViewLayer *view_layer = CTX_data_view_layer(C);
+
+  BKE_view_layer_base_deselect_all(view_layer);
+
+  ID *id = WM_drag_asset_id_import(asset_drag, FILE_AUTOSELECT);
+  Collection *collection = (Collection *)id;
+
+  /* TODO(sergey): Only update relations for the current scene. */
+  DEG_relations_tag_update(CTX_data_main(C));
+  WM_event_add_notifier(C, NC_SCENE | ND_LAYER_CONTENT, scene);
+
+  RNA_int_set(drop->ptr, "session_uuid", (int)id->session_uuid);
+
+  /* Make an object active, just use the first one in the collection. */
+  CollectionObject *cobject = collection->gobject.first;
+  Base *base = cobject ? BKE_view_layer_base_find(view_layer, cobject->ob) : NULL;
+  if (base) {
+    BLI_assert((base->flag & BASE_SELECTABLE) && (base->flag & BASE_ENABLED_VIEWPORT));
+    BKE_view_layer_base_select_and_set_active(view_layer, base);
+    WM_main_add_notifier(NC_SCENE | ND_OB_ACTIVE, scene);
+  }
+  DEG_id_tag_update(&scene->id, ID_RECALC_SELECT);
+  ED_outliner_select_sync_from_object_tag(C);
+
+  /* XXX Without an undo push here, there will be a crash when the user modifies operator
+   * properties. The stuff we do in these drop callbacks just isn't safe over undo/redo. */
+  ED_undo_push(C, "Collection_Drop");
 }
 
-static void view3d_id_drop_copy_with_type(wmDrag *drag, wmDropBox *drop)
+static void view3d_id_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
-  RNA_string_set(drop->ptr, "name", id->name + 2);
+  WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
+}
+
+static void view3d_id_drop_copy_with_type(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
+{
+  ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
+
   RNA_enum_set(drop->ptr, "type", GS(id->name));
+  WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
 }
 
-static void view3d_id_path_drop_copy(wmDrag *drag, wmDropBox *drop)
+static void view3d_id_path_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   if (id) {
-    RNA_string_set(drop->ptr, "name", id->name + 2);
+    WM_operator_properties_id_lookup_set_from_id(drop->ptr, id);
     RNA_struct_property_unset(drop->ptr, "filepath");
   }
   else if (drag->path[0]) {
@@ -813,7 +863,7 @@ static void view3d_lightcache_update(bContext *C)
   RNA_int_set(&op_ptr, "delay", 200);
   RNA_enum_set_identifier(C, &op_ptr, "subset", "DIRTY");
 
-  WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_ptr);
+  WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &op_ptr, NULL);
 
   WM_operator_properties_free(&op_ptr);
 }
@@ -831,7 +881,7 @@ static void view3d_dropboxes(void)
                         WM_drag_free_imported_drag_ID,
                         NULL);
 
-  drop->draw = WM_drag_draw_item_name_fn;
+  drop->draw_droptip = WM_drag_draw_item_name_fn;
   drop->draw_activate = view3d_ob_drop_draw_activate;
   drop->draw_deactivate = view3d_ob_drop_draw_deactivate;
 
@@ -842,9 +892,22 @@ static void view3d_dropboxes(void)
                         WM_drag_free_imported_drag_ID,
                         NULL);
 
-  drop->draw = WM_drag_draw_item_name_fn;
+  drop->draw_droptip = WM_drag_draw_item_name_fn;
   drop->draw_activate = view3d_ob_drop_draw_activate;
   drop->draw_deactivate = view3d_ob_drop_draw_deactivate;
+
+  WM_dropbox_add(lb,
+                 "OBJECT_OT_collection_external_asset_drop",
+                 view3d_collection_drop_poll_external_asset,
+                 view3d_collection_drop_copy_external_asset,
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
+  WM_dropbox_add(lb,
+                 "OBJECT_OT_collection_instance_add",
+                 view3d_collection_drop_poll_local_id,
+                 view3d_collection_drop_copy_local_id,
+                 WM_drag_free_imported_drag_ID,
+                 NULL);
 
   WM_dropbox_add(lb,
                  "OBJECT_OT_drop_named_material",
@@ -868,12 +931,6 @@ static void view3d_dropboxes(void)
                  "OBJECT_OT_volume_import",
                  view3d_volume_drop_poll,
                  view3d_id_path_drop_copy,
-                 WM_drag_free_imported_drag_ID,
-                 NULL);
-  WM_dropbox_add(lb,
-                 "OBJECT_OT_collection_instance_add",
-                 view3d_collection_drop_poll,
-                 view3d_collection_drop_copy,
                  WM_drag_free_imported_drag_ID,
                  NULL);
   WM_dropbox_add(lb,
@@ -1246,6 +1303,27 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
   }
 }
 
+static void view3d_do_msg_notify_workbench_view_update(struct bContext *C,
+                                                       struct wmMsgSubscribeKey *UNUSED(msg_key),
+                                                       struct wmMsgSubscribeValue *msg_val)
+{
+  Scene *scene = CTX_data_scene(C);
+  ScrArea *area = (ScrArea *)msg_val->user_data;
+  View3D *v3d = (View3D *)area->spacedata.first;
+  if (v3d->shading.type == OB_SOLID) {
+    RenderEngineType *engine_type = ED_view3d_engine_type(scene, v3d->shading.type);
+    DRWUpdateContext drw_context = {NULL};
+    drw_context.bmain = CTX_data_main(C);
+    drw_context.depsgraph = CTX_data_depsgraph_pointer(C);
+    drw_context.scene = scene;
+    drw_context.view_layer = CTX_data_view_layer(C);
+    drw_context.region = (ARegion *)(msg_val->owner);
+    drw_context.v3d = v3d;
+    drw_context.engine_type = engine_type;
+    DRW_notify_view_update(&drw_context);
+  }
+}
+
 static void view3d_main_region_message_subscribe(const wmRegionMessageSubscribeParams *params)
 {
   struct wmMsgBus *mbus = params->message_bus;
@@ -1287,6 +1365,12 @@ static void view3d_main_region_message_subscribe(const wmRegionMessageSubscribeP
       .notify = ED_region_do_msg_notify_tag_redraw,
   };
 
+  wmMsgSubscribeValue msg_sub_value_workbench_view_update = {
+      .owner = region,
+      .user_data = area,
+      .notify = view3d_do_msg_notify_workbench_view_update,
+  };
+
   for (int i = 0; i < ARRAY_SIZE(type_array); i++) {
     msg_key_params.ptr.type = type_array[i];
     WM_msg_subscribe_rna_params(mbus, &msg_key_params, &msg_sub_value_region_tag_redraw, __func__);
@@ -1319,6 +1403,11 @@ static void view3d_main_region_message_subscribe(const wmRegionMessageSubscribeP
     switch (obact->mode) {
       case OB_MODE_PARTICLE_EDIT:
         WM_msg_subscribe_rna_anon_type(mbus, ParticleEdit, &msg_sub_value_region_tag_redraw);
+        break;
+
+      case OB_MODE_SCULPT:
+        WM_msg_subscribe_rna_anon_prop(
+            mbus, WorkSpace, tools, &msg_sub_value_workbench_view_update);
         break;
       default:
         break;
@@ -1490,6 +1579,9 @@ void ED_view3d_buttons_region_layout_ex(const bContext *C,
     case CTX_MODE_EDIT_CURVE:
       ARRAY_SET_ITEMS(contexts, ".curve_edit");
       break;
+    case CTX_MODE_EDIT_CURVES:
+      ARRAY_SET_ITEMS(contexts, ".curves_edit");
+      break;
     case CTX_MODE_EDIT_SURFACE:
       ARRAY_SET_ITEMS(contexts, ".curve_edit");
       break;
@@ -1537,6 +1629,9 @@ void ED_view3d_buttons_region_layout_ex(const bContext *C,
       break;
     case CTX_MODE_VERTEX_GPENCIL:
       ARRAY_SET_ITEMS(contexts, ".greasepencil_vertex");
+      break;
+    case CTX_MODE_SCULPT_CURVES:
+      ARRAY_SET_ITEMS(contexts, ".paint_common", ".curves_sculpt");
       break;
     default:
       break;

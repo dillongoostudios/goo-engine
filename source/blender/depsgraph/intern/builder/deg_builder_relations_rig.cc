@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2013 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2013 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup depsgraph
@@ -44,6 +28,8 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_constraint.h"
+
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -463,67 +449,6 @@ void DepsgraphRelationBuilder::build_rig(Object *object)
 
       add_relation(bone_ready_key, pose_cleanup_key, "Ready -> Cleanup");
     }
-    /* Custom shape. */
-    if (pchan->custom != nullptr) {
-      build_object(pchan->custom);
-      add_visibility_relation(&pchan->custom->id, &armature->id);
-    }
-  }
-}
-
-void DepsgraphRelationBuilder::build_proxy_rig(Object *object)
-{
-  bArmature *armature = (bArmature *)object->data;
-  Object *proxy_from = object->proxy_from;
-  build_armature(armature);
-  OperationKey pose_init_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_INIT);
-  OperationKey pose_done_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_DONE);
-  OperationKey pose_cleanup_key(&object->id, NodeType::EVAL_POSE, OperationCode::POSE_CLEANUP);
-  LISTBASE_FOREACH (bPoseChannel *, pchan, &object->pose->chanbase) {
-    build_idproperties(pchan->prop);
-    OperationKey bone_local_key(
-        &object->id, NodeType::BONE, pchan->name, OperationCode::BONE_LOCAL);
-    OperationKey bone_ready_key(
-        &object->id, NodeType::BONE, pchan->name, OperationCode::BONE_READY);
-    OperationKey bone_done_key(&object->id, NodeType::BONE, pchan->name, OperationCode::BONE_DONE);
-    OperationKey from_bone_done_key(
-        &proxy_from->id, NodeType::BONE, pchan->name, OperationCode::BONE_DONE);
-    add_relation(pose_init_key, bone_local_key, "Pose Init -> Bone Local");
-    add_relation(bone_local_key, bone_ready_key, "Local -> Ready");
-    add_relation(bone_ready_key, bone_done_key, "Ready -> Done");
-    add_relation(bone_done_key, pose_cleanup_key, "Bone Done -> Pose Cleanup");
-    add_relation(bone_done_key, pose_done_key, "Bone Done -> Pose Done", RELATION_FLAG_GODMODE);
-    /* Make sure bone in the proxy is not done before its FROM is done. */
-    if (check_pchan_has_bbone(object, pchan)) {
-      OperationKey from_bone_segments_key(
-          &proxy_from->id, NodeType::BONE, pchan->name, OperationCode::BONE_SEGMENTS);
-      add_relation(from_bone_segments_key,
-                   bone_done_key,
-                   "Bone Segments -> Bone Done",
-                   RELATION_FLAG_GODMODE);
-    }
-    else {
-      add_relation(from_bone_done_key, bone_done_key, "Bone Done -> Bone Done");
-    }
-
-    /* Parent relation: even though the proxy bone itself doesn't need
-     * the parent bone, some users expect the parent to be ready if the
-     * bone itself is (e.g. for computing the local space matrix).
-     */
-    if (pchan->parent != nullptr) {
-      OperationKey parent_key(
-          &object->id, NodeType::BONE, pchan->parent->name, OperationCode::BONE_DONE);
-      add_relation(parent_key, bone_done_key, "Parent Bone -> Child Bone");
-    }
-
-    if (pchan->prop != nullptr) {
-      OperationKey bone_parameters(
-          &object->id, NodeType::PARAMETERS, OperationCode::PARAMETERS_EVAL, pchan->name);
-      OperationKey from_bone_parameters(
-          &proxy_from->id, NodeType::PARAMETERS, OperationCode::PARAMETERS_EVAL, pchan->name);
-      add_relation(from_bone_parameters, bone_parameters, "Proxy Bone Parameters");
-    }
-
     /* Custom shape. */
     if (pchan->custom != nullptr) {
       build_object(pchan->custom);

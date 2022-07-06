@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -53,7 +37,7 @@ constexpr int estimated_max_facelen = 100; /* Used for initial size of some Vect
  * so this is a hack to clean up such matrices.
  * Would be better to change the transformation code itself.
  */
-static float4x4 clean_obmat(const float4x4 &mat)
+static float4x4 clean_transform(const float4x4 &mat)
 {
   float4x4 cleaned;
   const float fuzz = 1e-6f;
@@ -273,13 +257,13 @@ static IMesh meshes_to_imesh(Span<const Mesh *> meshes,
   const int estimate_num_outv = 3 * totvert;
   const int estimate_num_outf = 4 * totpoly;
   arena.reserve(estimate_num_outv, estimate_num_outf);
-  r_info->mesh_to_imesh_vert = Array<const Vert *>(totvert);
-  r_info->mesh_to_imesh_face = Array<Face *>(totpoly);
-  r_info->mesh_vert_offset = Array<int>(nmeshes);
-  r_info->mesh_edge_offset = Array<int>(nmeshes);
-  r_info->mesh_poly_offset = Array<int>(nmeshes);
-  r_info->to_target_transform = Array<float4x4>(nmeshes);
-  r_info->has_negative_transform = Array<bool>(nmeshes);
+  r_info->mesh_to_imesh_vert.reinitialize(totvert);
+  r_info->mesh_to_imesh_face.reinitialize(totpoly);
+  r_info->mesh_vert_offset.reinitialize(nmeshes);
+  r_info->mesh_edge_offset.reinitialize(nmeshes);
+  r_info->mesh_poly_offset.reinitialize(nmeshes);
+  r_info->to_target_transform.reinitialize(nmeshes);
+  r_info->has_negative_transform.reinitialize(nmeshes);
   r_info->material_remaps = material_remaps;
   int v = 0;
   int e = 0;
@@ -291,11 +275,11 @@ static IMesh meshes_to_imesh(Span<const Mesh *> meshes,
   Vector<const Vert *, estimated_max_facelen> face_vert;
   Vector<int, estimated_max_facelen> face_edge_orig;
 
-  /* To convert the coordinates of objects 1, 2, etc. into the local space
-   * of the target. We multiply each object's `obmat` by the inverse of the
+  /* To convert the coordinates of meshes 1, 2, etc. into the local space
+   * of the target, multiply each transform by the inverse of the
    * target matrix. Exact Boolean works better if these matrices are 'cleaned'
-   *  -- see the comment for the `clean_obmat` function, above. */
-  const float4x4 inv_target_mat = clean_obmat(target_transform).inverted();
+   *  -- see the comment for the `clean_transform` function, above. */
+  const float4x4 inv_target_mat = clean_transform(target_transform).inverted();
 
   /* For each input `Mesh`, make `Vert`s and `Face`s for the corresponding
    * `MVert`s and `MPoly`s, and keep track of the original indices (using the
@@ -307,10 +291,10 @@ static IMesh meshes_to_imesh(Span<const Mesh *> meshes,
     r_info->mesh_vert_offset[mi] = v;
     r_info->mesh_edge_offset[mi] = e;
     r_info->mesh_poly_offset[mi] = f;
-    /* Get matrix that transforms a coordinate in objects[mi]'s local space
-     * to the target space space. */
+    /* Get matrix that transforms a coordinate in meshes[mi]'s local space
+     * to the target space. */
     const float4x4 objn_mat = (obmats[mi] == nullptr) ? float4x4::identity() :
-                                                        clean_obmat(*obmats[mi]);
+                                                        clean_transform(*obmats[mi]);
     r_info->to_target_transform[mi] = inv_target_mat * objn_mat;
     r_info->has_negative_transform[mi] = objn_mat.is_negative();
 
@@ -423,18 +407,13 @@ static void copy_poly_attributes(Mesh *dest_mesh,
                                  int index_in_orig_me,
                                  Span<short> material_remap)
 {
-  mp->mat_nr = orig_mp->mat_nr;
-  if (mp->mat_nr >= dest_mesh->totcol) {
-    mp->mat_nr = 0;
+  if (material_remap.size() > 0 && material_remap.index_range().contains(orig_mp->mat_nr)) {
+    mp->mat_nr = material_remap[orig_mp->mat_nr];
   }
   else {
-    if (material_remap.size() > 0) {
-      short mat_nr = material_remap[orig_mp->mat_nr];
-      if (mat_nr >= 0 && mat_nr < dest_mesh->totcol) {
-        mp->mat_nr = mat_nr;
-      }
-    }
+    mp->mat_nr = orig_mp->mat_nr;
   }
+
   mp->flag = orig_mp->flag;
   CustomData *target_cd = &dest_mesh->pdata;
   const CustomData *source_cd = &orig_me->pdata;
@@ -798,7 +777,6 @@ static Mesh *imesh_to_mesh(IMesh *im, MeshesToIMeshInfo &mim)
     }
   }
 
-  BKE_mesh_calc_normals(result);
   if (dbg_level > 0) {
     BKE_mesh_validate(result, true, true);
   }
@@ -808,7 +786,7 @@ static Mesh *imesh_to_mesh(IMesh *im, MeshesToIMeshInfo &mim)
 #endif  // WITH_GMP
 
 Mesh *direct_mesh_boolean(Span<const Mesh *> meshes,
-                          Span<const float4x4 *> obmats,
+                          Span<const float4x4 *> transforms,
                           const float4x4 &target_transform,
                           Span<Array<short>> material_remaps,
                           const bool use_self,
@@ -816,7 +794,7 @@ Mesh *direct_mesh_boolean(Span<const Mesh *> meshes,
                           const int boolean_mode)
 {
 #ifdef WITH_GMP
-  BLI_assert(meshes.size() == obmats.size());
+  BLI_assert(meshes.size() == transforms.size());
   BLI_assert(material_remaps.size() == 0 || material_remaps.size() == meshes.size());
   if (meshes.size() <= 0) {
     return nullptr;
@@ -828,7 +806,7 @@ Mesh *direct_mesh_boolean(Span<const Mesh *> meshes,
   }
   MeshesToIMeshInfo mim;
   IMeshArena arena;
-  IMesh m_in = meshes_to_imesh(meshes, obmats, material_remaps, target_transform, arena, &mim);
+  IMesh m_in = meshes_to_imesh(meshes, transforms, material_remaps, target_transform, arena, &mim);
   std::function<int(int)> shape_fn = [&mim](int f) {
     for (int mi = 0; mi < mim.mesh_poly_offset.size() - 1; ++mi) {
       if (f < mim.mesh_poly_offset[mi + 1]) {
@@ -852,8 +830,13 @@ Mesh *direct_mesh_boolean(Span<const Mesh *> meshes,
 
   return imesh_to_mesh(&m_out, mim);
 #else   // WITH_GMP
-  UNUSED_VARS(
-      meshes, obmats, material_remaps, target_transform, use_self, hole_tolerant, boolean_mode);
+  UNUSED_VARS(meshes,
+              transforms,
+              material_remaps,
+              target_transform,
+              use_self,
+              hole_tolerant,
+              boolean_mode);
   return nullptr;
 #endif  // WITH_GMP
 }

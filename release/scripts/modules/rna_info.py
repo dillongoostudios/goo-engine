@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 
@@ -77,7 +61,8 @@ def range_str(val):
 
 def float_as_string(f):
     val_str = "%g" % f
-    if '.' not in val_str and '-' not in val_str:  # value could be 1e-05
+    # Ensure a `.0` suffix for whole numbers, excluding scientific notation such as `1e-05` or `1e+5`.
+    if '.' not in val_str and 'e' not in val_str:
         val_str += '.0'
     return val_str
 
@@ -214,9 +199,21 @@ class InfoStructRNA:
         for identifier, attr in self._get_py_visible_attrs():
             # methods may be python wrappers to C functions
             attr_func = getattr(attr, "__func__", attr)
-            if type(attr_func) in {types.BuiltinMethodType, types.BuiltinFunctionType}:
+            if (
+                    (type(attr_func) in {types.BuiltinMethodType, types.BuiltinFunctionType}) or
+                    # Without the `objclass` check, many inherited methods are included.
+                    (type(attr_func) == types.MethodDescriptorType and attr_func.__objclass__ == self.py_class)
+            ):
                 functions.append((identifier, attr))
         return functions
+
+    def get_py_c_properties_getset(self):
+        import types
+        properties_getset = []
+        for identifier, descr in self.py_class.__dict__.items():
+            if type(descr) == types.GetSetDescriptorType:
+                properties_getset.append((identifier, descr))
+        return properties_getset
 
     def __str__(self):
 

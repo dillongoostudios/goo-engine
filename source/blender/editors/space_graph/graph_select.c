@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. */
 
 /** \file
  * \ingroup spgraph
@@ -814,7 +799,9 @@ static int graphkeys_box_select_invoke(bContext *C, wmOperator *op, const wmEven
   }
 
   if (RNA_boolean_get(op->ptr, "tweak")) {
-    tNearestVertInfo *under_mouse = find_nearest_fcurve_vert(&ac, event->mval);
+    int mval[2];
+    WM_event_drag_start_mval(event, ac.region, mval);
+    tNearestVertInfo *under_mouse = find_nearest_fcurve_vert(&ac, mval);
     bool mouse_is_over_element = under_mouse != NULL;
     if (under_mouse) {
       MEM_freeN(under_mouse);
@@ -918,7 +905,7 @@ void GRAPH_OT_select_box(wmOperatorType *ot)
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_boolean(
-      ot->srna, "tweak", 0, "Tweak", "Operator has been activated using a tweak event");
+      ot->srna, "tweak", 0, "Tweak", "Operator has been activated using a click-drag event");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
 
   prop = RNA_def_boolean(
@@ -1093,6 +1080,7 @@ void GRAPH_OT_select_circle(wmOperatorType *ot)
   ot->exec = graph_circle_select_exec;
   ot->poll = graphop_visible_keyframes_poll;
   ot->cancel = WM_gesture_circle_cancel;
+  ot->get_name = ED_select_circle_get_name;
 
   /* flags */
   ot->flag = OPTYPE_UNDO;

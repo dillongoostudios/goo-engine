@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -35,6 +19,7 @@
 #include "GPU_batch.h"
 #include "GPU_batch_presets.h" /* own include */
 #include "GPU_batch_utils.h"
+#include "GPU_context.h"
 
 /* -------------------------------------------------------------------- */
 /** \name Local Structures
@@ -336,11 +321,12 @@ GPUBatch *GPU_batch_preset_quad(void)
     GPUVertBuf *vbo = GPU_vertbuf_create_with_format(preset_2d_format());
     GPU_vertbuf_data_alloc(vbo, 4);
 
-    float pos_data[4][2] = {{0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 1.0f}, {1.0f, 0.0f}};
+    float pos_data[4][2] = {{0.0f, 0.0f}, {0.0f, 1.0f}, {1.0f, 0.0f}, {1.0f, 1.0f}};
     GPU_vertbuf_attr_fill(vbo, g_presets_2d.attr_id.pos, pos_data);
     /* Don't fill the color. */
 
-    g_presets_2d.batch.quad = GPU_batch_create_ex(GPU_PRIM_TRI_FAN, vbo, NULL, GPU_BATCH_OWNS_VBO);
+    g_presets_2d.batch.quad = GPU_batch_create_ex(
+        GPU_PRIM_TRI_STRIP, vbo, NULL, GPU_BATCH_OWNS_VBO);
 
     gpu_batch_presets_register(g_presets_2d.batch.quad);
   }

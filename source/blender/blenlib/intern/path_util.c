@@ -1,25 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * various string, file, list operations.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bli
+ * Various string, file, list operations.
  */
 
 #include <ctype.h>
@@ -69,7 +53,7 @@ static bool BLI_path_is_abs(const char *name);
 
 /* implementation */
 
-int BLI_path_sequence_decode(const char *string, char *head, char *tail, ushort *r_num_len)
+int BLI_path_sequence_decode(const char *string, char *head, char *tail, ushort *r_digits_len)
 {
   uint nums = 0, nume = 0;
   int i;
@@ -114,8 +98,8 @@ int BLI_path_sequence_decode(const char *string, char *head, char *tail, ushort 
         strcpy(head, string);
         head[nums] = 0;
       }
-      if (r_num_len) {
-        *r_num_len = nume - nums + 1;
+      if (r_digits_len) {
+        *r_digits_len = nume - nums + 1;
       }
       return (int)ret;
     }
@@ -130,8 +114,8 @@ int BLI_path_sequence_decode(const char *string, char *head, char *tail, ushort 
      */
     BLI_strncpy(head, string, name_end + 1);
   }
-  if (r_num_len) {
-    *r_num_len = 0;
+  if (r_digits_len) {
+    *r_digits_len = 0;
   }
   return 0;
 }
@@ -329,8 +313,8 @@ bool BLI_filename_make_safe(char *fname)
 
 bool BLI_path_make_safe(char *path)
 {
-  /* Simply apply BLI_filename_make_safe() over each component of the path.
-   * Luckily enough, same 'safe' rules applies to filenames and dirnames. */
+  /* Simply apply #BLI_filename_make_safe() over each component of the path.
+   * Luckily enough, same 'safe' rules applies to file & directory names. */
   char *curr_slash, *curr_path = path;
   bool changed = false;
   bool skip_first = false;
@@ -486,7 +470,7 @@ void BLI_path_rel(char *file, const char *relfile)
      * can happen with old recent-files.txt files */
     BLI_windows_get_default_root_dir(temp);
     ptemp = &temp[2];
-    if (relfile[0] != '\\' && relfile[0] != '/') {
+    if (!ELEM(relfile[0], '\\', '/')) {
       ptemp++;
     }
     BLI_strncpy(ptemp, relfile, FILE_MAX - 3);
@@ -645,7 +629,7 @@ bool BLI_path_parent_dir(char *path)
   BLI_path_normalize(NULL, tmp); /* does all the work of normalizing the path for us */
 
   if (!BLI_path_extension_check(tmp, parent_dir)) {
-    strcpy(path, tmp); /* We assume pardir is always shorter... */
+    strcpy(path, tmp); /* We assume the parent directory is always shorter. */
     return true;
   }
 
@@ -766,14 +750,14 @@ bool BLI_path_frame_range(char *path, int sta, int end, int digits)
   return false;
 }
 
-bool BLI_path_frame_get(char *path, int *r_frame, int *r_numdigits)
+bool BLI_path_frame_get(char *path, int *r_frame, int *r_digits_len)
 {
   if (*path) {
     char *file = (char *)BLI_path_slash_rfind(path);
     char *c;
-    int len, numdigits;
+    int len, digits_len;
 
-    numdigits = *r_numdigits = 0;
+    digits_len = *r_digits_len = 0;
 
     if (file == NULL) {
       file = path;
@@ -795,21 +779,21 @@ bool BLI_path_frame_get(char *path, int *r_frame, int *r_numdigits)
     /* find start of number */
     while (c != (file - 1) && isdigit(*c)) {
       c--;
-      numdigits++;
+      digits_len++;
     }
 
-    if (numdigits) {
+    if (digits_len) {
       char prevchar;
 
       c++;
-      prevchar = c[numdigits];
-      c[numdigits] = 0;
+      prevchar = c[digits_len];
+      c[digits_len] = 0;
 
       /* was the number really an extension? */
       *r_frame = atoi(c);
-      c[numdigits] = prevchar;
+      c[digits_len] = prevchar;
 
-      *r_numdigits = numdigits;
+      *r_digits_len = digits_len;
 
       return true;
     }
@@ -828,7 +812,7 @@ void BLI_path_frame_strip(char *path, char *r_ext)
   char *file = (char *)BLI_path_slash_rfind(path);
   char *c, *suffix;
   int len;
-  int numdigits = 0;
+  int digits_len = 0;
 
   if (file == NULL) {
     file = path;
@@ -852,7 +836,7 @@ void BLI_path_frame_strip(char *path, char *r_ext)
   /* find start of number */
   while (c != (file - 1) && isdigit(*c)) {
     c--;
-    numdigits++;
+    digits_len++;
   }
 
   c++;
@@ -861,7 +845,7 @@ void BLI_path_frame_strip(char *path, char *r_ext)
   BLI_strncpy(r_ext, suffix, suffix_length + 1);
 
   /* replace the number with the suffix and terminate the string */
-  while (numdigits--) {
+  while (digits_len--) {
     *c++ = '#';
   }
   *c = '\0';

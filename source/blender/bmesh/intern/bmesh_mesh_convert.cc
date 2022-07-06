@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bmesh
@@ -621,7 +607,7 @@ static BMVert **bm_to_mesh_vertex_map(BMesh *bm, int ototvert)
  *
  * WARNING: There is an exception to the rule of ignoring coordinates in the destination:
  * that is when shape-key data in `bm` can't be found (which is itself an error/exception).
- * In this case our own rule is violated as the alternative is loosing the shape-data entirely.
+ * In this case our own rule is violated as the alternative is losing the shape-data entirely.
  *
  * Flushing Coordinates Back to the #BMesh
  * ---------------------------------------
@@ -1110,7 +1096,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
               vertMap = bm_to_mesh_vertex_map(bm, ototvert);
             }
 
-            for (i = j = 0; i < hmd->totindex; i++) {
+            for (i = j = 0; i < hmd->indexar_num; i++) {
               if (hmd->indexar[i] < ototvert) {
                 eve = vertMap[hmd->indexar[i]];
 
@@ -1123,7 +1109,7 @@ void BM_mesh_bm_to_me(Main *bmain, BMesh *bm, Mesh *me, const struct BMeshToMesh
               }
             }
 
-            hmd->totindex = j;
+            hmd->indexar_num = j;
           }
         }
       }

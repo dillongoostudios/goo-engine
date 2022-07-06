@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -230,18 +214,14 @@ float (*BKE_editmesh_vert_coords_alloc(struct Depsgraph *depsgraph,
                                        Object *ob,
                                        int *r_vert_len))[3]
 {
-  Mesh *cage;
-  BLI_bitmap *visit_bitmap;
+  Mesh *cage = editbmesh_get_eval_cage(depsgraph, scene, ob, em, &CD_MASK_BAREMESH);
+  float(*cos_cage)[3] = MEM_callocN(sizeof(*cos_cage) * em->bm->totvert, "bmbvh cos_cage");
+
+  /* When initializing cage verts, we only want the first cage coordinate for each vertex,
+   * so that e.g. mirror or array use original vertex coordinates and not mirrored or duplicate. */
+  BLI_bitmap *visit_bitmap = BLI_BITMAP_NEW(em->bm->totvert, __func__);
+
   struct CageUserData data;
-  float(*cos_cage)[3];
-
-  cage = editbmesh_get_eval_cage(depsgraph, scene, ob, em, &CD_MASK_BAREMESH);
-  cos_cage = MEM_callocN(sizeof(*cos_cage) * em->bm->totvert, "bmbvh cos_cage");
-
-  /* when initializing cage verts, we only want the first cage coordinate for each vertex,
-   * so that e.g. mirror or array use original vertex coordinates and not mirrored or duplicate */
-  visit_bitmap = BLI_BITMAP_NEW(em->bm->totvert, __func__);
-
   data.totvert = em->bm->totvert;
   data.cos_cage = cos_cage;
   data.visit_bitmap = visit_bitmap;

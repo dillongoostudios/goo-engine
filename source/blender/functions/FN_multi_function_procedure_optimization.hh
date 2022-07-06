@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -52,9 +38,9 @@ namespace blender::fn::procedure_optimization {
  * For simplicity, and because this is the most common use case, this optimization currently only
  * works on a single chain of instructions. Destruct instructions are not moved across branches.
  *
- * \param procedure The procedure that should be optimized.
- * \param block_end_instr The instruction that points to the last instruction within a linear chain
- *   of instructions. The algorithm moves instructions backward starting at this instruction.
+ * \param procedure: The procedure that should be optimized.
+ * \param block_end_instr: The instruction that points to the last instruction within a linear
+ * chain of instructions. The algorithm moves instructions backward starting at this instruction.
  */
 void move_destructs_up(MFProcedure &procedure, MFInstruction &block_end_instr);
 

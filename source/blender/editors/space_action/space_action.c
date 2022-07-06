@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spaction
@@ -186,12 +170,8 @@ static void action_main_region_draw(const bContext *C, ARegion *region)
   bAnimContext ac;
   View2D *v2d = &region->v2d;
   short marker_flag = 0;
-  short cfra_flag = 0;
 
   UI_view2d_view_ortho(v2d);
-  if (saction->flag & SACTION_DRAWTIME) {
-    cfra_flag |= DRAWCFRA_UNIT_SECONDS;
-  }
 
   /* clear and setup matrix */
   UI_ThemeClearColor(TH_BACK);
@@ -244,6 +224,9 @@ static void action_main_region_draw(const bContext *C, ARegion *region)
 
   /* reset view matrix */
   UI_view2d_view_restore(C);
+
+  /* gizmos */
+  WM_gizmomap_draw(region->gizmo_map, C, WM_GIZMOMAP_DRAWSTEP_2D);
 
   /* scrubbing region */
   ED_time_scrub_draw(region, scene, saction->flag & SACTION_DRAWTIME, true);
@@ -494,12 +477,6 @@ static void saction_main_region_message_subscribe(const wmRegionMessageSubscribe
   /* Timeline depends on scene properties. */
   {
     bool use_preview = (scene->r.flag & SCER_PRV_RANGE);
-    extern PropertyRNA rna_Scene_frame_start;
-    extern PropertyRNA rna_Scene_frame_end;
-    extern PropertyRNA rna_Scene_frame_preview_start;
-    extern PropertyRNA rna_Scene_frame_preview_end;
-    extern PropertyRNA rna_Scene_use_preview_range;
-    extern PropertyRNA rna_Scene_frame_current;
     const PropertyRNA *props[] = {
         use_preview ? &rna_Scene_frame_preview_start : &rna_Scene_frame_start,
         use_preview ? &rna_Scene_frame_preview_end : &rna_Scene_frame_end,
@@ -887,7 +864,7 @@ void ED_spacetype_action(void)
   art->draw_overlay = action_main_region_draw_overlay;
   art->listener = action_main_region_listener;
   art->message_subscribe = saction_main_region_message_subscribe;
-  art->keymapflag = ED_KEYMAP_VIEW2D | ED_KEYMAP_ANIMATION | ED_KEYMAP_FRAMES;
+  art->keymapflag = ED_KEYMAP_GIZMO | ED_KEYMAP_VIEW2D | ED_KEYMAP_ANIMATION | ED_KEYMAP_FRAMES;
 
   BLI_addhead(&st->regiontypes, art);
 

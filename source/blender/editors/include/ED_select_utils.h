@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup editors
@@ -20,11 +6,15 @@
 
 #pragma once
 
+#include "BLI_compiler_attrs.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 struct KDTree_1d;
+struct wmOperator;
+struct wmOperatorType;
 
 enum {
   SEL_TOGGLE = 0,
@@ -83,6 +73,46 @@ bool ED_select_similar_compare_float_tree(const struct KDTree_1d *tree,
  * Utility to use for selection operations that run multiple times (circle select).
  */
 eSelectOp ED_select_op_modal(eSelectOp sel_op, bool is_first);
+
+/** Argument passed to picking functions. */
+struct SelectPick_Params {
+  /**
+   * - #SEL_OP_ADD named "extend" from operators.
+   * - #SEL_OP_SUB named "deselect" from operators.
+   * - #SEL_OP_XOR named "toggle" from operators.
+   * - #SEL_OP_AND (never used for picking).
+   * - #SEL_OP_SET use when "extend", "deselect" and "toggle" are all disabled.
+   */
+  eSelectOp sel_op;
+  /** Deselect all, even when there is nothing found at the cursor location. */
+  bool deselect_all;
+  /**
+   * When selecting an element that is already selected, do nothing (passthrough).
+   * don't even make it active.
+   * Use to implement tweaking to move the selection without first de-selecting.
+   */
+  bool select_passthrough;
+};
+
+/**
+ * Utility to get #eSelectPickMode from booleans for convenience.
+ */
+eSelectOp ED_select_op_from_operator(struct PointerRNA *ptr)
+    ATTR_NONNULL(1) ATTR_WARN_UNUSED_RESULT;
+
+/**
+ * Initialize `params` from `op`,
+ * these properties are defined by #WM_operator_properties_mouse_select.
+ */
+void ED_select_pick_params_from_operator(struct PointerRNA *ptr, struct SelectPick_Params *params)
+    ATTR_NONNULL(1, 2);
+
+/**
+ * Get-name callback for #wmOperatorType.get_name, this is mainly useful so the selection
+ * action is shown in the status-bar.
+ */
+const char *ED_select_pick_get_name(struct wmOperatorType *ot, PointerRNA *ptr);
+const char *ED_select_circle_get_name(struct wmOperatorType *ot, PointerRNA *ptr);
 
 #ifdef __cplusplus
 }

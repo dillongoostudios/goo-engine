@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 /** \file
  * \ingroup DNA
  *
@@ -73,13 +57,14 @@ typedef struct StripCrop {
 } StripCrop;
 
 typedef struct StripTransform {
-  int xofs;
-  int yofs;
+  float xofs;
+  float yofs;
   float scale_x;
   float scale_y;
   float rotation;
   /** 0-1 range, use SEQ_image_transform_origin_offset_pixelspace_get to convert to pixel space. */
   float origin[2];
+  int filter;
 } StripTransform;
 
 typedef struct StripColorBalance {
@@ -220,6 +205,7 @@ typedef struct Sequence {
 
   /** List of strips for metastrips. */
   ListBase seqbase;
+  ListBase channels; /* SeqTimelineChannel */
 
   /** The linked "bSound" object. */
   struct bSound *sound;
@@ -269,10 +255,18 @@ typedef struct Sequence {
 typedef struct MetaStack {
   struct MetaStack *next, *prev;
   ListBase *oldbasep;
+  ListBase *old_channels;
   Sequence *parseq;
   /* the startdisp/enddisp when entering the meta */
   int disp_range[2];
 } MetaStack;
+
+typedef struct SeqTimelineChannel {
+  struct SeqTimelineChannel *next, *prev;
+  char name[64];
+  int index;
+  int flag;
+} SeqTimelineChannel;
 
 typedef struct EditingRuntime {
   struct SequenceLookup *sequence_lookup;
@@ -281,9 +275,12 @@ typedef struct EditingRuntime {
 typedef struct Editing {
   /** Pointer to the current list of seq's being edited (can be within a meta strip). */
   ListBase *seqbasep;
+  ListBase *displayed_channels;
+  void *_pad0;
   /** Pointer to the top-most seq's. */
   ListBase seqbase;
   ListBase metastack;
+  ListBase channels; /* SeqTimelineChannel */
 
   /* Context vars, used to be static */
   Sequence *act_seq;
@@ -565,7 +562,7 @@ enum {
   SEQ_MAKE_FLOAT = (1 << 13),
   SEQ_LOCK = (1 << 14),
   SEQ_USE_PROXY = (1 << 15),
-  SEQ_FLAG_UNUSED_23 = (1 << 16), /* cleared */
+  SEQ_IGNORE_CHANNEL_LOCK = (1 << 16),
   SEQ_FLAG_UNUSED_22 = (1 << 17), /* cleared */
   SEQ_FLAG_UNUSED_18 = (1 << 18), /* cleared */
   SEQ_FLAG_UNUSED_19 = (1 << 19), /* cleared */
@@ -787,6 +784,19 @@ typedef enum SequenceColorTag {
 
   SEQUENCE_COLOR_TOT,
 } SequenceColorTag;
+
+/* Sequence->StripTransform->filter */
+enum {
+  SEQ_TRANSFORM_FILTER_NEAREST = 0,
+  SEQ_TRANSFORM_FILTER_BILINEAR = 1,
+};
+
+typedef enum eSeqChannelFlag {
+  SEQ_CHANNEL_LOCK = (1 << 0),
+  SEQ_CHANNEL_MUTE = (1 << 1),
+} eSeqChannelFlag;
+
+/** \} */
 
 #ifdef __cplusplus
 }

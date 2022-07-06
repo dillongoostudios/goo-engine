@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Peter Schlaile <peter [at] schlaile [dot] de> 2011
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2011 Peter Schlaile <peter [at] schlaile [dot] de>. */
 
 /** \file
  * \ingroup imbuf
@@ -287,7 +272,7 @@ int IMB_indexer_get_frame_index(struct anim_index *idx, int frameno)
   int middle;
   int first = 0;
 
-  /* bsearch (lower bound) the right index */
+  /* Binary-search (lower bound) the right index. */
 
   while (len > 0) {
     half = len >> 1;
@@ -1138,6 +1123,9 @@ static int indexer_performance_get_decode_rate(FFmpegIndexBuilderContext *contex
     }
   }
 
+  av_packet_free(&packet);
+  av_frame_free(&in_frame);
+
   avcodec_flush_buffers(context->iCodecCtx);
   av_seek_frame(context->iFormatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
   return frames_decoded;
@@ -1172,12 +1160,14 @@ static int indexer_performance_get_max_gop_size(FFmpegIndexBuilderContext *conte
     }
   }
 
+  av_packet_free(&packet);
+
   av_seek_frame(context->iFormatCtx, -1, 0, AVSEEK_FLAG_BACKWARD);
   return max_gop;
 }
 
 /* Assess scrubbing performance of provided file. This function is not meant to be very exact.
- * It compares number number of frames decoded in reasonable time with largest detected GOP size.
+ * It compares number of frames decoded in reasonable time with largest detected GOP size.
  * Because seeking happens in single GOP, it means, that maximum seek time can be detected this
  * way.
  * Since proxies use GOP size of 10 frames, skip building if detected GOP size is less or
@@ -1329,14 +1319,14 @@ static void index_rebuild_fallback(FallbackIndexBuilderContext *context,
                                    short *do_update,
                                    float *progress)
 {
-  int cnt = IMB_anim_get_duration(context->anim, IMB_TC_NONE);
+  int count = IMB_anim_get_duration(context->anim, IMB_TC_NONE);
   int i, pos;
   struct anim *anim = context->anim;
 
-  for (pos = 0; pos < cnt; pos++) {
+  for (pos = 0; pos < count; pos++) {
     struct ImBuf *ibuf = IMB_anim_absolute(anim, pos, IMB_TC_NONE, IMB_PROXY_NONE);
     struct ImBuf *tmp_ibuf = IMB_dupImBuf(ibuf);
-    float next_progress = (float)pos / (float)cnt;
+    float next_progress = (float)pos / (float)count;
 
     if (*progress != next_progress) {
       *progress = next_progress;

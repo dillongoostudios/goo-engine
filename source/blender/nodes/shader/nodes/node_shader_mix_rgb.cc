@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup shdnodes
@@ -100,7 +84,7 @@ static int gpu_shader_mix_rgb(GPUMaterial *mat,
   return 0;
 }
 
-class MixRGBFunction : public blender::fn::MultiFunction {
+class MixRGBFunction : public fn::MultiFunction {
  private:
   bool clamp_;
   int type_;
@@ -108,31 +92,29 @@ class MixRGBFunction : public blender::fn::MultiFunction {
  public:
   MixRGBFunction(bool clamp, int type) : clamp_(clamp), type_(type)
   {
-    static blender::fn::MFSignature signature = create_signature();
+    static fn::MFSignature signature = create_signature();
     this->set_signature(&signature);
   }
 
-  static blender::fn::MFSignature create_signature()
+  static fn::MFSignature create_signature()
   {
-    blender::fn::MFSignatureBuilder signature{"MixRGB"};
+    fn::MFSignatureBuilder signature{"MixRGB"};
     signature.single_input<float>("Fac");
-    signature.single_input<blender::ColorGeometry4f>("Color1");
-    signature.single_input<blender::ColorGeometry4f>("Color2");
-    signature.single_output<blender::ColorGeometry4f>("Color");
+    signature.single_input<ColorGeometry4f>("Color1");
+    signature.single_input<ColorGeometry4f>("Color2");
+    signature.single_output<ColorGeometry4f>("Color");
     return signature.build();
   }
 
-  void call(blender::IndexMask mask,
-            blender::fn::MFParams params,
-            blender::fn::MFContext UNUSED(context)) const override
+  void call(IndexMask mask, fn::MFParams params, fn::MFContext UNUSED(context)) const override
   {
-    const blender::VArray<float> &fac = params.readonly_single_input<float>(0, "Fac");
-    const blender::VArray<blender::ColorGeometry4f> &col1 =
-        params.readonly_single_input<blender::ColorGeometry4f>(1, "Color1");
-    const blender::VArray<blender::ColorGeometry4f> &col2 =
-        params.readonly_single_input<blender::ColorGeometry4f>(2, "Color2");
-    blender::MutableSpan<blender::ColorGeometry4f> results =
-        params.uninitialized_single_output<blender::ColorGeometry4f>(3, "Color");
+    const VArray<float> &fac = params.readonly_single_input<float>(0, "Fac");
+    const VArray<ColorGeometry4f> &col1 = params.readonly_single_input<ColorGeometry4f>(1,
+                                                                                        "Color1");
+    const VArray<ColorGeometry4f> &col2 = params.readonly_single_input<ColorGeometry4f>(2,
+                                                                                        "Color2");
+    MutableSpan<ColorGeometry4f> results = params.uninitialized_single_output<ColorGeometry4f>(
+        3, "Color");
 
     for (int64_t i : mask) {
       results[i] = col1[i];
@@ -147,7 +129,7 @@ class MixRGBFunction : public blender::fn::MultiFunction {
   }
 };
 
-static void sh_node_mix_rgb_build_multi_function(blender::nodes::NodeMultiFunctionBuilder &builder)
+static void sh_node_mix_rgb_build_multi_function(NodeMultiFunctionBuilder &builder)
 {
   bNode &node = builder.node();
   bool clamp = node.custom2 & SHD_MIXRGB_CLAMP;

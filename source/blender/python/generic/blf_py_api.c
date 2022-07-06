@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pygen
@@ -410,41 +396,41 @@ static PyObject *py_blf_shadow_offset(PyObject *UNUSED(self), PyObject *args)
 }
 
 PyDoc_STRVAR(py_blf_load_doc,
-             ".. function:: load(filename)\n"
+             ".. function:: load(filepath)\n"
              "\n"
              "   Load a new font.\n"
              "\n"
-             "   :arg filename: the filename of the font.\n"
-             "   :type filename: string\n"
+             "   :arg filepath: the filepath of the font.\n"
+             "   :type filepath: string\n"
              "   :return: the new font's fontid or -1 if there was an error.\n"
              "   :rtype: integer\n");
 static PyObject *py_blf_load(PyObject *UNUSED(self), PyObject *args)
 {
-  const char *filename;
+  const char *filepath;
 
-  if (!PyArg_ParseTuple(args, "s:blf.load", &filename)) {
+  if (!PyArg_ParseTuple(args, "s:blf.load", &filepath)) {
     return NULL;
   }
 
-  return PyLong_FromLong(BLF_load(filename));
+  return PyLong_FromLong(BLF_load(filepath));
 }
 
 PyDoc_STRVAR(py_blf_unload_doc,
-             ".. function:: unload(filename)\n"
+             ".. function:: unload(filepath)\n"
              "\n"
              "   Unload an existing font.\n"
              "\n"
-             "   :arg filename: the filename of the font.\n"
-             "   :type filename: string\n");
+             "   :arg filepath: the filepath of the font.\n"
+             "   :type filepath: string\n");
 static PyObject *py_blf_unload(PyObject *UNUSED(self), PyObject *args)
 {
-  const char *filename;
+  const char *filepath;
 
-  if (!PyArg_ParseTuple(args, "s:blf.unload", &filename)) {
+  if (!PyArg_ParseTuple(args, "s:blf.unload", &filepath)) {
     return NULL;
   }
 
-  BLF_unload(filename);
+  BLF_unload(filepath);
 
   Py_RETURN_NONE;
 }

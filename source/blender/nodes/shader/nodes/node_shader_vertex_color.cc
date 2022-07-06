@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -38,14 +22,7 @@ static void node_shader_buts_vertex_color(uiLayout *layout, bContext *C, Pointer
   if (obptr.data && RNA_enum_get(&obptr, "type") == OB_MESH) {
     PointerRNA dataptr = RNA_pointer_get(&obptr, "data");
 
-    if (U.experimental.use_sculpt_vertex_colors &&
-        RNA_collection_length(&dataptr, "sculpt_vertex_colors")) {
-      uiItemPointerR(
-          layout, ptr, "layer_name", &dataptr, "sculpt_vertex_colors", "", ICON_GROUP_VCOL);
-    }
-    else {
-      uiItemPointerR(layout, ptr, "layer_name", &dataptr, "vertex_colors", "", ICON_GROUP_VCOL);
-    }
+    uiItemPointerR(layout, ptr, "layer_name", &dataptr, "color_attributes", "", ICON_GROUP_VCOL);
   }
   else {
     uiItemL(layout, TIP_("No mesh in active object"), ICON_ERROR);
@@ -65,11 +42,20 @@ static int node_shader_gpu_vertex_color(GPUMaterial *mat,
                                         GPUNodeStack *out)
 {
   NodeShaderVertexColor *vertexColor = (NodeShaderVertexColor *)node->storage;
-  if (U.experimental.use_sculpt_vertex_colors) {
-    GPUNodeLink *vertexColorLink = GPU_attribute(mat, CD_PROP_COLOR, vertexColor->layer_name);
-    return GPU_stack_link(mat, node, "node_vertex_color", in, out, vertexColorLink);
+  /* NOTE: using CD_AUTO_FROM_NAME instead of CD_MCOL or CD_PROP_COLOR for named attributes
+   * as geometry nodes may overwrite data which will also change the CustomDataType.
+   * This will also make EEVEE and Cycles
+   * consistent. See T93179. */
+
+  GPUNodeLink *vertexColorLink;
+
+  if (vertexColor->layer_name[0]) {
+    vertexColorLink = GPU_attribute(mat, CD_AUTO_FROM_NAME, vertexColor->layer_name);
   }
-  GPUNodeLink *vertexColorLink = GPU_attribute(mat, CD_MCOL, vertexColor->layer_name);
+  else { /* Fall back on active render color attribute. */
+    vertexColorLink = GPU_attribute(mat, CD_MCOL, vertexColor->layer_name);
+  }
+
   return GPU_stack_link(mat, node, "node_vertex_color", in, out, vertexColorLink);
 }
 
@@ -81,7 +67,7 @@ void register_node_type_sh_vertex_color()
 
   static bNodeType ntype;
 
-  sh_node_type_base(&ntype, SH_NODE_VERTEX_COLOR, "Vertex Color", NODE_CLASS_INPUT);
+  sh_node_type_base(&ntype, SH_NODE_VERTEX_COLOR, "Color Attribute", NODE_CLASS_INPUT);
   ntype.declare = file_ns::node_declare;
   ntype.draw_buttons = file_ns::node_shader_buts_vertex_color;
   node_type_init(&ntype, file_ns::node_shader_init_vertex_color);

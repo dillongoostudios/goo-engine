@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2022, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2022 Blender Foundation. */
 
 #pragma once
 
@@ -27,8 +12,11 @@
 #include <iostream>
 #include <type_traits>
 
-#include "BLI_math_vector.hh"
 #include "BLI_utildefines.h"
+
+#ifdef WITH_GMP
+#  include "BLI_math_mpq.hh"
+#endif
 
 namespace blender {
 
@@ -55,6 +43,28 @@ template<typename T> struct vec_struct_base<T, 3> {
 template<typename T> struct vec_struct_base<T, 4> {
   T x, y, z, w;
 };
+
+namespace math {
+
+template<typename T> uint64_t vector_hash(const T &vec)
+{
+  BLI_STATIC_ASSERT(T::type_length <= 4, "Longer types need to implement vector_hash themself.");
+  const typename T::uint_type &uvec = *reinterpret_cast<const typename T::uint_type *>(&vec);
+  uint64_t result;
+  result = uvec[0] * uint64_t(435109);
+  if constexpr (T::type_length > 1) {
+    result ^= uvec[1] * uint64_t(380867);
+  }
+  if constexpr (T::type_length > 2) {
+    result ^= uvec[2] * uint64_t(1059217);
+  }
+  if constexpr (T::type_length > 3) {
+    result ^= uvec[3] * uint64_t(2002613);
+  }
+  return result;
+}
+
+}  // namespace math
 
 template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size> {
 
@@ -191,6 +201,14 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
     }
   }
 
+  template<typename U, BLI_ENABLE_IF((std::is_convertible_v<U, T>))>
+  explicit vec_base(const U *ptr)
+  {
+    for (int i = 0; i < Size; i++) {
+      (*this)[i] = ptr[i];
+    }
+  }
+
   vec_base(const T (*ptr)[Size]) : vec_base(static_cast<const T *>(ptr[0]))
   {
   }
@@ -311,7 +329,7 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
     BLI_VEC_OP_IMPL(ret, i, ret[i] = a[i] * b[i]);
   }
 
-  friend vec_base operator*(const vec_base &a, T b)
+  template<typename FactorT> friend vec_base operator*(const vec_base &a, FactorT b)
   {
     BLI_VEC_OP_IMPL(ret, i, ret[i] = a[i] * b);
   }
@@ -333,7 +351,9 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
 
   friend vec_base operator/(const vec_base &a, const vec_base &b)
   {
-    BLI_assert(!math::is_any_zero(b));
+    for (int i = 0; i < Size; i++) {
+      BLI_assert(b[i] != T(0));
+    }
     BLI_VEC_OP_IMPL(ret, i, ret[i] = a[i] / b[i]);
   }
 
@@ -345,7 +365,9 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
 
   friend vec_base operator/(T a, const vec_base &b)
   {
-    BLI_assert(!math::is_any_zero(b));
+    for (int i = 0; i < Size; i++) {
+      BLI_assert(b[i] != T(0));
+    }
     BLI_VEC_OP_IMPL(ret, i, ret[i] = a / b[i]);
   }
 
@@ -357,7 +379,7 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
 
   vec_base &operator/=(const vec_base &b)
   {
-    BLI_assert(!math::is_any_zero(b));
+    BLI_assert(b != T(0));
     BLI_VEC_OP_IMPL_SELF(i, (*this)[i] /= b[i]);
   }
 
@@ -489,7 +511,9 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
 
   BLI_INT_OP(T) friend vec_base operator%(const vec_base &a, const vec_base &b)
   {
-    BLI_assert(!math::is_any_zero(b));
+    for (int i = 0; i < Size; i++) {
+      BLI_assert(b[i] != T(0));
+    }
     BLI_VEC_OP_IMPL(ret, i, ret[i] = a[i] % b[i]);
   }
 
@@ -501,7 +525,7 @@ template<typename T, int Size> struct vec_base : public vec_struct_base<T, Size>
 
   BLI_INT_OP(T) friend vec_base operator%(T a, const vec_base &b)
   {
-    BLI_assert(!math::is_any_zero(b));
+    BLI_assert(b != T(0));
     BLI_VEC_OP_IMPL(ret, i, ret[i] = a % b[i]);
   }
 
@@ -554,6 +578,8 @@ using int4 = vec_base<int32_t, 4>;
 using uint2 = vec_base<uint32_t, 2>;
 using uint3 = vec_base<uint32_t, 3>;
 using uint4 = vec_base<uint32_t, 4>;
+
+using ushort2 = vec_base<uint16_t, 2>;
 
 using float2 = vec_base<float, 2>;
 using float3 = vec_base<float, 3>;

@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #include "integrator/render_scheduler.h"
 
@@ -33,7 +20,7 @@ RenderScheduler::RenderScheduler(TileManager &tile_manager, const SessionParams 
       background_(params.background),
       pixel_size_(params.pixel_size),
       tile_manager_(tile_manager),
-      default_start_resolution_divider_(pixel_size_ * 8)
+      default_start_resolution_divider_(params.use_resolution_divider ? pixel_size_ * 8 : 0)
 {
   use_progressive_noise_floor_ = !background_;
 }
@@ -132,7 +119,7 @@ void RenderScheduler::reset(const BufferParams &buffer_params, int num_samples, 
 
   /* In background mode never do lower resolution render preview, as it is not really supported
    * by the software. */
-  if (background_) {
+  if (background_ || start_resolution_divider_ == 0) {
     state_.resolution_divider = 1;
   }
   else {
@@ -257,7 +244,7 @@ void RenderScheduler::render_work_reschedule_on_cancel(RenderWork &render_work)
   render_work.tile.write = tile_write;
   render_work.full.write = full_write;
 
-  /* Do not write tile if it has zero samples it it, treat it similarly to all other tiles which
+  /* Do not write tile if it has zero samples in it, treat it similarly to all other tiles which
    * got canceled. */
   if (!state_.tile_result_was_written && has_rendered_samples) {
     render_work.tile.write = true;
@@ -763,6 +750,11 @@ double RenderScheduler::guess_display_update_interval_in_seconds_for_num_samples
 int RenderScheduler::calculate_num_samples_per_update() const
 {
   const double time_per_sample_average = path_trace_time_.get_average();
+  /* Fall back to 1 sample if we have not recorded a time yet. */
+  if (time_per_sample_average == 0.0) {
+    return 1;
+  }
+
   const double num_samples_in_second = pixel_size_ * pixel_size_ / time_per_sample_average;
 
   const double update_interval_in_seconds = guess_display_update_interval_in_seconds();
@@ -1063,6 +1055,10 @@ bool RenderScheduler::work_need_rebalance()
 
 void RenderScheduler::update_start_resolution_divider()
 {
+  if (default_start_resolution_divider_ == 0) {
+    return;
+  }
+
   if (start_resolution_divider_ == 0) {
     /* Resolution divider has never been calculated before: use default resolution, so that we have
      * somewhat good initial behavior, giving a chance to collect real numbers. */

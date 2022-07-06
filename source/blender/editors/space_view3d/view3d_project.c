@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spview3d
@@ -292,7 +276,7 @@ float ED_view3d_pixel_size_no_ui_scale(const RegionView3D *rv3d, const float co[
   return mul_project_m4_v3_zfac(rv3d->persmat, co) * rv3d->pixsize;
 }
 
-float ED_view3d_calc_zfac(const RegionView3D *rv3d, const float co[3], bool *r_flip)
+float ED_view3d_calc_zfac_ex(const RegionView3D *rv3d, const float co[3], bool *r_flip)
 {
   float zfac = mul_project_m4_v3_zfac(rv3d->persmat, co);
 
@@ -315,10 +299,15 @@ float ED_view3d_calc_zfac(const RegionView3D *rv3d, const float co[3], bool *r_f
   return zfac;
 }
 
+float ED_view3d_calc_zfac(const RegionView3D *rv3d, const float co[3])
+{
+  return ED_view3d_calc_zfac_ex(rv3d, co, NULL);
+}
+
 float ED_view3d_calc_depth_for_comparison(const RegionView3D *rv3d, const float co[3])
 {
   if (rv3d->is_persp) {
-    return ED_view3d_calc_zfac(rv3d, co, NULL);
+    return ED_view3d_calc_zfac(rv3d, co);
   }
   return -dot_v3v3(rv3d->viewinv[2], co);
 }
@@ -452,8 +441,8 @@ bool view3d_get_view_aligned_coordinate(ARegion *region,
 
   if (ret == V3D_PROJ_RET_OK) {
     const float mval_f[2] = {(float)(mval_cpy[0] - mval[0]), (float)(mval_cpy[1] - mval[1])};
-    const float zfac = ED_view3d_calc_zfac(rv3d, fp, NULL);
-    ED_view3d_win_to_delta(region, mval_f, dvec, zfac);
+    const float zfac = ED_view3d_calc_zfac(rv3d, fp);
+    ED_view3d_win_to_delta(region, mval_f, zfac, dvec);
     sub_v3_v3(fp, dvec);
 
     return true;
@@ -600,57 +589,57 @@ bool ED_view3d_win_to_3d_on_plane_with_fallback(const ARegion *region,
 }
 
 void ED_view3d_win_to_delta(const ARegion *region,
-                            const float mval[2],
-                            float out[3],
-                            const float zfac)
+                            const float xy_delta[2],
+                            const float zfac,
+                            float r_out[3])
 {
   RegionView3D *rv3d = region->regiondata;
   float dx, dy;
 
-  dx = 2.0f * mval[0] * zfac / region->winx;
-  dy = 2.0f * mval[1] * zfac / region->winy;
+  dx = 2.0f * xy_delta[0] * zfac / region->winx;
+  dy = 2.0f * xy_delta[1] * zfac / region->winy;
 
-  out[0] = (rv3d->persinv[0][0] * dx + rv3d->persinv[1][0] * dy);
-  out[1] = (rv3d->persinv[0][1] * dx + rv3d->persinv[1][1] * dy);
-  out[2] = (rv3d->persinv[0][2] * dx + rv3d->persinv[1][2] * dy);
+  r_out[0] = (rv3d->persinv[0][0] * dx + rv3d->persinv[1][0] * dy);
+  r_out[1] = (rv3d->persinv[0][1] * dx + rv3d->persinv[1][1] * dy);
+  r_out[2] = (rv3d->persinv[0][2] * dx + rv3d->persinv[1][2] * dy);
 }
 
-void ED_view3d_win_to_origin(const ARegion *region, const float mval[2], float out[3])
+void ED_view3d_win_to_origin(const ARegion *region, const float mval[2], float r_out[3])
 {
   RegionView3D *rv3d = region->regiondata;
   if (rv3d->is_persp) {
-    copy_v3_v3(out, rv3d->viewinv[3]);
+    copy_v3_v3(r_out, rv3d->viewinv[3]);
   }
   else {
-    out[0] = 2.0f * mval[0] / region->winx - 1.0f;
-    out[1] = 2.0f * mval[1] / region->winy - 1.0f;
+    r_out[0] = 2.0f * mval[0] / region->winx - 1.0f;
+    r_out[1] = 2.0f * mval[1] / region->winy - 1.0f;
 
     if (rv3d->persp == RV3D_CAMOB) {
-      out[2] = -1.0f;
+      r_out[2] = -1.0f;
     }
     else {
-      out[2] = 0.0f;
+      r_out[2] = 0.0f;
     }
 
-    mul_project_m4_v3(rv3d->persinv, out);
+    mul_project_m4_v3(rv3d->persinv, r_out);
   }
 }
 
-void ED_view3d_win_to_vector(const ARegion *region, const float mval[2], float out[3])
+void ED_view3d_win_to_vector(const ARegion *region, const float mval[2], float r_out[3])
 {
   RegionView3D *rv3d = region->regiondata;
 
   if (rv3d->is_persp) {
-    out[0] = 2.0f * (mval[0] / region->winx) - 1.0f;
-    out[1] = 2.0f * (mval[1] / region->winy) - 1.0f;
-    out[2] = -0.5f;
-    mul_project_m4_v3(rv3d->persinv, out);
-    sub_v3_v3(out, rv3d->viewinv[3]);
+    r_out[0] = 2.0f * (mval[0] / region->winx) - 1.0f;
+    r_out[1] = 2.0f * (mval[1] / region->winy) - 1.0f;
+    r_out[2] = -0.5f;
+    mul_project_m4_v3(rv3d->persinv, r_out);
+    sub_v3_v3(r_out, rv3d->viewinv[3]);
   }
   else {
-    negate_v3_v3(out, rv3d->viewinv[2]);
+    negate_v3_v3(r_out, rv3d->viewinv[2]);
   }
-  normalize_v3(out);
+  normalize_v3(r_out);
 }
 
 bool ED_view3d_win_to_segment_clipped(struct Depsgraph *depsgraph,

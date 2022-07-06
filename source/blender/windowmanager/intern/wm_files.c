@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup wm
@@ -262,7 +246,9 @@ static void wm_window_substitute_old(wmWindowManager *oldwm,
   oldwin->gpuctx = NULL;
 
   win->eventstate = oldwin->eventstate;
+  win->event_last_handled = oldwin->event_last_handled;
   oldwin->eventstate = NULL;
+  oldwin->event_last_handled = NULL;
 
   /* Ensure proper screen re-scaling. */
   win->sizex = oldwin->sizex;
@@ -874,18 +860,16 @@ static void file_read_reports_finalize(BlendFileReadReport *bf_reports)
                 duration_lib_override_recursive_resync_seconds);
   }
 
-  if (bf_reports->count.linked_proxies != 0 ||
-      bf_reports->count.proxies_to_lib_overrides_success != 0 ||
+  if (bf_reports->count.proxies_to_lib_overrides_success != 0 ||
       bf_reports->count.proxies_to_lib_overrides_failures != 0) {
-    BKE_reportf(bf_reports->reports,
-                RPT_WARNING,
-                "Proxies are deprecated (%d proxies were automatically converted to library "
-                "overrides, %d proxies could not be converted and %d linked proxies were kept "
-                "untouched). If you need to keep proxies for the time being, please disable the "
-                "`Proxy to Override Auto Conversion` in Experimental user preferences",
-                bf_reports->count.proxies_to_lib_overrides_success,
-                bf_reports->count.proxies_to_lib_overrides_failures,
-                bf_reports->count.linked_proxies);
+    BKE_reportf(
+        bf_reports->reports,
+        RPT_WARNING,
+        "Proxies have been removed from Blender (%d proxies were automatically converted "
+        "to library overrides, %d proxies could not be converted and were cleared). "
+        "Please also consider re-saving any library .blend file with the newest Blender version",
+        bf_reports->count.proxies_to_lib_overrides_success,
+        bf_reports->count.proxies_to_lib_overrides_failures);
   }
 
   if (bf_reports->count.sequence_strips_skipped != 0) {
@@ -1776,11 +1760,9 @@ static bool wm_file_write(bContext *C,
   /* Enforce full override check/generation on file save. */
   BKE_lib_override_library_main_operations_create(bmain, true);
 
-  if (!G.background && BLI_thread_is_main()) {
-    /* Redraw to remove menus that might be open.
-     * But only in the main thread otherwise this can crash, see T92704. */
-    WM_redraw_windows(C);
-  }
+  /* NOTE: Ideally we would call `WM_redraw_windows` here to remove any open menus. But we
+   * can crash if saving from a script, see T92704 & T97627. Just checking `!G.background
+   * && BLI_thread_is_main()` is not sufficient to fix this. */
 
   /* don't forget not to return without! */
   WM_cursor_wait(true);
@@ -1984,7 +1966,7 @@ void wm_autosave_timer_end(wmWindowManager *wm)
   }
 }
 
-void WM_autosave_init(wmWindowManager *wm)
+void WM_file_autosave_init(wmWindowManager *wm)
 {
   wm_autosave_timer_begin(wm);
 }
@@ -2015,20 +1997,20 @@ void wm_autosave_timer(Main *bmain, wmWindowManager *wm, wmTimer *UNUSED(wt))
 
 void wm_autosave_delete(void)
 {
-  char filename[FILE_MAX];
+  char filepath[FILE_MAX];
 
-  wm_autosave_location(filename);
+  wm_autosave_location(filepath);
 
-  if (BLI_exists(filename)) {
+  if (BLI_exists(filepath)) {
     char str[FILE_MAX];
     BLI_join_dirfile(str, sizeof(str), BKE_tempdir_base(), BLENDER_QUIT_FILE);
 
     /* if global undo; remove tempsave, otherwise rename */
     if (U.uiflag & USER_GLOBALUNDO) {
-      BLI_delete(filename, false, false);
+      BLI_delete(filepath, false, false);
     }
     else {
-      BLI_rename(filename, str);
+      BLI_rename(filepath, str);
     }
   }
 }
@@ -2440,7 +2422,7 @@ static int wm_homefile_read_exec(bContext *C, wmOperator *op)
 static void wm_homefile_read_after_dialog_callback(bContext *C, void *user_data)
 {
   WM_operator_name_call_with_properties(
-      C, "WM_OT_read_homefile", WM_OP_EXEC_DEFAULT, (IDProperty *)user_data);
+      C, "WM_OT_read_homefile", WM_OP_EXEC_DEFAULT, (IDProperty *)user_data, NULL);
 }
 
 static int wm_homefile_read_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
@@ -2593,7 +2575,7 @@ static int wm_open_mainfile_dispatch(bContext *C, wmOperator *op);
 static void wm_open_mainfile_after_dialog_callback(bContext *C, void *user_data)
 {
   WM_operator_name_call_with_properties(
-      C, "WM_OT_open_mainfile", WM_OP_INVOKE_DEFAULT, (IDProperty *)user_data);
+      C, "WM_OT_open_mainfile", WM_OP_INVOKE_DEFAULT, (IDProperty *)user_data, NULL);
 }
 
 static int wm_open_mainfile__discard_changes(bContext *C, wmOperator *op)
@@ -2706,7 +2688,7 @@ static char *wm_open_mainfile_description(struct bContext *UNUSED(C),
 
   BLI_stat_t stats;
   if (BLI_stat(path, &stats) == -1) {
-    return BLI_sprintfN("%s\n\n%s", path, N_("File Not Found"));
+    return BLI_sprintfN("%s\n\n%s", path, TIP_("File Not Found"));
   }
 
   /* Date. */
@@ -2716,7 +2698,7 @@ static char *wm_open_mainfile_description(struct bContext *UNUSED(C),
   BLI_filelist_entry_datetime_to_string(
       NULL, (int64_t)stats.st_mtime, false, time_st, date_st, &is_today, &is_yesterday);
   if (is_today || is_yesterday) {
-    BLI_strncpy(date_st, is_today ? N_("Today") : N_("Yesterday"), sizeof(date_st));
+    BLI_strncpy(date_st, is_today ? TIP_("Today") : TIP_("Yesterday"), sizeof(date_st));
   }
 
   /* Size. */
@@ -2724,7 +2706,7 @@ static char *wm_open_mainfile_description(struct bContext *UNUSED(C),
   BLI_filelist_entry_size_to_string(NULL, (uint64_t)stats.st_size, false, size_str);
 
   return BLI_sprintfN(
-      "%s\n\n%s: %s %s\n%s: %s", path, N_("Modified"), date_st, time_st, N_("Size"), size_str);
+      "%s\n\n%s: %s %s\n%s: %s", path, TIP_("Modified"), date_st, time_st, TIP_("Size"), size_str);
 }
 
 /* currently fits in a pointer */
@@ -2878,7 +2860,7 @@ void WM_OT_revert_mainfile(wmOperatorType *ot)
 /** \name Recover Last Session Operator
  * \{ */
 
-bool WM_recover_last_session(bContext *C, ReportList *reports)
+bool WM_file_recover_last_session(bContext *C, ReportList *reports)
 {
   char filepath[FILE_MAX];
   BLI_join_dirfile(filepath, sizeof(filepath), BKE_tempdir_base(), BLENDER_QUIT_FILE);
@@ -2892,7 +2874,7 @@ static int wm_recover_last_session_exec(bContext *C, wmOperator *op)
 {
   wm_open_init_use_scripts(op, true);
   SET_FLAG_FROM_TEST(G.f, RNA_boolean_get(op->ptr, "use_scripts"), G_FLAG_SCRIPT_AUTOEXEC);
-  if (WM_recover_last_session(C, op->reports)) {
+  if (WM_file_recover_last_session(C, op->reports)) {
     if (!G.background) {
       wmOperatorType *ot = op->type;
       PointerRNA *props_ptr = MEM_callocN(sizeof(PointerRNA), __func__);
@@ -2908,7 +2890,7 @@ static int wm_recover_last_session_exec(bContext *C, wmOperator *op)
 static void wm_recover_last_session_after_dialog_callback(bContext *C, void *user_data)
 {
   WM_operator_name_call_with_properties(
-      C, "WM_OT_recover_last_session", WM_OP_EXEC_DEFAULT, (IDProperty *)user_data);
+      C, "WM_OT_recover_last_session", WM_OP_EXEC_DEFAULT, (IDProperty *)user_data, NULL);
 }
 
 static int wm_recover_last_session_invoke(bContext *C,
@@ -2975,10 +2957,10 @@ static int wm_recover_auto_save_exec(bContext *C, wmOperator *op)
 
 static int wm_recover_auto_save_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
 {
-  char filename[FILE_MAX];
+  char filepath[FILE_MAX];
 
-  wm_autosave_location(filename);
-  RNA_string_set(op->ptr, "filepath", filename);
+  wm_autosave_location(filepath);
+  RNA_string_set(op->ptr, "filepath", filepath);
   wm_open_init_use_scripts(op, true);
   WM_event_add_fileselect(C, op);
 
@@ -3171,8 +3153,8 @@ static char *wm_save_as_mainfile_get_description(bContext *UNUSED(C),
                                                  PointerRNA *ptr)
 {
   if (RNA_boolean_get(ptr, "copy")) {
-    return BLI_strdup(
-        "Save the current file in the desired location but do not make the saved file active");
+    return BLI_strdup(TIP_(
+        "Save the current file in the desired location but do not make the saved file active"));
   }
   return NULL;
 }
@@ -3306,7 +3288,7 @@ static void wm_block_autorun_warning_reload_with_scripts(bContext *C,
 
   /* Save user preferences for permanent execution. */
   if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
-    WM_operator_name_call(C, "WM_OT_save_userpref", WM_OP_EXEC_DEFAULT, NULL);
+    WM_operator_name_call(C, "WM_OT_save_userpref", WM_OP_EXEC_DEFAULT, NULL, NULL);
   }
 
   /* Load file again with scripts enabled.
@@ -3325,7 +3307,7 @@ static void wm_block_autorun_warning_enable_scripts(bContext *C,
 
   /* Save user preferences for permanent execution. */
   if ((U.flag & USER_SCRIPT_AUTOEXEC_DISABLE) == 0) {
-    WM_operator_name_call(C, "WM_OT_save_userpref", WM_OP_EXEC_DEFAULT, NULL);
+    WM_operator_name_call(C, "WM_OT_save_userpref", WM_OP_EXEC_DEFAULT, NULL, NULL);
   }
 
   /* Force a full refresh, but without reloading the file. */
@@ -3494,7 +3476,7 @@ void wm_test_autorun_revert_action_exec(bContext *C)
     wm_test_autorun_revert_action_set(ot, ptr);
   }
 
-  WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, ptr);
+  WM_operator_name_call_ptr(C, ot, WM_OP_EXEC_DEFAULT, ptr, NULL);
   wm_test_autorun_revert_action_set(NULL, NULL);
 }
 
@@ -3575,13 +3557,13 @@ static void wm_block_file_close_save(bContext *C, void *arg_block, void *arg_dat
   bool file_has_been_saved_before = BKE_main_blendfile_path(bmain)[0] != '\0';
 
   if (file_has_been_saved_before) {
-    if (WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_EXEC_DEFAULT, NULL) &
+    if (WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_EXEC_DEFAULT, NULL, NULL) &
         OPERATOR_CANCELLED) {
       execute_callback = false;
     }
   }
   else {
-    WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_INVOKE_DEFAULT, NULL);
+    WM_operator_name_call(C, "WM_OT_save_mainfile", WM_OP_INVOKE_DEFAULT, NULL, NULL);
     execute_callback = false;
   }
 

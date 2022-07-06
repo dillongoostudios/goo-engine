@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2017 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #ifndef __UTIL_MATH_MATRIX_H__
 #define __UTIL_MATH_MATRIX_H__
@@ -389,7 +376,7 @@ ccl_device void math_matrix_jacobi_eigendecomposition(ccl_private float *A,
 ccl_device_inline void math_vector_zero_sse(float4 *A, int n)
 {
   for (int i = 0; i < n; i++) {
-    A[i] = make_float4(0.0f);
+    A[i] = zero_float4();
   }
 }
 
@@ -397,7 +384,7 @@ ccl_device_inline void math_matrix_zero_sse(float4 *A, int n)
 {
   for (int row = 0; row < n; row++) {
     for (int col = 0; col <= row; col++) {
-      MAT(A, n, row, col) = make_float4(0.0f);
+      MAT(A, n, row, col) = zero_float4();
     }
   }
 }

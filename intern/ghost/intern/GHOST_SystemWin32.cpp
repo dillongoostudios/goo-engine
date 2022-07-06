@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup GHOST
@@ -102,6 +86,8 @@
  */
 #define BROKEN_PEEK_TOUCHPAD
 
+static bool isStartedFromCommandPrompt();
+
 static void initRawInput()
 {
 #ifdef WITH_INPUT_NDOF
@@ -163,7 +149,10 @@ GHOST_SystemWin32::~GHOST_SystemWin32()
 {
   // Shutdown COM
   OleUninitialize();
-  toggleConsole(1);
+
+  if (isStartedFromCommandPrompt()) {
+    setConsoleWindowState(GHOST_kConsoleWindowStateShow);
+  }
 }
 
 uint64_t GHOST_SystemWin32::performanceCounterToMillis(__int64 perf_ticks) const
@@ -665,7 +654,7 @@ GHOST_TKey GHOST_SystemWin32::processSpecialKey(short vKey, short scanCode) cons
       }
       else if (vKey == VK_OEM_8) {
         if (PRIMARYLANGID(m_langId) == LANG_FRENCH) {
-          /* oem key; used purely for shortcuts. */
+          /* OEM key; used purely for shortcuts. */
           key = GHOST_kKeyF13;
         }
       }
@@ -883,6 +872,13 @@ GHOST_EventButton *GHOST_SystemWin32::processButtonEvent(GHOST_TEventType type,
     int msgPosY = GET_Y_LPARAM(msgPos);
     system->pushEvent(new GHOST_EventCursor(
         ::GetMessageTime(), GHOST_kEventCursorMove, window, msgPosX, msgPosY, td));
+
+    if (type == GHOST_kEventButtonDown) {
+      WINTAB_PRINTF("HWND %p OS button down\n", window->getHWND());
+    }
+    else if (type == GHOST_kEventButtonUp) {
+      WINTAB_PRINTF("HWND %p OS button up\n", window->getHWND());
+    }
   }
 
   window->updateMouseCapture(type == GHOST_kEventButtonDown ? MousePressed : MouseReleased);
@@ -925,6 +921,8 @@ void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
         break;
       }
       case GHOST_kEventButtonDown: {
+        WINTAB_PRINTF("HWND %p Wintab button down", window->getHWND());
+
         UINT message;
         switch (info.button) {
           case GHOST_kButtonMaskLeft:
@@ -950,8 +948,11 @@ void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
           /* Test for Win32/Wintab button down match. */
           useWintabPos = wt->testCoordinates(msg.pt.x, msg.pt.y, info.x, info.y);
           if (!useWintabPos) {
+            WINTAB_PRINTF(" ... but associated system button mismatched position\n");
             continue;
           }
+
+          WINTAB_PRINTF(" ... associated to system button\n");
 
           /* Steal the Win32 event which was previously peeked. */
           PeekMessage(&msg, window->getHWND(), message, message, PM_REMOVE | PM_NOYIELD);
@@ -969,9 +970,14 @@ void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
           mouseMoveHandled = true;
           break;
         }
+        else {
+          WINTAB_PRINTF(" ... but no system button\n");
+        }
       }
       case GHOST_kEventButtonUp: {
+        WINTAB_PRINTF("HWND %p Wintab button up", window->getHWND());
         if (!useWintabPos) {
+          WINTAB_PRINTF(" ... but Wintab position isn't trusted\n");
           continue;
         }
 
@@ -997,9 +1003,13 @@ void GHOST_SystemWin32::processWintabEvent(GHOST_WindowWin32 *window)
         if (PeekMessage(&msg, window->getHWND(), message, message, PM_REMOVE | PM_NOYIELD) &&
             msg.message != WM_QUIT) {
 
+          WINTAB_PRINTF(" ... associated to system button\n");
           window->updateMouseCapture(MouseReleased);
           system->pushEvent(
               new GHOST_EventButton(info.time, info.type, window, info.button, info.tabletData));
+        }
+        else {
+          WINTAB_PRINTF(" ... but no system button\n");
         }
         break;
       }
@@ -1231,7 +1241,7 @@ GHOST_EventKey *GHOST_SystemWin32::processKeyEvent(GHOST_WindowWin32 *window, RA
     }
 
 #ifdef WITH_INPUT_IME
-    if (window->getImeInput()->IsImeKeyEvent(ascii)) {
+    if (window->getImeInput()->IsImeKeyEvent(ascii, key)) {
       return NULL;
     }
 #endif /* WITH_INPUT_IME */
@@ -1327,6 +1337,12 @@ void GHOST_SystemWin32::setTabletAPI(GHOST_TTabletAPI api)
       windowWin32->closeWintab();
     }
   }
+}
+
+void GHOST_SystemWin32::initDebug(GHOST_Debug debug)
+{
+  GHOST_System::initDebug(debug);
+  GHOST_Wintab::setDebug(debug.flags & GHOST_kDebugWintab);
 }
 
 void GHOST_SystemWin32::processMinMaxInfo(MINMAXINFO *minmax)
@@ -1604,6 +1620,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
         // Wintab events, processed
         ////////////////////////////////////////////////////////////////////////
         case WT_CSRCHANGE: {
+          WINTAB_PRINTF("HWND %p HCTX %p WT_CSRCHANGE\n", window->getHWND(), (void *)lParam);
           GHOST_Wintab *wt = window->getWintab();
           if (wt) {
             wt->updateCursorInfo();
@@ -1612,6 +1629,20 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
           break;
         }
         case WT_PROXIMITY: {
+          WINTAB_PRINTF("HWND %p HCTX %p WT_PROXIMITY\n", window->getHWND(), (void *)wParam);
+          if (LOWORD(lParam)) {
+            WINTAB_PRINTF(" Cursor entering context.\n");
+          }
+          else {
+            WINTAB_PRINTF(" Cursor leaving context.\n");
+          }
+          if (HIWORD(lParam)) {
+            WINTAB_PRINTF(" Cursor entering or leaving hardware proximity.\n");
+          }
+          else {
+            WINTAB_PRINTF(" Cursor neither entering nor leaving hardware proximity.\n");
+          }
+
           GHOST_Wintab *wt = window->getWintab();
           if (wt) {
             bool inRange = LOWORD(lParam);
@@ -1627,6 +1658,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
           break;
         }
         case WT_INFOCHANGE: {
+          WINTAB_PRINTF("HWND %p HCTX %p WT_INFOCHANGE\n", window->getHWND(), (void *)wParam);
           GHOST_Wintab *wt = window->getWintab();
           if (wt) {
             wt->processInfoChange(lParam);
@@ -1641,6 +1673,32 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
         case WT_PACKET:
           processWintabEvent(window);
           eventHandled = true;
+          break;
+        ////////////////////////////////////////////////////////////////////////
+        // Wintab events, debug
+        ////////////////////////////////////////////////////////////////////////
+        case WT_CTXOPEN:
+          WINTAB_PRINTF("HWND %p HCTX %p WT_CTXOPEN\n", window->getHWND(), (void *)wParam);
+          break;
+        case WT_CTXCLOSE:
+          WINTAB_PRINTF("HWND %p HCTX %p WT_CTXCLOSE\n", window->getHWND(), (void *)wParam);
+          break;
+        case WT_CTXUPDATE:
+          WINTAB_PRINTF("HWND %p HCTX %p WT_CTXUPDATE\n", window->getHWND(), (void *)wParam);
+          break;
+        case WT_CTXOVERLAP:
+          WINTAB_PRINTF("HWND %p HCTX %p WT_CTXOVERLAP", window->getHWND(), (void *)wParam);
+          switch (lParam) {
+            case CXS_DISABLED:
+              WINTAB_PRINTF(" CXS_DISABLED\n");
+              break;
+            case CXS_OBSCURED:
+              WINTAB_PRINTF(" CXS_OBSCURED\n");
+              break;
+            case CXS_ONTOP:
+              WINTAB_PRINTF(" CXS_ONTOP\n");
+              break;
+          }
           break;
         ////////////////////////////////////////////////////////////////////////
         // Pointer events, processed
@@ -1703,6 +1761,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
           break;
         case WM_MOUSEMOVE:
           if (!window->m_mousePresent) {
+            WINTAB_PRINTF("HWND %p mouse enter\n", window->getHWND());
             TRACKMOUSEEVENT tme = {sizeof(tme)};
             tme.dwFlags = TME_LEAVE;
             tme.hwndTrack = hwnd;
@@ -1751,6 +1810,7 @@ LRESULT WINAPI GHOST_SystemWin32::s_wndProc(HWND hwnd, UINT msg, WPARAM wParam, 
           }
           break;
         case WM_MOUSELEAVE: {
+          WINTAB_PRINTF("HWND %p mouse leave\n", window->getHWND());
           window->m_mousePresent = false;
           if (window->getTabletData().Active == GHOST_kTabletModeNone) {
             event = processCursorEvent(window);
@@ -2227,31 +2287,30 @@ static bool isStartedFromCommandPrompt()
   return false;
 }
 
-int GHOST_SystemWin32::toggleConsole(int action)
+int GHOST_SystemWin32::setConsoleWindowState(GHOST_TConsoleWindowState action)
 {
   HWND wnd = GetConsoleWindow();
 
   switch (action) {
-    case 3:  // startup: hide if not started from command prompt
-    {
+    case GHOST_kConsoleWindowStateHideForNonConsoleLaunch: {
       if (!isStartedFromCommandPrompt()) {
         ShowWindow(wnd, SW_HIDE);
         m_consoleStatus = 0;
       }
       break;
     }
-    case 0:  // hide
+    case GHOST_kConsoleWindowStateHide:
       ShowWindow(wnd, SW_HIDE);
       m_consoleStatus = 0;
       break;
-    case 1:  // show
+    case GHOST_kConsoleWindowStateShow:
       ShowWindow(wnd, SW_SHOW);
       if (!isStartedFromCommandPrompt()) {
         DeleteMenu(GetSystemMenu(wnd, FALSE), SC_CLOSE, MF_BYCOMMAND);
       }
       m_consoleStatus = 1;
       break;
-    case 2:  // toggle
+    case GHOST_kConsoleWindowStateToggle:
       ShowWindow(wnd, m_consoleStatus ? SW_HIDE : SW_SHOW);
       m_consoleStatus = !m_consoleStatus;
       if (m_consoleStatus && !isStartedFromCommandPrompt()) {

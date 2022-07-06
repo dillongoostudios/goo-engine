@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 by Janne Karhu.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 by Janne Karhu. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -80,14 +64,14 @@ static void distribute_simple_children(Scene *scene,
 {
   ChildParticle *cpa = NULL;
   int i, p;
-  int child_nbr = psys_get_child_number(scene, psys, use_render_params);
-  int totpart = psys_get_tot_child(scene, psys, use_render_params);
+  const int child_num = psys_get_child_number(scene, psys, use_render_params);
+  const int totpart = psys_get_tot_child(scene, psys, use_render_params);
   RNG *rng = BLI_rng_new_srandom(31415926 + psys->seed + psys->child_seed);
 
   alloc_child_particles(psys, totpart);
 
   cpa = psys->child;
-  for (i = 0; i < child_nbr; i++) {
+  for (i = 0; i < child_num; i++) {
     for (p = 0; p < psys->totpart; p++, cpa++) {
       float length = 2.0;
       cpa->parent = p;
@@ -1329,7 +1313,7 @@ static void distribute_particles_on_dm(ParticleSimulationData *sim, int from)
     return;
   }
 
-  task_pool = BLI_task_pool_create(&ctx, TASK_PRIORITY_LOW);
+  task_pool = BLI_task_pool_create(&ctx, TASK_PRIORITY_HIGH);
 
   totpart = (from == PART_FROM_CHILD ? sim->psys->totchild : sim->psys->totpart);
   psys_tasks_create(&ctx, 0, totpart, &tasks, &numtasks);

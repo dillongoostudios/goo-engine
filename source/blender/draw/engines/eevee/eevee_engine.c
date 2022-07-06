@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2016, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -67,6 +52,8 @@ static void eevee_engine_init(void *ved)
   stl->g_data->valid_taa_history = (txl->taa_history != NULL);
   stl->g_data->queued_shaders_count = 0;
   stl->g_data->render_timesteps = 1;
+  stl->g_data->disable_ligthprobes = v3d &&
+                                     (v3d->object_type_exclude_viewport & (1 << OB_LIGHTPROBE));
 
   /* Main Buffer */
   DRW_texture_ensure_fullscreen_2d(&txl->color, GPU_RGBA16F, DRW_TEX_FILTER);
@@ -125,8 +112,8 @@ void EEVEE_cache_populate(void *vedata, Object *ob)
     if (ELEM(ob->type, OB_MESH, OB_SURF, OB_MBALL)) {
       EEVEE_materials_cache_populate(vedata, sldata, ob, &cast_shadow);
     }
-    else if (ob->type == OB_HAIR) {
-      EEVEE_object_hair_cache_populate(vedata, sldata, ob, &cast_shadow);
+    else if (ob->type == OB_CURVES) {
+      EEVEE_object_curves_cache_populate(vedata, sldata, ob, &cast_shadow);
     }
     else if (ob->type == OB_VOLUME) {
       EEVEE_volumes_cache_object_add(sldata, vedata, draw_ctx->scene, ob);
@@ -154,8 +141,9 @@ void EEVEE_cache_populate(void *vedata, Object *ob)
 
 static void eevee_cache_finish(void *vedata)
 {
+  EEVEE_Data *ved = (EEVEE_Data *)vedata;
   EEVEE_ViewLayerData *sldata = EEVEE_view_layer_data_ensure();
-  EEVEE_StorageList *stl = ((EEVEE_Data *)vedata)->stl;
+  EEVEE_StorageList *stl = ved->stl;
   EEVEE_PrivateData *g_data = stl->g_data;
   const DRWContextState *draw_ctx = DRW_context_state_get();
   const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
@@ -183,6 +171,10 @@ static void eevee_cache_finish(void *vedata)
   if (g_data->queued_shaders_count != g_data->queued_shaders_count_prev) {
     g_data->queued_shaders_count_prev = g_data->queued_shaders_count;
     EEVEE_temporal_sampling_reset(vedata);
+  }
+
+  if (g_data->queued_shaders_count > 0) {
+    SNPRINTF(ved->info, "Compiling Shaders %d", g_data->queued_shaders_count);
   }
 }
 
@@ -268,6 +260,10 @@ static void eevee_draw_scene(void *vedata)
     /* Set ray type. */
     sldata->common_data.ray_type = EEVEE_RAY_CAMERA;
     sldata->common_data.ray_depth = 0.0f;
+    if (stl->g_data->disable_ligthprobes) {
+      sldata->common_data.prb_num_render_cube = 1;
+      sldata->common_data.prb_num_render_grid = 1;
+    }
     GPU_uniformbuf_update(sldata->common_ubo, &sldata->common_data);
 
     GPU_framebuffer_bind(fbl->main_fb);
@@ -361,8 +357,6 @@ static void eevee_draw_scene(void *vedata)
   }
 
   EEVEE_renderpasses_draw_debug(vedata);
-
-  EEVEE_volumes_free_smoke_textures();
 
   stl->g_data->view_updated = false;
 
@@ -583,7 +577,6 @@ static void eevee_render_to_image(void *vedata,
     }
   }
 
-  EEVEE_volumes_free_smoke_textures();
   EEVEE_motion_blur_data_free(&ved->stl->effects->motion_blur);
 
   if (RE_engine_test_break(engine)) {

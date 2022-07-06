@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2013 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2013 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup depsgraph
@@ -87,7 +71,7 @@ void depsgraph_geometry_tag_to_component(const ID *id, NodeType *component_type)
 
 bool is_selectable_data_id_type(const ID_Type id_type)
 {
-  return ELEM(id_type, ID_ME, ID_CU, ID_MB, ID_LT, ID_GD, ID_HA, ID_PT, ID_VO);
+  return ELEM(id_type, ID_ME, ID_CU_LEGACY, ID_MB, ID_LT, ID_GD, ID_CV, ID_PT, ID_VO);
 }
 
 void depsgraph_select_tag_to_component_opcode(const ID *id,
@@ -348,7 +332,7 @@ void deg_graph_id_tag_legacy_compat(
         }
         break;
       }
-      case ID_CU: {
+      case ID_CU_LEGACY: {
         Curve *curve = (Curve *)id;
         if (curve->key != nullptr) {
           ID *key_id = &curve->key->id;
@@ -461,8 +445,8 @@ const char *update_source_as_string(eUpdateSource source)
 
 int deg_recalc_flags_for_legacy_zero()
 {
-  return ID_RECALC_ALL &
-         ~(ID_RECALC_PSYS_ALL | ID_RECALC_ANIMATION | ID_RECALC_SOURCE | ID_RECALC_EDITORS);
+  return ID_RECALC_ALL & ~(ID_RECALC_PSYS_ALL | ID_RECALC_ANIMATION | ID_RECALC_FRAME_CHANGE |
+                           ID_RECALC_SOURCE | ID_RECALC_EDITORS);
 }
 
 int deg_recalc_flags_effective(Depsgraph *graph, int flags)
@@ -499,7 +483,7 @@ void deg_graph_node_tag_zero(Main *bmain,
     if (comp_node->type == NodeType::ANIMATION) {
       continue;
     }
-    else if (comp_node->type == NodeType::COPY_ON_WRITE) {
+    if (comp_node->type == NodeType::COPY_ON_WRITE) {
       id_node->is_cow_explicitly_tagged = true;
     }
 
@@ -530,12 +514,6 @@ void graph_tag_ids_for_visible_update(Depsgraph *graph)
    * this. */
   for (deg::IDNode *id_node : graph->id_nodes) {
     const ID_Type id_type = GS(id_node->id_orig->name);
-    if (id_type == ID_OB) {
-      Object *object_orig = reinterpret_cast<Object *>(id_node->id_orig);
-      if (object_orig->proxy != nullptr) {
-        object_orig->proxy->proxy_from = object_orig;
-      }
-    }
 
     if (!id_node->visible_components_mask) {
       /* ID has no components which affects anything visible.
@@ -595,13 +573,13 @@ NodeType geometry_tag_to_component(const ID *id)
       const Object *object = (Object *)id;
       switch (object->type) {
         case OB_MESH:
-        case OB_CURVE:
+        case OB_CURVES_LEGACY:
         case OB_SURF:
         case OB_FONT:
         case OB_LATTICE:
         case OB_MBALL:
         case OB_GPENCIL:
-        case OB_HAIR:
+        case OB_CURVES:
         case OB_POINTCLOUD:
         case OB_VOLUME:
           return NodeType::GEOMETRY;
@@ -612,10 +590,10 @@ NodeType geometry_tag_to_component(const ID *id)
       break;
     }
     case ID_ME:
-    case ID_CU:
+    case ID_CU_LEGACY:
     case ID_LT:
     case ID_MB:
-    case ID_HA:
+    case ID_CV:
     case ID_PT:
     case ID_VO:
     case ID_GR:
@@ -887,7 +865,7 @@ void DEG_ids_clear_recalc(Depsgraph *depsgraph, const bool backup)
   if (!DEG_id_type_any_updated(depsgraph)) {
     return;
   }
-  /* Go over all ID nodes nodes, clearing tags. */
+  /* Go over all ID nodes, clearing tags. */
   for (deg::IDNode *id_node : deg_graph->id_nodes) {
     if (backup) {
       id_node->id_cow_recalc_backup |= id_node->id_cow->recalc;

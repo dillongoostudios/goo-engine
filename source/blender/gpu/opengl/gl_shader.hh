@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -88,11 +72,24 @@ class GLShader : public Shader {
   /** DEPRECATED: Kept only because of BGL API. */
   int program_handle_get() const override;
 
+  bool is_compute() const
+  {
+    return compute_shader_ != 0;
+  }
+
  private:
   char *glsl_patch_get(GLenum gl_stage);
 
   /** Create, compile and attach the shader stage to the shader program. */
   GLuint create_shader_stage(GLenum gl_stage, MutableSpan<const char *> sources);
+
+  /**
+   * \brief features available on newer implementation such as native barycentric coordinates
+   * and layered rendering, necessitate a geometry shader to work on older hardware.
+   */
+  std::string workaround_geometry_shader_source_create(const shader::ShaderCreateInfo &info);
+
+  bool do_geometry_shader_injection(const shader::ShaderCreateInfo *info);
 
   MEM_CXX_CLASS_ALLOC_FUNCS("GLShader");
 };

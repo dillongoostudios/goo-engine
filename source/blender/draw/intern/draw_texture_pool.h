@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2021, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. */
 
 /** \file
  * \ingroup draw
@@ -44,6 +29,17 @@ void DRW_texture_pool_free(DRWTexturePool *pool);
  */
 GPUTexture *DRW_texture_pool_query(
     DRWTexturePool *pool, int width, int height, eGPUTextureFormat format, void *user);
+/**
+ * Returns a temporary texture that needs to be released after use. Texture content is undefined.
+ */
+GPUTexture *DRW_texture_pool_texture_acquire(DRWTexturePool *pool,
+                                             int width,
+                                             int height,
+                                             eGPUTextureFormat format);
+/**
+ * Releases a previously acquired texture.
+ */
+void DRW_texture_pool_texture_release(DRWTexturePool *pool, GPUTexture *tmp_tex);
 /**
  * Resets the user bits for each texture in the pool and delete unused ones.
  */

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2014 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2014 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edgizmolib
@@ -112,7 +96,8 @@ static void dial_geom_draw(const float color[4],
                                                  ED_GIZMO_DIAL_DRAW_FLAG_FILL)));
 
   GPUVertFormat *format = immVertexFormat();
-  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+  /* Note(Metal): Prefer using 3D coordinates with 3D shader, even if rendering 2D gizmo's. */
+  uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
 
   if (clip_plane) {
     immBindBuiltinProgram(filled ? GPU_SHADER_3D_CLIPPED_UNIFORM_COLOR :
@@ -130,18 +115,19 @@ static void dial_geom_draw(const float color[4],
   if (filled) {
     if (arc_partial_angle == 0.0f) {
       if (arc_inner_factor == 0.0f) {
-        imm_draw_circle_fill_2d(pos, 0, 0, 1.0, DIAL_RESOLUTION);
+        imm_draw_circle_fill_3d(pos, 0.0f, 0.0f, 1.0f, DIAL_RESOLUTION);
       }
       else {
-        imm_draw_disk_partial_fill_2d(
-            pos, 0, 0, arc_inner_factor, 1.0f, DIAL_RESOLUTION, 0, RAD2DEGF(M_PI * 2));
+        imm_draw_disk_partial_fill_3d(
+            pos, 0.0f, 0.0f, 0.0f, arc_inner_factor, 1.0f, DIAL_RESOLUTION, 0, RAD2DEGF(M_PI * 2));
       }
     }
     else {
       float arc_partial_deg = RAD2DEGF((M_PI * 2) - arc_partial_angle);
-      imm_draw_disk_partial_fill_2d(pos,
-                                    0,
-                                    0,
+      imm_draw_disk_partial_fill_3d(pos,
+                                    0.0f,
+                                    0.0f,
+                                    0.0f,
                                     arc_inner_factor,
                                     1.0f,
                                     DIAL_RESOLUTION,
@@ -156,15 +142,15 @@ static void dial_geom_draw(const float color[4],
     immUniform1f("lineWidth", line_width * U.pixelsize);
 
     if (arc_partial_angle == 0.0f) {
-      imm_draw_circle_wire_2d(pos, 0, 0, 1.0, DIAL_RESOLUTION);
+      imm_draw_circle_wire_3d(pos, 0.0f, 0.0f, 1.0f, DIAL_RESOLUTION);
       if (arc_inner_factor != 0.0f) {
-        imm_draw_circle_wire_2d(pos, 0, 0, arc_inner_factor, DIAL_RESOLUTION);
+        imm_draw_circle_wire_3d(pos, 0.0f, 0.0f, arc_inner_factor, DIAL_RESOLUTION);
       }
     }
     else {
       float arc_partial_deg = RAD2DEGF((M_PI * 2) - arc_partial_angle);
-      imm_draw_circle_partial_wire_2d(
-          pos, 0, 0, 1.0, DIAL_RESOLUTION, -arc_partial_deg / 2, arc_partial_deg);
+      imm_draw_circle_partial_wire_3d(
+          pos, 0.0f, 0.0f, 0.0f, 1.0f, DIAL_RESOLUTION, -arc_partial_deg / 2, arc_partial_deg);
 #  if 0
       if (arc_inner_factor != 0.0f) {
         BLI_assert(0);
@@ -202,7 +188,7 @@ static void dial_ghostarc_draw_helpline(const float angle,
   immUniformColor4fv(color);
 
   immBegin(GPU_PRIM_LINE_STRIP, 2);
-  immVertex3f(pos, 0.0f, 0, 0.0f);
+  immVertex3f(pos, 0.0f, 0.0f, 0.0f);
   immVertex3fv(pos, co_outer);
   immEnd();
 

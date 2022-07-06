@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup wm
@@ -171,8 +155,8 @@ static void window_manager_blend_read_data(BlendDataReader *reader, ID *id)
     win->ghostwin = NULL;
     win->gpuctx = NULL;
     win->eventstate = NULL;
+    win->event_last_handled = NULL;
     win->cursor_keymap_status = NULL;
-    win->tweak = NULL;
 #if defined(WIN32) || defined(__APPLE__)
     win->ime_data = NULL;
 #endif
@@ -498,17 +482,17 @@ void WM_check(bContext *C)
   }
 
   if (!G.background) {
-    /* Case: fileread. */
+    /* Case: file-read. */
     if ((wm->initialized & WM_WINDOW_IS_INIT) == 0) {
       WM_keyconfig_init(C);
-      WM_autosave_init(wm);
+      WM_file_autosave_init(wm);
     }
 
     /* Case: no open windows at all, for old file reads. */
     wm_window_ghostwindows_ensure(wm);
   }
 
-  /* Case: fileread. */
+  /* Case: file-read. */
   /* NOTE: this runs in background mode to set the screen context cb. */
   if ((wm->initialized & WM_WINDOW_IS_INIT) == 0) {
     ED_screens_init(bmain, wm);

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pythonintern
@@ -37,6 +23,7 @@
 #include "BKE_global.h" /* XXX, G_MAIN only */
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 #include "RNA_types.h"
 
 #include "GPU_state.h"
@@ -126,7 +113,15 @@ static PyObject *bpy_blend_paths(PyObject *UNUSED(self), PyObject *args, PyObjec
   bool local = false;
 
   static const char *_keywords[] = {"absolute", "packed", "local", NULL};
-  static _PyArg_Parser _parser = {"|$O&O&O&:blend_paths", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "|$" /* Optional keyword only arguments. */
+      "O&" /* `absolute` */
+      "O&" /* `packed` */
+      "O&" /* `local` */
+      ":blend_paths",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args,
                                         kw,
                                         &_parser,
@@ -184,7 +179,6 @@ static PyObject *bpy_flip_name(PyObject *UNUSED(self), PyObject *args, PyObject 
       "s#" /* `name` */
       "|$" /* Optional, keyword only arguments. */
       "O&" /* `strip_digits` */
-      /* Name to show in the case of an error. */
       ":flip_name",
       _keywords,
       0,
@@ -195,7 +189,7 @@ static PyObject *bpy_flip_name(PyObject *UNUSED(self), PyObject *args, PyObject 
   }
 
   /* Worst case we gain one extra byte (besides null-terminator) by changing
-  "Left" to "Right", because only the first appearance of "Left" gets replaced. */
+   * "Left" to "Right", because only the first appearance of "Left" gets replaced. */
   const size_t size = name_src_len + 2;
   char *name_dst = PyMem_MALLOC(size);
   const size_t name_dst_len = BLI_string_flip_side_name(name_dst, name_src, strip_digits, size);
@@ -224,7 +218,14 @@ static PyObject *bpy_user_resource(PyObject *UNUSED(self), PyObject *args, PyObj
   const char *path;
 
   static const char *_keywords[] = {"type", "path", NULL};
-  static _PyArg_Parser _parser = {"O&|$s:user_resource", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `type` */
+      "|$" /* Optional keyword only arguments. */
+      "s"  /* `path` */
+      ":user_resource",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, PyC_ParseStringEnum, &type, &subdir)) {
     return NULL;
   }
@@ -260,7 +261,14 @@ static PyObject *bpy_system_resource(PyObject *UNUSED(self), PyObject *args, PyO
   const char *path;
 
   static const char *_keywords[] = {"type", "path", NULL};
-  static _PyArg_Parser _parser = {"O&|$s:system_resource", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `type` */
+      "|$" /* Optional keyword only arguments. */
+      "s"  /* `path` */
+      ":system_resource",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(args, kw, &_parser, PyC_ParseStringEnum, &type, &subdir)) {
     return NULL;
   }
@@ -298,7 +306,15 @@ static PyObject *bpy_resource_path(PyObject *UNUSED(self), PyObject *args, PyObj
   const char *path;
 
   static const char *_keywords[] = {"type", "major", "minor", NULL};
-  static _PyArg_Parser _parser = {"O&|$ii:resource_path", _keywords, 0};
+  static _PyArg_Parser _parser = {
+      "O&" /* `type` */
+      "|$" /* Optional keyword only arguments. */
+      "i"  /* `major` */
+      "i"  /* `minor` */
+      ":resource_path",
+      _keywords,
+      0,
+  };
   if (!_PyArg_ParseTupleAndKeywordsFast(
           args, kw, &_parser, PyC_ParseStringEnum, &type, &major, &minor)) {
     return NULL;

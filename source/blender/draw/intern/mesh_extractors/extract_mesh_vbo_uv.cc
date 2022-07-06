@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -60,14 +44,11 @@ static bool mesh_extract_uv_format_init(GPUVertFormat *format,
 
       GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
       /* UV layer name. */
-      BLI_snprintf(attr_name, sizeof(attr_name), "u%s", attr_safe_name);
-      GPU_vertformat_attr_add(format, attr_name, GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      /* Auto layer name. */
       BLI_snprintf(attr_name, sizeof(attr_name), "a%s", attr_safe_name);
-      GPU_vertformat_alias_add(format, attr_name);
+      GPU_vertformat_attr_add(format, attr_name, GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
       /* Active render layer name. */
       if (i == CustomData_get_render_layer(cd_ldata, CD_MLOOPUV)) {
-        GPU_vertformat_alias_add(format, "u");
+        GPU_vertformat_alias_add(format, "a");
       }
       /* Active display layer name. */
       if (i == CustomData_get_active_layer(cd_ldata, CD_MLOOPUV)) {
@@ -150,7 +131,7 @@ static void extract_uv_init_subdiv(const DRWSubdivCache *subdiv_cache,
   uint uv_layers;
   if (!mesh_extract_uv_format_init(
           &format, cache, &coarse_mesh->ldata, MR_EXTRACT_MESH, uv_layers)) {
-    // TODO(kevindietrich): handle this more gracefully.
+    /* TODO(kevindietrich): handle this more gracefully. */
     v_len = 1;
   }
 

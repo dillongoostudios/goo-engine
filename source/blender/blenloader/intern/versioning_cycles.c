@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup blenloader
@@ -344,7 +330,7 @@ static void image_node_colorspace(bNode *node)
     return;
   }
 
-  const int SHD_COLORSPACE_NONE = 0;
+  enum { SHD_COLORSPACE_NONE = 0 };
   Image *image = (Image *)node->id;
   if (color_space == SHD_COLORSPACE_NONE) {
     STRNCPY(image->colorspace_settings.name,
@@ -1376,10 +1362,12 @@ void blo_do_versions_cycles(FileData *UNUSED(fd), Library *UNUSED(lib), Main *bm
 
 void do_versions_after_linking_cycles(Main *bmain)
 {
-  const int DENOISER_AUTO = 0;
-  const int DENOISER_NLM = 1;
-  const int DENOISER_OPTIX = 2;
-  const int DENOISER_OPENIMAGEDENOISE = 4;
+  enum {
+    DENOISER_AUTO = 0,
+    DENOISER_NLM = 1,
+    DENOISER_OPTIX = 2,
+    DENOISER_OPENIMAGEDENOISE = 4,
+  };
 
   if (!MAIN_VERSION_ATLEAST(bmain, 280, 66)) {
     /* Shader node tree changes. After lib linking so we have all the typeinfo

@@ -1,23 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2015 Blender Foundation.
- * All rights reserved.
- *
- * Defines and code for core node types
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2015 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -88,7 +70,7 @@ static void splineik_init_tree_from_pchan(Scene *UNUSED(scene),
       ik_data = con->data;
 
       /* Target can only be a curve. */
-      if ((ik_data->tar == NULL) || (ik_data->tar->type != OB_CURVE)) {
+      if ((ik_data->tar == NULL) || (ik_data->tar->type != OB_CURVES_LEGACY)) {
         continue;
       }
       /* Skip if disabled. */
@@ -423,8 +405,8 @@ static void splineik_evaluate_bone(
 
   if (pchan->bone->length < FLT_EPSILON) {
     /* Only move the bone position with zero length bones. */
-    float bone_pos[4], dir[3], rad;
-    BKE_where_on_path(ik_data->tar, state->curve_position, bone_pos, dir, NULL, &rad, NULL);
+    float bone_pos[4], rad;
+    BKE_where_on_path(ik_data->tar, state->curve_position, bone_pos, NULL, NULL, &rad, NULL);
 
     apply_curve_transform(ik_data, ob, rad, bone_pos, &rad);
 
@@ -463,13 +445,13 @@ static void splineik_evaluate_bone(
 
   /* Step 1: determine the positions for the endpoints of the bone. */
   if (point_start < 1.0f) {
-    float vec[4], dir[3], rad;
+    float vec[4], rad;
     radius = 0.0f;
 
     /* Calculate head position. */
     if (point_start == 0.0f) {
       /* Start of the path. We have no previous tail position to copy. */
-      BKE_where_on_path(ik_data->tar, point_start, vec, dir, NULL, &rad, NULL);
+      BKE_where_on_path(ik_data->tar, point_start, vec, NULL, NULL, &rad, NULL);
     }
     else {
       copy_v3_v3(vec, state->prev_tail_loc);
@@ -504,7 +486,7 @@ static void splineik_evaluate_bone(
     }
     else {
       /* Scale to fit curve end position. */
-      if (BKE_where_on_path(ik_data->tar, point_end, vec, dir, NULL, &rad, NULL)) {
+      if (BKE_where_on_path(ik_data->tar, point_end, vec, NULL, NULL, &rad, NULL)) {
         state->prev_tail_radius = rad;
         copy_v3_v3(state->prev_tail_loc, vec);
         copy_v3_v3(pose_tail, vec);
@@ -850,10 +832,6 @@ void BKE_pose_eval_init(struct Depsgraph *depsgraph, Scene *UNUSED(scene), Objec
   }
 
   BLI_assert(pose->chan_array != NULL || BLI_listbase_is_empty(&pose->chanbase));
-
-  if (object->proxy != NULL) {
-    object->proxy->proxy_from = object;
-  }
 }
 
 void BKE_pose_eval_init_ik(struct Depsgraph *depsgraph, Scene *scene, Object *object)
@@ -1069,58 +1047,4 @@ void BKE_pose_eval_cleanup(struct Depsgraph *depsgraph, Scene *scene, Object *ob
   /* Release the IK tree. */
   BIK_release_tree(scene, object, ctime);
   pose_eval_cleanup_common(object);
-}
-
-void BKE_pose_eval_proxy_init(struct Depsgraph *depsgraph, Object *object)
-{
-  BLI_assert(ID_IS_LINKED(object) && object->proxy_from != NULL);
-  DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
-
-  BLI_assert(object->pose->chan_array != NULL || BLI_listbase_is_empty(&object->pose->chanbase));
-}
-
-void BKE_pose_eval_proxy_done(struct Depsgraph *depsgraph, Object *object)
-{
-  BLI_assert(ID_IS_LINKED(object) && object->proxy_from != NULL);
-  DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
-}
-
-void BKE_pose_eval_proxy_cleanup(struct Depsgraph *depsgraph, Object *object)
-{
-  BLI_assert(ID_IS_LINKED(object) && object->proxy_from != NULL);
-  DEG_debug_print_eval(depsgraph, __func__, object->id.name, object);
-  pose_eval_cleanup_common(object);
-}
-
-void BKE_pose_eval_proxy_copy_bone(struct Depsgraph *depsgraph, Object *object, int pchan_index)
-{
-  const bArmature *armature = (bArmature *)object->data;
-  if (armature->edbo != NULL) {
-    return;
-  }
-  BLI_assert(ID_IS_LINKED(object) && object->proxy_from != NULL);
-  bPoseChannel *pchan = pose_pchan_get_indexed(object, pchan_index);
-  BLI_assert(pchan != NULL);
-  DEG_debug_print_eval_subdata(
-      depsgraph, __func__, object->id.name, object, "pchan", pchan->name, pchan);
-  /* TODO(sergey): Use indexed lookup, once it's guaranteed to be kept
-   * around for the time while proxies are evaluating.
-   */
-#if 0
-  bPoseChannel *pchan_from = pose_pchan_get_indexed(object->proxy_from, pchan_index);
-#else
-  bPoseChannel *pchan_from = BKE_pose_channel_find_name(object->proxy_from->pose, pchan->name);
-#endif
-  if (pchan_from == NULL) {
-    printf(
-        "WARNING: Could not find bone %s in linked ID anymore... "
-        "You should delete and re-generate your proxy.\n",
-        pchan->name);
-    return;
-  }
-  BKE_pose_copy_pchan_result(pchan, pchan_from);
-  copy_dq_dq(&pchan->runtime.deform_dual_quat, &pchan_from->runtime.deform_dual_quat);
-  BKE_pchan_bbone_segments_cache_copy(pchan, pchan_from);
-
-  pose_channel_flush_to_orig_if_needed(depsgraph, object, pchan);
 }

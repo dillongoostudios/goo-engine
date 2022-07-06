@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2017 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #ifndef __UTIL_MATH_FLOAT2_H__
 #define __UTIL_MATH_FLOAT2_H__
@@ -53,7 +40,7 @@ ccl_device_inline float average(const float2 &a);
 ccl_device_inline float distance(const float2 &a, const float2 &b);
 ccl_device_inline float dot(const float2 &a, const float2 &b);
 ccl_device_inline float cross(const float2 &a, const float2 &b);
-ccl_device_inline float len(const float2 &a);
+ccl_device_inline float len(const float2 a);
 ccl_device_inline float2 normalize(const float2 &a);
 ccl_device_inline float2 normalize_len(const float2 &a, float *t);
 ccl_device_inline float2 safe_normalize(const float2 &a);
@@ -200,11 +187,6 @@ ccl_device_inline float cross(const float2 &a, const float2 &b)
   return (a.x * b.y - a.y * b.x);
 }
 
-ccl_device_inline float len(const float2 &a)
-{
-  return sqrtf(dot(a, a));
-}
-
 ccl_device_inline float2 normalize(const float2 &a)
 {
   return a / len(a);
@@ -263,6 +245,11 @@ ccl_device_inline float2 floor(const float2 &a)
 }
 
 #endif /* !__KERNEL_METAL__ */
+
+ccl_device_inline float len(const float2 a)
+{
+  return sqrtf(dot(a, a));
+}
 
 ccl_device_inline float2 safe_divide_float2_float(const float2 a, const float b)
 {

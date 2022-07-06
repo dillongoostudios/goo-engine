@@ -1,18 +1,5 @@
-/*
- * Copyright 2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2021-2022 Blender Foundation */
 
 #ifdef WITH_METAL
 
@@ -472,7 +459,7 @@ bool MetalDeviceKernels::load(MetalDevice *device, int kernel_type)
 
     tbb::task_arena local_arena(max_mtlcompiler_threads);
     local_arena.execute([&]() {
-      tbb::parallel_for(int(0), int(DEVICE_KERNEL_NUM), [&](int i) {
+      parallel_for(int(0), int(DEVICE_KERNEL_NUM), [&](int i) {
         /* skip megakernel */
         if (i == DEVICE_KERNEL_INTEGRATOR_MEGAKERNEL) {
           return;
@@ -502,7 +489,8 @@ bool MetalDeviceKernels::load(MetalDevice *device, int kernel_type)
             i == DEVICE_KERNEL_INTEGRATOR_INTERSECT_SHADOW ||
             i == DEVICE_KERNEL_INTEGRATOR_INTERSECT_SUBSURFACE ||
             i == DEVICE_KERNEL_INTEGRATOR_INTERSECT_VOLUME_STACK ||
-            i == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE) {
+            i == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE ||
+            i == DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_MNEE) {
           kernel_function_list = function_list;
         }
 

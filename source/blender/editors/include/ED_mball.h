@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -28,7 +12,9 @@ extern "C" {
 #endif
 
 struct Base;
+struct MetaElem;
 struct Object;
+struct SelectPick_Params;
 struct UndoType;
 struct bContext;
 struct wmKeyConfig;
@@ -47,11 +33,19 @@ struct MetaElem *ED_mball_add_primitive(struct bContext *C,
                                         float dia,
                                         int type);
 
+struct Base *ED_mball_base_and_elem_from_select_buffer(struct Base **bases,
+                                                       uint bases_len,
+                                                       const uint select_id,
+                                                       struct MetaElem **r_ml);
+
 /**
- * Select MetaElement with mouse click (user can select radius circle or stiffness circle).
+ * Select meta-element with mouse click (user can select radius circle or stiffness circle).
+ *
+ * \return True when pick finds an element or the selection changed.
  */
-bool ED_mball_select_pick(
-    struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+bool ED_mball_select_pick(struct bContext *C,
+                          const int mval[2],
+                          const struct SelectPick_Params *params);
 
 bool ED_mball_deselect_all_multi_ex(struct Base **bases, uint bases_len);
 bool ED_mball_deselect_all_multi(struct bContext *C);

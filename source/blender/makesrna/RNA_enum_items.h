@@ -1,18 +1,4 @@
-/*
- * This program is free software you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -101,10 +87,11 @@ DEF_ENUM(rna_enum_keying_flag_items_api)
 DEF_ENUM(rna_enum_fmodifier_type_items)
 
 DEF_ENUM(rna_enum_motionpath_bake_location_items)
+DEF_ENUM(rna_enum_motionpath_display_type_items)
+DEF_ENUM(rna_enum_motionpath_range_items)
 
-DEF_ENUM(rna_enum_event_value_all_items)
-DEF_ENUM(rna_enum_event_value_keymouse_items)
-DEF_ENUM(rna_enum_event_value_tweak_items)
+DEF_ENUM(rna_enum_event_value_items)
+DEF_ENUM(rna_enum_event_direction_items)
 
 DEF_ENUM(rna_enum_event_type_items)
 DEF_ENUM(rna_enum_event_type_mask_items)
@@ -121,6 +108,7 @@ DEF_ENUM(rna_enum_brush_gpencil_types_items)
 DEF_ENUM(rna_enum_brush_gpencil_vertex_types_items)
 DEF_ENUM(rna_enum_brush_gpencil_sculpt_types_items)
 DEF_ENUM(rna_enum_brush_gpencil_weight_types_items)
+DEF_ENUM(rna_enum_brush_curves_sculpt_tool_items);
 DEF_ENUM(rna_enum_brush_image_tool_items)
 
 DEF_ENUM(rna_enum_axis_xy_items)
@@ -225,6 +213,8 @@ DEF_ENUM(rna_enum_subdivision_uv_smooth_items)
 DEF_ENUM(rna_enum_subdivision_boundary_smooth_items)
 
 DEF_ENUM(rna_enum_transform_orientation_items)
+
+DEF_ENUM(rna_enum_velocity_unit_items)
 
 /* Not available to RNA pre-processing (`makesrna`).
  * Defined in editors for example. */

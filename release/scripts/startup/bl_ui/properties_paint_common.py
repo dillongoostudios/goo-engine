@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 from bpy.types import Menu
@@ -95,6 +79,8 @@ class UnifiedPaintPanel:
             return tool_settings.gpencil_weight_paint
         elif mode == 'VERTEX_GPENCIL':
             return tool_settings.gpencil_vertex_paint
+        elif mode == 'SCULPT_CURVES':
+            return tool_settings.curves_sculpt
         return None
 
     @staticmethod
@@ -252,7 +238,7 @@ class ClonePanel(BrushPanel):
                 col.label(text="Source Clone Slot")
                 col.template_list(
                     "TEXTURE_UL_texpaintslots", "",
-                    mat, "texture_paint_images",
+                    mat, "texture_paint_slots",
                     mat, "paint_clone_slot",
                     rows=2,
                 )
@@ -446,7 +432,7 @@ class FalloffPanel(BrushPanel):
             row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
             row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
 
-        if mode in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT'} and brush.sculpt_tool != 'POSE':
+        if mode in {'SCULPT', 'PAINT_VERTEX', 'PAINT_WEIGHT', 'SCULPT_CURVES'} and brush.sculpt_tool != 'POSE':
             col.separator()
             row = col.row(align=True)
             row.use_property_split = True
@@ -837,6 +823,11 @@ def brush_shared_settings(layout, context, brush, popover=False):
         size = True
         strength = True
 
+    # Sculpt Curves #
+    if mode == 'SCULPT_CURVES':
+        size = True
+        strength = True
+
     ### Draw settings. ###
     ups = context.scene.tool_settings.unified_paint_settings
 
@@ -933,6 +924,16 @@ def brush_settings_advanced(layout, context, brush, popover=False):
             col.prop(brush, "use_original_normal", text="Normal")
             col.prop(brush, "use_original_plane", text="Plane")
             layout.separator()
+
+    elif mode == 'SCULPT_CURVES':
+        if brush.curves_sculpt_tool == 'ADD':
+            layout.prop(brush.curves_sculpt_settings, "add_amount")
+            layout.prop(brush.curves_sculpt_settings, "curve_length")
+            layout.prop(brush.curves_sculpt_settings, "interpolate_length")
+            layout.prop(brush.curves_sculpt_settings, "interpolate_shape")
+        elif brush.curves_sculpt_tool == 'GROW_SHRINK':
+            layout.prop(brush.curves_sculpt_settings, "scale_uniform")
+            layout.prop(brush.curves_sculpt_settings, "minimum_length")
 
     # 3D and 2D Texture Paint.
     elif mode in {'PAINT_TEXTURE', 'PAINT_2D'}:

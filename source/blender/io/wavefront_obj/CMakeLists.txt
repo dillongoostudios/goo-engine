@@ -1,23 +1,10 @@
-# ***** BEGIN GPL LICENSE BLOCK *****
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program; if not, write to the Free Software Foundation,
-# Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-# ***** END GPL LICENSE BLOCK *****
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
   .
   ./exporter
+  ./importer
+  ../common
   ../../blenkernel
   ../../blenlib
   ../../bmesh
@@ -28,6 +15,7 @@ set(INC
   ../../makesrna
   ../../nodes
   ../../windowmanager
+  ../../../../extern/fmtlib/include
   ../../../../intern/guardedalloc
 )
 
@@ -42,6 +30,12 @@ set(SRC
   exporter/obj_export_mtl.cc
   exporter/obj_export_nurbs.cc
   exporter/obj_exporter.cc
+  importer/importer_mesh_utils.cc
+  importer/obj_import_file_reader.cc
+  importer/obj_import_mesh.cc
+  importer/obj_import_mtl.cc
+  importer/obj_import_nurbs.cc
+  importer/obj_importer.cc
 
   IO_wavefront_obj.h
   exporter/obj_export_file_writer.hh
@@ -50,17 +44,33 @@ set(SRC
   exporter/obj_export_mtl.hh
   exporter/obj_export_nurbs.hh
   exporter/obj_exporter.hh
+  importer/importer_mesh_utils.hh
+  importer/obj_import_file_reader.hh
+  importer/obj_import_mesh.hh
+  importer/obj_import_mtl.hh
+  importer/obj_import_nurbs.hh
+  importer/obj_import_objects.hh
+  importer/obj_importer.hh
 )
 
 set(LIB
   bf_blenkernel
+  bf_io_common
 )
+
+if(WITH_TBB)
+  add_definitions(-DWITH_TBB)
+  list(APPEND INC_SYS ${TBB_INCLUDE_DIRS})
+  list(APPEND LIB ${TBB_LIBRARIES})
+endif()
 
 blender_add_lib(bf_wavefront_obj "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 
 if(WITH_GTESTS)
   set(TEST_SRC
     tests/obj_exporter_tests.cc
+    tests/obj_importer_tests.cc
+    tests/obj_mtl_parser_tests.cc
     tests/obj_exporter_tests.hh
   )
 

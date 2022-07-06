@@ -1,25 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017, Blender Foundation
- * This is a new part of Blender
- * Operators for creating new Grease Pencil primitives (boxes, circles, ...)
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. */
 
 /** \file
  * \ingroup edgpencil
+ * Operators for creating new Grease Pencil primitives (boxes, circles, ...).
  */
 
 #include <math.h>
@@ -1417,7 +1401,7 @@ static void gpencil_primitive_interaction_end(bContext *C,
     BKE_gpencil_stroke_geometry_update(tgpi->gpd, gps);
   }
 
-  /* In Multiframe mode, duplicate the stroke in other frames. */
+  /* In Multi-frame mode, duplicate the stroke in other frames. */
   if (GPENCIL_MULTIEDIT_SESSIONS_ON(tgpi->gpd)) {
     const bool tail = (ts->gpencil_flags & GP_TOOL_FLAG_PAINT_ONBACK);
     BKE_gpencil_stroke_copy_to_keyframes(tgpi->gpd, tgpi->gpl, gpf, gps, tail);
@@ -1510,7 +1494,7 @@ static void gpencil_primitive_edit_event_handling(
           float dy = (tgpi->mval[1] - tgpi->mvalo[1]);
           tgpi->cp1[0] += dx;
           tgpi->cp1[1] += dy;
-          if (event->shift) {
+          if (event->modifier & KM_SHIFT) {
             copy_v2_v2(tgpi->cp2, tgpi->cp1);
           }
         }
@@ -1519,7 +1503,7 @@ static void gpencil_primitive_edit_event_handling(
           float dy = (tgpi->mval[1] - tgpi->mvalo[1]);
           tgpi->cp2[0] += dx;
           tgpi->cp2[1] += dy;
-          if (event->shift) {
+          if (event->modifier & KM_SHIFT) {
             copy_v2_v2(tgpi->cp1, tgpi->cp2);
           }
         }
@@ -1708,7 +1692,7 @@ static int gpencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *e
         WM_cursor_modal_set(win, WM_CURSOR_NSEW_SCROLL);
         copy_v2_v2(tgpi->end, tgpi->mval);
 
-        if (event->shift) {
+        if (event->modifier & KM_SHIFT) {
           gpencil_primitive_constrain(tgpi, true);
         }
 
@@ -1738,7 +1722,7 @@ static int gpencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *e
       case EVT_FKEY: /* brush thickness/ brush strength */
       {
         if ((event->val == KM_PRESS)) {
-          if (event->shift) {
+          if (event->modifier & KM_SHIFT) {
             tgpi->prev_flag = tgpi->flag;
             tgpi->flag = IN_BRUSH_STRENGTH;
           }
@@ -1916,7 +1900,7 @@ static int gpencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *e
     case EVT_FKEY: /* brush thickness/ brush strength */
     {
       if ((event->val == KM_PRESS)) {
-        if (event->shift) {
+        if (event->modifier & KM_SHIFT) {
           tgpi->prev_flag = tgpi->flag;
           tgpi->flag = IN_BRUSH_STRENGTH;
         }
@@ -1970,12 +1954,12 @@ static int gpencil_primitive_modal(bContext *C, wmOperator *op, const wmEvent *e
           copy_v2_v2(tgpi->origin, tgpi->mval);
         }
         /* Keep square if shift key */
-        if (event->shift) {
+        if (event->modifier & KM_SHIFT) {
           gpencil_primitive_constrain(
               tgpi, (ELEM(tgpi->type, GP_STROKE_LINE, GP_STROKE_POLYLINE) || tgpi->curve));
         }
         /* Center primitive if alt key */
-        if (event->alt && !ELEM(tgpi->type, GP_STROKE_POLYLINE)) {
+        if ((event->modifier & KM_ALT) && !ELEM(tgpi->type, GP_STROKE_POLYLINE)) {
           tgpi->start[0] = tgpi->origin[0] - (tgpi->end[0] - tgpi->origin[0]);
           tgpi->start[1] = tgpi->origin[1] - (tgpi->end[1] - tgpi->origin[1]);
         }

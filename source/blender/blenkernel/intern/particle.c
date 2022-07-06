@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 by Janne Karhu.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 by Janne Karhu. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -1265,7 +1249,9 @@ typedef struct ParticleInterpolationData {
   PTCacheEditPoint *epoint;
   PTCacheEditKey *ekey[2];
 
-  float birthtime, dietime;
+  float birthtime;
+  /** Die on this frame, see #ParticleData.dietime for details. */
+  float dietime;
   int bspline;
 } ParticleInterpolationData;
 /**
@@ -1327,15 +1313,15 @@ static void get_pointcache_keys_for_time(Object *UNUSED(ob),
 }
 static int get_pointcache_times_for_particle(PointCache *cache,
                                              int index,
-                                             float *start,
-                                             float *end)
+                                             float *r_start,
+                                             float *r_dietime)
 {
   PTCacheMem *pm;
   int ret = 0;
 
   for (pm = cache->mem_cache.first; pm; pm = pm->next) {
     if (BKE_ptcache_mem_index_find(pm, index) >= 0) {
-      *start = pm->frame;
+      *r_start = pm->frame;
       ret++;
       break;
     }
@@ -1343,7 +1329,8 @@ static int get_pointcache_times_for_particle(PointCache *cache,
 
   for (pm = cache->mem_cache.last; pm; pm = pm->prev) {
     if (BKE_ptcache_mem_index_find(pm, index) >= 0) {
-      *end = pm->frame;
+      /* Die *after* the last available frame. */
+      *r_dietime = pm->frame + 1;
       ret++;
       break;
     }
@@ -1359,7 +1346,9 @@ float psys_get_dietime_from_cache(PointCache *cache, int index)
 
   for (pm = cache->mem_cache.last; pm; pm = pm->prev) {
     if (BKE_ptcache_mem_index_find(pm, index) >= 0) {
-      return (float)pm->frame;
+      /* Die *after* the last available frame. */
+      dietime = pm->frame + 1;
+      break;
     }
   }
 
@@ -1390,14 +1379,14 @@ static void init_particle_interpolation(Object *ob,
     pind->dietime = (key + pa->totkey - 1)->time;
   }
   else if (pind->cache) {
-    float start = 0.0f, end = 0.0f;
+    float start = 0.0f, dietime = 0.0f;
     get_pointcache_keys_for_time(ob, pind->cache, &pind->pm, -1, 0.0f, NULL, NULL);
     pind->birthtime = pa ? pa->time : pind->cache->startframe;
-    pind->dietime = pa ? pa->dietime : pind->cache->endframe;
+    pind->dietime = pa ? pa->dietime : (pind->cache->endframe + 1);
 
-    if (get_pointcache_times_for_particle(pind->cache, pa - psys->particles, &start, &end)) {
+    if (get_pointcache_times_for_particle(pind->cache, pa - psys->particles, &start, &dietime)) {
       pind->birthtime = MAX2(pind->birthtime, start);
-      pind->dietime = MIN2(pind->dietime, end);
+      pind->dietime = MIN2(pind->dietime, dietime);
     }
   }
   else {
@@ -2401,12 +2390,12 @@ void precalc_guides(ParticleSimulationData *sim, ListBase *effectors)
   }
 }
 
-int do_guides(Depsgraph *depsgraph,
-              ParticleSettings *part,
-              ListBase *effectors,
-              ParticleKey *state,
-              int index,
-              float time)
+bool do_guides(Depsgraph *depsgraph,
+               ParticleSettings *part,
+               ListBase *effectors,
+               ParticleKey *state,
+               int index,
+               float time)
 {
   CurveMapping *clumpcurve = (part->child_flag & PART_CHILD_USE_CLUMP_CURVE) ? part->clumpcurve :
                                                                                NULL;
@@ -2677,8 +2666,8 @@ void psys_find_parents(ParticleSimulationData *sim, const bool use_render_params
   int from = PART_FROM_FACE;
   totparent = (int)(totchild * part->parents * 0.3f);
 
-  if (use_render_params && part->child_nbr && part->ren_child_nbr) {
-    totparent *= (float)part->child_nbr / (float)part->ren_child_nbr;
+  if (use_render_params && part->child_percent && part->child_render_percent) {
+    totparent *= (float)part->child_percent / (float)part->child_render_percent;
   }
 
   /* hard limit, workaround for it being ignored above */
@@ -2752,8 +2741,8 @@ static bool psys_thread_context_init_path(ParticleThreadContext *ctx,
   if (totchild && part->childtype == PART_CHILD_FACES) {
     totparent = (int)(totchild * part->parents * 0.3f);
 
-    if (use_render_params && part->child_nbr && part->ren_child_nbr) {
-      totparent *= (float)part->child_nbr / (float)part->ren_child_nbr;
+    if (use_render_params && part->child_percent && part->child_render_percent) {
+      totparent *= (float)part->child_percent / (float)part->child_render_percent;
     }
 
     /* part->parents could still be 0 so we can't test with totparent */
@@ -3205,7 +3194,7 @@ void psys_cache_child_paths(ParticleSimulationData *sim,
     return;
   }
 
-  task_pool = BLI_task_pool_create(&ctx, TASK_PRIORITY_LOW);
+  task_pool = BLI_task_pool_create(&ctx, TASK_PRIORITY_HIGH);
   totchild = ctx.totchild;
   totparent = ctx.totparent;
 
@@ -4663,7 +4652,7 @@ void psys_get_particle_on_path(ParticleSimulationData *sim,
        * account when subdividing for instance. */
       pind.mesh = psys_in_edit_mode(sim->depsgraph, psys) ?
                       NULL :
-                      psys->hair_out_mesh; /* XXX(@sybren) EEK. */
+                      psys->hair_out_mesh; /* XXX(@sybren): EEK. */
       init_particle_interpolation(sim->ob, psys, pa, &pind);
       do_particle_interpolation(psys, p, pa, t, &pind, state);
 

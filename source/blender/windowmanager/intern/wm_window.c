@@ -1,22 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation but based
- * on ghostwinlay.c (C) 2001-2002 by NaN Holding BV
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. 2007 Blender Foundation. */
 
 /** \file
  * \ingroup wm
@@ -225,6 +208,9 @@ void wm_window_free(bContext *C, wmWindowManager *wm, wmWindow *win)
 
   if (win->eventstate) {
     MEM_freeN(win->eventstate);
+  }
+  if (win->event_last_handled) {
+    MEM_freeN(win->event_last_handled);
   }
 
   if (win->cursor_keymap_status) {
@@ -592,6 +578,9 @@ static void wm_window_ghostwindow_add(wmWindowManager *wm,
 
     wm_window_swap_buffers(win);
 
+    /* Clear double buffer to avoids flickering of new windows on certain drivers. (See T97600) */
+    GPU_clear_color(0.55f, 0.55f, 0.55f, 1.0f);
+
     // GHOST_SetWindowState(ghostwin, GHOST_kWindowStateModified);
   }
   else {
@@ -631,10 +620,10 @@ static void wm_window_ghostwindow_ensure(wmWindowManager *wm, wmWindow *win, boo
   }
 
   if (win->ghostwin != NULL) {
-    /* If we have no ghostwin this is a buggy window that should be removed.
+    /* If we have no `ghostwin` this is a buggy window that should be removed.
      * However we still need to initialize it correctly so the screen doesn't hang. */
 
-    /* happens after fileread */
+    /* Happens after file-read. */
     wm_window_ensure_eventstate(win);
 
     WM_window_set_dpi(win);
@@ -1121,10 +1110,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
         win->active = 0; /* XXX */
 
         /* clear modifiers for inactive windows */
-        win->eventstate->alt = 0;
-        win->eventstate->ctrl = 0;
-        win->eventstate->shift = 0;
-        win->eventstate->oskey = 0;
+        win->eventstate->modifier = 0;
         win->eventstate->keymodifier = 0;
 
         break;
@@ -1155,7 +1141,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
         kdata.ascii = '\0';
         kdata.utf8_buf[0] = '\0';
 
-        if (win->eventstate->shift) {
+        if (win->eventstate->modifier & KM_SHIFT) {
           if ((keymodifier & KM_SHIFT) == 0) {
             kdata.key = GHOST_kKeyLeftShift;
             wm_event_add_ghostevent(wm, win, GHOST_kEventKeyUp, &kdata);
@@ -1164,11 +1150,11 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 #ifdef USE_WIN_ACTIVATE
         else {
           if (keymodifier & KM_SHIFT) {
-            win->eventstate->shift = KM_MOD_HELD;
+            win->eventstate->modifier |= KM_SHIFT;
           }
         }
 #endif
-        if (win->eventstate->ctrl) {
+        if (win->eventstate->modifier & KM_CTRL) {
           if ((keymodifier & KM_CTRL) == 0) {
             kdata.key = GHOST_kKeyLeftControl;
             wm_event_add_ghostevent(wm, win, GHOST_kEventKeyUp, &kdata);
@@ -1177,11 +1163,11 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 #ifdef USE_WIN_ACTIVATE
         else {
           if (keymodifier & KM_CTRL) {
-            win->eventstate->ctrl = KM_MOD_HELD;
+            win->eventstate->modifier |= KM_CTRL;
           }
         }
 #endif
-        if (win->eventstate->alt) {
+        if (win->eventstate->modifier & KM_ALT) {
           if ((keymodifier & KM_ALT) == 0) {
             kdata.key = GHOST_kKeyLeftAlt;
             wm_event_add_ghostevent(wm, win, GHOST_kEventKeyUp, &kdata);
@@ -1190,11 +1176,11 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 #ifdef USE_WIN_ACTIVATE
         else {
           if (keymodifier & KM_ALT) {
-            win->eventstate->alt = KM_MOD_HELD;
+            win->eventstate->modifier |= KM_ALT;
           }
         }
 #endif
-        if (win->eventstate->oskey) {
+        if (win->eventstate->modifier & KM_OSKEY) {
           if ((keymodifier & KM_OSKEY) == 0) {
             kdata.key = GHOST_kKeyOS;
             wm_event_add_ghostevent(wm, win, GHOST_kEventKeyUp, &kdata);
@@ -1203,7 +1189,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 #ifdef USE_WIN_ACTIVATE
         else {
           if (keymodifier & KM_OSKEY) {
-            win->eventstate->oskey = KM_MOD_HELD;
+            win->eventstate->modifier |= KM_OSKEY;
           }
         }
 #endif
@@ -1232,8 +1218,9 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
         wmEvent event;
         wm_event_init_from_window(win, &event);
         event.type = MOUSEMOVE;
+        event.val = KM_NOTHING;
         copy_v2_v2_int(event.prev_xy, event.xy);
-        event.is_repeat = false;
+        event.flag = 0;
 
         wm_event_add(win, &event);
 
@@ -1345,7 +1332,7 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
           WM_operator_properties_create_ptr(&props_ptr, ot);
           RNA_string_set(&props_ptr, "filepath", path);
           RNA_boolean_set(&props_ptr, "display_file_selector", false);
-          WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &props_ptr);
+          WM_operator_name_call_ptr(C, ot, WM_OP_INVOKE_DEFAULT, &props_ptr, NULL);
           WM_operator_properties_free(&props_ptr);
 
           CTX_wm_window_set(C, NULL);
@@ -1363,8 +1350,9 @@ static int ghost_event_proc(GHOST_EventHandle evt, GHOST_TUserDataPtr C_void_ptr
 
         /* activate region */
         event.type = MOUSEMOVE;
+        event.val = KM_NOTHING;
         copy_v2_v2_int(event.prev_xy, event.xy);
-        event.is_repeat = false;
+        event.flag = 0;
 
         /* No context change! C->wm->windrawable is drawable, or for area queues. */
         wm->winactive = win;
@@ -1483,7 +1471,11 @@ static bool wm_window_timer(const bContext *C)
       wt->delta = time - wt->ltime;
       wt->duration += wt->delta;
       wt->ltime = time;
-      wt->ntime = wt->stime + wt->timestep * ceil(wt->duration / wt->timestep);
+
+      wt->ntime = wt->stime;
+      if (wt->timestep != 0.0f) {
+        wt->ntime += wt->timestep * ceil(wt->duration / wt->timestep);
+      }
 
       if (wt->event_type == TIMERJOBS) {
         wm_jobs_timer(wm, wt);
@@ -1501,7 +1493,7 @@ static bool wm_window_timer(const bContext *C)
         event.type = wt->event_type;
         event.val = KM_NOTHING;
         event.keymodifier = 0;
-        event.is_repeat = false;
+        event.flag = 0;
         event.custom = EVT_DATA_TIMER;
         event.customdata = wt;
         wm_event_add(win, &event);
@@ -1552,7 +1544,15 @@ void wm_ghost_init(bContext *C)
     }
 
     g_system = GHOST_CreateSystem();
-    GHOST_SystemInitDebug(g_system, G.debug & G_DEBUG_GHOST);
+
+    GHOST_Debug debug = {0};
+    if (G.debug & G_DEBUG_GHOST) {
+      debug.flags |= GHOST_kDebugDefault;
+    }
+    if (G.debug & G_DEBUG_WINTAB) {
+      debug.flags |= GHOST_kDebugWintab;
+    }
+    GHOST_SystemInitDebug(g_system, debug);
 
     if (C != NULL) {
       GHOST_AddEventConsumer(g_system, consumer);
@@ -1596,6 +1596,7 @@ void WM_event_timer_sleep(wmWindowManager *wm,
 wmTimer *WM_event_add_timer(wmWindowManager *wm, wmWindow *win, int event_type, double timestep)
 {
   wmTimer *wt = MEM_callocN(sizeof(wmTimer), "window timer");
+  BLI_assert(timestep >= 0.0f);
 
   wt->event_type = event_type;
   wt->ltime = PIL_check_seconds_timer();
@@ -1615,6 +1616,7 @@ wmTimer *WM_event_add_timer_notifier(wmWindowManager *wm,
                                      double timestep)
 {
   wmTimer *wt = MEM_callocN(sizeof(wmTimer), "window timer");
+  BLI_assert(timestep >= 0.0f);
 
   wt->event_type = TIMERNOTIFIER;
   wt->ltime = PIL_check_seconds_timer();

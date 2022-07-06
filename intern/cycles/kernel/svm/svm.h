@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -317,22 +304,13 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
         }
         break;
       case NODE_SET_DISPLACEMENT:
-        IF_KERNEL_NODES_FEATURE(BUMP)
-        {
-          svm_node_set_displacement(kg, sd, stack, node.y);
-        }
+        svm_node_set_displacement<node_feature_mask>(kg, sd, stack, node.y);
         break;
       case NODE_DISPLACEMENT:
-        IF_KERNEL_NODES_FEATURE(BUMP)
-        {
-          svm_node_displacement(kg, sd, stack, node);
-        }
+        svm_node_displacement<node_feature_mask>(kg, sd, stack, node);
         break;
       case NODE_VECTOR_DISPLACEMENT:
-        IF_KERNEL_NODES_FEATURE(BUMP)
-        {
-          offset = svm_node_vector_displacement(kg, sd, stack, node, offset);
-        }
+        offset = svm_node_vector_displacement<node_feature_mask>(kg, sd, stack, node, offset);
         break;
       case NODE_TEX_IMAGE:
         offset = svm_node_tex_image(kg, sd, stack, node, offset);
@@ -344,10 +322,7 @@ ccl_device void svm_eval_nodes(KernelGlobals kg,
         offset = svm_node_tex_noise(kg, sd, stack, node.y, node.z, node.w, offset);
         break;
       case NODE_SET_BUMP:
-        IF_KERNEL_NODES_FEATURE(BUMP)
-        {
-          svm_node_set_bump(kg, sd, stack, node);
-        }
+        svm_node_set_bump<node_feature_mask>(kg, sd, stack, node);
         break;
       case NODE_ATTR_BUMP_DX:
         IF_KERNEL_NODES_FEATURE(BUMP)

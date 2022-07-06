@@ -1,17 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup spimage
@@ -1001,7 +988,7 @@ void ED_image_undosys_type(UndoType *ut)
 
   ut->step_foreach_ID_ref = image_undosys_foreach_ID_ref;
 
-  /* NOTE this is actually a confusing case, since it expects a valid context, but only in a
+  /* NOTE: this is actually a confusing case, since it expects a valid context, but only in a
    * specific case, see `image_undosys_step_encode` code. We cannot specify
    * `UNDOTYPE_FLAG_NEED_CONTEXT_FOR_ENCODE` though, as it can be called with a NULL context by
    * current code. */

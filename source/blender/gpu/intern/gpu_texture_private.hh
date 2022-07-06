@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -117,16 +101,24 @@ class Texture {
   virtual ~Texture();
 
   /* Return true on success. */
-  bool init_1D(int w, int layers, eGPUTextureFormat format);
-  bool init_2D(int w, int h, int layers, eGPUTextureFormat format);
-  bool init_3D(int w, int h, int d, eGPUTextureFormat format);
-  bool init_cubemap(int w, int layers, eGPUTextureFormat format);
+  bool init_1D(int w, int layers, int mips, eGPUTextureFormat format);
+  bool init_2D(int w, int h, int layers, int mips, eGPUTextureFormat format);
+  bool init_3D(int w, int h, int d, int mips, eGPUTextureFormat format);
+  bool init_cubemap(int w, int layers, int mips, eGPUTextureFormat format);
   bool init_buffer(GPUVertBuf *vbo, eGPUTextureFormat format);
+  bool init_view(const GPUTexture *src,
+                 eGPUTextureFormat format,
+                 int mip_start,
+                 int mip_len,
+                 int layer_start,
+                 int layer_len,
+                 bool cube_as_array);
 
   virtual void generate_mipmap() = 0;
   virtual void copy_to(Texture *tex) = 0;
   virtual void clear(eGPUDataFormat format, const void *data) = 0;
   virtual void swizzle_set(const char swizzle_mask[4]) = 0;
+  virtual void stencil_texture_mode_set(bool use_stencil) = 0;
   virtual void mip_range_set(int min, int max) = 0;
   virtual void *read(int mip, eGPUDataFormat format) = 0;
 
@@ -139,7 +131,6 @@ class Texture {
 
   /* TODO(fclem): Legacy. Should be removed at some point. */
   virtual uint gl_bindcode_get() const = 0;
-
   int width_get() const
   {
     return w_;
@@ -218,6 +209,11 @@ class Texture {
     }
   }
 
+  int mip_count() const
+  {
+    return mipmaps_;
+  }
+
   eGPUTextureFormat format_get() const
   {
     return format_;
@@ -250,6 +246,7 @@ class Texture {
  protected:
   virtual bool init_internal() = 0;
   virtual bool init_internal(GPUVertBuf *vbo) = 0;
+  virtual bool init_internal(const GPUTexture *src, int mip_offset, int layer_offset) = 0;
 };
 
 /* Syntactic sugar. */
@@ -456,6 +453,72 @@ inline bool validate_data_format(eGPUTextureFormat tex_format, eGPUDataFormat da
     case GPU_R11F_G11F_B10F:
       return ELEM(data_format, GPU_DATA_10_11_11_REV, GPU_DATA_FLOAT);
     default:
+      return data_format == GPU_DATA_FLOAT;
+  }
+}
+
+/* Ensure valid upload formats. With format conversion support, certain types can be extended to
+ * allow upload from differing source formats. If these cases are added, amend accordingly. */
+inline bool validate_data_format_mtl(eGPUTextureFormat tex_format, eGPUDataFormat data_format)
+{
+  switch (tex_format) {
+    case GPU_DEPTH_COMPONENT24:
+    case GPU_DEPTH_COMPONENT16:
+    case GPU_DEPTH_COMPONENT32F:
+      return ELEM(data_format, GPU_DATA_FLOAT, GPU_DATA_UINT);
+    case GPU_DEPTH24_STENCIL8:
+    case GPU_DEPTH32F_STENCIL8:
+      /* Data can be provided as a 4-byte UINT. */
+      return ELEM(data_format, GPU_DATA_UINT_24_8, GPU_DATA_UINT);
+    case GPU_R8UI:
+    case GPU_R16UI:
+    case GPU_RG16UI:
+    case GPU_R32UI:
+    case GPU_RGBA32UI:
+    case GPU_RGBA16UI:
+    case GPU_RG8UI:
+    case GPU_RG32UI:
+      return data_format == GPU_DATA_UINT;
+    case GPU_R32I:
+    case GPU_RG16I:
+    case GPU_R16I:
+    case GPU_RGBA8I:
+    case GPU_RGBA32I:
+    case GPU_RGBA16I:
+    case GPU_RG8I:
+    case GPU_RG32I:
+    case GPU_R8I:
+      return data_format == GPU_DATA_INT;
+    case GPU_R8:
+    case GPU_RG8:
+    case GPU_RGBA8:
+    case GPU_RGBA8_DXT1:
+    case GPU_RGBA8_DXT3:
+    case GPU_RGBA8_DXT5:
+    case GPU_RGBA8UI:
+    case GPU_SRGB8_A8:
+    case GPU_SRGB8_A8_DXT1:
+    case GPU_SRGB8_A8_DXT3:
+    case GPU_SRGB8_A8_DXT5:
+      return ELEM(data_format, GPU_DATA_UBYTE, GPU_DATA_FLOAT);
+    case GPU_RGB10_A2:
+      return ELEM(data_format, GPU_DATA_2_10_10_10_REV, GPU_DATA_FLOAT);
+    case GPU_R11F_G11F_B10F:
+      return ELEM(data_format, GPU_DATA_10_11_11_REV, GPU_DATA_FLOAT);
+    case GPU_RGBA16F:
+      return ELEM(data_format, GPU_DATA_HALF_FLOAT, GPU_DATA_FLOAT);
+    case GPU_RGBA32F:
+    case GPU_RGBA16:
+    case GPU_RG32F:
+    case GPU_RG16F:
+    case GPU_RG16:
+    case GPU_R32F:
+    case GPU_R16F:
+    case GPU_R16:
+    case GPU_RGB16F:
+      return data_format == GPU_DATA_FLOAT;
+    default:
+      BLI_assert_msg(0, "Unrecognized data format");
       return data_format == GPU_DATA_FLOAT;
   }
 }

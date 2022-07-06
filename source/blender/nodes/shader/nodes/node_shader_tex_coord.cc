@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "node_shader_util.hh"
 
@@ -51,24 +35,18 @@ static int node_shader_gpu_tex_coord(GPUMaterial *mat,
 {
   Object *ob = (Object *)node->id;
 
-  GPUNodeLink *inv_obmat = (ob != nullptr) ? GPU_uniform(&ob->imat[0][0]) :
-                                             GPU_builtin(GPU_INVERSE_OBJECT_MATRIX);
+  /* Use special matrix to let the shader branch to using the render object's matrix. */
+  float dummy_matrix[4][4];
+  dummy_matrix[3][3] = 0.0f;
+  GPUNodeLink *inv_obmat = (ob != NULL) ? GPU_uniform(&ob->imat[0][0]) :
+                                          GPU_uniform(&dummy_matrix[0][0]);
 
   /* Opti: don't request orco if not needed. */
-  const float default_coords[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-  GPUNodeLink *orco = (!out[0].hasoutput) ? GPU_constant(default_coords) :
-                                            GPU_attribute(mat, CD_ORCO, "");
-  GPUNodeLink *mtface = GPU_attribute(mat, CD_MTFACE, "");
-  GPUNodeLink *viewpos = GPU_builtin(GPU_VIEW_POSITION);
-  GPUNodeLink *worldnor = GPU_builtin(GPU_WORLD_NORMAL);
-  GPUNodeLink *texcofacs = GPU_builtin(GPU_CAMERA_TEXCO_FACTORS);
+  float4 zero(0.0f);
+  GPUNodeLink *orco = (!out[0].hasoutput) ? GPU_constant(zero) : GPU_attribute(mat, CD_ORCO, "");
+  GPUNodeLink *mtface = GPU_attribute(mat, CD_AUTO_FROM_NAME, "");
 
-  if (out[0].hasoutput) {
-    GPU_link(mat, "generated_from_orco", orco, &orco);
-  }
-
-  GPU_stack_link(
-      mat, node, "node_tex_coord", in, out, viewpos, worldnor, inv_obmat, texcofacs, orco, mtface);
+  GPU_stack_link(mat, node, "node_tex_coord", in, out, inv_obmat, orco, mtface);
 
   int i;
   LISTBASE_FOREACH_INDEX (bNodeSocket *, sock, &node->outputs, i) {
@@ -77,7 +55,7 @@ static int node_shader_gpu_tex_coord(GPUMaterial *mat,
      * This is the case for interpolated, non linear functions.
      * The resulting vector can still be a bit wrong but not as much.
      * (see T70644) */
-    if (node->branch_tag != 0 && ELEM(i, 1, 6)) {
+    if (ELEM(i, 1, 6)) {
       GPU_link(mat,
                "vector_math_normalize",
                out[i].link,

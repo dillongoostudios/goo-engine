@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2013 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #ifndef __UTIL_HALF_H__
 #define __UTIL_HALF_H__
@@ -87,9 +74,9 @@ struct half4 {
 ccl_device_inline half float_to_half_image(float f)
 {
 #if defined(__KERNEL_METAL__)
-  return half(f);
+  return half(min(f, 65504.0f));
 #elif defined(__KERNEL_CUDA__) || defined(__KERNEL_HIP__)
-  return __float2half(f);
+  return __float2half(min(f, 65504.0f));
 #else
   const uint u = __float_as_uint(f);
   /* Sign bit, shifted to its position. */
@@ -150,9 +137,9 @@ ccl_device_inline float4 half4_to_float4_image(const half4 h)
 ccl_device_inline half float_to_half_display(const float f)
 {
 #if defined(__KERNEL_METAL__)
-  return half(f);
+  return half(min(f, 65504.0f));
 #elif defined(__KERNEL_CUDA__) || defined(__KERNEL_HIP__)
-  return __float2half(f);
+  return __float2half(min(f, 65504.0f));
 #else
   const int x = __float_as_int((f > 0.0f) ? ((f < 65504.0f) ? f : 65504.0f) : 0.0f);
   const int absolute = x & 0x7FFFFFFF;

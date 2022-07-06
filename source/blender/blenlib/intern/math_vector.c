@@ -1,23 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * The Original Code is: some of this file.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bli
@@ -286,12 +268,12 @@ void mid_v3_v3v3v3v3(
   v[2] = (v1[2] + v2[2] + v3[2] + v4[2]) / 4.0f;
 }
 
-void mid_v3_v3_array(float r[3], const float (*vec_arr)[3], const uint nbr)
+void mid_v3_v3_array(float r[3], const float (*vec_arr)[3], const uint vec_arr_num)
 {
-  const float factor = 1.0f / (float)nbr;
+  const float factor = 1.0f / (float)vec_arr_num;
   zero_v3(r);
 
-  for (uint i = 0; i < nbr; i++) {
+  for (uint i = 0; i < vec_arr_num; i++) {
     madd_v3_v3fl(r, vec_arr[i], factor);
   }
 }
@@ -307,7 +289,7 @@ void mid_v3_v3v3_angle_weighted(float r[3], const float a[3], const float b[3])
   BLI_ASSERT_UNIT_V3(b);
 
   add_v3_v3v3(r, a, b);
-  angle = ((float)(1.0 / (M_PI / 2.0)) *
+  angle = ((float)M_2_PI *
            /* normally we would only multiply by 2,
             * but instead of an angle make this 0-1 factor */
            2.0f) *
@@ -323,7 +305,7 @@ void mid_v3_angle_weighted(float r[3])
   /* double check they are normalized */
   BLI_assert(len_squared_v3(r) <= 1.0f + FLT_EPSILON);
 
-  angle = ((float)(1.0 / (M_PI / 2.0)) *
+  angle = ((float)M_2_PI *
            /* normally we would only multiply by 2,
             * but instead of an angle make this 0-1 factor */
            2.0f) *
@@ -922,9 +904,12 @@ void minmax_v2v2_v2(float min[2], float max[2], const float vec[2])
   }
 }
 
-void minmax_v3v3_v3_array(float r_min[3], float r_max[3], const float (*vec_arr)[3], int nbr)
+void minmax_v3v3_v3_array(float r_min[3],
+                          float r_max[3],
+                          const float (*vec_arr)[3],
+                          int var_arr_num)
 {
-  while (nbr--) {
+  while (var_arr_num--) {
     minmax_v3v3_v3(r_min, r_max, *vec_arr++);
   }
 }

@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2016, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. */
 
 /** \file
  * \ingroup draw
@@ -35,6 +20,7 @@ struct ParticleSystem;
 struct Volume;
 struct VolumeGrid;
 struct bGPDstroke;
+struct bGPdata;
 
 /**
  * Shape resolution level of detail.
@@ -201,17 +187,7 @@ struct GPUBatch *DRW_cache_text_edge_wire_get(struct Object *ob);
 
 /* Surface */
 
-struct GPUBatch *DRW_cache_surf_surface_get(struct Object *ob);
 struct GPUBatch *DRW_cache_surf_edge_wire_get(struct Object *ob);
-struct GPUBatch *DRW_cache_surf_loose_edges_get(struct Object *ob);
-
-/* Return list of batches */
-
-struct GPUBatch **DRW_cache_surf_surface_shaded_get(struct Object *ob,
-                                                    struct GPUMaterial **gpumat_array,
-                                                    uint gpumat_array_len);
-struct GPUBatch *DRW_cache_surf_face_wireframe_get(struct Object *ob);
-struct GPUBatch *DRW_cache_surf_edge_detection_get(struct Object *ob, bool *r_is_manifold);
 
 /* Lattice */
 
@@ -246,14 +222,14 @@ struct GPUBatch **DRW_cache_mball_surface_shaded_get(struct Object *ob,
 struct GPUBatch *DRW_cache_mball_face_wireframe_get(struct Object *ob);
 struct GPUBatch *DRW_cache_mball_edge_detection_get(struct Object *ob, bool *r_is_manifold);
 
-/* Hair */
+/* Curves */
 
-struct GPUBatch *DRW_cache_hair_surface_get(struct Object *ob);
-struct GPUBatch **DRW_cache_hair_surface_shaded_get(struct Object *ob,
-                                                    struct GPUMaterial **gpumat_array,
-                                                    uint gpumat_array_len);
-struct GPUBatch *DRW_cache_hair_face_wireframe_get(struct Object *ob);
-struct GPUBatch *DRW_cache_hair_edge_detection_get(struct Object *ob, bool *r_is_manifold);
+struct GPUBatch *DRW_cache_curves_surface_get(struct Object *ob);
+struct GPUBatch **DRW_cache_curves_surface_shaded_get(struct Object *ob,
+                                                      struct GPUMaterial **gpumat_array,
+                                                      uint gpumat_array_len);
+struct GPUBatch *DRW_cache_curves_face_wireframe_get(struct Object *ob);
+struct GPUBatch *DRW_cache_curves_edge_detection_get(struct Object *ob, bool *r_is_manifold);
 
 /* PointCloud */
 
@@ -295,6 +271,7 @@ struct GPUBatch *DRW_cache_gpencil_edit_curve_handles_get(struct Object *ob, int
 struct GPUBatch *DRW_cache_gpencil_edit_curve_points_get(struct Object *ob, int cfra);
 struct GPUBatch *DRW_cache_gpencil_sbuffer_stroke_get(struct Object *ob);
 struct GPUBatch *DRW_cache_gpencil_sbuffer_fill_get(struct Object *ob);
+int DRW_gpencil_material_count_get(struct bGPdata *gpd);
 
 struct GPUBatch *DRW_cache_gpencil_face_wireframe_get(struct Object *ob);
 

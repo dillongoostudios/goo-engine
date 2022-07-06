@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup wm
@@ -241,35 +225,73 @@ typedef enum eOperatorPropTags {
 } eOperatorPropTags;
 #define OP_PROP_TAG_ADVANCED ((eOperatorPropTags)OP_PROP_TAG_ADVANCED)
 
-/* ************** wmKeyMap ************************ */
+/* -------------------------------------------------------------------- */
+/** \name #wmKeyMapItem
+ * \{ */
 
-/* modifier */
-#define KM_SHIFT 1
-#define KM_CTRL 2
-#define KM_ALT 4
-#define KM_OSKEY 8
+/**
+ * Modifier keys, not actually used for #wmKeyMapItem (never stored in DNA), used for:
+ * - #wmEvent.modifier without the `KM_*_ANY` flags.
+ * - #WM_keymap_add_item & #WM_modalkeymap_add_item
+ */
+enum {
+  KM_SHIFT = (1 << 0),
+  KM_CTRL = (1 << 1),
+  KM_ALT = (1 << 2),
+  /** Use for Windows-Key on MS-Windows, Command-key on macOS and Super on Linux. */
+  KM_OSKEY = (1 << 3),
 
-/* Used for key-map item creation function arguments (never stored in DNA). */
-#define KM_SHIFT_ANY 16
-#define KM_CTRL_ANY 32
-#define KM_ALT_ANY 64
-#define KM_OSKEY_ANY 128
+  /* Used for key-map item creation function arguments. */
+  KM_SHIFT_ANY = (1 << 4),
+  KM_CTRL_ANY = (1 << 5),
+  KM_ALT_ANY = (1 << 6),
+  KM_OSKEY_ANY = (1 << 7),
+};
 
-/* KM_MOD_ flags for `wmKeyMapItem` and `wmEvent.alt/shift/oskey/ctrl`. */
-/* note that KM_ANY and KM_NOTHING are used with these defines too */
+/* `KM_MOD_*` flags for #wmKeyMapItem and `wmEvent.alt/shift/oskey/ctrl`. */
+/* Note that #KM_ANY and #KM_NOTHING are used with these defines too. */
 #define KM_MOD_HELD 1
 
-/* type: defined in wm_event_types.c */
-#define KM_TEXTINPUT -2
+/**
+ * #wmKeyMapItem.type
+ * NOTE: most types are defined in `wm_event_types.h`.
+ */
+enum {
+  KM_TEXTINPUT = -2,
+};
 
-/* val */
-#define KM_ANY -1
-#define KM_NOTHING 0
-#define KM_PRESS 1
-#define KM_RELEASE 2
-#define KM_CLICK 3
-#define KM_DBL_CLICK 4
-#define KM_CLICK_DRAG 5
+/** #wmKeyMapItem.val */
+enum {
+  KM_ANY = -1,
+  KM_NOTHING = 0,
+  KM_PRESS = 1,
+  KM_RELEASE = 2,
+  KM_CLICK = 3,
+  KM_DBL_CLICK = 4,
+  /**
+   * \note The cursor location at the point dragging starts is set to #wmEvent.prev_press_xy
+   * some operators such as box selection should use this location instead of #wmEvent.xy.
+   */
+  KM_CLICK_DRAG = 5,
+};
+
+/**
+ * #wmKeyMapItem.direction
+ *
+ * Direction set for #KM_CLICK_DRAG key-map items. #KM_ANY (-1) to ignore direction.
+ */
+enum {
+  KM_DIRECTION_N = 1,
+  KM_DIRECTION_NE = 2,
+  KM_DIRECTION_E = 3,
+  KM_DIRECTION_SE = 4,
+  KM_DIRECTION_S = 5,
+  KM_DIRECTION_SW = 6,
+  KM_DIRECTION_W = 7,
+  KM_DIRECTION_NW = 8,
+};
+
+/** \} */
 
 /* ************** UI Handler ***************** */
 
@@ -486,6 +508,7 @@ typedef struct wmNotifier {
 #define NS_EDITMODE_ARMATURE (8 << 8)
 #define NS_MODE_POSE (9 << 8)
 #define NS_MODE_PARTICLE (10 << 8)
+#define NS_EDITMODE_CURVES (11 << 8)
 
 /* subtype 3d view editing */
 #define NS_VIEW3D_GPU (16 << 8)
@@ -509,7 +532,6 @@ typedef struct wmNotifier {
 /* ************** Gesture Manager data ************** */
 
 /* wmGesture->type */
-#define WM_GESTURE_TWEAK 0
 #define WM_GESTURE_LINES 1
 #define WM_GESTURE_RECT 2
 #define WM_GESTURE_CROSS_RECT 3
@@ -519,12 +541,15 @@ typedef struct wmNotifier {
 
 /**
  * wmGesture is registered to #wmWindow.gesture, handled by operator callbacks.
- * Tweak gesture is builtin feature.
  */
 typedef struct wmGesture {
   struct wmGesture *next, *prev;
   /** #wmEvent.type */
   int event_type;
+  /** #wmEvent.modifier */
+  uint8_t event_modifier;
+  /** #wmEvent.keymodifier */
+  short event_keymodifier;
   /** Gesture type define. */
   int type;
   /** bounds of region to draw gesture within. */
@@ -571,6 +596,27 @@ typedef struct wmGesture {
 
 /* ************** wmEvent ************************ */
 
+typedef enum eWM_EventFlag {
+  /**
+   * True if the operating system inverted the delta x/y values and resulting
+   * `prev_xy` values, for natural scroll direction.
+   * For absolute scroll direction, the delta must be negated again.
+   */
+  WM_EVENT_SCROLL_INVERT = (1 << 0),
+  /**
+   * Generated by auto-repeat, note that this must only ever be set for keyboard events
+   * where `ISKEYBOARD(event->type) == true`.
+   *
+   * See #KMI_REPEAT_IGNORE for details on how key-map handling uses this.
+   */
+  WM_EVENT_IS_REPEAT = (1 << 1),
+  /**
+   * Mouse-move events may have this flag set to force creating a click-drag event
+   * even when the threshold has not been met.
+   */
+  WM_EVENT_FORCE_DRAG_THRESHOLD = (1 << 2),
+} eWM_EventFlag;
+
 typedef struct wmTabletData {
   /** 0=EVT_TABLET_NONE, 1=EVT_TABLET_STYLUS, 2=EVT_TABLET_ERASER. */
   int active;
@@ -589,23 +635,39 @@ typedef struct wmTabletData {
  * event comes from event manager and from keymap.
  *
  *
- * Previous State
- * ==============
+ * Previous State (`prev_*`)
+ * =========================
  *
- * Events hold information about the previous event,
- * this is used for detecting click and double-click events (the timer is needed for double-click).
- * See #wm_event_add_ghostevent for implementation details.
+ * Events hold information about the previous event.
  *
- * Notes:
- *
- * - The previous values are only set for mouse button and keyboard events.
- *   See: #ISMOUSE_BUTTON & #ISKEYBOARD macros.
+ * - Previous values are only set for events types that generate #KM_PRESS.
+ *   See: #ISKEYBOARD_OR_BUTTON.
  *
  * - Previous x/y are exceptions: #wmEvent.prev
  *   these are set on mouse motion, see #MOUSEMOVE & track-pad events.
  *
  * - Modal key-map handling sets `prev_val` & `prev_type` to `val` & `type`,
  *   this allows modal keys-maps to check the original values (needed in some cases).
+ *
+ *
+ * Press State (`prev_press_*`)
+ * ============================
+ *
+ * Events hold information about the state when the last #KM_PRESS event was added.
+ * This is used for generating #KM_CLICK, #KM_DBL_CLICK & #KM_CLICK_DRAG events.
+ * See #wm_handlers_do for the implementation.
+ *
+ * - Previous values are only set when a #KM_PRESS event is detected.
+ *   See: #ISKEYBOARD_OR_BUTTON.
+ *
+ * - The reason to differentiate between "press" and the previous event state is
+ *   the previous event may be set by key-release events. In the case of a single key click
+ *   this isn't a problem however releasing other keys such as modifiers prevents click/click-drag
+ *   events from being detected, see: T89989.
+ *
+ * - Mouse-wheel events are excluded even though they generate #KM_PRESS
+ *   as clicking and dragging don't make sense for mouse wheel events.
+ *
  */
 typedef struct wmEvent {
   struct wmEvent *next, *prev;
@@ -627,52 +689,62 @@ typedef struct wmEvent {
   /** From ghost, fallback if utf8 isn't set. */
   char ascii;
 
-  /**
-   * Generated by auto-repeat, note that this must only ever be set for keyboard events
-   * where `ISKEYBOARD(event->type) == true`.
-   *
-   * See #KMI_REPEAT_IGNORE for details on how key-map handling uses this.
-   */
-  char is_repeat;
+  /** Modifier states: #KM_SHIFT, #KM_CTRL, #KM_ALT & #KM_OSKEY. */
+  uint8_t modifier;
 
-  /** The previous value of `type`. */
-  short prev_type;
-  /** The previous value of `val`. */
-  short prev_val;
-  /** The time when the key is pressed, see #PIL_check_seconds_timer. */
-  double prev_click_time;
-  /** The location when the key is pressed (used to enforce drag thresholds). */
-  int prev_click_xy[2];
-  /**
-   * The previous value of #wmEvent.xy,
-   * Unlike other previous state variables, this is set on any mouse motion.
-   * Use `prev_click` for the value at time of pressing.
-   */
-  int prev_xy[2];
+  /** The direction (for #KM_CLICK_DRAG events only). */
+  int8_t direction;
 
-  /** Modifier states. */
-  /** 'oskey' is apple or windows-key, value denotes order of pressed. */
-  short shift, ctrl, alt, oskey;
-  /** Raw-key modifier (allow using any key as a modifier). */
+  /**
+   * Raw-key modifier (allow using any key as a modifier).
+   * Compatible with values in `type`.
+   */
   short keymodifier;
 
   /** Tablet info, available for mouse move and button events. */
   wmTabletData tablet;
 
+  eWM_EventFlag flag;
+
   /* Custom data. */
-  /** Custom data type, stylus, 6dof, see wm_event_types.h */
+
+  /** Custom data type, stylus, 6-DOF, see `wm_event_types.h`. */
   short custom;
   short customdata_free;
-  int pad2;
   /** Ascii, unicode, mouse-coords, angles, vectors, NDOF data, drag-drop info. */
   void *customdata;
 
+  /* Previous State. */
+
+  /** The previous value of `type`. */
+  short prev_type;
+  /** The previous value of `val`. */
+  short prev_val;
   /**
-   * True if the operating system inverted the delta x/y values and resulting
-   * `prev_xy` values, for natural scroll direction.
-   * For absolute scroll direction, the delta must be negated again.
+   * The previous value of #wmEvent.xy,
+   * Unlike other previous state variables, this is set on any mouse motion.
+   * Use `prev_press_*` for the value at time of pressing.
    */
-  char is_direction_inverted;
+  int prev_xy[2];
+
+  /* Previous Press State (when `val == KM_PRESS`). */
+
+  /** The `type` at the point of the press action. */
+  short prev_press_type;
+  /**
+   * The location when the key is pressed.
+   * used to enforce drag threshold & calculate the `direction`.
+   */
+  int prev_press_xy[2];
+  /** The `modifier` at the point of the press action. */
+  uint8_t prev_press_modifier;
+  /** The `keymodifier` at the point of the press action. */
+  short prev_press_keymodifier;
+  /**
+   * The time when the key is pressed, see #PIL_check_seconds_timer.
+   * Used to detect double-click events.
+   */
+  double prev_press_time;
 } wmEvent;
 
 /**
@@ -1048,6 +1120,10 @@ typedef struct wmDragActiveDropState {
    * it as needed. */
   struct ARegion *region_from;
 
+  /** If `active_dropbox` is set, additional context provided by the active (i.e. hovered) button.
+   * Activated before context sensitive operations (polling, drawing, dropping). */
+  struct bContextStore *ui_context;
+
   /** Text to show when a dropbox poll succeeds (so the dropbox itself is available) but the
    * operator poll fails. Typically the message the operator set with
    * CTX_wm_operator_poll_msg_set(). */
@@ -1067,8 +1143,7 @@ typedef struct wmDrag {
 
   /** If no icon but imbuf should be drawn around cursor. */
   struct ImBuf *imb;
-  float scale;
-  int sx, sy;
+  float imbuf_scale;
 
   wmDragActiveDropState drop_state;
 
@@ -1081,36 +1156,58 @@ typedef struct wmDrag {
 } wmDrag;
 
 /**
- * Dropboxes are like keymaps, part of the screen/area/region definition.
+ * Drop-boxes are like key-maps, part of the screen/area/region definition.
  * Allocation and free is on startup and exit.
  *
  * The operator is polled and invoked with the current context (#WM_OP_INVOKE_DEFAULT), there is no
- * way to override that (by design, since dropboxes should act on the exact mouse position). So the
- * drop-boxes are supposed to check the required area and region context in their poll.
+ * way to override that (by design, since drop-boxes should act on the exact mouse position).
+ * So the drop-boxes are supposed to check the required area and region context in their poll.
  */
 typedef struct wmDropBox {
   struct wmDropBox *next, *prev;
 
   /** Test if the dropbox is active. */
-  bool (*poll)(struct bContext *, struct wmDrag *, const wmEvent *);
+  bool (*poll)(struct bContext *C, struct wmDrag *drag, const wmEvent *event);
+
+  /** Called when the drag action starts. Can be used to prefetch data for previews.
+   * \note The dropbox that will be called eventually is not known yet when starting the drag.
+   * So this callback is called on every dropbox that is registered in the current screen. */
+  void (*on_drag_start)(struct bContext *C, struct wmDrag *drag);
 
   /** Before exec, this copies drag info to #wmDrop properties. */
-  void (*copy)(struct wmDrag *, struct wmDropBox *);
+  void (*copy)(struct bContext *C, struct wmDrag *drag, struct wmDropBox *drop);
 
   /**
-   * If the operator is cancelled (returns `OPERATOR_CANCELLED`), this can be used for cleanup of
+   * If the operator is canceled (returns `OPERATOR_CANCELLED`), this can be used for cleanup of
    * `copy()` resources.
    */
-  void (*cancel)(struct Main *, struct wmDrag *, struct wmDropBox *);
+  void (*cancel)(struct Main *bmain, struct wmDrag *drag, struct wmDropBox *drop);
 
-  /** Override the default drawing function. */
-  void (*draw)(struct bContext *, struct wmWindow *, struct wmDrag *, const int *);
+  /**
+   * Override the default cursor overlay drawing function.
+   * Can be used to draw text or thumbnails. IE a tooltip for drag and drop.
+   * \param xy: Cursor location in window coordinates (#wmEvent.xy compatible).
+   */
+  void (*draw_droptip)(struct bContext *C,
+                       struct wmWindow *win,
+                       struct wmDrag *drag,
+                       const int xy[2]);
 
-  /** Called when pool returns true the first time. */
-  void (*draw_activate)(struct wmDropBox *, struct wmDrag *drag);
+  /** Called with the draw buffer (#GPUViewport) set up for drawing into the region's view.
+   * \note Only setups the drawing buffer for drawing in view, not the GPU transform matricies.
+   * The callback has to do that itself, with for example #UI_view2d_view_ortho.
+   * \param xy: Cursor location in window coordinates (#wmEvent.xy compatible).
+   */
+  void (*draw_in_view)(struct bContext *C,
+                       struct wmWindow *win,
+                       struct wmDrag *drag,
+                       const int xy[2]);
 
-  /** Called when pool returns false the first time or when the drag event ends. */
-  void (*draw_deactivate)(struct wmDropBox *, struct wmDrag *drag);
+  /** Called when poll returns true the first time. */
+  void (*draw_activate)(struct wmDropBox *drop, struct wmDrag *drag);
+
+  /** Called when poll returns false the first time or when the drag event ends. */
+  void (*draw_deactivate)(struct wmDropBox *drop, struct wmDrag *drag);
 
   /** Custom data for drawing. */
   void *draw_data;
@@ -1167,6 +1264,7 @@ typedef struct RecentFile {
 /* Logging */
 struct CLG_LogRef;
 /* wm_init_exit.c */
+
 extern struct CLG_LogRef *WM_LOG_OPERATORS;
 extern struct CLG_LogRef *WM_LOG_HANDLERS;
 extern struct CLG_LogRef *WM_LOG_EVENTS;

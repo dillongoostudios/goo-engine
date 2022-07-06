@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
@@ -1871,23 +1857,23 @@ double incircle(const double *pa, const double *pb, const double *pc, const doub
 }
 
 /**
- *  inspherefast()   Approximate 3D insphere test.  Non-robust.
- *  insphere()   Adaptive exact 3D insphere test.  Robust.
+ * inspherefast()   Approximate 3D insphere test.  Non-robust.
+ * insphere()   Adaptive exact 3D insphere test.  Robust.
  *
- *               Return a positive value if the point pe lies inside the
- *               sphere passing through pa, pb, pc, and pd; a negative value
- *               if it lies outside; and zero if the five points are
- *               co-spherical.  The points pa, pb, pc, and pd must be ordered
- *               so that they have a positive orientation (as defined by
- *               orient3d()), or the sign of the result will be reversed.
+ *              Return a positive value if the point pe lies inside the
+ *              sphere passing through pa, pb, pc, and pd; a negative value
+ *              if it lies outside; and zero if the five points are
+ *              co-spherical.  The points pa, pb, pc, and pd must be ordered
+ *              so that they have a positive orientation (as defined by
+ *              orient3d()), or the sign of the result will be reversed.
  *
- *  The second uses exact arithmetic to ensure a correct answer.  The
- *  result returned is the determinant of a matrix.  In insphere() only,
- *  this determinant is computed adaptively, in the sense that exact
- *  arithmetic is used only to the degree it is needed to ensure that the
- *  returned value has the correct sign.  Hence, insphere() is usually quite
- *  fast, but will run more slowly when the input points are co-spherical or
- *  nearly so.
+ * The second uses exact arithmetic to ensure a correct answer.  The
+ * result returned is the determinant of a matrix.  In insphere() only,
+ * this determinant is computed adaptively, in the sense that exact
+ * arithmetic is used only to the degree it is needed to ensure that the
+ * returned value has the correct sign.  Hence, insphere() is usually quite
+ * fast, but will run more slowly when the input points are co-spherical or
+ * nearly so.
  */
 
 double inspherefast(

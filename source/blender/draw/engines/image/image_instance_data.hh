@@ -1,26 +1,13 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2021, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
  */
 
 #pragma once
+
+#include "BKE_image_wrappers.hh"
 
 #include "image_batches.hh"
 #include "image_buffer_cache.hh"
@@ -29,14 +16,11 @@
 #include "image_shader_params.hh"
 #include "image_texture_info.hh"
 #include "image_usage.hh"
-#include "image_wrappers.hh"
 
 #include "DRW_render.h"
 
 /**
  * \brief max allowed textures to use by the ScreenSpaceDrawingMode.
- *
- * 4 textures are used to reduce uploading screen space textures when translating the image.
  */
 constexpr int SCREEN_SPACE_DRAWING_MODE_TEXTURE_LEN = 1;
 
@@ -91,8 +75,10 @@ struct IMAGE_InstanceData {
       TextureInfo &info = texture_infos[i];
       const bool is_allocated = info.texture != nullptr;
       const bool is_visible = info.visible;
-      const bool should_be_freed = !is_visible && is_allocated;
-      const bool should_be_created = is_visible && !is_allocated;
+      const bool resolution_changed = assign_if_different(info.last_viewport_size,
+                                                          float2(DRW_viewport_size_get()));
+      const bool should_be_freed = is_allocated && (!is_visible || resolution_changed);
+      const bool should_be_created = is_visible && (!is_allocated || resolution_changed);
 
       if (should_be_freed) {
         GPU_texture_free(info.texture);

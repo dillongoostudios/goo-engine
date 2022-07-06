@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2021 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 #pragma once
 
@@ -61,7 +48,7 @@ ccl_device float3 integrator_eval_background_shader(KernelGlobals kg,
 
     PROFILING_SHADER(emission_sd->object, emission_sd->shader);
     PROFILING_EVENT(PROFILING_SHADE_LIGHT_EVAL);
-    shader_eval_surface<KERNEL_FEATURE_NODE_MASK_SURFACE_LIGHT>(
+    shader_eval_surface<KERNEL_FEATURE_NODE_MASK_SURFACE_BACKGROUND>(
         kg, state, emission_sd, render_buffer, path_flag | PATH_RAY_EMISSION);
 
     L = shader_background_eval(emission_sd);
@@ -114,6 +101,22 @@ ccl_device_inline void integrate_background(KernelGlobals kg,
 #endif
   }
 
+#ifdef __MNEE__
+  if (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_CULL_LIGHT_CONNECTION) {
+    if (kernel_data.background.use_mis) {
+      for (int lamp = 0; lamp < kernel_data.integrator.num_all_lights; lamp++) {
+        /* This path should have been resolved with mnee, it will
+         * generate a firefly for small lights since it is improbable. */
+        const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, lamp);
+        if (klight->type == LIGHT_BACKGROUND && klight->use_caustics) {
+          eval_background = false;
+          break;
+        }
+      }
+    }
+  }
+#endif /* __MNEE__ */
+
   /* Evaluate background shader. */
   float3 L = (eval_background) ? integrator_eval_background_shader(kg, state, render_buffer) :
                                  zero_float3();
@@ -153,6 +156,16 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
       }
 #endif
 
+#ifdef __MNEE__
+      if (INTEGRATOR_STATE(state, path, mnee) & PATH_MNEE_CULL_LIGHT_CONNECTION) {
+        /* This path should have been resolved with mnee, it will
+         * generate a firefly for small lights since it is improbable. */
+        const ccl_global KernelLight *klight = &kernel_tex_fetch(__lights, lamp);
+        if (klight->use_caustics)
+          return;
+      }
+#endif /* __MNEE__ */
+
       /* Evaluate light shader. */
       /* TODO: does aliasing like this break automatic SoA in CUDA? */
       ShaderDataTinyStorage emission_sd_storage;
@@ -173,7 +186,8 @@ ccl_device_inline void integrate_distant_lights(KernelGlobals kg,
 
       /* Write to render buffer. */
       const float3 throughput = INTEGRATOR_STATE(state, path, throughput);
-      kernel_accum_emission(kg, state, throughput * light_eval, render_buffer);
+      kernel_accum_emission(
+          kg, state, throughput * light_eval, render_buffer, kernel_data.background.lightgroup);
     }
   }
 }

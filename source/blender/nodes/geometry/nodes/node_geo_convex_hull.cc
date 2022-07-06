@@ -1,26 +1,12 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_pointcloud_types.h"
 
+#include "BKE_curves.hh"
 #include "BKE_material.h"
 #include "BKE_mesh.h"
-#include "BKE_spline.hh"
 
 #include "node_geometry_util.hh"
 
@@ -44,25 +30,25 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
 {
   plConvexHull hull = plConvexHullCompute((float(*)[3])coords.data(), coords.size());
 
-  const int num_verts = plConvexHullNumVertices(hull);
-  const int num_faces = num_verts <= 2 ? 0 : plConvexHullNumFaces(hull);
-  const int num_loops = num_verts <= 2 ? 0 : plConvexHullNumLoops(hull);
+  const int verts_num = plConvexHullNumVertices(hull);
+  const int faces_num = verts_num <= 2 ? 0 : plConvexHullNumFaces(hull);
+  const int loops_num = verts_num <= 2 ? 0 : plConvexHullNumLoops(hull);
   /* Half as many edges as loops, because the mesh is manifold. */
-  const int num_edges = num_verts == 2 ? 1 : num_verts < 2 ? 0 : num_loops / 2;
+  const int edges_num = verts_num == 2 ? 1 : verts_num < 2 ? 0 : loops_num / 2;
 
   /* Create Mesh *result with proper capacity. */
   Mesh *result;
   if (mesh) {
     result = BKE_mesh_new_nomain_from_template(
-        mesh, num_verts, num_edges, 0, num_loops, num_faces);
+        mesh, verts_num, edges_num, 0, loops_num, faces_num);
   }
   else {
-    result = BKE_mesh_new_nomain(num_verts, num_edges, 0, num_loops, num_faces);
+    result = BKE_mesh_new_nomain(verts_num, edges_num, 0, loops_num, faces_num);
     BKE_id_material_eval_ensure_default_slot(&result->id);
   }
 
   /* Copy vertices. */
-  for (const int i : IndexRange(num_verts)) {
+  for (const int i : IndexRange(verts_num)) {
     float co[3];
     int original_index;
     plConvexHullGetVertex(hull, i, co, &original_index);
@@ -87,9 +73,9 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
   /* NOTE: ConvexHull from Bullet uses a half-edge data structure
    * for its mesh. To convert that, each half-edge needs to be converted
    * to a loop and edges need to be created from that. */
-  Array<MLoop> mloop_src(num_loops);
+  Array<MLoop> mloop_src(loops_num);
   uint edge_index = 0;
-  for (const int i : IndexRange(num_loops)) {
+  for (const int i : IndexRange(loops_num)) {
     int v_from;
     int v_to;
     plConvexHullGetLoop(hull, i, &v_from, &v_to);
@@ -109,7 +95,7 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
       edge_index++;
     }
   }
-  if (num_edges == 1) {
+  if (edges_num == 1) {
     /* In this case there are no loops. */
     MEdge &edge = result->medge[0];
     edge.v1 = 0;
@@ -117,13 +103,13 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
     edge.flag |= ME_EDGEDRAW | ME_EDGERENDER | ME_LOOSEEDGE;
     edge_index++;
   }
-  BLI_assert(edge_index == num_edges);
+  BLI_assert(edge_index == edges_num);
 
   /* Copy faces. */
   Array<int> loops;
   int j = 0;
   MLoop *loop = result->mloop;
-  for (const int i : IndexRange(num_faces)) {
+  for (const int i : IndexRange(faces_num)) {
     const int len = plConvexHullGetFaceSize(hull, i);
 
     BLI_assert(len > 2);
@@ -145,8 +131,6 @@ static Mesh *hull_from_bullet(const Mesh *mesh, Span<float3> coords)
   }
 
   plConvexHullDelete(hull);
-
-  BKE_mesh_normals_tag_dirty(result);
   return result;
 }
 
@@ -175,14 +159,13 @@ static Mesh *compute_hull(const GeometrySet &geometry_set)
     positions_span = varray.get_internal_span();
   }
 
-  if (geometry_set.has_curve()) {
-    const CurveEval &curve = *geometry_set.get_curve_for_read();
-    for (const SplinePtr &spline : curve.splines()) {
-      positions_span = spline->evaluated_positions();
-      total_size += positions_span.size();
-      count++;
-      span_count++;
-    }
+  if (geometry_set.has_curves()) {
+    count++;
+    span_count++;
+    const Curves &curves_id = *geometry_set.get_curves_for_read();
+    const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
+    positions_span = curves.evaluated_positions();
+    total_size += positions_span.size();
   }
 
   if (count == 0) {
@@ -215,84 +198,16 @@ static Mesh *compute_hull(const GeometrySet &geometry_set)
     offset += varray.size();
   }
 
-  if (geometry_set.has_curve()) {
-    const CurveEval &curve = *geometry_set.get_curve_for_read();
-    for (const SplinePtr &spline : curve.splines()) {
-      Span<float3> array = spline->evaluated_positions();
-      positions.as_mutable_span().slice(offset, array.size()).copy_from(array);
-      offset += array.size();
-    }
+  if (geometry_set.has_curves()) {
+    const Curves &curves_id = *geometry_set.get_curves_for_read();
+    const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
+    Span<float3> array = curves.evaluated_positions();
+    positions.as_mutable_span().slice(offset, array.size()).copy_from(array);
+    offset += array.size();
   }
 
   return hull_from_bullet(geometry_set.get_mesh_for_read(), positions);
 }
-
-/* Since only positions are read from the instances, this can be used as an internal optimization
- * to avoid the cost of realizing instances before the node. But disable this for now, since
- * re-enabling that optimization will be a separate step. */
-#  if 0
-static void read_positions(const GeometryComponent &component,
-                                           Span<float4x4> transforms,
-                                           Vector<float3> *r_coords)
-{
-  VArray<float3> positions = component.attribute_get_for_read<float3>(
-      "position", ATTR_DOMAIN_POINT, {0, 0, 0});
-
-  /* NOTE: could use convex hull operation here to
-   * cut out some vertices, before accumulating,
-   * but can also be done by the user beforehand. */
-
-  r_coords->reserve(r_coords->size() + positions->size() * transforms.size());
-  for (const float4x4 &transform : transforms) {
-    for (const int i : positions->index_range()) {
-      const float3 position = positions[i];
-      const float3 transformed_position = transform * position;
-      r_coords->append(transformed_position);
-    }
-  }
-}
-
-static void read_curve_positions(const CurveEval &curve,
-                                 Span<float4x4> transforms,
-                                 Vector<float3> *r_coords)
-{
-  const Array<int> offsets = curve.evaluated_point_offsets();
-  const int total_size = offsets.last();
-  r_coords->reserve(r_coords->size() + total_size * transforms.size());
-  for (const SplinePtr &spline : curve.splines()) {
-    Span<float3> positions = spline->evaluated_positions();
-    for (const float4x4 &transform : transforms) {
-      for (const float3 &position : positions) {
-        r_coords->append(transform * position);
-      }
-    }
-  }
-}
-
-static Mesh *convex_hull_from_instances(const GeometrySet &geometry_set)
-{
-  Vector<GeometryInstanceGroup> set_groups;
-  bke::geometry_set_gather_instances(geometry_set, set_groups);
-
-  Vector<float3> coords;
-
-  for (const GeometryInstanceGroup &set_group : set_groups) {
-    const GeometrySet &set = set_group.geometry_set;
-    Span<float4x4> transforms = set_group.transforms;
-
-    if (set.has_pointcloud()) {
-      read_positions(*set.get_component_for_read<PointCloudComponent>(), transforms, &coords);
-    }
-    if (set.has_mesh()) {
-      read_positions(*set.get_component_for_read<MeshComponent>(), transforms, &coords);
-    }
-    if (set.has_curve()) {
-      read_curve_positions(*set.get_curve_for_read(), transforms, &coords);
-    }
-  }
-  return hull_from_bullet(nullptr, coords);
-}
-#  endif
 
 #endif /* WITH_BULLET */
 

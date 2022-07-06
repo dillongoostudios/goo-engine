@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 
@@ -166,6 +150,22 @@ class NLA_MT_marker(Menu):
         marker_menu_generic(layout, context)
 
 
+class NLA_MT_marker_select(Menu):
+    bl_label = 'Select'
+
+    def draw(self, context):
+        layout = self.layout
+
+        layout.operator("marker.select_all", text="All").action = 'SELECT'
+        layout.operator("marker.select_all", text="None").action = 'DESELECT'
+        layout.operator("marker.select_all", text="Invert").action = 'INVERT'
+
+        layout.separator()
+
+        layout.operator("marker.select_leftright", text="Before Current Frame").mode = 'LEFT'
+        layout.operator("marker.select_leftright", text="After Current Frame").mode = 'RIGHT'
+
+
 class NLA_MT_edit(Menu):
     bl_label = "Edit"
 
@@ -179,6 +179,7 @@ class NLA_MT_edit(Menu):
         layout.operator_menu_enum("nla.snap", "type", text="Snap")
 
         layout.separator()
+        layout.operator("nla.bake", text="Bake Action")
         layout.operator("nla.duplicate", text="Duplicate").linked = False
         layout.operator("nla.duplicate", text="Linked Duplicate").linked = True
         layout.operator("nla.split")
@@ -213,7 +214,10 @@ class NLA_MT_edit(Menu):
             layout.operator("nla.tweakmode_exit", text="Stop Tweaking Strip Actions")
         else:
             layout.operator("nla.tweakmode_enter", text="Start Editing Stashed Action").isolate_action = True
-            layout.operator("nla.tweakmode_enter", text="Start Tweaking Strip Actions")
+            layout.operator("nla.tweakmode_enter",
+                            text="Start Tweaking Strip Actions (Full Stack)").use_upper_stack_evaluation = True
+            layout.operator("nla.tweakmode_enter",
+                            text="Start Tweaking Strip Actions (Lower Stack)").use_upper_stack_evaluation = False
 
 
 class NLA_MT_add(Menu):
@@ -287,10 +291,16 @@ class NLA_MT_context_menu(Menu):
             layout.operator("nla.tweakmode_exit", text="Stop Tweaking Strip Actions")
         else:
             layout.operator("nla.tweakmode_enter", text="Start Editing Stashed Action").isolate_action = True
-            layout.operator("nla.tweakmode_enter", text="Start Tweaking Strip Actions")
+            layout.operator("nla.tweakmode_enter",
+                            text="Start Tweaking Strip Actions (Full Stack)").use_upper_stack_evaluation = True
+            layout.operator("nla.tweakmode_enter",
+                            text="Start Tweaking Strip Actions (Lower Stack)").use_upper_stack_evaluation = False
 
         layout.separator()
 
+        props = layout.operator("wm.call_panel", text="Rename...")
+        props.name = "TOPBAR_PT_name"
+        props.keep_open = False
         layout.operator("nla.duplicate", text="Duplicate").linked = False
         layout.operator("nla.duplicate", text="Linked Duplicate").linked = True
 
@@ -325,6 +335,7 @@ classes = (
     NLA_MT_view,
     NLA_MT_select,
     NLA_MT_marker,
+    NLA_MT_marker_select,
     NLA_MT_add,
     NLA_MT_edit_transform,
     NLA_MT_snap_pie,

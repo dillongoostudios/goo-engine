@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup eduv
@@ -86,11 +70,13 @@ bool uv_find_nearest_vert_multi(struct Scene *scene,
 bool uv_find_nearest_edge(struct Scene *scene,
                           struct Object *obedit,
                           const float co[2],
+                          float penalty,
                           struct UvNearestHit *hit);
 bool uv_find_nearest_edge_multi(struct Scene *scene,
                                 struct Object **objects,
                                 uint objects_len,
                                 const float co[2],
+                                float penalty,
                                 struct UvNearestHit *hit);
 
 /**
@@ -132,6 +118,16 @@ BMLoop *uv_find_nearest_loop_from_edge(struct Scene *scene,
                                        struct BMEdge *e,
                                        const float co[2]);
 
+bool uvedit_vert_is_edge_select_any_other(const struct Scene *scene,
+                                          struct BMLoop *l,
+                                          const int cd_loop_uv_offset);
+bool uvedit_vert_is_face_select_any_other(const struct Scene *scene,
+                                          struct BMLoop *l,
+                                          const int cd_loop_uv_offset);
+bool uvedit_vert_is_all_other_faces_selected(const struct Scene *scene,
+                                             struct BMLoop *l,
+                                             const int cd_loop_uv_offset);
+
 /* utility tool functions */
 
 void uvedit_live_unwrap_update(struct SpaceImage *sima,
@@ -154,13 +150,14 @@ void UV_OT_stitch(struct wmOperatorType *ot);
 void UV_OT_smart_project(struct wmOperatorType *ot);
 
 /* uvedit_path.c */
+
 void UV_OT_shortest_path_pick(struct wmOperatorType *ot);
 void UV_OT_shortest_path_select(struct wmOperatorType *ot);
 
 /* uvedit_select.c */
 
-bool uvedit_select_is_any_selected(struct Scene *scene, struct Object *obedit);
-bool uvedit_select_is_any_selected_multi(struct Scene *scene,
+bool uvedit_select_is_any_selected(const struct Scene *scene, struct Object *obedit);
+bool uvedit_select_is_any_selected_multi(const struct Scene *scene,
                                          struct Object **objects,
                                          uint objects_len);
 /**
@@ -185,3 +182,5 @@ void UV_OT_select_circle(struct wmOperatorType *ot);
 void UV_OT_select_more(struct wmOperatorType *ot);
 void UV_OT_select_less(struct wmOperatorType *ot);
 void UV_OT_select_overlap(struct wmOperatorType *ot);
+/* Used only when UV sync select is disabled. */
+void UV_OT_select_mode(struct wmOperatorType *ot);

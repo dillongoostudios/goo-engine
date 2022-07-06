@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #ifdef WITH_OPENVDB
 #  include <openvdb/openvdb.h>
@@ -212,17 +198,12 @@ static void initialize_volume_component_from_points(GeoNodeExecParams &params,
   Vector<float3> positions;
   Vector<float> radii;
 
-  if (r_geometry_set.has<MeshComponent>()) {
-    gather_point_data_from_component(
-        params, *r_geometry_set.get_component_for_read<MeshComponent>(), positions, radii);
-  }
-  if (r_geometry_set.has<PointCloudComponent>()) {
-    gather_point_data_from_component(
-        params, *r_geometry_set.get_component_for_read<PointCloudComponent>(), positions, radii);
-  }
-  if (r_geometry_set.has<CurveComponent>()) {
-    gather_point_data_from_component(
-        params, *r_geometry_set.get_component_for_read<CurveComponent>(), positions, radii);
+  for (const GeometryComponentType type :
+       {GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_POINT_CLOUD, GEO_COMPONENT_TYPE_CURVE}) {
+    if (r_geometry_set.has(type)) {
+      gather_point_data_from_component(
+          params, *r_geometry_set.get_component_for_read(type), positions, radii);
+    }
   }
 
   const float max_radius = *std::max_element(radii.begin(), radii.end());

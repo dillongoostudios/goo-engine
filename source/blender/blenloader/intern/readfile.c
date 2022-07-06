@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup blenloader
@@ -177,14 +161,14 @@
  * which keeps large arrays in memory from data-blocks we may not even use.
  *
  * \note This is disabled when using compression,
- * while zlib supports seek it's unusably slow, see: T61880.
+ * while ZLIB supports seek it's unusably slow, see: T61880.
  */
 #define USE_BHEAD_READ_ON_DEMAND
 
-/* use GHash for BHead name-based lookups (speeds up linking) */
+/** Use #GHash for #BHead name-based lookups (speeds up linking). */
 #define USE_GHASH_BHEAD
 
-/* Use GHash for restoring pointers by name */
+/** Use #GHash for restoring pointers by name. */
 #define USE_GHASH_RESTORE_POINTER
 
 static CLG_LogRef LOG = {"blo.readfile"};
@@ -210,8 +194,10 @@ typedef struct BHeadN {
 
 #define BHEADN_FROM_BHEAD(bh) ((BHeadN *)POINTER_OFFSET(bh, -(int)offsetof(BHeadN, bhead)))
 
-/* We could change this in the future, for now it's simplest if only data is delayed
- * because ID names are used in lookup tables. */
+/**
+ * We could change this in the future, for now it's simplest if only data is delayed
+ * because ID names are used in lookup tables.
+ */
 #define BHEAD_USE_READ_ON_DEMAND(bhead) ((bhead)->code == DATA)
 
 void BLO_reportf_wrap(BlendFileReadReport *reports, eReportType type, const char *format, ...)
@@ -336,15 +322,22 @@ static void oldnewmap_increase_size(OldNewMap *onm)
 
 /* Public OldNewMap API */
 
-static OldNewMap *oldnewmap_new(void)
+static void oldnewmap_init_data(OldNewMap *onm, const int capacity_exp)
 {
-  OldNewMap *onm = MEM_callocN(sizeof(*onm), "OldNewMap");
+  memset(onm, 0x0, sizeof(*onm));
 
-  onm->capacity_exp = DEFAULT_SIZE_EXP;
+  onm->capacity_exp = capacity_exp;
   onm->entries = MEM_malloc_arrayN(
       ENTRIES_CAPACITY(onm), sizeof(*onm->entries), "OldNewMap.entries");
   onm->map = MEM_malloc_arrayN(MAP_CAPACITY(onm), sizeof(*onm->map), "OldNewMap.map");
   oldnewmap_clear_map(onm);
+}
+
+static OldNewMap *oldnewmap_new(void)
+{
+  OldNewMap *onm = MEM_mallocN(sizeof(*onm), "OldNewMap");
+
+  oldnewmap_init_data(onm, DEFAULT_SIZE_EXP);
 
   return onm;
 }
@@ -411,9 +404,10 @@ static void oldnewmap_clear(OldNewMap *onm)
     }
   }
 
-  onm->capacity_exp = DEFAULT_SIZE_EXP;
-  oldnewmap_clear_map(onm);
-  onm->nentries = 0;
+  MEM_freeN(onm->entries);
+  MEM_freeN(onm->map);
+
+  oldnewmap_init_data(onm, DEFAULT_SIZE_EXP);
 }
 
 static void oldnewmap_free(OldNewMap *onm)
@@ -1580,15 +1574,6 @@ static void change_link_placeholder_to_real_ID_pointer(ListBase *mainlist,
   }
 }
 
-void blo_clear_proxy_pointers_from_lib(Main *oldmain)
-{
-  LISTBASE_FOREACH (Object *, ob, &oldmain->objects) {
-    if (ID_IS_LINKED(ob) && ob->proxy_from != NULL && !ID_IS_LINKED(ob->proxy_from)) {
-      ob->proxy_from = NULL;
-    }
-  }
-}
-
 /* XXX disabled this feature - packed files also belong in temp saves and quit.blend,
  * to make restore work. */
 
@@ -1704,12 +1689,14 @@ typedef struct BLOCacheStorage {
   MemArena *memarena;
 } BLOCacheStorage;
 
+typedef struct BLOCacheStorageValue {
+  void *cache_v;
+  uint new_usage_count;
+} BLOCacheStorageValue;
+
 /** Register a cache data entry to be preserved when reading some undo memfile. */
-static void blo_cache_storage_entry_register(ID *id,
-                                             const IDCacheKey *key,
-                                             void **UNUSED(cache_p),
-                                             uint UNUSED(flags),
-                                             void *cache_storage_v)
+static void blo_cache_storage_entry_register(
+    ID *id, const IDCacheKey *key, void **cache_p, uint UNUSED(flags), void *cache_storage_v)
 {
   BLI_assert(key->id_session_uuid == id->session_uuid);
   UNUSED_VARS_NDEBUG(id);
@@ -1719,7 +1706,11 @@ static void blo_cache_storage_entry_register(ID *id,
 
   IDCacheKey *storage_key = BLI_memarena_alloc(cache_storage->memarena, sizeof(*storage_key));
   *storage_key = *key;
-  BLI_ghash_insert(cache_storage->cache_map, storage_key, POINTER_FROM_UINT(0));
+  BLOCacheStorageValue *storage_value = BLI_memarena_alloc(cache_storage->memarena,
+                                                           sizeof(*storage_value));
+  storage_value->cache_v = *cache_p;
+  storage_value->new_usage_count = 0;
+  BLI_ghash_insert(cache_storage->cache_map, storage_key, storage_value);
 }
 
 /** Restore a cache data entry from old ID into new one, when reading some undo memfile. */
@@ -1738,13 +1729,13 @@ static void blo_cache_storage_entry_restore_in_new(
     return;
   }
 
-  void **value = BLI_ghash_lookup_p(cache_storage->cache_map, key);
-  if (value == NULL) {
+  BLOCacheStorageValue *storage_value = BLI_ghash_lookup(cache_storage->cache_map, key);
+  if (storage_value == NULL) {
     *cache_p = NULL;
     return;
   }
-  *value = POINTER_FROM_UINT(POINTER_AS_UINT(*value) + 1);
-  *cache_p = key->cache_v;
+  storage_value->new_usage_count++;
+  *cache_p = storage_value->cache_v;
 }
 
 /** Clear as needed a cache data entry from old ID, when reading some undo memfile. */
@@ -1756,14 +1747,19 @@ static void blo_cache_storage_entry_clear_in_old(ID *UNUSED(id),
 {
   BLOCacheStorage *cache_storage = cache_storage_v;
 
-  void **value = BLI_ghash_lookup_p(cache_storage->cache_map, key);
-  if (value == NULL) {
+  BLOCacheStorageValue *storage_value = BLI_ghash_lookup(cache_storage->cache_map, key);
+  if (storage_value == NULL) {
     *cache_p = NULL;
     return;
   }
   /* If that cache has been restored into some new ID, we want to remove it from old one, otherwise
    * keep it there so that it gets properly freed together with its ID. */
-  *cache_p = POINTER_AS_UINT(*value) != 0 ? NULL : key->cache_v;
+  if (storage_value->new_usage_count != 0) {
+    *cache_p = NULL;
+  }
+  else {
+    BLI_assert(*cache_p == storage_value->cache_v);
+  }
 }
 
 void blo_cache_storage_init(FileData *fd, Main *bmain)
@@ -2008,6 +2004,7 @@ static void lib_link_id(BlendLibReader *reader, ID *id)
   if (id->override_library) {
     BLO_read_id_address(reader, id->lib, &id->override_library->reference);
     BLO_read_id_address(reader, id->lib, &id->override_library->storage);
+    BLO_read_id_address(reader, id->lib, &id->override_library->hierarchy_root);
   }
 
   lib_link_id_embedded_id(reader, id);
@@ -2622,7 +2619,7 @@ static void lib_link_workspace_layout_restore(struct IDNameLib_Map *id_map,
 
           scpt->script = restore_pointer_by_name(id_map, (ID *)scpt->script, USER_REAL);
 
-          /*screen->script = NULL; - 2.45 set to null, better re-run the script */
+          // screen->script = NULL; /* 2.45 set to null, better re-run the script. */
           if (scpt->script) {
             SCRIPT_SET_NULL(scpt->script);
           }
@@ -2937,7 +2934,7 @@ static const char *dataname(short id_code)
       return "Data from MA";
     case ID_TE:
       return "Data from TE";
-    case ID_CU:
+    case ID_CU_LEGACY:
       return "Data from CU";
     case ID_GR:
       return "Data from GR";
@@ -2997,7 +2994,7 @@ static const char *dataname(short id_code)
       return "Data from CF";
     case ID_WS:
       return "Data from WS";
-    case ID_HA:
+    case ID_CV:
       return "Data from HA";
     case ID_PT:
       return "Data from PT";
@@ -3207,18 +3204,8 @@ static void read_libblock_undo_restore_identical(
   id_old->recalc |= direct_link_id_restore_recalc_exceptions(id_old);
   id_old->recalc_after_undo_push = 0;
 
-  /* As usual, proxies require some special love...
-   * In `blo_clear_proxy_pointers_from_lib()` we clear all `proxy_from` pointers to local IDs, for
-   * undo. This is required since we do not re-read linked data in that case, so we also do not
-   * re-'lib_link' their pointers.
-   * Those `proxy_from` pointers are then re-defined properly when lib_linking the newly read local
-   * object. However, in case of re-used data 'as-is', we never lib_link it again, so we have to
-   * fix those backward pointers here. */
   if (GS(id_old->name) == ID_OB) {
     Object *ob = (Object *)id_old;
-    if (ob->proxy != NULL) {
-      ob->proxy->proxy_from = ob;
-    }
     /* For undo we stay in object mode during undo presses, so keep editmode disabled for re-used
      * data-blocks too. */
     ob->mode &= ~OB_MODE_EDIT;
@@ -4737,9 +4724,9 @@ static void read_library_linked_ids(FileData *basefd,
           read_library_linked_id(basefd, fd, mainvar, id, realid);
         }
 
-        /* realid shall never be NULL - unless some source file/lib is broken
+        /* `realid` shall never be NULL - unless some source file/lib is broken
          * (known case: some directly linked shapekey from a missing lib...). */
-        /* BLI_assert(*realid != NULL); */
+        // BLI_assert(*realid != NULL);
 
         /* Now that we have a real ID, replace all pointers to placeholders in
          * fd->libmap with pointers to the real data-blocks. We do this for all

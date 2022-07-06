@@ -1,88 +1,48 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
 #include "BLI_array.hh"
 #include "BLI_color.hh"
-#include "BLI_math_vec_types.hh"
+#include "BLI_cpp_type.hh"
+#include "BLI_math_color.hh"
+#include "BLI_math_vector.h"
+#include "BLI_math_vector.hh"
 
-#include "DNA_customdata_types.h"
-
-#include "FN_cpp_type.hh"
+#include "BKE_customdata.h"
 
 namespace blender::attribute_math {
 
-using fn::CPPType;
-
 /**
- * Utility function that simplifies calling a templated function based on a custom data type.
+ * Utility function that simplifies calling a templated function based on a run-time data type.
  */
 template<typename Func>
-inline void convert_to_static_type(const CustomDataType data_type, const Func &func)
+inline void convert_to_static_type(const CPPType &cpp_type, const Func &func)
 {
-  switch (data_type) {
-    case CD_PROP_FLOAT:
-      func(float());
-      break;
-    case CD_PROP_FLOAT2:
-      func(float2());
-      break;
-    case CD_PROP_FLOAT3:
-      func(float3());
-      break;
-    case CD_PROP_INT32:
-      func(int());
-      break;
-    case CD_PROP_BOOL:
-      func(bool());
-      break;
-    case CD_PROP_COLOR:
-      func(ColorGeometry4f());
-      break;
-    default:
+  cpp_type.to_static_type_tag<float,
+                              float2,
+                              float3,
+                              int,
+                              bool,
+                              int8_t,
+                              ColorGeometry4f,
+                              ColorGeometry4b>([&](auto type_tag) {
+    using T = typename decltype(type_tag)::type;
+    if constexpr (std::is_same_v<T, void>) {
+      /* It's expected that the given cpp type is one of the supported ones. */
       BLI_assert_unreachable();
-      break;
-  }
+    }
+    else {
+      func(T());
+    }
+  });
 }
 
 template<typename Func>
-inline void convert_to_static_type(const fn::CPPType &cpp_type, const Func &func)
+inline void convert_to_static_type(const CustomDataType data_type, const Func &func)
 {
-  if (cpp_type.is<float>()) {
-    func(float());
-  }
-  else if (cpp_type.is<float2>()) {
-    func(float2());
-  }
-  else if (cpp_type.is<float3>()) {
-    func(float3());
-  }
-  else if (cpp_type.is<int>()) {
-    func(int());
-  }
-  else if (cpp_type.is<bool>()) {
-    func(bool());
-  }
-  else if (cpp_type.is<ColorGeometry4f>()) {
-    func(ColorGeometry4f());
-  }
-  else {
-    BLI_assert_unreachable();
-  }
+  const CPPType &cpp_type = *bke::custom_data_type_to_cpp_type(data_type);
+  convert_to_static_type(cpp_type, func);
 }
 
 /* -------------------------------------------------------------------- */
@@ -93,6 +53,12 @@ inline void convert_to_static_type(const fn::CPPType &cpp_type, const Func &func
 
 template<typename T> T mix3(const float3 &weights, const T &v0, const T &v1, const T &v2);
 
+template<>
+inline int8_t mix3(const float3 &weights, const int8_t &v0, const int8_t &v1, const int8_t &v2)
+{
+  return static_cast<int8_t>(std::round(weights.x * v0 + weights.y * v1 + weights.z * v2));
+}
+
 template<> inline bool mix3(const float3 &weights, const bool &v0, const bool &v1, const bool &v2)
 {
   return (weights.x * v0 + weights.y * v1 + weights.z * v2) >= 0.5f;
@@ -100,7 +66,7 @@ template<> inline bool mix3(const float3 &weights, const bool &v0, const bool &v
 
 template<> inline int mix3(const float3 &weights, const int &v0, const int &v1, const int &v2)
 {
-  return static_cast<int>(weights.x * v0 + weights.y * v1 + weights.z * v2);
+  return static_cast<int>(std::round(weights.x * v0 + weights.y * v1 + weights.z * v2));
 }
 
 template<>
@@ -132,6 +98,22 @@ inline ColorGeometry4f mix3(const float3 &weights,
   return result;
 }
 
+template<>
+inline ColorGeometry4b mix3(const float3 &weights,
+                            const ColorGeometry4b &v0,
+                            const ColorGeometry4b &v1,
+                            const ColorGeometry4b &v2)
+{
+  const float4 v0_f{&v0.r};
+  const float4 v1_f{&v1.r};
+  const float4 v2_f{&v2.r};
+  const float4 mixed = v0_f * weights[0] + v1_f * weights[1] + v2_f * weights[2];
+  return ColorGeometry4b{static_cast<uint8_t>(mixed[0]),
+                         static_cast<uint8_t>(mixed[1]),
+                         static_cast<uint8_t>(mixed[2]),
+                         static_cast<uint8_t>(mixed[3])};
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -147,9 +129,14 @@ template<> inline bool mix2(const float factor, const bool &a, const bool &b)
   return ((1.0f - factor) * a + factor * b) >= 0.5f;
 }
 
+template<> inline int8_t mix2(const float factor, const int8_t &a, const int8_t &b)
+{
+  return static_cast<int8_t>(std::round((1.0f - factor) * a + factor * b));
+}
+
 template<> inline int mix2(const float factor, const int &a, const int &b)
 {
-  return static_cast<int>((1.0f - factor) * a + factor * b);
+  return static_cast<int>(std::round((1.0f - factor) * a + factor * b));
 }
 
 template<> inline float mix2(const float factor, const float &a, const float &b)
@@ -170,9 +157,13 @@ template<> inline float3 mix2(const float factor, const float3 &a, const float3 
 template<>
 inline ColorGeometry4f mix2(const float factor, const ColorGeometry4f &a, const ColorGeometry4f &b)
 {
-  ColorGeometry4f result;
-  interp_v4_v4v4(result, a, b, factor);
-  return result;
+  return math::interpolate(a, b, factor);
+}
+
+template<>
+inline ColorGeometry4b mix2(const float factor, const ColorGeometry4b &a, const ColorGeometry4b &b)
+{
+  return math::interpolate(a, b, factor);
 }
 
 /** \} */
@@ -314,16 +305,30 @@ class SimpleMixerWithAccumulationType {
   }
 };
 
-class ColorGeometryMixer {
+class ColorGeometry4fMixer {
  private:
   MutableSpan<ColorGeometry4f> buffer_;
   ColorGeometry4f default_color_;
   Array<float> total_weights_;
 
  public:
-  ColorGeometryMixer(MutableSpan<ColorGeometry4f> buffer,
-                     ColorGeometry4f default_color = ColorGeometry4f(0.0f, 0.0f, 0.0f, 1.0f));
+  ColorGeometry4fMixer(MutableSpan<ColorGeometry4f> buffer,
+                       ColorGeometry4f default_color = ColorGeometry4f(0.0f, 0.0f, 0.0f, 1.0f));
   void mix_in(int64_t index, const ColorGeometry4f &color, float weight = 1.0f);
+  void finalize();
+};
+
+class ColorGeometry4bMixer {
+ private:
+  MutableSpan<ColorGeometry4b> buffer_;
+  ColorGeometry4b default_color_;
+  Array<float> total_weights_;
+  Array<float4> accumulation_buffer_;
+
+ public:
+  ColorGeometry4bMixer(MutableSpan<ColorGeometry4b> buffer,
+                       ColorGeometry4b default_color = ColorGeometry4b(0, 0, 0, 255));
+  void mix_in(int64_t index, const ColorGeometry4b &color, float weight = 1.0f);
   void finalize();
 };
 
@@ -343,12 +348,15 @@ template<> struct DefaultMixerStruct<float3> {
 template<> struct DefaultMixerStruct<ColorGeometry4f> {
   /* Use a special mixer for colors. ColorGeometry4f can't be added/multiplied, because this is not
    * something one should usually do with colors. */
-  using type = ColorGeometryMixer;
+  using type = ColorGeometry4fMixer;
+};
+template<> struct DefaultMixerStruct<ColorGeometry4b> {
+  using type = ColorGeometry4bMixer;
 };
 template<> struct DefaultMixerStruct<int> {
   static int double_to_int(const double &value)
   {
-    return static_cast<int>(value);
+    return static_cast<int>(std::round(value));
   }
   /* Store interpolated ints in a double temporarily, so that weights are handled correctly. It
    * uses double instead of float so that it is accurate for all 32 bit integers. */
@@ -362,6 +370,15 @@ template<> struct DefaultMixerStruct<bool> {
   /* Store interpolated booleans in a float temporary.
    * Otherwise information provided by weights is easily rounded away. */
   using type = SimpleMixerWithAccumulationType<bool, float, float_to_bool>;
+};
+
+template<> struct DefaultMixerStruct<int8_t> {
+  static int8_t float_to_int8_t(const float &value)
+  {
+    return static_cast<int8_t>(std::round(value));
+  }
+  /* Store interpolated 8 bit integers in a float temporarily to increase accuracy. */
+  using type = SimpleMixerWithAccumulationType<int8_t, float, float_to_int8_t>;
 };
 
 template<typename T> struct DefaultPropatationMixerStruct {

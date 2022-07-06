@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bli
@@ -47,7 +33,7 @@ struct _GSQueue {
   size_t chunk_last_index;        /* index into 'chunk_last' */
   size_t chunk_elem_max;          /* number of elements per chunk */
   size_t elem_size;               /* memory size of elements */
-  size_t totelem;                 /* total number of elements */
+  size_t elem_num;                /* total number of elements */
 };
 
 static void *queue_get_first_elem(GSQueue *queue)
@@ -111,7 +97,7 @@ void BLI_gsqueue_free(GSQueue *queue)
 void BLI_gsqueue_push(GSQueue *queue, const void *item)
 {
   queue->chunk_last_index++;
-  queue->totelem++;
+  queue->elem_num++;
 
   if (UNLIKELY(queue->chunk_last_index == queue->chunk_elem_max)) {
     struct QueueChunk *chunk;
@@ -148,9 +134,9 @@ void BLI_gsqueue_pop(GSQueue *queue, void *r_item)
 
   memcpy(r_item, queue_get_first_elem(queue), queue->elem_size);
   queue->chunk_first_index++;
-  queue->totelem--;
+  queue->elem_num--;
 
-  if (UNLIKELY(queue->chunk_first_index == queue->chunk_elem_max || queue->totelem == 0)) {
+  if (UNLIKELY(queue->chunk_first_index == queue->chunk_elem_max || queue->elem_num == 0)) {
     struct QueueChunk *chunk_free = queue->chunk_first;
 
     queue->chunk_first = queue->chunk_first->next;
@@ -167,7 +153,7 @@ void BLI_gsqueue_pop(GSQueue *queue, void *r_item)
 
 size_t BLI_gsqueue_len(const GSQueue *queue)
 {
-  return queue->totelem;
+  return queue->elem_num;
 }
 
 bool BLI_gsqueue_is_empty(const GSQueue *queue)

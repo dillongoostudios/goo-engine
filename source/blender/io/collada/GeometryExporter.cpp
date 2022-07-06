@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup collada
@@ -392,12 +378,12 @@ void GeometryExporter::create_mesh_primitive_list(short material_index,
     }
   }
 
-  int totlayer_mcol = CustomData_number_of_layers(&me->ldata, CD_MLOOPCOL);
+  int totlayer_mcol = CustomData_number_of_layers(&me->ldata, CD_PROP_BYTE_COLOR);
   if (totlayer_mcol > 0) {
     int map_index = 0;
 
     for (int a = 0; a < totlayer_mcol; a++) {
-      char *layer_name = bc_CustomData_get_layer_name(&me->ldata, CD_MLOOPCOL, a);
+      char *layer_name = bc_CustomData_get_layer_name(&me->ldata, CD_PROP_BYTE_COLOR, a);
       COLLADASW::Input input4(COLLADASW::InputSemantic::COLOR,
                               makeUrl(makeVertexColorSourceId(geom_id, layer_name)),
                               (has_uvs) ? 3 : 2, /* all color layers have same index order */
@@ -482,7 +468,7 @@ void GeometryExporter::createVertsSource(std::string geom_id, Mesh *me)
 void GeometryExporter::createVertexColorSource(std::string geom_id, Mesh *me)
 {
   /* Find number of vertex color layers */
-  int totlayer_mcol = CustomData_number_of_layers(&me->ldata, CD_MLOOPCOL);
+  int totlayer_mcol = CustomData_number_of_layers(&me->ldata, CD_PROP_BYTE_COLOR);
   if (totlayer_mcol == 0) {
     return;
   }
@@ -491,11 +477,11 @@ void GeometryExporter::createVertexColorSource(std::string geom_id, Mesh *me)
   for (int a = 0; a < totlayer_mcol; a++) {
 
     map_index++;
-    MLoopCol *mloopcol = (MLoopCol *)CustomData_get_layer_n(&me->ldata, CD_MLOOPCOL, a);
+    MLoopCol *mloopcol = (MLoopCol *)CustomData_get_layer_n(&me->ldata, CD_PROP_BYTE_COLOR, a);
 
     COLLADASW::FloatSourceF source(mSW);
 
-    char *layer_name = bc_CustomData_get_layer_name(&me->ldata, CD_MLOOPCOL, a);
+    char *layer_name = bc_CustomData_get_layer_name(&me->ldata, CD_PROP_BYTE_COLOR, a);
     std::string layer_id = makeVertexColorSourceId(geom_id, layer_name);
     source.setId(layer_id);
 

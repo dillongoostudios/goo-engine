@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2022 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2022 Blender Foundation. All rights reserved. */
 
 #pragma once
 
@@ -35,6 +19,18 @@ struct Sequence;
 void SEQ_free_animdata(struct Scene *scene, struct Sequence *seq);
 void SEQ_offset_animdata(struct Scene *scene, struct Sequence *seq, int ofs);
 struct GSet *SEQ_fcurves_by_strip_get(const struct Sequence *seq, struct ListBase *fcurve_base);
+/**
+ * Move all `F-Curves` from `scene` to `list`.
+ */
+void SEQ_animation_backup_original(struct Scene *scene, struct ListBase *list);
+/**
+ * Move all `F-Curves` from `list` to `scene`.
+ */
+void SEQ_animation_restore_original(struct Scene *scene, struct ListBase *list);
+/**
+ * Duplicate `F-Curves` used by `seq` from `list` to `scene`.
+ */
+void SEQ_animation_duplicate(struct Scene *scene, struct Sequence *seq, struct ListBase *list);
 
 #ifdef __cplusplus
 }

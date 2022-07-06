@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2007 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2007 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup DNA
@@ -310,9 +294,8 @@ typedef struct wmWindow {
 
   /** Storage for event system. */
   struct wmEvent *eventstate;
-
-  /** Internal for wm_operators.c. */
-  struct wmGesture *tweak;
+  /** Keep the last handled event in `event_queue` here (owned and must be freed). */
+  struct wmEvent *event_last_handled;
 
   /* Input Method Editor data - complex character input (especially for Asian character input)
    * Currently WIN32 and APPLE, runtime-only data. */
@@ -380,8 +363,10 @@ typedef struct wmKeyMapItem {
   /** Event code itself. */
   short type;
   /** KM_ANY, KM_PRESS, KM_NOTHING etc. */
-  short val;
-  /** `oskey` also known as apple, windows-key or super, value denotes order of pressed. */
+  int8_t val;
+  /** Use when `val == KM_CLICK_DRAG`. */
+  int8_t direction;
+  /** `oskey` also known as apple, windows-key or super. */
   short shift, ctrl, alt, oskey;
   /** Raw-key modifier. */
   short keymodifier;
@@ -438,7 +423,7 @@ enum {
 enum {
   KMI_TYPE_KEYBOARD = 0,
   KMI_TYPE_MOUSE = 1,
-  KMI_TYPE_TWEAK = 2,
+  /* 2 is deprecated, was tweak. */
   KMI_TYPE_TEXTINPUT = 3,
   KMI_TYPE_TIMER = 4,
   KMI_TYPE_NDOF = 5,
@@ -565,12 +550,14 @@ enum {
   OPERATOR_RUNNING_MODAL = (1 << 0),
   OPERATOR_CANCELLED = (1 << 1),
   OPERATOR_FINISHED = (1 << 2),
-  /* add this flag if the event should pass through */
+  /** Add this flag if the event should pass through. */
   OPERATOR_PASS_THROUGH = (1 << 3),
-  /* in case operator got executed outside WM code... like via fileselect */
+  /** In case operator got executed outside WM code (like via file-select). */
   OPERATOR_HANDLED = (1 << 4),
-  /* used for operators that act indirectly (eg. popup menu)
-   * NOTE: this isn't great design (using operators to trigger UI) avoid where possible. */
+  /**
+   * Used for operators that act indirectly (eg. popup menu).
+   * \note this isn't great design (using operators to trigger UI) avoid where possible.
+   */
   OPERATOR_INTERFACE = (1 << 5),
 };
 #define OPERATOR_FLAGS_ALL \
@@ -583,9 +570,10 @@ enum {
 
 /** #wmOperator.flag */
 enum {
-  /** low level flag so exec() operators can tell if they were invoked, use with care.
-   * Typically this shouldn't make any difference, but it rare cases its needed
-   * (see smooth-view) */
+  /**
+   * Low level flag so exec() operators can tell if they were invoked, use with care.
+   * Typically this shouldn't make any difference, but it rare cases its needed (see smooth-view).
+   */
   OP_IS_INVOKE = (1 << 0),
   /** So we can detect if an operators exec() call is activated by adjusting the last action. */
   OP_IS_REPEAT = (1 << 1),
@@ -602,8 +590,10 @@ enum {
   /** When the cursor is grabbed */
   OP_IS_MODAL_GRAB_CURSOR = (1 << 2),
 
-  /** Allow modal operators to have the region under the cursor for their context
-   * (the regiontype is maintained to prevent errors) */
+  /**
+   * Allow modal operators to have the region under the cursor for their context
+   * (the region-type is maintained to prevent errors).
+   */
   OP_IS_MODAL_CURSOR_REGION = (1 << 3),
 };
 

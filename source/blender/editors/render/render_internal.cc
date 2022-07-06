@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edrend
@@ -47,6 +31,7 @@
 #include "BKE_context.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
+#include "BKE_image_format.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_node.h"
@@ -90,7 +75,7 @@ struct RenderJob {
   Scene *scene;
   ViewLayer *single_layer;
   Scene *current_scene;
-  /* TODO(sergey): Should not be needed once engine will have own
+  /* TODO(sergey): Should not be needed once engine will have its own
    * depsgraph and copy-on-write will be implemented.
    */
   Depsgraph *depsgraph;
@@ -117,7 +102,7 @@ struct RenderJob {
 /* called inside thread! */
 static bool image_buffer_calc_tile_rect(const RenderResult *rr,
                                         const ImBuf *ibuf,
-                                        volatile rcti *renrect,
+                                        rcti *renrect,
                                         rcti *r_ibuf_rect,
                                         int *r_offset_x,
                                         int *r_offset_y)
@@ -371,7 +356,14 @@ static int screen_render_exec(bContext *C, wmOperator *op)
                   scene->r.frame_step);
   }
   else {
-    RE_RenderFrame(re, mainp, scene, single_layer, camera_override, scene->r.cfra, is_write_still);
+    RE_RenderFrame(re,
+                   mainp,
+                   scene,
+                   single_layer,
+                   camera_override,
+                   scene->r.cfra,
+                   scene->r.subframe,
+                   is_write_still);
   }
 
   RE_SetReports(re, nullptr);
@@ -565,7 +557,7 @@ static void render_image_update_pass_and_layer(RenderJob *rj, RenderResult *rr, 
   }
 }
 
-static void image_rect_update(void *rjv, RenderResult *rr, volatile rcti *renrect)
+static void image_rect_update(void *rjv, RenderResult *rr, rcti *renrect)
 {
   RenderJob *rj = static_cast<RenderJob *>(rjv);
   Image *ima = rj->image;
@@ -671,6 +663,7 @@ static void render_startjob(void *rjv, short *stop, short *do_update, float *pro
                    rj->single_layer,
                    rj->camera_override,
                    rj->scene->r.cfra,
+                   rj->scene->r.subframe,
                    rj->write_still);
   }
 
@@ -834,7 +827,7 @@ static void render_drawlock(void *rjv, bool lock)
   }
 }
 
-/* catch esc */
+/** Catch escape key to cancel. */
 static int screen_render_modal(bContext *C, wmOperator *op, const wmEvent *event)
 {
   Scene *scene = (Scene *)op->customdata;
@@ -987,7 +980,7 @@ static int screen_render_invoke(bContext *C, wmOperator *op, const wmEvent *even
   rj->scene = scene;
   rj->current_scene = rj->scene;
   rj->single_layer = single_layer;
-  /* TODO(sergey): Render engine should be using own depsgraph.
+  /* TODO(sergey): Render engine should be using its own depsgraph.
    *
    * NOTE: Currently is only used by ED_update_for_newframe() at the end of the render, so no
    * need to ensure evaluation here. */
@@ -1153,7 +1146,8 @@ void RENDER_OT_render(wmOperatorType *ot)
 Scene *ED_render_job_get_scene(const bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-  RenderJob *rj = (RenderJob *)WM_jobs_customdata_from_type(wm, WM_JOB_TYPE_RENDER);
+  RenderJob *rj = (RenderJob *)WM_jobs_customdata_from_type(
+      wm, CTX_data_scene(C), WM_JOB_TYPE_RENDER);
 
   if (rj) {
     return rj->scene;
@@ -1165,7 +1159,8 @@ Scene *ED_render_job_get_scene(const bContext *C)
 Scene *ED_render_job_get_current_scene(const bContext *C)
 {
   wmWindowManager *wm = CTX_wm_manager(C);
-  RenderJob *rj = (RenderJob *)WM_jobs_customdata_from_type(wm, WM_JOB_TYPE_RENDER);
+  RenderJob *rj = (RenderJob *)WM_jobs_customdata_from_type(
+      wm, CTX_data_scene(C), WM_JOB_TYPE_RENDER);
   if (rj) {
     return rj->current_scene;
   }
@@ -1210,5 +1205,6 @@ void RENDER_OT_shutter_curve_preset(wmOperatorType *ot)
   ot->exec = render_shutter_curve_preset_exec;
 
   prop = RNA_def_enum(ot->srna, "shape", prop_shape_items, CURVE_PRESET_SMOOTH, "Mode", "");
-  RNA_def_property_translation_context(prop, BLT_I18NCONTEXT_ID_CURVE); /* Abusing id_curve :/ */
+  RNA_def_property_translation_context(prop,
+                                       BLT_I18NCONTEXT_ID_CURVE_LEGACY); /* Abusing id_curve :/ */
 }

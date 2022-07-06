@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-#
-# "make update" for all platforms, updating svn libraries and tests and Blender
-# git repository and submodules.
-#
-# For release branches, this will check out the appropriate branches of
-# submodules and libraries.
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+"""
+"make update" for all platforms, updating svn libraries and tests and Blender
+git repository and sub-modules.
+
+For release branches, this will check out the appropriate branches of
+sub-modules and libraries.
+"""
 
 import argparse
 import os
@@ -125,6 +128,7 @@ def svn_update(args, release_version):
                 # Switch to appropriate branch and update.
                 call(svn_non_interactive + ["switch", svn_url + dirname, dirpath], exit_on_error=False)
                 call(svn_non_interactive + ["update", dirpath])
+
 
 # Test if git repo can be updated.
 def git_update_skip(args, check_remote_exists=True):

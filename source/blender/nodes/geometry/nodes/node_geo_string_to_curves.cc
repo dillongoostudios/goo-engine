@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_curve_types.h"
 #include "DNA_vfont_types.h"
@@ -200,7 +186,7 @@ static TextLayout get_text_layout(GeoNodeExecParams &params)
                               params.extract_input<float>("Text Box Height");
   VFont *vfont = (VFont *)params.node().id;
 
-  Curve cu = {{nullptr}};
+  Curve cu = dna::shallow_zero_initialize();
   cu.type = OB_FONT;
   /* Set defaults */
   cu.resolu = 12;
@@ -292,7 +278,7 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
     if (handles.contains(layout.char_codes[i])) {
       continue;
     }
-    Curve cu = {{nullptr}};
+    Curve cu = dna::shallow_zero_initialize();
     cu.type = OB_FONT;
     cu.resolu = 12;
     cu.vfont = vfont;
@@ -312,7 +298,8 @@ static Map<int, int> create_curve_instances(GeoNodeExecParams &params,
       layout.pivot_points.add_new(layout.char_codes[i], pivot_point);
     }
 
-    GeometrySet geometry_set_curve = GeometrySet::create_with_curve(curve_eval.release());
+    GeometrySet geometry_set_curve = GeometrySet::create_with_curves(
+        curve_eval_to_curves(*curve_eval));
     handles.add_new(layout.char_codes[i],
                     instance_component.add_reference(std::move(geometry_set_curve)));
   }

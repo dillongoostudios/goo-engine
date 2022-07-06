@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2020 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2020 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -73,6 +57,7 @@ class GLTexture : public Texture {
   void copy_to(Texture *dst) override;
   void clear(eGPUDataFormat format, const void *data) override;
   void swizzle_set(const char swizzle_mask[4]) override;
+  void stencil_texture_mode_set(bool use_stencil) override;
   void mip_range_set(int min, int max) override;
   void *read(int mip, eGPUDataFormat type) override;
 
@@ -90,11 +75,11 @@ class GLTexture : public Texture {
   bool init_internal() override;
   /** Return true on success. */
   bool init_internal(GPUVertBuf *vbo) override;
+  /** Return true on success. */
+  bool init_internal(const GPUTexture *src, int mip_offset, int layer_offset) override;
 
  private:
   bool proxy_check(int mip);
-  /** Will create enough mipmaps up to get to the given level. */
-  void ensure_mipmaps(int mip);
   void update_sub_direct_state_access(
       int mip, int offset[3], int extent[3], GLenum gl_format, GLenum gl_type, const void *data);
   GPUFrameBuffer *framebuffer_get();

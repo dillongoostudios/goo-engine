@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -47,6 +31,7 @@ struct Mesh;
 struct Object;
 struct ReportList;
 struct Scene;
+struct SelectPick_Params;
 struct UndoType;
 struct UvMapVert;
 struct UvVertMap;
@@ -284,8 +269,9 @@ bool EDBM_unified_findnearest_from_raycast(struct ViewContext *vc,
                                            struct BMEdge **r_eed,
                                            struct BMFace **r_efa);
 
-bool EDBM_select_pick(
-    struct bContext *C, const int mval[2], bool extend, bool deselect, bool toggle);
+bool EDBM_select_pick(struct bContext *C,
+                      const int mval[2],
+                      const struct SelectPick_Params *params);
 
 /**
  * When switching select mode, makes sure selection is consistent for editing
@@ -349,6 +335,7 @@ bool EDBM_selectmode_disable_multi(struct bContext *C,
                                    short selectmode_fallback);
 
 /* editmesh_preselect_edgering.c */
+
 struct EditMesh_PreSelEdgeRing;
 struct EditMesh_PreSelEdgeRing *EDBM_preselect_edgering_create(void);
 void EDBM_preselect_edgering_destroy(struct EditMesh_PreSelEdgeRing *psel);
@@ -361,6 +348,7 @@ void EDBM_preselect_edgering_update_from_edge(struct EditMesh_PreSelEdgeRing *ps
                                               const float (*coords)[3]);
 
 /* editmesh_preselect_elem.c */
+
 struct EditMesh_PreSelElem;
 typedef enum eEditMesh_PreSelPreviewAction {
   PRESELECT_ACTION_TRANSFORM = 1,
@@ -403,12 +391,13 @@ void ED_keymap_mesh(struct wmKeyConfig *keyconf);
  * use in object mode when selecting faces (while painting).
  */
 void paintface_flush_flags(struct bContext *C, struct Object *ob, short flag);
+/**
+ * \return True when pick finds an element or the selection changed.
+ */
 bool paintface_mouse_select(struct bContext *C,
-                            struct Object *ob,
                             const int mval[2],
-                            bool extend,
-                            bool deselect,
-                            bool toggle);
+                            const struct SelectPick_Params *params,
+                            struct Object *ob);
 bool paintface_deselect_all_visible(struct bContext *C,
                                     struct Object *ob,
                                     int action,
@@ -454,6 +443,7 @@ void ED_mesh_mirrtopo_init(struct BMEditMesh *em,
 void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store);
 
 /* object_vgroup.c */
+
 #define WEIGHT_REPLACE 1
 #define WEIGHT_ADD 2
 #define WEIGHT_SUBTRACT 3

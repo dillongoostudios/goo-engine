@@ -1,18 +1,5 @@
-/*
- * Copyright 2011-2014 Blender Foundation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2011-2022 Blender Foundation */
 
 /*
  * ASHIKHMIN SHIRLEY BSDF
@@ -66,9 +53,10 @@ bsdf_ashikhmin_shirley_eval_reflect(ccl_private const ShaderClosure *sc,
 
   float out = 0.0f;
 
-  if (fmaxf(bsdf->alpha_x, bsdf->alpha_y) <= 1e-4f)
+  if (fmaxf(bsdf->alpha_x, bsdf->alpha_y) <= 1e-4f) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f);
-
+  }
   if (NdotI > 0.0f && NdotO > 0.0f) {
     NdotI = fmaxf(NdotI, 1e-6f);
     NdotO = fmaxf(NdotO, 1e-6f);
@@ -125,6 +113,7 @@ ccl_device float3 bsdf_ashikhmin_shirley_eval_transmit(ccl_private const ShaderC
                                                        const float3 omega_in,
                                                        ccl_private float *pdf)
 {
+  *pdf = 0.0f;
   return make_float3(0.0f, 0.0f, 0.0f);
 }
 

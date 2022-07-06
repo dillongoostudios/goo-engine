@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 by Mike Erwin.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 by Mike Erwin. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -149,7 +133,7 @@ uint GPU_vertformat_attr_add(GPUVertFormat *format,
     case GPU_COMP_I10:
       /* 10_10_10 format intended for normals (xyz) or colors (rgb)
        * extra component packed.w can be manually set to { -2, -1, 0, 1 } */
-      assert(comp_len == 3 || comp_len == 4);
+      assert(ELEM(comp_len, 3, 4));
 
       /* Not strictly required, may relax later. */
       assert(fetch_mode == GPU_FETCH_INT_TO_FLOAT_UNIT);
@@ -159,7 +143,7 @@ uint GPU_vertformat_attr_add(GPUVertFormat *format,
       /* integer types can be kept as int or converted/normalized to float */
       assert(fetch_mode != GPU_FETCH_FLOAT);
       /* only support float matrices (see Batch_update_program_bindings) */
-      assert(comp_len != 8 && comp_len != 12 && comp_len != 16);
+      assert(!ELEM(comp_len, 8, 12, 16));
   }
 #endif
   format->name_len++; /* Multi-name support. */

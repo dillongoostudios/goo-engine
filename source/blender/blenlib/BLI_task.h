@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /* Use a define instead of `#pragma once` because of `bmesh_iterators_inline.h` */
 #ifndef __BLI_TASK_H__
@@ -252,18 +238,18 @@ typedef void (*TaskParallelIteratorFunc)(void *__restrict userdata,
  * \param iter_func: Callback function used to generate chunks of items.
  * \param init_item: The initial item, if necessary (may be NULL if unused).
  * \param init_index: The initial index.
- * \param tot_items: The total amount of items to iterate over
+ * \param items_num: The total amount of items to iterate over
  *                   (if unknown, set it to a negative number).
  * \param func: Callback function.
  * \param settings: See public API doc of TaskParallelSettings for description of all settings.
  *
- * \note Static scheduling is only available when \a tot_items is >= 0.
+ * \note Static scheduling is only available when \a items_num is >= 0.
  */
 void BLI_task_parallel_iterator(void *userdata,
                                 TaskParallelIteratorIterFunc iter_func,
                                 void *init_item,
                                 int init_index,
-                                int tot_items,
+                                int items_num,
                                 TaskParallelIteratorFunc func,
                                 const TaskParallelSettings *settings);
 

@@ -1,20 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_listbase.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
 
 #include "RNA_enum_types.h"
@@ -28,11 +15,20 @@ namespace blender::nodes::node_fn_rotate_euler_cc {
 
 static void fn_node_rotate_euler_declare(NodeDeclarationBuilder &b)
 {
+  auto enable_axis_angle = [](bNode &node) {
+    node.custom1 = FN_NODE_ROTATE_EULER_TYPE_AXIS_ANGLE;
+  };
+
   b.is_function_node();
   b.add_input<decl::Vector>(N_("Rotation")).subtype(PROP_EULER).hide_value();
-  b.add_input<decl::Vector>(N_("Rotate By")).subtype(PROP_EULER);
-  b.add_input<decl::Vector>(N_("Axis")).default_value({0.0, 0.0, 1.0}).subtype(PROP_XYZ);
-  b.add_input<decl::Float>(N_("Angle")).subtype(PROP_ANGLE);
+  b.add_input<decl::Vector>(N_("Rotate By")).subtype(PROP_EULER).make_available([](bNode &node) {
+    node.custom1 = FN_NODE_ROTATE_EULER_TYPE_EULER;
+  });
+  b.add_input<decl::Vector>(N_("Axis"))
+      .default_value({0.0, 0.0, 1.0})
+      .subtype(PROP_XYZ)
+      .make_available(enable_axis_angle);
+  b.add_input<decl::Float>(N_("Angle")).subtype(PROP_ANGLE).make_available(enable_axis_angle);
   b.add_output<decl::Vector>(N_("Rotation"));
 }
 

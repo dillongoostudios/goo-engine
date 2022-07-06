@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Apache License, Version 2.0
+# SPDX-License-Identifier: Apache-2.0
 
 import argparse
 import os
@@ -30,6 +30,11 @@ BLACKLIST_OPTIX = [
     # Ray intersection precision issues
     'T50164.blend',
     'T43865.blend',
+]
+
+BLACKLIST_METAL = [
+    # No MNEE for Metal currently
+    "underwater_caustics.blend",
 ]
 
 BLACKLIST_GPU = [
@@ -116,6 +121,8 @@ def main():
         blacklist += BLACKLIST_OSL
     if device == 'OPTIX':
         blacklist += BLACKLIST_OPTIX
+    if device == 'METAL':
+        blacklist += BLACKLIST_METAL
 
     from modules import render_report
     report = render_report.Report('Cycles', output_dir, idiff, device, blacklist)

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pygen
@@ -883,8 +869,6 @@ PyObject *PyC_ExceptionBuffer(void)
 
   PyErr_Fetch(&error_type, &error_value, &error_traceback);
 
-  PyErr_Clear();
-
   /* import io
    * string_io = io.StringIO()
    */
@@ -908,6 +892,10 @@ PyObject *PyC_ExceptionBuffer(void)
   PySys_SetObject("stderr", string_io);
 
   PyErr_Restore(error_type, error_value, error_traceback);
+  /* Printing clears (call #PyErr_Clear as well to ensure it's cleared).  */
+  Py_XINCREF(error_type);
+  Py_XINCREF(error_value);
+  Py_XINCREF(error_traceback);
   PyErr_Print(); /* print the error */
   PyErr_Clear();
 
@@ -923,17 +911,18 @@ PyObject *PyC_ExceptionBuffer(void)
   Py_DECREF(string_io_getvalue);
   Py_DECREF(string_io); /* free the original reference */
 
-  PyErr_Clear();
+  PyErr_Restore(error_type, error_value, error_traceback);
+
   return string_io_buf;
 
 error_cleanup:
-  /* could not import the module so print the error and close */
+  /* Could not import the module so print the error and close. */
   Py_XDECREF(string_io_mod);
   Py_XDECREF(string_io);
 
   PyErr_Restore(error_type, error_value, error_traceback);
   PyErr_Print(); /* print the error */
-  PyErr_Clear();
+  PyErr_Restore(error_type, error_value, error_traceback);
 
   return NULL;
 }
@@ -941,19 +930,15 @@ error_cleanup:
 
 PyObject *PyC_ExceptionBuffer_Simple(void)
 {
-  PyObject *string_io_buf = NULL;
-
-  PyObject *error_type, *error_value, *error_traceback;
-
   if (!PyErr_Occurred()) {
     return NULL;
   }
 
-  PyErr_Fetch(&error_type, &error_value, &error_traceback);
+  PyObject *string_io_buf = NULL;
 
-  if (error_value == NULL) {
-    return NULL;
-  }
+  PyObject *error_type, *error_value, *error_traceback;
+
+  PyErr_Fetch(&error_type, &error_value, &error_traceback);
 
   if (PyErr_GivenExceptionMatches(error_type, PyExc_SyntaxError)) {
     /* Special exception for syntax errors,
@@ -975,7 +960,6 @@ PyObject *PyC_ExceptionBuffer_Simple(void)
 
   PyErr_Restore(error_type, error_value, error_traceback);
 
-  PyErr_Clear();
   return string_io_buf;
 }
 

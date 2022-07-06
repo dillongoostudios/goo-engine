@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "FN_multi_function_procedure_executor.hh"
 
@@ -695,14 +681,9 @@ class VariableState : NonCopyable, NonMovable {
     /* Sanity check to make sure that enough indices can be destructed. */
     BLI_assert(new_tot_initialized >= 0);
 
-    bool do_destruct_self = false;
-
     switch (value_->type) {
       case ValueType::GVArray: {
-        if (mask.size() == full_mask.size()) {
-          do_destruct_self = true;
-        }
-        else {
+        if (mask.size() < full_mask.size()) {
           /* Not all elements are destructed. Since we can't work on the original array, we have to
            * create a copy first. */
           this->ensure_is_mutable(full_mask, data_type, value_allocator);
@@ -715,16 +696,10 @@ class VariableState : NonCopyable, NonMovable {
       case ValueType::Span: {
         const CPPType &type = data_type.single_type();
         type.destruct_indices(this->value_as<VariableValue_Span>()->data, mask);
-        if (new_tot_initialized == 0) {
-          do_destruct_self = true;
-        }
         break;
       }
       case ValueType::GVVectorArray: {
-        if (mask.size() == full_mask.size()) {
-          do_destruct_self = true;
-        }
-        else {
+        if (mask.size() < full_mask.size()) {
           /* Not all elements are cleared. Since we can't work on the original vector array, we
            * have to create a copy first. A possible future optimization is to create the partial
            * copy directly. */
@@ -743,22 +718,26 @@ class VariableState : NonCopyable, NonMovable {
         BLI_assert(value_typed->is_initialized);
         UNUSED_VARS_NDEBUG(value_typed);
         if (mask.size() == tot_initialized_) {
-          do_destruct_self = true;
+          const CPPType &type = data_type.single_type();
+          type.destruct(value_typed->data);
+          value_typed->is_initialized = false;
         }
         break;
       }
       case ValueType::OneVector: {
         auto *value_typed = this->value_as<VariableValue_OneVector>();
-        UNUSED_VARS(value_typed);
         if (mask.size() == tot_initialized_) {
-          do_destruct_self = true;
+          value_typed->data.clear(IndexRange(1));
         }
         break;
       }
     }
 
     tot_initialized_ = new_tot_initialized;
-    return do_destruct_self;
+
+    const bool should_self_destruct = new_tot_initialized == 0 &&
+                                      caller_provided_storage_ == nullptr;
+    return should_self_destruct;
   }
 
   void indices_split(IndexMask mask, IndicesSplitVectors &r_indices)
@@ -875,32 +854,32 @@ class VariableStates {
       };
 
       switch (param_type.category()) {
-        case MFParamType::SingleInput: {
+        case MFParamCategory::SingleInput: {
           const GVArray &data = params.readonly_single_input(param_index);
           add_state(value_allocator_.obtain_GVArray(data), true);
           break;
         }
-        case MFParamType::VectorInput: {
+        case MFParamCategory::VectorInput: {
           const GVVectorArray &data = params.readonly_vector_input(param_index);
           add_state(value_allocator_.obtain_GVVectorArray(data), true);
           break;
         }
-        case MFParamType::SingleOutput: {
+        case MFParamCategory::SingleOutput: {
           GMutableSpan data = params.uninitialized_single_output(param_index);
           add_state(value_allocator_.obtain_Span_not_owned(data.data()), false, data.data());
           break;
         }
-        case MFParamType::VectorOutput: {
+        case MFParamCategory::VectorOutput: {
           GVectorArray &data = params.vector_output(param_index);
           add_state(value_allocator_.obtain_GVectorArray_not_owned(data), false, &data);
           break;
         }
-        case MFParamType::SingleMutable: {
+        case MFParamCategory::SingleMutable: {
           GMutableSpan data = params.single_mutable(param_index);
           add_state(value_allocator_.obtain_Span_not_owned(data.data()), true, data.data());
           break;
         }
-        case MFParamType::VectorMutable: {
+        case MFParamCategory::VectorMutable: {
           GVectorArray &data = params.vector_mutable(param_index);
           add_state(value_allocator_.obtain_GVectorArray_not_owned(data), true, &data);
           break;

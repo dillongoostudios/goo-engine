@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spview3d
@@ -1036,7 +1020,7 @@ static void draw_rotation_guide(const RegionView3D *rv3d)
   negate_v3_v3(o, rv3d->ofs);
 
   GPU_blend(GPU_BLEND_ALPHA);
-  GPU_depth_mask(false); /* don't overwrite zbuf */
+  GPU_depth_mask(false); /* Don't overwrite the Z-buffer. */
 
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
@@ -1258,11 +1242,7 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
 
   /* 6 is the maximum size of the axis roll text. */
   /* increase size for unicode languages (Chinese in utf-8...) */
-#ifdef WITH_INTERNATIONAL
   char tmpstr[96 + 6];
-#else
-  char tmpstr[32 + 6];
-#endif
 
   BLF_enable(font_id, BLF_SHADOW);
   BLF_shadow(font_id, 5, (const float[4]){0.0f, 0.0f, 0.0f, 1.0f});
@@ -1371,7 +1351,7 @@ static void draw_selected_name(
         }
       }
     }
-    else if (ELEM(ob->type, OB_MESH, OB_LATTICE, OB_CURVE)) {
+    else if (ELEM(ob->type, OB_MESH, OB_LATTICE, OB_CURVES_LEGACY)) {
       /* try to display active bone and active shapekey too (if they exist) */
 
       if (ob->type == OB_MESH && ob->mode & OB_MODE_WEIGHT_PAINT) {
@@ -1689,9 +1669,9 @@ void ED_view3d_draw_offscreen(Depsgraph *depsgraph,
   G.f |= G_FLAG_RENDER_VIEWPORT;
 
   {
-    /* free images which can have changed on frame-change
-     * warning! can be slow so only free animated images - campbell */
-    BKE_image_free_anim_gputextures(G.main); /* XXX :((( */
+    /* Free images which can have changed on frame-change.
+     * WARNING(@campbellbarton): can be slow so only free animated images. */
+    BKE_image_free_anim_gputextures(G.main);
   }
 
   GPU_matrix_push_projection();
@@ -1743,6 +1723,8 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
                                      Scene *scene,
                                      View3DShading *shading_override,
                                      eDrawType drawtype,
+                                     int object_type_exclude_viewport_override,
+                                     int object_type_exclude_select_override,
                                      int winx,
                                      int winy,
                                      uint draw_flags,
@@ -1805,13 +1787,19 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
     /* Disable other overlays (set all available _HIDE_ flags). */
     v3d.overlay.flag |= V3D_OVERLAY_HIDE_CURSOR | V3D_OVERLAY_HIDE_TEXT |
                         V3D_OVERLAY_HIDE_MOTION_PATHS | V3D_OVERLAY_HIDE_BONES |
-                        V3D_OVERLAY_HIDE_OBJECT_XTRAS | V3D_OVERLAY_HIDE_OBJECT_ORIGINS;
+                        V3D_OVERLAY_HIDE_OBJECT_ORIGINS;
+    if ((draw_flags & V3D_OFSDRAW_SHOW_OBJECT_EXTRAS) == 0) {
+      v3d.overlay.flag |= V3D_OVERLAY_HIDE_OBJECT_XTRAS;
+    }
     v3d.flag |= V3D_HIDE_HELPLINES;
   }
 
   if (is_xr_surface) {
     v3d.flag |= V3D_XR_SESSION_SURFACE;
   }
+
+  v3d.object_type_exclude_viewport = object_type_exclude_viewport_override;
+  v3d.object_type_exclude_select = object_type_exclude_select_override;
 
   rv3d.persp = RV3D_PERSP;
   v3d.clip_start = clip_start;
@@ -2391,7 +2379,7 @@ void ED_view3d_datamask(const bContext *C,
                         CustomData_MeshMasks *r_cddata_masks)
 {
   if (ELEM(v3d->shading.type, OB_TEXTURE, OB_MATERIAL, OB_RENDER)) {
-    r_cddata_masks->lmask |= CD_MASK_MLOOPUV | CD_MASK_MLOOPCOL;
+    r_cddata_masks->lmask |= CD_MASK_MLOOPUV | CD_MASK_PROP_BYTE_COLOR;
     r_cddata_masks->vmask |= CD_MASK_ORCO | CD_MASK_PROP_COLOR;
   }
   else if (v3d->shading.type == OB_SOLID) {
@@ -2399,7 +2387,7 @@ void ED_view3d_datamask(const bContext *C,
       r_cddata_masks->lmask |= CD_MASK_MLOOPUV;
     }
     if (v3d->shading.color_type == V3D_SHADING_VERTEX_COLOR) {
-      r_cddata_masks->lmask |= CD_MASK_MLOOPCOL;
+      r_cddata_masks->lmask |= CD_MASK_PROP_BYTE_COLOR;
       r_cddata_masks->vmask |= CD_MASK_ORCO | CD_MASK_PROP_COLOR;
     }
   }

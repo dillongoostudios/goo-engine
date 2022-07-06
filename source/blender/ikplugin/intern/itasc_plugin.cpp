@@ -1,22 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * Original author: Benoit Bolsee
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup ikplugin
@@ -261,9 +244,9 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
     }
 
     if (BLI_listbase_is_empty(&curchan->iktree) == false) {
-      /* Oh oh, there is already a chain starting from this channel and our chain is longer...
+      /* Oh, there is already a chain starting from this channel and our chain is longer.
        * Should handle this by moving the previous chain up to the beginning of our chain
-       * For now we just stop here */
+       * For now we just stop here. */
       break;
     }
   }
@@ -1529,17 +1512,17 @@ static IK_Scene *convert_tree(
     iktarget->bldepsgraph = depsgraph;
     condata = (bKinematicConstraint *)iktarget->blenderConstraint->data;
     pchan = tree->pchan[iktarget->channel];
-    unsigned int controltype, bonecnt;
-    double bonelen;
+    unsigned int controltype, bone_count;
+    double bone_length;
     float mat[4][4];
 
     /* add the end effector
      * estimate the average bone length, used to clamp feedback error */
-    for (bonecnt = 0, bonelen = 0.0f, a = iktarget->channel; a >= 0;
-         a = tree->parent[a], bonecnt++) {
-      bonelen += ikscene->blScale * tree->pchan[a]->bone->length;
+    for (bone_count = 0, bone_length = 0.0f, a = iktarget->channel; a >= 0;
+         a = tree->parent[a], bone_count++) {
+      bone_length += ikscene->blScale * tree->pchan[a]->bone->length;
     }
-    bonelen /= bonecnt;
+    bone_length /= bone_count;
 
     /* store the rest pose of the end effector to compute enforce target */
     copy_m4_m4(mat, pchan->bone->arm_mat);
@@ -1584,7 +1567,7 @@ static IK_Scene *convert_tree(
           }
         }
         if (controltype) {
-          iktarget->constraint = new iTaSC::CopyPose(controltype, controltype, bonelen);
+          iktarget->constraint = new iTaSC::CopyPose(controltype, controltype, bone_length);
           /* set the gain */
           if (controltype & iTaSC::CopyPose::CTL_POSITION) {
             iktarget->constraint->setControlParameter(
@@ -1616,7 +1599,7 @@ static IK_Scene *convert_tree(
         }
         break;
       case CONSTRAINT_IK_DISTANCE:
-        iktarget->constraint = new iTaSC::Distance(bonelen);
+        iktarget->constraint = new iTaSC::Distance(bone_length);
         iktarget->constraint->setControlParameter(
             iTaSC::Distance::ID_DISTANCE, iTaSC::ACT_VALUE, condata->dist);
         iktarget->constraint->registerCallback(distance_callback, iktarget);

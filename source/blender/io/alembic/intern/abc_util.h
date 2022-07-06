@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
 
 /** \file
@@ -93,11 +79,11 @@ void get_min_max_time(const Alembic::AbcGeom::IObject &object,
 
 bool has_property(const Alembic::Abc::ICompoundProperty &prop, const std::string &name);
 
-float get_weight_and_index(float time,
-                           const Alembic::AbcCoreAbstract::TimeSamplingPtr &time_sampling,
-                           int samples_number,
-                           Alembic::AbcGeom::index_t &i0,
-                           Alembic::AbcGeom::index_t &i1);
+double get_weight_and_index(Alembic::AbcCoreAbstract::chrono_t time,
+                            const Alembic::AbcCoreAbstract::TimeSamplingPtr &time_sampling,
+                            int samples_number,
+                            Alembic::AbcGeom::index_t &i0,
+                            Alembic::AbcGeom::index_t &i1);
 
 AbcObjectReader *create_reader(const Alembic::AbcGeom::IObject &object, ImportSettings &settings);
 

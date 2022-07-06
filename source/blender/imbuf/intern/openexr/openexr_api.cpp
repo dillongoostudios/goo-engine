@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright by Gernot Ziegler <gz@lysator.liu.se>.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright by Gernot Ziegler <gz@lysator.liu.se>. All rights reserved. */
 
 /** \file
  * \ingroup openexr
@@ -94,6 +78,7 @@ _CRTIMP void __cdecl _invalid_parameter_noinfo(void)
 }
 #include "BLI_blenlib.h"
 #include "BLI_math_color.h"
+#include "BLI_string_utils.h"
 #include "BLI_threads.h"
 
 #include "BKE_idprop.h"
@@ -105,8 +90,7 @@ _CRTIMP void __cdecl _invalid_parameter_noinfo(void)
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_metadata.h"
-
-#include "openexr_multi.h"
+#include "IMB_openexr.h"
 
 using namespace Imf;
 using namespace Imath;
@@ -171,15 +155,15 @@ class IMemStream : public Imf::IStream {
 
 class IFileStream : public Imf::IStream {
  public:
-  IFileStream(const char *filename) : IStream(filename)
+  IFileStream(const char *filepath) : IStream(filepath)
   {
     /* utf-8 file path support on windows */
 #if defined(WIN32)
-    wchar_t *wfilename = alloc_utf16_from_8(filename, 0);
-    ifs.open(wfilename, std::ios_base::binary);
-    free(wfilename);
+    wchar_t *wfilepath = alloc_utf16_from_8(filepath, 0);
+    ifs.open(wfilepath, std::ios_base::binary);
+    free(wfilepath);
 #else
-    ifs.open(filename, std::ios_base::binary);
+    ifs.open(filepath, std::ios_base::binary);
 #endif
 
     if (!ifs) {
@@ -277,15 +261,15 @@ class OMemStream : public OStream {
 
 class OFileStream : public OStream {
  public:
-  OFileStream(const char *filename) : OStream(filename)
+  OFileStream(const char *filepath) : OStream(filepath)
   {
     /* utf-8 file path support on windows */
 #if defined(WIN32)
-    wchar_t *wfilename = alloc_utf16_from_8(filename, 0);
-    ofs.open(wfilename, std::ios_base::binary);
-    free(wfilename);
+    wchar_t *wfilepath = alloc_utf16_from_8(filepath, 0);
+    ofs.open(wfilepath, std::ios_base::binary);
+    free(wfilepath);
 #else
-    ofs.open(filename, std::ios_base::binary);
+    ofs.open(filepath, std::ios_base::binary);
 #endif
 
     if (!ofs) {
@@ -379,7 +363,7 @@ static void openexr_header_compression(Header *header, int compression)
     case R_IMF_EXR_CODEC_B44A:
       header->compression() = B44A_COMPRESSION;
       break;
-#if OPENEXR_VERSION_MAJOR >= 2 && OPENEXR_VERSION_MINOR >= 2
+#if OPENEXR_VERSION_MAJOR > 2 || (OPENEXR_VERSION_MAJOR >= 2 && OPENEXR_VERSION_MINOR >= 2)
     case R_IMF_EXR_CODEC_DWAA:
       header->compression() = DWAA_COMPRESSION;
       break;
@@ -850,7 +834,7 @@ void IMB_exr_add_channel(void *handle,
 }
 
 bool IMB_exr_begin_write(void *handle,
-                         const char *filename,
+                         const char *filepath,
                          int width,
                          int height,
                          int compress,
@@ -888,7 +872,7 @@ bool IMB_exr_begin_write(void *handle,
   /* avoid crash/abort when we don't have permission to write here */
   /* manually create ofstream, so we can handle utf-8 filepaths on windows */
   try {
-    data->ofile_stream = new OFileStream(filename);
+    data->ofile_stream = new OFileStream(filepath);
     data->ofile = new OutputFile(*(data->ofile_stream), header);
   }
   catch (const std::exception &exc) {
@@ -905,7 +889,7 @@ bool IMB_exr_begin_write(void *handle,
 }
 
 void IMB_exrtile_begin_write(
-    void *handle, const char *filename, int mipmap, int width, int height, int tilex, int tiley)
+    void *handle, const char *filepath, int mipmap, int width, int height, int tilex, int tiley)
 {
   ExrHandle *data = (ExrHandle *)handle;
   Header header(width, height);
@@ -957,7 +941,7 @@ void IMB_exrtile_begin_write(
   /* avoid crash/abort when we don't have permission to write here */
   /* manually create ofstream, so we can handle utf-8 filepaths on windows */
   try {
-    data->ofile_stream = new OFileStream(filename);
+    data->ofile_stream = new OFileStream(filepath);
     data->mpofile = new MultiPartOutputFile(*(data->ofile_stream), &headers[0], headers.size());
   }
   catch (const std::exception &) {
@@ -970,19 +954,19 @@ void IMB_exrtile_begin_write(
 }
 
 bool IMB_exr_begin_read(
-    void *handle, const char *filename, int *width, int *height, const bool parse_channels)
+    void *handle, const char *filepath, int *width, int *height, const bool parse_channels)
 {
   ExrHandle *data = (ExrHandle *)handle;
   ExrChannel *echan;
 
   /* 32 is arbitrary, but zero length files crashes exr. */
-  if (!(BLI_exists(filename) && BLI_file_size(filename) > 32)) {
+  if (!(BLI_exists(filepath) && BLI_file_size(filepath) > 32)) {
     return false;
   }
 
   /* avoid crash/abort when we don't have permission to write here */
   try {
-    data->ifile_stream = new IFileStream(filename);
+    data->ifile_stream = new IFileStream(filepath);
     data->ifile = new MultiPartInputFile(*(data->ifile_stream));
   }
   catch (const std::exception &) {
@@ -1410,12 +1394,10 @@ static int imb_exr_split_channel_name(ExrChannel *echan, char *layname, char *pa
   const char *name = echan->m->name.c_str();
   const char *end = name + strlen(name);
   const char *token;
-  char tokenbuf[EXR_TOT_MAXNAME];
-  int len;
 
   /* some multilayers have the combined buffer with names A B G R saved */
   if (name[1] == 0) {
-    echan->chan_id = name[0];
+    echan->chan_id = BLI_toupper_ascii(name[0]);
     layname[0] = '\0';
 
     if (ELEM(name[0], 'R', 'G', 'B', 'A')) {
@@ -1432,13 +1414,17 @@ static int imb_exr_split_channel_name(ExrChannel *echan, char *layname, char *pa
   }
 
   /* last token is channel identifier */
-  len = imb_exr_split_token(name, end, &token);
+  size_t len = imb_exr_split_token(name, end, &token);
   if (len == 0) {
     printf("multilayer read: bad channel name: %s\n", name);
     return 0;
   }
+
+  char channelname[EXR_TOT_MAXNAME];
+  BLI_strncpy(channelname, token, std::min(len + 1, sizeof(channelname)));
+
   if (len == 1) {
-    echan->chan_id = token[0];
+    echan->chan_id = BLI_toupper_ascii(channelname[0]);
   }
   else if (len > 1) {
     bool ok = false;
@@ -1452,36 +1438,35 @@ static int imb_exr_split_channel_name(ExrChannel *echan, char *layname, char *pa
        *
        * Here we do some magic to distinguish such cases.
        */
-      if (ELEM(token[1], 'X', 'Y', 'Z') || ELEM(token[1], 'R', 'G', 'B') ||
-          ELEM(token[1], 'U', 'V', 'A')) {
-        echan->chan_id = token[1];
+      const char chan_id = BLI_toupper_ascii(channelname[1]);
+      if (ELEM(chan_id, 'X', 'Y', 'Z', 'R', 'G', 'B', 'U', 'V', 'A')) {
+        echan->chan_id = chan_id;
         ok = true;
       }
     }
-    else if (BLI_strcaseeq(token, "red")) {
+    else if (BLI_strcaseeq(channelname, "red")) {
       echan->chan_id = 'R';
       ok = true;
     }
-    else if (BLI_strcaseeq(token, "green")) {
+    else if (BLI_strcaseeq(channelname, "green")) {
       echan->chan_id = 'G';
       ok = true;
     }
-    else if (BLI_strcaseeq(token, "blue")) {
+    else if (BLI_strcaseeq(channelname, "blue")) {
       echan->chan_id = 'B';
       ok = true;
     }
-    else if (BLI_strcaseeq(token, "alpha")) {
+    else if (BLI_strcaseeq(channelname, "alpha")) {
       echan->chan_id = 'A';
       ok = true;
     }
-    else if (BLI_strcaseeq(token, "depth")) {
+    else if (BLI_strcaseeq(channelname, "depth")) {
       echan->chan_id = 'Z';
       ok = true;
     }
 
     if (ok == false) {
-      BLI_strncpy(tokenbuf, token, std::min(len + 1, EXR_TOT_MAXNAME));
-      printf("multilayer read: unknown channel token: %s\n", tokenbuf);
+      printf("multilayer read: unknown channel token: %s\n", channelname);
       return 0;
     }
   }

@@ -1,24 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * - Blender Foundation, 2003-2009
- * - Peter Schlaile <peter [at] schlaile [dot] de> 2005/2006
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved.
+ *           2003-2009 Blender Foundation.
+ *           2005-2006 Peter Schlaile <peter [at] schlaile [dot] de> */
 
 /** \file
  * \ingroup bke
@@ -41,6 +24,7 @@
 #include "BKE_scene.h"
 
 #include "SEQ_animation.h"
+#include "SEQ_channels.h"
 #include "SEQ_edit.h"
 #include "SEQ_iterator.h"
 #include "SEQ_relations.h"
@@ -241,13 +225,14 @@ const char *SEQ_sequence_give_name(Sequence *seq)
   return name;
 }
 
-ListBase *SEQ_get_seqbase_from_sequence(Sequence *seq, int *r_offset)
+ListBase *SEQ_get_seqbase_from_sequence(Sequence *seq, ListBase **r_channels, int *r_offset)
 {
   ListBase *seqbase = NULL;
 
   switch (seq->type) {
     case SEQ_TYPE_META: {
       seqbase = &seq->seqbase;
+      *r_channels = &seq->channels;
       *r_offset = seq->start;
       break;
     }
@@ -256,6 +241,7 @@ ListBase *SEQ_get_seqbase_from_sequence(Sequence *seq, int *r_offset)
         Editing *ed = SEQ_editing_get(seq->scene);
         if (ed) {
           seqbase = &ed->seqbase;
+          *r_channels = &ed->channels;
           *r_offset = seq->scene->r.sfra;
         }
       }
@@ -397,7 +383,8 @@ void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
 
 const Sequence *SEQ_get_topmost_sequence(const Scene *scene, int frame)
 {
-  const Editing *ed = scene->ed;
+  Editing *ed = scene->ed;
+  ListBase *channels = SEQ_channels_displayed_get(ed);
   const Sequence *seq, *best_seq = NULL;
   int best_machine = -1;
 
@@ -406,7 +393,7 @@ const Sequence *SEQ_get_topmost_sequence(const Scene *scene, int frame)
   }
 
   for (seq = ed->seqbasep->first; seq; seq = seq->next) {
-    if (seq->flag & SEQ_MUTE || !SEQ_time_strip_intersects_frame(seq, frame)) {
+    if (SEQ_render_is_muted(channels, seq) || !SEQ_time_strip_intersects_frame(seq, frame)) {
       continue;
     }
     /* Only use strips that generate an image, not ones that combine

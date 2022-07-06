@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2019 by Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2019 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edobj
@@ -56,6 +40,7 @@
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_shrinkwrap.h"
+#include "BKE_unit.h"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -298,7 +283,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
   immEnd();
 }
 
-static void voxel_size_edit_draw(const bContext *UNUSED(C), ARegion *UNUSED(ar), void *arg)
+static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *arg)
 {
   VoxelSizeEditCustomData *cd = static_cast<VoxelSizeEditCustomData *>(arg);
 
@@ -354,8 +339,15 @@ static void voxel_size_edit_draw(const bContext *UNUSED(C), ARegion *UNUSED(ar),
   short fstyle_points = fstyle->points;
   char str[VOXEL_SIZE_EDIT_MAX_STR_LEN];
   short strdrawlen = 0;
-
-  BLI_snprintf(str, VOXEL_SIZE_EDIT_MAX_STR_LEN, "%.4f", cd->voxel_size);
+  Scene *scene = CTX_data_scene(C);
+  UnitSettings *unit = &scene->unit;
+  BKE_unit_value_as_string(str,
+                           VOXEL_SIZE_EDIT_MAX_STR_LEN,
+                           (double)(cd->voxel_size * unit->scale_length),
+                           4,
+                           B_UNIT_LENGTH,
+                           unit,
+                           true);
   strdrawlen = BLI_strlen_utf8(str);
 
   immUnbindProgram();
@@ -422,7 +414,7 @@ static int voxel_size_edit_modal(bContext *C, wmOperator *op, const wmEvent *eve
     d = cd->slow_mval[0] - mval[0];
   }
 
-  if (event->ctrl) {
+  if (event->modifier & KM_CTRL) {
     /* Linear mode, enables jumping to any voxel size. */
     d = d * 0.0005f;
   }
@@ -475,7 +467,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   op->customdata = cd;
 
   /* Select the front facing face of the mesh bounding box. */
-  BoundBox *bb = BKE_mesh_boundbox_get(cd->active_object);
+  const BoundBox *bb = BKE_mesh_boundbox_get(cd->active_object);
 
   /* Indices of the Bounding Box faces. */
   const int BB_faces[6][4] = {
@@ -901,9 +893,6 @@ static void quadriflow_start_job(void *customdata, short *stop, short *do_update
   BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob, &CD_MASK_MESH, true);
 
   if (qj->smooth_normals) {
-    if (qj->use_mesh_symmetry) {
-      BKE_mesh_calc_normals(static_cast<Mesh *>(ob->data));
-    }
     BKE_mesh_smooth_flag_set(static_cast<Mesh *>(ob->data), true);
   }
 

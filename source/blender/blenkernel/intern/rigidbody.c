@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2013 Blender Foundation
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2013 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -489,7 +473,6 @@ static rbCollisionShape *rigidbody_validate_sim_shape_helper(RigidBodyWorld *rbw
 {
   RigidBodyOb *rbo = ob->rigidbody_object;
   rbCollisionShape *new_shape = NULL;
-  BoundBox *bb = NULL;
   float size[3] = {1.0f, 1.0f, 1.0f};
   float radius = 1.0f;
   float height = 1.0f;
@@ -510,7 +493,7 @@ static rbCollisionShape *rigidbody_validate_sim_shape_helper(RigidBodyWorld *rbw
    */
   /* XXX: all dimensions are auto-determined now... later can add stored settings for this */
   /* get object dimensions without scaling */
-  bb = BKE_object_boundbox_get(ob);
+  const BoundBox *bb = BKE_object_boundbox_get(ob);
   if (bb) {
     size[0] = (bb->vec[4][0] - bb->vec[0][0]);
     size[1] = (bb->vec[2][1] - bb->vec[0][1]);
@@ -1694,7 +1677,7 @@ static void rigidbody_update_sim_ob(
     if (mesh) {
       MVert *mvert = mesh->mvert;
       int totvert = mesh->totvert;
-      BoundBox *bb = BKE_object_boundbox_get(ob);
+      const BoundBox *bb = BKE_object_boundbox_get(ob);
 
       RB_shape_trimesh_update(rbo->shared->physics_shape,
                               (float *)mvert,

@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup obj
@@ -23,6 +9,7 @@
 #include "DNA_meshdata_types.h"
 
 #include "BLI_map.hh"
+#include "BLI_set.hh"
 #include "BLI_vector.hh"
 
 #include "IO_wavefront_obj.h"
@@ -49,14 +36,29 @@ struct IndexOffsets {
 class OBJWriter : NonMovable, NonCopyable {
  private:
   const OBJExportParams &export_params_;
-  std::unique_ptr<FormattedFileHandler<eFileType::OBJ>> file_handler_ = nullptr;
-  IndexOffsets index_offsets_{0, 0, 0};
+  std::string outfile_path_;
+  FILE *outfile_;
 
  public:
   OBJWriter(const char *filepath, const OBJExportParams &export_params) noexcept(false)
-      : export_params_(export_params)
+      : export_params_(export_params), outfile_path_(filepath), outfile_(nullptr)
   {
-    file_handler_ = std::make_unique<FormattedFileHandler<eFileType::OBJ>>(filepath);
+    outfile_ = BLI_fopen(filepath, "wb");
+    if (!outfile_) {
+      throw std::system_error(errno, std::system_category(), "Cannot open file " + outfile_path_);
+    }
+  }
+  ~OBJWriter()
+  {
+    if (outfile_ && std::fclose(outfile_)) {
+      std::cerr << "Error: could not close the file '" << outfile_path_
+                << "' properly, it may be corrupted." << std::endl;
+    }
+  }
+
+  FILE *get_outfile() const
+  {
+    return outfile_;
   }
 
   void write_header() const;
@@ -64,7 +66,7 @@ class OBJWriter : NonMovable, NonCopyable {
   /**
    * Write object's name or group.
    */
-  void write_object_name(const OBJMesh &obj_mesh_data) const;
+  void write_object_name(FormatHandler<eFileType::OBJ> &fh, const OBJMesh &obj_mesh_data) const;
   /**
    * Write file name of Material Library in .OBJ file.
    */
@@ -72,38 +74,17 @@ class OBJWriter : NonMovable, NonCopyable {
   /**
    * Write vertex coordinates for all vertices as "v x y z".
    */
-  void write_vertex_coords(const OBJMesh &obj_mesh_data) const;
+  void write_vertex_coords(FormatHandler<eFileType::OBJ> &fh, const OBJMesh &obj_mesh_data) const;
   /**
    * Write UV vertex coordinates for all vertices as `vt u v`.
    * \note UV indices are stored here, but written with polygons later.
    */
-  void write_uv_coords(OBJMesh &obj_mesh_data) const;
+  void write_uv_coords(FormatHandler<eFileType::OBJ> &fh, OBJMesh &obj_mesh_data) const;
   /**
    * Write loop normals for smooth-shaded polygons, and polygon normals otherwise, as "vn x y z".
    * \note Normal indices ares stored here, but written with polygons later.
    */
-  void write_poly_normals(OBJMesh &obj_mesh_data);
-  /**
-   * Write smooth group if polygon at the given index is shaded smooth else "s 0"
-   */
-  int write_smooth_group(const OBJMesh &obj_mesh_data,
-                         int poly_index,
-                         int last_poly_smooth_group) const;
-  /**
-   * Write material name and material group of a polygon in the .OBJ file.
-   * \return #mat_nr of the polygon at the given index.
-   * \note It doesn't write to the material library.
-   */
-  int16_t write_poly_material(const OBJMesh &obj_mesh_data,
-                              int poly_index,
-                              int16_t last_poly_mat_nr,
-                              std::function<const char *(int)> matname_fn) const;
-  /**
-   * Write the name of the deform group of a polygon.
-   */
-  int16_t write_vertex_group(const OBJMesh &obj_mesh_data,
-                             int poly_index,
-                             int16_t last_poly_vertex_group) const;
+  void write_poly_normals(FormatHandler<eFileType::OBJ> &fh, OBJMesh &obj_mesh_data);
   /**
    * Write polygon elements with at least vertex indices, and conditionally with UV vertex
    * indices and polygon normal indices. Also write groups: smooth, vertex, material.
@@ -111,25 +92,25 @@ class OBJWriter : NonMovable, NonCopyable {
    * name used in the .obj file.
    * \note UV indices were stored while writing UV vertices.
    */
-  void write_poly_elements(const OBJMesh &obj_mesh_data,
+  void write_poly_elements(FormatHandler<eFileType::OBJ> &fh,
+                           const IndexOffsets &offsets,
+                           const OBJMesh &obj_mesh_data,
                            std::function<const char *(int)> matname_fn);
   /**
    * Write loose edges of a mesh as "l v1 v2".
    */
-  void write_edges_indices(const OBJMesh &obj_mesh_data) const;
+  void write_edges_indices(FormatHandler<eFileType::OBJ> &fh,
+                           const IndexOffsets &offsets,
+                           const OBJMesh &obj_mesh_data) const;
   /**
    * Write a NURBS curve to the .OBJ file in parameter form.
    */
-  void write_nurbs_curve(const OBJCurve &obj_nurbs_data) const;
-
-  /**
-   * When there are multiple objects in a frame, the indices of previous objects' coordinates or
-   * normals add up.
-   */
-  void update_index_offsets(const OBJMesh &obj_mesh_data);
+  void write_nurbs_curve(FormatHandler<eFileType::OBJ> &fh, const OBJCurve &obj_nurbs_data) const;
 
  private:
-  using func_vert_uv_normal_indices = void (OBJWriter::*)(Span<int> vert_indices,
+  using func_vert_uv_normal_indices = void (OBJWriter::*)(FormatHandler<eFileType::OBJ> &fh,
+                                                          const IndexOffsets &offsets,
+                                                          Span<int> vert_indices,
                                                           Span<int> uv_indices,
                                                           Span<int> normal_indices,
                                                           bool flip) const;
@@ -141,28 +122,36 @@ class OBJWriter : NonMovable, NonCopyable {
   /**
    * Write one line of polygon indices as "f v1/vt1/vn1 v2/vt2/vn2 ...".
    */
-  void write_vert_uv_normal_indices(Span<int> vert_indices,
+  void write_vert_uv_normal_indices(FormatHandler<eFileType::OBJ> &fh,
+                                    const IndexOffsets &offsets,
+                                    Span<int> vert_indices,
                                     Span<int> uv_indices,
                                     Span<int> normal_indices,
                                     bool flip) const;
   /**
    * Write one line of polygon indices as "f v1//vn1 v2//vn2 ...".
    */
-  void write_vert_normal_indices(Span<int> vert_indices,
+  void write_vert_normal_indices(FormatHandler<eFileType::OBJ> &fh,
+                                 const IndexOffsets &offsets,
+                                 Span<int> vert_indices,
                                  Span<int> /*uv_indices*/,
                                  Span<int> normal_indices,
                                  bool flip) const;
   /**
    * Write one line of polygon indices as "f v1/vt1 v2/vt2 ...".
    */
-  void write_vert_uv_indices(Span<int> vert_indices,
+  void write_vert_uv_indices(FormatHandler<eFileType::OBJ> &fh,
+                             const IndexOffsets &offsets,
+                             Span<int> vert_indices,
                              Span<int> uv_indices,
                              Span<int> /*normal_indices*/,
                              bool flip) const;
   /**
    * Write one line of polygon indices as "f v1 v2 ...".
    */
-  void write_vert_indices(Span<int> vert_indices,
+  void write_vert_indices(FormatHandler<eFileType::OBJ> &fh,
+                          const IndexOffsets &offsets,
+                          Span<int> vert_indices,
                           Span<int> /*uv_indices*/,
                           Span<int> /*normal_indices*/,
                           bool flip) const;
@@ -173,7 +162,8 @@ class OBJWriter : NonMovable, NonCopyable {
  */
 class MTLWriter : NonMovable, NonCopyable {
  private:
-  std::unique_ptr<FormattedFileHandler<eFileType::MTL>> file_handler_ = nullptr;
+  FormatHandler<eFileType::MTL> fmt_handler_;
+  FILE *outfile_;
   std::string mtl_filepath_;
   Vector<MTLMaterial> mtlmaterials_;
   /* Map from a Material* to an index into mtlmaterials_. */
@@ -184,14 +174,17 @@ class MTLWriter : NonMovable, NonCopyable {
    * Create the .MTL file.
    */
   MTLWriter(const char *obj_filepath) noexcept(false);
+  ~MTLWriter();
 
-  void write_header(const char *blen_filepath) const;
+  void write_header(const char *blen_filepath);
   /**
    * Write all of the material specifications to the MTL file.
    * For consistency of output from run to run (useful for testing),
    * the materials are sorted by name before writing.
    */
-  void write_materials();
+  void write_materials(const char *blen_filepath,
+                       ePathReferenceMode path_mode,
+                       const char *dest_dir);
   StringRefNull mtl_file_path() const;
   /**
    * Add the materials of the given object to #MTLWriter, de-duplicating
@@ -213,6 +206,10 @@ class MTLWriter : NonMovable, NonCopyable {
    * Write a texture map in the form "map_XX -s 1. 1. 1. -o 0. 0. 0. [-bm 1.] path/to/image".
    */
   void write_texture_map(const MTLMaterial &mtl_material,
-                         const Map<const eMTLSyntaxElement, tex_map_XX>::Item &texture_map);
+                         const Map<const eMTLSyntaxElement, tex_map_XX>::Item &texture_map,
+                         const char *blen_filedir,
+                         const char *dest_dir,
+                         ePathReferenceMode mode,
+                         Set<std::pair<std::string, std::string>> &copy_set);
 };
 }  // namespace blender::io::obj

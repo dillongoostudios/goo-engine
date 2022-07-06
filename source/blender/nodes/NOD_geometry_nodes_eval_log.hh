@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -32,14 +18,15 @@
 
 #include "BLI_enumerable_thread_specific.hh"
 #include "BLI_function_ref.hh"
+#include "BLI_generic_pointer.hh"
 #include "BLI_linear_allocator.hh"
 #include "BLI_map.hh"
 
 #include "BKE_geometry_set.hh"
 
-#include "FN_generic_pointer.hh"
-
 #include "NOD_derived_node_tree.hh"
+
+#include "FN_field.hh"
 
 #include <chrono>
 
@@ -47,9 +34,6 @@ struct SpaceNode;
 struct SpaceSpreadsheet;
 
 namespace blender::nodes::geometry_nodes_eval_log {
-
-using fn::GMutablePointer;
-using fn::GPointer;
 
 /** Contains information about a value that has been computed during geometry nodes evaluation. */
 class ValueLog {
@@ -81,7 +65,7 @@ class GenericValueLog : public ValueLog {
 class GFieldValueLog : public ValueLog {
  private:
   fn::GField field_;
-  const fn::CPPType &type_;
+  const CPPType &type_;
   Vector<std::string> input_tooltips_;
 
  public:
@@ -97,7 +81,7 @@ class GFieldValueLog : public ValueLog {
     return input_tooltips_;
   }
 
-  const fn::CPPType &type() const
+  const CPPType &type() const
   {
     return type_;
   }
@@ -105,8 +89,9 @@ class GFieldValueLog : public ValueLog {
 
 struct GeometryAttributeInfo {
   std::string name;
-  AttributeDomain domain;
-  CustomDataType data_type;
+  /** Can be empty when #name does not actually exist on a geometry yet. */
+  std::optional<AttributeDomain> domain;
+  std::optional<CustomDataType> data_type;
 };
 
 /** Contains information about a geometry set. In most cases this does not store the entire
@@ -158,7 +143,6 @@ enum class NodeWarningType {
   Error,
   Warning,
   Info,
-  Legacy,
 };
 
 struct NodeWarning {
@@ -187,6 +171,24 @@ struct ValueOfSockets {
   destruct_ptr<ValueLog> value;
 };
 
+enum class NamedAttributeUsage {
+  None = 0,
+  Read = 1 << 0,
+  Write = 1 << 1,
+  Remove = 1 << 2,
+};
+ENUM_OPERATORS(NamedAttributeUsage, NamedAttributeUsage::Remove);
+
+struct UsedNamedAttribute {
+  std::string name;
+  NamedAttributeUsage usage;
+};
+
+struct NodeWithUsedNamedAttribute {
+  DNode node;
+  UsedNamedAttribute attribute;
+};
+
 class GeoLogger;
 class ModifierLog;
 
@@ -203,6 +205,7 @@ class LocalGeoLogger {
   Vector<NodeWithWarning> node_warnings_;
   Vector<NodeWithExecutionTime> node_exec_times_;
   Vector<NodeWithDebugMessage> node_debug_messages_;
+  Vector<NodeWithUsedNamedAttribute> used_named_attributes_;
 
   friend ModifierLog;
 
@@ -216,6 +219,7 @@ class LocalGeoLogger {
   void log_multi_value_socket(DSocket socket, Span<GPointer> values);
   void log_node_warning(DNode node, NodeWarningType type, std::string message);
   void log_execution_time(DNode node, std::chrono::microseconds exec_time);
+  void log_used_named_attribute(DNode node, std::string attribute_name, NamedAttributeUsage usage);
   /**
    * Log a message that will be displayed in the node editor next to the node.
    * This should only be used for debugging purposes and not to display information to users.
@@ -295,6 +299,7 @@ class NodeLog {
   Vector<SocketLog> output_logs_;
   Vector<NodeWarning, 0> warnings_;
   Vector<std::string, 0> debug_messages_;
+  Vector<UsedNamedAttribute, 0> used_named_attributes_;
   std::chrono::microseconds exec_time_;
 
   friend ModifierLog;
@@ -322,6 +327,11 @@ class NodeLog {
   Span<std::string> debug_messages() const
   {
     return debug_messages_;
+  }
+
+  Span<UsedNamedAttribute> used_named_attributes() const
+  {
+    return used_named_attributes_;
   }
 
   std::chrono::microseconds execution_time() const
@@ -372,6 +382,8 @@ class ModifierLog {
   static const TreeLog *find_tree_by_node_editor_context(const SpaceNode &snode);
   static const NodeLog *find_node_by_node_editor_context(const SpaceNode &snode,
                                                          const bNode &node);
+  static const NodeLog *find_node_by_node_editor_context(const SpaceNode &snode,
+                                                         const StringRef node_name);
   static const SocketLog *find_socket_by_node_editor_context(const SpaceNode &snode,
                                                              const bNode &node,
                                                              const bNodeSocket &socket);

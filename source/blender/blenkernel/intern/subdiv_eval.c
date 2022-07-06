@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2018 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2018 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -60,7 +44,8 @@ static eOpenSubdivEvaluator opensubdiv_evalutor_from_subdiv_evaluator_type(
 
 bool BKE_subdiv_eval_begin(Subdiv *subdiv,
                            eSubdivEvaluatorType evaluator_type,
-                           OpenSubdiv_EvaluatorCache *evaluator_cache)
+                           OpenSubdiv_EvaluatorCache *evaluator_cache,
+                           const OpenSubdiv_EvaluatorSettings *settings)
 {
   BKE_subdiv_stats_reset(&subdiv->stats, SUBDIV_STATS_EVALUATOR_CREATE);
   if (subdiv->topology_refiner == NULL) {
@@ -82,6 +67,7 @@ bool BKE_subdiv_eval_begin(Subdiv *subdiv,
   else {
     /* TODO(sergey): Check for topology change. */
   }
+  subdiv->evaluator->setSettings(subdiv->evaluator, settings);
   BKE_subdiv_eval_init_displacement(subdiv);
   return true;
 }
@@ -195,13 +181,52 @@ static void set_face_varying_data_from_uv(Subdiv *subdiv,
   MEM_freeN(buffer);
 }
 
+static void set_vertex_data_from_orco(Subdiv *subdiv, const Mesh *mesh)
+{
+  const float(*orco)[3] = CustomData_get_layer(&mesh->vdata, CD_ORCO);
+  const float(*cloth_orco)[3] = CustomData_get_layer(&mesh->vdata, CD_CLOTH_ORCO);
+
+  if (orco || cloth_orco) {
+    OpenSubdiv_TopologyRefiner *topology_refiner = subdiv->topology_refiner;
+    OpenSubdiv_Evaluator *evaluator = subdiv->evaluator;
+    const int num_verts = topology_refiner->getNumVertices(topology_refiner);
+
+    if (orco && cloth_orco) {
+      /* Set one by one if have both. */
+      for (int i = 0; i < num_verts; i++) {
+        float data[6];
+        copy_v3_v3(data, orco[i]);
+        copy_v3_v3(data + 3, cloth_orco[i]);
+        evaluator->setVertexData(evaluator, data, i, 1);
+      }
+    }
+    else {
+      /* Faster single call if we have either. */
+      if (orco) {
+        evaluator->setVertexData(evaluator, orco[0], 0, num_verts);
+      }
+      else if (cloth_orco) {
+        evaluator->setVertexData(evaluator, cloth_orco[0], 0, num_verts);
+      }
+    }
+  }
+}
+
+static void get_mesh_evaluator_settings(OpenSubdiv_EvaluatorSettings *settings, const Mesh *mesh)
+{
+  settings->num_vertex_data = (CustomData_has_layer(&mesh->vdata, CD_ORCO) ? 3 : 0) +
+                              (CustomData_has_layer(&mesh->vdata, CD_CLOTH_ORCO) ? 3 : 0);
+}
+
 bool BKE_subdiv_eval_begin_from_mesh(Subdiv *subdiv,
                                      const Mesh *mesh,
                                      const float (*coarse_vertex_cos)[3],
                                      eSubdivEvaluatorType evaluator_type,
                                      OpenSubdiv_EvaluatorCache *evaluator_cache)
 {
-  if (!BKE_subdiv_eval_begin(subdiv, evaluator_type, evaluator_cache)) {
+  OpenSubdiv_EvaluatorSettings settings = {0};
+  get_mesh_evaluator_settings(&settings, mesh);
+  if (!BKE_subdiv_eval_begin(subdiv, evaluator_type, evaluator_cache, &settings)) {
     return false;
   }
   return BKE_subdiv_eval_refine_from_mesh(subdiv, mesh, coarse_vertex_cos);
@@ -224,6 +249,8 @@ bool BKE_subdiv_eval_refine_from_mesh(Subdiv *subdiv,
     const MLoopUV *mloopuv = CustomData_get_layer_n(&mesh->ldata, CD_MLOOPUV, layer_index);
     set_face_varying_data_from_uv(subdiv, mesh, mloopuv, layer_index);
   }
+  /* Set vertex data to orco. */
+  set_vertex_data_from_orco(subdiv, mesh);
   /* Update evaluator to the new coarse geometry. */
   BKE_subdiv_stats_begin(&subdiv->stats, SUBDIV_STATS_EVALUATOR_REFINE);
   subdiv->evaluator->refine(subdiv->evaluator);
@@ -295,6 +322,12 @@ void BKE_subdiv_eval_limit_point_and_normal(Subdiv *subdiv,
   BKE_subdiv_eval_limit_point_and_derivatives(subdiv, ptex_face_index, u, v, r_P, dPdu, dPdv);
   cross_v3_v3v3(r_N, dPdu, dPdv);
   normalize_v3(r_N);
+}
+
+void BKE_subdiv_eval_vertex_data(
+    Subdiv *subdiv, const int ptex_face_index, const float u, const float v, float r_vertex_data[])
+{
+  subdiv->evaluator->evaluateVertexData(subdiv->evaluator, ptex_face_index, u, v, r_vertex_data);
 }
 
 void BKE_subdiv_eval_face_varying(Subdiv *subdiv,

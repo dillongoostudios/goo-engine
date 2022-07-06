@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2017, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. */
 
 /** \file
  * \ingroup draw
@@ -75,7 +60,7 @@ GPENCIL_tObject *gpencil_object_cache_add(GPENCIL_PrivateData *pd, Object *ob)
    * strokes not aligned with the object axes. Maybe we could try to
    * compute the minimum axis of all strokes. But this would be more
    * computationally heavy and should go into the GPData evaluation. */
-  BoundBox *bbox = BKE_object_boundbox_get(ob);
+  const BoundBox *bbox = BKE_object_boundbox_get(ob);
   /* Convert bbox to matrix */
   float mat[4][4], size[3], center[3];
   BKE_boundbox_calc_size_aabb(bbox, size);
@@ -284,9 +269,9 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
                                               !BLI_listbase_is_empty(&gpl->mask_layers);
 
   float vert_col_opacity = (override_vertcol) ?
-                                           (is_vert_col_mode ? pd->vertex_paint_opacity : 0.0f) :
-                           pd->is_render ? gpl->vertex_paint_opacity :
-                                           pd->vertex_paint_opacity;
+                               (is_vert_col_mode ? pd->vertex_paint_opacity : 0.0f) :
+                               (pd->is_render ? gpl->vertex_paint_opacity :
+                                                pd->vertex_paint_opacity);
   /* Negate thickness sign to tag that strokes are in screen space.
    * Convert to world units (by default, 1 meter = 2000 pixels). */
   float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / GPENCIL_PIXEL_FACTOR);
@@ -404,14 +389,12 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
     DRW_shgroup_uniform_texture(grp, "gpSceneDepthTexture", depth_tex);
     DRW_shgroup_uniform_texture_ref(grp, "gpMaskTexture", mask_tex);
     DRW_shgroup_uniform_vec3_copy(grp, "gpNormal", tgp_ob->plane_normal);
-    DRW_shgroup_uniform_bool_copy(grp, "strokeOrder3d", tgp_ob->is_drawmode3d);
-    DRW_shgroup_uniform_float_copy(grp, "thicknessScale", tgp_ob->object_scale);
-    DRW_shgroup_uniform_vec2_copy(grp, "sizeViewportInv", DRW_viewport_invert_size_get());
-    DRW_shgroup_uniform_vec2_copy(grp, "sizeViewport", DRW_viewport_size_get());
-    DRW_shgroup_uniform_float_copy(grp, "thicknessOffset", (float)gpl->line_change);
+    DRW_shgroup_uniform_bool_copy(grp, "gpStrokeOrder3d", tgp_ob->is_drawmode3d);
+    DRW_shgroup_uniform_float_copy(grp, "gpThicknessScale", tgp_ob->object_scale);
+    DRW_shgroup_uniform_float_copy(grp, "gpThicknessOffset", (float)gpl->line_change);
+    DRW_shgroup_uniform_float_copy(grp, "gpThicknessWorldScale", thickness_scale);
+    DRW_shgroup_uniform_float_copy(grp, "gpVertexColorOpacity", vert_col_opacity);
     DRW_shgroup_uniform_bool_copy(grp, "thicknessViewIndependent", is_fixed_view_scale);
-    DRW_shgroup_uniform_float_copy(grp, "thicknessWorldScale", thickness_scale);
-    DRW_shgroup_uniform_float_copy(grp, "vertexColorOpacity", vert_col_opacity);
 
     /* If random color type, need color by layer. */
     float gpl_color[4];
@@ -420,9 +403,9 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
       gpencil_layer_random_color_get(ob, gpl, gpl_color);
       gpl_color[3] = 1.0f;
     }
-    DRW_shgroup_uniform_vec4_copy(grp, "layerTint", gpl_color);
+    DRW_shgroup_uniform_vec4_copy(grp, "gpLayerTint", gpl_color);
 
-    DRW_shgroup_uniform_float_copy(grp, "layerOpacity", layer_alpha);
+    DRW_shgroup_uniform_float_copy(grp, "gpLayerOpacity", layer_alpha);
     DRW_shgroup_stencil_mask(grp, 0xFF);
   }
 

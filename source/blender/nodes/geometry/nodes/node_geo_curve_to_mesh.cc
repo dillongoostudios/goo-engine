@@ -1,20 +1,6 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_spline.hh"
+#include "BKE_curves.hh"
 
 #include "BKE_curve_to_mesh.hh"
 
@@ -41,15 +27,18 @@ static void geometry_set_curve_to_mesh(GeometrySet &geometry_set,
                                        const GeometrySet &profile_set,
                                        const bool fill_caps)
 {
-  const CurveEval *curve = geometry_set.get_curve_for_read();
-  const CurveEval *profile_curve = profile_set.get_curve_for_read();
+  const Curves &curves = *geometry_set.get_curves_for_read();
 
-  if (profile_curve == nullptr) {
-    Mesh *mesh = bke::curve_to_wire_mesh(*curve);
+  const Curves *profile_curves = profile_set.get_curves_for_read();
+
+  if (profile_curves == nullptr) {
+    Mesh *mesh = bke::curve_to_wire_mesh(bke::CurvesGeometry::wrap(curves.geometry));
     geometry_set.replace_mesh(mesh);
   }
   else {
-    Mesh *mesh = bke::curve_to_mesh_sweep(*curve, *profile_curve, fill_caps);
+    Mesh *mesh = bke::curve_to_mesh_sweep(bke::CurvesGeometry::wrap(curves.geometry),
+                                          bke::CurvesGeometry::wrap(profile_curves->geometry),
+                                          fill_caps);
     geometry_set.replace_mesh(mesh);
   }
 }
@@ -60,10 +49,10 @@ static void node_geo_exec(GeoNodeExecParams params)
   GeometrySet profile_set = params.extract_input<GeometrySet>("Profile Curve");
   const bool fill_caps = params.extract_input<bool>("Fill Caps");
 
-  bool has_curve = false;
+  bool has_curves = false;
   curve_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-    if (geometry_set.has_curve()) {
-      has_curve = true;
+    if (geometry_set.has_curves()) {
+      has_curves = true;
       geometry_set_curve_to_mesh(geometry_set, profile_set, fill_caps);
     }
     geometry_set.keep_only({GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_INSTANCES});

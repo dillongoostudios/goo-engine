@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup RNA
@@ -294,7 +278,8 @@ static void rna_uiItemPointerR(uiLayout *layout,
                                const char *name,
                                const char *text_ctxt,
                                bool translate,
-                               int icon)
+                               int icon,
+                               const bool results_are_suggestions)
 {
   PropertyRNA *prop = RNA_struct_find_property(ptr, propname);
   if (!prop) {
@@ -311,7 +296,8 @@ static void rna_uiItemPointerR(uiLayout *layout,
   /* Get translated name (label). */
   name = rna_translate_ui_text(name, text_ctxt, NULL, prop, translate);
 
-  uiItemPointerR_prop(layout, ptr, prop, searchptr, searchprop, name, icon);
+  uiItemPointerR_prop(
+      layout, ptr, prop, searchptr, searchprop, name, icon, results_are_suggestions);
 }
 
 static PointerRNA rna_uiItemO(uiLayout *layout,
@@ -1158,6 +1144,8 @@ void RNA_api_ui_layout(StructRNA *srna)
       func, "search_property", NULL, 0, "", "Identifier of search collection property");
   RNA_def_parameter_flags(parm, 0, PARM_REQUIRED);
   api_ui_item_common(func);
+  RNA_def_boolean(
+      func, "results_are_suggestions", false, "", "Accept inputs that do not match any item");
 
   func = RNA_def_function(srna, "prop_decorator", "uiItemDecoratorR");
   api_ui_item_rna_common(func);

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup intern_mem
@@ -39,8 +23,8 @@
  * second intern/ module with MEM_ prefix, for use in c++.
  *
  * \subsection memdependencies Dependencies
- * - stdlib
- * - stdio
+ * - `stdlib`
+ * - `stdio`
  *
  * \subsection memdocs API Documentation
  * See \ref MEM_guardedalloc.h
@@ -268,6 +252,12 @@ void MEM_use_guarded_allocator(void);
  * Allocate new memory for and constructs an object of type #T.
  * #MEM_delete should be used to delete the object. Just calling #MEM_freeN is not enough when #T
  * is not a trivial type.
+ *
+ * Note that when no arguments are passed, C++ will do recursive member-wise value initialization.
+ * That is because C++ differentiates between creating an object with `T` (default initialization)
+ * and `T()` (value initialization), whereby this function does the latter. Value initialization
+ * rules are complex, but for C-style structs, memory will be zero-initialized. So this doesn't
+ * match a `malloc()`, but a `calloc()` call in this case. See https://stackoverflow.com/a/4982720.
  */
 template<typename T, typename... Args>
 inline T *MEM_new(const char *allocation_name, Args &&...args)
@@ -286,6 +276,24 @@ template<typename T> inline T *MEM_cnew(const char *allocation_name)
 {
   static_assert(std::is_trivial_v<T>, "For non-trivial types, MEM_new should be used.");
   return static_cast<T *>(MEM_callocN(sizeof(T), allocation_name));
+}
+
+/**
+ * Allocate memory for an object of type #T and copy construct an object from `other`.
+ * Only applicable for a trivial types.
+ *
+ * This function works around problem of copy-constructing DNA structs which contains deprecated
+ * fields: some compilers will generate access deprecated field in implicitly defined copy
+ * constructors.
+ *
+ * This is a better alternative to #MEM_dupallocN.
+ */
+template<typename T> inline T *MEM_cnew(const char *allocation_name, const T &other)
+{
+  static_assert(std::is_trivial_v<T>, "For non-trivial types, MEM_new should be used.");
+  T *new_object = static_cast<T *>(MEM_mallocN(sizeof(T), allocation_name));
+  memcpy(new_object, &other, sizeof(T));
+  return new_object;
 }
 
 /**

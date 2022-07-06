@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup modifiers
@@ -41,6 +27,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "bmesh.h"
 #include "bmesh_tools.h"
@@ -56,7 +43,7 @@ static Mesh *triangulate_mesh(Mesh *mesh,
 {
   Mesh *result;
   BMesh *bm;
-  int total_edges, i;
+  int edges_num, i;
   MEdge *me;
   CustomData_MeshMasks cd_mask_extra = {
       .vmask = CD_MASK_ORIGINDEX, .emask = CD_MASK_ORIGINDEX, .pmask = CD_MASK_ORIGINDEX};
@@ -94,15 +81,13 @@ static Mesh *triangulate_mesh(Mesh *mesh,
     CustomData_set_layer_flag(&result->ldata, CD_NORMAL, CD_FLAG_TEMPORARY);
   }
 
-  total_edges = result->totedge;
+  edges_num = result->totedge;
   me = result->medge;
 
   /* force drawing of all edges (seems to be omitted in CDDM_from_bmesh) */
-  for (i = 0; i < total_edges; i++, me++) {
+  for (i = 0; i < edges_num; i++, me++) {
     me->flag |= ME_EDGEDRAW | ME_EDGERENDER;
   }
-
-  BKE_mesh_normals_tag_dirty(result);
 
   return result;
 }
@@ -171,7 +156,6 @@ ModifierTypeInfo modifierType_Triangulate = {
     /* deformVertsEM */ NULL,
     /* deformMatricesEM */ NULL,
     /* modifyMesh */ modifyMesh,
-    /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
 
     /* initData */ initData,

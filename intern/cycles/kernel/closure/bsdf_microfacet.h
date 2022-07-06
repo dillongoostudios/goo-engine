@@ -1,34 +1,10 @@
-/*
- * Adapted from Open Shading Language with this license:
+/* SPDX-License-Identifier: BSD-3-Clause
  *
+ * Adapted from Open Shading Language
  * Copyright (c) 2009-2010 Sony Pictures Imageworks Inc., et al.
  * All Rights Reserved.
  *
- * Modifications Copyright 2011, Blender Foundation.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met:
- * * Redistributions of source code must retain the above copyright
- *   notice, this list of conditions and the following disclaimer.
- * * Redistributions in binary form must reproduce the above copyright
- *   notice, this list of conditions and the following disclaimer in the
- *   documentation and/or other materials provided with the distribution.
- * * Neither the name of Sony Pictures Imageworks nor the names of its
- *   contributors may be used to endorse or promote products derived from
- *   this software without specific prior written permission.
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
+ * Modifications Copyright 2011-2022 Blender Foundation. */
 
 #pragma once
 
@@ -392,8 +368,10 @@ ccl_device float3 bsdf_microfacet_ggx_eval_reflect(ccl_private const ShaderClosu
   bool m_refractive = bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
   float3 N = bsdf->N;
 
-  if (m_refractive || alpha_x * alpha_y <= 1e-7f)
+  if (m_refractive || alpha_x * alpha_y <= 1e-7f) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f);
+  }
 
   float cosNO = dot(N, I);
   float cosNI = dot(N, omega_in);
@@ -506,15 +484,18 @@ ccl_device float3 bsdf_microfacet_ggx_eval_transmit(ccl_private const ShaderClos
   bool m_refractive = bsdf->type == CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID;
   float3 N = bsdf->N;
 
-  if (!m_refractive || alpha_x * alpha_y <= 1e-7f)
+  if (!m_refractive || alpha_x * alpha_y <= 1e-7f) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f);
+  }
 
   float cosNO = dot(N, I);
   float cosNI = dot(N, omega_in);
 
-  if (cosNO <= 0 || cosNI >= 0)
+  if (cosNO <= 0 || cosNI >= 0) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f); /* vectors on same side -- not possible */
-
+  }
   /* compute half-vector of the refraction (eq. 16) */
   float3 ht = -(m_eta * omega_in + I);
   float3 Ht = normalize(ht);
@@ -697,6 +678,10 @@ ccl_device int bsdf_microfacet_ggx_sample(KernelGlobals kg,
           *domega_in_dy = (2 * dot(m, dIdy)) * m - dIdy;
 #endif
         }
+        else {
+          *eval = make_float3(0.0f, 0.0f, 0.0f);
+          *pdf = 0.0f;
+        }
       }
     }
     else {
@@ -767,6 +752,10 @@ ccl_device int bsdf_microfacet_ggx_sample(KernelGlobals kg,
 
           *eval = make_float3(out, out, out);
         }
+      }
+      else {
+        *eval = make_float3(0.0f, 0.0f, 0.0f);
+        *pdf = 0.0f;
       }
     }
   }
@@ -857,8 +846,10 @@ ccl_device float3 bsdf_microfacet_beckmann_eval_reflect(ccl_private const Shader
   bool m_refractive = bsdf->type == CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID;
   float3 N = bsdf->N;
 
-  if (m_refractive || alpha_x * alpha_y <= 1e-7f)
+  if (m_refractive || alpha_x * alpha_y <= 1e-7f) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f);
+  }
 
   float cosNO = dot(N, I);
   float cosNI = dot(N, omega_in);
@@ -937,15 +928,18 @@ ccl_device float3 bsdf_microfacet_beckmann_eval_transmit(ccl_private const Shade
   bool m_refractive = bsdf->type == CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID;
   float3 N = bsdf->N;
 
-  if (!m_refractive || alpha_x * alpha_y <= 1e-7f)
+  if (!m_refractive || alpha_x * alpha_y <= 1e-7f) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f);
+  }
 
   float cosNO = dot(N, I);
   float cosNI = dot(N, omega_in);
 
-  if (cosNO <= 0 || cosNI >= 0)
+  if (cosNO <= 0 || cosNI >= 0) {
+    *pdf = 0.0f;
     return make_float3(0.0f, 0.0f, 0.0f);
-
+  }
   /* compute half-vector of the refraction (eq. 16) */
   float3 ht = -(m_eta * omega_in + I);
   float3 Ht = normalize(ht);
@@ -1088,6 +1082,10 @@ ccl_device int bsdf_microfacet_beckmann_sample(KernelGlobals kg,
           *domega_in_dy = (2 * dot(m, dIdy)) * m - dIdy;
 #endif
         }
+        else {
+          *eval = make_float3(0.0f, 0.0f, 0.0f);
+          *pdf = 0.0f;
+        }
       }
     }
     else {
@@ -1159,6 +1157,10 @@ ccl_device int bsdf_microfacet_beckmann_sample(KernelGlobals kg,
 
           *eval = make_float3(out, out, out);
         }
+      }
+      else {
+        *eval = make_float3(0.0f, 0.0f, 0.0f);
+        *pdf = 0.0f;
       }
     }
   }

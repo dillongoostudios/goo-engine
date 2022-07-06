@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 by Mike Erwin.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 by Mike Erwin. All rights reserved. */
 
 /** \file
  * \ingroup gpu
@@ -29,7 +13,9 @@
  */
 
 /* TODO: Create cmake option. */
-#define WITH_OPENGL_BACKEND 1
+#if WITH_OPENGL
+#  define WITH_OPENGL_BACKEND 1
+#endif
 
 #include "BLI_assert.h"
 #include "BLI_utildefines.h"
@@ -47,6 +33,9 @@
 #ifdef WITH_OPENGL_BACKEND
 #  include "gl_backend.hh"
 #  include "gl_context.hh"
+#endif
+#ifdef WITH_METAL_BACKEND
+#  include "mtl_backend.hh"
 #endif
 
 #include <mutex>
@@ -157,19 +146,74 @@ void GPU_context_main_unlock()
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name  GPU Begin/end work blocks
+ *
+ * Used to explicitly define a per-frame block within which GPU work will happen.
+ * Used for global autoreleasepool flushing in Metal
+ * \{ */
+
+void GPU_render_begin()
+{
+  GPUBackend *backend = GPUBackend::get();
+  BLI_assert(backend);
+  backend->render_begin();
+}
+void GPU_render_end()
+{
+  GPUBackend *backend = GPUBackend::get();
+  BLI_assert(backend);
+  backend->render_end();
+}
+void GPU_render_step()
+{
+  GPUBackend *backend = GPUBackend::get();
+  BLI_assert(backend);
+  backend->render_step();
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Backend selection
  * \{ */
 
 static GPUBackend *g_backend;
 
+bool GPU_backend_supported(eGPUBackendType type)
+{
+  switch (type) {
+    case GPU_BACKEND_OPENGL:
+#ifdef WITH_OPENGL_BACKEND
+      return true;
+#else
+      return false;
+#endif
+    case GPU_BACKEND_METAL:
+#ifdef WITH_METAL_BACKEND
+      return MTLBackend::metal_is_supported();
+#else
+      return false;
+#endif
+    default:
+      BLI_assert(false && "No backend specified");
+      return false;
+  }
+}
+
 void GPU_backend_init(eGPUBackendType backend_type)
 {
   BLI_assert(g_backend == nullptr);
+  BLI_assert(GPU_backend_supported(backend_type));
 
   switch (backend_type) {
-#if WITH_OPENGL_BACKEND
+#ifdef WITH_OPENGL_BACKEND
     case GPU_BACKEND_OPENGL:
       g_backend = new GLBackend;
+      break;
+#endif
+#ifdef WITH_METAL_BACKEND
+    case GPU_BACKEND_METAL:
+      g_backend = new MTLBackend;
       break;
 #endif
     default:
@@ -188,9 +232,18 @@ void GPU_backend_exit()
 
 eGPUBackendType GPU_backend_get_type()
 {
+
+#ifdef WITH_OPENGL_BACKEND
   if (g_backend && dynamic_cast<GLBackend *>(g_backend) != nullptr) {
     return GPU_BACKEND_OPENGL;
   }
+#endif
+
+#ifdef WITH_METAL_BACKEND
+  if (g_backend && dynamic_cast<MTLBackend *>(g_backend) != nullptr) {
+    return GPU_BACKEND_METAL;
+  }
+#endif
 
   return GPU_BACKEND_NONE;
 }

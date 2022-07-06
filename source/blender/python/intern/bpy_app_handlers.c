@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup pythonintern
@@ -38,7 +24,7 @@
 
 void bpy_app_generic_callback(struct Main *main,
                               struct PointerRNA **pointers,
-                              const int num_pointers,
+                              const int pointers_num,
                               void *arg);
 
 static PyTypeObject BlenderAppCbType;
@@ -78,6 +64,8 @@ static PyStructSequence_Field app_cb_info_fields[] = {
     {"load_factory_preferences_post", "on loading factory preferences (after)"},
     {"load_factory_startup_post", "on loading factory startup (after)"},
     {"xr_session_start_pre", "on starting an xr session (before)"},
+    {"annotation_pre", "on drawing an annotation (before)"},
+    {"annotation_post", "on drawing an annotation (after)"},
 
 /* sets the permanent tag */
 #define APP_CB_OTHER_FIELDS 1
@@ -256,7 +244,7 @@ PyObject *BPY_app_handlers_struct(void)
   return ret;
 }
 
-void BPY_app_handlers_reset(const short do_all)
+void BPY_app_handlers_reset(const bool do_all)
 {
   PyGILState_STATE gilstate;
   int pos = 0;
@@ -278,19 +266,24 @@ void BPY_app_handlers_reset(const short do_all)
       PyObject *ls = py_cb_array[pos];
       Py_ssize_t i;
 
-      PyObject *item;
-      PyObject **dict_ptr;
-
       for (i = PyList_GET_SIZE(ls) - 1; i >= 0; i--) {
+        PyObject *item = PyList_GET_ITEM(ls, i);
 
-        if (PyFunction_Check((item = PyList_GET_ITEM(ls, i))) &&
-            (dict_ptr = _PyObject_GetDictPtr(item)) && (*dict_ptr) &&
+        if (PyMethod_Check(item)) {
+          PyObject *item_test = PyMethod_GET_FUNCTION(item);
+          if (item_test) {
+            item = item_test;
+          }
+        }
+
+        PyObject **dict_ptr;
+        if (PyFunction_Check(item) && (dict_ptr = _PyObject_GetDictPtr(item)) && (*dict_ptr) &&
             (PyDict_GetItem(*dict_ptr, perm_id_str) != NULL)) {
           /* keep */
         }
         else {
           /* remove */
-          /* PySequence_DelItem(ls, i); */ /* more obvious but slower */
+          // PySequence_DelItem(ls, i); /* more obvious but slower */
           PyList_SetSlice(ls, i, i + 1, NULL);
         }
       }
@@ -317,7 +310,7 @@ static PyObject *choose_arguments(PyObject *func, PyObject *args_all, PyObject *
 /* the actual callback - not necessarily called from py */
 void bpy_app_generic_callback(struct Main *UNUSED(main),
                               struct PointerRNA **pointers,
-                              const int num_pointers,
+                              const int pointers_num,
                               void *arg)
 {
   PyObject *cb_list = py_cb_array[POINTER_AS_INT(arg)];
@@ -332,14 +325,14 @@ void bpy_app_generic_callback(struct Main *UNUSED(main),
     Py_ssize_t pos;
 
     /* setup arguments */
-    for (int i = 0; i < num_pointers; ++i) {
+    for (int i = 0; i < pointers_num; ++i) {
       PyTuple_SET_ITEM(args_all, i, pyrna_struct_CreatePyObject(pointers[i]));
     }
-    for (int i = num_pointers; i < num_arguments; ++i) {
+    for (int i = pointers_num; i < num_arguments; ++i) {
       PyTuple_SET_ITEM(args_all, i, Py_INCREF_RET(Py_None));
     }
 
-    if (num_pointers == 0) {
+    if (pointers_num == 0) {
       PyTuple_SET_ITEM(args_single, 0, Py_INCREF_RET(Py_None));
     }
     else {

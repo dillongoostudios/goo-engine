@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2016, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -244,10 +229,10 @@ void EEVEE_render_cache(void *vedata,
         EEVEE_cryptomatte_cache_populate(data, sldata, ob);
       }
     }
-    else if (ob->type == OB_HAIR) {
-      EEVEE_object_hair_cache_populate(vedata, sldata, ob, &cast_shadow);
+    else if (ob->type == OB_CURVES) {
+      EEVEE_object_curves_cache_populate(vedata, sldata, ob, &cast_shadow);
       if (do_cryptomatte) {
-        EEVEE_cryptomatte_object_hair_cache_populate(data, sldata, ob);
+        EEVEE_cryptomatte_object_curves_cache_populate(data, sldata, ob);
       }
     }
     else if (ob->type == OB_VOLUME) {
@@ -517,8 +502,7 @@ static void eevee_render_draw_background(EEVEE_Data *vedata)
   EEVEE_PassList *psl = vedata->psl;
 
   /* Prevent background to write to data buffers.
-   * NOTE : This also make sure the textures are bound
-   *        to the right double buffer. */
+   * NOTE: This also make sure the textures are bound to the right double buffer. */
   GPU_framebuffer_ensure_config(&fbl->main_fb,
                                 {GPU_ATTACHMENT_LEAVE,
                                  GPU_ATTACHMENT_LEAVE,
@@ -554,9 +538,9 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
   DRW_render_instance_buffer_finish();
 
   /* Need to be called after DRW_render_instance_buffer_finish() */
-  /* Also we weed to have a correct FBO bound for DRW_hair_update */
+  /* Also we weed to have a correct FBO bound for DRW_curves_update */
   GPU_framebuffer_bind(fbl->main_fb);
-  DRW_hair_update();
+  DRW_curves_update();
 
   /* Sort transparents before the loop. */
   DRW_pass_sort_shgroup_z(psl->transparent_pass);

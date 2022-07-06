@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 by the Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup modifiers
@@ -46,6 +30,7 @@
 #include "UI_resources.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph_query.h"
 
@@ -303,7 +288,7 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
                                     struct Object *ob,
                                     struct Mesh *mesh,
                                     float (*vertexCos)[3],
-                                    int numVerts)
+                                    int verts_num)
 {
   int i;
   float smd_limit[2], smd_factor;
@@ -370,7 +355,7 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
     float lower = FLT_MAX;
     float upper = -FLT_MAX;
 
-    for (i = 0; i < numVerts; i++) {
+    for (i = 0; i < verts_num; i++) {
       float tmp[3];
       copy_v3_v3(tmp, vertexCos[i]);
 
@@ -416,7 +401,7 @@ static void SimpleDeformModifier_do(SimpleDeformModifierData *smd,
   /* Do deformation. */
   TaskParallelSettings settings;
   BLI_parallel_range_settings_defaults(&settings);
-  BLI_task_parallel_range(0, numVerts, (void *)&deform_pool_data, simple_helper, &settings);
+  BLI_task_parallel_range(0, verts_num, (void *)&deform_pool_data, simple_helper, &settings);
 }
 
 /* SimpleDeform */
@@ -461,17 +446,17 @@ static void deformVerts(ModifierData *md,
                         const ModifierEvalContext *ctx,
                         struct Mesh *mesh,
                         float (*vertexCos)[3],
-                        int numVerts)
+                        int verts_num)
 {
   SimpleDeformModifierData *sdmd = (SimpleDeformModifierData *)md;
   Mesh *mesh_src = NULL;
 
   if (ctx->object->type == OB_MESH && sdmd->vgroup_name[0] != '\0') {
     /* mesh_src is only needed for vgroups. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false, false);
   }
 
-  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, numVerts);
+  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -483,14 +468,15 @@ static void deformVertsEM(ModifierData *md,
                           struct BMEditMesh *editData,
                           struct Mesh *mesh,
                           float (*vertexCos)[3],
-                          int numVerts)
+                          int verts_num)
 {
   SimpleDeformModifierData *sdmd = (SimpleDeformModifierData *)md;
   Mesh *mesh_src = NULL;
 
   if (ctx->object->type == OB_MESH && sdmd->vgroup_name[0] != '\0') {
     /* mesh_src is only needed for vgroups. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, editData, mesh, NULL, numVerts, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(
+        ctx->object, editData, mesh, NULL, verts_num, false, false);
   }
 
   /* TODO(Campbell): use edit-mode data only (remove this line). */
@@ -498,7 +484,7 @@ static void deformVertsEM(ModifierData *md,
     BKE_mesh_wrapper_ensure_mdata(mesh_src);
   }
 
-  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, numVerts);
+  SimpleDeformModifier_do(sdmd, ctx, ctx->object, mesh_src, vertexCos, verts_num);
 
   if (!ELEM(mesh_src, NULL, mesh)) {
     BKE_id_free(NULL, mesh_src);
@@ -596,7 +582,6 @@ ModifierTypeInfo modifierType_SimpleDeform = {
     /* deformVertsEM */ deformVertsEM,
     /* deformMatricesEM */ NULL,
     /* modifyMesh */ NULL,
-    /* modifyHair */ NULL,
     /* modifyGeometrySet */ NULL,
 
     /* initData */ initData,

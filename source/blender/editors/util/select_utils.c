@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edutil
@@ -23,6 +9,12 @@
 #include "BLI_kdtree.h"
 #include "BLI_math.h"
 #include "BLI_utildefines.h"
+
+#include "DNA_windowmanager_types.h"
+
+#include "RNA_access.h"
+
+#include "WM_types.h"
 
 #include "ED_select_utils.h"
 
@@ -126,3 +118,75 @@ bool ED_select_similar_compare_float_tree(const KDTree_1d *tree,
 
   return false;
 }
+
+eSelectOp ED_select_op_from_operator(PointerRNA *ptr)
+{
+  const bool extend = RNA_boolean_get(ptr, "extend");
+  const bool deselect = RNA_boolean_get(ptr, "deselect");
+  const bool toggle = RNA_boolean_get(ptr, "toggle");
+
+  if (extend) {
+    return SEL_OP_ADD;
+  }
+  if (deselect) {
+    return SEL_OP_SUB;
+  }
+  if (toggle) {
+    return SEL_OP_XOR;
+  }
+  return SEL_OP_SET;
+}
+
+void ED_select_pick_params_from_operator(PointerRNA *ptr, struct SelectPick_Params *params)
+{
+  memset(params, 0x0, sizeof(*params));
+  params->sel_op = ED_select_op_from_operator(ptr);
+  params->deselect_all = RNA_boolean_get(ptr, "deselect_all");
+  params->select_passthrough = RNA_boolean_get(ptr, "select_passthrough");
+}
+
+/* -------------------------------------------------------------------- */
+/** \name Operator Naming Callbacks
+ * \{ */
+
+const char *ED_select_pick_get_name(wmOperatorType *UNUSED(ot), PointerRNA *ptr)
+{
+  struct SelectPick_Params params = {0};
+  ED_select_pick_params_from_operator(ptr, &params);
+  switch (params.sel_op) {
+    case SEL_OP_ADD:
+      return "Select (Extend)";
+    case SEL_OP_SUB:
+      return "Select (Deselect)";
+    case SEL_OP_XOR:
+      return "Select (Toggle)";
+    case SEL_OP_AND:
+      BLI_assert_unreachable();
+      ATTR_FALLTHROUGH;
+    case SEL_OP_SET:
+      break;
+  }
+  return "Select";
+}
+
+const char *ED_select_circle_get_name(wmOperatorType *UNUSED(ot), PointerRNA *ptr)
+{
+  /* Matches options in #WM_operator_properties_select_operation_simple */
+  const eSelectOp sel_op = RNA_enum_get(ptr, "mode");
+  switch (sel_op) {
+    case SEL_OP_ADD:
+      return "Circle Select (Extend)";
+    case SEL_OP_SUB:
+      return "Circle Select (Deselect)";
+    case SEL_OP_XOR:
+      ATTR_FALLTHROUGH;
+    case SEL_OP_AND:
+      BLI_assert_unreachable();
+      ATTR_FALLTHROUGH;
+    case SEL_OP_SET:
+      break;
+  }
+  return "Circle Select";
+}
+
+/** \} */

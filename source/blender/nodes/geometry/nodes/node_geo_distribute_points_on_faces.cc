@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_kdtree.h"
 #include "BLI_noise.hh"
@@ -40,17 +26,35 @@ namespace blender::nodes::node_geo_distribute_points_on_faces_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  auto enable_random = [](bNode &node) {
+    node.custom1 = GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_RANDOM;
+  };
+  auto enable_poisson = [](bNode &node) {
+    node.custom1 = GEO_NODE_POINT_DISTRIBUTE_POINTS_ON_FACES_POISSON;
+  };
+
   b.add_input<decl::Geometry>(N_("Mesh")).supported_type(GEO_COMPONENT_TYPE_MESH);
   b.add_input<decl::Bool>(N_("Selection")).default_value(true).hide_value().supports_field();
-  b.add_input<decl::Float>(N_("Distance Min")).min(0.0f).subtype(PROP_DISTANCE);
-  b.add_input<decl::Float>(N_("Density Max")).default_value(10.0f).min(0.0f);
-  b.add_input<decl::Float>(N_("Density")).default_value(10.0f).min(0.0f).supports_field();
+  b.add_input<decl::Float>(N_("Distance Min"))
+      .min(0.0f)
+      .subtype(PROP_DISTANCE)
+      .make_available(enable_poisson);
+  b.add_input<decl::Float>(N_("Density Max"))
+      .default_value(10.0f)
+      .min(0.0f)
+      .make_available(enable_poisson);
+  b.add_input<decl::Float>(N_("Density"))
+      .default_value(10.0f)
+      .min(0.0f)
+      .supports_field()
+      .make_available(enable_random);
   b.add_input<decl::Float>(N_("Density Factor"))
       .default_value(1.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR)
-      .supports_field();
+      .supports_field()
+      .make_available(enable_poisson);
   b.add_input<decl::Int>(N_("Seed"));
 
   b.add_output<decl::Geometry>(N_("Points"));
@@ -128,10 +132,8 @@ static void sample_mesh_surface(const Mesh &mesh,
     const int looptri_seed = noise::hash(looptri_index, seed);
     RandomNumberGenerator looptri_rng(looptri_seed);
 
-    const float points_amount_fl = area * base_density * looptri_density_factor;
-    const float add_point_probability = fractf(points_amount_fl);
-    const bool add_point = add_point_probability > looptri_rng.get_float();
-    const int point_amount = (int)points_amount_fl + (int)add_point;
+    const int point_amount = looptri_rng.round_probabilistic(area * base_density *
+                                                             looptri_density_factor);
 
     for (int i = 0; i < point_amount; i++) {
       const float3 bary_coord = looptri_rng.get_barycentric_coordinates();
@@ -166,6 +168,7 @@ BLI_NOINLINE static void update_elimination_mask_for_close_points(
   }
 
   KDTree_3d *kdtree = build_kdtree(positions);
+  BLI_SCOPED_DEFER([&]() { BLI_kdtree_3d_free(kdtree); });
 
   for (const int i : positions.index_range()) {
     if (elimination_mask[i]) {
@@ -190,8 +193,6 @@ BLI_NOINLINE static void update_elimination_mask_for_close_points(
         },
         &callback_data);
   }
-
-  BLI_kdtree_3d_free(kdtree);
 }
 
 BLI_NOINLINE static void update_elimination_mask_based_on_density_factors(

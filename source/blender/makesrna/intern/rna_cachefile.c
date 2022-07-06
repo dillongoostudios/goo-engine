@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2016 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2016 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup RNA
@@ -29,6 +13,12 @@
 #include "RNA_enum_types.h"
 
 #include "rna_internal.h"
+
+const EnumPropertyItem rna_enum_velocity_unit_items[] = {
+    {CACHEFILE_VELOCITY_UNIT_SECOND, "SECOND", 0, "Second", ""},
+    {CACHEFILE_VELOCITY_UNIT_FRAME, "FRAME", 0, "Frame", ""},
+    {0, NULL, 0, NULL, NULL},
+};
 
 #ifdef RNA_RUNTIME
 
@@ -366,15 +356,9 @@ static void rna_def_cachefile(BlenderRNA *brna)
   RNA_def_property_update(prop, 0, "rna_CacheFile_update");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
 
-  static const EnumPropertyItem velocity_unit_items[] = {
-      {CACHEFILE_VELOCITY_UNIT_SECOND, "SECOND", 0, "Second", ""},
-      {CACHEFILE_VELOCITY_UNIT_FRAME, "FRAME", 0, "Frame", ""},
-      {0, NULL, 0, NULL, NULL},
-  };
-
   prop = RNA_def_property(srna, "velocity_unit", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "velocity_unit");
-  RNA_def_property_enum_items(prop, velocity_unit_items);
+  RNA_def_property_enum_items(prop, rna_enum_velocity_unit_items);
   RNA_def_property_ui_text(
       prop,
       "Velocity Unit",

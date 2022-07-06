@@ -1,22 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- * util.c
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup imbuf
@@ -58,12 +41,12 @@
 #define UTIL_DEBUG 0
 
 const char *imb_ext_image[] = {
-    ".png", ".tga",  ".bmp", ".jpg", ".jpeg", ".sgi", ".rgb", ".rgba",
+    ".png",  ".tga",  ".bmp", ".jpg", ".jpeg", ".sgi", ".rgb", ".rgba",
 #ifdef WITH_TIFF
-    ".tif", ".tiff", ".tx",
+    ".tif",  ".tiff", ".tx",
 #endif
 #ifdef WITH_OPENJPEG
-    ".jp2", ".j2c",
+    ".jp2",  ".j2c",
 #endif
 #ifdef WITH_HDR
     ".hdr",
@@ -72,13 +55,16 @@ const char *imb_ext_image[] = {
     ".dds",
 #endif
 #ifdef WITH_CINEON
-    ".dpx", ".cin",
+    ".dpx",  ".cin",
 #endif
 #ifdef WITH_OPENEXR
     ".exr",
 #endif
 #ifdef WITH_OPENIMAGEIO
-    ".psd", ".pdd",  ".psb",
+    ".psd",  ".pdd",  ".psb",
+#endif
+#ifdef WITH_WEBP
+    ".webp",
 #endif
     NULL,
 };

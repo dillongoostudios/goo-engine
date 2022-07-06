@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup editors
@@ -150,6 +134,7 @@ void ED_region_visibility_change_update(struct bContext *C,
                                         struct ScrArea *area,
                                         struct ARegion *region);
 /* screen_ops.c */
+
 /**
  * \note Assumes that \a region itself is not a split version from previous region.
  */
@@ -265,6 +250,12 @@ ScrArea *ED_area_offscreen_create(struct wmWindow *win, eSpace_Type space_type);
 void ED_area_offscreen_free(struct wmWindowManager *wm,
                             struct wmWindow *win,
                             struct ScrArea *area);
+
+/**
+ * Search all screens, even non-active or overlapping (multiple windows), return the most-likely
+ * area of interest. xy is relative to active window, like all similar functions.
+ */
+ScrArea *ED_area_find_under_cursor(const struct bContext *C, int spacetype, const int xy[2]);
 
 ScrArea *ED_screen_areas_iter_first(const struct wmWindow *win, const bScreen *screen);
 ScrArea *ED_screen_areas_iter_next(const bScreen *screen, const ScrArea *area);
@@ -660,6 +651,7 @@ void ED_region_generic_tools_region_message_subscribe(
 int ED_region_generic_tools_region_snap_size(const struct ARegion *region, int size, int axis);
 
 /* area_query.c */
+
 bool ED_region_overlap_isect_x(const ARegion *region, int event_x);
 bool ED_region_overlap_isect_y(const ARegion *region, int event_y);
 bool ED_region_overlap_isect_xy(const ARegion *region, const int event_xy[2]);

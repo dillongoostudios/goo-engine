@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup bmesh
@@ -302,6 +288,8 @@ static void bm_log_verts_restore(BMesh *bm, BMLog *log, GHash *verts)
 static void bm_log_faces_restore(BMesh *bm, BMLog *log, GHash *faces)
 {
   GHashIterator gh_iter;
+  const int cd_face_sets = CustomData_get_offset(&bm->pdata, CD_SCULPT_FACE_SETS);
+
   GHASH_ITER (gh_iter, faces) {
     void *key = BLI_ghashIterator_getKey(&gh_iter);
     BMLogFace *lf = BLI_ghashIterator_getValue(&gh_iter);
@@ -315,6 +303,11 @@ static void bm_log_faces_restore(BMesh *bm, BMLog *log, GHash *faces)
     f = BM_face_create_verts(bm, v, 3, NULL, BM_CREATE_NOP, true);
     f->head.hflag = lf->hflag;
     bm_log_face_id_set(log, f, POINTER_AS_UINT(key));
+
+    /* Ensure face sets have valid values.  Fixes T80174. */
+    if (cd_face_sets != -1) {
+      BM_ELEM_CD_SET_INT(f, cd_face_sets, 1);
+    }
   }
 }
 

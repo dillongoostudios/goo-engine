@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2012 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2012 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -625,7 +609,7 @@ float BKE_mask_spline_project_co(MaskSpline *spline,
 
         if (len_squared_v2(v1) > proj_eps_sq) {
           ang1 = angle_v2v2(v1, n1);
-          if (ang1 > (float)M_PI / 2.0f) {
+          if (ang1 > (float)M_PI_2) {
             ang1 = (float)M_PI - ang1;
           }
 
@@ -651,7 +635,7 @@ float BKE_mask_spline_project_co(MaskSpline *spline,
 
         if (len_squared_v2(v2) > proj_eps_sq) {
           ang2 = angle_v2v2(v2, n2);
-          if (ang2 > (float)M_PI / 2.0f) {
+          if (ang2 > (float)M_PI_2) {
             ang2 = (float)M_PI - ang2;
           }
 
@@ -1390,7 +1374,7 @@ static void mask_calc_point_handle(MaskSplinePoint *point,
   else if (handle_type == HD_AUTO) {
     BKE_nurb_handle_calc(bezt, bezt_prev, bezt_next, 0, 0);
   }
-  else if (handle_type == HD_ALIGN || handle_type == HD_ALIGN_DOUBLESIDE) {
+  else if (ELEM(handle_type, HD_ALIGN, HD_ALIGN_DOUBLESIDE)) {
     float v1[3], v2[3];
     float vec[3], h[3];
 

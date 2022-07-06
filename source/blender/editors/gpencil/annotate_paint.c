@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2008/2018, Blender Foundation
- * This is a new part of Blender
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2008-2018 Blender Foundation. */
 
 /** \file
  * \ingroup edgpencil
@@ -38,6 +22,7 @@
 
 #include "PIL_time.h"
 
+#include "BKE_callbacks.h"
 #include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_global.h"
@@ -67,6 +52,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_prototypes.h"
 
 #include "WM_api.h"
 #include "WM_types.h"
@@ -342,8 +328,7 @@ static void annotation_stroke_convertcoords(tGPsdata *p,
     }
     else {
       float mval_prj[2];
-      float rvec[3], dvec[3];
-      float zfac;
+      float rvec[3];
 
       /* Current method just converts each point in screen-coordinates to
        * 3D-coordinates using the 3D-cursor as reference. In general, this
@@ -355,13 +340,14 @@ static void annotation_stroke_convertcoords(tGPsdata *p,
        */
 
       annotation_get_3d_reference(p, rvec);
-      zfac = ED_view3d_calc_zfac(p->region->regiondata, rvec, NULL);
+      const float zfac = ED_view3d_calc_zfac(p->region->regiondata, rvec);
 
       if (ED_view3d_project_float_global(p->region, rvec, mval_prj, V3D_PROJ_TEST_NOP) ==
           V3D_PROJ_RET_OK) {
-        float mval_f[2];
-        sub_v2_v2v2(mval_f, mval_prj, mval);
-        ED_view3d_win_to_delta(p->region, mval_f, dvec, zfac);
+        float dvec[3];
+        float xy_delta[2];
+        sub_v2_v2v2(xy_delta, mval_prj, mval);
+        ED_view3d_win_to_delta(p->region, xy_delta, zfac, dvec);
         sub_v3_v3v3(out, rvec, dvec);
       }
       else {
@@ -996,7 +982,8 @@ static void annotation_stroke_newfrombuffer(tGPsdata *p)
       }
 
       if (found_depth == false) {
-        /* eeh... not much we can do.. :/, ignore depth in this case, use the 3D cursor */
+        /* Unfortunately there is not much we can do when the depth isn't found,
+         * ignore depth in this case, use the 3D cursor. */
         for (i = gpd->runtime.sbuffer_used - 1; i >= 0; i--) {
           depth_arr[i] = 0.9999f;
         }
@@ -1525,6 +1512,9 @@ static void annotation_paint_initstroke(tGPsdata *p,
   Scene *scene = p->scene;
   ToolSettings *ts = scene->toolsettings;
 
+  /* Call to the annotation pre handler to notify python the annotation starts. */
+  BKE_callback_exec_id_depsgraph(p->bmain, &p->gpd->id, p->depsgraph, BKE_CB_EVT_ANNOTATION_PRE);
+
   /* get active layer (or add a new one if non-existent) */
   p->gpl = BKE_gpencil_layer_active_get(p->gpd);
   if (p->gpl == NULL) {
@@ -1690,6 +1680,9 @@ static void annotation_paint_strokeend(tGPsdata *p)
     /* transfer stroke to frame */
     annotation_stroke_newfrombuffer(p);
   }
+
+  /* Call to the annotation post handler to notify python the annotation is done. */
+  BKE_callback_exec_id_depsgraph(p->bmain, &p->gpd->id, p->depsgraph, BKE_CB_EVT_ANNOTATION_POST);
 
   /* clean up buffer now */
   annotation_session_validatebuffer(p);
@@ -2076,7 +2069,7 @@ static void annotation_draw_apply_event(
   p->mval[1] = (float)event->mval[1] - y;
 
   /* Key to toggle stabilization. */
-  if (event->shift && p->paintmode == GP_PAINTMODE_DRAW) {
+  if ((event->modifier & KM_SHIFT) && (p->paintmode == GP_PAINTMODE_DRAW)) {
     /* Using permanent stabilization, shift will deactivate the flag. */
     if (p->flags & GP_PAINTFLAG_USE_STABILIZER) {
       if (p->flags & GP_PAINTFLAG_USE_STABILIZER_TEMP) {
@@ -2091,7 +2084,7 @@ static void annotation_draw_apply_event(
     }
   }
   /* verify key status for straight lines */
-  else if (event->ctrl || event->alt) {
+  else if (event->modifier & (KM_CTRL | KM_ALT)) {
     if (p->straight[0] == 0) {
       int dx = abs((int)(p->mval[0] - p->mvalo[0]));
       int dy = abs((int)(p->mval[1] - p->mvalo[1]));
@@ -2315,7 +2308,7 @@ static int annotation_draw_invoke(bContext *C, wmOperator *op, const wmEvent *ev
       p->flags |= GP_PAINTFLAG_USE_STABILIZER | GP_PAINTFLAG_USE_STABILIZER_TEMP;
       annotation_draw_toggle_stabilizer_cursor(p, true);
     }
-    else if (event->shift) {
+    else if (event->modifier & KM_SHIFT) {
       p->flags |= GP_PAINTFLAG_USE_STABILIZER_TEMP;
       annotation_draw_toggle_stabilizer_cursor(p, true);
     }
@@ -2482,10 +2475,10 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
                   EVT_PAD7,
                   EVT_PAD8,
                   EVT_PAD9)) {
-      /* allow numpad keys so that camera/view manipulations can still take place
-       * - PAD0 in particular is really important for Grease Pencil drawing,
+      /* Allow numpad keys so that camera/view manipulations can still take place
+       * - #EVT_PAD0 in particular is really important for Grease Pencil drawing,
        *   as animators may be working "to camera", so having this working
-       *   is essential for ensuring that they can quickly return to that view
+       *   is essential for ensuring that they can quickly return to that view.
        */
     }
     else if ((event->type == EVT_BKEY) && (event->val == KM_RELEASE)) {
@@ -2493,7 +2486,7 @@ static int annotation_draw_modal(bContext *C, wmOperator *op, const wmEvent *eve
        * - Since this operator is non-modal, we can just call it here, and keep going...
        * - This operator is especially useful when animating
        */
-      WM_operator_name_call(C, "GPENCIL_OT_blank_frame_add", WM_OP_EXEC_DEFAULT, NULL);
+      WM_operator_name_call(C, "GPENCIL_OT_blank_frame_add", WM_OP_EXEC_DEFAULT, NULL, event);
       estate = OPERATOR_RUNNING_MODAL;
     }
     else {

@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2017 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2017 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup draw
@@ -579,7 +563,6 @@ static void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
                                                const float obmat[4][4],
                                                const bool do_final,
                                                const bool do_uvedit,
-                                               const bool use_subsurf_fdots,
                                                const Scene *scene,
                                                const ToolSettings *ts,
                                                const bool use_hide)
@@ -703,7 +686,7 @@ static void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
   MeshRenderData *mr = mesh_render_data_create(
       object, me, is_editmode, is_paint_mode, is_mode_active, obmat, do_final, do_uvedit, ts);
   mr->use_hide = use_hide;
-  mr->use_subsurf_fdots = use_subsurf_fdots;
+  mr->use_subsurf_fdots = mr->me && mr->me->runtime.subsurf_face_dot_tags != nullptr;
   mr->use_final_mesh = do_final;
 
 #ifdef DEBUG_TIME
@@ -860,6 +843,7 @@ static void mesh_buffer_cache_create_requested_subdiv(MeshBatchCache *cache,
   EXTRACT_ADD_REQUESTED(vbo, edituv_stretch_angle);
   EXTRACT_ADD_REQUESTED(ibo, lines_paint_mask);
   EXTRACT_ADD_REQUESTED(ibo, lines_adjacency);
+  EXTRACT_ADD_REQUESTED(vbo, orco);
   EXTRACT_ADD_REQUESTED(vbo, vcol);
   EXTRACT_ADD_REQUESTED(vbo, weights);
   EXTRACT_ADD_REQUESTED(vbo, sculpt_data);
@@ -934,7 +918,6 @@ void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
                                         const float obmat[4][4],
                                         const bool do_final,
                                         const bool do_uvedit,
-                                        const bool use_subsurf_fdots,
                                         const Scene *scene,
                                         const ToolSettings *ts,
                                         const bool use_hide)
@@ -950,7 +933,6 @@ void mesh_buffer_cache_create_requested(struct TaskGraph *task_graph,
                                                     obmat,
                                                     do_final,
                                                     do_uvedit,
-                                                    use_subsurf_fdots,
                                                     scene,
                                                     ts,
                                                     use_hide);

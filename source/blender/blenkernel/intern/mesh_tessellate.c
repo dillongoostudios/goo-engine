@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -74,7 +58,7 @@ static void mesh_loops_to_tessdata(CustomData *fdata,
    * The issue is, unless having two different functions with nearly the same code,
    * there's not much ways to solve this. Better IMHO to live with it for now (sigh). */
   const int numUV = CustomData_number_of_layers(ldata, CD_MLOOPUV);
-  const int numCol = CustomData_number_of_layers(ldata, CD_MLOOPCOL);
+  const int numCol = CustomData_number_of_layers(ldata, CD_PROP_BYTE_COLOR);
   const bool hasPCol = CustomData_has_layer(ldata, CD_PREVIEW_MLOOPCOL);
   const bool hasOrigSpace = CustomData_has_layer(ldata, CD_ORIGSPACE_MLOOP);
   const bool hasLoopNormal = CustomData_has_layer(ldata, CD_NORMAL);
@@ -97,7 +81,7 @@ static void mesh_loops_to_tessdata(CustomData *fdata,
 
   for (i = 0; i < numCol; i++) {
     MCol(*mcol)[4] = CustomData_get_layer_n(fdata, CD_MCOL, i);
-    MLoopCol *mloopcol = CustomData_get_layer_n(ldata, CD_MLOOPCOL, i);
+    MLoopCol *mloopcol = CustomData_get_layer_n(ldata, CD_PROP_BYTE_COLOR, i);
 
     for (findex = 0, lidx = loopindices; findex < num_faces; lidx++, findex++, mcol++) {
       for (j = (mface ? mface[findex].v4 : (*lidx)[3]) ? 4 : 3; j--;) {

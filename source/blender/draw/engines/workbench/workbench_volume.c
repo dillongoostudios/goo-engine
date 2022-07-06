@@ -1,20 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * Copyright 2018, Blender Foundation.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2018 Blender Foundation. */
 
 /** \file
  * \ingroup draw_engine
@@ -193,8 +178,6 @@ static void workbench_volume_modifier_cache_populate(WORKBENCH_Data *vedata,
   else {
     DRW_shgroup_call(grp, DRW_cache_cube_get(), ob);
   }
-
-  BLI_addtail(&wpd->smoke_domains, BLI_genericNodeN(fmd));
 }
 
 static void workbench_volume_material_color(WORKBENCH_PrivateData *wpd,
@@ -348,21 +331,4 @@ void workbench_volume_draw_pass(WORKBENCH_Data *vedata)
     GPU_framebuffer_bind(dfbl->color_only_fb);
     DRW_draw_pass(psl->volume_ps);
   }
-}
-
-void workbench_volume_draw_finish(WORKBENCH_Data *vedata)
-{
-  WORKBENCH_PrivateData *wpd = vedata->stl->wpd;
-
-  /* Free Smoke Textures after rendering */
-  /* XXX This is a waste of processing and GPU bandwidth if nothing
-   * is updated. But the problem is since Textures are stored in the
-   * modifier we don't want them to take precious VRAM if the
-   * modifier is not used for display. We should share them for
-   * all viewport in a redraw at least. */
-  LISTBASE_FOREACH (LinkData *, link, &wpd->smoke_domains) {
-    FluidModifierData *fmd = (FluidModifierData *)link->data;
-    DRW_smoke_free(fmd);
-  }
-  BLI_freelistN(&wpd->smoke_domains);
 }

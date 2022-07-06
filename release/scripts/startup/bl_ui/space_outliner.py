@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 import bpy
@@ -38,6 +22,8 @@ class OUTLINER_HT_header(Header):
 
         if display_mode == 'DATA_API':
             OUTLINER_MT_editor_menus.draw_collapsible(context, layout)
+        if display_mode == 'LIBRARY_OVERRIDES':
+            layout.prop(space, "lib_override_view_mode", text="")
 
         layout.separator_spacer()
 
@@ -57,7 +43,11 @@ class OUTLINER_HT_header(Header):
                 text="",
                 icon='FILTER',
             )
-        if display_mode in {'LIBRARIES', 'LIBRARY_OVERRIDES', 'ORPHAN_DATA'}:
+        if display_mode == 'LIBRARY_OVERRIDES' and space.lib_override_view_mode == 'HIERARCHIES':
+            # Don't add ID type filter for library overrides hierarchies mode. Point of it is to see a hierarchy that is
+            # usually constructed out of different ID types.
+            pass
+        elif display_mode in {'LIBRARIES', 'LIBRARY_OVERRIDES', 'ORPHAN_DATA'}:
             row.prop(space, "use_filter_id_type", text="", icon='FILTER')
             sub = row.row(align=True)
             sub.active = space.use_filter_id_type
@@ -145,7 +135,7 @@ class OUTLINER_MT_context_menu_view(Menu):
 class OUTLINER_MT_view_pie(Menu):
     bl_label = "View"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
 
         pie = layout.menu_pie()
@@ -324,10 +314,8 @@ class OUTLINER_MT_object(Menu):
 class OUTLINER_MT_asset(Menu):
     bl_label = "Assets"
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
-
-        space = context.space_data
 
         layout.operator("asset.mark")
         layout.operator("asset.clear", text="Clear Asset").set_fake_user = False
@@ -369,7 +357,7 @@ class OUTLINER_PT_filter(Panel):
             col = layout.column(align=True)
             col.prop(space, "use_sort_alpha")
 
-        if display_mode not in {'LIBRARY_OVERRIDES'}:
+        if display_mode != 'LIBRARY_OVERRIDES':
             row = layout.row(align=True)
             row.prop(space, "use_sync_select", text="Sync Selection")
 
@@ -382,13 +370,13 @@ class OUTLINER_PT_filter(Panel):
         col.prop(space, "use_filter_complete", text="Exact Match")
         col.prop(space, "use_filter_case_sensitive", text="Case Sensitive")
 
-        if display_mode in {'LIBRARY_OVERRIDES'} and bpy.data.libraries:
+        if display_mode == 'LIBRARY_OVERRIDES' and space.lib_override_view_mode == 'PROPERTIES' and bpy.data.libraries:
             col.separator()
             row = col.row()
             row.label(icon='LIBRARY_DATA_OVERRIDE')
             row.prop(space, "use_filter_lib_override_system", text="System Overrides")
 
-        if display_mode not in {'VIEW_LAYER'}:
+        if display_mode != 'VIEW_LAYER':
             return
 
         layout.separator()
@@ -448,7 +436,7 @@ class OUTLINER_PT_filter(Panel):
         if (
                 bpy.data.curves or
                 bpy.data.metaballs or
-                (hasattr(bpy.data, "hairs") and bpy.data.hairs) or
+                (hasattr(bpy.data, "hair_curves") and bpy.data.hair_curves) or
                 (hasattr(bpy.data, "pointclouds") and bpy.data.pointclouds) or
                 bpy.data.volumes or
                 bpy.data.lightprobes or
@@ -459,15 +447,6 @@ class OUTLINER_PT_filter(Panel):
             row = sub.row()
             row.label(icon='BLANK1')
             row.prop(space, "use_filter_object_others", text="Others")
-
-        if bpy.data.libraries:
-            col.separator()
-            row = col.row()
-            row.label(icon='LIBRARY_DATA_OVERRIDE')
-            row.prop(space, "use_filter_lib_override", text="Library Overrides")
-            row = col.row()
-            row.label(icon='LIBRARY_DATA_OVERRIDE')
-            row.prop(space, "use_filter_lib_override_system", text="System Overrides")
 
 
 classes = (

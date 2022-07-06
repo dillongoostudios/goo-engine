@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup spnode
@@ -46,6 +30,7 @@
 
 #include "RNA_access.h"
 #include "RNA_define.h"
+#include "RNA_prototypes.h"
 
 #include "DEG_depsgraph.h"
 
@@ -68,10 +53,6 @@
 #include "node_intern.hh" /* own include */
 
 using namespace blender::nodes::node_tree_ref_types;
-
-/* -------------------------------------------------------------------- */
-/** \name Add Node
- * \{ */
 
 struct bNodeListItem {
   struct bNodeListItem *next, *prev;
@@ -97,6 +78,10 @@ static void clear_picking_highlight(ListBase *links)
 }
 
 namespace blender::ed::space_node {
+
+/* -------------------------------------------------------------------- */
+/** \name Add Node
+ * \{ */
 
 static bNodeLink *create_drag_link(bNode &node, bNodeSocket &sock)
 {
@@ -442,11 +427,11 @@ static void snode_autoconnect(SpaceNode &snode, const bool allow_multiple, const
 
 /** \} */
 
+namespace viewer_linking {
+
 /* -------------------------------------------------------------------- */
 /** \name Link Viewer Operator
  * \{ */
-
-namespace viewer_linking {
 
 /* Depending on the node tree type, different socket types are supported by viewer nodes. */
 static bool socket_can_be_viewed(const OutputSocketRef &socket)
@@ -713,7 +698,13 @@ static int node_link_viewer(const bContext &C, bNode &bnode_to_view)
   return link_socket_to_viewer(C, viewer_bnode, bnode_to_view, bsocket_to_view);
 }
 
+/** \} */
+
 }  // namespace viewer_linking
+
+/* -------------------------------------------------------------------- */
+/** \name Link to Viewer Node Operator
+ * \{ */
 
 static int node_active_link_viewer_exec(bContext *C, wmOperator *UNUSED(op))
 {
@@ -1193,8 +1184,11 @@ static int node_link_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 
   bool detach = RNA_boolean_get(op->ptr, "detach");
 
+  int mval[2];
+  WM_event_drag_start_mval(event, &region, mval);
+
   float2 cursor;
-  UI_view2d_region_to_view(&region.v2d, event->mval[0], event->mval[1], &cursor[0], &cursor[1]);
+  UI_view2d_region_to_view(&region.v2d, mval[0], mval[1], &cursor[0], &cursor[1]);
   RNA_float_set_array(op->ptr, "drag_start", cursor);
   RNA_boolean_set(op->ptr, "has_link_picked", false);
 
@@ -1938,7 +1932,13 @@ static bool ed_node_link_conditions(ScrArea *area,
   return true;
 }
 
+/** \} */
+
 }  // namespace blender::ed::space_node
+
+/* -------------------------------------------------------------------- */
+/** \name Node Line Intersection Test
+ * \{ */
 
 void ED_node_link_intersect_test(ScrArea *area, int test)
 {
@@ -2003,9 +2003,9 @@ void ED_node_link_intersect_test(ScrArea *area, int test)
   }
 }
 
-namespace blender::ed::space_node {
-
 /** \} */
+
+namespace blender::ed::space_node {
 
 /* -------------------------------------------------------------------- */
 /** \name Node Insert Offset Operator

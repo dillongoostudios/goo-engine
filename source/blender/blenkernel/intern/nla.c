@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 /** \file
  * \ingroup bke
@@ -57,6 +41,8 @@
 #include "BLO_read_write.h"
 
 #include "RNA_access.h"
+#include "RNA_prototypes.h"
+
 #include "nla_private.h"
 
 static CLG_LogRef LOG = {"bke.nla"};
@@ -258,22 +244,36 @@ void BKE_nla_tracks_copy(Main *bmain, ListBase *dst, const ListBase *src, const 
   }
 }
 
-/* Set adt_dest->actstrip to the strip with the same index as adt_source->actstrip. */
-static void update_active_strip(AnimData *adt_dest,
-                                NlaTrack *track_dest,
-                                const AnimData *adt_source,
-                                NlaTrack *track_source)
+static void update_active_strip_from_listbase(AnimData *adt_dest,
+                                              NlaTrack *track_dest,
+                                              const NlaStrip *active_strip,
+                                              const ListBase /* NlaStrip */ *strips_source)
 {
-  BLI_assert(BLI_listbase_count(&track_source->strips) == BLI_listbase_count(&track_dest->strips));
-
   NlaStrip *strip_dest = track_dest->strips.first;
-  LISTBASE_FOREACH (NlaStrip *, strip_source, &track_source->strips) {
-    if (strip_source == adt_source->actstrip) {
+  LISTBASE_FOREACH (const NlaStrip *, strip_source, strips_source) {
+    if (strip_source == active_strip) {
       adt_dest->actstrip = strip_dest;
+      return;
+    }
+
+    if (strip_source->type == NLASTRIP_TYPE_META) {
+      update_active_strip_from_listbase(adt_dest, track_dest, active_strip, &strip_source->strips);
     }
 
     strip_dest = strip_dest->next;
   }
+}
+
+/* Set adt_dest->actstrip to the strip with the same index as adt_source->actstrip. */
+static void update_active_strip(AnimData *adt_dest,
+                                NlaTrack *track_dest,
+                                const AnimData *adt_source,
+                                const NlaTrack *track_source)
+{
+  BLI_assert(BLI_listbase_count(&track_source->strips) == BLI_listbase_count(&track_dest->strips));
+
+  update_active_strip_from_listbase(
+      adt_dest, track_dest, adt_source->actstrip, &track_source->strips);
 }
 
 /* Set adt_dest->act_track to the track with the same index as adt_source->act_track. */
@@ -286,20 +286,20 @@ static void update_active_track(AnimData *adt_dest, const AnimData *adt_source)
   LISTBASE_FOREACH (NlaTrack *, track_source, &adt_source->nla_tracks) {
     if (track_source == adt_source->act_track) {
       adt_dest->act_track = track_dest;
-      /* Assumption: the active strip is on the active track. */
-      update_active_strip(adt_dest, track_dest, adt_source, track_source);
     }
+    update_active_strip(adt_dest, track_dest, adt_source, track_source);
 
     track_dest = track_dest->next;
   }
 
-  /* If the above assumption failed to hold, do a more thorough search for the active strip. */
-  if (adt_source->actstrip != NULL && adt_dest->actstrip == NULL) {
-    nla_tweakmode_find_active(&adt_source->nla_tracks, &track_dest, &adt_dest->actstrip);
+#ifndef NDEBUG
+  {
+    const bool source_has_actstrip = adt_source->actstrip != NULL;
+    const bool dest_has_actstrip = adt_dest->actstrip != NULL;
+    BLI_assert_msg(source_has_actstrip == dest_has_actstrip,
+                   "Active strip did not copy correctly");
   }
-
-  BLI_assert_msg((adt_source->actstrip == NULL) == (adt_dest->actstrip == NULL),
-                 "Active strip did not copy correctly");
+#endif
 }
 
 void BKE_nla_tracks_copy_from_adt(Main *bmain,
@@ -1185,24 +1185,33 @@ bool BKE_nlatrack_is_nonlocal_in_liboverride(const ID *id, const NlaTrack *nlt)
 
 /* NLA Strips -------------------------------------- */
 
-NlaStrip *BKE_nlastrip_find_active(NlaTrack *nlt)
+static NlaStrip *nlastrip_find_active(ListBase /* NlaStrip */ *strips)
 {
-  NlaStrip *strip;
-
-  /* sanity check */
-  if (ELEM(NULL, nlt, nlt->strips.first)) {
-    return NULL;
-  }
-
-  /* try to find the first active strip */
-  for (strip = nlt->strips.first; strip; strip = strip->next) {
+  LISTBASE_FOREACH (NlaStrip *, strip, strips) {
     if (strip->flag & NLASTRIP_FLAG_ACTIVE) {
       return strip;
     }
+
+    if (strip->type != NLASTRIP_TYPE_META) {
+      continue;
+    }
+
+    NlaStrip *inner_active = nlastrip_find_active(&strip->strips);
+    if (inner_active != NULL) {
+      return inner_active;
+    }
   }
 
-  /* none found */
   return NULL;
+}
+
+NlaStrip *BKE_nlastrip_find_active(NlaTrack *nlt)
+{
+  if (nlt == NULL) {
+    return NULL;
+  }
+
+  return nlastrip_find_active(&nlt->strips);
 }
 
 void BKE_nlastrip_set_active(AnimData *adt, NlaStrip *strip)
@@ -1399,39 +1408,6 @@ void BKE_nlastrip_recalculate_bounds(NlaStrip *strip)
 
   /* make sure we don't overlap our neighbors */
   nlastrip_fix_resize_overlaps(strip);
-}
-
-/* Is the given NLA-strip the first one to occur for the given AnimData block */
-/* TODO: make this an api method if necessary, but need to add prefix first */
-static bool nlastrip_is_first(AnimData *adt, NlaStrip *strip)
-{
-  NlaTrack *nlt;
-  NlaStrip *ns;
-
-  /* sanity checks */
-  if (ELEM(NULL, adt, strip)) {
-    return false;
-  }
-
-  /* check if strip has any strips before it */
-  if (strip->prev) {
-    return false;
-  }
-
-  /* check other tracks to see if they have a strip that's earlier */
-  /* TODO: or should we check that the strip's track is also the first? */
-  for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
-    /* only check the first strip, assuming that they're all in order */
-    ns = nlt->strips.first;
-    if (ns) {
-      if (ns->start < strip->start) {
-        return false;
-      }
-    }
-  }
-
-  /* should be first now */
-  return true;
 }
 
 /* Animated Strips ------------------------------------------- */
@@ -1753,7 +1729,7 @@ static void BKE_nlastrip_validate_autoblends(NlaTrack *nlt, NlaStrip *nls)
 
 void BKE_nla_validate_state(AnimData *adt)
 {
-  NlaStrip *strip, *fstrip = NULL;
+  NlaStrip *strip = NULL;
   NlaTrack *nlt;
 
   /* sanity checks */
@@ -1767,37 +1743,6 @@ void BKE_nla_validate_state(AnimData *adt)
     for (strip = nlt->strips.first; strip; strip = strip->next) {
       /* auto-blending first */
       BKE_nlastrip_validate_autoblends(nlt, strip);
-
-      /* extend mode - find first strip */
-      if ((fstrip == NULL) || (strip->start < fstrip->start)) {
-        fstrip = strip;
-      }
-    }
-  }
-
-  /* second pass over the strips to adjust the extend-mode to fix any problems */
-  for (nlt = adt->nla_tracks.first; nlt; nlt = nlt->next) {
-    for (strip = nlt->strips.first; strip; strip = strip->next) {
-      /* apart from 'nothing' option which user has to explicitly choose, we don't really know if
-       * we should be overwriting the extend setting (but assume that's what the user wanted)
-       */
-      /* TODO: 1 solution is to tie this in with auto-blending... */
-      if (strip->extendmode != NLASTRIP_EXTEND_NOTHING) {
-        /* 1) First strip must be set to extend hold, otherwise, stuff before acts dodgy
-         * 2) Only overwrite extend mode if *not* changing it will most probably result in
-         * occlusion problems, which will occur if...
-         * - blendmode = REPLACE
-         * - all channels the same (this is fiddly to test, so is currently assumed)
-         *
-         * Should fix problems such as T29869.
-         */
-        if (strip == fstrip) {
-          strip->extendmode = NLASTRIP_EXTEND_HOLD;
-        }
-        else if (strip->blendmode == NLASTRIP_MODE_REPLACE) {
-          strip->extendmode = NLASTRIP_EXTEND_HOLD_FORWARD;
-        }
-      }
     }
   }
 }
@@ -1896,7 +1841,6 @@ bool BKE_nla_action_stash(AnimData *adt, const bool is_liboverride)
 void BKE_nla_action_pushdown(AnimData *adt, const bool is_liboverride)
 {
   NlaStrip *strip;
-  const bool is_first = (adt) && (adt->nla_tracks.first == NULL);
 
   /* sanity checks */
   /* TODO: need to report the error for this */
@@ -1926,41 +1870,23 @@ void BKE_nla_action_pushdown(AnimData *adt, const bool is_liboverride)
   /* copy current "action blending" settings from adt to the strip,
    * as it was keyframed with these settings, so omitting them will
    * change the effect  [T54233]
-   *
-   * NOTE: We only do this when there are no tracks
    */
-  if (is_first == false) {
-    strip->blendmode = adt->act_blendmode;
-    strip->influence = adt->act_influence;
-    strip->extendmode = adt->act_extendmode;
+  strip->blendmode = adt->act_blendmode;
+  strip->influence = adt->act_influence;
+  strip->extendmode = adt->act_extendmode;
 
-    if (adt->act_influence < 1.0f) {
-      /* enable "user-controlled" influence (which will insert a default keyframe)
-       * so that the influence doesn't get lost on the new update
-       *
-       * NOTE: An alternative way would have been to instead hack the influence
-       * to not get always get reset to full strength if NLASTRIP_FLAG_USR_INFLUENCE
-       * is disabled but auto-blending isn't being used. However, that approach
-       * is a bit hacky/hard to discover, and may cause backwards compatibility issues,
-       * so it's better to just do it this way.
-       */
-      strip->flag |= NLASTRIP_FLAG_USR_INFLUENCE;
-      BKE_nlastrip_validate_fcurves(strip);
-    }
-  }
-
-  /* if the strip is the first one in the track it lives in, check if there
-   * are strips in any other tracks that may be before this, and set the extend
-   * mode accordingly
-   */
-  if (nlastrip_is_first(adt, strip) == 0) {
-    /* Not first, so extend mode can only be:
-     * NLASTRIP_EXTEND_HOLD_FORWARD not NLASTRIP_EXTEND_HOLD,
-     * so that it doesn't override strips in previous tracks. */
-    /* FIXME: this needs to be more automated, since user can rearrange strips */
-    if (strip->extendmode == NLASTRIP_EXTEND_HOLD) {
-      strip->extendmode = NLASTRIP_EXTEND_HOLD_FORWARD;
-    }
+  if (adt->act_influence < 1.0f) {
+    /* enable "user-controlled" influence (which will insert a default keyframe)
+     * so that the influence doesn't get lost on the new update
+     *
+     * NOTE: An alternative way would have been to instead hack the influence
+     * to not get always get reset to full strength if NLASTRIP_FLAG_USR_INFLUENCE
+     * is disabled but auto-blending isn't being used. However, that approach
+     * is a bit hacky/hard to discover, and may cause backwards compatibility issues,
+     * so it's better to just do it this way.
+     */
+    strip->flag |= NLASTRIP_FLAG_USR_INFLUENCE;
+    BKE_nlastrip_validate_fcurves(strip);
   }
 
   /* make strip the active one... */
@@ -2069,8 +1995,11 @@ bool BKE_nla_tweakmode_enter(AnimData *adt)
   /* go over all the tracks after AND INCLUDING the active one, tagging them as being disabled
    * - the active track needs to also be tagged, otherwise, it'll overlap with the tweaks going on
    */
-  for (nlt = activeTrack; nlt; nlt = nlt->next) {
-    nlt->flag |= NLATRACK_DISABLED;
+  activeTrack->flag |= NLATRACK_DISABLED;
+  if ((adt->flag & ADT_NLA_EVAL_UPPER_TRACKS) == 0) {
+    for (nlt = activeTrack->next; nlt; nlt = nlt->next) {
+      nlt->flag |= NLATRACK_DISABLED;
+    }
   }
 
   /* handle AnimData level changes:

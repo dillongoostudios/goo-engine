@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -358,7 +344,9 @@ constexpr int64_t StringRefBase::find_first_of(StringRef chars, int64_t pos) con
 
 constexpr int64_t StringRefBase::find_first_of(char c, int64_t pos) const
 {
-  return this->find_first_of(StringRef(&c, 1), pos);
+  BLI_assert(pos >= 0);
+  return index_or_npos_to_int64(
+      std::string_view(*this).find_first_of(c, static_cast<size_t>(pos)));
 }
 
 constexpr int64_t StringRefBase::find_last_of(StringRef chars, int64_t pos) const
@@ -370,7 +358,8 @@ constexpr int64_t StringRefBase::find_last_of(StringRef chars, int64_t pos) cons
 
 constexpr int64_t StringRefBase::find_last_of(char c, int64_t pos) const
 {
-  return this->find_last_of(StringRef(&c, 1), pos);
+  BLI_assert(pos >= 0);
+  return index_or_npos_to_int64(std::string_view(*this).find_last_of(c, static_cast<size_t>(pos)));
 }
 
 constexpr int64_t StringRefBase::find_first_not_of(StringRef chars, int64_t pos) const
@@ -382,7 +371,9 @@ constexpr int64_t StringRefBase::find_first_not_of(StringRef chars, int64_t pos)
 
 constexpr int64_t StringRefBase::find_first_not_of(char c, int64_t pos) const
 {
-  return this->find_first_not_of(StringRef(&c, 1), pos);
+  BLI_assert(pos >= 0);
+  return index_or_npos_to_int64(
+      std::string_view(*this).find_first_not_of(c, static_cast<size_t>(pos)));
 }
 
 constexpr int64_t StringRefBase::find_last_not_of(StringRef chars, int64_t pos) const
@@ -394,7 +385,9 @@ constexpr int64_t StringRefBase::find_last_not_of(StringRef chars, int64_t pos) 
 
 constexpr int64_t StringRefBase::find_last_not_of(char c, int64_t pos) const
 {
-  return this->find_last_not_of(StringRef(&c, 1), pos);
+  BLI_assert(pos >= 0);
+  return index_or_npos_to_int64(
+      std::string_view(*this).find_last_not_of(c, static_cast<size_t>(pos)));
 }
 
 constexpr StringRef StringRefBase::trim() const

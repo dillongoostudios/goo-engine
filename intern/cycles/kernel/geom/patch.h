@@ -1,27 +1,8 @@
-/*
- * Based on code from OpenSubdiv released under this license:
- *
- * Copyright 2013 Pixar
- *
- * Licensed under the Apache License, Version 2.0 (the "Apache License")
- * with the following modification; you may not use this file except in
- * compliance with the Apache License and the following modification to it:
- * Section 6. Trademarks. is deleted and replaced with:
- *
- * 6. Trademarks. This License does not grant permission to use the trade
- *   names, trademarks, service marks, or product names of the Licensor
- *   and its affiliates, except as required to comply with Section 4(c) of
- *   the License and to reproduce the content of the NOTICE file.
- *
- * You may obtain a copy of the Apache License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the Apache License with the above modification is
- * distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the Apache License for the specific
- * language governing permissions and limitations under the Apache License.
+/* SPDX-License-Identifier: Apache-2.0
+ * Copyright 2013 Pixar. */
+
+/** \file
+ * Based on code from OpenSubdiv.
  */
 
 #pragma once
@@ -410,11 +391,11 @@ ccl_device float4 patch_eval_float4(KernelGlobals kg,
   int num_control = patch_eval_control_verts(
       kg, sd->object, patch, u, v, channel, indices, weights, weights_du, weights_dv);
 
-  float4 val = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+  float4 val = zero_float4();
   if (du)
-    *du = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    *du = zero_float4();
   if (dv)
-    *dv = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    *dv = zero_float4();
 
   for (int i = 0; i < num_control; i++) {
     float4 v = kernel_tex_fetch(__attributes_float4, offset + indices[i]);
@@ -447,11 +428,11 @@ ccl_device float4 patch_eval_uchar4(KernelGlobals kg,
   int num_control = patch_eval_control_verts(
       kg, sd->object, patch, u, v, channel, indices, weights, weights_du, weights_dv);
 
-  float4 val = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+  float4 val = zero_float4();
   if (du)
-    *du = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    *du = zero_float4();
   if (dv)
-    *dv = make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+    *dv = zero_float4();
 
   for (int i = 0; i < num_control; i++) {
     float4 v = color_srgb_to_linear_v4(

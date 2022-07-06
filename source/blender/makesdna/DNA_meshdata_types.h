@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup DNA
@@ -48,11 +32,7 @@ typedef struct MVert {
 /** #MVert.flag */
 enum {
   /*  SELECT = (1 << 0), */
-  ME_VERT_TMP_TAG = (1 << 2),
   ME_HIDE = (1 << 4),
-  ME_VERT_FACEDOT = (1 << 5),
-  /*  ME_VERT_MERGED = (1 << 6), */
-  ME_VERT_PBVH_UPDATE = (1 << 7),
 };
 
 /**
@@ -266,6 +246,9 @@ typedef struct MStringProperty {
 typedef struct MBoolProperty {
   uint8_t b;
 } MBoolProperty;
+typedef struct MInt8Property {
+  int8_t i;
+} MInt8Property;
 
 /** \} */
 
@@ -343,7 +326,7 @@ typedef struct MLoopUV {
 
 /** #MLoopUV.flag */
 enum {
-  /* MLOOPUV_DEPRECATED = (1 << 0), MLOOPUV_EDGESEL removed */
+  MLOOPUV_EDGESEL = (1 << 0),
   MLOOPUV_VERTSEL = (1 << 1),
   MLOOPUV_PINNED = (1 << 2),
 };

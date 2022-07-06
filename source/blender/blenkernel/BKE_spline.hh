@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma once
 
@@ -22,9 +8,10 @@
 
 #include <mutex>
 
-#include "FN_generic_virtual_array.hh"
+#include "DNA_curves_types.h"
 
 #include "BLI_float4x4.hh"
+#include "BLI_generic_virtual_array.hh"
 #include "BLI_math_vec_types.hh"
 #include "BLI_vector.hh"
 
@@ -32,6 +19,7 @@
 #include "BKE_attribute_math.hh"
 
 struct Curve;
+struct Curves;
 struct ListBase;
 
 class Spline;
@@ -63,23 +51,12 @@ using SplinePtr = std::unique_ptr<Spline>;
  */
 class Spline {
  public:
-  enum class Type {
-    Bezier,
-    NURBS,
-    Poly,
-  };
-
-  enum NormalCalculationMode {
-    ZUp,
-    Minimum,
-    Tangent,
-  };
-  NormalCalculationMode normal_mode = Minimum;
+  NormalMode normal_mode = NORMAL_MODE_MINIMUM_TWIST;
 
   blender::bke::CustomDataAttributes attributes;
 
  protected:
-  Type type_;
+  CurveType type_;
   bool is_cyclic_ = false;
 
   /** Direction of the spline at each evaluated point. */
@@ -99,7 +76,7 @@ class Spline {
 
  public:
   virtual ~Spline() = default;
-  Spline(const Type type) : type_(type)
+  Spline(const CurveType type) : type_(type)
   {
   }
   Spline(Spline &other) : attributes(other.attributes), type_(other.type_)
@@ -121,7 +98,7 @@ class Spline {
   SplinePtr copy_without_attributes() const;
   static void copy_base_settings(const Spline &src, Spline &dst);
 
-  Spline::Type type() const;
+  CurveType type() const;
 
   /** Return the number of control points. */
   virtual int size() const = 0;
@@ -222,16 +199,16 @@ class Spline {
    * points) to arbitrary parameters in between the evaluated points. The interpolation is quite
    * simple, but this handles the cyclic and end point special cases.
    */
-  void sample_with_index_factors(const blender::fn::GVArray &src,
+  void sample_with_index_factors(const blender::GVArray &src,
                                  blender::Span<float> index_factors,
-                                 blender::fn::GMutableSpan dst) const;
+                                 blender::GMutableSpan dst) const;
   template<typename T>
   void sample_with_index_factors(const blender::VArray<T> &src,
                                  blender::Span<float> index_factors,
                                  blender::MutableSpan<T> dst) const
   {
     this->sample_with_index_factors(
-        blender::fn::GVArray(src), index_factors, blender::fn::GMutableSpan(dst));
+        blender::GVArray(src), index_factors, blender::GMutableSpan(dst));
   }
   template<typename T>
   void sample_with_index_factors(blender::Span<T> src,
@@ -246,11 +223,11 @@ class Spline {
    * evaluated points. For poly splines, the lifetime of the returned virtual array must not
    * exceed the lifetime of the input data.
    */
-  virtual blender::fn::GVArray interpolate_to_evaluated(const blender::fn::GVArray &src) const = 0;
-  blender::fn::GVArray interpolate_to_evaluated(blender::fn::GSpan data) const;
+  virtual blender::GVArray interpolate_to_evaluated(const blender::GVArray &src) const = 0;
+  blender::GVArray interpolate_to_evaluated(blender::GSpan data) const;
   template<typename T> blender::VArray<T> interpolate_to_evaluated(blender::Span<T> data) const
   {
-    return this->interpolate_to_evaluated(blender::fn::GSpan(data)).typed<T>();
+    return this->interpolate_to_evaluated(blender::GSpan(data)).typed<T>();
   }
 
  protected:
@@ -261,31 +238,18 @@ class Spline {
 };
 
 /**
- * A Bézier spline is made up of a many curve segments, possibly achieving continuity of curvature
+ * A Bezier spline is made up of a many curve segments, possibly achieving continuity of curvature
  * by constraining the alignment of curve handles. Evaluation stores the positions and a map of
  * factors and indices in a list of floats, which is then used to interpolate any other data.
  */
 class BezierSpline final : public Spline {
- public:
-  enum class HandleType {
-    /** The handle can be moved anywhere, and doesn't influence the point's other handle. */
-    Free,
-    /** The location is automatically calculated to be smooth. */
-    Auto,
-    /** The location is calculated to point to the next/previous control point. */
-    Vector,
-    /** The location is constrained to point in the opposite direction as the other handle. */
-    Align,
-  };
-
- private:
   blender::Vector<blender::float3> positions_;
   blender::Vector<float> radii_;
   blender::Vector<float> tilts_;
   int resolution_;
 
-  blender::Vector<HandleType> handle_types_left_;
-  blender::Vector<HandleType> handle_types_right_;
+  blender::Vector<int8_t> handle_types_left_;
+  blender::Vector<int8_t> handle_types_right_;
 
   /* These are mutable to allow lazy recalculation of #Auto and #Vector handle positions. */
   mutable blender::Vector<blender::float3> handle_positions_left_;
@@ -310,7 +274,7 @@ class BezierSpline final : public Spline {
   mutable bool mapping_cache_dirty_ = true;
 
  public:
-  BezierSpline() : Spline(Type::Bezier)
+  BezierSpline() : Spline(CURVE_TYPE_BEZIER)
   {
   }
   BezierSpline(const BezierSpline &other)
@@ -337,8 +301,8 @@ class BezierSpline final : public Spline {
   blender::Span<float> radii() const final;
   blender::MutableSpan<float> tilts() final;
   blender::Span<float> tilts() const final;
-  blender::Span<HandleType> handle_types_left() const;
-  blender::MutableSpan<HandleType> handle_types_left();
+  blender::Span<int8_t> handle_types_left() const;
+  blender::MutableSpan<int8_t> handle_types_left();
   blender::Span<blender::float3> handle_positions_left() const;
   /**
    * Get writable access to the handle position.
@@ -347,8 +311,8 @@ class BezierSpline final : public Spline {
    * uninitialized memory while auto-generating handles.
    */
   blender::MutableSpan<blender::float3> handle_positions_left(bool write_only = false);
-  blender::Span<HandleType> handle_types_right() const;
-  blender::MutableSpan<HandleType> handle_types_right();
+  blender::Span<int8_t> handle_types_right() const;
+  blender::MutableSpan<int8_t> handle_types_right();
   blender::Span<blender::float3> handle_positions_right() const;
   /**
    * Get writable access to the handle position.
@@ -416,8 +380,7 @@ class BezierSpline final : public Spline {
    */
   InterpolationData interpolation_data_from_index_factor(float index_factor) const;
 
-  virtual blender::fn::GVArray interpolate_to_evaluated(
-      const blender::fn::GVArray &src) const override;
+  virtual blender::GVArray interpolate_to_evaluated(const blender::GVArray &src) const override;
 
   void evaluate_segment(int index,
                         int next_index,
@@ -479,22 +442,19 @@ class BezierSpline final : public Spline {
  */
 class NURBSpline final : public Spline {
  public:
-  enum class KnotsMode {
-    Normal,
-    EndPoint,
-    Bezier,
-  };
-
   /** Method used to recalculate the knots vector when points are added or removed. */
   KnotsMode knots_mode;
 
   struct BasisCache {
-    /** The influence at each control point `i + #start_index`. */
+    /**
+     * For each evaluated point, the weight for all control points that influences it.
+     * The vector's size is the evaluated point count multiplied by the spline's order.
+     */
     blender::Vector<float> weights;
     /**
      * An offset for the start of #weights: the first control point index with a non-zero weight.
      */
-    int start_index;
+    blender::Vector<int> start_indices;
   };
 
  private:
@@ -520,7 +480,7 @@ class NURBSpline final : public Spline {
   mutable bool knots_dirty_ = true;
 
   /** Cache of control point influences on each evaluated point. */
-  mutable blender::Vector<BasisCache> basis_cache_;
+  mutable BasisCache basis_cache_;
   mutable std::mutex basis_cache_mutex_;
   mutable bool basis_cache_dirty_ = true;
 
@@ -533,7 +493,7 @@ class NURBSpline final : public Spline {
   mutable bool position_cache_dirty_ = true;
 
  public:
-  NURBSpline() : Spline(Type::NURBS)
+  NURBSpline() : Spline(CURVE_TYPE_NURBS)
   {
   }
   NURBSpline(const NURBSpline &other)
@@ -574,7 +534,7 @@ class NURBSpline final : public Spline {
 
   blender::Span<blender::float3> evaluated_positions() const final;
 
-  blender::fn::GVArray interpolate_to_evaluated(const blender::fn::GVArray &src) const final;
+  blender::GVArray interpolate_to_evaluated(const blender::GVArray &src) const final;
 
  protected:
   void correct_end_tangents() const final;
@@ -583,11 +543,11 @@ class NURBSpline final : public Spline {
   void reverse_impl() override;
 
   void calculate_knots() const;
-  blender::Span<BasisCache> calculate_basis_cache() const;
+  const BasisCache &calculate_basis_cache() const;
 };
 
 /**
- * A Poly spline is like a Bézier spline with a resolution of one. The main reason to distinguish
+ * A Poly spline is like a Bezier spline with a resolution of one. The main reason to distinguish
  * the two is for reduced complexity and increased performance, since interpolating data to control
  * points does not change it.
  *
@@ -600,7 +560,7 @@ class PolySpline final : public Spline {
   blender::Vector<float> tilts_;
 
  public:
-  PolySpline() : Spline(Type::Poly)
+  PolySpline() : Spline(CURVE_TYPE_POLY)
   {
   }
   PolySpline(const PolySpline &other)
@@ -632,7 +592,7 @@ class PolySpline final : public Spline {
    * the original data. Therefore the lifetime of the returned virtual array must not be longer
    * than the source data.
    */
-  blender::fn::GVArray interpolate_to_evaluated(const blender::fn::GVArray &src) const final;
+  blender::GVArray interpolate_to_evaluated(const blender::GVArray &src) const final;
 
  protected:
   void correct_end_tangents() const final;
@@ -672,7 +632,7 @@ struct CurveEval {
    * \note If you are looping over all of the splines in the same scope anyway,
    * it's better to avoid calling this function, in case there are many splines.
    */
-  bool has_spline_with_type(const Spline::Type type) const;
+  bool has_spline_with_type(const CurveType type) const;
 
   void resize(int size);
   /**
@@ -722,3 +682,5 @@ struct CurveEval {
 std::unique_ptr<CurveEval> curve_eval_from_dna_curve(const Curve &curve,
                                                      const ListBase &nurbs_list);
 std::unique_ptr<CurveEval> curve_eval_from_dna_curve(const Curve &dna_curve);
+std::unique_ptr<CurveEval> curves_to_curve_eval(const Curves &curves);
+Curves *curve_eval_to_curves(const CurveEval &curve_eval);

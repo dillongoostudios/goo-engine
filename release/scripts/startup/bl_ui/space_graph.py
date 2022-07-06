@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 
@@ -340,6 +324,7 @@ class GRAPH_MT_key_snap(Menu):
         layout.operator("graph.frame_jump", text="Cursor to Selection")
         layout.operator("graph.snap_cursor_value", text="Cursor Value to Selection")
 
+
 class GRAPH_MT_slider(Menu):
     bl_label = "Slider Operators"
 
@@ -347,7 +332,8 @@ class GRAPH_MT_slider(Menu):
         layout = self.layout
 
         layout.operator("graph.breakdown", text="Breakdown")
-        layout.operator("graph.blend_to_neighbor", text="Blend To Neighbor")
+        layout.operator("graph.blend_to_neighbor", text="Blend to Neighbor")
+        layout.operator("graph.blend_to_default", text="Blend to Default Value")
 
 
 class GRAPH_MT_view_pie(Menu):

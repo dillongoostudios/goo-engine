@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved. */
 
 /** \file
  * \ingroup spseq
@@ -41,7 +25,9 @@
 
 #include "RNA_define.h"
 
+#include "SEQ_channels.h"
 #include "SEQ_iterator.h"
+#include "SEQ_relations.h"
 #include "SEQ_select.h"
 #include "SEQ_sequencer.h"
 #include "SEQ_time.h"
@@ -67,11 +53,13 @@
 SeqCollection *all_strips_from_context(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ListBase *seqbase = SEQ_active_seqbase_get(SEQ_editing_get(scene));
+  Editing *ed = SEQ_editing_get(scene);
+  ListBase *seqbase = SEQ_active_seqbase_get(ed);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
 
   const bool is_preview = sequencer_view_has_preview_poll(C);
   if (is_preview) {
-    return SEQ_query_rendered_strips(seqbase, scene->r.cfra, 0);
+    return SEQ_query_rendered_strips(channels, seqbase, scene->r.cfra, 0);
   }
 
   return SEQ_query_all_strips(seqbase);
@@ -80,11 +68,13 @@ SeqCollection *all_strips_from_context(bContext *C)
 SeqCollection *selected_strips_from_context(bContext *C)
 {
   Scene *scene = CTX_data_scene(C);
-  ListBase *seqbase = SEQ_active_seqbase_get(SEQ_editing_get(scene));
+  Editing *ed = SEQ_editing_get(scene);
+  ListBase *seqbase = SEQ_active_seqbase_get(ed);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
 
   const bool is_preview = sequencer_view_has_preview_poll(C);
   if (is_preview) {
-    SeqCollection *strips = SEQ_query_rendered_strips(seqbase, scene->r.cfra, 0);
+    SeqCollection *strips = SEQ_query_rendered_strips(channels, seqbase, scene->r.cfra, 0);
     SEQ_filter_selected_strips(strips);
     return strips;
   }
@@ -725,6 +715,7 @@ static Sequence *seq_select_seq_from_preview(
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_get(scene);
   ListBase *seqbase = SEQ_active_seqbase_get(ed);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
   SpaceSeq *sseq = CTX_wm_space_seq(C);
   View2D *v2d = UI_view2d_fromcontext(C);
 
@@ -734,7 +725,8 @@ static Sequence *seq_select_seq_from_preview(
   /* Always update the coordinates (check extended after). */
   const bool use_cycle = (!WM_cursor_test_motion_and_update(mval) || extend || toggle);
 
-  SeqCollection *strips = SEQ_query_rendered_strips(seqbase, scene->r.cfra, sseq->chanshown);
+  SeqCollection *strips = SEQ_query_rendered_strips(
+      channels, seqbase, scene->r.cfra, sseq->chanshown);
 
   /* Allow strips this far from the closest center to be included.
    * This allows cycling over center points which are near enough
@@ -1004,6 +996,7 @@ void SEQUENCER_OT_select(wmOperatorType *ot)
   ot->invoke = sequencer_select_invoke;
   ot->modal = WM_generic_select_modal;
   ot->poll = ED_operator_sequencer_active;
+  ot->get_name = ED_select_pick_get_name;
 
   /* Flags. */
   ot->flag = OPTYPE_UNDO;
@@ -1590,9 +1583,11 @@ static void seq_box_select_seq_from_preview(const bContext *C, rctf *rect, const
   Scene *scene = CTX_data_scene(C);
   Editing *ed = SEQ_editing_get(scene);
   ListBase *seqbase = SEQ_active_seqbase_get(ed);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
   SpaceSeq *sseq = CTX_wm_space_seq(C);
 
-  SeqCollection *strips = SEQ_query_rendered_strips(seqbase, scene->r.cfra, sseq->chanshown);
+  SeqCollection *strips = SEQ_query_rendered_strips(
+      channels, seqbase, scene->r.cfra, sseq->chanshown);
   Sequence *seq;
   SEQ_ITERATOR_FOREACH (seq, strips) {
     if (!seq_box_select_rect_image_isect(scene, seq, rect)) {
@@ -1707,7 +1702,9 @@ static int sequencer_box_select_invoke(bContext *C, wmOperator *op, const wmEven
 
   if (tweak) {
     int hand_dummy;
-    Sequence *seq = find_nearest_seq(scene, v2d, &hand_dummy, event->mval);
+    int mval[2];
+    WM_event_drag_start_mval(event, region, mval);
+    Sequence *seq = find_nearest_seq(scene, v2d, &hand_dummy, mval);
     if (seq != NULL) {
       return OPERATOR_CANCELLED | OPERATOR_PASS_THROUGH;
     }
@@ -1741,7 +1738,7 @@ void SEQUENCER_OT_select_box(wmOperatorType *ot)
   WM_operator_properties_select_operation_simple(ot);
 
   prop = RNA_def_boolean(
-      ot->srna, "tweak", 0, "Tweak", "Operator has been activated using a tweak event");
+      ot->srna, "tweak", 0, "Tweak", "Operator has been activated using a click-drag event");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   prop = RNA_def_boolean(
       ot->srna, "include_handles", 0, "Select Handles", "Select the strips and their handles");
@@ -1925,7 +1922,7 @@ static bool select_grouped_effect(SeqCollection *strips,
   Sequence *seq;
   SEQ_ITERATOR_FOREACH (seq, strips) {
     if (SEQ_CHANNEL_CHECK(seq, channel) && (seq->type & SEQ_TYPE_EFFECT) &&
-        ELEM(actseq, seq->seq1, seq->seq2, seq->seq3)) {
+        SEQ_relation_is_effect_of_strip(seq, actseq)) {
       effects[seq->type] = true;
     }
   }

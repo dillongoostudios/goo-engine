@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation, Joshua Leung
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation, Joshua Leung. All rights reserved. */
 
 #pragma once
 
@@ -59,16 +43,16 @@ typedef struct CfraElem {
 
 /* ************** F-Curve Modifiers *************** */
 
-/* F-Curve Modifier Type-Info (fmi):
- *  This struct provides function pointers for runtime, so that functions can be
- *  written more generally (with fewer/no special exceptions for various modifiers).
+/**
+ * F-Curve Modifier Type-Info (fmi):
+ * This struct provides function pointers for runtime, so that functions can be
+ * written more generally (with fewer/no special exceptions for various modifiers).
  *
- *  Callers of these functions must check that they actually point to something useful,
- *  as some constraints don't define some of these.
+ * Callers of these functions must check that they actually point to something useful,
+ * as some constraints don't define some of these.
  *
- *  Warning: it is not too advisable to reorder order of members of this struct,
- *           as you'll have to edit quite a few ($FMODIFIER_NUM_TYPES) of these
- *           structs.
+ * \warning it is not too advisable to reorder order of members of this struct,
+ * as you'll have to edit quite a few (#FMODIFIER_NUM_TYPES) of these structs.
  */
 typedef struct FModifierTypeInfo {
   /* admin/ident */
@@ -280,7 +264,7 @@ struct FCurve *id_data_find_fcurve(
     ID *id, void *data, struct StructRNA *type, const char *prop_name, int index, bool *r_driven);
 
 /**
- * Get list of LinkData's containing pointers to the F-curves
+ * Get list of LinkData's containing pointers to the F-Curves
  * which control the types of data indicated.
  * e.g. `numMatches = BKE_fcurves_filter(matches, &act->curves, "pose.bones[", "MyFancyBone");`
  *

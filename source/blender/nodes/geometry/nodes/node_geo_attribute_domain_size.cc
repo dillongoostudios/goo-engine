@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -98,7 +84,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
     }
     case GEO_COMPONENT_TYPE_CURVE: {
-      if (geometry_set.has_curve()) {
+      if (geometry_set.has_curves()) {
         const CurveComponent *component = geometry_set.get_component_for_read<CurveComponent>();
         params.set_output("Point Count", component->attribute_domain_size(ATTR_DOMAIN_POINT));
         params.set_output("Spline Count", component->attribute_domain_size(ATTR_DOMAIN_CURVE));

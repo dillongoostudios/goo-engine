@@ -1,24 +1,7 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2001-2002 by NaN Holding BV.
- * All rights reserved.
- *
- * - Blender Foundation, 2003-2009
- * - Peter Schlaile <peter [at] schlaile [dot] de> 2005/2006
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2001-2002 NaN Holding BV. All rights reserved.
+ *           2003-2009 Blender Foundation.
+ *           2005-2006 Peter Schlaile <peter [at] schlaile [dot] de> */
 
 /** \file
  * \ingroup bke
@@ -37,6 +20,7 @@
 #include "DNA_sound_types.h"
 #include "IMB_imbuf.h"
 
+#include "SEQ_channels.h"
 #include "SEQ_iterator.h"
 #include "SEQ_render.h"
 #include "SEQ_sequencer.h"
@@ -338,6 +322,7 @@ int SEQ_time_find_next_prev_edit(Scene *scene,
                                  const bool do_unselected)
 {
   Editing *ed = SEQ_editing_get(scene);
+  ListBase *channels = SEQ_channels_displayed_get(ed);
   Sequence *seq;
 
   int dist, best_dist, best_frame = timeline_frame;
@@ -355,7 +340,7 @@ int SEQ_time_find_next_prev_edit(Scene *scene,
   for (seq = ed->seqbasep->first; seq; seq = seq->next) {
     int i;
 
-    if (do_skip_mute && (seq->flag & SEQ_MUTE)) {
+    if (do_skip_mute && SEQ_render_is_muted(channels, seq)) {
       continue;
     }
 
@@ -459,8 +444,8 @@ void SEQ_timeline_expand_boundbox(const ListBase *seqbase, rctf *rect)
     if (rect->xmax < seq->enddisp + 1) {
       rect->xmax = seq->enddisp + 1;
     }
-    if (rect->ymax < seq->machine + 2) {
-      rect->ymax = seq->machine + 2;
+    if (rect->ymax < seq->machine) {
+      rect->ymax = seq->machine;
     }
   }
 }

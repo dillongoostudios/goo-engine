@@ -1,23 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2021 by Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2021 Blender Foundation. All rights reserved. */
 
 #include "BKE_subdiv_modifier.h"
+
+#include "BLI_session_uuid.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -93,6 +79,10 @@ static bool is_subdivision_evaluation_possible_on_gpu(void)
     return false;
   }
 
+  if (GPU_max_compute_shader_storage_blocks() < MAX_GPU_SUBDIV_SSBOS) {
+    return false;
+  }
+
   const int available_evaluators = openSubdiv_getAvailableEvaluators();
   if ((available_evaluators & OPENSUBDIV_EVALUATOR_GLSL_COMPUTE) == 0) {
     return false;
@@ -105,7 +95,7 @@ bool BKE_subsurf_modifier_force_disable_gpu_evaluation_for_mesh(const SubsurfMod
                                                                 const Mesh *mesh)
 {
   if ((U.gpu_flag & USER_GPU_FLAG_SUBDIVISION_EVALUATION) == 0) {
-    /* GPU subdivision is explicitely disabled, so we don't force it. */
+    /* GPU subdivision is explicitly disabled, so we don't force it. */
     return false;
   }
 
@@ -117,12 +107,11 @@ bool BKE_subsurf_modifier_force_disable_gpu_evaluation_for_mesh(const SubsurfMod
   return subsurf_modifier_use_autosmooth_or_split_normals(smd, mesh);
 }
 
-bool BKE_subsurf_modifier_can_do_gpu_subdiv_ex(const Scene *scene,
-                                               const Object *ob,
-                                               const Mesh *mesh,
-                                               const SubsurfModifierData *smd,
-                                               int required_mode,
-                                               bool skip_check_is_last)
+bool BKE_subsurf_modifier_can_do_gpu_subdiv(const Scene *scene,
+                                            const Object *ob,
+                                            const Mesh *mesh,
+                                            const SubsurfModifierData *smd,
+                                            int required_mode)
 {
   if ((U.gpu_flag & USER_GPU_FLAG_SUBDIVISION_EVALUATION) == 0) {
     return false;
@@ -134,33 +123,17 @@ bool BKE_subsurf_modifier_can_do_gpu_subdiv_ex(const Scene *scene,
     return false;
   }
 
-  if (!skip_check_is_last) {
-    ModifierData *md = modifier_get_last_enabled_for_mode(scene, ob, required_mode);
-    if (md != (const ModifierData *)smd) {
-      return false;
-    }
+  ModifierData *md = modifier_get_last_enabled_for_mode(scene, ob, required_mode);
+  if (md != (const ModifierData *)smd) {
+    return false;
   }
 
   return is_subdivision_evaluation_possible_on_gpu();
 }
 
-bool BKE_subsurf_modifier_can_do_gpu_subdiv(const Scene *scene,
-                                            const Object *ob,
-                                            const Mesh *mesh,
-                                            int required_mode)
+bool BKE_subsurf_modifier_has_gpu_subdiv(const Mesh *mesh)
 {
-  ModifierData *md = modifier_get_last_enabled_for_mode(scene, ob, required_mode);
-
-  if (!md) {
-    return false;
-  }
-
-  if (md->type != eModifierType_Subsurf) {
-    return false;
-  }
-
-  return BKE_subsurf_modifier_can_do_gpu_subdiv_ex(
-      scene, ob, mesh, (SubsurfModifierData *)md, required_mode, true);
+  return BLI_session_uuid_is_generated(&mesh->runtime.subsurf_session_uuid);
 }
 
 void (*BKE_subsurf_modifier_free_gpu_cache_cb)(Subdiv *subdiv) = NULL;

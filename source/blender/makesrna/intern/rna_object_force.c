@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup RNA
@@ -62,6 +48,8 @@ static const EnumPropertyItem effector_shape_items[] = {
 #ifdef RNA_RUNTIME
 
 #  include "BLI_math_base.h"
+
+#  include "RNA_access.h"
 
 /* type specific return values only used from functions */
 static const EnumPropertyItem curve_shape_items[] = {
@@ -253,6 +241,33 @@ static void rna_Cache_toggle_disk_cache(Main *UNUSED(bmain), Scene *UNUSED(scene
   }
 }
 
+bool rna_Cache_use_disk_cache_override_apply(Main *UNUSED(bmain),
+                                             PointerRNA *ptr_dst,
+                                             PointerRNA *ptr_src,
+                                             PointerRNA *UNUSED(ptr_storage),
+                                             PropertyRNA *prop_dst,
+                                             PropertyRNA *prop_src,
+                                             PropertyRNA *UNUSED(prop_storage),
+                                             const int UNUSED(len_dst),
+                                             const int UNUSED(len_src),
+                                             const int UNUSED(len_storage),
+                                             PointerRNA *UNUSED(ptr_item_dst),
+                                             PointerRNA *UNUSED(ptr_item_src),
+                                             PointerRNA *UNUSED(ptr_item_storage),
+                                             IDOverrideLibraryPropertyOperation *opop)
+{
+  BLI_assert(RNA_property_type(prop_dst) == PROP_BOOLEAN);
+  BLI_assert(opop->operation == IDOVERRIDE_LIBRARY_OP_REPLACE);
+  UNUSED_VARS_NDEBUG(opop);
+
+  RNA_property_boolean_set(ptr_dst, prop_dst, RNA_property_boolean_get(ptr_src, prop_src));
+
+  /* DO NOT call `RNA_property_update_main(bmain, NULL, ptr_dst, prop_dst);`, that would trigger
+   * the whole 'update from mem point cache' process, ending up in the complete deletion of an
+   * existing disk-cache if any. */
+  return true;
+}
+
 static void rna_Cache_idname_change(Main *UNUSED(bmain), Scene *UNUSED(scene), PointerRNA *ptr)
 {
   Object *ob = NULL;
@@ -421,7 +436,7 @@ int rna_Cache_info_length(PointerRNA *ptr)
 
   PTCacheID pid = BKE_ptcache_id_find(ob, scene, cache);
 
-  if (cache->flag & PTCACHE_FLAG_INFO_DIRTY) {
+  if (pid.cache != NULL && pid.cache->flag & PTCACHE_FLAG_INFO_DIRTY) {
     BKE_ptcache_update_info(&pid);
   }
 
@@ -705,7 +720,7 @@ static void rna_FieldSettings_dependency_update(Main *bmain, Scene *scene, Point
 
     rna_FieldSettings_shape_update(bmain, scene, ptr);
 
-    if (ob->type == OB_CURVE && ob->pd->forcefield == PFIELD_GUIDE) {
+    if (ob->type == OB_CURVES_LEGACY && ob->pd->forcefield == PFIELD_GUIDE) {
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
     }
     else {
@@ -913,7 +928,7 @@ static const EnumPropertyItem *rna_Effector_shape_itemf(bContext *UNUSED(C),
 
   ob = (Object *)ptr->owner_id;
 
-  if (ob->type == OB_CURVE) {
+  if (ob->type == OB_CURVES_LEGACY) {
     if (ob->pd->forcefield == PFIELD_VORTEX) {
       return curve_vortex_shape_items;
     }
@@ -997,6 +1012,7 @@ static void rna_def_pointcache_common(StructRNA *srna)
   RNA_def_property_ui_text(
       prop, "Disk Cache", "Save cache files to disk (.blend file must be saved first)");
   RNA_def_property_update(prop, NC_OBJECT, "rna_Cache_toggle_disk_cache");
+  RNA_def_property_override_funcs(prop, NULL, NULL, "rna_Cache_use_disk_cache_override_apply");
 
   prop = RNA_def_property(srna, "is_outdated", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", PTCACHE_OUTDATED);
@@ -1030,6 +1046,7 @@ static void rna_def_pointcache_common(StructRNA *srna)
   prop = RNA_def_property(srna, "info", PROP_STRING, PROP_NONE);
   RNA_def_property_string_sdna(prop, NULL, "info");
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   /* Note that we do not actually need a getter here, `rna_Cache_info_length` will update the info
    * string just as well. */
   RNA_def_property_string_funcs(prop, NULL, "rna_Cache_info_length", NULL);

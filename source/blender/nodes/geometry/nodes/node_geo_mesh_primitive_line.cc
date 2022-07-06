@@ -1,21 +1,9 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
+
+#include "BLI_task.hh"
 
 #include "BKE_material.h"
 #include "BKE_mesh.h"
@@ -183,15 +171,6 @@ static void node_geo_exec(GeoNodeExecParams params)
 
 namespace blender::nodes {
 
-static void fill_edge_data(MutableSpan<MEdge> edges)
-{
-  for (const int i : edges.index_range()) {
-    edges[i].v1 = i;
-    edges[i].v2 = i + 1;
-    edges[i].flag |= ME_LOOSEEDGE;
-  }
-}
-
 Mesh *create_line_mesh(const float3 start, const float3 delta, const int count)
 {
   if (count < 1) {
@@ -203,11 +182,23 @@ Mesh *create_line_mesh(const float3 start, const float3 delta, const int count)
   MutableSpan<MVert> verts{mesh->mvert, mesh->totvert};
   MutableSpan<MEdge> edges{mesh->medge, mesh->totedge};
 
-  for (const int i : verts.index_range()) {
-    copy_v3_v3(verts[i].co, start + delta * i);
-  }
-
-  fill_edge_data(edges);
+  threading::parallel_invoke(
+      [&]() {
+        threading::parallel_for(verts.index_range(), 4096, [&](IndexRange range) {
+          for (const int i : range) {
+            copy_v3_v3(verts[i].co, start + delta * i);
+          }
+        });
+      },
+      [&]() {
+        threading::parallel_for(edges.index_range(), 4096, [&](IndexRange range) {
+          for (const int i : range) {
+            edges[i].v1 = i;
+            edges[i].v2 = i + 1;
+            edges[i].flag |= ME_LOOSEEDGE;
+          }
+        });
+      });
 
   return mesh;
 }

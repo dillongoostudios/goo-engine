@@ -1,21 +1,5 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2009 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2009 Blender Foundation. All rights reserved. */
 
 /** \file
  * \ingroup edinterface
@@ -1194,7 +1178,7 @@ static bool draw_widgetbase_batch_skip_draw_cache(void)
 {
   /* MacOS is known to have issues on Mac Mini and MacBook Pro with Intel Iris GPU.
    * For example, T78307. */
-  if (GPU_type_matches(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY)) {
+  if (GPU_type_matches_ex(GPU_DEVICE_INTEL, GPU_OS_MAC, GPU_DRIVER_ANY, GPU_BACKEND_OPENGL)) {
     return true;
   }
 
@@ -1875,15 +1859,15 @@ static bool widget_draw_text_underline_calc_position(const char *UNUSED(str),
                                                      const size_t str_step_ofs,
                                                      const rcti *glyph_step_bounds,
                                                      const int UNUSED(glyph_advance_x),
-                                                     const rctf *glyph_bounds,
+                                                     const rcti *glyph_bounds,
                                                      const int UNUSED(glyph_bearing[2]),
                                                      void *user_data)
 {
   struct UnderlineData *ul_data = user_data;
   if (ul_data->str_offset == str_step_ofs) {
     /* Full width of this glyph including both bearings. */
-    const float width = glyph_bounds->xmin + BLI_rctf_size_x(glyph_bounds) + glyph_bounds->xmin;
-    ul_data->r_offset_px[0] = glyph_step_bounds->xmin + ((width - ul_data->width_px) * 0.5f);
+    const int width = glyph_bounds->xmin + BLI_rcti_size_x(glyph_bounds) + glyph_bounds->xmin;
+    ul_data->r_offset_px[0] = glyph_step_bounds->xmin + ((width - ul_data->width_px) / 2);
     /* One line-width below the lower glyph bounds. */
     ul_data->r_offset_px[1] = glyph_bounds->ymin - U.pixelsize;
     /* Early exit. */
@@ -2595,7 +2579,7 @@ static void widget_state(uiWidgetType *wt, int state, int drawflag, eUIEmbossTyp
  *
  * A lot of places of the UI like the Node Editor or panels are zoomable. In most cases we can
  * get the zoom factor from the aspect, but in some cases like popups we need to fall back to
- * using the the size of the element. The latter method relies on the element always being the same
+ * using the size of the element. The latter method relies on the element always being the same
  * size.
  * \{ */
 
@@ -3335,6 +3319,8 @@ static void ui_draw_separator(const rcti *rect, const uiWidgetColors *wcol)
 /** \name Button Draw Callbacks
  * \{ */
 
+#define NUM_BUT_PADDING_FACTOR 0.425f
+
 static void widget_numbut_draw(
     uiWidgetColors *wcol, rcti *rect, const float zoom, int state, int roundboxalign, bool emboss)
 {
@@ -3429,11 +3415,10 @@ static void widget_numbut_draw(
   }
 
   if (!(state & UI_STATE_TEXT_INPUT)) {
-    const float textofs = 0.425f * BLI_rcti_size_y(rect);
+    const float text_padding = NUM_BUT_PADDING_FACTOR * BLI_rcti_size_y(rect);
 
-    /* text space */
-    rect->xmin += textofs;
-    rect->xmax -= textofs;
+    rect->xmin += text_padding;
+    rect->xmax -= text_padding;
   }
 }
 
@@ -3760,9 +3745,8 @@ static void widget_numslider(
   widget_init(&wtb1);
 
   /* Backdrop first. */
-  const float ofs = widget_radius_from_zoom(zoom, wcol);
-  const float toffs = ofs * 0.75f;
-  round_box_edges(&wtb, roundboxalign, rect, ofs);
+  const float rad = widget_radius_from_zoom(zoom, wcol);
+  round_box_edges(&wtb, roundboxalign, rect, rad);
 
   wtb.draw_outline = false;
   widgetbase_draw(&wtb, wcol);
@@ -3817,24 +3801,27 @@ static void widget_numslider(
 
     const float width = (float)BLI_rcti_size_x(rect);
     factor_ui = factor * width;
+    /* The rectangle width needs to be at least twice the corner radius for the round corners
+     * to be drawn properly. */
+    const float min_width = 2.0f * rad;
 
-    if (factor_ui <= ofs) {
-      /* Left part only. */
-      roundboxalign_slider &= ~(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT);
-      rect1.xmax = rect1.xmin + ofs;
-      factor_discard = factor_ui / ofs;
+    if (factor_ui > width - rad) {
+      /* Left part + middle part + right part. */
+      factor_discard = factor;
     }
-    else if (factor_ui <= width - ofs) {
+    else if (factor_ui > min_width) {
       /* Left part + middle part. */
       roundboxalign_slider &= ~(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT);
       rect1.xmax = rect1.xmin + factor_ui;
     }
     else {
-      /* Left part + middle part + right part. */
-      factor_discard = factor;
+      /* Left part */
+      roundboxalign_slider &= ~(UI_CNR_TOP_RIGHT | UI_CNR_BOTTOM_RIGHT);
+      rect1.xmax = rect1.xmin + min_width;
+      factor_discard = factor_ui / min_width;
     }
 
-    round_box_edges(&wtb1, roundboxalign_slider, &rect1, ofs);
+    round_box_edges(&wtb1, roundboxalign_slider, &rect1, rad);
     wtb1.draw_outline = false;
     widgetbase_set_uniform_discard_factor(&wtb1, factor_discard);
     widgetbase_draw(&wtb1, wcol);
@@ -3854,8 +3841,9 @@ static void widget_numslider(
   /* Add space at either side of the button so text aligns with number-buttons
    * (which have arrow icons). */
   if (!(state & UI_STATE_TEXT_INPUT)) {
-    rect->xmax -= toffs;
-    rect->xmin += toffs;
+    const float text_padding = NUM_BUT_PADDING_FACTOR * BLI_rcti_size_y(rect);
+    rect->xmax -= text_padding;
+    rect->xmin += text_padding;
   }
 }
 
@@ -4309,7 +4297,7 @@ static void widget_tab(
   const bool is_active = (state & UI_SELECT);
 
   /* Draw shaded outline - Disabled for now,
-   * seems incorrect and also looks nicer without it imho ;) */
+   * seems incorrect and also looks nicer without it IMHO ;). */
   // #define USE_TAB_SHADED_HIGHLIGHT
 
   uchar theme_col_tab_highlight[3];
@@ -4978,6 +4966,9 @@ void ui_draw_but(const bContext *C, struct ARegion *region, uiStyle *style, uiBu
     }
   }
 #endif
+  if (but->block->flag & UI_BLOCK_NO_DRAW_OVERRIDDEN_STATE) {
+    state &= ~UI_BUT_OVERRIDDEN;
+  }
 
   const float zoom = 1.0f / but->block->aspect;
   wt->state(wt, state, drawflag, but->emboss);

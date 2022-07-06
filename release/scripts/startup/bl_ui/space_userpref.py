@@ -1,20 +1,4 @@
-# ##### BEGIN GPL LICENSE BLOCK #####
-#
-#  This program is free software; you can redistribute it and/or
-#  modify it under the terms of the GNU General Public License
-#  as published by the Free Software Foundation; either version 2
-#  of the License, or (at your option) any later version.
-#
-#  This program is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with this program; if not, write to the Free Software Foundation,
-#  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-#
-# ##### END GPL LICENSE BLOCK #####
+# SPDX-License-Identifier: GPL-2.0-or-later
 
 # <pep8 compliant>
 import bpy
@@ -402,8 +386,8 @@ class USERPREF_PT_edit_objects_duplicate_data(EditingPanel, CenterAlignMixIn, Pa
         col.prop(edit, "use_duplicate_curve", text="Curve")
         # col.prop(edit, "use_duplicate_fcurve", text="F-Curve")  # Not implemented.
         col.prop(edit, "use_duplicate_grease_pencil", text="Grease Pencil")
-        if hasattr(edit, "use_duplicate_hair"):
-            col.prop(edit, "use_duplicate_hair", text="Hair")
+        if hasattr(edit, "use_duplicate_curves"):
+            col.prop(edit, "use_duplicate_curves", text="Curves")
 
         col = flow.column()
         col.prop(edit, "use_duplicate_lattice", text="Lattice")
@@ -476,6 +460,7 @@ class USERPREF_PT_edit_weight_paint(EditingPanel, CenterAlignMixIn, Panel):
         col = layout.column()
         col.active = view.use_weight_color_range
         col.template_color_ramp(view, "weight_color_range", expand=True)
+
 
 class USERPREF_PT_edit_text_editor(EditingPanel, CenterAlignMixIn, Panel):
     bl_label = "Text Editor"
@@ -701,10 +686,10 @@ class USERPREF_PT_viewport_display(ViewportPanel, CenterAlignMixIn, Panel):
         prefs = context.preferences
         view = prefs.view
 
-        col = layout.column(heading="Show")
+        col = layout.column(heading="Text Info Overlay")
         col.prop(view, "show_object_info", text="Object Info")
         col.prop(view, "show_view_name", text="View Name")
-        col.prop(view, "show_playback_fps", text="Playback FPS")
+        col.prop(view, "show_playback_fps", text="Playback Frame Rate (FPS)")
 
         layout.separator()
 
@@ -1734,6 +1719,7 @@ class USERPREF_PT_ndof_settings(Panel):
         if show_3dview_settings:
             col.prop(props, "ndof_show_guide")
         col.prop(props, "ndof_zoom_invert")
+        col.prop(props, "ndof_lock_camera_pan_zoom")
         row = col.row(heading="Pan")
         row.prop(props, "ndof_pan_yz_swap_axis", text="Swap Y and Z Axes")
 
@@ -2273,8 +2259,8 @@ class USERPREF_PT_experimental_new_features(ExperimentalPanel, Panel):
     def draw(self, context):
         self._draw_items(
             context, (
-                ({"property": "use_sculpt_vertex_colors"}, "T71947"),
                 ({"property": "use_sculpt_tools_tilt"}, "T82877"),
+                ({"property": "use_sculpt_texture_paint"}, "T96225"),
                 ({"property": "use_extended_asset_browser"}, ("project/view/130/", "Project Page")),
                 ({"property": "use_override_templates"}, ("T73318", "Milestone 4")),
             ),
@@ -2287,11 +2273,28 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
     def draw(self, context):
         self._draw_items(
             context, (
-                ({"property": "use_new_hair_type"}, "T68981"),
+                ({"property": "use_new_curves_type"}, "T68981"),
                 ({"property": "use_new_point_cloud_type"}, "T75717"),
                 ({"property": "use_full_frame_compositor"}, "T88150"),
+                ({"property": "enable_eevee_next"}, "T93220"),
+                ({"property": "use_draw_manager_acquire_lock"}, "T98016"),
             ),
         )
+
+
+# Keep this as tweaks can be useful to restore.
+"""
+class USERPREF_PT_experimental_tweaks(ExperimentalPanel, Panel):
+    bl_label = "Tweaks"
+
+    def draw(self, context):
+        self._draw_items(
+            context, (
+                ({"property": "use_select_nearest_on_first_click"}, "T96752"),
+            ),
+        )
+
+"""
 
 
 class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
@@ -2308,9 +2311,7 @@ class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
             context, (
                 ({"property": "use_undo_legacy"}, "T60695"),
                 ({"property": "override_auto_resync"}, "T83811"),
-                ({"property": "proxy_to_override_auto_conversion"}, "T91671"),
                 ({"property": "use_cycles_debug"}, None),
-                ({"property": "use_geometry_nodes_legacy"}, "T91274"),
                 ({"property": "show_asset_debug_info"}, None),
                 ({"property": "use_asset_indexing"}, None),
             ),
@@ -2416,6 +2417,7 @@ classes = (
 
     USERPREF_PT_experimental_new_features,
     USERPREF_PT_experimental_prototypes,
+    # USERPREF_PT_experimental_tweaks,
     USERPREF_PT_experimental_debugging,
 
     # Add dynamically generated editor theme panels last,

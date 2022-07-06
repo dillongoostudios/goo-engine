@@ -1,18 +1,4 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
  * \ingroup edinterface
@@ -25,7 +11,7 @@
 /* interface_eyedropper.c */
 
 void eyedropper_draw_cursor_text_window(const struct wmWindow *window, const char *name);
-void eyedropper_draw_cursor_text_region(int x, int y, const char *name);
+void eyedropper_draw_cursor_text_region(const int xy[2], const char *name);
 /**
  * Utility to retrieve a button representing a RNA property that is currently under the cursor.
  *
@@ -51,7 +37,7 @@ void datadropper_win_area_find(const struct bContext *C,
  *
  * \note Exposed by 'interface_eyedropper_intern.h' for use with color band picking.
  */
-void eyedropper_color_sample_fl(bContext *C, int mx, int my, float r_col[3]);
+void eyedropper_color_sample_fl(bContext *C, const int m_xy[2], float r_col[3]);
 
 /* Used for most eye-dropper operators. */
 enum {
