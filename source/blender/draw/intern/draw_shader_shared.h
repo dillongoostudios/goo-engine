@@ -58,14 +58,15 @@ struct ObjectMatrices {
   float4x4 drw_modelMatrix;
   float4x4 drw_modelMatrixInverse;
 };
-BLI_STATIC_ASSERT_ALIGN(ViewInfos, 16)
+BLI_STATIC_ASSERT_ALIGN(ObjectMatrices, 16)
 
 struct ObjectInfos {
   float4 drw_OrcoTexCoFactors[2];
   float4 drw_ObjectColor;
   float4 drw_Infos;
+  uint4 drw_ObjectHash;
 };
-BLI_STATIC_ASSERT_ALIGN(ViewInfos, 16)
+BLI_STATIC_ASSERT_ALIGN(ObjectInfos, 16)
 
 struct VolumeInfos {
   /* Object to grid-space. */
@@ -82,3 +83,4 @@ BLI_STATIC_ASSERT_ALIGN(VolumeInfos, 16)
 #define OrcoTexCoFactors (drw_infos[resource_id].drw_OrcoTexCoFactors)
 #define ObjectInfo (drw_infos[resource_id].drw_Infos)
 #define ObjectColor (drw_infos[resource_id].drw_ObjectColor)
+#define ObjectHash ((shadow_id_high_bitdepth) ? drw_infos[resource_id].drw_ObjectHash.x : (drw_infos[resource_id].drw_ObjectHash.x & 0x0000FFFFu))

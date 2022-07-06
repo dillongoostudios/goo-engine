@@ -84,7 +84,7 @@ def git_branch_release_version(branch, tag):
             release_version = release_version.group(1)
     # return release_version
     # TODO Fix this so I don't have to manually change it every time we update.
-    return "3.1"
+    return "3.2"
 
 
 def svn_libraries_base_url(release_version, branch=None):

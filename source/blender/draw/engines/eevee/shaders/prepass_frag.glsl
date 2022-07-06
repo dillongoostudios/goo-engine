@@ -9,7 +9,6 @@
 #pragma BLENDER_REQUIRE(common_uniforms_lib.glsl)
 #pragma BLENDER_REQUIRE(closure_eval_surface_lib.glsl)
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_common_obinfos_lib.glsl)
 
 layout(location = 1) out uint resource_id_out;
 

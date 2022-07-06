@@ -1,3 +1,5 @@
+#pragma BLENDER_REQUIRE(common_utiltex_lib.glsl)
+
 /**
  * Adapted from :
  * Real-Time Polygonal-Light Shading with Linearly Transformed Cosines.

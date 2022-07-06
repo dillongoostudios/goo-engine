@@ -3,7 +3,6 @@
 #pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(raytrace_lib.glsl)
 #pragma BLENDER_REQUIRE(ltc_lib.glsl)
-#pragma BLENDER_REQUIRE(gpu_shader_common_obinfos_lib.glsl)
 
 #extension GL_ARB_texture_gather : enable
 
@@ -23,7 +22,7 @@ struct LightData {
   vec4 upvec_sizey;            /* xyz: Normalized right vector, w: area size Y or spot scale Y */
   vec4 forwardvec_type;        /* xyz: Normalized forward vector, w: Light Type */
   vec4 diff_spec_volume;       /* xyz: Diffuse/Spec/Volume power, w: radius for volumetric. */
-  ivec4  light_group_bits;     /* x : light groups, yzw : unused */
+  ivec4 light_group_bits;     /* x : light groups, yzw : unused */
 };
 
 /* convenience aliases */
@@ -179,6 +178,9 @@ vec4 sample_cascade(sampler2DArray tex, vec2 co, float cascade_id)
 #define scube(x) shadows_cube_data[x]
 #define scascade(x) shadows_cascade_data[x]
 
+/* HACK (Late) disable ID sampling on shaders that don't support it.
+TODO check which cases this actually is */
+#ifdef ObjectHash
 /*
   Gather samples and manually compare against the ObjectHash uniform, then interpolate the results.
 */
@@ -202,6 +204,12 @@ float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
     fra.y
   );
 }
+#else
+float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
+{
+  return 1.0;
+}
+#endif
 
 float sample_cube_shadow(int shadow_id, vec3 P, bool match_shadow_id)
 {

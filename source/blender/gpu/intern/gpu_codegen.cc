@@ -248,6 +248,7 @@ class GPUCodegen {
     output.create_info = reinterpret_cast<GPUShaderCreateInfo *>(
         static_cast<ShaderCreateInfo *>(create_info));
 
+    GPU_material_flag_set(mat_, GPU_MATFLAG_OBJECT_INFO);
     if (GPU_material_flag_get(mat_, GPU_MATFLAG_OBJECT_INFO)) {
       create_info->additional_info("draw_object_infos");
     }
@@ -574,7 +575,6 @@ GPUPass *GPU_generate_pass(GPUMaterial *material,
    * generated VBOs are ready to accept the future shader. */
   gpu_node_graph_prune_unused(graph);
   gpu_node_graph_finalize_uniform_attrs(graph);
-
   GPUCodegen codegen(material, graph);
   codegen.generate_graphs();
   codegen.generate_uniform_buffer();
