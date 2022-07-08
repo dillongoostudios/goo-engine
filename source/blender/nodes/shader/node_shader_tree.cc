@@ -666,7 +666,8 @@ static bool ntree_weight_tree_tag_nodes(bNode *fromnode, bNode *tonode, void *us
                                        SH_NODE_MIX_SHADER,
                                        SH_NODE_OUTPUT_WORLD,
                                        SH_NODE_OUTPUT_MATERIAL,
-                                       SH_NODE_SHADERTORGB);
+                                       SH_NODE_SHADERTORGB,
+                                       SH_NODE_SET_DEPTH);
   if (tonode->tmp_flag == -1 && to_node_from_weight_tree) {
     tonode->tmp_flag = *node_count;
     *node_count += (tonode->type == SH_NODE_MIX_SHADER) ? 4 : 1;
@@ -713,6 +714,7 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
       switch (node->type) {
         case SH_NODE_SHADERTORGB:
         case SH_NODE_OUTPUT_WORLD:
+        case SH_NODE_SET_DEPTH:
         case SH_NODE_OUTPUT_MATERIAL: {
           /* Start the tree with full weight. */
           nodes_copy[id] = nodeAddStaticNode(NULL, ntree, SH_NODE_VALUE);

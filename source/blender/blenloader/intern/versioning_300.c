@@ -2798,6 +2798,17 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
+    if (!MAIN_VERSION_ATLEAST(bmain, 302, 0)) {
+        /* Rename sockets on Set Depth node. */
+        FOREACH_NODETREE_BEGIN (bmain, ntree, _id) {
+            if (ntree->type == NTREE_SHADER) {
+                printf("VERSIONING SOCKET NAMES\n");
+                version_node_socket_name(ntree, SH_NODE_SET_DEPTH, "BSDF", "Shader");
+            }
+        }
+        FOREACH_NODETREE_END;
+    }
+
   /**
    * Versioning code until next subversion bump goes here.
    *

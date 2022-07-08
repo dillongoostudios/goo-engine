@@ -1,4 +1,8 @@
-#pragma BLENDER_REQUIRE(common_view_lib.glsl)
+#ifdef GPU_VERTEX_SHADER
+    #define FRAG_DEPTH float _frag_depth
+    #else
+    #define FRAG_DEPTH gl_FragDepth
+#endif
 
 void view_z_get(out float z)
 {
@@ -9,8 +13,8 @@ void node_set_depth(in Closure _in, in float z_in, out Closure _out)
 {
     _out = _in;
 
-    /* Alpha hash must be enabled for depth prepass to use the shader. */
-    /* Shader compiler *really* doesn't like using a #ifdef here, unfortunately. */
     float z_clipped = max(min(-z_in, ViewNear), ViewFar);
-    gl_FragDepth = get_depth_from_view_z(z_clipped);
+    FRAG_DEPTH = get_depth_from_view_z(z_clipped);
 }
+
+#undef FRAG_DEPTH
