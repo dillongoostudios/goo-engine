@@ -37,6 +37,8 @@
 #  include "BLI_math_base.h" /* isfinite() */
 #endif
 
+#include "float.h" /* FLT_MAX */
+
 /* -------------------------------------------------------------------- */
 /** \name Fast Python to C Array Conversion for Primitive Types
  * \{ */
@@ -1508,7 +1510,11 @@ bool PyC_RunString_AsNumber(const char *imports[],
       ok = false;
     }
     else if (!isfinite(val)) {
-      *r_value = 0.0;
+      if (val > 0.0) {
+        *r_value = FLT_MAX;
+      } else {
+        *r_value = -FLT_MAX;
+      }
     }
     else {
       *r_value = val;
