@@ -769,11 +769,11 @@ static bool ui_but_equals_old(const uiBut *but, const uiBut *oldbut)
     return false;
   }
 
-  if ((but->type == UI_BTYPE_TREEROW) && (oldbut->type == UI_BTYPE_TREEROW)) {
-    uiButTreeRow *but_treerow = (uiButTreeRow *)but;
-    uiButTreeRow *oldbut_treerow = (uiButTreeRow *)oldbut;
-    if (!but_treerow->tree_item || !oldbut_treerow->tree_item ||
-        !UI_tree_view_item_matches(but_treerow->tree_item, oldbut_treerow->tree_item)) {
+  if ((but->type == UI_BTYPE_VIEW_ITEM) && (oldbut->type == UI_BTYPE_VIEW_ITEM)) {
+    uiButViewItem *but_item = (uiButViewItem *)but;
+    uiButViewItem *oldbut_item = (uiButViewItem *)oldbut;
+    if (!but_item->view_item || !oldbut_item->view_item ||
+        !UI_view_item_matches(but_item->view_item, oldbut_item->view_item)) {
       return false;
     }
   }
@@ -898,10 +898,10 @@ static void ui_but_update_old_active_from_new(uiBut *oldbut, uiBut *but)
       progress_oldbut->progress = progress_but->progress;
       break;
     }
-    case UI_BTYPE_TREEROW: {
-      uiButTreeRow *treerow_oldbut = (uiButTreeRow *)oldbut;
-      uiButTreeRow *treerow_newbut = (uiButTreeRow *)but;
-      SWAP(uiTreeViewItemHandle *, treerow_newbut->tree_item, treerow_oldbut->tree_item);
+    case UI_BTYPE_VIEW_ITEM: {
+      uiButViewItem *view_item_oldbut = (uiButViewItem *)oldbut;
+      uiButViewItem *view_item_newbut = (uiButViewItem *)but;
+      SWAP(uiViewItemHandle *, view_item_newbut->view_item, view_item_oldbut->view_item);
       break;
     }
     default:
@@ -996,9 +996,9 @@ static bool ui_but_update_from_old_block(const bContext *C,
   else {
     int flag_copy = UI_BUT_DRAG_MULTI;
 
-    /* Stupid special case: The active button may be inside (as in, overlapped on top) a tree-row
+    /* Stupid special case: The active button may be inside (as in, overlapped on top) a view-item
      * button which we also want to keep highlighted then. */
-    if (but->type == UI_BTYPE_TREEROW) {
+    if (but->type == UI_BTYPE_VIEW_ITEM) {
       flag_copy |= UI_ACTIVE;
     }
 
@@ -2230,12 +2230,12 @@ int ui_but_is_pushed_ex(uiBut *but, double *value)
           }
         }
         break;
-      case UI_BTYPE_TREEROW: {
-        uiButTreeRow *tree_row_but = (uiButTreeRow *)but;
+      case UI_BTYPE_VIEW_ITEM: {
+        const uiButViewItem *view_item_but = (const uiButViewItem *)but;
 
         is_push = -1;
-        if (tree_row_but->tree_item) {
-          is_push = UI_tree_view_item_is_active(tree_row_but->tree_item);
+        if (view_item_but->view_item) {
+          is_push = UI_view_item_is_active(view_item_but->view_item);
         }
         break;
       }
@@ -3445,9 +3445,7 @@ static void ui_but_free(const bContext *C, uiBut *but)
     IMB_freeImBuf((struct ImBuf *)but->poin);
   }
 
-  if (but->dragpoin && (but->dragflag & UI_BUT_DRAGPOIN_FREE)) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-  }
+  ui_but_drag_free(but);
   ui_but_extra_operator_icons_free(but);
 
   BLI_assert(UI_butstore_is_registered(but->block, but) == false);
@@ -3852,21 +3850,22 @@ static void ui_but_update_ex(uiBut *but, const bool validate)
     }
     case UI_BTYPE_HOTKEY_EVENT:
       if (but->flag & UI_SELECT) {
+        const uiButHotkeyEvent *hotkey_but = (uiButHotkeyEvent *)but;
 
-        if (but->modifier_key) {
+        if (hotkey_but->modifier_key) {
           char *str = but->drawstr;
           but->drawstr[0] = '\0';
 
-          if (but->modifier_key & KM_SHIFT) {
+          if (hotkey_but->modifier_key & KM_SHIFT) {
             str += BLI_strcpy_rlen(str, "Shift ");
           }
-          if (but->modifier_key & KM_CTRL) {
+          if (hotkey_but->modifier_key & KM_CTRL) {
             str += BLI_strcpy_rlen(str, "Ctrl ");
           }
-          if (but->modifier_key & KM_ALT) {
+          if (hotkey_but->modifier_key & KM_ALT) {
             str += BLI_strcpy_rlen(str, "Alt ");
           }
-          if (but->modifier_key & KM_OSKEY) {
+          if (hotkey_but->modifier_key & KM_OSKEY) {
             str += BLI_strcpy_rlen(str, "Cmd ");
           }
 
@@ -3988,9 +3987,13 @@ static void ui_but_alloc_info(const eButType type,
       alloc_size = sizeof(uiButCurveProfile);
       alloc_str = "uiButCurveProfile";
       break;
-    case UI_BTYPE_TREEROW:
-      alloc_size = sizeof(uiButTreeRow);
-      alloc_str = "uiButTreeRow";
+    case UI_BTYPE_HOTKEY_EVENT:
+      alloc_size = sizeof(uiButHotkeyEvent);
+      alloc_str = "uiButHotkeyEvent";
+      break;
+    case UI_BTYPE_VIEW_ITEM:
+      alloc_size = sizeof(uiButViewItem);
+      alloc_str = "uiButViewItem";
       break;
     default:
       alloc_size = sizeof(uiBut);
@@ -4183,7 +4186,6 @@ static uiBut *ui_def_but(uiBlock *block,
                 UI_BTYPE_BLOCK,
                 UI_BTYPE_BUT_MENU,
                 UI_BTYPE_SEARCH_MENU,
-                UI_BTYPE_TREEROW,
                 UI_BTYPE_POPOVER)) {
     but->drawflag |= (UI_BUT_TEXT_LEFT | UI_BUT_ICON_LEFT);
   }
@@ -4965,6 +4967,33 @@ int UI_autocomplete_end(AutoComplete *autocpl, char *autoname)
   MEM_freeN(autocpl);
   return match;
 }
+
+#define PREVIEW_TILE_PAD (0.15f * UI_UNIT_X)
+
+int UI_preview_tile_size_x(void)
+{
+  const float pad = PREVIEW_TILE_PAD;
+  return round_fl_to_int((96.0f / 20.0f) * UI_UNIT_X + 2.0f * pad);
+}
+
+int UI_preview_tile_size_y(void)
+{
+  const uiStyle *style = UI_style_get();
+  const float font_height = style->widget.points * UI_DPI_FAC;
+  const float pad = PREVIEW_TILE_PAD;
+
+  return round_fl_to_int(UI_preview_tile_size_y_no_label() + font_height +
+                         /* Add some extra padding to make things less tight vertically. */
+                         pad);
+}
+
+int UI_preview_tile_size_y_no_label(void)
+{
+  const float pad = PREVIEW_TILE_PAD;
+  return round_fl_to_int((96.0f / 20.0f) * UI_UNIT_Y + 2.0f * pad);
+}
+
+#undef PREVIEW_TILE_PAD
 
 static void ui_but_update_and_icon_set(uiBut *but, int icon)
 {
@@ -5876,104 +5905,6 @@ int UI_but_return_value_get(uiBut *but)
   return but->retval;
 }
 
-void UI_but_drag_set_id(uiBut *but, ID *id)
-{
-  but->dragtype = WM_DRAG_ID;
-  if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-    but->dragflag &= ~UI_BUT_DRAGPOIN_FREE;
-  }
-  but->dragpoin = (void *)id;
-}
-
-void UI_but_drag_attach_image(uiBut *but, struct ImBuf *imb, const float scale)
-{
-  but->imb = imb;
-  but->imb_scale = scale;
-}
-
-void UI_but_drag_set_asset(uiBut *but,
-                           const AssetHandle *asset,
-                           const char *path,
-                           struct AssetMetaData *metadata,
-                           int import_type,
-                           int icon,
-                           struct ImBuf *imb,
-                           float scale)
-{
-  wmDragAsset *asset_drag = WM_drag_create_asset_data(asset, metadata, path, import_type);
-
-  /* FIXME: This is temporary evil solution to get scene/viewlayer/etc in the copy callback of the
-   * #wmDropBox.
-   * TODO: Handle link/append in operator called at the end of the drop process, and NOT in its
-   * copy callback.
-   * */
-  asset_drag->evil_C = static_cast<bContext *>(but->block->evil_C);
-
-  but->dragtype = WM_DRAG_ASSET;
-  ui_def_but_icon(but, icon, 0); /* no flag UI_HAS_ICON, so icon doesn't draw in button */
-  if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-  }
-  but->dragpoin = asset_drag;
-  but->dragflag |= UI_BUT_DRAGPOIN_FREE;
-  UI_but_drag_attach_image(but, imb, scale);
-}
-
-void UI_but_drag_set_rna(uiBut *but, PointerRNA *ptr)
-{
-  but->dragtype = WM_DRAG_RNA;
-  if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-    but->dragflag &= ~UI_BUT_DRAGPOIN_FREE;
-  }
-  but->dragpoin = (void *)ptr;
-}
-
-void UI_but_drag_set_path(uiBut *but, const char *path, const bool use_free)
-{
-  but->dragtype = WM_DRAG_PATH;
-  if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-    but->dragflag &= ~UI_BUT_DRAGPOIN_FREE;
-  }
-  but->dragpoin = (void *)path;
-  if (use_free) {
-    but->dragflag |= UI_BUT_DRAGPOIN_FREE;
-  }
-}
-
-void UI_but_drag_set_name(uiBut *but, const char *name)
-{
-  but->dragtype = WM_DRAG_NAME;
-  if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-    but->dragflag &= ~UI_BUT_DRAGPOIN_FREE;
-  }
-  but->dragpoin = (void *)name;
-}
-
-void UI_but_drag_set_value(uiBut *but)
-{
-  but->dragtype = WM_DRAG_VALUE;
-}
-
-void UI_but_drag_set_image(
-    uiBut *but, const char *path, int icon, struct ImBuf *imb, float scale, const bool use_free)
-{
-  but->dragtype = WM_DRAG_PATH;
-  ui_def_but_icon(but, icon, 0); /* no flag UI_HAS_ICON, so icon doesn't draw in button */
-  if (but->dragflag & UI_BUT_DRAGPOIN_FREE) {
-    WM_drag_data_free(but->dragtype, but->dragpoin);
-    but->dragflag &= ~UI_BUT_DRAGPOIN_FREE;
-  }
-  but->dragpoin = (void *)path;
-  if (use_free) {
-    but->dragflag |= UI_BUT_DRAGPOIN_FREE;
-  }
-  UI_but_drag_attach_image(but, imb, scale);
-}
-
 PointerRNA *UI_but_operator_ptr_get(uiBut *but)
 {
   if (but->optype && !but->opptr) {
@@ -6283,64 +6214,6 @@ uiBut *uiDefIconBlockBut(uiBlock *block,
   return but;
 }
 
-uiBut *uiDefKeyevtButS(uiBlock *block,
-                       int retval,
-                       const char *str,
-                       int x,
-                       int y,
-                       short width,
-                       short height,
-                       short *spoin,
-                       const char *tip)
-{
-  uiBut *but = ui_def_but(block,
-                          UI_BTYPE_KEY_EVENT | UI_BUT_POIN_SHORT,
-                          retval,
-                          str,
-                          x,
-                          y,
-                          width,
-                          height,
-                          spoin,
-                          0.0,
-                          0.0,
-                          0.0,
-                          0.0,
-                          tip);
-  ui_but_update(but);
-  return but;
-}
-
-uiBut *uiDefHotKeyevtButS(uiBlock *block,
-                          int retval,
-                          const char *str,
-                          int x,
-                          int y,
-                          short width,
-                          short height,
-                          short *keypoin,
-                          const short *modkeypoin,
-                          const char *tip)
-{
-  uiBut *but = ui_def_but(block,
-                          UI_BTYPE_HOTKEY_EVENT | UI_BUT_POIN_SHORT,
-                          retval,
-                          str,
-                          x,
-                          y,
-                          width,
-                          height,
-                          keypoin,
-                          0.0,
-                          0.0,
-                          0.0,
-                          0.0,
-                          tip);
-  but->modifier_key = *modkeypoin;
-  ui_but_update(but);
-  return but;
-}
-
 uiBut *uiDefSearchBut(uiBlock *block,
                       void *arg,
                       int retval,
@@ -6567,15 +6440,6 @@ uiBut *uiDefSearchButO_ptr(uiBlock *block,
   return but;
 }
 
-void UI_but_treerow_indentation_set(uiBut *but, int indentation)
-{
-  uiButTreeRow *but_row = (uiButTreeRow *)but;
-  BLI_assert(but->type == UI_BTYPE_TREEROW);
-
-  but_row->indentation = indentation;
-  BLI_assert(indentation >= 0);
-}
-
 void UI_but_hint_drawstr_set(uiBut *but, const char *string)
 {
   ui_but_add_shortcut(but, string, false);
@@ -6721,7 +6585,7 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
           MenuType *mt = UI_but_menutype_get(but);
           if (mt) {
             if (type == BUT_GET_RNA_LABEL) {
-              tmp = BLI_strdup(mt->label);
+              tmp = BLI_strdup(CTX_TIP_(mt->translation_context, mt->label));
             }
             else {
               /* Not all menus are from Python. */
@@ -6751,7 +6615,7 @@ void UI_but_string_info_get(bContext *C, uiBut *but, ...)
           PanelType *pt = UI_but_paneltype_get(but);
           if (pt) {
             if (type == BUT_GET_RNA_LABEL) {
-              tmp = BLI_strdup(pt->label);
+              tmp = BLI_strdup(CTX_TIP_(pt->translation_context, pt->label));
             }
             else {
               /* Not all panels are from Python. */

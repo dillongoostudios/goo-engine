@@ -9,9 +9,10 @@
 
 #include "BLI_utildefines.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math_color.h"
 #include "BLI_math_vector.h"
+
+#include "BLT_translation.h"
 
 #include "DNA_defaults.h"
 #include "DNA_gpencil_modifier_types.h"
@@ -203,7 +204,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Color = {
-    /* name */ "Hue/Saturation",
+    /* name */ N_("Hue/Saturation"),
     /* structName */ "ColorGpencilModifierData",
     /* structSize */ sizeof(ColorGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

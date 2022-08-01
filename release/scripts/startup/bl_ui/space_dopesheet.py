@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 import bpy
 from bpy.types import (
     Header,
@@ -16,6 +14,8 @@ from bl_ui.properties_grease_pencil_common import (
     GreasePencilLayerRelationsPanel,
     GreasePencilLayerDisplayPanel,
 )
+
+from rna_prop_ui import PropertyPanel
 
 #######################################
 # DopeSheet Filtering - Header Buttons
@@ -546,16 +546,29 @@ class DopesheetActionPanelBase:
         col.prop(action, "use_cyclic")
 
 
-class DOPESHEET_PT_action(DopesheetActionPanelBase, Panel):
+class DOPESHEET_PT_custom_props_action(PropertyPanel, Panel):
     bl_space_type = 'DOPESHEET_EDITOR'
-    bl_category = "Item"
+    bl_category = "Action"
+    bl_region_type = 'UI'
+    bl_context = 'data'
+    _context_path = "active_action"
+    _property_type = bpy.types.Action
 
     @classmethod
     def poll(cls, context):
-        return bool(context.selected_visible_actions)
+        return bool(context.active_action)
+
+
+class DOPESHEET_PT_action(DopesheetActionPanelBase, Panel):
+    bl_space_type = 'DOPESHEET_EDITOR'
+    bl_category = "Action"
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.active_action)
 
     def draw(self, context):
-        action = context.selected_visible_actions[0]
+        action = context.active_action
         self.draw_generic_panel(context, self.layout, action)
 
 
@@ -819,6 +832,7 @@ classes = (
     DOPESHEET_PT_gpencil_layer_adjustments,
     DOPESHEET_PT_gpencil_layer_relations,
     DOPESHEET_PT_gpencil_layer_display,
+    DOPESHEET_PT_custom_props_action,
 )
 
 if __name__ == "__main__":  # only for live edit.

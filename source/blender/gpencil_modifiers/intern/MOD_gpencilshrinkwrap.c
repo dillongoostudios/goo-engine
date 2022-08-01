@@ -9,7 +9,7 @@
 #include <string.h> /* For #MEMCPY_STRUCT_AFTER. */
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -18,7 +18,6 @@
 #include "DNA_gpencil_modifier_types.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
@@ -136,7 +135,7 @@ static void bakeModifier(Main *UNUSED(bmain),
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     LISTBASE_FOREACH (bGPDframe *, gpf, &gpl->frames) {
       /* Apply shrinkwrap effects on this frame. */
-      CFRA = gpf->framenum;
+      scene->r.cfra = gpf->framenum;
       BKE_scene_graph_update_for_newframe(depsgraph);
 
       /* Recalculate shrinkwrap data. */
@@ -145,7 +144,7 @@ static void bakeModifier(Main *UNUSED(bmain),
         MEM_SAFE_FREE(mmd->cache_data);
       }
       Object *ob_target = DEG_get_evaluated_object(depsgraph, mmd->target);
-      Mesh *target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target, false);
+      Mesh *target = BKE_modifier_get_evaluated_mesh_from_evaluated_object(ob_target);
       mmd->cache_data = MEM_callocN(sizeof(ShrinkwrapTreeData), __func__);
       if (BKE_shrinkwrap_init_tree(
               mmd->cache_data, target, mmd->shrink_type, mmd->shrink_mode, false)) {
@@ -164,7 +163,7 @@ static void bakeModifier(Main *UNUSED(bmain),
   }
 
   /* Return frame state and DB to original state. */
-  CFRA = oldframe;
+  scene->r.cfra = oldframe;
   BKE_scene_graph_update_for_newframe(depsgraph);
 }
 
@@ -308,7 +307,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Shrinkwrap = {
-    /* name */ "Shrinkwrap",
+    /* name */ N_("Shrinkwrap"),
     /* structName */ "ShrinkwrapGpencilModifierData",
     /* structSize */ sizeof(ShrinkwrapGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

@@ -515,12 +515,12 @@ void ED_object_modifier_copy_to_object(bContext *C,
   DEG_relations_tag_update(bmain);
 }
 
-bool ED_object_modifier_convert(ReportList *UNUSED(reports),
-                                Main *bmain,
-                                Depsgraph *depsgraph,
-                                ViewLayer *view_layer,
-                                Object *ob,
-                                ModifierData *md)
+bool ED_object_modifier_convert_psys_to_mesh(ReportList *UNUSED(reports),
+                                             Main *bmain,
+                                             Depsgraph *depsgraph,
+                                             ViewLayer *view_layer,
+                                             Object *ob,
+                                             ModifierData *md)
 {
   int cvert = 0;
 
@@ -757,9 +757,7 @@ static bool modifier_apply_obdata(
       BKE_mesh_nomain_to_mesh(mesh_applied, me, ob, &CD_MASK_MESH, true);
 
       /* Anonymous attributes shouldn't be available on the applied geometry. */
-      MeshComponent component;
-      component.replace(me, GeometryOwnershipType::Editable);
-      component.attributes_remove_anonymous();
+      blender::bke::mesh_attributes_for_write(*me).remove_anonymous();
 
       if (md_eval->type == eModifierType_Multires) {
         multires_customdata_delete(me);
@@ -820,7 +818,7 @@ static bool modifier_apply_obdata(
     /* Create a temporary geometry set and component. */
     GeometrySet geometry_set;
     geometry_set.get_component_for_write<CurveComponent>().replace(
-        &curves, GeometryOwnershipType::Editable);
+        &curves, GeometryOwnershipType::ReadOnly);
 
     ModifierEvalContext mectx = {depsgraph, ob, (ModifierApplyFlag)0};
     mti->modifyGeometrySet(md_eval, &mectx, &geometry_set);
@@ -828,20 +826,18 @@ static bool modifier_apply_obdata(
       BKE_report(reports, RPT_ERROR, "Evaluated geometry from modifier does not contain curves");
       return false;
     }
-    CurveComponent &component = geometry_set.get_component_for_write<CurveComponent>();
     Curves &curves_eval = *geometry_set.get_curves_for_write();
 
     /* Anonymous attributes shouldn't be available on the applied geometry. */
-    component.attributes_remove_anonymous();
+    blender::bke::CurvesGeometry::wrap(curves_eval.geometry)
+        .attributes_for_write()
+        .remove_anonymous();
 
-    /* If the modifier's output is a different curves data-block, copy the relevant information to
-     * the original. */
-    if (&curves_eval != &curves) {
-      blender::bke::CurvesGeometry::wrap(curves.geometry) = std::move(
-          blender::bke::CurvesGeometry::wrap(curves_eval.geometry));
-      Main *bmain = DEG_get_bmain(depsgraph);
-      BKE_object_material_from_eval_data(bmain, ob, &curves_eval.id);
-    }
+    /* Copy the relevant information to the original. */
+    blender::bke::CurvesGeometry::wrap(curves.geometry) = std::move(
+        blender::bke::CurvesGeometry::wrap(curves_eval.geometry));
+    Main *bmain = DEG_get_bmain(depsgraph);
+    BKE_object_material_from_eval_data(bmain, ob, &curves_eval.id);
   }
   else {
     /* TODO: implement for point clouds and volumes. */
@@ -1440,7 +1436,6 @@ static int modifier_apply_exec_ex(bContext *C, wmOperator *op, int apply_as, boo
   Scene *scene = CTX_data_scene(C);
   Object *ob = ED_object_active_context(C);
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
-  const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
   const bool do_report = RNA_boolean_get(op->ptr, "report");
   const bool do_single_user = RNA_boolean_get(op->ptr, "single_user");
   const bool do_merge_customdata = RNA_boolean_get(op->ptr, "merge_customdata");
@@ -1448,6 +1443,8 @@ static int modifier_apply_exec_ex(bContext *C, wmOperator *op, int apply_as, boo
   if (md == nullptr) {
     return OPERATOR_CANCELLED;
   }
+
+  const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
 
   if (do_single_user && ID_REAL_USERS(ob->data) > 1) {
     ED_object_single_obdata_user(bmain, scene, ob);
@@ -1608,7 +1605,7 @@ void OBJECT_OT_modifier_apply_as_shapekey(wmOperatorType *ot)
 /** \} */
 
 /* ------------------------------------------------------------------- */
-/** \name Convert Modifier Operator
+/** \name Convert Particle System Modifier to Mesh Operator
  * \{ */
 
 static int modifier_convert_exec(bContext *C, wmOperator *op)
@@ -1618,16 +1615,10 @@ static int modifier_convert_exec(bContext *C, wmOperator *op)
   ViewLayer *view_layer = CTX_data_view_layer(C);
   Object *ob = ED_object_active_context(C);
   ModifierData *md = edit_modifier_property_get(op, ob, 0);
-  const ModifierTypeInfo *mti = BKE_modifier_get_info((ModifierType)md->type);
-  const bool do_merge_customdata = RNA_boolean_get(op->ptr, "merge_customdata");
 
-  if (!md || !ED_object_modifier_convert(op->reports, bmain, depsgraph, view_layer, ob, md)) {
+  if (!md || !ED_object_modifier_convert_psys_to_mesh(
+                 op->reports, bmain, depsgraph, view_layer, ob, md)) {
     return OPERATOR_CANCELLED;
-  }
-
-  if (do_merge_customdata &&
-      (mti->type & (eModifierTypeType_Constructive | eModifierTypeType_Nonconstructive))) {
-    BKE_mesh_merge_customdata_for_apply_modifier((Mesh *)ob->data);
   }
 
   DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
@@ -1646,7 +1637,7 @@ static int modifier_convert_invoke(bContext *C, wmOperator *op, const wmEvent *U
 
 void OBJECT_OT_modifier_convert(wmOperatorType *ot)
 {
-  ot->name = "Convert Modifier";
+  ot->name = "Convert Particles to Mesh";
   ot->description = "Convert particles to a mesh object";
   ot->idname = "OBJECT_OT_modifier_convert";
 
@@ -1657,13 +1648,6 @@ void OBJECT_OT_modifier_convert(wmOperatorType *ot)
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO | OPTYPE_INTERNAL;
   edit_modifier_properties(ot);
-
-  RNA_def_boolean(
-      ot->srna,
-      "merge_customdata",
-      true,
-      "Merge UV's",
-      "Merge UV coordinates that share a vertex to account for imprecision in some modifiers");
 }
 
 /** \} */

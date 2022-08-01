@@ -15,6 +15,13 @@ struct CacheReader;
 struct Object;
 struct bContext;
 
+/* Behavior when the name of an imported material
+ * conflicts with an existing material. */
+typedef enum eUSDMtlNameCollisionMode {
+  USD_MTL_NAME_COLLISION_MAKE_UNIQUE = 0,
+  USD_MTL_NAME_COLLISION_REFERENCE_EXISTING = 1,
+} eUSDMtlNameCollisionMode;
+
 struct USDExportParams {
   bool export_animation;
   bool export_hair;
@@ -28,7 +35,7 @@ struct USDExportParams {
   bool generate_preview_surface;
   bool export_textures;
   bool overwrite_textures;
-  bool relative_texture_paths;
+  bool relative_paths;
 };
 
 struct USDImportParams {
@@ -57,6 +64,7 @@ struct USDImportParams {
   bool import_usd_preview;
   bool set_material_blend;
   float light_intensity_scale;
+  eUSDMtlNameCollisionMode mtl_name_collision_mode;
 };
 
 /* The USD_export takes a as_background_job parameter, and returns a boolean.
@@ -83,7 +91,7 @@ int USD_get_version(void);
 /* USD Import and Mesh Cache interface. */
 
 struct CacheArchiveHandle *USD_create_handle(struct Main *bmain,
-                                             const char *filename,
+                                             const char *filepath,
                                              struct ListBase *object_paths);
 
 void USD_free_handle(struct CacheArchiveHandle *handle);

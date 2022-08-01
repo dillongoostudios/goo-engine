@@ -1,7 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <atomic>
+
 #include "UI_interface.h"
 #include "UI_resources.h"
+
+#include "RNA_enum_types.h"
 
 #include "NOD_socket_search_link.hh"
 
@@ -45,7 +49,7 @@ static void node_init(bNodeTree *UNUSED(tree), bNode *node)
 static void node_update(bNodeTree *ntree, bNode *node)
 {
   const NodeGeometryStoreNamedAttribute &storage = node_storage(*node);
-  const CustomDataType data_type = static_cast<CustomDataType>(storage.data_type);
+  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
 
   bNodeSocket *socket_geometry = (bNodeSocket *)node->inputs.first;
   bNodeSocket *socket_name = socket_geometry->next;
@@ -69,7 +73,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   search_link_ops_for_declarations(params, declaration.inputs().take_front(2));
 
   if (params.in_out() == SOCK_OUT) {
-    const std::optional<CustomDataType> type = node_data_type_to_custom_data_type(
+    const std::optional<eCustomDataType> type = node_data_type_to_custom_data_type(
         static_cast<eNodeSocketDatatype>(params.other_socket().type));
     if (type && *type != CD_PROP_STRING) {
       /* The input and output sockets have the same name. */
@@ -84,18 +88,24 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 
 static void try_capture_field_on_geometry(GeometryComponent &component,
                                           const StringRef name,
-                                          const AttributeDomain domain,
-                                          const GField &field)
+                                          const eAttrDomain domain,
+                                          const GField &field,
+                                          std::atomic<bool> &r_failure)
 {
+  MutableAttributeAccessor attributes = *component.attributes_for_write();
+  const int domain_size = attributes.domain_size(domain);
+  if (domain_size == 0) {
+    return;
+  }
+
   GeometryComponentFieldContext field_context{component, domain};
-  const int domain_size = component.attribute_domain_size(domain);
   const IndexMask mask{IndexMask(domain_size)};
 
   const CPPType &type = field.cpp_type();
-  const CustomDataType data_type = bke::cpp_type_to_custom_data_type(type);
+  const eCustomDataType data_type = bke::cpp_type_to_custom_data_type(type);
 
   /* Could avoid allocating a new buffer if:
-   * - We are writing to an attribute that exists already.
+   * - We are writing to an attribute that exists already with the correct domain and type.
    * - The field does not depend on that attribute (we can't easily check for that yet). */
   void *buffer = MEM_mallocN(type.size() * domain_size, __func__);
 
@@ -103,23 +113,25 @@ static void try_capture_field_on_geometry(GeometryComponent &component,
   evaluator.add_with_destination(field, GMutableSpan{type, buffer, domain_size});
   evaluator.evaluate();
 
-  component.attribute_try_delete(name);
-  if (component.attribute_exists(name)) {
-    WriteAttributeLookup write_attribute = component.attribute_try_get_for_write(name);
-    if (write_attribute && write_attribute.domain == domain &&
-        write_attribute.varray.type() == type) {
-      write_attribute.varray.set_all(buffer);
-      write_attribute.tag_modified_fn();
+  if (GAttributeWriter attribute = attributes.lookup_for_write(name)) {
+    if (attribute.domain == domain && attribute.varray.type() == type) {
+      attribute.varray.set_all(buffer);
+      attribute.finish();
+      type.destruct_n(buffer, domain_size);
+      MEM_freeN(buffer);
+      return;
     }
-    else {
-      /* Cannot change type of built-in attribute. */
-    }
-    type.destruct_n(buffer, domain_size);
-    MEM_freeN(buffer);
   }
-  else {
-    component.attribute_try_create(name, domain, data_type, AttributeInitMove{buffer});
+  attributes.remove(name);
+  if (attributes.add(name, domain, data_type, bke::AttributeInitMove{buffer})) {
+    return;
   }
+
+  /* If the name corresponds to a builtin attribute, removing the attribute might fail if
+   * it's required, and adding the attribute might fail if the domain or type is incorrect. */
+  type.destruct_n(buffer, domain_size);
+  MEM_freeN(buffer);
+  r_failure = true;
 }
 
 static void node_geo_exec(GeoNodeExecParams params)
@@ -131,12 +143,17 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_output("Geometry", std::move(geometry_set));
     return;
   }
+  if (!bke::allow_procedural_attribute_access(name)) {
+    params.error_message_add(NodeWarningType::Info, TIP_(bke::no_procedural_access_message));
+    params.set_output("Geometry", std::move(geometry_set));
+    return;
+  }
 
-  params.used_named_attribute(name, NamedAttributeUsage::Write);
+  params.used_named_attribute(name, eNamedAttrUsage::Write);
 
   const NodeGeometryStoreNamedAttribute &storage = node_storage(params.node());
-  const CustomDataType data_type = static_cast<CustomDataType>(storage.data_type);
-  const AttributeDomain domain = static_cast<AttributeDomain>(storage.domain);
+  const eCustomDataType data_type = static_cast<eCustomDataType>(storage.data_type);
+  const eAttrDomain domain = static_cast<eAttrDomain>(storage.domain);
 
   GField field;
   switch (data_type) {
@@ -165,12 +182,14 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
   }
 
+  std::atomic<bool> failure = false;
+
   /* Run on the instances component separately to only affect the top level of instances. */
   if (domain == ATTR_DOMAIN_INSTANCE) {
     if (geometry_set.has_instances()) {
       GeometryComponent &component = geometry_set.get_component_for_write(
           GEO_COMPONENT_TYPE_INSTANCES);
-      try_capture_field_on_geometry(component, name, domain, field);
+      try_capture_field_on_geometry(component, name, domain, field, failure);
     }
   }
   else {
@@ -179,10 +198,24 @@ static void node_geo_exec(GeoNodeExecParams params)
            {GEO_COMPONENT_TYPE_MESH, GEO_COMPONENT_TYPE_POINT_CLOUD, GEO_COMPONENT_TYPE_CURVE}) {
         if (geometry_set.has(type)) {
           GeometryComponent &component = geometry_set.get_component_for_write(type);
-          try_capture_field_on_geometry(component, name, domain, field);
+          try_capture_field_on_geometry(component, name, domain, field, failure);
         }
       }
     });
+  }
+
+  if (failure) {
+    const char *domain_name = nullptr;
+    RNA_enum_name_from_value(rna_enum_attribute_domain_items, domain, &domain_name);
+    const char *type_name = nullptr;
+    RNA_enum_name_from_value(rna_enum_attribute_type_items, data_type, &type_name);
+    char *message = BLI_sprintfN(
+        TIP_("Failed to write to attribute \"%s\" with domain \"%s\" and type \"%s\""),
+        name.c_str(),
+        TIP_(domain_name),
+        TIP_(type_name));
+    params.error_message_add(NodeWarningType::Warning, message);
+    MEM_freeN(message);
   }
 
   params.set_output("Geometry", std::move(geometry_set));

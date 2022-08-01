@@ -26,7 +26,10 @@ namespace blender::eevee {
 
 /* Keep alphabetical order and clean prefix. */
 enum eShaderType {
-  MAX_SHADER_TYPE = 0,
+  FILM_FRAG = 0,
+  FILM_COMP,
+
+  MAX_SHADER_TYPE,
 };
 
 /**
@@ -36,7 +39,7 @@ class ShaderModule {
  private:
   std::array<GPUShader *, MAX_SHADER_TYPE> shaders_;
 
-  /** Shared shader module accross all engine instances. */
+  /** Shared shader module across all engine instances. */
   static ShaderModule *g_shader_module;
 
  public:

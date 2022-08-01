@@ -46,7 +46,7 @@ static void NodeToTransData(TransData *td, TransData2D *td2d, bNode *node, const
   }
 
   /* use top-left corner as the transform origin for nodes */
-  /* weirdo - but the node system is a mix of free 2d elements and dpi sensitive UI */
+  /* Weirdo - but the node system is a mix of free 2d elements and DPI sensitive UI. */
 #ifdef USE_NODE_CENTER
   td2d->loc[0] = (locx * dpi_fac) + (BLI_rctf_size_x(&node->totr) * +0.5f);
   td2d->loc[1] = (locy * dpi_fac) + (BLI_rctf_size_y(&node->totr) * -0.5f);
@@ -89,7 +89,7 @@ static bool is_node_parent_select(bNode *node)
   return false;
 }
 
-void createTransNodeData(TransInfo *t)
+static void createTransNodeData(bContext *UNUSED(C), TransInfo *t)
 {
   const float dpi_fac = UI_DPI_FAC;
   SpaceNode *snode = t->area->spacedata.first;
@@ -150,7 +150,7 @@ void createTransNodeData(TransInfo *t)
 /** \name Node Transform Creation
  * \{ */
 
-void flushTransNodes(TransInfo *t)
+static void flushTransNodes(TransInfo *t)
 {
   const float dpi_fac = UI_DPI_FAC;
 
@@ -194,7 +194,7 @@ void flushTransNodes(TransInfo *t)
       loc[1] += 0.5f * BLI_rctf_size_y(&node->totr);
 #endif
 
-      /* weirdo - but the node system is a mix of free 2d elements and dpi sensitive UI */
+      /* Weirdo - but the node system is a mix of free 2d elements and DPI sensitive UI. */
       loc[0] /= dpi_fac;
       loc[1] /= dpi_fac;
 
@@ -220,7 +220,7 @@ void flushTransNodes(TransInfo *t)
 /** \name Special After Transform Node
  * \{ */
 
-void special_aftertrans_update__node(bContext *C, TransInfo *t)
+static void special_aftertrans_update__node(bContext *C, TransInfo *t)
 {
   struct Main *bmain = CTX_data_main(C);
   const bool canceled = (t->state == TRANS_CANCEL);
@@ -249,3 +249,10 @@ void special_aftertrans_update__node(bContext *C, TransInfo *t)
 }
 
 /** \} */
+
+TransConvertTypeInfo TransConvertType_Node = {
+    /* flags */ (T_POINTS | T_2D_EDIT),
+    /* createTransData */ createTransNodeData,
+    /* recalcData */ flushTransNodes,
+    /* special_aftertrans_update */ special_aftertrans_update__node,
+};

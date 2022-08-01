@@ -15,7 +15,6 @@
 
 #include "BLI_ghash.h"
 #include "BLI_map.hh"
-#include "BLI_set.hh"
 #include "BLI_string_ref.hh"
 
 #include "gpu_material_library.h"
@@ -593,7 +592,9 @@ struct GPUSource {
 
   bool is_from_material_library() const
   {
-    return filename.startswith("gpu_shader_material_") && filename.endswith(".glsl");
+    return (filename.startswith("gpu_shader_material_") ||
+            filename.startswith("gpu_shader_common_")) &&
+           filename.endswith(".glsl");
   }
 };
 
@@ -668,14 +669,20 @@ Vector<const char *> gpu_shader_dependency_get_resolved_source(
     const StringRefNull shader_source_name)
 {
   Vector<const char *> result;
-  GPUSource *source = g_sources->lookup(shader_source_name);
-  source->build(result);
+  GPUSource *src = g_sources->lookup_default(shader_source_name, nullptr);
+  if (src == nullptr) {
+    std::cout << "Error source not found : " << shader_source_name << std::endl;
+  }
+  src->build(result);
   return result;
 }
 
 StringRefNull gpu_shader_dependency_get_source(const StringRefNull shader_source_name)
 {
-  GPUSource *src = g_sources->lookup(shader_source_name);
+  GPUSource *src = g_sources->lookup_default(shader_source_name, nullptr);
+  if (src == nullptr) {
+    std::cout << "Error source not found : " << shader_source_name << std::endl;
+  }
   return src->source;
 }
 

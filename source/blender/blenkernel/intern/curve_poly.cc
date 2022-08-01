@@ -65,8 +65,21 @@ void calculate_tangents(const Span<float3> positions,
     tangents.last() = direction_bisect(second_to_last, last, first, used_fallback);
   }
   else {
-    tangents.first() = math::normalize(positions[1] - positions.first());
-    tangents.last() = math::normalize(positions.last() - positions[positions.size() - 2]);
+    const float epsilon = 1e-6f;
+    if (math::almost_equal_relative(positions[0], positions[1], epsilon)) {
+      tangents.first() = {0.0f, 0.0f, 0.0f};
+      used_fallback = true;
+    }
+    else {
+      tangents.first() = math::normalize(positions[1] - positions[0]);
+    }
+    if (math::almost_equal_relative(positions.last(0), positions.last(1), epsilon)) {
+      tangents.last() = {0.0f, 0.0f, 0.0f};
+      used_fallback = true;
+    }
+    else {
+      tangents.last() = math::normalize(positions.last(0) - positions.last(1));
+    }
   }
 
   if (!used_fallback) {
@@ -159,7 +172,7 @@ void calculate_normals_minimum(const Span<float3> tangents,
     normals.first() = math::normalize(float3(first_tangent.y, -first_tangent.x, 0.0f));
   }
 
-  /* Forward normal with minimum twist along the entire spline. */
+  /* Forward normal with minimum twist along the entire curve. */
   for (const int i : IndexRange(1, normals.size() - 1)) {
     normals[i] = calculate_next_normal(normals[i - 1], tangents[i - 1], tangents[i]);
   }
@@ -169,7 +182,7 @@ void calculate_normals_minimum(const Span<float3> tangents,
   }
 
   /* Compute how much the first normal deviates from the normal that has been forwarded along the
-   * entire cyclic spline. */
+   * entire cyclic curve. */
   const float3 uncorrected_last_normal = calculate_next_normal(
       normals.last(), tangents.last(), tangents.first());
   float correction_angle = angle_signed_on_axis_v3v3_v3(

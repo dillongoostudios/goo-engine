@@ -26,6 +26,7 @@ set(DEFSRC
   rna_context.c
   rna_curve.c
   rna_curveprofile.c
+  rna_curves.c
   rna_depsgraph.c
   rna_dynamicpaint.c
   rna_fcurve.c
@@ -84,9 +85,7 @@ set(DEFSRC
 
 if(WITH_EXPERIMENTAL_FEATURES)
   add_definitions(-DWITH_SIMULATION_DATABLOCK)
-  add_definitions(-DWITH_NEW_CURVES_TYPE)
   list(APPEND DEFSRC
-    rna_curves.c
     rna_simulation.c
   )
 endif()
@@ -237,7 +236,7 @@ if(WITH_IMAGE_HDR)
 endif()
 
 if(WITH_IMAGE_WEBP)
-	add_definitions(-DWITH_WEBP)
+  add_definitions(-DWITH_WEBP)
 endif()
 
 if(WITH_AUDASPACE)

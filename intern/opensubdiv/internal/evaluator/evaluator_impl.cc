@@ -388,6 +388,11 @@ void EvalOutputAPI::wrapSrcBuffer(OpenSubdiv_Buffer *src_buffer)
   implementation_->wrapSrcBuffer(src_buffer);
 }
 
+void EvalOutputAPI::wrapSrcVertexDataBuffer(OpenSubdiv_Buffer *src_buffer)
+{
+  implementation_->wrapSrcVertexDataBuffer(src_buffer);
+}
+
 void EvalOutputAPI::fillFVarPatchArraysBuffer(const int face_varying_channel,
                                               OpenSubdiv_Buffer *patch_arrays_buffer)
 {
@@ -412,6 +417,11 @@ void EvalOutputAPI::wrapFVarSrcBuffer(const int face_varying_channel,
   implementation_->wrapFVarSrcBuffer(face_varying_channel, src_buffer);
 }
 
+bool EvalOutputAPI::hasVertexData() const
+{
+  return implementation_->hasVertexData();
+}
+
 }  // namespace opensubdiv
 }  // namespace blender
 
@@ -432,11 +442,6 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
     eOpenSubdivEvaluator evaluator_type,
     OpenSubdiv_EvaluatorCacheImpl *evaluator_cache_descr)
 {
-  // Only CPU and GLCompute are implemented at the moment.
-  if (evaluator_type != OPENSUBDIV_EVALUATOR_CPU &&
-      evaluator_type != OPENSUBDIV_EVALUATOR_GLSL_COMPUTE) {
-    return NULL;
-  }
   using blender::opensubdiv::vector;
   TopologyRefiner *refiner = topology_refiner->impl->topology_refiner;
   if (refiner == NULL) {
@@ -541,8 +546,8 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
   // Create OpenSubdiv's CPU side evaluator.
   blender::opensubdiv::EvalOutputAPI::EvalOutput *eval_output = nullptr;
 
-  const bool use_gl_evaluator = evaluator_type == OPENSUBDIV_EVALUATOR_GLSL_COMPUTE;
-  if (use_gl_evaluator) {
+  const bool use_gpu_evaluator = evaluator_type == OPENSUBDIV_EVALUATOR_GPU;
+  if (use_gpu_evaluator) {
     blender::opensubdiv::GpuEvalOutput::EvaluatorCache *evaluator_cache = nullptr;
     if (evaluator_cache_descr) {
       evaluator_cache = static_cast<blender::opensubdiv::GpuEvalOutput::EvaluatorCache *>(
@@ -569,7 +574,7 @@ OpenSubdiv_EvaluatorImpl *openSubdiv_createEvaluatorInternal(
   evaluator_descr->eval_output = new blender::opensubdiv::EvalOutputAPI(eval_output, patch_map);
   evaluator_descr->patch_map = patch_map;
   evaluator_descr->patch_table = patch_table;
-  // TOOD(sergey): Look into whether we've got duplicated stencils arrays.
+  // TODO(sergey): Look into whether we've got duplicated stencils arrays.
   delete vertex_stencils;
   delete varying_stencils;
   for (const StencilTable *table : all_face_varying_stencils) {

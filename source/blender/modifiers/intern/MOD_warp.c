@@ -302,7 +302,6 @@ static void warpModifier_do(WarpModifierData *wmd,
       if (tex_co) {
         struct Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
         TexResult texres;
-        texres.nor = NULL;
         BKE_texture_get_value(scene, tex_target, tex_co[i], &texres, false);
         fac *= texres.tin;
       }
@@ -489,9 +488,11 @@ static void panelRegister(ARegionType *region_type)
       region_type, "texture", "Texture", NULL, texture_panel_draw, panel_type);
 }
 
-static void blendWrite(BlendWriter *writer, const ModifierData *md)
+static void blendWrite(BlendWriter *writer, const ID *UNUSED(id_owner), const ModifierData *md)
 {
   const WarpModifierData *wmd = (const WarpModifierData *)md;
+
+  BLO_write_struct(writer, WarpModifierData, wmd);
 
   if (wmd->curfalloff) {
     BKE_curvemapping_blend_write(writer, wmd->curfalloff);
@@ -509,7 +510,7 @@ static void blendRead(BlendDataReader *reader, ModifierData *md)
 }
 
 ModifierTypeInfo modifierType_Warp = {
-    /* name */ "Warp",
+    /* name */ N_("Warp"),
     /* structName */ "WarpModifierData",
     /* structSize */ sizeof(WarpModifierData),
     /* srna */ &RNA_WarpModifier,

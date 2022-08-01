@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-
-# <pep8 compliant>
 from bpy.types import Panel
 from bl_ui.space_view3d import (
     VIEW3D_PT_shading_lighting,
@@ -49,7 +47,7 @@ class RENDER_PT_color_management(RenderButtonsPanel, Panel):
     bl_label = "Color Management"
     bl_options = {'DEFAULT_CLOSED'}
     bl_order = 100
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw(self, context):
         layout = self.layout
@@ -82,7 +80,7 @@ class RENDER_PT_color_management_curves(RenderButtonsPanel, Panel):
     bl_label = "Use Curves"
     bl_parent_id = "RENDER_PT_color_management"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw_header(self, context):
 
@@ -393,6 +391,30 @@ class RENDER_PT_eevee_sampling(RenderButtonsPanel, Panel):
         col.prop(props, "use_taa_reprojection")
 
 
+class RENDER_PT_eevee_next_sampling(RenderButtonsPanel, Panel):
+    bl_label = "Sampling"
+    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.engine in cls.COMPAT_ENGINES)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
+
+        scene = context.scene
+        props = scene.eevee
+
+        col = layout.column(align=True)
+        col.prop(props, "taa_render_samples", text="Render")
+        col.prop(props, "taa_samples", text="Viewport")
+
+        col = layout.column()
+        col.prop(props, "use_taa_reprojection")
+
+
 class RENDER_PT_eevee_indirect_lighting(RenderButtonsPanel, Panel):
     bl_label = "Indirect Lighting"
     bl_options = {'DEFAULT_CLOSED'}
@@ -485,6 +507,28 @@ class RENDER_PT_eevee_film(RenderButtonsPanel, Panel):
         sub.prop(props, "overscan_size", text="")
 
 
+class RENDER_PT_eevee_next_film(RenderButtonsPanel, Panel):
+    bl_label = "Film"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+
+    @classmethod
+    def poll(cls, context):
+        return (context.engine in cls.COMPAT_ENGINES)
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        scene = context.scene
+        rd = scene.render
+        props = scene.eevee
+
+        col = layout.column()
+        col.prop(rd, "filter_size")
+        col.prop(rd, "film_transparent", text="Transparent")
+
+
 def draw_curves_settings(self, context):
     layout = self.layout
     scene = context.scene
@@ -500,7 +544,7 @@ def draw_curves_settings(self, context):
 class RENDER_PT_eevee_hair(RenderButtonsPanel, Panel):
     bl_label = "Curves"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -513,7 +557,7 @@ class RENDER_PT_eevee_hair(RenderButtonsPanel, Panel):
 class RENDER_PT_eevee_performance(RenderButtonsPanel, Panel):
     bl_label = "Performance"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -534,7 +578,7 @@ class RENDER_PT_gpencil(RenderButtonsPanel, Panel):
     bl_label = "Grease Pencil"
     bl_options = {'DEFAULT_CLOSED'}
     bl_order = 10
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw(self, context):
         layout = self.layout
@@ -622,7 +666,7 @@ class RENDER_PT_opengl_options(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify(RenderButtonsPanel, Panel):
     bl_label = "Simplify"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw_header(self, context):
         rd = context.scene.render
@@ -635,7 +679,7 @@ class RENDER_PT_simplify(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify_viewport(RenderButtonsPanel, Panel):
     bl_label = "Viewport"
     bl_parent_id = "RENDER_PT_simplify"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw(self, context):
         layout = self.layout
@@ -660,7 +704,7 @@ class RENDER_PT_simplify_viewport(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify_render(RenderButtonsPanel, Panel):
     bl_label = "Render"
     bl_parent_id = "RENDER_PT_simplify"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw(self, context):
         layout = self.layout
@@ -682,7 +726,14 @@ class RENDER_PT_simplify_render(RenderButtonsPanel, Panel):
 class RENDER_PT_simplify_greasepencil(RenderButtonsPanel, Panel, GreasePencilSimplifyPanel):
     bl_label = "Grease Pencil"
     bl_parent_id = "RENDER_PT_simplify"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_GAME', 'BLENDER_CLAY', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {
+        'BLENDER_RENDER',
+        'BLENDER_GAME',
+        'BLENDER_CLAY',
+        'BLENDER_EEVEE',
+        'BLENDER_EEVEE_NEXT',
+        'BLENDER_WORKBENCH',
+    }
     bl_options = {'DEFAULT_CLOSED'}
 
 
@@ -704,6 +755,9 @@ classes = (
     RENDER_PT_eevee_indirect_lighting,
     RENDER_PT_eevee_indirect_lighting_display,
     RENDER_PT_eevee_film,
+
+    RENDER_PT_eevee_next_sampling,
+    RENDER_PT_eevee_next_film,
 
     RENDER_PT_gpencil,
     RENDER_PT_opengl_sampling,

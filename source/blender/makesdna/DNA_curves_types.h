@@ -9,6 +9,8 @@
 #include "DNA_ID.h"
 #include "DNA_customdata_types.h"
 
+#include "BLI_utildefines.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -65,27 +67,13 @@ typedef enum NormalMode {
  */
 typedef struct CurvesGeometry {
   /**
-   * A runtime pointer to the "position" attribute data.
-   * \note This data is owned by #point_data.
-   */
-  float (*position)[3];
-  /**
-   * A runtime pointer to the "radius" attribute data.
-   * \note This data is owned by #point_data.
-   */
-  float *radius;
-
-  /**
-   * The type of each curve. #CurveType.
-   * \note This data is owned by #curve_data.
-   */
-  int8_t *curve_type;
-
-  /**
    * The start index of each curve in the point data. The size of each curve can be calculated by
    * subtracting the offset from the next offset. That is valid even for the last curve because
    * this array is allocated with a length one larger than the number of curves. This is allowed
    * to be null when there are no curves.
+   *
+   * Every curve offset must be at least one larger than the previous.
+   * In other words, every curve must have at least one point.
    *
    * \note This is *not* stored in #CustomData because its size is one larger than #curve_data.
    */
@@ -105,11 +93,11 @@ typedef struct CurvesGeometry {
   /**
    * The total number of control points in all curves.
    */
-  int point_size;
+  int point_num;
   /**
    * The number of curves in the data-block.
    */
-  int curve_size;
+  int curve_num;
 
   /**
    * Runtime data for curves, stored as a pointer to allow defining this as a C++ class.
@@ -130,7 +118,18 @@ typedef struct Curves {
   /* Materials. */
   struct Material **mat;
   short totcol;
-  short _pad2[3];
+
+  /**
+   * User-defined symmetry flag (#eCurvesSymmetryType) that causes editing operations to maintain
+   * symmetrical geometry.
+   */
+  char symmetry;
+  /**
+   * #eAttrDomain. The active selection mode domain. At most one selection mode can be active
+   * at a time.
+   */
+  char selection_domain;
+  char _pad[4];
 
   /**
    * Used as base mesh when curves represent e.g. hair or fur. This surface is used in edit modes.
@@ -141,6 +140,13 @@ typedef struct Curves {
    */
   struct Object *surface;
 
+  /**
+   * The name of the attribute on the surface #Mesh used to give meaning to the UV attachment
+   * coordinates stored on each curve. Expected to be a 2D vector attribute on the face corner
+   * domain.
+   */
+  char *surface_uv_map;
+
   /* Draw Cache. */
   void *batch_cache;
 } Curves;
@@ -148,7 +154,16 @@ typedef struct Curves {
 /** #Curves.flag */
 enum {
   HA_DS_EXPAND = (1 << 0),
+  CV_SCULPT_SELECTION_ENABLED = (1 << 1),
 };
+
+/** #Curves.symmetry */
+typedef enum eCurvesSymmetryType {
+  CURVES_SYMMETRY_X = 1 << 0,
+  CURVES_SYMMETRY_Y = 1 << 1,
+  CURVES_SYMMETRY_Z = 1 << 2,
+} eCurvesSymmetryType;
+ENUM_OPERATORS(eCurvesSymmetryType, CURVES_SYMMETRY_Z)
 
 /* Only one material supported currently. */
 #define CURVES_MATERIAL_NR 1

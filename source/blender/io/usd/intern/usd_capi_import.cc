@@ -30,6 +30,7 @@
 #include "BLI_math_rotation.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
+#include "BLI_timeit.hh"
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
@@ -119,7 +120,7 @@ struct ImportJobData {
   ViewLayer *view_layer;
   wmWindowManager *wm;
 
-  char filename[1024];
+  char filepath[1024];
   USDImportParams params;
   ImportSettings settings;
 
@@ -132,7 +133,16 @@ struct ImportJobData {
   char error_code;
   bool was_canceled;
   bool import_ok;
+  timeit::TimePoint start_time;
 };
+
+static void report_job_duration(const ImportJobData *data)
+{
+  timeit::Nanoseconds duration = timeit::Clock::now() - data->start_time;
+  std::cout << "USD import of '" << data->filepath << "' took ";
+  timeit::print_duration(duration);
+  std::cout << '\n';
+}
 
 static void import_startjob(void *customdata, short *stop, short *do_update, float *progress)
 {
@@ -143,6 +153,7 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
   data->progress = progress;
   data->was_canceled = false;
   data->archive = nullptr;
+  data->start_time = timeit::Clock::now();
 
   WM_set_locked_interface(data->wm, true);
   G.is_break = false;
@@ -150,7 +161,7 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
   if (data->params.create_collection) {
     char display_name[1024];
     BLI_path_to_display_name(
-        display_name, strlen(data->filename), BLI_path_basename(data->filename));
+        display_name, strlen(data->filepath), BLI_path_basename(data->filepath));
     Collection *import_collection = BKE_collection_add(
         data->bmain, data->scene->master_collection, display_name);
     id_fake_user_set(&import_collection->id);
@@ -164,10 +175,10 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
         data->view_layer, import_collection);
   }
 
-  BLI_path_abs(data->filename, BKE_main_blendfile_path_from_global());
+  BLI_path_abs(data->filepath, BKE_main_blendfile_path_from_global());
 
   CacheFile *cache_file = static_cast<CacheFile *>(
-      BKE_cachefile_add(data->bmain, BLI_path_basename(data->filename)));
+      BKE_cachefile_add(data->bmain, BLI_path_basename(data->filepath)));
 
   /* Decrement the ID ref-count because it is going to be incremented for each
    * modifier and constraint that it will be attached to, so since currently
@@ -176,7 +187,7 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
 
   cache_file->is_sequence = data->params.is_sequence;
   cache_file->scale = data->params.scale;
-  STRNCPY(cache_file->filepath, data->filename);
+  STRNCPY(cache_file->filepath, data->filepath);
 
   data->settings.cache_file = cache_file;
 
@@ -191,10 +202,10 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
   *data->do_update = true;
   *data->progress = 0.1f;
 
-  pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(data->filename);
+  pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(data->filepath);
 
   if (!stage) {
-    WM_reportf(RPT_ERROR, "USD Import: unable to open stage to read %s", data->filename);
+    WM_reportf(RPT_ERROR, "USD Import: unable to open stage to read %s", data->filepath);
     data->import_ok = false;
     return;
   }
@@ -207,6 +218,7 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
     data->scene->r.efra = stage->GetEndTimeCode();
   }
 
+  *data->do_update = true;
   *data->progress = 0.15f;
 
   USDStageReader *archive = new USDStageReader(stage, data->params, data->settings);
@@ -215,13 +227,32 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
 
   archive->collect_readers(data->bmain);
 
+  *data->do_update = true;
   *data->progress = 0.2f;
 
   const float size = static_cast<float>(archive->readers().size());
   size_t i = 0;
 
-  /* Setup parenthood */
+  /* Sort readers by name: when creating a lot of objects in Blender,
+   * it is much faster if the order is sorted by name. */
+  archive->sort_readers();
+  *data->do_update = true;
+  *data->progress = 0.25f;
 
+  /* Create blender objects. */
+  for (USDPrimReader *reader : archive->readers()) {
+    if (!reader) {
+      continue;
+    }
+    reader->create_object(data->bmain, 0.0);
+    if ((++i & 1023) == 0) {
+      *data->do_update = true;
+      *data->progress = 0.25f + 0.25f * (i / size);
+    }
+  }
+
+  /* Setup parenthood and read actual object data. */
+  i = 0;
   for (USDPrimReader *reader : archive->readers()) {
 
     if (!reader) {
@@ -241,7 +272,7 @@ static void import_startjob(void *customdata, short *stop, short *do_update, flo
       ob->parent = parent->object();
     }
 
-    *data->progress = 0.2f + 0.8f * (++i / size);
+    *data->progress = 0.5f + 0.5f * (++i / size);
     *data->do_update = true;
 
     if (G.is_break) {
@@ -277,7 +308,6 @@ static void import_endjob(void *customdata)
     }
   }
   else if (data->archive) {
-    /* Add object to scene. */
     Base *base;
     LayerCollection *lc;
     ViewLayer *view_layer = data->view_layer;
@@ -286,20 +316,30 @@ static void import_endjob(void *customdata)
 
     lc = BKE_layer_collection_get_active(view_layer);
 
+    /* Add all objects to the collection (don't do sync for each object). */
+    BKE_layer_collection_resync_forbid();
     for (USDPrimReader *reader : data->archive->readers()) {
-
       if (!reader) {
         continue;
       }
-
       Object *ob = reader->object();
-
       if (!ob) {
         continue;
       }
-
       BKE_collection_object_add(data->bmain, lc->collection, ob);
+    }
 
+    /* Sync the collection, and do view layer operations. */
+    BKE_layer_collection_resync_allow();
+    BKE_main_collection_sync(data->bmain);
+    for (USDPrimReader *reader : data->archive->readers()) {
+      if (!reader) {
+        continue;
+      }
+      Object *ob = reader->object();
+      if (!ob) {
+        continue;
+      }
       base = BKE_view_layer_base_find(view_layer, ob);
       /* TODO: is setting active needed? */
       BKE_view_layer_base_select_and_set_active(view_layer, base);
@@ -328,6 +368,7 @@ static void import_endjob(void *customdata)
   }
 
   WM_main_add_notifier(NC_SCENE | ND_FRAME, data->scene);
+  report_job_duration(data);
 }
 
 static void import_freejob(void *user_data)
@@ -356,7 +397,7 @@ bool USD_import(struct bContext *C,
   job->view_layer = CTX_data_view_layer(C);
   job->wm = CTX_wm_manager(C);
   job->import_ok = false;
-  BLI_strncpy(job->filename, filepath, 1024);
+  BLI_strncpy(job->filepath, filepath, 1024);
 
   job->settings.scale = params->scale;
   job->settings.sequence_offset = params->offset;
@@ -499,13 +540,13 @@ void USD_CacheReader_free(CacheReader *reader)
 }
 
 CacheArchiveHandle *USD_create_handle(struct Main * /*bmain*/,
-                                      const char *filename,
+                                      const char *filepath,
                                       ListBase *object_paths)
 {
   /* Must call this so that USD file format plugins are loaded. */
   ensure_usd_plugin_path_registered();
 
-  pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(filename);
+  pxr::UsdStageRefPtr stage = pxr::UsdStage::Open(filepath);
 
   if (!stage) {
     return nullptr;

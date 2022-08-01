@@ -494,7 +494,8 @@ static void screen_opengl_render_apply(const bContext *C, OGLRender *oglrender)
     for (view_id = 0; view_id < oglrender->views_len; view_id++) {
       context.view_id = view_id;
       context.gpu_offscreen = oglrender->ofs;
-      oglrender->seq_data.ibufs_arr[view_id] = SEQ_render_give_ibuf(&context, CFRA, chanshown);
+      oglrender->seq_data.ibufs_arr[view_id] = SEQ_render_give_ibuf(
+          &context, scene->r.cfra, chanshown);
     }
   }
 
@@ -757,8 +758,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   WM_jobs_kill_all_except(wm, CTX_wm_screen(C));
 
   /* create offscreen buffer */
-  sizex = (scene->r.size * scene->r.xsch) / 100;
-  sizey = (scene->r.size * scene->r.ysch) / 100;
+  BKE_render_resolution(&scene->r, false, &sizex, &sizey);
 
   /* corrects render size with actual size, not every card supports non-power-of-two dimensions */
   DRW_opengl_context_enable(); /* Off-screen creation needs to be done in DRW context. */
@@ -1136,12 +1136,12 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
   RenderResult *rr;
 
   /* go to next frame */
-  if (CFRA < oglrender->nfra) {
-    CFRA++;
+  if (scene->r.cfra < oglrender->nfra) {
+    scene->r.cfra++;
   }
-  while (CFRA < oglrender->nfra) {
+  while (scene->r.cfra < oglrender->nfra) {
     BKE_scene_graph_update_for_newframe(depsgraph);
-    CFRA++;
+    scene->r.cfra++;
   }
 
   is_movie = BKE_imtype_is_movie(scene->r.im_format.imtype);
@@ -1184,7 +1184,7 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
   }
 
   if (oglrender->render_frames == nullptr ||
-      BLI_BITMAP_TEST_BOOL(oglrender->render_frames, CFRA - PSFRA)) {
+      BLI_BITMAP_TEST_BOOL(oglrender->render_frames, scene->r.cfra - PSFRA)) {
     /* render into offscreen buffer */
     screen_opengl_render_apply(C, oglrender);
   }
@@ -1204,7 +1204,7 @@ finally: /* Step the frame and bail early if needed */
   oglrender->nfra += scene->r.frame_step;
 
   /* stop at the end or on error */
-  if (CFRA >= PEFRA || !ok) {
+  if (scene->r.cfra >= PEFRA || !ok) {
     screen_opengl_render_end(C, static_cast<OGLRender *>(op->customdata));
     return false;
   }

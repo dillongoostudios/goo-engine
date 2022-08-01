@@ -1,6 +1,4 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-
-# <pep8 compliant>
 from bpy.types import Menu, Panel, UIList
 
 
@@ -26,7 +24,7 @@ class ViewLayerButtonsPanel:
 
 class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
     bl_label = "View Layer"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     def draw(self, context):
         layout = self.layout
@@ -44,7 +42,7 @@ class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
 
 class VIEWLAYER_PT_layer_passes(ViewLayerButtonsPanel, Panel):
     bl_label = "Passes"
-    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
     def draw(self, context):
         pass
@@ -70,10 +68,32 @@ class VIEWLAYER_PT_eevee_layer_passes_data(ViewLayerButtonsPanel, Panel):
         col.prop(view_layer, "use_pass_normal")
 
 
+class VIEWLAYER_PT_eevee_next_layer_passes_data(ViewLayerButtonsPanel, Panel):
+    bl_label = "Data"
+    bl_parent_id = "VIEWLAYER_PT_layer_passes"
+
+    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        view_layer = context.view_layer
+
+        col = layout.column()
+        col.prop(view_layer, "use_pass_combined")
+        col.prop(view_layer, "use_pass_z")
+        col.prop(view_layer, "use_pass_mist")
+        col.prop(view_layer, "use_pass_normal")
+        col.prop(view_layer, "use_pass_position")
+        col.prop(view_layer, "use_pass_vector")
+
+
 class VIEWLAYER_PT_eevee_layer_passes_light(ViewLayerButtonsPanel, Panel):
     bl_label = "Light"
     bl_parent_id = "VIEWLAYER_PT_layer_passes"
-    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -153,7 +173,7 @@ class ViewLayerAOVPanel(ViewLayerButtonsPanel, Panel):
 
 class VIEWLAYER_PT_layer_passes_aov(ViewLayerAOVPanel):
     bl_parent_id = "VIEWLAYER_PT_layer_passes"
-    COMPAT_ENGINES = {'BLENDER_EEVEE'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
 
 class ViewLayerCryptomattePanel(ViewLayerButtonsPanel, Panel):
@@ -230,6 +250,7 @@ classes = (
     VIEWLAYER_MT_lightgroup_sync,
     VIEWLAYER_PT_layer,
     VIEWLAYER_PT_layer_passes,
+    VIEWLAYER_PT_eevee_next_layer_passes_data,
     VIEWLAYER_PT_eevee_layer_passes_data,
     VIEWLAYER_PT_eevee_layer_passes_light,
     VIEWLAYER_PT_eevee_layer_passes_effects,

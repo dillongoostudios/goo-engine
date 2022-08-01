@@ -91,6 +91,16 @@ layout(std430, binding = 8) writeonly buffer outputVertexData
 {
   PosNorLoop output_verts[];
 };
+#  if defined(ORCO_EVALUATION)
+layout(std430, binding = 9) buffer src_extra_buffer
+{
+  float srcExtraVertexBuffer[];
+};
+layout(std430, binding = 10) writeonly buffer outputOrcoData
+{
+  vec4 output_orcos[];
+};
+#  endif
 #endif
 
 vec2 read_vec2(int index)
@@ -109,6 +119,17 @@ vec3 read_vec3(int index)
   result.z = srcVertexBuffer[index * 3 + 2];
   return result;
 }
+
+#if defined(ORCO_EVALUATION)
+vec3 read_vec3_extra(int index)
+{
+  vec3 result;
+  result.x = srcExtraVertexBuffer[index * 3];
+  result.y = srcExtraVertexBuffer[index * 3 + 1];
+  result.z = srcExtraVertexBuffer[index * 3 + 2];
+  return result;
+}
+#endif
 
 OsdPatchArray GetPatchArray(int arrayIndex)
 {
@@ -292,6 +313,31 @@ void evaluate_patches_limits(
     dv += src_vertex * wDv[cv];
   }
 }
+
+#  if defined(ORCO_EVALUATION)
+/* Evaluate the patches limits from the extra source vertex buffer. */
+void evaluate_patches_limits_extra(int patch_index, float u, float v, inout vec3 dst)
+{
+  OsdPatchCoord coord = GetPatchCoord(patch_index, u, v);
+  OsdPatchArray array = GetPatchArray(coord.arrayIndex);
+  OsdPatchParam param = GetPatchParam(coord.patchIndex);
+
+  int patchType = OsdPatchParamIsRegular(param) ? array.regDesc : array.desc;
+
+  float wP[20], wDu[20], wDv[20], wDuu[20], wDuv[20], wDvv[20];
+  int nPoints = OsdEvaluatePatchBasis(
+      patchType, param, coord.s, coord.t, wP, wDu, wDv, wDuu, wDuv, wDvv);
+
+  int indexBase = array.indexBase + array.stride * (coord.patchIndex - array.primitiveIdBase);
+
+  for (int cv = 0; cv < nPoints; ++cv) {
+    int index = patchIndexBuffer[indexBase + cv];
+    vec3 src_vertex = read_vec3_extra(index);
+
+    dst += src_vertex * wP[cv];
+  }
+}
+#  endif
 #endif
 
 /* ------------------------------------------------------------------------------
@@ -381,7 +427,7 @@ void main()
   output_nors[coarse_quad_index] = fnor;
 #  endif
 
-  if (is_face_hidden(coarse_quad_index)) {
+  if (use_hide && is_face_hidden(coarse_quad_index)) {
     output_indices[coarse_quad_index] = 0xffffffff;
   }
   else {
@@ -413,15 +459,25 @@ void main()
     vec3 nor = vec3(0.0);
 
     int origindex = input_vert_origindex[loop_index];
-    uint flag = 0;
+    float flag = 0.0;
     if (origindex == -1) {
-      flag = -1;
+      flag = -1.0;
     }
 
     PosNorLoop vertex_data;
     set_vertex_pos(vertex_data, pos);
     set_vertex_nor(vertex_data, nor, flag);
     output_verts[loop_index] = vertex_data;
+
+#  if defined(ORCO_EVALUATION)
+    pos = vec3(0.0);
+    evaluate_patches_limits_extra(patch_co.patch_index, uv.x, uv.y, pos);
+
+    /* Set w = 0.0 to indicate that this is not a generic attribute.
+     * See comments in `extract_mesh_vbo_orco.cc`. */
+    vec4 orco_data = vec4(pos, 0.0);
+    output_orcos[loop_index] = orco_data;
+#  endif
   }
 }
 #endif

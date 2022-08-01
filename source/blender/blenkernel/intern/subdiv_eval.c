@@ -23,7 +23,9 @@
 #include "opensubdiv_evaluator_capi.h"
 #include "opensubdiv_topology_refiner_capi.h"
 
-/* ============================  Helper Function ============================ */
+/* --------------------------------------------------------------------
+ * Helper functions.
+ */
 
 static eOpenSubdivEvaluator opensubdiv_evalutor_from_subdiv_evaluator_type(
     eSubdivEvaluatorType evaluator_type)
@@ -32,15 +34,17 @@ static eOpenSubdivEvaluator opensubdiv_evalutor_from_subdiv_evaluator_type(
     case SUBDIV_EVALUATOR_TYPE_CPU: {
       return OPENSUBDIV_EVALUATOR_CPU;
     }
-    case SUBDIV_EVALUATOR_TYPE_GLSL_COMPUTE: {
-      return OPENSUBDIV_EVALUATOR_GLSL_COMPUTE;
+    case SUBDIV_EVALUATOR_TYPE_GPU: {
+      return OPENSUBDIV_EVALUATOR_GPU;
     }
   }
   BLI_assert_msg(0, "Unknown evaluator type");
   return OPENSUBDIV_EVALUATOR_CPU;
 }
 
-/* ======================  Main Subdivision Evaluation ====================== */
+/* --------------------------------------------------------------------
+ * Main subdivision evaluation.
+ */
 
 bool BKE_subdiv_eval_begin(Subdiv *subdiv,
                            eSubdivEvaluatorType evaluator_type,
@@ -243,7 +247,7 @@ bool BKE_subdiv_eval_refine_from_mesh(Subdiv *subdiv,
   }
   /* Set coordinates of base mesh vertices. */
   set_coarse_positions(subdiv, mesh, coarse_vertex_cos);
-  /* Set face-varyign data to UV maps. */
+  /* Set face-varying data to UV maps. */
   const int num_uv_layers = CustomData_number_of_layers(&mesh->ldata, CD_MLOOPUV);
   for (int layer_index = 0; layer_index < num_uv_layers; layer_index++) {
     const MLoopUV *mloopuv = CustomData_get_layer_n(&mesh->ldata, CD_MLOOPUV, layer_index);
@@ -269,7 +273,9 @@ void BKE_subdiv_eval_init_displacement(Subdiv *subdiv)
   subdiv->displacement_evaluator->initialize(subdiv->displacement_evaluator);
 }
 
-/* ========================== Single point queries ========================== */
+/* --------------------------------------------------------------------
+ * Single point queries.
+ */
 
 void BKE_subdiv_eval_limit_point(
     Subdiv *subdiv, const int ptex_face_index, const float u, const float v, float r_P[3])

@@ -6,10 +6,11 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "BLI_hash.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_base.h"
 #include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
@@ -354,7 +355,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Length = {
-    /* name */ "Length",
+    /* name */ N_("Length"),
     /* structName */ "LengthGpencilModifierData",
     /* structSize */ sizeof(LengthGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

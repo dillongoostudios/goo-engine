@@ -125,7 +125,7 @@ void ED_imapaint_dirty_region(
 
   imapaint_region_tiles(ibuf, x, y, w, h, &tilex, &tiley, &tilew, &tileh);
 
-  ListBase *undo_tiles = ED_image_paint_tile_list_get();
+  PaintTileMap *undo_tiles = ED_image_paint_tile_map_get();
 
   for (ty = tiley; ty <= tileh; ty++) {
     for (tx = tilex; tx <= tilew; tx++) {
@@ -276,10 +276,11 @@ static bool image_paint_poll_ex(bContext *C, bool check_tool)
           (ID_IS_LINKED(sima->image) || ID_IS_OVERRIDE_LIBRARY(sima->image))) {
         return false;
       }
-      ARegion *region = CTX_wm_region(C);
-
-      if ((sima->mode == SI_MODE_PAINT) && region->regiontype == RGN_TYPE_WINDOW) {
-        return true;
+      if (sima->mode == SI_MODE_PAINT) {
+        const ARegion *region = CTX_wm_region(C);
+        if (region->regiontype == RGN_TYPE_WINDOW) {
+          return true;
+        }
       }
     }
   }
@@ -287,7 +288,7 @@ static bool image_paint_poll_ex(bContext *C, bool check_tool)
   return false;
 }
 
-bool image_paint_poll(bContext *C)
+bool ED_image_tools_paint_poll(bContext *C)
 {
   return image_paint_poll_ex(C, true);
 }
@@ -301,7 +302,7 @@ static bool image_paint_2d_clone_poll(bContext *C)
 {
   Brush *brush = image_paint_brush(C);
 
-  if (!CTX_wm_region_view3d(C) && image_paint_poll(C)) {
+  if (!CTX_wm_region_view3d(C) && ED_image_tools_paint_poll(C)) {
     if (brush && (brush->imagepaint_tool == PAINT_TOOL_CLONE)) {
       if (brush->clone.image) {
         return true;
@@ -430,7 +431,7 @@ static void toggle_paint_cursor(Scene *scene, bool enable)
     paint_cursor_delete_textures();
   }
   else if (enable) {
-    paint_cursor_start(p, image_paint_poll);
+    ED_paint_cursor_start(p, ED_image_tools_paint_poll);
   }
 }
 
@@ -455,7 +456,7 @@ void ED_space_image_paint_update(Main *bmain, wmWindowManager *wm, Scene *scene)
   if (enabled) {
     BKE_paint_init(bmain, scene, PAINT_MODE_TEXTURE_2D, PAINT_CURSOR_TEXTURE_PAINT);
 
-    paint_cursor_start(&imapaint->paint, image_paint_poll);
+    ED_paint_cursor_start(&imapaint->paint, ED_image_tools_paint_poll);
   }
   else {
     paint_cursor_delete_textures();
@@ -925,7 +926,7 @@ static int brush_colors_flip_exec(bContext *C, wmOperator *UNUSED(op))
 
 static bool brush_colors_flip_poll(bContext *C)
 {
-  if (image_paint_poll(C)) {
+  if (ED_image_tools_paint_poll(C)) {
     Brush *br = image_paint_brush(C);
     if (ELEM(br->imagepaint_tool, PAINT_TOOL_DRAW, PAINT_TOOL_FILL)) {
       return true;
@@ -991,7 +992,7 @@ static bool texture_paint_poll(bContext *C)
 
 bool image_texture_paint_poll(bContext *C)
 {
-  return (texture_paint_poll(C) || image_paint_poll(C));
+  return (texture_paint_poll(C) || ED_image_tools_paint_poll(C));
 }
 
 bool facemask_paint_poll(bContext *C)

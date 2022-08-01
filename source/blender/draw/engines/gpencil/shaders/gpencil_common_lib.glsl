@@ -345,7 +345,7 @@ float stroke_thickness_modulate(float thickness)
   }
   else {
     /* World space point size. */
-    thickness *= thicknessWorldScale * ProjectionMatrix[1][1] * sizeViewport.y;
+    thickness *= thicknessWorldScale * drw_view.winmat[1][1] * sizeViewport.y;
   }
 
   if (thicknessViewIndependent) {

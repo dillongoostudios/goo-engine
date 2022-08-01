@@ -229,7 +229,6 @@ struct uiBut {
   bool changed;
   /** so buttons can support unit systems which are not RNA */
   uchar unit_type;
-  short modifier_key;
   short iconadd;
 
   /** #UI_BTYPE_BLOCK data */
@@ -344,13 +343,12 @@ typedef struct uiButProgressbar {
   float progress;
 } uiButProgressbar;
 
-/** Derived struct for #UI_BTYPE_TREEROW. */
-typedef struct uiButTreeRow {
+typedef struct uiButViewItem {
   uiBut but;
 
-  uiTreeViewItemHandle *tree_item;
-  int indentation;
-} uiButTreeRow;
+  /* C-Handle to the view item this button was created for. */
+  uiViewItemHandle *view_item;
+} uiButViewItem;
 
 /** Derived struct for #UI_BTYPE_HSVCUBE. */
 typedef struct uiButHSVCube {
@@ -380,6 +378,13 @@ typedef struct uiButCurveMapping {
   struct CurveMapping *edit_cumap;
   eButGradientType gradient_type;
 } uiButCurveMapping;
+
+/** Derived struct for #UI_BTYPE_HOTKEY_EVENT. */
+typedef struct uiButHotkeyEvent {
+  uiBut but;
+
+  short modifier_key;
+} uiButHotkeyEvent;
 
 /**
  * Additional, superimposed icon for a button, invoking an operator.
@@ -1212,24 +1217,24 @@ typedef enum {
 /**
  * Helper call to draw a menu item without a button.
  *
- * \param state: The state of the button,
- * typically #UI_ACTIVE, #UI_BUT_DISABLED, #UI_BUT_INACTIVE.
+ * \param but_flag: Button flags (#uiBut.flag) indicating the state of the item, typically
+ *                  #UI_ACTIVE, #UI_BUT_DISABLED, #UI_BUT_INACTIVE.
  * \param separator_type: The kind of separator which controls if and how the string is clipped.
- * \param r_xmax: The right hand position of the text, this takes into the icon,
- * padding and text clipping when there is not enough room to display the full text.
+ * \param r_xmax: The right hand position of the text, this takes into the icon, padding and text
+ *                clipping when there is not enough room to display the full text.
  */
 void ui_draw_menu_item(const struct uiFontStyle *fstyle,
                        rcti *rect,
                        const char *name,
                        int iconid,
-                       int state,
+                       int but_flag,
                        uiMenuItemSeparatorType separator_type,
                        int *r_xmax);
 void ui_draw_preview_item(const struct uiFontStyle *fstyle,
                           rcti *rect,
                           const char *name,
                           int iconid,
-                          int state,
+                          int but_flag,
                           eFontStyle_Align text_align);
 /**
  * Version of #ui_draw_preview_item() that does not draw the menu background and item text based on
@@ -1315,6 +1320,12 @@ void ui_button_group_add_but(uiBlock *block, uiBut *but);
 void ui_button_group_replace_but_ptr(uiBlock *block, const void *old_but_ptr, uiBut *new_but);
 void ui_block_free_button_groups(uiBlock *block);
 
+/* interface_drag.cc */
+
+void ui_but_drag_free(uiBut *but);
+bool ui_but_drag_is_draggable(const uiBut *but);
+void ui_but_drag_start(struct bContext *C, uiBut *but);
+
 /* interface_align.c */
 
 bool ui_but_can_align(const uiBut *but) ATTR_WARN_UNUSED_RESULT;
@@ -1384,9 +1395,9 @@ uiBut *ui_list_row_find_mouse_over(const struct ARegion *region, const int xy[2]
 uiBut *ui_list_row_find_from_index(const struct ARegion *region,
                                    int index,
                                    uiBut *listbox) ATTR_WARN_UNUSED_RESULT;
-uiBut *ui_tree_row_find_mouse_over(const struct ARegion *region, const int xy[2])
+uiBut *ui_view_item_find_mouse_over(const struct ARegion *region, const int xy[2])
     ATTR_NONNULL(1, 2);
-uiBut *ui_tree_row_find_active(const struct ARegion *region);
+uiBut *ui_view_item_find_active(const struct ARegion *region);
 
 typedef bool (*uiButFindPollFn)(const uiBut *but, const void *customdata);
 /**
@@ -1521,10 +1532,11 @@ void ui_interface_tag_script_reload_queries(void);
 /* interface_view.cc */
 
 void ui_block_free_views(struct uiBlock *block);
-uiTreeViewHandle *ui_block_view_find_matching_in_old_block(const uiBlock *new_block,
-                                                           const uiTreeViewHandle *new_view);
-uiButTreeRow *ui_block_view_find_treerow_in_old_block(const uiBlock *new_block,
-                                                      const uiTreeViewItemHandle *new_item_handle);
+uiViewHandle *ui_block_view_find_matching_in_old_block(const uiBlock *new_block,
+                                                       const uiViewHandle *new_view);
+
+uiButViewItem *ui_block_view_find_matching_view_item_but_in_old_block(
+    const uiBlock *new_block, const uiViewItemHandle *new_item_handle);
 
 /* interface_templates.c */
 

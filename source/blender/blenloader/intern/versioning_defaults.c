@@ -23,6 +23,7 @@
 #include "DNA_curveprofile_types.h"
 #include "DNA_gpencil_types.h"
 #include "DNA_light_types.h"
+#include "DNA_mask_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
@@ -133,6 +134,14 @@ static void blo_update_defaults_screen(bScreen *screen,
           }
         }
       }
+      else {
+        /* Open properties panel by default. */
+        LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+          if (region->regiontype == RGN_TYPE_UI) {
+            region->flag &= ~RGN_FLAG_HIDDEN;
+          }
+        }
+      }
     }
     else if (area->spacetype == SPACE_GRAPH) {
       SpaceGraph *sipo = area->spacedata.first;
@@ -184,6 +193,8 @@ static void blo_update_defaults_screen(bScreen *screen,
     else if (area->spacetype == SPACE_CLIP) {
       SpaceClip *sclip = area->spacedata.first;
       sclip->around = V3D_AROUND_CENTER_MEDIAN;
+      sclip->mask_info.blend_factor = 0.7f;
+      sclip->mask_info.draw_flag = MASK_DRAWFLAG_SPLINE;
     }
   }
 
@@ -476,8 +487,10 @@ void BLO_update_defaults_startup_blend(Main *bmain, const char *app_template)
         /* Default only has one window. */
         if (layout->screen) {
           bScreen *screen = layout->screen;
-          BLI_strncpy(screen->id.name + 2, workspace->id.name + 2, sizeof(screen->id.name) - 2);
-          BLI_libblock_ensure_unique_name(bmain, screen->id.name);
+          if (!STREQ(screen->id.name + 2, workspace->id.name + 2)) {
+            BLI_strncpy(screen->id.name + 2, workspace->id.name + 2, sizeof(screen->id.name) - 2);
+            BLI_libblock_ensure_unique_name(bmain, screen->id.name);
+          }
         }
 
         /* For some reason we have unused screens, needed until re-saving.

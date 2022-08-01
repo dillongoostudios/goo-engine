@@ -44,7 +44,6 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 #include "DNA_world_types.h"
-#include "draw_manager.h"
 
 #include "ED_gpencil.h"
 #include "ED_screen.h"
@@ -213,17 +212,6 @@ int DRW_object_visibility_in_active_context(const Object *ob)
   return BKE_object_visibility(ob, mode);
 }
 
-bool DRW_object_is_flat_normal(const Object *ob)
-{
-  if (ob->type == OB_MESH) {
-    const Mesh *me = ob->data;
-    if (me->mpoly && me->mpoly[0].flag & ME_SMOOTH) {
-      return false;
-    }
-  }
-  return true;
-}
-
 bool DRW_object_use_hide_faces(const struct Object *ob)
 {
   if (ob->type == OB_MESH) {
@@ -236,7 +224,7 @@ bool DRW_object_use_hide_faces(const struct Object *ob)
         return (me->editflag & ME_EDIT_PAINT_FACE_SEL) != 0;
       case OB_MODE_VERTEX_PAINT:
       case OB_MODE_WEIGHT_PAINT:
-        return (me->editflag & (ME_EDIT_PAINT_FACE_SEL | ME_EDIT_PAINT_VERT_SEL)) != 0;
+        return true;
     }
   }
 
@@ -479,6 +467,7 @@ void DRW_viewport_data_free(DRWData *drw_data)
     MEM_freeN(drw_data->obinfos_ubo);
   }
   DRW_volume_ubos_pool_free(drw_data->volume_grids_ubos);
+  DRW_curves_ubos_pool_free(drw_data->curves_ubos);
   MEM_freeN(drw_data);
 }
 
@@ -501,7 +490,7 @@ static DRWData *drw_viewport_data_ensure(GPUViewport *viewport)
  * - size can be NULL to get it from viewport.
  * - if viewport and size are NULL, size is set to (1, 1).
  *
- * Important: drw_manager_init can be called multiple times before drw_manager_exit.
+ * IMPORTANT: #drw_manager_init can be called multiple times before #drw_manager_exit.
  */
 static void drw_manager_init(DRWManager *dst, GPUViewport *viewport, const int size[2])
 {
@@ -529,7 +518,7 @@ static void drw_manager_init(DRWManager *dst, GPUViewport *viewport, const int s
   dst->view_data_active = dst->vmempool->view_data[view];
   dst->resource_handle = 0;
   dst->pass_handle = 0;
-  dst->primary_view_ct = 0;
+  dst->primary_view_num = 0;
 
   drw_viewport_data_reset(dst->vmempool);
 
@@ -1650,7 +1639,7 @@ void DRW_draw_render_loop_ex(struct Depsgraph *depsgraph,
   DRW_globals_update();
 
   drw_debug_init();
-  DRW_curves_init();
+  DRW_curves_init(DST.vmempool);
   DRW_volume_init(DST.vmempool);
   DRW_smoke_init(DST.vmempool);
 
@@ -2022,7 +2011,7 @@ void DRW_render_object_iter(
     void (*callback)(void *vedata, Object *ob, RenderEngine *engine, struct Depsgraph *depsgraph))
 {
   const DRWContextState *draw_ctx = DRW_context_state_get();
-  DRW_curves_init();
+  DRW_curves_init(DST.vmempool);
   DRW_volume_init(DST.vmempool);
   DRW_smoke_init(DST.vmempool);
 
@@ -2079,7 +2068,7 @@ void DRW_custom_pipeline(DrawEngineType *draw_engine_type,
 
   drw_manager_init(&DST, NULL, NULL);
 
-  DRW_curves_init();
+  DRW_curves_init(DST.vmempool);
   DRW_volume_init(DST.vmempool);
   DRW_smoke_init(DST.vmempool);
 
@@ -2114,7 +2103,7 @@ void DRW_cache_restart(void)
 
   DST.buffer_finish_called = false;
 
-  DRW_curves_init();
+  DRW_curves_init(DST.vmempool);
   DRW_volume_init(DST.vmempool);
   DRW_smoke_init(DST.vmempool);
 }
@@ -2433,7 +2422,7 @@ void DRW_draw_select_loop(struct Depsgraph *depsgraph,
 
   /* Init engines */
   drw_engines_init();
-  DRW_curves_init();
+  DRW_curves_init(DST.vmempool);
   DRW_volume_init(DST.vmempool);
   DRW_smoke_init(DST.vmempool);
 
@@ -2607,7 +2596,7 @@ static void drw_draw_depth_loop_impl(struct Depsgraph *depsgraph,
 
   /* Init engines */
   drw_engines_init();
-  DRW_curves_init();
+  DRW_curves_init(DST.vmempool);
   DRW_volume_init(DST.vmempool);
   DRW_smoke_init(DST.vmempool);
 

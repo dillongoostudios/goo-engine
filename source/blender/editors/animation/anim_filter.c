@@ -1807,11 +1807,13 @@ static size_t animdata_filter_gpencil_data(ListBase *anim_data,
     ListBase tmp_data = {NULL, NULL};
     size_t tmp_items = 0;
 
-    /* add gpencil animation channels */
-    BEGIN_ANIMFILTER_SUBCHANNELS (EXPANDED_GPD(gpd)) {
-      tmp_items += animdata_filter_gpencil_layers_data(&tmp_data, ads, gpd, filter_mode);
+    if (!(filter_mode & ANIMFILTER_FCURVESONLY)) {
+      /* add gpencil animation channels */
+      BEGIN_ANIMFILTER_SUBCHANNELS (EXPANDED_GPD(gpd)) {
+        tmp_items += animdata_filter_gpencil_layers_data(&tmp_data, ads, gpd, filter_mode);
+      }
+      END_ANIMFILTER_SUBCHANNELS;
     }
-    END_ANIMFILTER_SUBCHANNELS;
 
     /* did we find anything? */
     if (tmp_items) {
@@ -1925,6 +1927,9 @@ static size_t animdata_filter_ds_gpencil(
     tmp_items += animfilter_block_data(ac, &tmp_data, ads, &gpd->id, filter_mode);
 
     /* add Grease Pencil layers */
+    if (!(filter_mode & ANIMFILTER_FCURVESONLY)) {
+      tmp_items += animdata_filter_gpencil_layers_data(&tmp_data, ads, gpd, filter_mode);
+    }
 
     /* TODO: do these need a separate expander?
      * XXX:  what order should these go in? */

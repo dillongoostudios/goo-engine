@@ -6,11 +6,13 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "BLI_listbase.h"
+#include "BLI_math_base.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
-
-#include "BLI_math.h"
 
 #include "BLT_translation.h"
 
@@ -385,7 +387,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Hook = {
-    /* name */ "Hook",
+    /* name */ N_("Hook"),
     /* structName */ "HookGpencilModifierData",
     /* structSize */ sizeof(HookGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

@@ -63,24 +63,24 @@ struct AttributeOutputs {
 
 static void save_selection_as_attribute(MeshComponent &component,
                                         const AnonymousAttributeID *id,
-                                        const AttributeDomain domain,
+                                        const eAttrDomain domain,
                                         const IndexMask selection)
 {
-  BLI_assert(!component.attribute_exists(id));
+  BLI_assert(!component.attributes()->contains(id));
 
-  OutputAttribute_Typed<bool> attribute = component.attribute_try_get_for_output_only<bool>(
-      id, domain);
+  SpanAttributeWriter<bool> attribute =
+      component.attributes_for_write()->lookup_or_add_for_write_span<bool>(id, domain);
   /* Rely on the new attribute being zeroed by default. */
-  BLI_assert(!attribute.as_span().as_span().contains(true));
+  BLI_assert(!attribute.span.as_span().contains(true));
 
   if (selection.is_range()) {
-    attribute.as_span().slice(selection.as_range()).fill(true);
+    attribute.span.slice(selection.as_range()).fill(true);
   }
   else {
-    attribute.as_span().fill_indices(selection, true);
+    attribute.span.fill_indices(selection, true);
   }
 
-  attribute.save();
+  attribute.finish();
 }
 
 static MutableSpan<MVert> mesh_verts(Mesh &mesh)
@@ -109,7 +109,7 @@ static MutableSpan<MLoop> mesh_loops(Mesh &mesh)
 }
 
 /**
- * \note: Some areas in this file rely on the new sections of attributes from #CustomData_realloc
+ * \note Some areas in this file rely on the new sections of attributes from #CustomData_realloc
  * to be zeroed.
  */
 static void expand_mesh(Mesh &mesh,
@@ -145,7 +145,7 @@ static void expand_mesh(Mesh &mesh,
   BKE_mesh_update_customdata_pointers(&mesh, false);
 }
 
-static CustomData &get_customdata(Mesh &mesh, const AttributeDomain domain)
+static CustomData &get_customdata(Mesh &mesh, const eAttrDomain domain)
 {
   switch (domain) {
     case ATTR_DOMAIN_POINT:
@@ -162,13 +162,12 @@ static CustomData &get_customdata(Mesh &mesh, const AttributeDomain domain)
   }
 }
 
-static MutableSpan<int> get_orig_index_layer(Mesh &mesh, const AttributeDomain domain)
+static MutableSpan<int> get_orig_index_layer(Mesh &mesh, const eAttrDomain domain)
 {
-  MeshComponent component;
-  component.replace(&mesh, GeometryOwnershipType::ReadOnly);
+  const bke::AttributeAccessor attributes = bke::mesh_attributes(mesh);
   CustomData &custom_data = get_customdata(mesh, domain);
   if (int *orig_indices = static_cast<int *>(CustomData_get_layer(&custom_data, CD_ORIGINDEX))) {
-    return {orig_indices, component.attribute_domain_size(domain)};
+    return {orig_indices, attributes.domain_size(domain)};
   }
   return {};
 }
@@ -280,16 +279,18 @@ static void extrude_mesh_vertices(MeshComponent &component,
     new_edges[i_selection] = new_loose_edge(selection[i_selection], new_vert_range[i_selection]);
   }
 
-  component.attribute_foreach([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+  MutableAttributeAccessor attributes = *component.attributes_for_write();
+
+  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
     if (!ELEM(meta_data.domain, ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE)) {
       return true;
     }
-    OutputAttribute attribute = component.attribute_try_get_for_output(
+    GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
-      MutableSpan<T> data = attribute.as_span().typed<T>();
-      switch (attribute.domain()) {
+      MutableSpan<T> data = attribute.span.typed<T>();
+      switch (attribute.domain) {
         case ATTR_DOMAIN_POINT: {
           /* New vertices copy the attribute values from their source vertex. */
           copy_with_mask(data.slice(new_vert_range), data.as_span(), selection);
@@ -307,7 +308,7 @@ static void extrude_mesh_vertices(MeshComponent &component,
       }
     });
 
-    attribute.save();
+    attribute.finish();
     return true;
   });
 
@@ -424,7 +425,7 @@ static void extrude_mesh_edges(MeshComponent &component,
   edge_evaluator.add(offset_field);
   edge_evaluator.evaluate();
   const IndexMask edge_selection = edge_evaluator.get_evaluated_selection_as_mask();
-  const VArray<float3> &edge_offsets = edge_evaluator.get_evaluated<float3>(0);
+  const VArray<float3> edge_offsets = edge_evaluator.get_evaluated<float3>(0);
   if (edge_selection.is_empty()) {
     return;
   }
@@ -524,8 +525,10 @@ static void extrude_mesh_edges(MeshComponent &component,
   const Array<Vector<int>> new_vert_to_duplicate_edge_map = create_vert_to_edge_map(
       new_vert_range.size(), duplicate_edges, orig_vert_size);
 
-  component.attribute_foreach([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
-    OutputAttribute attribute = component.attribute_try_get_for_output(
+  MutableAttributeAccessor attributes = *component.attributes_for_write();
+
+  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+    GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     if (!attribute) {
       return true; /* Impossible to write the "normal" attribute. */
@@ -533,8 +536,8 @@ static void extrude_mesh_edges(MeshComponent &component,
 
     attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
-      MutableSpan<T> data = attribute.as_span().typed<T>();
-      switch (attribute.domain()) {
+      MutableSpan<T> data = attribute.span.typed<T>();
+      switch (attribute.domain) {
         case ATTR_DOMAIN_POINT: {
           /* New vertices copy the attribute values from their source vertex. */
           copy_with_indices(data.slice(new_vert_range), data.as_span(), new_vert_indices);
@@ -626,7 +629,7 @@ static void extrude_mesh_edges(MeshComponent &component,
       }
     });
 
-    attribute.save();
+    attribute.finish();
     return true;
   });
 
@@ -686,7 +689,7 @@ static void extrude_mesh_face_regions(MeshComponent &component,
   poly_evaluator.add(offset_field);
   poly_evaluator.evaluate();
   const IndexMask poly_selection = poly_evaluator.get_evaluated_selection_as_mask();
-  const VArray<float3> &poly_offsets = poly_evaluator.get_evaluated<float3>(0);
+  const VArray<float3> poly_offsets = poly_evaluator.get_evaluated<float3>(0);
   if (poly_selection.is_empty()) {
     return;
   }
@@ -902,8 +905,10 @@ static void extrude_mesh_face_regions(MeshComponent &component,
   const Array<Vector<int>> new_vert_to_duplicate_edge_map = create_vert_to_edge_map(
       new_vert_range.size(), boundary_edges, orig_vert_size);
 
-  component.attribute_foreach([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
-    OutputAttribute attribute = component.attribute_try_get_for_output(
+  MutableAttributeAccessor attributes = *component.attributes_for_write();
+
+  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+    GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     if (!attribute) {
       return true; /* Impossible to write the "normal" attribute. */
@@ -911,8 +916,8 @@ static void extrude_mesh_face_regions(MeshComponent &component,
 
     attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
-      MutableSpan<T> data = attribute.as_span().typed<T>();
-      switch (attribute.domain()) {
+      MutableSpan<T> data = attribute.span.typed<T>();
+      switch (attribute.domain) {
         case ATTR_DOMAIN_POINT: {
           /* New vertices copy the attributes from their original vertices. */
           copy_with_indices(data.slice(new_vert_range), data.as_span(), new_vert_indices);
@@ -991,7 +996,7 @@ static void extrude_mesh_face_regions(MeshComponent &component,
       }
     });
 
-    attribute.save();
+    attribute.finish();
     return true;
   });
 
@@ -1154,8 +1159,10 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
     }
   });
 
-  component.attribute_foreach([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
-    OutputAttribute attribute = component.attribute_try_get_for_output(
+  MutableAttributeAccessor attributes = *component.attributes_for_write();
+
+  attributes.for_all([&](const AttributeIDRef &id, const AttributeMetaData meta_data) {
+    GSpanAttributeWriter attribute = attributes.lookup_or_add_for_write_span(
         id, meta_data.domain, meta_data.data_type);
     if (!attribute) {
       return true; /* Impossible to write the "normal" attribute. */
@@ -1163,8 +1170,8 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
 
     attribute_math::convert_to_static_type(meta_data.data_type, [&](auto dummy) {
       using T = decltype(dummy);
-      MutableSpan<T> data = attribute.as_span().typed<T>();
-      switch (attribute.domain()) {
+      MutableSpan<T> data = attribute.span.typed<T>();
+      switch (attribute.domain) {
         case ATTR_DOMAIN_POINT: {
           /* New vertices copy the attributes from their original vertices. */
           MutableSpan<T> new_data = data.slice(new_vert_range);
@@ -1267,7 +1274,7 @@ static void extrude_individual_mesh_faces(MeshComponent &component,
       }
     });
 
-    attribute.save();
+    attribute.finish();
     return true;
   });
 

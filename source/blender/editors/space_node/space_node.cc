@@ -327,8 +327,9 @@ static bool any_node_uses_id(const bNodeTree *ntree, const ID *id)
 /**
  * Tag the space to recalculate the compositing tree using auto-compositing pipeline.
  *
- * Will check the space to be using a compsiting tree, and check whether auto-compositing
- * is enabled. If the checks do not pass then the function has no affect. */
+ * Will check the space to be using a compositing tree, and check whether auto-compositing
+ * is enabled. If the checks do not pass then the function has no affect.
+ */
 static void node_area_tag_recalc_auto_compositing(SpaceNode *snode, ScrArea *area)
 {
   if (!ED_node_is_compositor(snode)) {
@@ -347,7 +348,8 @@ static void node_area_tag_recalc_auto_compositing(SpaceNode *snode, ScrArea *are
  * For all node trees this will do `snode_set_context()` which takes care of setting an active
  * tree. This will be done in the area refresh callback.
  *
- * For compositor tree this will additionally start of the compositor job. */
+ * For compositor tree this will additionally start of the compositor job.
+ */
 static void node_area_tag_tree_recalc(SpaceNode *snode, ScrArea *area)
 {
   if (ED_node_is_compositor(snode)) {
@@ -670,7 +672,7 @@ static void node_group_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *d
 {
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
-  RNA_string_set(drop->ptr, "name", id->name + 2);
+  RNA_int_set(drop->ptr, "session_uuid", (int)id->session_uuid);
 }
 
 static void node_id_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox *drop)
@@ -685,7 +687,7 @@ static void node_id_path_drop_copy(bContext *UNUSED(C), wmDrag *drag, wmDropBox 
   ID *id = WM_drag_get_local_ID_or_import_from_asset(drag, 0);
 
   if (id) {
-    RNA_string_set(drop->ptr, "name", id->name + 2);
+    RNA_int_set(drop->ptr, "session_uuid", (int)id->session_uuid);
     RNA_struct_property_unset(drop->ptr, "filepath");
   }
   else if (drag->path[0]) {
@@ -824,8 +826,10 @@ static void node_region_listener(const wmRegionListenerParams *params)
 }  // namespace blender::ed::space_node
 
 /* Outside of blender namespace to avoid Python documentation build error with `ctypes`. */
+extern "C" {
 const char *node_context_dir[] = {
     "selected_nodes", "active_node", "light", "material", "world", nullptr};
+};
 
 namespace blender::ed::space_node {
 

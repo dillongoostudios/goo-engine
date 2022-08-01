@@ -8,8 +8,8 @@
 #include <stdio.h>
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
 #include "BLI_math_geom.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -22,7 +22,6 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_colortools.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_gpencil.h"
@@ -646,7 +645,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Envelope = {
-    /* name */ "Envelope",
+    /* name */ N_("Envelope"),
     /* structName */ "EnvelopeGpencilModifierData",
     /* structSize */ sizeof(EnvelopeGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

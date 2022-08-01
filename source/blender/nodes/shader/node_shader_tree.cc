@@ -587,7 +587,7 @@ static bNode *ntree_shader_copy_branch(bNodeTree *ntree,
       }
     }
   }
-  /* Recreate links between copied nodes AND incomming links to the copied nodes. */
+  /* Recreate links between copied nodes AND incoming links to the copied nodes. */
   LISTBASE_FOREACH (bNodeLink *, link, &ntree->links) {
     if (link->tonode->tmp_flag >= 0) {
       bool from_node_copied = link->fromnode->tmp_flag >= 0;
@@ -713,6 +713,7 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
 
       switch (node->type) {
         case SH_NODE_SHADERTORGB:
+        case SH_NODE_OUTPUT_LIGHT:
         case SH_NODE_OUTPUT_WORLD:
         case SH_NODE_SET_DEPTH:
         case SH_NODE_OUTPUT_MATERIAL: {
@@ -812,6 +813,7 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
 
         switch (node->type) {
           case SH_NODE_SHADERTORGB:
+          case SH_NODE_OUTPUT_LIGHT:
           case SH_NODE_OUTPUT_WORLD:
           case SH_NODE_OUTPUT_MATERIAL:
           case SH_NODE_ADD_SHADER: {
@@ -1009,6 +1011,7 @@ static void ntree_shader_pruned_unused(bNodeTree *ntree, bNode *output_node)
 
   LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
     if (node->type == SH_NODE_OUTPUT_AOV) {
+      node->tmp_flag = 1;
       nodeChainIterBackwards(ntree, node, ntree_branch_node_tag, nullptr, 0);
     }
   }

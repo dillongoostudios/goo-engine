@@ -525,7 +525,8 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
                                          UVCALC_TRANSFORM_CORRECT_SLIDE :
                                          UVCALC_TRANSFORM_CORRECT;
 
-    if ((t->data_type == TC_MESH_VERTS) && (t->settings->uvcalc_flag & uvcalc_correct_flag)) {
+    if ((t->data_type == &TransConvertType_Mesh) &&
+        (t->settings->uvcalc_flag & uvcalc_correct_flag)) {
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, NULL);
     }
 
@@ -847,7 +848,7 @@ static bool transform_event_modal_constraint(TransInfo *t, short modal_type)
       return false;
     }
 
-    if (t->data_type == TC_SEQ_IMAGE_DATA) {
+    if (t->data_type == &TransConvertType_SequencerImage) {
       /* Setup the 2d msg string so it writes out the transform space. */
       msg_2d = msg_3d;
 
@@ -1174,7 +1175,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
                 stopConstraint(t);
                 initSelectConstraint(t);
 
-                /* In this case we might just want to remove the contraint,
+                /* In this case we might just want to remove the constraint,
                  * so set #TREDRAW_SOFT to only select the constraint on the next mouse move event.
                  * This way we can kind of "cancel" due to confirmation without constraint. */
                 t->redraw = TREDRAW_SOFT;
@@ -1327,7 +1328,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
     handled = true;
   }
 
-  if (t->redraw && !ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+  if (t->redraw && !ISMOUSE_MOTION(event->type)) {
     WM_window_status_area_tag_redraw(CTX_wm_window(t->context));
   }
 
@@ -1425,9 +1426,6 @@ static void drawTransformView(const struct bContext *C, ARegion *region, void *a
     /* edge slide, vert slide */
     drawEdgeSlide(t);
     drawVertSlide(t);
-
-    /* Rotation */
-    drawDial3d(t);
   }
 }
 
@@ -1579,7 +1577,8 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
     /* do we check for parameter? */
     if (transformModeUseSnap(t)) {
       if (!(t->modifiers & MOD_SNAP) != !(t->tsnap.flag & SCE_SNAP)) {
-        char *snap_flag_ptr;
+        /* Type is #eSnapFlag, but type must match various snap attributes in #ToolSettings. */
+        short *snap_flag_ptr;
 
         wmMsgParams_RNA msg_key_params = {{0}};
         RNA_pointer_create(&t->scene->id, &RNA_ToolSettings, ts, &msg_key_params.ptr);
@@ -1785,13 +1784,6 @@ bool initTransform(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   /* Needed to translate tweak events to mouse buttons. */
   t->launch_event = event ? WM_userdef_event_type_from_keymap_type(event->type) : -1;
   t->is_launch_event_drag = event ? (event->val == KM_CLICK_DRAG) : false;
-
-  /* XXX Remove this when wm_operator_call_internal doesn't use window->eventstate
-   * (which can have type = 0) */
-  /* For gizmo only, so assume LEFTMOUSE. */
-  if (t->launch_event == 0) {
-    t->launch_event = LEFTMOUSE;
-  }
 
   unit_m3(t->spacemtx);
 
@@ -2060,4 +2052,18 @@ bool checkUseAxisMatrix(TransInfo *t)
   }
 
   return false;
+}
+
+bool transform_apply_matrix(TransInfo *t, float mat[4][4])
+{
+  if (t->transform_matrix != NULL) {
+    t->transform_matrix(t, mat);
+    return true;
+  }
+  return false;
+}
+
+void transform_final_value_get(const TransInfo *t, float *value, const int value_num)
+{
+  memcpy(value, t->values_final, sizeof(float) * value_num);
 }

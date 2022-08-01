@@ -64,24 +64,22 @@ void World::sync()
   // }
 
   ::World *bl_world = inst_.scene->world;
-
   if (bl_world == nullptr) {
     // bl_world = BKE_world_default();
     return;
   }
-  else {
-    WorldHandle &wo_handle = inst_.sync.sync_world(bl_world);
 
-    if (wo_handle.recalc != 0) {
-      // inst_.lightprobes.set_world_dirty();
-    }
-    wo_handle.reset_recalc_flag();
+  WorldHandle &wo_handle = inst_.sync.sync_world(bl_world);
+
+  if (wo_handle.recalc != 0) {
+    // inst_.lightprobes.set_world_dirty();
   }
+  wo_handle.reset_recalc_flag();
 
   /* TODO(fclem) This should be detected to scene level. */
   ::World *orig_world = (::World *)DEG_get_original_id(&bl_world->id);
   if (assign_if_different(prev_original_world, orig_world)) {
-    // inst_.sampling.reset();
+    inst_.sampling.reset();
   }
 
   bNodeTree *ntree = (bl_world->nodetree && bl_world->use_nodes) ?

@@ -24,6 +24,8 @@ namespace blender::eevee {
 
 void WorldPipeline::sync(GPUMaterial *gpumat)
 {
+  RenderBuffers &rbufs = inst_.render_buffers;
+
   DRWState state = DRW_STATE_WRITE_COLOR;
   world_ps_ = DRW_pass_create("World", state);
 
@@ -34,6 +36,20 @@ void WorldPipeline::sync(GPUMaterial *gpumat)
   DRWShadingGroup *grp = DRW_shgroup_material_create(gpumat, world_ps_);
   DRW_shgroup_uniform_texture(grp, "utility_tx", inst_.pipelines.utility_tx);
   DRW_shgroup_call_obmat(grp, DRW_cache_fullscreen_quad_get(), camera_mat.ptr());
+  DRW_shgroup_uniform_float_copy(grp, "world_opacity_fade", inst_.film.background_opacity_get());
+  /* AOVs. */
+  DRW_shgroup_uniform_image_ref(grp, "aov_color_img", &rbufs.aov_color_tx);
+  DRW_shgroup_uniform_image_ref(grp, "aov_value_img", &rbufs.aov_value_tx);
+  DRW_shgroup_storage_block_ref(grp, "aov_buf", &inst_.film.aovs_info);
+  /* RenderPasses. Cleared by background (even if bad practice). */
+  DRW_shgroup_uniform_image_ref(grp, "rp_normal_img", &rbufs.normal_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_diffuse_light_img", &rbufs.diffuse_light_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_diffuse_color_img", &rbufs.diffuse_color_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_specular_light_img", &rbufs.specular_light_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_specular_color_img", &rbufs.specular_color_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_emission_img", &rbufs.emission_tx);
+  /* To allow opaque pass rendering over it. */
+  DRW_shgroup_barrier(grp, GPU_BARRIER_SHADER_IMAGE_ACCESS);
 }
 
 void WorldPipeline::render()
@@ -54,11 +70,17 @@ void ForwardPipeline::sync()
   {
     DRWState state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS;
     prepass_ps_ = DRW_pass_create("Forward.Opaque.Prepass", state);
+    prepass_velocity_ps_ = DRW_pass_create("Forward.Opaque.Prepass.Velocity",
+                                           state | DRW_STATE_WRITE_COLOR);
 
     state |= DRW_STATE_CULL_BACK;
     prepass_culled_ps_ = DRW_pass_create("Forward.Opaque.Prepass.Culled", state);
+    prepass_culled_velocity_ps_ = DRW_pass_create("Forward.Opaque.Prepass.Velocity",
+                                                  state | DRW_STATE_WRITE_COLOR);
 
-    DRW_pass_link(prepass_ps_, prepass_culled_ps_);
+    DRW_pass_link(prepass_ps_, prepass_velocity_ps_);
+    DRW_pass_link(prepass_velocity_ps_, prepass_culled_ps_);
+    DRW_pass_link(prepass_culled_ps_, prepass_culled_velocity_ps_);
   }
   {
     DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL;
@@ -77,6 +99,7 @@ void ForwardPipeline::sync()
 
 DRWShadingGroup *ForwardPipeline::material_opaque_add(::Material *blender_mat, GPUMaterial *gpumat)
 {
+  RenderBuffers &rbufs = inst_.render_buffers;
   DRWPass *pass = (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) ? opaque_culled_ps_ : opaque_ps_;
   // LightModule &lights = inst_.lights;
   // LightProbeModule &lightprobes = inst_.lightprobes;
@@ -91,6 +114,18 @@ DRWShadingGroup *ForwardPipeline::material_opaque_add(::Material *blender_mat, G
   // DRW_shgroup_uniform_texture_ref(grp, "lightprobe_grid_tx", lightprobes.grid_tx_ref_get());
   // DRW_shgroup_uniform_texture_ref(grp, "lightprobe_cube_tx", lightprobes.cube_tx_ref_get());
   DRW_shgroup_uniform_texture(grp, "utility_tx", inst_.pipelines.utility_tx);
+  /* AOVs. */
+  DRW_shgroup_uniform_image_ref(grp, "aov_color_img", &rbufs.aov_color_tx);
+  DRW_shgroup_uniform_image_ref(grp, "aov_value_img", &rbufs.aov_value_tx);
+  DRW_shgroup_storage_block_ref(grp, "aov_buf", &inst_.film.aovs_info);
+  /* RenderPasses. */
+  DRW_shgroup_uniform_image_ref(grp, "rp_normal_img", &rbufs.normal_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_diffuse_light_img", &rbufs.diffuse_light_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_diffuse_color_img", &rbufs.diffuse_color_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_specular_light_img", &rbufs.specular_light_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_specular_color_img", &rbufs.specular_color_tx);
+  DRW_shgroup_uniform_image_ref(grp, "rp_emission_img", &rbufs.emission_tx);
+
   /* TODO(fclem): Make this only needed if material uses it ... somehow. */
   // if (true) {
   //   DRW_shgroup_uniform_texture_ref(
@@ -110,11 +145,17 @@ DRWShadingGroup *ForwardPipeline::material_opaque_add(::Material *blender_mat, G
   return grp;
 }
 
-DRWShadingGroup *ForwardPipeline::prepass_opaque_add(::Material *blender_mat, GPUMaterial *gpumat)
+DRWShadingGroup *ForwardPipeline::prepass_opaque_add(::Material *blender_mat,
+                                                     GPUMaterial *gpumat,
+                                                     bool has_motion)
 {
-  DRWPass *pass = (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) ? prepass_culled_ps_ :
-                                                                    prepass_ps_;
+  DRWPass *pass = (blender_mat->blend_flag & MA_BL_CULL_BACKFACE) ?
+                      (has_motion ? prepass_culled_velocity_ps_ : prepass_culled_ps_) :
+                      (has_motion ? prepass_velocity_ps_ : prepass_ps_);
   DRWShadingGroup *grp = DRW_shgroup_material_create(gpumat, pass);
+  if (has_motion) {
+    inst_.velocity.bind_resources(grp);
+  }
   return grp;
 }
 
@@ -181,15 +222,19 @@ DRWShadingGroup *ForwardPipeline::prepass_transparent_add(::Material *blender_ma
 }
 
 void ForwardPipeline::render(const DRWView *view,
+                             Framebuffer &prepass_fb,
+                             Framebuffer &combined_fb,
                              GPUTexture *depth_tx,
                              GPUTexture *UNUSED(combined_tx))
 {
-  UNUSED_VARS(view, depth_tx);
+  UNUSED_VARS(view, depth_tx, prepass_fb, combined_fb);
   // HiZBuffer &hiz = inst_.hiz_front;
 
   DRW_stats_group_start("ForwardOpaque");
 
+  GPU_framebuffer_bind(prepass_fb);
   DRW_draw_pass(prepass_ps_);
+
   // hiz.set_dirty();
 
   // if (inst_.raytracing.enabled()) {
@@ -199,6 +244,7 @@ void ForwardPipeline::render(const DRWView *view,
 
   // inst_.shadows.set_view(view, depth_tx);
 
+  GPU_framebuffer_bind(combined_fb);
   DRW_draw_pass(opaque_ps_);
 
   DRW_stats_group_end();

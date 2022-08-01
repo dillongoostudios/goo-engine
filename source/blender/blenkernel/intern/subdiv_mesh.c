@@ -5,9 +5,6 @@
  * \ingroup bke
  */
 
-#include "BKE_mesh.h"
-#include "BKE_subdiv_mesh.h"
-
 #include "atomic_ops.h"
 
 #include "DNA_key_types.h"
@@ -24,6 +21,7 @@
 #include "BKE_subdiv.h"
 #include "BKE_subdiv_eval.h"
 #include "BKE_subdiv_foreach.h"
+#include "BKE_subdiv_mesh.h"
 
 #include "MEM_guardedalloc.h"
 
@@ -44,7 +42,7 @@ typedef struct SubdivMeshContext {
   /* UV layers interpolation. */
   int num_uv_layers;
   MLoopUV *uv_layers[MAX_MTFACE];
-  /* Orco interpolation. */
+  /* Original coordinates (ORCO) interpolation. */
   float (*orco)[3];
   float (*cloth_orco)[3];
   /* Per-subdivided vertex counter of averaged values. */

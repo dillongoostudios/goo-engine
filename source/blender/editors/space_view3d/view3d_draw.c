@@ -1294,7 +1294,7 @@ static void draw_viewport_name(ARegion *region, View3D *v3d, int xoffset, int *y
 static void draw_selected_name(
     Scene *scene, ViewLayer *view_layer, Object *ob, int xoffset, int *yoffset)
 {
-  const int cfra = CFRA;
+  const int cfra = scene->r.cfra;
   const char *msg_pin = " (Pinned)";
   const char *msg_sep = " : ";
 
@@ -1786,10 +1786,12 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
     }
     /* Disable other overlays (set all available _HIDE_ flags). */
     v3d.overlay.flag |= V3D_OVERLAY_HIDE_CURSOR | V3D_OVERLAY_HIDE_TEXT |
-                        V3D_OVERLAY_HIDE_MOTION_PATHS | V3D_OVERLAY_HIDE_BONES |
-                        V3D_OVERLAY_HIDE_OBJECT_ORIGINS;
+                        V3D_OVERLAY_HIDE_MOTION_PATHS | V3D_OVERLAY_HIDE_OBJECT_ORIGINS;
     if ((draw_flags & V3D_OFSDRAW_SHOW_OBJECT_EXTRAS) == 0) {
       v3d.overlay.flag |= V3D_OVERLAY_HIDE_OBJECT_XTRAS;
+    }
+    if ((object_type_exclude_viewport_override & (1 << OB_ARMATURE)) != 0) {
+      v3d.overlay.flag |= V3D_OVERLAY_HIDE_BONES;
     }
     v3d.flag |= V3D_HIDE_HELPLINES;
   }
@@ -2245,16 +2247,16 @@ void view3d_depths_rect_create(ARegion *region, rcti *rect, ViewDepths *r_d)
 static ViewDepths *view3d_depths_create(ARegion *region)
 {
   ViewDepths *d = MEM_callocN(sizeof(ViewDepths), "ViewDepths");
-  d->w = region->winx;
-  d->h = region->winy;
 
   {
     GPUViewport *viewport = WM_draw_region_get_viewport(region);
     GPUTexture *depth_tx = GPU_viewport_depth_texture(viewport);
     uint32_t *int_depths = GPU_texture_read(depth_tx, GPU_DATA_UINT_24_8, 0);
+    d->w = GPU_texture_width(depth_tx);
+    d->h = GPU_texture_height(depth_tx);
     d->depths = (float *)int_depths;
     /* Convert in-place. */
-    int pixel_count = GPU_texture_width(depth_tx) * GPU_texture_height(depth_tx);
+    int pixel_count = d->w * d->h;
     for (int i = 0; i < pixel_count; i++) {
       d->depths[i] = (int_depths[i] >> 8u) / (float)0xFFFFFF;
     }

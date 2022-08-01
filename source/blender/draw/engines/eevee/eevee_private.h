@@ -302,7 +302,7 @@ typedef struct EEVEE_PassList {
   struct DRWPass *maxz_copydepth_ps;
   struct DRWPass *maxz_copydepth_layer_ps;
 
-  /* Renderpass Accumulation. */
+  /* Render-pass Accumulation. */
   struct DRWPass *material_accum_ps;
   struct DRWPass *background_accum_ps;
   struct DRWPass *cryptomatte_ps;
@@ -673,7 +673,7 @@ typedef struct EEVEE_HairMotionData {
   /** Allocator will alloc enough slot for all particle systems. Or 1 if it's a curves object. */
   int psys_len;
   struct {
-    /* The vbos and textures are not owned. */
+    /* The VBO's and textures are not owned. */
     EEVEE_HairMotionStepData step_data[2]; /* Data for time = t +/- step. */
   } psys[0];
 } EEVEE_HairMotionData;
@@ -684,7 +684,7 @@ typedef struct EEVEE_GeometryMotionData {
   /** To disable deform mb if vertcount mismatch. */
   int use_deform;
 
-  /* The batch and vbos are not owned. */
+  /* The batch and VBOs are not owned. */
   struct GPUBatch *batch;    /* Batch for time = t. */
   struct GPUVertBuf *vbo[2]; /* VBO for time = t +/- step. */
 } EEVEE_GeometryMotionData;
@@ -1055,7 +1055,7 @@ typedef struct EEVEE_PrivateData {
   float studiolight_glossy_clamp;
   float studiolight_filter_quality;
 
-  /* Renderpasses */
+  /* Render-passes */
   /* Bitmask containing the active render_passes */
   eViewLayerEEVEEPassType render_passes;
   uint aov_hash;
@@ -1074,7 +1074,7 @@ typedef struct EEVEE_PrivateData {
   GPUTexture *renderpass_col_input;
   GPUTexture *renderpass_light_input;
   GPUTexture *renderpass_transmittance_input;
-  /* Renderpass ubo reference used by material pass. */
+  /* Render-pass UBO reference used by material pass. */
   struct GPUUniformBuf *renderpass_ubo;
   /** For rendering shadows. */
   struct DRWView *cube_views[6];

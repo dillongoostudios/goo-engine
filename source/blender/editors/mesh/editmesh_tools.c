@@ -3092,8 +3092,8 @@ static int edbm_rotate_colors_exec(bContext *C, wmOperator *op)
 
     BMOperator bmop;
 
-    Mesh *me = BKE_object_get_original_mesh(ob);
-    CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
+    const Mesh *me = BKE_object_get_original_mesh(ob);
+    const CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
 
     if (!layer || BKE_id_attribute_domain(&me->id, layer) != ATTR_DOMAIN_CORNER) {
       continue;
@@ -3144,8 +3144,8 @@ static int edbm_reverse_colors_exec(bContext *C, wmOperator *op)
       continue;
     }
 
-    Mesh *me = BKE_object_get_original_mesh(obedit);
-    CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
+    const Mesh *me = BKE_object_get_original_mesh(obedit);
+    const CustomDataLayer *layer = BKE_id_attributes_active_color_get(&me->id);
 
     if (!layer || BKE_id_attribute_domain(&me->id, layer) != ATTR_DOMAIN_CORNER) {
       continue;
@@ -8692,7 +8692,7 @@ static int edbm_point_normals_modal(bContext *C, wmOperator *op, const wmEvent *
    * Free the data here, then use #point_normals_ensure to add it back on demand. */
   if (ret == OPERATOR_PASS_THROUGH) {
     /* Don't free on mouse-move, causes creation/freeing of the loop data in an inefficient way. */
-    if (!ELEM(event->type, MOUSEMOVE, INBETWEEN_MOUSEMOVE)) {
+    if (!ISMOUSE_MOTION(event->type)) {
       point_normals_free(op);
     }
   }

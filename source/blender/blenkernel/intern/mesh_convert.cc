@@ -12,6 +12,7 @@
 #include "DNA_key_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
+#include "DNA_meshdata_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
@@ -40,7 +41,6 @@
 #include "BKE_mesh_runtime.h"
 #include "BKE_mesh_wrapper.h"
 #include "BKE_modifier.h"
-#include "BKE_spline.hh"
 /* these 2 are only used by conversion functions */
 #include "BKE_curve.h"
 /* -- */
@@ -751,6 +751,8 @@ void BKE_mesh_to_curve(Main *bmain, Depsgraph *depsgraph, Scene *UNUSED(scene), 
 
 void BKE_pointcloud_from_mesh(Mesh *me, PointCloud *pointcloud)
 {
+  using namespace blender;
+
   BLI_assert(me != nullptr);
 
   pointcloud->totpoint = me->totvert;
@@ -758,14 +760,17 @@ void BKE_pointcloud_from_mesh(Mesh *me, PointCloud *pointcloud)
 
   /* Copy over all attributes. */
   CustomData_merge(&me->vdata, &pointcloud->pdata, CD_MASK_PROP_ALL, CD_DUPLICATE, me->totvert);
-  BKE_pointcloud_update_customdata_pointers(pointcloud);
-  CustomData_update_typemap(&pointcloud->pdata);
 
-  MVert *mvert;
-  mvert = me->mvert;
-  for (int i = 0; i < me->totvert; i++, mvert++) {
-    copy_v3_v3(pointcloud->co[i], mvert->co);
-  }
+  bke::AttributeAccessor mesh_attributes = bke::mesh_attributes(*me);
+  bke::MutableAttributeAccessor point_attributes = bke::pointcloud_attributes_for_write(
+      *pointcloud);
+
+  const VArray<float3> mesh_positions = mesh_attributes.lookup_or_default<float3>(
+      "position", ATTR_DOMAIN_POINT, float3(0));
+  bke::SpanAttributeWriter<float3> point_positions =
+      point_attributes.lookup_or_add_for_write_only_span<float3>("position", ATTR_DOMAIN_POINT);
+  mesh_positions.materialize(point_positions.span);
+  point_positions.finish();
 }
 
 void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene *UNUSED(scene), Object *ob)
@@ -943,24 +948,9 @@ static void curve_to_mesh_eval_ensure(Object &object)
   BKE_object_runtime_free_data(&taper_object);
 }
 
-/* Necessary because #BKE_object_get_evaluated_mesh doesn't look in the geometry set yet. */
-static const Mesh *get_evaluated_mesh_from_object(const Object *object)
-{
-  const Mesh *mesh = BKE_object_get_evaluated_mesh(object);
-  if (mesh) {
-    return mesh;
-  }
-  GeometrySet *geometry_set_eval = object->runtime.geometry_set_eval;
-  if (geometry_set_eval) {
-    return geometry_set_eval->get_mesh_for_read();
-  }
-  return nullptr;
-}
-
 static const Curves *get_evaluated_curves_from_object(const Object *object)
 {
-  GeometrySet *geometry_set_eval = object->runtime.geometry_set_eval;
-  if (geometry_set_eval) {
+  if (GeometrySet *geometry_set_eval = object->runtime.geometry_set_eval) {
     return geometry_set_eval->get_curves_for_read();
   }
   return nullptr;
@@ -968,12 +958,10 @@ static const Curves *get_evaluated_curves_from_object(const Object *object)
 
 static Mesh *mesh_new_from_evaluated_curve_type_object(const Object *evaluated_object)
 {
-  const Mesh *mesh = get_evaluated_mesh_from_object(evaluated_object);
-  if (mesh) {
+  if (const Mesh *mesh = BKE_object_get_evaluated_mesh(evaluated_object)) {
     return BKE_mesh_copy_for_eval(mesh, false);
   }
-  const Curves *curves = get_evaluated_curves_from_object(evaluated_object);
-  if (curves) {
+  if (const Curves *curves = get_evaluated_curves_from_object(evaluated_object)) {
     return blender::bke::curve_to_wire_mesh(blender::bke::CurvesGeometry::wrap(curves->geometry));
   }
   return nullptr;
@@ -1045,7 +1033,7 @@ static Mesh *mesh_new_from_mesh(Object *object, Mesh *mesh)
     BKE_mesh_wrapper_ensure_mdata(mesh);
   }
   else {
-    mesh = BKE_mesh_wrapper_ensure_subdivision(object, mesh);
+    mesh = BKE_mesh_wrapper_ensure_subdivision(mesh);
   }
 
   Mesh *mesh_result = (Mesh *)BKE_id_copy_ex(
@@ -1082,7 +1070,7 @@ static Mesh *mesh_new_from_mesh_object_with_layers(Depsgraph *depsgraph,
     mask.pmask |= CD_MASK_ORIGINDEX;
   }
   Mesh *result = mesh_create_eval_final(depsgraph, scene, &object_for_eval, &mask);
-  return BKE_mesh_wrapper_ensure_subdivision(object, result);
+  return BKE_mesh_wrapper_ensure_subdivision(result);
 }
 
 static Mesh *mesh_new_from_mesh_object(Depsgraph *depsgraph,
@@ -1226,9 +1214,7 @@ Mesh *BKE_mesh_new_from_object_to_bmain(Main *bmain,
   BKE_mesh_nomain_to_mesh(mesh, mesh_in_bmain, nullptr, &CD_MASK_MESH, true);
 
   /* Anonymous attributes shouldn't exist on original data. */
-  MeshComponent component;
-  component.replace(mesh_in_bmain, GeometryOwnershipType::Editable);
-  component.attributes_remove_anonymous();
+  blender::bke::mesh_attributes_for_write(*mesh_in_bmain).remove_anonymous();
 
   /* User-count is required because so far mesh was in a limbo, where library management does
    * not perform any user management (i.e. copy of a mesh will not increase users of materials). */
@@ -1392,7 +1378,7 @@ static void shapekey_layers_to_keyblocks(Mesh *mesh_src, Mesh *mesh_dst, int act
   for (i = 0; i < tot; i++) {
     CustomDataLayer *layer =
         &mesh_src->vdata.layers[CustomData_get_layer_index_n(&mesh_src->vdata, CD_SHAPEKEY, i)];
-    float(*cos)[3], (*kbcos)[3];
+    float(*kbcos)[3];
 
     for (kb = (KeyBlock *)mesh_dst->key->block.first; kb; kb = kb->next) {
       if (kb->uid == layer->uid) {
@@ -1409,7 +1395,8 @@ static void shapekey_layers_to_keyblocks(Mesh *mesh_src, Mesh *mesh_dst, int act
       MEM_freeN(kb->data);
     }
 
-    cos = (float(*)[3])CustomData_get_layer_n(&mesh_src->vdata, CD_SHAPEKEY, i);
+    const float(*cos)[3] = (const float(*)[3])CustomData_get_layer_n(
+        &mesh_src->vdata, CD_SHAPEKEY, i);
     kb->totelem = mesh_src->totvert;
 
     kb->data = kbcos = (float(*)[3])MEM_malloc_arrayN(kb->totelem, sizeof(float[3]), __func__);

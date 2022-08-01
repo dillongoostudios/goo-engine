@@ -77,17 +77,19 @@ Value parallel_reduce(IndexRange range,
                       const Reduction &reduction)
 {
 #ifdef WITH_TBB
-  return tbb::parallel_reduce(
-      tbb::blocked_range<int64_t>(range.first(), range.one_after_last(), grain_size),
-      identity,
-      [&](const tbb::blocked_range<int64_t> &subrange, const Value &ident) {
-        return function(IndexRange(subrange.begin(), subrange.size()), ident);
-      },
-      reduction);
+  if (range.size() >= grain_size) {
+    return tbb::parallel_reduce(
+        tbb::blocked_range<int64_t>(range.first(), range.one_after_last(), grain_size),
+        identity,
+        [&](const tbb::blocked_range<int64_t> &subrange, const Value &ident) {
+          return function(IndexRange(subrange.begin(), subrange.size()), ident);
+        },
+        reduction);
+  }
 #else
   UNUSED_VARS(grain_size, reduction);
-  return function(range, identity);
 #endif
+  return function(range, identity);
 }
 
 /**
@@ -101,6 +103,22 @@ template<typename... Functions> void parallel_invoke(Functions &&...functions)
 #else
   (functions(), ...);
 #endif
+}
+
+/**
+ * Same #parallel_invoke, but allows disabling threading dynamically. This is useful because when
+ * the individual functions do very little work, there is a lot of overhead from starting parallel
+ * tasks.
+ */
+template<typename... Functions>
+void parallel_invoke(const bool use_threading, Functions &&...functions)
+{
+  if (use_threading) {
+    parallel_invoke(std::forward<Functions>(functions)...);
+  }
+  else {
+    (functions(), ...);
+  }
 }
 
 /** See #BLI_task_isolate for a description of what isolating a task means. */

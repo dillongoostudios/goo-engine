@@ -40,7 +40,7 @@ class GeometryDataSource : public DataSource {
   Object *object_eval_;
   const GeometrySet geometry_set_;
   const GeometryComponent *component_;
-  AttributeDomain domain_;
+  eAttrDomain domain_;
   ExtraColumns extra_columns_;
 
   /* Some data is computed on the fly only when it is requested. Computing it does not change the
@@ -53,7 +53,7 @@ class GeometryDataSource : public DataSource {
   GeometryDataSource(Object *object_eval,
                      GeometrySet geometry_set,
                      const GeometryComponentType component_type,
-                     const AttributeDomain domain,
+                     const eAttrDomain domain,
                      ExtraColumns extra_columns)
       : object_eval_(object_eval),
         geometry_set_(std::move(geometry_set)),
@@ -68,10 +68,6 @@ class GeometryDataSource : public DataSource {
     return object_eval_;
   }
 
-  /**
-   * Only data sets corresponding to mesh objects in edit mode currently support selection
-   * filtering.
-   */
   bool has_selection_filter() const override;
   IndexMask apply_selection_filter(Vector<int64_t> &indices) const;
 

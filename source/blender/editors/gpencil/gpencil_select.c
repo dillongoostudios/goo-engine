@@ -759,7 +759,7 @@ static bool gpencil_select_same_layer(bContext *C)
 
   bool changed = false;
   CTX_DATA_BEGIN (C, bGPDlayer *, gpl, editable_gpencil_layers) {
-    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, CFRA, GP_GETFRAME_USE_PREV);
+    bGPDframe *gpf = BKE_gpencil_layer_frame_get(gpl, scene->r.cfra, GP_GETFRAME_USE_PREV);
     bGPDstroke *gps;
     bool found = false;
 
@@ -1701,7 +1701,7 @@ static int gpencil_circle_select_exec(bContext *C, wmOperator *op)
   const bool select = (sel_op != SEL_OP_SUB);
 
   bool changed = false;
-  /* for bounding rect around circle (for quicky intersection testing) */
+  /* For bounding `rect` around circle (for quickly intersection testing). */
   rcti rect = {0};
   rect.xmin = mx - radius;
   rect.ymin = my - radius;

@@ -20,7 +20,7 @@ struct Subdiv;
 
 typedef enum eSubdivEvaluatorType {
   SUBDIV_EVALUATOR_TYPE_CPU,
-  SUBDIV_EVALUATOR_TYPE_GLSL_COMPUTE,
+  SUBDIV_EVALUATOR_TYPE_GPU,
 } eSubdivEvaluatorType;
 
 /* Returns true if evaluator is ready for use. */
@@ -62,7 +62,7 @@ void BKE_subdiv_eval_limit_point_and_derivatives(struct Subdiv *subdiv,
 void BKE_subdiv_eval_limit_point_and_normal(
     struct Subdiv *subdiv, int ptex_face_index, float u, float v, float r_P[3], float r_N[3]);
 
-/* Evaluate smoothly interpolated vertex data (such as orco). */
+/* Evaluate smoothly interpolated vertex data (such as ORCO). */
 void BKE_subdiv_eval_vertex_data(struct Subdiv *subdiv,
                                  const int ptex_face_index,
                                  const float u,

@@ -8,8 +8,10 @@
 #include <stdio.h>
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
+
+#include "BLT_translation.h"
 
 #include "DNA_defaults.h"
 #include "DNA_gpencil_modifier_types.h"
@@ -29,7 +31,6 @@
 
 #include "DEG_depsgraph.h"
 #include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
 
 #include "UI_interface.h"
 #include "UI_resources.h"
@@ -227,7 +228,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_WeightProximity = {
-    /* name */ "Vertex Weight Proximity",
+    /* name */ N_("Vertex Weight Proximity"),
     /* structName */ "WeightProxGpencilModifierData",
     /* structSize */ sizeof(WeightProxGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

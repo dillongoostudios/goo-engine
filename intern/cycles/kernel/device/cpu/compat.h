@@ -3,8 +3,6 @@
 
 #pragma once
 
-#define __KERNEL_CPU__
-
 /* Release kernel has too much false-positive maybe-uninitialized warnings,
  * which makes it possible to miss actual warnings.
  */
@@ -34,20 +32,6 @@ CCL_NAMESPACE_BEGIN
  * a macro which is empty for other devices */
 
 #define kernel_assert(cond) assert(cond)
-
-/* Texture types to be compatible with CUDA textures. These are really just
- * simple arrays and after inlining fetch hopefully revert to being a simple
- * pointer lookup. */
-template<typename T> struct texture {
-  ccl_always_inline const T &fetch(int index) const
-  {
-    kernel_assert(index >= 0 && index < width);
-    return data[index];
-  }
-
-  T *data;
-  int width;
-};
 
 /* Macros to handle different memory storage on different devices */
 

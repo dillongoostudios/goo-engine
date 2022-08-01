@@ -55,8 +55,6 @@
 
 #include "BLO_read_write.h"
 
-#include "BKE_gpencil.h"
-
 static CLG_LogRef LOG = {"bke.gpencil"};
 
 static void greasepencil_copy_data(Main *UNUSED(bmain),
@@ -273,7 +271,7 @@ static void greasepencil_blend_read_lib(BlendLibReader *reader, ID *id)
 {
   bGPdata *gpd = (bGPdata *)id;
 
-  /* Relink all data-lock linked by GP data-lock */
+  /* Relink all data-block linked by GP data-block. */
   /* Layers */
   LISTBASE_FOREACH (bGPDlayer *, gpl, &gpd->layers) {
     /* Layer -> Parent References */
@@ -2803,7 +2801,7 @@ void BKE_gpencil_update_layer_transforms(const Depsgraph *depsgraph, Object *ob)
 
     /* Iterate over frame range. */
     for (bGPDframe *gpf = gpf_start; gpf != NULL && gpf != gpf_end; gpf = gpf->next) {
-      /* Skip frames without a valid onion skinning id (note: active frame has one). */
+      /* Skip frames without a valid onion skinning id (NOTE: active frame has one). */
       if (gpf->runtime.onion_id == INT_MAX) {
         continue;
       }

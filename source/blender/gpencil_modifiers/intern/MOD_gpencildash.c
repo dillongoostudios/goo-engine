@@ -9,10 +9,8 @@
 #include <string.h>
 
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_string.h"
-
-#include "BLT_translation.h"
 
 #include "DNA_defaults.h"
 #include "DNA_gpencil_modifier_types.h"
@@ -365,7 +363,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Dash = {
-    /* name */ "Dot Dash",
+    /* name */ N_("Dot Dash"),
     /* structName */ "DashGpencilModifierData",
     /* structSize */ sizeof(DashGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

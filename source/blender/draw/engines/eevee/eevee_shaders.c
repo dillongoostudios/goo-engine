@@ -181,6 +181,7 @@ extern char datatoc_closure_type_lib_glsl[];
 extern char datatoc_closure_eval_volume_lib_glsl[];
 extern char datatoc_common_uniforms_lib_glsl[];
 extern char datatoc_common_utiltex_lib_glsl[];
+extern char datatoc_cryptomatte_lib_glsl[];
 extern char datatoc_cryptomatte_frag_glsl[];
 extern char datatoc_cryptomatte_vert_glsl[];
 extern char datatoc_cubemap_lib_glsl[];
@@ -304,6 +305,7 @@ static void eevee_shader_library_ensure(void)
     DRW_SHADER_LIB_ADD(e_data.lib, closure_eval_refraction_lib);
     DRW_SHADER_LIB_ADD(e_data.lib, closure_eval_surface_lib);
     DRW_SHADER_LIB_ADD(e_data.lib, closure_eval_volume_lib);
+    DRW_SHADER_LIB_ADD(e_data.lib, cryptomatte_lib);
     DRW_SHADER_LIB_ADD(e_data.lib, surface_vert);
 
     e_data.surface_lit_frag = DRW_shader_library_create_shader_string(e_data.lib,
@@ -718,7 +720,7 @@ GPUShader *EEVEE_shaders_cryptomatte_sh_get(bool is_hair)
   if (e_data.cryptomatte_sh[index] == NULL) {
     DynStr *ds = BLI_dynstr_new();
     BLI_dynstr_append(ds, SHADER_DEFINES);
-    BLI_dynstr_append(ds, "#define attrib_load(a) \n");
+    BLI_dynstr_append(ds, "#define attrib_load() \n");
     if (is_hair) {
       BLI_dynstr_append(ds, "#define HAIR_SHADER\n");
     }

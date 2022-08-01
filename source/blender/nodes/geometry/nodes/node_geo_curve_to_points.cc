@@ -90,7 +90,7 @@ static Array<int> calculate_spline_point_offsets(GeoNodeExecParams &params,
       int offset = 0;
       for (const int i : IndexRange(size)) {
         offsets[i] = offset;
-        if (splines[i]->evaluated_points_size() > 0) {
+        if (splines[i]->evaluated_points_num() > 0) {
           offset += count;
         }
       }
@@ -104,7 +104,7 @@ static Array<int> calculate_spline_point_offsets(GeoNodeExecParams &params,
       int offset = 0;
       for (const int i : IndexRange(size)) {
         offsets[i] = offset;
-        if (splines[i]->evaluated_points_size() > 0) {
+        if (splines[i]->evaluated_points_num() > 0) {
           offset += splines[i]->length() / resolution + 1;
         }
       }
@@ -120,25 +120,28 @@ static Array<int> calculate_spline_point_offsets(GeoNodeExecParams &params,
 }
 
 /**
- * \note: Relies on the fact that all attributes on point clouds are stored contiguously.
+ * \note Relies on the fact that all attributes on point clouds are stored contiguously.
  */
 static GMutableSpan ensure_point_attribute(PointCloudComponent &points,
                                            const AttributeIDRef &attribute_id,
-                                           const CustomDataType data_type)
+                                           const eCustomDataType data_type)
 {
-  points.attribute_try_create(attribute_id, ATTR_DOMAIN_POINT, data_type, AttributeInitDefault());
-  WriteAttributeLookup attribute = points.attribute_try_get_for_write(attribute_id);
-  BLI_assert(attribute);
-  return attribute.varray.get_internal_span();
+  GAttributeWriter attribute = points.attributes_for_write()->lookup_or_add_for_write(
+      attribute_id, ATTR_DOMAIN_POINT, data_type);
+  GMutableSpan span = attribute.varray.get_internal_span();
+  attribute.finish();
+  return span;
 }
 
 template<typename T>
 static MutableSpan<T> ensure_point_attribute(PointCloudComponent &points,
                                              const AttributeIDRef &attribute_id)
 {
-  GMutableSpan attribute = ensure_point_attribute(
-      points, attribute_id, bke::cpp_type_to_custom_data_type(CPPType::get<T>()));
-  return attribute.typed<T>();
+  AttributeWriter<T> attribute = points.attributes_for_write()->lookup_or_add_for_write<T>(
+      attribute_id, ATTR_DOMAIN_POINT);
+  MutableSpan<T> span = attribute.varray.get_internal_span();
+  attribute.finish();
+  return span;
 }
 
 namespace {
@@ -240,18 +243,18 @@ static void copy_uniform_sample_point_attributes(const Span<SplinePtr> splines,
     for (const int i : range) {
       const Spline &spline = *splines[i];
       const int offset = offsets[i];
-      const int size = offsets[i + 1] - offsets[i];
-      if (size == 0) {
+      const int num = offsets[i + 1] - offsets[i];
+      if (num == 0) {
         continue;
       }
 
-      const Array<float> uniform_samples = spline.sample_uniform_index_factors(size);
+      const Array<float> uniform_samples = spline.sample_uniform_index_factors(num);
 
       spline.sample_with_index_factors<float3>(
-          spline.evaluated_positions(), uniform_samples, data.positions.slice(offset, size));
+          spline.evaluated_positions(), uniform_samples, data.positions.slice(offset, num));
       spline.sample_with_index_factors<float>(spline.interpolate_to_evaluated(spline.radii()),
                                               uniform_samples,
-                                              data.radii.slice(offset, size));
+                                              data.radii.slice(offset, num));
 
       for (const Map<AttributeIDRef, GMutableSpan>::Item item : data.point_attributes.items()) {
         const AttributeIDRef attribute_id = item.key;
@@ -260,14 +263,13 @@ static void copy_uniform_sample_point_attributes(const Span<SplinePtr> splines,
         BLI_assert(spline.attributes.get_for_read(attribute_id));
         GSpan spline_span = *spline.attributes.get_for_read(attribute_id);
 
-        spline.sample_with_index_factors(spline.interpolate_to_evaluated(spline_span),
-                                         uniform_samples,
-                                         dst.slice(offset, size));
+        spline.sample_with_index_factors(
+            spline.interpolate_to_evaluated(spline_span), uniform_samples, dst.slice(offset, num));
       }
 
       if (!data.tangents.is_empty()) {
         Span<float3> src_tangents = spline.evaluated_tangents();
-        MutableSpan<float3> sampled_tangents = data.tangents.slice(offset, size);
+        MutableSpan<float3> sampled_tangents = data.tangents.slice(offset, num);
         spline.sample_with_index_factors<float3>(src_tangents, uniform_samples, sampled_tangents);
         for (float3 &vector : sampled_tangents) {
           vector = math::normalize(vector);
@@ -276,7 +278,7 @@ static void copy_uniform_sample_point_attributes(const Span<SplinePtr> splines,
 
       if (!data.normals.is_empty()) {
         Span<float3> src_normals = spline.evaluated_normals();
-        MutableSpan<float3> sampled_normals = data.normals.slice(offset, size);
+        MutableSpan<float3> sampled_normals = data.normals.slice(offset, num);
         spline.sample_with_index_factors<float3>(src_normals, uniform_samples, sampled_normals);
         for (float3 &vector : sampled_normals) {
           vector = math::normalize(vector);
@@ -298,8 +300,8 @@ static void copy_spline_domain_attributes(const CurveEval &curve,
 
         for (const int i : curve.splines().index_range()) {
           const int offset = offsets[i];
-          const int size = offsets[i + 1] - offsets[i];
-          type.fill_assign_n(curve_attribute[i], dst[offset], size);
+          const int num = offsets[i + 1] - offsets[i];
+          type.fill_assign_n(curve_attribute[i], dst[offset], num);
         }
 
         return true;
@@ -318,9 +320,11 @@ static void node_geo_exec(GeoNodeExecParams params)
   attribute_outputs.normal_id = StrongAnonymousAttributeID("Normal");
   attribute_outputs.rotation_id = StrongAnonymousAttributeID("Rotation");
 
+  GeometryComponentEditData::remember_deformed_curve_positions_if_necessary(geometry_set);
+
   geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
     if (!geometry_set.has_curves()) {
-      geometry_set.keep_only({GEO_COMPONENT_TYPE_INSTANCES});
+      geometry_set.remove_geometry_during_modify();
       return;
     }
     const std::unique_ptr<CurveEval> curve = curves_to_curve_eval(
@@ -329,13 +333,13 @@ static void node_geo_exec(GeoNodeExecParams params)
     curve->assert_valid_point_attributes();
 
     const Array<int> offsets = calculate_spline_point_offsets(params, mode, *curve, splines);
-    const int total_size = offsets.last();
-    if (total_size == 0) {
-      geometry_set.keep_only({GEO_COMPONENT_TYPE_INSTANCES});
+    const int total_num = offsets.last();
+    if (total_num == 0) {
+      geometry_set.remove_geometry_during_modify();
       return;
     }
 
-    geometry_set.replace_pointcloud(BKE_pointcloud_new_nomain(total_size));
+    geometry_set.replace_pointcloud(BKE_pointcloud_new_nomain(total_num));
     PointCloudComponent &points = geometry_set.get_component_for_write<PointCloudComponent>();
     ResultAttributes point_attributes = create_attributes_for_transfer(
         points, *curve, attribute_outputs);
@@ -357,7 +361,7 @@ static void node_geo_exec(GeoNodeExecParams params)
           point_attributes.tangents, point_attributes.normals, point_attributes.rotations);
     }
 
-    geometry_set.keep_only({GEO_COMPONENT_TYPE_INSTANCES, GEO_COMPONENT_TYPE_POINT_CLOUD});
+    geometry_set.keep_only_during_modify({GEO_COMPONENT_TYPE_POINT_CLOUD});
   });
 
   params.set_output("Points", std::move(geometry_set));

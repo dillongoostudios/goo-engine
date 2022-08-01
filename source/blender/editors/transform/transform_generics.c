@@ -358,6 +358,10 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else if (t->spacetype == SPACE_SEQ && region->regiontype == RGN_TYPE_PREVIEW) {
     t->options |= CTX_SEQUENCER_IMAGE;
+
+    /* Needed for autokeying transforms in preview during playback. */
+    bScreen *animscreen = ED_screen_animation_playing(CTX_wm_manager(C));
+    t->animtimer = (animscreen) ? animscreen->animtimer : NULL;
   }
 
   setTransformViewAspect(t, t->aspect);
@@ -551,7 +555,7 @@ void initTransInfo(bContext *C, TransInfo *t, wmOperator *op, const wmEvent *eve
   }
   else {
     /* Release confirms preference should not affect node editor (T69288, T70504). */
-    if (ISMOUSE(t->launch_event) &&
+    if (ISMOUSE_BUTTON(t->launch_event) &&
         ((U.flag & USER_RELEASECONFIRM) || (t->spacetype == SPACE_NODE))) {
       /* Global "release confirm" on mouse bindings */
       t->flag |= T_RELEASE_CONFIRM;

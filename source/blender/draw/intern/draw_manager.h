@@ -321,6 +321,8 @@ typedef enum {
   DRW_UNIFORM_STORAGE_BLOCK,
   DRW_UNIFORM_STORAGE_BLOCK_REF,
   DRW_UNIFORM_TFEEDBACK_TARGET,
+  DRW_UNIFORM_VERTEX_BUFFER_AS_TEXTURE,
+  DRW_UNIFORM_VERTEX_BUFFER_AS_TEXTURE_REF,
   DRW_UNIFORM_VERTEX_BUFFER_AS_STORAGE,
   DRW_UNIFORM_VERTEX_BUFFER_AS_STORAGE_REF,
   /** Per drawcall uniforms/UBO */
@@ -533,11 +535,15 @@ typedef struct DRWData {
   void *volume_grids_ubos; /* VolumeUniformBufPool */
   /** List of smoke textures to free after drawing. */
   ListBase smoke_textures;
-  /** Texture pool to reuse temp texture across engines. */
-  /* TODO(@fclem): The pool could be shared even between view-ports. */
+  /**
+   * Texture pool to reuse temp texture across engines.
+   * TODO(@fclem): The pool could be shared even between view-ports.
+   */
   struct DRWTexturePool *texture_pool;
-  /** Per stereo view data. Contains engine data and default framebuffers. */
+  /** Per stereo view data. Contains engine data and default frame-buffers. */
   struct DRWViewData *view_data[2];
+  /** Per draw-call curves object data. */
+  struct CurvesUniformBufPool *curves_ubos;
 } DRWData;
 
 /* ------------- DRAW MANAGER ------------ */
@@ -619,7 +625,7 @@ typedef struct DRWManager {
   DRWView *view_default;
   DRWView *view_active;
   DRWView *view_previous;
-  uint primary_view_ct;
+  uint primary_view_num;
   /** TODO(@fclem): Remove this. Only here to support
    * shaders without common_view_lib.glsl */
   ViewInfos view_storage_cpy;

@@ -221,6 +221,17 @@ class FieldOperation : public FieldNode {
   const MultiFunction &multi_function() const;
 
   const CPPType &output_cpp_type(int output_index) const override;
+
+  static std::shared_ptr<FieldOperation> Create(std::shared_ptr<const MultiFunction> function,
+                                                Vector<GField> inputs = {})
+  {
+    return std::make_shared<FieldOperation>(FieldOperation(std::move(function), inputs));
+  }
+  static std::shared_ptr<FieldOperation> Create(const MultiFunction &function,
+                                                Vector<GField> inputs = {})
+  {
+    return std::make_shared<FieldOperation>(FieldOperation(function, inputs));
+  }
 };
 
 class FieldContext;
@@ -372,7 +383,7 @@ class FieldEvaluator : NonMovable, NonCopyable {
   /**
    * \param field: Field to add to the evaluator.
    * \param dst: Mutable span that the evaluated result for this field is be written into.
-   * \note: When the output may only be used as a single value, the version of this function with
+   * \note When the output may only be used as a single value, the version of this function with
    * a virtual array result array should be used.
    */
   int add_with_destination(GField field, GMutableSpan dst);
@@ -380,7 +391,7 @@ class FieldEvaluator : NonMovable, NonCopyable {
   /**
    * \param field: Field to add to the evaluator.
    * \param dst: Mutable span that the evaluated result for this field is be written into.
-   * \note: When the output may only be used as a single value, the version of this function with
+   * \note When the output may only be used as a single value, the version of this function with
    * a virtual array result array should be used.
    */
   template<typename T> int add_with_destination(Field<T> field, MutableSpan<T> dst)
@@ -475,6 +486,8 @@ template<typename T> T evaluate_constant_field(const Field<T> &field)
   evaluate_constant_field(field, &value);
   return value;
 }
+
+Field<bool> invert_boolean_field(const Field<bool> &field);
 
 GField make_constant_field(const CPPType &type, const void *value);
 

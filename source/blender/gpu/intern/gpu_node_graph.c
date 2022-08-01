@@ -335,13 +335,14 @@ void gpu_node_graph_finalize_uniform_attrs(GPUNodeGraph *graph)
 
 /* Attributes and Textures */
 
-static char attr_prefix_get(CustomDataType type)
+static char attr_prefix_get(GPUMaterialAttribute *attr)
 {
-  switch (type) {
+  if (attr->is_default_color) {
+    return 'c';
+  }
+  switch (attr->type) {
     case CD_TANGENT:
       return 't';
-    case CD_MCOL:
-      return 'c';
     case CD_AUTO_FROM_NAME:
       return 'a';
     case CD_HAIRLENGTH:
@@ -354,13 +355,13 @@ static char attr_prefix_get(CustomDataType type)
 
 static void attr_input_name(GPUMaterialAttribute *attr)
 {
-  /* NOTE: Replicate changes to mesh_render_data_create() in draw_cache_impl_mesh.c */
+  /* NOTE: Replicate changes to mesh_render_data_create() in draw_cache_impl_mesh.cc */
   if (attr->type == CD_ORCO) {
     /* OPTI: orco is computed from local positions, but only if no modifier is present. */
     STRNCPY(attr->input_name, "orco");
   }
   else {
-    attr->input_name[0] = attr_prefix_get(attr->type);
+    attr->input_name[0] = attr_prefix_get(attr);
     attr->input_name[1] = '\0';
     if (attr->name[0] != '\0') {
       /* XXX FIXME: see notes in mesh_render_data_create() */
@@ -371,22 +372,25 @@ static void attr_input_name(GPUMaterialAttribute *attr)
 
 /** Add a new varying attribute of given type and name. Returns NULL if out of slots. */
 static GPUMaterialAttribute *gpu_node_graph_add_attribute(GPUNodeGraph *graph,
-                                                          CustomDataType type,
-                                                          const char *name)
+                                                          eCustomDataType type,
+                                                          const char *name,
+                                                          const bool is_default_color)
 {
   /* Find existing attribute. */
   int num_attributes = 0;
   GPUMaterialAttribute *attr = graph->attributes.first;
   for (; attr; attr = attr->next) {
-    if (attr->type == type && STREQ(attr->name, name)) {
+    if (attr->type == type && STREQ(attr->name, name) &&
+        attr->is_default_color == is_default_color) {
       break;
     }
     num_attributes++;
   }
 
   /* Add new requested attribute if it's within GPU limits. */
-  if (attr == NULL && num_attributes < GPU_MAX_ATTR) {
+  if (attr == NULL) {
     attr = MEM_callocN(sizeof(*attr), __func__);
+    attr->is_default_color = is_default_color;
     attr->type = type;
     STRNCPY(attr->name, name);
     attr_input_name(attr);
@@ -475,10 +479,10 @@ static GPUMaterialTexture *gpu_node_graph_add_texture(GPUNodeGraph *graph,
 
 /* Creating Inputs */
 
-GPUNodeLink *GPU_attribute(GPUMaterial *mat, const CustomDataType type, const char *name)
+GPUNodeLink *GPU_attribute(GPUMaterial *mat, const eCustomDataType type, const char *name)
 {
   GPUNodeGraph *graph = gpu_material_node_graph(mat);
-  GPUMaterialAttribute *attr = gpu_node_graph_add_attribute(graph, type, name);
+  GPUMaterialAttribute *attr = gpu_node_graph_add_attribute(graph, type, name, false);
 
   if (type == CD_ORCO) {
     /* OPTI: orco might be computed from local positions and needs object infos. */
@@ -497,8 +501,23 @@ GPUNodeLink *GPU_attribute(GPUMaterial *mat, const CustomDataType type, const ch
   return link;
 }
 
+GPUNodeLink *GPU_attribute_default_color(GPUMaterial *mat)
+{
+  GPUNodeGraph *graph = gpu_material_node_graph(mat);
+  GPUMaterialAttribute *attr = gpu_node_graph_add_attribute(graph, CD_AUTO_FROM_NAME, "", true);
+  if (attr == NULL) {
+    static const float zero_data[GPU_MAX_CONSTANT_DATA] = {0.0f};
+    return GPU_constant(zero_data);
+  }
+  attr->is_default_color = true;
+  GPUNodeLink *link = gpu_node_link_create();
+  link->link_type = GPU_NODE_LINK_ATTR;
+  link->attr = attr;
+  return link;
+}
+
 GPUNodeLink *GPU_attribute_with_default(GPUMaterial *mat,
-                                        const CustomDataType type,
+                                        const eCustomDataType type,
                                         const char *name,
                                         eGPUDefaultValue default_value)
 {

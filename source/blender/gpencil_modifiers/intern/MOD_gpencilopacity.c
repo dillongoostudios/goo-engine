@@ -6,11 +6,9 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "BLI_utildefines.h"
-
-#include "BLI_blenlib.h"
-#include "BLI_math_vector.h"
 
 #include "BLT_translation.h"
 
@@ -281,7 +279,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Opacity = {
-    /* name */ "Opacity",
+    /* name */ N_("Opacity"),
     /* structName */ "OpacityGpencilModifierData",
     /* structSize */ sizeof(OpacityGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

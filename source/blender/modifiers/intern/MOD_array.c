@@ -328,7 +328,7 @@ static void mesh_merge_transform(Mesh *result,
     ml->e += cap_edges_index;
   }
 
-  /* set origindex */
+  /* Set #CD_ORIGINDEX. */
   index_orig = CustomData_get_layer(&result->vdata, CD_ORIGINDEX);
   if (index_orig) {
     copy_vn_i(index_orig + cap_verts_index, cap_nverts, ORIGINDEX_NONE);
@@ -402,7 +402,7 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
           start_cap_ob, ctx->object, &vgroup_start_cap_remap_len);
     }
 
-    start_cap_mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(start_cap_ob, false);
+    start_cap_mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(start_cap_ob);
     if (start_cap_mesh) {
       start_cap_nverts = start_cap_mesh->totvert;
       start_cap_nedges = start_cap_mesh->totedge;
@@ -417,7 +417,7 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
           end_cap_ob, ctx->object, &vgroup_end_cap_remap_len);
     }
 
-    end_cap_mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(end_cap_ob, false);
+    end_cap_mesh = BKE_modifier_get_evaluated_mesh_from_evaluated_object(end_cap_ob);
     if (end_cap_mesh) {
       end_cap_nverts = end_cap_mesh->totvert;
       end_cap_nedges = end_cap_mesh->totedge;
@@ -464,7 +464,7 @@ static Mesh *arrayModifier_doArray(ArrayModifierData *amd,
     copy_m4_m4(offset, result_mat);
   }
 
-  /* Check if there is some scaling.  If scaling, then we will not translate mapping */
+  /* Check if there is some scaling. If scaling, then we will not translate mapping */
   mat4_to_size(scale, offset);
   offset_has_scale = !is_one_v3(scale);
 
@@ -1002,7 +1002,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 ModifierTypeInfo modifierType_Array = {
-    /* name */ "Array",
+    /* name */ N_("Array"),
     /* structName */ "ArrayModifierData",
     /* structSize */ sizeof(ArrayModifierData),
     /* srna */ &RNA_ArrayModifier,

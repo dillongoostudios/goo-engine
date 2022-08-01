@@ -25,7 +25,7 @@ ShaderModule *ShaderModule::g_shader_module = nullptr;
 ShaderModule *ShaderModule::module_get()
 {
   if (g_shader_module == nullptr) {
-    /* TODO(fclem) threadsafety. */
+    /* TODO(@fclem) thread-safety. */
     g_shader_module = new ShaderModule();
   }
   return g_shader_module;
@@ -34,7 +34,7 @@ ShaderModule *ShaderModule::module_get()
 void ShaderModule::module_free()
 {
   if (g_shader_module != nullptr) {
-    /* TODO(fclem) threadsafety. */
+    /* TODO(@fclem) thread-safety. */
     delete g_shader_module;
     g_shader_module = nullptr;
   }
@@ -78,6 +78,10 @@ ShaderModule::~ShaderModule()
 const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
 {
   switch (shader_type) {
+    case FILM_FRAG:
+      return "eevee_film_frag";
+    case FILM_COMP:
+      return "eevee_film_comp";
     /* To avoid compiler warning about missing case. */
     case MAX_SHADER_TYPE:
       return "";
@@ -148,7 +152,7 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
       /** Noop. */
       break;
     case MAT_GEOM_CURVES:
-      /** Hair attributes comme from sampler buffer. Transfer attributes to sampler. */
+      /** Hair attributes come from sampler buffer. Transfer attributes to sampler. */
       for (auto &input : info.vertex_inputs_) {
         if (input.name == "orco") {
           /** NOTE: Orco is generated from strand position for now. */
@@ -163,14 +167,14 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
     case MAT_GEOM_WORLD:
       /**
        * Only orco layer is supported by world and it is procedurally generated. These are here to
-       * make the attribs_load function calls valids.
+       * make the attribs_load function calls valid.
        */
       ATTR_FALLTHROUGH;
     case MAT_GEOM_GPENCIL:
       /**
        * Only one uv and one color attribute layer are supported by gpencil objects and they are
        * already declared in another createInfo. These are here to make the attribs_load
-       * function calls valids.
+       * function calls valid.
        */
       for (auto &input : info.vertex_inputs_) {
         global_vars << input.type << " " << input.name << ";\n";
@@ -190,7 +194,7 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
     const StageInterfaceInfo &iface = *info.vertex_out_interfaces_.first();
     /* Globals the attrib_load() can write to when it is in the fragment shader. */
     global_vars << "struct " << iface.name << " {\n";
-    for (auto &inout : iface.inouts) {
+    for (const auto &inout : iface.inouts) {
       global_vars << "  " << inout.type << " " << inout.name << ";\n";
     }
     global_vars << "};\n";
@@ -289,6 +293,10 @@ void ShaderModule::material_create_info_ammend(GPUMaterial *gpumat, GPUCodegenOu
       break;
     default:
       switch (pipeline_type) {
+        case MAT_PIPE_FORWARD_PREPASS_VELOCITY:
+        case MAT_PIPE_DEFERRED_PREPASS_VELOCITY:
+          info.additional_info("eevee_surf_depth", "eevee_velocity_geom");
+          break;
         case MAT_PIPE_FORWARD_PREPASS:
         case MAT_PIPE_DEFERRED_PREPASS:
         case MAT_PIPE_SHADOW:

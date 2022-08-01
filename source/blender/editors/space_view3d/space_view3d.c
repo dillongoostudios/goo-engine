@@ -594,7 +594,7 @@ static char *view3d_mat_drop_tooltip(bContext *C,
 {
   const char *name = WM_drag_get_item_name(drag);
   ARegion *region = CTX_wm_region(C);
-  int mval[2] = {
+  const int mval[2] = {
       xy[0] - region->winrct.xmin,
       xy[1] - region->winrct.ymin,
   };
@@ -1299,6 +1299,10 @@ static void view3d_main_region_listener(const wmRegionListenerParams *params)
       if (wmn->data == ND_DATA || ELEM(wmn->action, NA_EDITED, NA_SELECTED)) {
         ED_region_tag_redraw(region);
       }
+      break;
+    case NC_WORKSPACE:
+      /* In case the region displays workspace settings. */
+      ED_region_tag_redraw(region);
       break;
   }
 }

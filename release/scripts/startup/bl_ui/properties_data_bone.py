@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-# <pep8 compliant>
-
 import bpy
 from bpy.types import Panel
 from rna_prop_ui import PropertyPanel
@@ -444,7 +442,7 @@ class BONE_PT_deform(BoneButtonsPanel, Panel):
 
 
 class BONE_PT_custom_props(BoneButtonsPanel, PropertyPanel, Panel):
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
     _property_type = bpy.types.Bone, bpy.types.EditBone, bpy.types.PoseBone
 
     @property

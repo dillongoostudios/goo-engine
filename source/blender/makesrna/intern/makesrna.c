@@ -1039,6 +1039,38 @@ static void rna_clamp_value(FILE *f, PropertyRNA *prop, int array)
   }
 }
 
+static char *rna_def_property_search_func(FILE *f,
+                                          StructRNA *srna,
+                                          PropertyRNA *prop,
+                                          PropertyDefRNA *UNUSED(dp),
+                                          const char *manualfunc)
+{
+  char *func;
+
+  if (prop->flag & PROP_IDPROPERTY && manualfunc == NULL) {
+    return NULL;
+  }
+  if (!manualfunc) {
+    return NULL;
+  }
+
+  func = rna_alloc_function_name(srna->identifier, rna_safe_id(prop->identifier), "search");
+
+  fprintf(f,
+          "void %s("
+          "const bContext *C, "
+          "PointerRNA *ptr, "
+          "PropertyRNA *prop, "
+          "const char *edit_text, "
+          "StringPropertySearchVisitFunc visit_fn, "
+          "void *visit_user_data)\n",
+          func);
+  fprintf(f, "{\n");
+  fprintf(f, "\n    %s(C, ptr, prop, edit_text, visit_fn, visit_user_data);\n", manualfunc);
+  fprintf(f, "}\n\n");
+  return func;
+}
+
 static char *rna_def_property_set_func(
     FILE *f, StructRNA *srna, PropertyRNA *prop, PropertyDefRNA *dp, const char *manualfunc)
 {
@@ -1085,8 +1117,10 @@ static char *rna_def_property_set_func(
           fprintf(
               f, "    if (data->%s != NULL) { MEM_freeN(data->%s); }\n", dp->dnaname, dp->dnaname);
           fprintf(f, "    const int length = strlen(value);\n");
-          fprintf(f, "    data->%s = MEM_mallocN(length + 1, __func__);\n", dp->dnaname);
-          fprintf(f, "    %s(data->%s, value, length + 1);\n", string_copy_func, dp->dnaname);
+          fprintf(f, "    if (length > 0) {\n");
+          fprintf(f, "        data->%s = MEM_mallocN(length + 1, __func__);\n", dp->dnaname);
+          fprintf(f, "        %s(data->%s, value, length + 1);\n", string_copy_func, dp->dnaname);
+          fprintf(f, "    } else { data->%s = NULL; }\n", dp->dnaname);
         }
         else {
           /* Handle char array properties. */
@@ -1895,6 +1929,8 @@ static void rna_def_property_funcs(FILE *f, StructRNA *srna, PropertyDefRNA *dp)
       sprop->length = (void *)rna_def_property_length_func(
           f, srna, prop, dp, (const char *)sprop->length);
       sprop->set = (void *)rna_def_property_set_func(f, srna, prop, dp, (const char *)sprop->set);
+      sprop->search = (void *)rna_def_property_search_func(
+          f, srna, prop, dp, (const char *)sprop->search);
       break;
     }
     case PROP_POINTER: {
@@ -2996,7 +3032,7 @@ static void rna_def_function_funcs(FILE *f, StructDefRNA *dsrna, FunctionDefRNA 
     }
 
     if (dparm->next) {
-      fprintf(f, "\t_data += %d;\n", rna_parameter_size(dparm->prop));
+      fprintf(f, "\t_data += %d;\n", rna_parameter_size_pad(rna_parameter_size(dparm->prop)));
     }
   }
 
@@ -4081,13 +4117,15 @@ static void rna_generate_property(FILE *f, StructRNA *srna, const char *nest, Pr
     case PROP_STRING: {
       StringPropertyRNA *sprop = (StringPropertyRNA *)prop;
       fprintf(f,
-              "\t%s, %s, %s, %s, %s, %s, %d, ",
+              "\t%s, %s, %s, %s, %s, %s, %s, %d, %d, ",
               rna_function_string(sprop->get),
               rna_function_string(sprop->length),
               rna_function_string(sprop->set),
               rna_function_string(sprop->get_ex),
               rna_function_string(sprop->length_ex),
               rna_function_string(sprop->set_ex),
+              rna_function_string(sprop->search),
+              (int)sprop->search_flag,
               sprop->maxlength);
       rna_print_c_string(f, sprop->defaultvalue);
       fprintf(f, "\n");
@@ -4397,9 +4435,7 @@ static RNAProcessItem PROCESS_ITEMS[] = {
     {"rna_dynamicpaint.c", NULL, RNA_def_dynamic_paint},
     {"rna_fcurve.c", "rna_fcurve_api.c", RNA_def_fcurve},
     {"rna_gpencil.c", NULL, RNA_def_gpencil},
-#ifdef WITH_NEW_CURVES_TYPE
     {"rna_curves.c", NULL, RNA_def_curves},
-#endif
     {"rna_image.c", "rna_image_api.c", RNA_def_image},
     {"rna_key.c", NULL, RNA_def_key},
     {"rna_light.c", NULL, RNA_def_light},

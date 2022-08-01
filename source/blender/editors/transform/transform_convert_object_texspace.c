@@ -29,7 +29,7 @@
  *
  * \{ */
 
-void createTransTexspace(TransInfo *t)
+static void createTransTexspace(bContext *UNUSED(C), TransInfo *t)
 {
   ViewLayer *view_layer = t->view_layer;
   TransData *td;
@@ -86,11 +86,11 @@ void createTransTexspace(TransInfo *t)
 /** \name Recalc Data object
  * \{ */
 
-void recalcData_texspace(TransInfo *t)
+static void recalcData_texspace(TransInfo *t)
 {
 
   if (t->state != TRANS_CANCEL) {
-    applyProject(t);
+    applySnappingIndividual(t);
   }
 
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
@@ -106,3 +106,10 @@ void recalcData_texspace(TransInfo *t)
 }
 
 /** \} */
+
+TransConvertTypeInfo TransConvertType_ObjectTexSpace = {
+    /* flags */ 0,
+    /* createTransData */ createTransTexspace,
+    /* recalcData */ recalcData_texspace,
+    /* special_aftertrans_update */ NULL,
+};

@@ -3400,6 +3400,9 @@ void DRW_batch_cache_free_old(Object *ob, int ctime)
     case OB_MESH:
       DRW_mesh_batch_cache_free_old((Mesh *)ob->data, ctime);
       break;
+    case OB_CURVES:
+      DRW_curves_batch_cache_free_old((Curves *)ob->data, ctime);
+      break;
     /* TODO: all cases. */
     default:
       break;
@@ -3407,3 +3410,35 @@ void DRW_batch_cache_free_old(Object *ob, int ctime)
 }
 
 /** \} */
+
+void DRW_cdlayer_attr_aliases_add(GPUVertFormat *format,
+                                  const char *base_name,
+                                  const CustomData *UNUSED(data),
+                                  const CustomDataLayer *cl,
+                                  bool is_active_render,
+                                  bool is_active_layer)
+{
+  char attr_name[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
+  const char *layer_name = cl->name;
+
+  GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
+
+  /* Attribute layer name. */
+  BLI_snprintf(attr_name, sizeof(attr_name), "%s%s", base_name, attr_safe_name);
+  GPU_vertformat_alias_add(format, attr_name);
+
+  /* Auto layer name. */
+  BLI_snprintf(attr_name, sizeof(attr_name), "a%s", attr_safe_name);
+  GPU_vertformat_alias_add(format, attr_name);
+
+  /* Active render layer name. */
+  if (is_active_render) {
+    GPU_vertformat_alias_add(format, base_name);
+  }
+
+  /* Active display layer name. */
+  if (is_active_layer) {
+    BLI_snprintf(attr_name, sizeof(attr_name), "a%s", base_name);
+    GPU_vertformat_alias_add(format, attr_name);
+  }
+}

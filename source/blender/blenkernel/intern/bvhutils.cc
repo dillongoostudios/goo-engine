@@ -19,6 +19,7 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_bvhutils.h"
 #include "BKE_editmesh.h"
 #include "BKE_mesh.h"
@@ -967,31 +968,6 @@ static BVHTree *bvhtree_from_mesh_faces_create_tree(float epsilon,
   return tree;
 }
 
-BVHTree *bvhtree_from_mesh_faces_ex(BVHTreeFromMesh *data,
-                                    const MVert *vert,
-                                    const MFace *face,
-                                    const int numFaces,
-                                    const BLI_bitmap *faces_mask,
-                                    int faces_num_active,
-                                    float epsilon,
-                                    int tree_type,
-                                    int axis)
-{
-  BVHTree *tree = nullptr;
-  tree = bvhtree_from_mesh_faces_create_tree(
-      epsilon, tree_type, axis, vert, face, numFaces, faces_mask, faces_num_active);
-
-  bvhtree_balance(tree, false);
-
-  if (data) {
-    /* Setup BVHTreeFromMesh */
-    bvhtree_from_mesh_setup_data(
-        tree, BVHTREE_FROM_FACES, vert, nullptr, face, nullptr, nullptr, nullptr, data);
-  }
-
-  return tree;
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1212,10 +1188,11 @@ static BLI_bitmap *looptri_no_hidden_map_get(const MPoly *mpoly,
 
   int looptri_no_hidden_len = 0;
   int looptri_iter = 0;
-  const MPoly *mp = mpoly;
+  int i_poly = 0;
   while (looptri_iter != looptri_len) {
-    int mp_totlooptri = mp->totloop - 2;
-    if (mp->flag & ME_HIDE) {
+    int mp_totlooptri = mpoly[i_poly].totloop - 2;
+    const MPoly &mp = mpoly[i_poly];
+    if (mp.flag & ME_HIDE) {
       looptri_iter += mp_totlooptri;
     }
     else {
@@ -1225,7 +1202,7 @@ static BLI_bitmap *looptri_no_hidden_map_get(const MPoly *mpoly,
         looptri_no_hidden_len++;
       }
     }
-    mp++;
+    i_poly++;
   }
 
   *r_looptri_active_len = looptri_no_hidden_len;
@@ -1454,13 +1431,17 @@ BVHTree *BKE_bvhtree_from_pointcloud_get(BVHTreeFromPointCloud *data,
     return nullptr;
   }
 
-  for (int i = 0; i < pointcloud->totpoint; i++) {
-    BLI_bvhtree_insert(tree, i, pointcloud->co[i], 1);
+  blender::bke::AttributeAccessor attributes = blender::bke::pointcloud_attributes(*pointcloud);
+  blender::VArraySpan<blender::float3> positions = attributes.lookup_or_default<blender::float3>(
+      "position", ATTR_DOMAIN_POINT, blender::float3(0));
+
+  for (const int i : positions.index_range()) {
+    BLI_bvhtree_insert(tree, i, positions[i], 1);
   }
   BLI_assert(BLI_bvhtree_get_len(tree) == pointcloud->totpoint);
   bvhtree_balance(tree, false);
 
-  data->coords = pointcloud->co;
+  data->coords = (const float(*)[3])positions.data();
   data->tree = tree;
   data->nearest_callback = nullptr;
 

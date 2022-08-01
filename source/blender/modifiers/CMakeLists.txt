@@ -70,7 +70,7 @@ set(SRC
   intern/MOD_normal_edit.c
   intern/MOD_ocean.c
   intern/MOD_particleinstance.c
-  intern/MOD_particlesystem.c
+  intern/MOD_particlesystem.cc
   intern/MOD_remesh.c
   intern/MOD_screw.c
   intern/MOD_shapekey.c
@@ -217,7 +217,6 @@ endif()
 
 if(WITH_EXPERIMENTAL_FEATURES)
   add_definitions(-DWITH_SIMULATION_DATABLOCK)
-  add_definitions(-DWITH_NEW_CURVES_TYPE)
 endif()
 
 # So we can have special tricks in modifier system.

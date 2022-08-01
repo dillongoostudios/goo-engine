@@ -518,7 +518,7 @@ static void createTransTrackingCurvesData(bContext *C, TransInfo *t)
   }
 }
 
-void createTransTrackingData(bContext *C, TransInfo *t)
+static void createTransTrackingData(bContext *C, TransInfo *t)
 {
   ARegion *region = CTX_wm_region(C);
   SpaceClip *sc = CTX_wm_space_clip(C);
@@ -694,7 +694,7 @@ static void flushTransTracking(TransInfo *t)
   }
 }
 
-void recalcData_tracking(TransInfo *t)
+static void recalcData_tracking(TransInfo *t)
 {
   SpaceClip *sc = t->area->spacedata.first;
 
@@ -713,23 +713,23 @@ void recalcData_tracking(TransInfo *t)
 
         if (t->mode == TFM_TRANSLATION) {
           if (TRACK_AREA_SELECTED(track, TRACK_AREA_PAT)) {
-            BKE_tracking_marker_clamp(marker, CLAMP_PAT_POS);
+            BKE_tracking_marker_clamp_pattern_position(marker);
           }
           if (TRACK_AREA_SELECTED(track, TRACK_AREA_SEARCH)) {
-            BKE_tracking_marker_clamp(marker, CLAMP_SEARCH_POS);
+            BKE_tracking_marker_clamp_search_position(marker);
           }
         }
         else if (t->mode == TFM_RESIZE) {
           if (TRACK_AREA_SELECTED(track, TRACK_AREA_PAT)) {
-            BKE_tracking_marker_clamp(marker, CLAMP_PAT_DIM);
+            BKE_tracking_marker_clamp_search_size(marker);
           }
           if (TRACK_AREA_SELECTED(track, TRACK_AREA_SEARCH)) {
-            BKE_tracking_marker_clamp(marker, CLAMP_SEARCH_DIM);
+            BKE_tracking_marker_clamp_search_size(marker);
           }
         }
         else if (t->mode == TFM_ROTATION) {
           if (TRACK_AREA_SELECTED(track, TRACK_AREA_PAT)) {
-            BKE_tracking_marker_clamp(marker, CLAMP_PAT_POS);
+            BKE_tracking_marker_clamp_pattern_position(marker);
           }
         }
       }
@@ -747,7 +747,7 @@ void recalcData_tracking(TransInfo *t)
 /** \name Special After Transform Tracking
  * \{ */
 
-void special_aftertrans_update__movieclip(bContext *C, TransInfo *t)
+static void special_aftertrans_update__movieclip(bContext *C, TransInfo *t)
 {
   SpaceClip *sc = t->area->spacedata.first;
   MovieClip *clip = ED_space_clip_get_clip(sc);
@@ -790,3 +790,10 @@ void special_aftertrans_update__movieclip(bContext *C, TransInfo *t)
 }
 
 /** \} */
+
+TransConvertTypeInfo TransConvertType_Tracking = {
+    /* flags */ (T_POINTS | T_2D_EDIT),
+    /* createTransData */ createTransTrackingData,
+    /* recalcData */ recalcData_tracking,
+    /* special_aftertrans_update */ special_aftertrans_update__movieclip,
+};

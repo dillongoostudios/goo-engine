@@ -122,6 +122,30 @@ static int remapTime(struct GpencilModifierData *md,
       nfra = (efra + 1 - (cfra + offset - 1) % (efra - sfra + 1)) - 1;
     }
   }
+
+  if (mmd->mode == GP_TIME_MODE_PINGPONG) {
+    if ((mmd->flag & GP_TIME_KEEP_LOOP) == 0) {
+      if (((int)(cfra + offset - 1) / (efra - sfra)) % (2)) {
+        nfra = efra - (cfra + offset - 1) % (efra - sfra);
+      }
+      else {
+        nfra = sfra + (cfra + offset - 1) % (efra - sfra);
+      }
+      if (cfra > (efra - sfra) * 2) {
+        nfra = sfra + offset;
+      }
+    }
+    else {
+
+      if (((int)(cfra + offset - 1) / (efra - sfra)) % (2)) {
+        nfra = efra - (cfra + offset - 1) % (efra - sfra);
+      }
+      else {
+        nfra = sfra + (cfra + offset - 1) % (efra - sfra);
+      }
+    }
+  }
+
   return nfra;
 }
 
@@ -206,7 +230,7 @@ static void panelRegister(ARegionType *region_type)
 }
 
 GpencilModifierTypeInfo modifierType_Gpencil_Time = {
-    /* name */ "TimeOffset",
+    /* name */ N_("TimeOffset"),
     /* structName */ "TimeGpencilModifierData",
     /* structSize */ sizeof(TimeGpencilModifierData),
     /* type */ eGpencilModifierTypeType_Gpencil,

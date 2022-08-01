@@ -13,6 +13,7 @@
 
 #include "DNA_listBase.h"
 #include "DNA_object_enums.h"
+#include "DNA_scene_types.h"
 
 #include "DEG_depsgraph.h"
 
@@ -37,6 +38,7 @@ struct ReportList;
 struct Scene;
 struct ScrArea;
 struct SnapObjectContext;
+struct TransConvertTypeInfo;
 struct TransDataContainer;
 struct TransInfo;
 struct TransSnap;
@@ -153,7 +155,8 @@ typedef enum {
 } eTModifier;
 
 /** #TransSnap.status */
-typedef enum {
+typedef enum eTSnap {
+  SNAP_RESETTED = 0,
   SNAP_FORCED = 1 << 0,
   TARGET_INIT = 1 << 1,
   /* Special flag for snap to grid. */
@@ -201,36 +204,6 @@ typedef enum {
   HLP_CARROW = 5,
   HLP_TRACKBALL = 6,
 } eTHelpline;
-
-typedef enum {
-  TC_NONE = 0,
-  TC_ACTION_DATA,
-  TC_POSE,
-  TC_ARMATURE_VERTS,
-  TC_CURSOR_IMAGE,
-  TC_CURSOR_SEQUENCER,
-  TC_CURSOR_VIEW3D,
-  TC_CURVE_VERTS,
-  TC_GRAPH_EDIT_DATA,
-  TC_GPENCIL,
-  TC_LATTICE_VERTS,
-  TC_MASKING_DATA,
-  TC_MBALL_VERTS,
-  TC_MESH_VERTS,
-  TC_MESH_EDGES,
-  TC_MESH_SKIN,
-  TC_MESH_UV,
-  TC_NLA_DATA,
-  TC_NODE_DATA,
-  TC_OBJECT,
-  TC_OBJECT_TEXSPACE,
-  TC_PAINT_CURVE_VERTS,
-  TC_PARTICLE_VERTS,
-  TC_SCULPT,
-  TC_SEQ_DATA,
-  TC_SEQ_IMAGE_DATA,
-  TC_TRACKING_DATA,
-} eTConvertType;
 
 /** \} */
 
@@ -294,19 +267,22 @@ typedef struct TransSnapPoint {
 } TransSnapPoint;
 
 typedef struct TransSnap {
-  char flag;
-  char mode;
-  short target;
-  short modePoint;
-  short modeSelect;
+  /* Snapping options stored as flags */
+  eSnapFlag flag;
+  /* Method(s) used for snapping source to target */
+  eSnapMode mode;
+  /* Part of source to snap to target */
+  eSnapSourceSelect source_select;
+  /* Determines which objects are possible target */
+  eSnapTargetSelect target_select;
   bool align;
   bool project;
-  bool snap_self;
   bool peel;
   bool use_backface_culling;
+  short face_nearest_steps;
   eTSnap status;
   /* Snapped Element Type (currently for objects only). */
-  char snapElem;
+  eSnapMode snapElem;
   /** snapping from this point (in global-space). */
   float snapTarget[3];
   /** to this point (in global-space). */
@@ -458,6 +434,8 @@ typedef struct TransDataContainer {
   int data_len;
   /** Total number of transformed data_mirror. */
   int data_mirror_len;
+  /** Total number of transformed gp-frames. */
+  int data_gpf_len;
 
   struct Object *obedit;
 
@@ -511,7 +489,7 @@ typedef struct TransInfo {
   int data_len_all;
 
   /** TODO: It should be a member of #TransDataContainer. */
-  eTConvertType data_type;
+  struct TransConvertTypeInfo *data_type;
 
   /** Current context/options for transform. */
   eTContext options;
@@ -532,6 +510,13 @@ typedef struct TransInfo {
   void (*transform)(struct TransInfo *, const int[2]);
   /* Event handler function that determines whether the viewport needs to be redrawn. */
   eRedrawFlag (*handleEvent)(struct TransInfo *, const struct wmEvent *);
+
+  /**
+   * Optional callback to transform a single matrix.
+   *
+   * \note used by the gizmo to transform the matrix used to position it.
+   */
+  void (*transform_matrix)(struct TransInfo *t, float mat_xform[4][4]);
 
   /** Constraint Data. */
   TransCon con;
@@ -713,6 +698,12 @@ void removeAspectRatio(TransInfo *t, float vec[2]);
  */
 struct wmKeyMap *transform_modal_keymap(struct wmKeyConfig *keyconf);
 
+/**
+ * Transform a single matrix using the current `t->final_values`.
+ */
+bool transform_apply_matrix(TransInfo *t, float mat[4][4]);
+void transform_final_value_get(const TransInfo *t, float *value, int value_num);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -725,7 +716,6 @@ struct wmKeyMap *transform_modal_keymap(struct wmKeyConfig *keyconf);
 
 bool gimbal_axis_pose(struct Object *ob, const struct bPoseChannel *pchan, float gmat[3][3]);
 bool gimbal_axis_object(struct Object *ob, float gmat[3][3]);
-void drawDial3d(const TransInfo *t);
 
 /** \} */
 

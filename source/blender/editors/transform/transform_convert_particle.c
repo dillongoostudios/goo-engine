@@ -28,7 +28,7 @@
 /** \name Particle Edit Transform Creation
  * \{ */
 
-void createTransParticleVerts(TransInfo *t)
+static void createTransParticleVerts(bContext *UNUSED(C), TransInfo *t)
 {
   FOREACH_TRANS_DATA_CONTAINER (t, tc) {
 
@@ -235,12 +235,19 @@ static void flushTransParticles(TransInfo *t)
 /** \name Recalc Transform Particles Data
  * \{ */
 
-void recalcData_particles(TransInfo *t)
+static void recalcData_particles(TransInfo *t)
 {
   if (t->state != TRANS_CANCEL) {
-    applyProject(t);
+    applySnappingIndividual(t);
   }
   flushTransParticles(t);
 }
 
 /** \} */
+
+TransConvertTypeInfo TransConvertType_Particle = {
+    /* flags */ T_POINTS,
+    /* createTransData */ createTransParticleVerts,
+    /* recalcData */ recalcData_particles,
+    /* special_aftertrans_update */ NULL,
+};

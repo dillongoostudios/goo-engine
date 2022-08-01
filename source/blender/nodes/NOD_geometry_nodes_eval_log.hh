@@ -90,8 +90,8 @@ class GFieldValueLog : public ValueLog {
 struct GeometryAttributeInfo {
   std::string name;
   /** Can be empty when #name does not actually exist on a geometry yet. */
-  std::optional<AttributeDomain> domain;
-  std::optional<CustomDataType> data_type;
+  std::optional<eAttrDomain> domain;
+  std::optional<eCustomDataType> data_type;
 };
 
 /** Contains information about a geometry set. In most cases this does not store the entire
@@ -104,22 +104,27 @@ class GeometryValueLog : public ValueLog {
 
  public:
   struct MeshInfo {
-    int tot_verts, tot_edges, tot_faces;
+    int verts_num, edges_num, faces_num;
   };
   struct CurveInfo {
-    int tot_splines;
+    int splines_num;
   };
   struct PointCloudInfo {
-    int tot_points;
+    int points_num;
   };
   struct InstancesInfo {
-    int tot_instances;
+    int instances_num;
+  };
+  struct EditDataInfo {
+    bool has_deformed_positions;
+    bool has_deform_matrices;
   };
 
   std::optional<MeshInfo> mesh_info;
   std::optional<CurveInfo> curve_info;
   std::optional<PointCloudInfo> pointcloud_info;
   std::optional<InstancesInfo> instances_info;
+  std::optional<EditDataInfo> edit_data_info;
 
   GeometryValueLog(const GeometrySet &geometry_set, bool log_full_geometry = false);
 
@@ -171,17 +176,17 @@ struct ValueOfSockets {
   destruct_ptr<ValueLog> value;
 };
 
-enum class NamedAttributeUsage {
+enum class eNamedAttrUsage {
   None = 0,
   Read = 1 << 0,
   Write = 1 << 1,
   Remove = 1 << 2,
 };
-ENUM_OPERATORS(NamedAttributeUsage, NamedAttributeUsage::Remove);
+ENUM_OPERATORS(eNamedAttrUsage, eNamedAttrUsage::Remove);
 
 struct UsedNamedAttribute {
   std::string name;
-  NamedAttributeUsage usage;
+  eNamedAttrUsage usage;
 };
 
 struct NodeWithUsedNamedAttribute {
@@ -219,7 +224,7 @@ class LocalGeoLogger {
   void log_multi_value_socket(DSocket socket, Span<GPointer> values);
   void log_node_warning(DNode node, NodeWarningType type, std::string message);
   void log_execution_time(DNode node, std::chrono::microseconds exec_time);
-  void log_used_named_attribute(DNode node, std::string attribute_name, NamedAttributeUsage usage);
+  void log_used_named_attribute(DNode node, std::string attribute_name, eNamedAttrUsage usage);
   /**
    * Log a message that will be displayed in the node editor next to the node.
    * This should only be used for debugging purposes and not to display information to users.

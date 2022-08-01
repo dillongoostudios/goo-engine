@@ -355,6 +355,18 @@ static ShaderNode *add_node(Scene *scene,
   else if (b_node.is_a(&RNA_ShaderNodeCombineHSV)) {
     node = graph->create_node<CombineHSVNode>();
   }
+  else if (b_node.is_a(&RNA_ShaderNodeSeparateColor)) {
+    BL::ShaderNodeSeparateColor b_separate_node(b_node);
+    SeparateColorNode *separate_node = graph->create_node<SeparateColorNode>();
+    separate_node->set_color_type((NodeCombSepColorType)b_separate_node.mode());
+    node = separate_node;
+  }
+  else if (b_node.is_a(&RNA_ShaderNodeCombineColor)) {
+    BL::ShaderNodeCombineColor b_combine_node(b_node);
+    CombineColorNode *combine_node = graph->create_node<CombineColorNode>();
+    combine_node->set_color_type((NodeCombSepColorType)b_combine_node.mode());
+    node = combine_node;
+  }
   else if (b_node.is_a(&RNA_ShaderNodeSeparateXYZ)) {
     node = graph->create_node<SeparateXYZNode>();
   }
@@ -764,9 +776,21 @@ static ShaderNode *add_node(Scene *scene,
          */
         int scene_frame = b_scene.frame_current();
         int image_frame = image_user_frame_number(b_image_user, b_image, scene_frame);
-        image->handle = scene->image_manager->add_image(
-            new BlenderImageLoader(b_image, image_frame, b_engine.is_preview()),
-            image->image_params());
+        if (b_image.source() != BL::Image::source_TILED) {
+          image->handle = scene->image_manager->add_image(
+              new BlenderImageLoader(b_image, image_frame, 0, b_engine.is_preview()),
+              image->image_params());
+        }
+        else {
+          vector<ImageLoader *> loaders;
+          loaders.reserve(image->get_tiles().size());
+          for (int tile_number : image->get_tiles()) {
+            loaders.push_back(
+                new BlenderImageLoader(b_image, image_frame, tile_number, b_engine.is_preview()));
+          }
+
+          image->handle = scene->image_manager->add_image(loaders, image->image_params());
+        }
       }
       else {
         ustring filename = ustring(
@@ -802,7 +826,7 @@ static ShaderNode *add_node(Scene *scene,
         int scene_frame = b_scene.frame_current();
         int image_frame = image_user_frame_number(b_image_user, b_image, scene_frame);
         env->handle = scene->image_manager->add_image(
-            new BlenderImageLoader(b_image, image_frame, b_engine.is_preview()),
+            new BlenderImageLoader(b_image, image_frame, 0, b_engine.is_preview()),
             env->image_params());
       }
       else {
@@ -904,8 +928,22 @@ static ShaderNode *add_node(Scene *scene,
     sky->set_sun_disc(b_sky_node.sun_disc());
     sky->set_sun_size(b_sky_node.sun_size());
     sky->set_sun_intensity(b_sky_node.sun_intensity());
-    sky->set_sun_elevation(b_sky_node.sun_elevation());
-    sky->set_sun_rotation(b_sky_node.sun_rotation());
+    /* Patch sun position to be able to animate daylight cycle while keeping the shading code
+     * simple. */
+    float sun_rotation = b_sky_node.sun_rotation();
+    /* Wrap into [-2PI..2PI] range. */
+    float sun_elevation = fmodf(b_sky_node.sun_elevation(), M_2PI_F);
+    /* Wrap into [-PI..PI] range. */
+    if (fabsf(sun_elevation) >= M_PI_F) {
+      sun_elevation -= copysignf(2.0f, sun_elevation) * M_PI_F;
+    }
+    /* Wrap into [-PI/2..PI/2] range while keeping the same absolute position. */
+    if (sun_elevation >= M_PI_2_F || sun_elevation <= -M_PI_2_F) {
+      sun_elevation = copysignf(M_PI_F, sun_elevation) - sun_elevation;
+      sun_rotation += M_PI_F;
+    }
+    sky->set_sun_elevation(sun_elevation);
+    sky->set_sun_rotation(sun_rotation);
     sky->set_altitude(b_sky_node.altitude());
     sky->set_air_density(b_sky_node.air_density());
     sky->set_dust_density(b_sky_node.dust_density());
