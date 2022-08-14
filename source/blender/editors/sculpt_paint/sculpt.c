@@ -343,7 +343,7 @@ void SCULPT_vertex_visible_set(SculptSession *ss, int index, bool visible)
   switch (BKE_pbvh_type(ss->pbvh)) {
     case PBVH_FACES:
       SET_FLAG_FROM_TEST(ss->mvert[index].flag, !visible, ME_HIDE);
-      BKE_pbvh_vert_mark_update(ss->pbvh, index);
+      BKE_pbvh_vert_tag_update_normal(ss->pbvh, index);
       break;
     case PBVH_BMESH:
       BM_elem_flag_set(BM_vert_at_index(ss->bm, index), BM_ELEM_HIDDEN, !visible);
@@ -586,7 +586,6 @@ static void UNUSED_FUNCTION(sculpt_visibility_sync_vertex_to_face_sets)(SculptSe
       ss->face_sets[vert_map->indices[i]] = -abs(ss->face_sets[vert_map->indices[i]]);
     }
   }
-  BKE_pbvh_vert_mark_update(ss->pbvh, index);
 }
 
 void SCULPT_visibility_sync_all_vertex_to_face_sets(SculptSession *ss)
@@ -1408,16 +1407,15 @@ static void paint_mesh_restore_co_task_cb(void *__restrict userdata,
       else {
         copy_v3_v3(vd.fno, orig_data.no);
       }
+      if (vd.mvert) {
+        BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.index);
+      }
     }
     else if (orig_data.unode->type == SCULPT_UNDO_MASK) {
       *vd.mask = orig_data.mask;
     }
     else if (orig_data.unode->type == SCULPT_UNDO_COLOR) {
       SCULPT_vertex_color_set(ss, vd.index, orig_data.col);
-    }
-
-    if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -3045,7 +3043,7 @@ static void do_gravity_task_cb_ex(void *__restrict userdata,
     mul_v3_v3fl(proxy[vd.i], offset, fade);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_mark_update(ss->pbvh, vd.index);
+      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.index);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -5355,7 +5353,7 @@ static bool sculpt_stroke_test_start(bContext *C, struct wmOperator *op, const f
 
 static void sculpt_stroke_update_step(bContext *C,
                                       wmOperator *UNUSED(op),
-                                      struct PaintStroke *UNUSED(stroke),
+                                      struct PaintStroke *stroke,
                                       PointerRNA *itemptr)
 {
   UnifiedPaintSettings *ups = &CTX_data_tool_settings(C)->unified_paint_settings;
@@ -5364,6 +5362,8 @@ static void sculpt_stroke_update_step(bContext *C,
   SculptSession *ss = ob->sculpt;
   const Brush *brush = BKE_paint_brush(&sd->paint);
   ToolSettings *tool_settings = CTX_data_tool_settings(C);
+  StrokeCache *cache = ss->cache;
+  cache->stroke_distance = paint_stroke_distance_get(stroke);
 
   SCULPT_stroke_modifiers_check(C, ob, brush);
   sculpt_update_cache_variants(C, sd, ob, itemptr);

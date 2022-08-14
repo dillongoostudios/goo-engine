@@ -404,13 +404,19 @@ static void node_foreach_path(ID *id, BPathForeachPathData *bpath_data)
   }
 }
 
-static ID *node_owner_get(Main *bmain, ID *id)
+static ID *node_owner_get(Main *bmain, ID *id, ID *owner_id_hint)
 {
   if ((id->flag & LIB_EMBEDDED_DATA) == 0) {
     return id;
   }
   /* TODO: Sort this NO_MAIN or not for embedded node trees. See T86119. */
   // BLI_assert((id->tag & LIB_TAG_NO_MAIN) == 0);
+
+  bNodeTree *ntree = reinterpret_cast<bNodeTree *>(id);
+
+  if (owner_id_hint != nullptr && ntreeFromID(owner_id_hint) == ntree) {
+    return owner_id_hint;
+  }
 
   ListBase *lists[] = {&bmain->materials,
                        &bmain->lights,
@@ -421,7 +427,6 @@ static ID *node_owner_get(Main *bmain, ID *id)
                        &bmain->simulations,
                        nullptr};
 
-  bNodeTree *ntree = (bNodeTree *)id;
   for (int i = 0; lists[i] != nullptr; i++) {
     LISTBASE_FOREACH (ID *, id_iter, lists[i]) {
       if (ntreeFromID(id_iter) == ntree) {
@@ -3047,7 +3052,9 @@ void nodeRemoveNode(Main *bmain, bNodeTree *ntree, bNode *node, bool do_id_user)
     }
   }
 
-  if (node_has_id) {
+  /* Also update relations for the scene time node, which causes a dependency
+   * on time that users expect to be removed when the node is removed. */
+  if (node_has_id || node->type == GEO_NODE_INPUT_SCENE_TIME) {
     if (bmain != nullptr) {
       DEG_relations_tag_update(bmain);
     }

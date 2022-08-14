@@ -50,7 +50,7 @@
 #include "lineart_intern.h"
 
 typedef struct LineartIsecSingle {
-  float v1[3], v2[3];
+  double v1[3], v2[3];
   LineartTriangle *tri1, *tri2;
 } LineartIsecSingle;
 
@@ -304,13 +304,12 @@ void lineart_edge_cut(LineartData *ld,
     /* The enclosed shape flag will override regular lit/shaded
      * flags. See LineartEdgeSegment::shadow_mask_bits for details. */
     if (shadow_bits == LRT_SHADOW_MASK_ENCLOSED_SHAPE) {
-      if (seg->shadow_mask_bits & LRT_SHADOW_MASK_LIT || e->flags & LRT_EDGE_FLAG_LIGHT_CONTOUR) {
-        seg->shadow_mask_bits &= ~LRT_SHADOW_MASK_LIT;
+      if (seg->shadow_mask_bits & LRT_SHADOW_MASK_ILLUMINATED ||
+          e->flags & LRT_EDGE_FLAG_LIGHT_CONTOUR) {
         seg->shadow_mask_bits |= LRT_SHADOW_MASK_INHIBITED;
       }
       else if (seg->shadow_mask_bits & LRT_SHADOW_MASK_SHADED) {
-        seg->shadow_mask_bits &= ~LRT_SHADOW_MASK_SHADED;
-        seg->shadow_mask_bits |= LRT_SHADOW_MASK_LIT;
+        seg->shadow_mask_bits |= LRT_SHADOW_MASK_ILLUMINATED_SHAPE;
       }
     }
     else {
@@ -1800,7 +1799,7 @@ static void lineart_add_edge_to_array_thread(LineartObjectInfo *obi, LineartEdge
  * #pe.  */
 void lineart_finalize_object_edge_array_reserve(LineartPendingEdges *pe, int count)
 {
-  if (pe->max || pe->array) {
+  if (pe->max || pe->array || count == 0) {
     return;
   }
 
@@ -3286,8 +3285,8 @@ static void lineart_add_isec_thread(LineartIsecThread *th,
     th->array = new_array;
   }
   LineartIsecSingle *isec_single = &th->array[th->current];
-  copy_v3fl_v3db(isec_single->v1, v1);
-  copy_v3fl_v3db(isec_single->v2, v2);
+  copy_v3_v3_db(isec_single->v1, v1);
+  copy_v3_v3_db(isec_single->v2, v2);
   isec_single->tri1 = tri1;
   isec_single->tri2 = tri2;
   if (tri1->target_reference > tri2->target_reference) {
@@ -3643,7 +3642,8 @@ static LineartData *lineart_create_render_buffer(Scene *scene,
                          (lmd->light_contour_object != NULL));
 
   ld->conf.shadow_selection = lmd->shadow_selection_override;
-  ld->conf.shadow_enclose_shapes = (lmd->calculation_flags & LRT_SHADOW_ENCLOSED_SHAPES) != 0;
+  ld->conf.shadow_enclose_shapes = lmd->shadow_selection_override ==
+                                   LRT_SHADOW_FILTER_ILLUMINATED_ENCLOSED_SHAPES;
   ld->conf.shadow_use_silhouette = lmd->shadow_use_silhouette_override != 0;
 
   ld->conf.use_back_face_culling = (lmd->calculation_flags & LRT_USE_BACK_FACE_CULLING) != 0;
@@ -4582,8 +4582,8 @@ static void lineart_create_edges_from_isec_data(LineartIsecData *d)
       LineartIsecSingle *is = &th->array[j];
       LineartVert *v1 = v;
       LineartVert *v2 = v + 1;
-      copy_v3db_v3fl(v1->gloc, is->v1);
-      copy_v3db_v3fl(v2->gloc, is->v2);
+      copy_v3_v3_db(v1->gloc, is->v1);
+      copy_v3_v3_db(v2->gloc, is->v2);
       /* The intersection line has been generated only in geometry space, so we need to transform
        * them as well. */
       mul_v4_m4v3_db(v1->fbcoord, ld->conf.view_projection, v1->gloc);
@@ -5227,12 +5227,21 @@ static void lineart_gpencil_generate(LineartCache *cache,
     }
     if (shaodow_selection) {
       if (ec->shadow_mask_bits != LRT_SHADOW_MASK_UNDEFINED) {
-        /* TODO(@Yiming): Give a behavior option for how to display undefined shadow info. */
-        if ((shaodow_selection == LRT_SHADOW_FILTER_LIT &&
-             (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_LIT))) ||
-            (shaodow_selection == LRT_SHADOW_FILTER_SHADED &&
-             (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_SHADED)))) {
+        /* TODO(Yiming): Give a behaviour option for how to display undefined shadow info. */
+        if ((shaodow_selection == LRT_SHADOW_FILTER_ILLUMINATED &&
+             (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_ILLUMINATED)))) {
           continue;
+        }
+        else if ((shaodow_selection == LRT_SHADOW_FILTER_SHADED &&
+                  (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_SHADED)))) {
+          continue;
+        }
+        else if (shaodow_selection == LRT_SHADOW_FILTER_ILLUMINATED_ENCLOSED_SHAPES) {
+          uint32_t test_bits = ec->shadow_mask_bits & LRT_SHADOW_TEST_SHAPE_BITS;
+          if ((test_bits != LRT_SHADOW_MASK_ILLUMINATED) &&
+              (test_bits != (LRT_SHADOW_MASK_SHADED | LRT_SHADOW_MASK_ILLUMINATED_SHAPE))) {
+            continue;
+          }
         }
       }
     }
