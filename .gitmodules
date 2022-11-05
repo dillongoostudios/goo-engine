@@ -1,7 +1,7 @@
 [submodule "release/scripts/addons"]
 	path = release/scripts/addons
-	url = git@github.com:studiogoobot/goo-blender-addons.git
-	branch = goo-blender-master-v3.0 
+	url = git@github.com:dillongoostudios/goo-blender-addons.git
+	branch = goo-blender-master
 	ignore = all
 [submodule "release/scripts/addons_contrib"]
 	path = release/scripts/addons_contrib
