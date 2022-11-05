@@ -1123,6 +1123,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
     case GHOST_kEventDraggingEntered:
     case GHOST_kEventDraggingUpdated:
     case GHOST_kEventDraggingExited:
+      window->clientToScreenIntern(mouseX, mouseY, mouseX, mouseY);
       pushEvent(new GHOST_EventDragnDrop(
           getMilliSeconds(), eventType, draggedObjectType, window, mouseX, mouseY, NULL));
       break;
@@ -1331,6 +1332,8 @@ GHOST_TSuccess GHOST_SystemCocoa::handleDraggingEvent(GHOST_TEventType eventType
           return GHOST_kFailure;
           break;
       }
+
+      window->clientToScreenIntern(mouseX, mouseY, mouseX, mouseY);
       pushEvent(new GHOST_EventDragnDrop(
           getMilliSeconds(), eventType, draggedObjectType, window, mouseX, mouseY, eventData));
 
@@ -1678,7 +1681,7 @@ GHOST_TSuccess GHOST_SystemCocoa::handleMouseEvent(void *eventPtr)
       /* we assume phases are only set for gestures from trackpad or magic
        * mouse events. note that using tablet at the same time may not work
        * since this is a static variable */
-      if (phase == NSEventPhaseBegan)
+      if (phase == NSEventPhaseBegan && m_multitouchGestures)
         m_multiTouchScroll = true;
       else if (phase == NSEventPhaseEnded)
         m_multiTouchScroll = false;

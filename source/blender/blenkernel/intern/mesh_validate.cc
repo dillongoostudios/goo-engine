@@ -1017,20 +1017,12 @@ bool BKE_mesh_validate_all_customdata(CustomData *vdata,
       pdata, mask.pmask, totpoly, do_verbose, do_fixes, &is_change_p);
 
   const int tot_uvloop = CustomData_number_of_layers(ldata, CD_MLOOPUV);
-  const int tot_vcolloop = CustomData_number_of_layers(ldata, CD_PROP_BYTE_COLOR);
   if (tot_uvloop > MAX_MTFACE) {
     PRINT_ERR(
         "\tMore UV layers than %d allowed, %d last ones won't be available for render, shaders, "
         "etc.\n",
         MAX_MTFACE,
         tot_uvloop - MAX_MTFACE);
-  }
-  if (tot_vcolloop > MAX_MCOL) {
-    PRINT_ERR(
-        "\tMore VCol layers than %d allowed, %d last ones won't be available for render, shaders, "
-        "etc.\n",
-        MAX_MCOL,
-        tot_vcolloop - MAX_MCOL);
   }
 
   /* check indices of clone/stencil */

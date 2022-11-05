@@ -733,11 +733,14 @@ Span<float3> CurvesGeometry::evaluated_tangents() const
           const IndexRange points = this->points_for_curve(curve_index);
           const IndexRange evaluated_points = this->evaluated_points_for_curve(curve_index);
 
-          if (handles_right[points.first()] != positions[points.first()]) {
+          const float epsilon = 1e-6f;
+          if (!math::almost_equal_relative(
+                  handles_right[points.first()], positions[points.first()], epsilon)) {
             tangents[evaluated_points.first()] = math::normalize(handles_right[points.first()] -
                                                                  positions[points.first()]);
           }
-          if (handles_left[points.last()] != positions[points.last()]) {
+          if (!math::almost_equal_relative(
+                  handles_left[points.last()], positions[points.last()], epsilon)) {
             tangents[evaluated_points.last()] = math::normalize(positions[points.last()] -
                                                                 handles_left[points.last()]);
           }
@@ -936,6 +939,12 @@ void CurvesGeometry::ensure_evaluated_lengths() const
   });
 
   this->runtime->length_cache_dirty = false;
+}
+
+void CurvesGeometry::ensure_can_interpolate_to_evaluated() const
+{
+  this->ensure_evaluated_offsets();
+  this->ensure_nurbs_basis_cache();
 }
 
 /** \} */
@@ -1338,6 +1347,10 @@ static void reverse_swap_curve_point_data(const CurvesGeometry &curves,
         const int end_index = points.size() - 1 - i;
         std::swap(a[end_index], b[i]);
         std::swap(b[end_index], a[i]);
+      }
+      if (points.size() % 2) {
+        const int64_t middle_index = points.size() / 2;
+        std::swap(a[middle_index], b[middle_index]);
       }
     }
   });

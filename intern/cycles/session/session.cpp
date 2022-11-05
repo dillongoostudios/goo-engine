@@ -43,6 +43,10 @@ Session::Session(const SessionParams &params_, const SceneParams &scene_params)
 
   device = Device::create(params.device, stats, profiler);
 
+  if (device->have_error()) {
+    progress.set_error(device->error_message());
+  }
+
   scene = new Scene(scene_params, device);
 
   /* Configure path tracer. */
@@ -436,8 +440,7 @@ int2 Session::get_effective_tile_size() const
   const int image_width = buffer_params_.width;
   const int image_height = buffer_params_.height;
 
-  /* No support yet for baking with tiles. */
-  if (!params.use_auto_tile || scene->bake_manager->get_baking()) {
+  if (!params.use_auto_tile) {
     return make_int2(image_width, image_height);
   }
 

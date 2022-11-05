@@ -192,6 +192,13 @@ static bNodeSocketLink *add_reroute_do_socket_section(bContext *C,
 
     reroute_node->locx = insert_point[0] / UI_DPI_FAC;
     reroute_node->locy = insert_point[1] / UI_DPI_FAC;
+
+    LISTBASE_FOREACH_BACKWARD (bNode *, frame_node, &ntree->nodes) {
+      if (frame_node->type == NODE_FRAME && BLI_rctf_isect_pt_v(&frame_node->totr, insert_point)) {
+        nodeAttachNode(reroute_node, frame_node);
+        break;
+      }
+    }
   }
 
   return socklink;
@@ -843,6 +850,8 @@ static int new_node_tree_exec(bContext *C, wmOperator *op)
 
     ED_node_tree_update(C);
   }
+
+  WM_event_add_notifier(C, NC_NODE | NA_ADDED, NULL);
 
   return OPERATOR_FINISHED;
 }

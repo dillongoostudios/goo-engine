@@ -1470,7 +1470,7 @@ static LineartTriangle *lineart_triangle_from_index(LineartData *ld,
 typedef struct EdgeFeatData {
   LineartData *ld;
   Mesh *me;
-  Object *ob;
+  Object *ob_eval; /* For evaluated materials. */
   const MLoopTri *mlooptri;
   LineartTriangle *tri_array;
   LineartVert *v_array;
@@ -1503,7 +1503,7 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
   EdgeFeatData *e_feat_data = (EdgeFeatData *)userdata;
   EdgeFeatReduceData *reduce_data = (EdgeFeatReduceData *)tls->userdata_chunk;
   Mesh *me = e_feat_data->me;
-  Object *ob = e_feat_data->ob;
+  Object *ob_eval = e_feat_data->ob_eval;
   LineartEdgeNeighbor *edge_nabr = e_feat_data->edge_nabr;
   const MLoopTri *mlooptri = e_feat_data->mlooptri;
 
@@ -1653,8 +1653,8 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
     int mat2 = me->mpoly[mlooptri[f2].poly].mat_nr;
 
     if (mat1 != mat2) {
-      Material *m1 = BKE_object_material_get(ob, mat1 + 1);
-      Material *m2 = BKE_object_material_get(ob, mat2 + 1);
+      Material *m1 = BKE_object_material_get_eval(ob_eval, mat1 + 1);
+      Material *m2 = BKE_object_material_get_eval(ob_eval, mat2 + 1);
       if (m1 && m2 &&
           ((m1->lineart.mat_occlusion == 0 && m2->lineart.mat_occlusion != 0) ||
            (m2->lineart.mat_occlusion == 0 && m1->lineart.mat_occlusion != 0))) {
@@ -1869,8 +1869,8 @@ static void lineart_load_tri_task(void *__restrict userdata,
   tri->v[2] = &vert_arr[v3];
 
   /* Material mask bits and occlusion effectiveness assignment. */
-  Material *mat = BKE_object_material_get(ob_info->original_ob,
-                                          me->mpoly[mlooptri->poly].mat_nr + 1);
+  Material *mat = BKE_object_material_get_eval(ob_info->original_ob_eval,
+                                               me->mpoly[mlooptri->poly].mat_nr + 1);
   tri->material_mask_bits |= ((mat && (mat->lineart.flags & LRT_MATERIAL_MASK_ENABLED)) ?
                                   mat->lineart.material_mask_bits :
                                   0);
@@ -1896,6 +1896,9 @@ static void lineart_load_tri_task(void *__restrict userdata,
 
   if (ob_info->usage == OBJECT_LRT_INTERSECTION_ONLY) {
     tri->flags |= LRT_TRIANGLE_INTERSECTION_ONLY;
+  }
+  else if (ob_info->usage == OBJECT_LRT_FORCE_INTERSECTION) {
+    tri->flags |= LRT_TRIANGLE_FORCE_INTERSECTION;
   }
   else if (ob_info->usage == OBJECT_LRT_NO_INTERSECTION ||
            ob_info->usage == OBJECT_LRT_OCCLUSION_ONLY) {
@@ -2120,7 +2123,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   EdgeFeatData edge_feat_data = {0};
   edge_feat_data.ld = la_data;
   edge_feat_data.me = me;
-  edge_feat_data.ob = orig_ob;
+  edge_feat_data.ob_eval = ob_info->original_ob_eval;
   edge_feat_data.mlooptri = mlooptri;
   edge_feat_data.edge_nabr = lineart_build_edge_neighbor(me, total_edges);
   edge_feat_data.tri_array = la_tri_arr;
@@ -2238,7 +2241,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
       }
 
       if (usage == OBJECT_LRT_INHERIT || usage == OBJECT_LRT_INCLUDE ||
-          usage == OBJECT_LRT_NO_INTERSECTION) {
+          usage == OBJECT_LRT_NO_INTERSECTION || usage == OBJECT_LRT_FORCE_INTERSECTION) {
         lineart_add_edge_to_array_thread(ob_info, la_edge);
       }
 
@@ -2266,7 +2269,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
       la_edge->edge_identifier = LRT_EDGE_IDENTIFIER(ob_info, la_edge);
       BLI_addtail(&la_edge->segments, la_seg);
       if (usage == OBJECT_LRT_INHERIT || usage == OBJECT_LRT_INCLUDE ||
-          usage == OBJECT_LRT_NO_INTERSECTION) {
+          usage == OBJECT_LRT_NO_INTERSECTION || usage == OBJECT_LRT_FORCE_INTERSECTION) {
         lineart_add_edge_to_array_thread(ob_info, la_edge);
         if (shadow_eln) {
           LineartEdge *shadow_e = lineart_find_matching_edge(shadow_eln, la_edge->edge_identifier);
@@ -2367,6 +2370,8 @@ static int lineart_usage_check(Collection *c, Object *ob, bool is_render)
             return OBJECT_LRT_INTERSECTION_ONLY;
           case COLLECTION_LRT_NO_INTERSECTION:
             return OBJECT_LRT_NO_INTERSECTION;
+          case COLLECTION_LRT_FORCE_INTERSECTION:
+            return OBJECT_LRT_FORCE_INTERSECTION;
         }
         return OBJECT_LRT_INHERIT;
       }
@@ -2511,6 +2516,7 @@ static void lineart_object_load_single_instance(LineartData *ld,
 
   obi->original_me = use_mesh;
   obi->original_ob = (ref_ob->id.orig_id ? (Object *)ref_ob->id.orig_id : (Object *)ref_ob);
+  obi->original_ob_eval = DEG_get_evaluated_object(depsgraph, obi->original_ob);
   lineart_geometry_load_assign_thread(olti, obi, thread_count, use_mesh->totpoly);
 }
 
@@ -2650,6 +2656,7 @@ void lineart_main_load_geometries(Depsgraph *depsgraph,
       }
       LineartVert *v = (LineartVert *)obi->v_eln->pointer;
       int v_count = obi->v_eln->element_count;
+      obi->v_eln->global_index_offset = global_i;
       for (int vi = 0; vi < v_count; vi++) {
         v[vi].index += global_i;
       }
@@ -3393,10 +3400,11 @@ static void lineart_triangle_intersect_in_bounding_area(LineartTriangle *tri,
     }
     tt->testing_e[th->thread_id] = (LineartEdge *)tri;
 
-    if ((testing_triangle->flags & LRT_TRIANGLE_NO_INTERSECTION) ||
-        ((testing_triangle->flags & LRT_TRIANGLE_INTERSECTION_ONLY) &&
-         (tri->flags & LRT_TRIANGLE_INTERSECTION_ONLY))) {
-      continue;
+    if (!((testing_triangle->flags | tri->flags) & LRT_TRIANGLE_FORCE_INTERSECTION)) {
+      if (((testing_triangle->flags | tri->flags) & LRT_TRIANGLE_NO_INTERSECTION) ||
+          (testing_triangle->flags & tri->flags & LRT_TRIANGLE_INTERSECTION_ONLY)) {
+        continue;
+      }
     }
 
     double *RG0 = testing_triangle->v[0]->gloc, *RG1 = testing_triangle->v[1]->gloc,
@@ -4519,14 +4527,8 @@ static void lineart_add_triangles_worker(TaskPool *__restrict UNUSED(pool), Line
           _dir_control++;
           for (co = x1; co <= x2; co++) {
             for (r = y1; r <= y2; r++) {
-              lineart_bounding_area_link_triangle(ld,
-                                                  &ld->qtree.initials[r * ld->qtree.count_x + co],
-                                                  tri,
-                                                  0,
-                                                  1,
-                                                  0,
-                                                  (!(tri->flags & LRT_TRIANGLE_NO_INTERSECTION)),
-                                                  th);
+              lineart_bounding_area_link_triangle(
+                  ld, &ld->qtree.initials[r * ld->qtree.count_x + co], tri, 0, 1, 0, 1, th);
             }
           }
         } /* Else throw away. */
@@ -5105,6 +5107,8 @@ bool MOD_lineart_compute_feature_lines(Depsgraph *depsgraph,
 
     /* At last, we need to clear flags so we don't confuse GPencil generation calls. */
     MOD_lineart_chain_clear_picked_flag(lc);
+
+    MOD_lineart_finalize_chains(ld);
   }
 
   lineart_mem_destroy(&lc->shadow_data_pool);
@@ -5227,7 +5231,7 @@ static void lineart_gpencil_generate(LineartCache *cache,
     }
     if (shaodow_selection) {
       if (ec->shadow_mask_bits != LRT_SHADOW_MASK_UNDEFINED) {
-        /* TODO(Yiming): Give a behaviour option for how to display undefined shadow info. */
+        /* TODO(@Yiming): Give a behavior option for how to display undefined shadow info. */
         if ((shaodow_selection == LRT_SHADOW_FILTER_ILLUMINATED &&
              (!(ec->shadow_mask_bits & LRT_SHADOW_MASK_ILLUMINATED)))) {
           continue;

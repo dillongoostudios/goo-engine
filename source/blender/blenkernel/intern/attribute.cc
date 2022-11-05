@@ -288,6 +288,10 @@ CustomDataLayer *BKE_id_attribute_duplicate(ID *id, const char *name, ReportList
 bool BKE_id_attribute_remove(ID *id, const char *name, ReportList *reports)
 {
   using namespace blender::bke;
+  if (!name || name[0] == '\0') {
+    BKE_report(reports, RPT_ERROR, "The attribute name must not be empty");
+    return false;
+  }
   if (BKE_id_attribute_required(id, name)) {
     BKE_report(reports, RPT_ERROR, "Attribute is required and can't be removed");
     return false;
@@ -469,7 +473,7 @@ CustomDataLayer *BKE_id_attributes_active_get(ID *id)
       for (int i = 0; i < customdata->totlayer; i++) {
         CustomDataLayer *layer = &customdata->layers[i];
         if (CD_MASK_PROP_ALL & CD_TYPE_AS_MASK(layer->type)) {
-          if (index == active_index) {
+          if (index == active_index && BKE_attribute_allow_procedural_access(layer->name)) {
             return layer;
           }
           index++;

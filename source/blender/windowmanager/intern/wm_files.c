@@ -296,6 +296,12 @@ static void wm_window_match_keep_current_wm(const bContext *C,
     }
   }
 
+  /* we'll be using the current wm list directly; make sure
+   * the names are validated and in the name map. */
+  LISTBASE_FOREACH (wmWindowManager *, wm_item, current_wm_list) {
+    BKE_main_namemap_get_name(bmain, &wm_item->id, wm_item->id.name + 2);
+  }
+
   *r_new_wm_list = *current_wm_list;
 }
 
@@ -456,8 +462,8 @@ static void wm_init_userdef(Main *bmain)
   /* Update the temporary directory from the preferences or fallback to the system default. */
   BKE_tempdir_init(U.tempdir);
 
-  /* Update tablet API preference. */
-  WM_init_tablet_api();
+  /* Update input device preference. */
+  WM_init_input_devices();
 
   BLO_sanitize_experimental_features_userpref_blend(&U);
 }

@@ -791,8 +791,10 @@ bool BKE_image_render_write_exr(ReportList *reports,
   LISTBASE_FOREACH (RenderLayer *, rl, &rr->layers) {
     /* Skip other render layers if requested. */
     if (!multi_layer && nr != layer) {
+      nr++;
       continue;
     }
+    nr++;
 
     LISTBASE_FOREACH (RenderPass *, rp, &rl->passes) {
       /* Skip non-RGBA and Z passes if not using multi layer. */
@@ -816,7 +818,7 @@ bool BKE_image_render_write_exr(ReportList *reports,
       const bool pass_RGBA = (STR_ELEM(rp->chan_id, "RGB", "RGBA", "R", "G", "B", "A"));
       const bool pass_half_float = half_float && pass_RGBA;
 
-      /* Colorspace conversion only happens on RGBA passes. */
+      /* Color-space conversion only happens on RGBA passes. */
       float *output_rect =
           (save_as_render && pass_RGBA) ?
               image_exr_from_scene_linear_to_output(

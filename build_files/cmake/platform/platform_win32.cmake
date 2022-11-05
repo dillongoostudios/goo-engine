@@ -378,7 +378,6 @@ if(WITH_OPENCOLLADA)
     optimized ${OPENCOLLADA}/lib/opencollada/OpenCOLLADAStreamWriter.lib
     optimized ${OPENCOLLADA}/lib/opencollada/MathMLSolver.lib
     optimized ${OPENCOLLADA}/lib/opencollada/GeneratedSaxParser.lib
-    optimized ${OPENCOLLADA}/lib/opencollada/xml.lib
     optimized ${OPENCOLLADA}/lib/opencollada/buffer.lib
     optimized ${OPENCOLLADA}/lib/opencollada/ftoa.lib
 
@@ -388,10 +387,14 @@ if(WITH_OPENCOLLADA)
     debug ${OPENCOLLADA}/lib/opencollada/OpenCOLLADAStreamWriter_d.lib
     debug ${OPENCOLLADA}/lib/opencollada/MathMLSolver_d.lib
     debug ${OPENCOLLADA}/lib/opencollada/GeneratedSaxParser_d.lib
-    debug ${OPENCOLLADA}/lib/opencollada/xml_d.lib
     debug ${OPENCOLLADA}/lib/opencollada/buffer_d.lib
     debug ${OPENCOLLADA}/lib/opencollada/ftoa_d.lib
   )
+  if(EXISTS ${LIBDIR}/xml2/lib/libxml2s.lib) # 3.4 libraries
+    list(APPEND OPENCOLLADA_LIBRARIES ${LIBDIR}/xml2/lib/libxml2s.lib)
+  else()
+    list(APPEND OPENCOLLADA_LIBRARIES ${OPENCOLLADA}/lib/opencollada/xml.lib)
+  endif()
 
   list(APPEND OPENCOLLADA_LIBRARIES ${OPENCOLLADA}/lib/opencollada/UTF.lib)
 
@@ -497,7 +500,7 @@ if(WITH_JACK)
 endif()
 
 if(WITH_PYTHON)
-  set(PYTHON_VERSION 3.10) # CACHE STRING)
+  SET(PYTHON_VERSION 3.10 CACHE STRING "Python Version (major and minor only)")
 
   string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
   set(PYTHON_LIBRARY ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}.lib)
@@ -692,11 +695,11 @@ endif()
 
 if(WITH_IMAGE_OPENJPEG)
   set(OPENJPEG ${LIBDIR}/openjpeg)
-  set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.4)
+  set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.5)
   if(NOT EXISTS "${OPENJPEG_INCLUDE_DIRS}")
-    # when not found, could be an older lib folder with openjpeg 2.3
-    # to ease the transition period, fall back if 2.4 is not found.
-    set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.3)
+    # when not found, could be an older lib folder with openjpeg 2.4
+    # to ease the transition period, fall back if 2.5 is not found.
+    set(OPENJPEG_INCLUDE_DIRS ${OPENJPEG}/include/openjpeg-2.4)
   endif()
   set(OPENJPEG_LIBRARIES ${OPENJPEG}/lib/openjp2.lib)
 endif()
@@ -713,12 +716,6 @@ if(WITH_OPENSUBDIV)
       debug ${OPENSUBDIV_LIBPATH}/osdCPU_d.lib
       debug ${OPENSUBDIV_LIBPATH}/osdGPU_d.lib
     )
-    set(OPENSUBDIV_HAS_OPENMP TRUE)
-    set(OPENSUBDIV_HAS_TBB FALSE)
-    set(OPENSUBDIV_HAS_OPENCL TRUE)
-    set(OPENSUBDIV_HAS_CUDA FALSE)
-    set(OPENSUBDIV_HAS_GLSL_TRANSFORM_FEEDBACK TRUE)
-    set(OPENSUBDIV_HAS_GLSL_COMPUTE TRUE)
   endif()
 endif()
 

@@ -5,8 +5,11 @@ from bpy.types import (
     Menu,
     Panel,
 )
-from bpy.app.translations import pgettext_iface as iface_
-from bpy.app.translations import contexts as i18n_contexts
+from bpy.app.translations import (
+    contexts as i18n_contexts,
+    pgettext_iface as iface_,
+    pgettext_tip as tip_,
+)
 
 
 # -----------------------------------------------------------------------------
@@ -383,9 +386,8 @@ class USERPREF_PT_edit_objects_duplicate_data(EditingPanel, CenterAlignMixIn, Pa
         col.prop(edit, "use_duplicate_camera", text="Camera")
         col.prop(edit, "use_duplicate_curve", text="Curve")
         # col.prop(edit, "use_duplicate_fcurve", text="F-Curve")  # Not implemented.
+        col.prop(edit, "use_duplicate_curves", text="Curves")
         col.prop(edit, "use_duplicate_grease_pencil", text="Grease Pencil")
-        if hasattr(edit, "use_duplicate_curves"):
-            col.prop(edit, "use_duplicate_curves", text="Curves")
 
         col = flow.column()
         col.prop(edit, "use_duplicate_lattice", text="Lattice")
@@ -1532,6 +1534,23 @@ class USERPREF_PT_input_mouse(InputPanel, CenterAlignMixIn, Panel):
         flow.prop(inputs, "move_threshold")
 
 
+class USERPREF_PT_input_touchpad(InputPanel, CenterAlignMixIn, Panel):
+    bl_label = "Touchpad"
+    bl_options = {'DEFAULT_CLOSED'}
+
+    @classmethod
+    def poll(cls, context):
+        import sys
+        return  sys.platform[:3] == "win" or sys.platform == "darwin"
+
+    def draw_centered(self, context, layout):
+        prefs = context.preferences
+        inputs = prefs.inputs
+
+        col = layout.column()
+        col.prop(inputs, "use_multitouch_gestures")
+
+
 class USERPREF_PT_input_tablet(InputPanel, CenterAlignMixIn, Panel):
     bl_label = "Tablet"
 
@@ -2090,7 +2109,10 @@ class StudioLightPanelMixin:
             for studio_light in lights:
                 self.draw_studio_light(flow, studio_light)
         else:
-            layout.label(text=iface_("No custom %s configured") % self.bl_label)
+            layout.label(text=self.get_error_message())
+
+    def get_error_message(self):
+        return tip_("No custom %s configured") % self.bl_label
 
     def draw_studio_light(self, layout, studio_light):
         box = layout.box()
@@ -2117,6 +2139,9 @@ class USERPREF_PT_studiolight_matcaps(StudioLightPanel, StudioLightPanelMixin, P
         layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...").type = 'MATCAP'
         layout.separator()
 
+    def get_error_message(self):
+        return tip_("No custom MatCaps configured")
+
 
 class USERPREF_PT_studiolight_world(StudioLightPanel, StudioLightPanelMixin, Panel):
     bl_label = "HDRIs"
@@ -2126,6 +2151,9 @@ class USERPREF_PT_studiolight_world(StudioLightPanel, StudioLightPanelMixin, Pan
         layout = self.layout
         layout.operator("preferences.studiolight_install", icon='IMPORT', text="Install...").type = 'WORLD'
         layout.separator()
+
+    def get_error_message(self):
+        return tip_("No custom HDRIs configured")
 
 
 class USERPREF_PT_studiolight_lights(StudioLightPanel, StudioLightPanelMixin, Panel):
@@ -2138,6 +2166,9 @@ class USERPREF_PT_studiolight_lights(StudioLightPanel, StudioLightPanelMixin, Pa
         op.type = 'STUDIO'
         op.filter_glob = ".sl"
         layout.separator()
+
+    def get_error_message(self):
+        return tip_("No custom Studio Lights configured")
 
 
 class USERPREF_PT_studiolight_light_editor(StudioLightPanel, Panel):
@@ -2274,7 +2305,6 @@ class USERPREF_PT_experimental_prototypes(ExperimentalPanel, Panel):
                 ({"property": "use_full_frame_compositor"}, "T88150"),
                 ({"property": "enable_eevee_next"}, "T93220"),
                 ({"property": "use_draw_manager_acquire_lock"}, "T98016"),
-                ({"property": "use_override_new_fully_editable"}, None),
             ),
         )
 
@@ -2394,6 +2424,7 @@ classes = (
     USERPREF_PT_input_keyboard,
     USERPREF_PT_input_mouse,
     USERPREF_PT_input_tablet,
+    USERPREF_PT_input_touchpad,
     USERPREF_PT_input_ndof,
     USERPREF_PT_navigation_orbit,
     USERPREF_PT_navigation_zoom,

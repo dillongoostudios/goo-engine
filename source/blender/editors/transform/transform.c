@@ -1514,26 +1514,26 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
     }
   }
 
-  bool use_prop_edit = false;
-  int prop_edit_flag = 0;
-  if (t->flag & T_PROP_EDIT_ALL) {
-    if (t->flag & T_PROP_EDIT) {
-      use_prop_edit = true;
+  /* Save proportional edit settings.
+   * Skip saving proportional edit if it was not actually used. */
+  if (!(t->options & CTX_NO_PET)) {
+    bool use_prop_edit = false;
+    int prop_edit_flag = 0;
+    if (t->flag & T_PROP_EDIT_ALL) {
+      if (t->flag & T_PROP_EDIT) {
+        use_prop_edit = true;
+      }
+      if (t->flag & T_PROP_CONNECTED) {
+        prop_edit_flag |= PROP_EDIT_CONNECTED;
+      }
+      if (t->flag & T_PROP_PROJECTED) {
+        prop_edit_flag |= PROP_EDIT_PROJECTED;
+      }
     }
-    if (t->flag & T_PROP_CONNECTED) {
-      prop_edit_flag |= PROP_EDIT_CONNECTED;
-    }
-    if (t->flag & T_PROP_PROJECTED) {
-      prop_edit_flag |= PROP_EDIT_PROJECTED;
-    }
-  }
 
-  /* If modal, save settings back in scene if not set as operator argument */
-  if ((t->flag & T_MODAL) || (op->flag & OP_IS_REPEAT)) {
-    /* save settings if not set in operator */
-
-    /* skip saving proportional edit if it was not actually used */
-    if (!(t->options & CTX_NO_PET)) {
+    /* If modal, save settings back in scene if not set as operator argument */
+    if ((t->flag & T_MODAL) || (op->flag & OP_IS_REPEAT)) {
+      /* save settings if not set in operator */
       if ((prop = RNA_struct_find_property(op->ptr, "use_proportional_edit")) &&
           !RNA_property_is_set(op->ptr, prop)) {
         const Object *obact = OBACT(t->view_layer);
@@ -1571,52 +1571,71 @@ void saveTransform(bContext *C, TransInfo *t, wmOperator *op)
         ts->prop_mode = t->prop_mode;
       }
     }
-  }
 
-  if (t->flag & T_MODAL) {
-    /* do we check for parameter? */
-    if (transformModeUseSnap(t)) {
-      if (!(t->modifiers & MOD_SNAP) != !(t->tsnap.flag & SCE_SNAP)) {
-        /* Type is #eSnapFlag, but type must match various snap attributes in #ToolSettings. */
-        short *snap_flag_ptr;
-
-        wmMsgParams_RNA msg_key_params = {{0}};
-        RNA_pointer_create(&t->scene->id, &RNA_ToolSettings, ts, &msg_key_params.ptr);
-
-        if (t->spacetype == SPACE_NODE) {
-          snap_flag_ptr = &ts->snap_flag_node;
-          msg_key_params.prop = &rna_ToolSettings_use_snap_node;
-        }
-        else if (t->spacetype == SPACE_IMAGE) {
-          snap_flag_ptr = &ts->snap_uv_flag;
-          msg_key_params.prop = &rna_ToolSettings_use_snap_uv;
-        }
-        else if (t->spacetype == SPACE_SEQ) {
-          snap_flag_ptr = &ts->snap_flag_seq;
-          msg_key_params.prop = &rna_ToolSettings_use_snap_sequencer;
-        }
-        else {
-          snap_flag_ptr = &ts->snap_flag;
-          msg_key_params.prop = &rna_ToolSettings_use_snap;
-        }
-
-        if (t->modifiers & MOD_SNAP) {
-          *snap_flag_ptr |= SCE_SNAP;
-        }
-        else {
-          *snap_flag_ptr &= ~SCE_SNAP;
-        }
-        WM_msg_publish_rna_params(t->mbus, &msg_key_params);
-      }
+    if ((prop = RNA_struct_find_property(op->ptr, "use_proportional_edit"))) {
+      RNA_property_boolean_set(op->ptr, prop, use_prop_edit);
+      RNA_boolean_set(op->ptr, "use_proportional_connected", prop_edit_flag & PROP_EDIT_CONNECTED);
+      RNA_boolean_set(op->ptr, "use_proportional_projected", prop_edit_flag & PROP_EDIT_PROJECTED);
+      RNA_enum_set(op->ptr, "proportional_edit_falloff", t->prop_mode);
+      RNA_float_set(op->ptr, "proportional_size", t->prop_size);
     }
   }
 
-  if ((prop = RNA_struct_find_property(op->ptr, "use_proportional_edit"))) {
-    RNA_property_boolean_set(op->ptr, prop, use_prop_edit);
-    RNA_boolean_set(op->ptr, "use_proportional_connected", prop_edit_flag & PROP_EDIT_CONNECTED);
-    RNA_boolean_set(op->ptr, "use_proportional_projected", prop_edit_flag & PROP_EDIT_PROJECTED);
-    RNA_enum_set(op->ptr, "proportional_edit_falloff", t->prop_mode);
-    RNA_float_set(op->ptr, "proportional_size", t->prop_size);
+  /* Save snapping settings. */
+  if (prop = RNA_struct_find_property(op->ptr, "snap")) {
+    RNA_property_boolean_set(op->ptr, prop, (t->modifiers & MOD_SNAP) != 0);
+
+    if (prop = RNA_struct_find_property(op->ptr, "snap_elements")) {
+      RNA_property_enum_set(op->ptr, prop, t->tsnap.mode);
+      RNA_boolean_set(op->ptr, "use_snap_project", t->tsnap.project);
+      RNA_enum_set(op->ptr, "snap_target", t->tsnap.source_select);
+
+      eSnapTargetSelect target = t->tsnap.target_select;
+      RNA_boolean_set(op->ptr, "use_snap_self", (target & SCE_SNAP_TARGET_NOT_ACTIVE) != 0);
+      RNA_boolean_set(op->ptr, "use_snap_edit", (target & SCE_SNAP_TARGET_NOT_EDITED) != 0);
+      RNA_boolean_set(op->ptr, "use_snap_nonedit", (target & SCE_SNAP_TARGET_NOT_NONEDITED) != 0);
+      RNA_boolean_set(
+          op->ptr, "use_snap_selectable", (target & SCE_SNAP_TARGET_ONLY_SELECTABLE) != 0);
+    }
+
+    /* Update `ToolSettings` for properties that change during modal. */
+    if (t->flag & T_MODAL) {
+      /* Do we check for parameter? */
+      if (transformModeUseSnap(t)) {
+        if (!(t->modifiers & MOD_SNAP) != !(t->tsnap.flag & SCE_SNAP)) {
+          /* Type is #eSnapFlag, but type must match various snap attributes in #ToolSettings. */
+          short *snap_flag_ptr;
+
+          wmMsgParams_RNA msg_key_params = {{0}};
+          RNA_pointer_create(&t->scene->id, &RNA_ToolSettings, ts, &msg_key_params.ptr);
+
+          if (t->spacetype == SPACE_NODE) {
+            snap_flag_ptr = &ts->snap_flag_node;
+            msg_key_params.prop = &rna_ToolSettings_use_snap_node;
+          }
+          else if (t->spacetype == SPACE_IMAGE) {
+            snap_flag_ptr = &ts->snap_uv_flag;
+            msg_key_params.prop = &rna_ToolSettings_use_snap_uv;
+          }
+          else if (t->spacetype == SPACE_SEQ) {
+            snap_flag_ptr = &ts->snap_flag_seq;
+            msg_key_params.prop = &rna_ToolSettings_use_snap_sequencer;
+          }
+          else {
+            snap_flag_ptr = &ts->snap_flag;
+            msg_key_params.prop = &rna_ToolSettings_use_snap;
+          }
+
+          if (t->modifiers & MOD_SNAP) {
+            *snap_flag_ptr |= SCE_SNAP;
+          }
+          else {
+            *snap_flag_ptr &= ~SCE_SNAP;
+          }
+          WM_msg_publish_rna_params(t->mbus, &msg_key_params);
+        }
+      }
+    }
   }
 
   if ((prop = RNA_struct_find_property(op->ptr, "mirror"))) {
