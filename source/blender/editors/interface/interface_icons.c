@@ -1418,6 +1418,10 @@ static void icon_set_image(const bContext *C,
                            enum eIconSizes size,
                            const bool use_job)
 {
+  if (U.experimental.disable_material_icon_rendering) {
+    return;
+  }
+
   if (!prv_img) {
     if (G.debug & G_DEBUG) {
       printf("%s: no preview image for this ID: %s\n", __func__, id->name);

@@ -2236,7 +2236,7 @@ class ExperimentalPanel:
 
     @classmethod
     def poll(cls, _context):
-        return bpy.app.version_cycle == 'alpha'
+        return bpy.app.version_cycle == 'alpha' or True # Always enable experimentals in goo-engine
 
     def _draw_items(self, context, items):
         prefs = context.preferences
@@ -2341,6 +2341,7 @@ class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
                 ({"property": "use_cycles_debug"}, None),
                 ({"property": "show_asset_debug_info"}, None),
                 ({"property": "use_asset_indexing"}, None),
+                ({"property": "disable_material_icon_rendering"}, None),
             ),
         )
 
