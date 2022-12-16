@@ -1,10 +1,7 @@
-
 #pragma BLENDER_REQUIRE(common_math_lib.glsl)
 #pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(raytrace_lib.glsl)
 #pragma BLENDER_REQUIRE(ltc_lib.glsl)
-
-#extension GL_ARB_texture_gather : enable
 
 #ifndef MAX_CASCADE_NUM
 #  define MAX_CASCADE_NUM 4
