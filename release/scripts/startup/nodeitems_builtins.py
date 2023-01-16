@@ -363,9 +363,6 @@ shader_node_categories = [
         NodeItem("ShaderNodeValue"),
         NodeItem("ShaderNodeTangent"),
         NodeItem("ShaderNodeNewGeometry"),
-        NodeItem("ShaderNodeScreenspaceInfo"),
-        NodeItem("ShaderNodeCurvature"),
-        NodeItem("ShaderNodeShaderInfo"),
         NodeItem("ShaderNodeWireframe"),
         NodeItem("ShaderNodeBevel"),
         NodeItem("ShaderNodeAmbientOcclusion"),
@@ -409,7 +406,6 @@ shader_node_categories = [
         NodeItem("ShaderNodeVolumePrincipled"),
         NodeItem("ShaderNodeEeveeSpecular", poll=object_eevee_shader_nodes_poll),
         NodeItem("ShaderNodeBsdfHairPrincipled", poll=object_cycles_shader_nodes_poll),
-        NodeItem("ShaderNodeSetDepth", poll=object_eevee_shader_nodes_poll),
     ]),
     ShaderNodeCategory("SH_NEW_TEXTURE", "Texture", items=[
         NodeItem("ShaderNodeTexImage"),
@@ -476,6 +472,12 @@ shader_node_categories = [
     ShaderNodeCategory("SH_NEW_LAYOUT", "Layout", items=[
         NodeItem("NodeFrame"),
         NodeItem("NodeReroute"),
+    ]),
+    ShaderNodeCategory("SH_NEW_GOO", "Goo Nodes", items=[
+        NodeItem("ShaderNodeScreenspaceInfo"),
+        NodeItem("ShaderNodeCurvature"),
+        NodeItem("ShaderNodeShaderInfo"),
+        NodeItem("ShaderNodeSetDepth", poll=object_eevee_shader_nodes_poll),
     ]),
 ]
 

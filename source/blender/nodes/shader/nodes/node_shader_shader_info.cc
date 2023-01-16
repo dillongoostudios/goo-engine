@@ -1,46 +1,65 @@
-/*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version 2
- * of the License, or (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- *
- * The Original Code is Copyright (C) 2005 Blender Foundation.
- * All rights reserved.
- */
+/* SPDX-License-Identifier: GPL-2.0-or-later
+ * Copyright 2005 Blender Foundation. All rights reserved. */
 
 #include "../node_shader_util.hh"
 
-/* **************** OUTPUT ******************** */
+#include "UI_interface.h"
+#include "UI_resources.h"
+namespace blender::nodes::node_shader_shader_info_cc {
 
-static bNodeSocketTemplate sh_node_shader_info_in[] = {
-    {SOCK_VECTOR, N_("WorldPosition"), 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, PROP_NONE, SOCK_HIDE_VALUE},
-    {SOCK_VECTOR, N_("Normal"), 0.0f, 0.0f, 0.0f, 1.0f, -1.0f, 1.0f, PROP_NONE, SOCK_HIDE_VALUE},
-    {-1, ""},
-};
+static void node_declare(NodeDeclarationBuilder &b)
+{
+  b.add_input<decl::Vector>(N_("WorldPosition")).hide_value();
+  b.add_input<decl::Vector>(N_("Normal")).hide_value();
 
-static bNodeSocketTemplate sh_node_shader_info_out[] = {
-    {SOCK_RGBA, N_("Diffuse Shading")},
-    {SOCK_FLOAT, N_("Cast Shadows")},
-    {SOCK_FLOAT, N_("Self Shadows")},
-    {SOCK_RGBA, N_("Ambient Lighting")},
-    {-1, ""},
-};
+  b.add_output<decl::Color>(N_("Diffuse Shading"));
+  b.add_output<decl::Float>(N_("Cast Shadows"));
+  b.add_output<decl::Float>(N_("Self Shadows"));
+  b.add_output<decl::Color>(N_("Ambient Lighting"));
+}
+
+static void node_shader_init_shader_info(bNodeTree *UNUSED(ntree), bNode *node)
+{
+  NodeShaderInfo *shinfo = MEM_cnew<NodeShaderInfo>("NodeShaderInfo");
+  shinfo->light_group_bits[3] = 1;
+  shinfo->light_group_shadow_bits[3] = 1;
+  shinfo->use_own_light_groups = 0;
+  node->storage = shinfo;
+}
+
+static void node_shader_buts_shader_info(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+{
+  uiItemR(layout,
+          ptr,
+          "use_own_light_groups",
+          UI_ITEM_R_SPLIT_EMPTY_NAME,
+          IFACE_("Light Groups"),
+          ICON_NONE);
+
+#if 0
+  /* Show group bits for debugging */
+  if (RNA_boolean_get(ptr, "use_own_light_groups")) {
+    uiItemR(
+        layout, ptr, "light_group_bits", UI_ITEM_R_SPLIT_EMPTY_NAME, IFACE_("bits"), ICON_NONE);
+    uiItemR(layout,
+            ptr,
+            "light_group_shadow_bits",
+            UI_ITEM_R_SPLIT_EMPTY_NAME,
+            IFACE_("shadow bits"),
+            ICON_NONE);
+  }
+#endif
+}
 
 static int node_shader_gpu_shader_info(GPUMaterial *mat,
-                                        bNode *node,
-                                        bNodeExecData *UNUSED(execdata),
-                                        GPUNodeStack *in,
-                                        GPUNodeStack *out)
+                                       bNode *node,
+                                       bNodeExecData *UNUSED(execdata),
+                                       GPUNodeStack *in,
+                                       GPUNodeStack *out)
 {
+  // Set this to ensure shadowmap eval.
+  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+
   if (!in[0].link) {
     GPU_link(mat, "world_position_get", &in[0].link);
   }
@@ -48,23 +67,33 @@ static int node_shader_gpu_shader_info(GPUMaterial *mat,
     GPU_link(mat, "world_normals_get", &in[1].link);
   }
 
-  // Set this to ensure shadowmap eval.
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
-
-  return GPU_stack_link(mat, node, "node_shader_info", in, out);
+  auto* info = (NodeShaderInfo*) node->storage;
+  if (info->use_own_light_groups) {
+      // HACK: GPU_uniform supports floats only, use floatBitsToInt in shader to reinterpret.
+      return GPU_stack_link(mat, node, "node_shader_info_light_groups", in, out, GPU_uniform((float*)info->light_group_bits), GPU_uniform((float*)info->light_group_shadow_bits));
+  } else {
+      return GPU_stack_link(mat, node, "node_shader_info", in, out);
+  }
 }
+
+}  // namespace blender::nodes::node_shader_shader_info_cc
 
 /* node type definition */
 void register_node_type_sh_shader_info(void)
 {
+  namespace file_ns = blender::nodes::node_shader_shader_info_cc;
+
   static bNodeType ntype;
 
   sh_node_type_base(&ntype, SH_NODE_SHADER_INFO, "Shader Info", NODE_CLASS_INPUT);
-  node_type_socket_templates(&ntype, sh_node_shader_info_in, sh_node_shader_info_out);
   node_type_size_preset(&ntype, NODE_SIZE_MIDDLE);
-  node_type_init(&ntype, NULL);
-  node_type_storage(&ntype, "", NULL, NULL);
-  node_type_gpu(&ntype, node_shader_gpu_shader_info);
+  ntype.declare = file_ns::node_declare;
+  ntype.draw_buttons = file_ns::node_shader_buts_shader_info;
+
+  node_type_init(&ntype, file_ns::node_shader_init_shader_info);
+  node_type_storage(
+      &ntype, "NodeShaderInfo", node_free_standard_storage, node_copy_standard_storage);
+  node_type_gpu(&ntype, file_ns::node_shader_gpu_shader_info);
 
   nodeRegisterType(&ntype);
 }

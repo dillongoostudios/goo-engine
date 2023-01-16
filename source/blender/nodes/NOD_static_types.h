@@ -30,7 +30,7 @@ DefNode(ShaderNode,     SH_NODE_VALTORGB,        def_colorramp,          "VALTOR
 DefNode(ShaderNode,     SH_NODE_RGBTOBW,         0,                      "RGBTOBW",        RGBToBW,          "RGB to BW",         "Convert a color's luminance to a grayscale value")
 DefNode(ShaderNode,     SH_NODE_SHADERTORGB,     0,                      "SHADERTORGB",    ShaderToRGB,      "Shader to RGB",     "Convert rendering effect (such as light and shadow) to color. Typically used for non-photorealistic rendering, to apply additional effects on the output of BSDFs.\nNote: only supported for Eevee")
 DefNode(ShaderNode,     SH_NODE_SCREENSPACE_INFO,0,                      "SCREENSPACEINFO",ScreenspaceInfo,  "Screenspace Info",  ""              )
-DefNode(ShaderNode,     SH_NODE_SHADER_INFO,     0,                      "SHADERINFO",     ShaderInfo,       "Shader Info",       ""              )
+DefNode(ShaderNode,     SH_NODE_SHADER_INFO,     def_sh_shader_info,     "SHADERINFO",     ShaderInfo,       "Shader Info",       ""              )
 DefNode(ShaderNode,     SH_NODE_CURVATURE,       0,                      "CURVATURE",      Curvature,        "Curvature",         ""              )
 DefNode(ShaderNode,     SH_NODE_NORMAL,          0,                      "NORMAL",         Normal,           "Normal",            "Generate a normal vector and a dot product")
 DefNode(ShaderNode,     SH_NODE_GAMMA,           0,                      "GAMMA",          Gamma,            "Gamma",             "Apply a gamma correction")

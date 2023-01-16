@@ -50,6 +50,7 @@ struct Closure {
 /* Prototype */
 Closure nodetree_exec();
 vec4 closure_to_rgba(Closure cl);
+void calc_shader_info(vec3 position, vec3 normal, ivec4 light_groups, ivec4 light_group_shadows, out vec4 half_light, out float shadows, out float self_shadows, out vec4 ambient);
 void calc_shader_info(vec3 position, vec3 normal, out vec4 half_light, out float shadows, out float self_shadows, out vec4 ambient);
 void screenspace_info(vec3 viewPos, out vec4 scene_col, out float scene_depth);
 void screenspace_curvature(float iiterations, float sample_scale, float clamp_dist, out float scene_curvature, out float scene_rim);

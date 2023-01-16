@@ -3351,15 +3351,29 @@ void blo_do_versions_300(FileData *fd, Library *UNUSED(lib), Main *bmain)
     }
   }
 
-    if (!MAIN_VERSION_ATLEAST(bmain, 302, 0)) {
-        /* Rename sockets on Set Depth node. */
-        FOREACH_NODETREE_BEGIN (bmain, ntree, _id) {
-            if (ntree->type == NTREE_SHADER) {
-                version_node_socket_name(ntree, SH_NODE_SET_DEPTH, "BSDF", "Shader");
-            }
+  if (!MAIN_VERSION_ATLEAST(bmain, 302, 0)) {
+      /* Rename sockets on Set Depth node. */
+      FOREACH_NODETREE_BEGIN (bmain, ntree, _id) {
+          if (ntree->type == NTREE_SHADER) {
+              version_node_socket_name(ntree, SH_NODE_SET_DEPTH, "BSDF", "Shader");
+          }
+      }
+      FOREACH_NODETREE_END;
+  }
+
+  /* Add storage to Shader Info nodes if missing. */
+  FOREACH_NODETREE_BEGIN (bmain, ntree, _id) {
+    if (ntree->type == NTREE_SHADER) {
+      LISTBASE_FOREACH (bNode *, node, &ntree->nodes) {
+        if (node->type == SH_NODE_SHADER_INFO) {
+          if (node->storage == NULL) {
+            node->storage = MEM_callocN(sizeof(NodeShaderInfo), "NodeShaderInfo");
+          }
         }
-        FOREACH_NODETREE_END;
+      }
     }
+  }
+  FOREACH_NODETREE_END;
 
   /**
    * Versioning code until next subversion bump goes here.

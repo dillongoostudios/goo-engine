@@ -23,10 +23,11 @@ Light group key management.
 """
 
 import bpy
-from bpy.types import Panel,  Material, Light, PropertyGroup, UIList, UI_UL_list, Operator
+from bpy.types import Panel,  Material, Light, PropertyGroup, UIList, UI_UL_list, Operator, ShaderNodeShaderInfo, ShaderNodeTree
 from bpy.props import StringProperty, CollectionProperty, IntProperty, PointerProperty, EnumProperty, BoolProperty
 from bpy.utils import register_classes_factory
 from bpy.app.handlers import persistent
+from itertools import chain
 # from time import perf_counter
 
 SIZEOF_INT = 32
@@ -43,7 +44,7 @@ def set_bit(vec, bit):
 
 def map_bits(data, mapping):
     data.light_group_bits = (0, 0, 0, 0)
-    is_mat = isinstance(data, Material)
+    is_mat = isinstance(data, (Material, ShaderNodeShaderInfo))
     if is_mat:
         data.light_group_shadow_bits = data.light_group_bits
 
@@ -60,6 +61,21 @@ def map_bits(data, mapping):
             set_bit(data.light_group_shadow_bits, MAX_LIGHT_GROUP_BIT)
 
 
+def iter_light_group_owners():
+    for mat in bpy.data.materials:
+        yield mat
+
+    # Assign bits to shader info nodes
+    for node_tree in chain(bpy.data.node_groups, map(lambda m: m.node_tree, bpy.data.materials)):
+        if not node_tree:
+            continue
+        for node in node_tree.nodes:
+            if isinstance(node, ShaderNodeShaderInfo) and node.use_own_light_groups:
+                yield node
+
+    for light in bpy.data.lights:
+        yield light
+
 def sync_light_groups():
     # Populate light bit set with groups from Light objects, merging duplicates
     light_names = set()
@@ -74,17 +90,13 @@ def sync_light_groups():
     # Assign bit numbers - default group is reserved at 127
     bit_mapping = {name: index for index, name in enumerate(light_names)}
 
-    # Assign bits to each material/light through lookup
-    for mat in bpy.data.materials:
-        map_bits(mat, bit_mapping)
-
-    for light in bpy.data.lights:
-        map_bits(light, bit_mapping)
+    # Assign bits to each material/light/node through lookup
+    for data in iter_light_group_owners():
+        map_bits(data, bit_mapping)
 
 
 def update_handler(_s, _c):
     sync_light_groups()
-
 
 @persistent
 def sync_handler(*_):
@@ -107,7 +119,7 @@ def sync_dg_handler(scn, dg):
 
 
 def rename_group(data, src, tgt):
-    if data.library:
+    if getattr(data, 'library', False):
         return
     for grp in data.light_groups.groups:
         if grp.name == src:
@@ -121,16 +133,14 @@ def get_name(self):
 # Update all matching names in the entire file
 def set_name(self, value):
     orig_name = self.name
-    for mat in bpy.data.materials:
-        rename_group(mat, orig_name, value)
-    for light in bpy.data.lights:
-        rename_group(light, orig_name, value)
+    for data in iter_light_group_owners():
+        rename_group(data, orig_name, value)
 
 
 class LightGroup(PropertyGroup):
     name: StringProperty()
     viz_name: StringProperty(name="Name", get=get_name, set=set_name)
-    ignore_shadow: BoolProperty(name="Ignore Shadows", description="Ignore shadows cast from this light group", default=False, options=set())
+    ignore_shadow: BoolProperty(name="Ignore Shadows", description="Ignore shadows cast from this light group", default=False, options=set(), update=update_handler)
 
 
 class LightGroups(PropertyGroup):
@@ -142,12 +152,9 @@ class LightGroups(PropertyGroup):
 
 def get_name_set():
     names = set()
-    for mat in bpy.data.materials:
-        for grp in mat.light_groups.groups:
-            names.add(grp.name)
 
-    for light in bpy.data.lights:
-        for grp in light.light_groups.groups:
+    for data in iter_light_group_owners():
+        for grp in data.light_groups.groups:
             names.add(grp.name)
 
     return names
@@ -176,7 +183,7 @@ class MAT_UL_LightGroupList(UIList):
                   flt_flag: int = 0):
         row = layout.row(align=True)
         row.prop(item, "viz_name", emboss=False, text="")
-        if isinstance(data.id_data, Material):
+        if isinstance(data.id_data, (Material, ShaderNodeTree)):
             row.prop(item, "ignore_shadow", text="", icon="REC" if item.ignore_shadow else "OVERLAY", emboss=False)
 
     def filter_items(self, context: 'Context', data: 'AnyType', property: str):
@@ -210,8 +217,7 @@ class ALightGroupPanel(Panel):
     bl_region_type = 'WINDOW'
 
     def get_groups(self, ctx):
-        obj = ctx.object
-        return get_groups(obj)
+        return get_groups_ctx(ctx)
 
     def draw_header(self, context):
         ...
@@ -236,7 +242,7 @@ class ALightGroupPanel(Panel):
         # Below Operators
         row = layout.row()
         row.prop(groups, 'use_default', text="Use Default Group")
-        if self.bl_context != "data":
+        if self.bl_context != "data" or self.bl_space_type == 'NODE_EDITOR':
             row = row.row()
             row.enabled = groups.use_default
             row.prop(groups, 'ignore_default_shadow', text="Ignore Default Shadows")
@@ -279,13 +285,32 @@ class OBJ_PT_LLightGroupPanel(ALightGroupPanel):
         return ctx.light
 
 
+class NOD_PT_LightGroupPanel(ALightGroupPanel):
+    bl_space_type = 'NODE_EDITOR'
+    bl_region_type = 'UI'
+    bl_category = 'Node'
+
+    @classmethod
+    def poll(cls, ctx):
+        return isinstance(ctx.active_node, ShaderNodeShaderInfo)
+
+    def get_groups(self, ctx):
+        node = ctx.active_node
+        if isinstance(node, ShaderNodeShaderInfo):
+            return node.light_groups
+
+
 class LightGroupOp(Operator):
     bl_options = {'UNDO'}
+
+    @staticmethod
+    def get_groups(ctx):
+        return get_groups_ctx(ctx)
 
     @classmethod
     def poll(cls, ctx):
         try:
-            get_groups(ctx.object)
+            cls.get_groups(ctx)
             return True
         except Exception as e:
             return False
@@ -294,10 +319,14 @@ class LightGroupOp(Operator):
 class LightGroupSelectionOp(Operator):
     bl_options = {'UNDO'}
 
+    @staticmethod
+    def get_groups(ctx):
+        return get_groups_ctx(ctx)
+
     @classmethod
     def poll(cls, ctx):
         try:
-            grp = get_groups(ctx.object)
+            grp = cls.get_groups(ctx)
             return 0 <= grp.group_index < len(grp.groups)
         except Exception as e:
             return False
@@ -309,7 +338,7 @@ class MAT_OT_NewLightGroup(LightGroupOp):
     bl_idname = 'light_groups.new'
 
     def execute(self, ctx):
-        lgs = get_groups(ctx.object)
+        lgs = self.get_groups(ctx)
         name = unique_group_name()
         new = lgs.groups.add()
         new.name = name
@@ -320,20 +349,26 @@ class MAT_OT_NewLightGroup(LightGroupOp):
         return {'FINISHED'}
 
 
+def get_groups_ctx(ctx):
+    if hasattr(ctx, 'active_node') and ctx.active_node and isinstance(ctx.active_node, ShaderNodeShaderInfo):
+        return ctx.active_node.light_groups
+    return get_groups(ctx.object)
+
+
 class MAT_OT_LinkLightGroup(LightGroupOp):
     """ Link an existing light group to this data-block """
     bl_label = "Link Existing Light Group"
     bl_idname = 'light_groups.link'
     bl_property = "name"
 
-    name: EnumProperty(items=lambda scn, ctx: [(x, x, x) for x in get_name_set() if x not in get_groups(ctx.object).groups])
+    name: EnumProperty(items=lambda scn, ctx: sorted([(x, x, x) for x in get_name_set() if x not in get_groups_ctx(ctx).groups]))
 
     def invoke(self, context: 'Context', event: 'Event'):
         context.window_manager.invoke_search_popup(self)
         return {'FINISHED'}
 
     def execute(self, ctx):
-        lgs = get_groups(ctx.object)
+        lgs = self.get_groups(ctx)
         new = lgs.groups.add()
         new.name = self.name
 
@@ -352,14 +387,13 @@ class MAT_OT_DeleteLightGroup(LightGroupSelectionOp):
         return ctx.window_manager.invoke_confirm(self, evt)
 
     def execute(self, ctx):
-        lgs = get_groups(ctx.object)
+        lgs = self.get_groups(ctx)
         grp_name = lgs.groups[lgs.group_index].name
 
-        for mat in bpy.data.materials:
-            mat.light_groups.groups.remove(mat.light_groups.groups.find(grp_name))
-
-        for light in bpy.data.lights:
-            light.light_groups.groups.remove(light.light_groups.groups.find(grp_name))
+        for data in iter_light_group_owners():
+            if grp_name not in data.light_groups.groups:
+                continue
+            data.light_groups.groups.remove(data.light_groups.groups.find(grp_name))
 
         lgs.group_index -= 1
 
@@ -373,7 +407,7 @@ class MAT_OT_UnlinkLightGroup(LightGroupSelectionOp):
     bl_idname = 'light_groups.unlink'
 
     def execute(self, ctx):
-        lgs = get_groups(ctx.object)
+        lgs = self.get_groups(ctx)
         lgs.groups.remove(lgs.group_index)
 
         lgs.group_index -= 1
@@ -398,8 +432,9 @@ _classes = (
     MAT_UL_LightGroupList,
     OBJ_PT_MLightGroupPanel,
     OBJ_PT_LLightGroupPanel,
-    MAT_OT_LinkLightGroup,
+    NOD_PT_LightGroupPanel,
     MAT_OT_NewLightGroup,
+    MAT_OT_LinkLightGroup,
     MAT_OT_DeleteLightGroup,
     MAT_OT_UnlinkLightGroup,
     MAT_OT_ResyncLightGroups
@@ -412,6 +447,7 @@ def register():
     _register()
     Material.light_groups = PointerProperty(type=LightGroups)
     Light.light_groups = PointerProperty(type=LightGroups)
+    ShaderNodeShaderInfo.light_groups = PointerProperty(type=LightGroups)
 
     bpy.app.handlers.render_init.append(sync_handler)
     bpy.app.handlers.load_post.append(sync_handler)
