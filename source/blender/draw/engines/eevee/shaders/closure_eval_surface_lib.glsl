@@ -411,15 +411,10 @@ vec2 rotate(vec2 v, float a)
  * a rotating pattern. Rotate all samples by the hash offset to reduce star shaped banding
  * artifacts.
  *
- * Curvature is determined as the sum of curvature of each pair of samples (+ve and -ve along the
- * line), with samples weighted inversely by distance from center. */
-void screenspace_curvature(float iiterations,
-                           float sample_scale,
-                           float clamp_dist,
-                           out float scene_curvature,
-                           out float scene_rim)
-{
-  vec2 uvs = get_uvs_from_view(viewPosition) * hizUvScale.xy;
+ * Curvature is determined as the sum of curvature of each pair of samples (+ve and -ve along the line), with samples weighted
+ * inversely by distance from center. */
+void screenspace_curvature(float iiterations, float sample_scale, float clamp_dist, vec3 scale, out float scene_curvature, out float scene_rim) {
+    vec2 uvs = get_uvs_from_view(viewPosition) * hizUvScale.xy;
 
   // Use a fixed texel size rather than adjusting to pixel space. Less accurate, wastes some
   // samples, but gives more intuitive results.
@@ -440,10 +435,9 @@ void screenspace_curvature(float iiterations,
   float accum = 0.0;
   float rim_accum = 0.0;
 
-  // Rotate in 8x 22.5° increments, sample lines
-  for (int r = 0; r < 8; r++) {
-    vec2 offset = rotate(vec2(1.0, 0.0), (r + alphaHashOffset) * 3.1415 * 0.25 * 0.5) *
-                  texel_size * sample_scale;
+    // Rotate in 8x 22.5° increments, sample lines
+    for (int r = 0; r < 8; r++) {
+        vec2 offset = rotate(vec2(1.0, 0.0), (r + alphaHashOffset) * 3.1415 * 0.25 * 0.5) * texel_size * sample_scale * scale.xy;
 
     // Accumulate curvature in the line window
     for (int i = 1; i <= n_samples; i++) {

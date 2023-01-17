@@ -25,6 +25,7 @@ static bNodeSocketTemplate sh_node_curvature_in[] = {
     {SOCK_FLOAT, N_("Samples"), 8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 64.0f, PROP_NONE},
     {SOCK_FLOAT, N_("Sample Radius"), 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
     {SOCK_FLOAT, N_("Thickness"), 1.0f, 0.0f, 0.0f, 0.0f, 0.01f, 1000.0f, PROP_NONE},
+    {SOCK_VECTOR, N_("Scale"), 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1000.0f, PROP_NONE},
     {-1, ""},
 };
 
