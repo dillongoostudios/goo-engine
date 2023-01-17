@@ -66,14 +66,12 @@ static void sig_handle_fpe(int UNUSED(sig))
 #  endif
 
 /* Handling `Ctrl-C` event in the console. */
-#  if !defined(WITH_HEADLESS)
 static void sig_handle_blender_esc(int sig)
 {
-  static int count = 0;
-
   G.is_break = true; /* forces render loop to read queue, not sure if its needed */
 
   if (sig == 2) {
+    static int count = 0;
     if (count) {
       printf("\nBlender killed\n");
       exit(2);
@@ -82,7 +80,6 @@ static void sig_handle_blender_esc(int sig)
     count++;
   }
 }
-#  endif
 
 static void sig_handle_crash_backtrace(FILE *fp)
 {
@@ -104,7 +101,7 @@ static void sig_handle_crash(int signum)
       char fname[FILE_MAX];
 
       if (!(G_MAIN && G_MAIN->filepath[0])) {
-        BLI_join_dirfile(fname, sizeof(fname), BKE_tempdir_base(), "crash.blend");
+        BLI_path_join(fname, sizeof(fname), BKE_tempdir_base(), "crash.blend");
       }
       else {
         STRNCPY(fname, G_MAIN->filepath);
@@ -125,11 +122,10 @@ static void sig_handle_crash(int signum)
   char fname[FILE_MAX];
 
   if (!(G_MAIN && G_MAIN->filepath[0])) {
-    BLI_join_dirfile(fname, sizeof(fname), BKE_tempdir_base(), "blender.crash.txt");
+    BLI_path_join(fname, sizeof(fname), BKE_tempdir_base(), "blender.crash.txt");
   }
   else {
-    BLI_join_dirfile(
-        fname, sizeof(fname), BKE_tempdir_base(), BLI_path_basename(G_MAIN->filepath));
+    BLI_path_join(fname, sizeof(fname), BKE_tempdir_base(), BLI_path_basename(G_MAIN->filepath));
     BLI_path_extension_replace(fname, sizeof(fname), ".crash.txt");
   }
 
@@ -244,11 +240,9 @@ void main_signal_setup_background(void)
   /* for all platforms, even windows has it! */
   BLI_assert(G.background);
 
-#  if !defined(WITH_HEADLESS)
   /* Support pressing `Ctrl-C` to close Blender in background-mode.
    * Useful to be able to cancel a render operation. */
   signal(SIGINT, sig_handle_blender_esc);
-#  endif
 }
 
 void main_signal_setup_fpe(void)
@@ -258,7 +252,7 @@ void main_signal_setup_fpe(void)
    * set breakpoints on sig_handle_fpe */
   signal(SIGFPE, sig_handle_fpe);
 
-#    if defined(__linux__) && defined(__GNUC__)
+#    if defined(__linux__) && defined(__GNUC__) && defined(HAVE_FEENABLEEXCEPT)
   feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
 #    endif /* defined(__linux__) && defined(__GNUC__) */
 #    if defined(OSX_SSE_FPE)

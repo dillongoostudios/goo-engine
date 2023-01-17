@@ -46,12 +46,15 @@ KERNEL_STRUCT_MEMBER(path, float, min_ray_pdf, KERNEL_FEATURE_PATH_TRACING)
 /* Continuation probability for path termination. */
 KERNEL_STRUCT_MEMBER(path, float, continuation_probability, KERNEL_FEATURE_PATH_TRACING)
 /* Throughput. */
-KERNEL_STRUCT_MEMBER(path, packed_float3, throughput, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(path, PackedSpectrum, throughput, KERNEL_FEATURE_PATH_TRACING)
+/* Factor to multiple with throughput to get remove any guiding PDFS.
+ * Such throughput without guiding PDFS is used for Russian roulette termination. */
+KERNEL_STRUCT_MEMBER(path, float, unguided_throughput, KERNEL_FEATURE_PATH_GUIDING)
 /* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
-KERNEL_STRUCT_MEMBER(path, packed_float3, pass_diffuse_weight, KERNEL_FEATURE_LIGHT_PASSES)
-KERNEL_STRUCT_MEMBER(path, packed_float3, pass_glossy_weight, KERNEL_FEATURE_LIGHT_PASSES)
+KERNEL_STRUCT_MEMBER(path, PackedSpectrum, pass_diffuse_weight, KERNEL_FEATURE_LIGHT_PASSES)
+KERNEL_STRUCT_MEMBER(path, PackedSpectrum, pass_glossy_weight, KERNEL_FEATURE_LIGHT_PASSES)
 /* Denoising. */
-KERNEL_STRUCT_MEMBER(path, packed_float3, denoising_feature_throughput, KERNEL_FEATURE_DENOISING)
+KERNEL_STRUCT_MEMBER(path, PackedSpectrum, denoising_feature_throughput, KERNEL_FEATURE_DENOISING)
 /* Shader sorting. */
 /* TODO: compress as uint16? or leave out entirely and recompute key in sorting code? */
 KERNEL_STRUCT_MEMBER(path, uint32_t, shader_sort_key, KERNEL_FEATURE_PATH_TRACING)
@@ -84,8 +87,8 @@ KERNEL_STRUCT_END(isect)
 /*************** Subsurface closure state for subsurface kernel ***************/
 
 KERNEL_STRUCT_BEGIN(subsurface)
-KERNEL_STRUCT_MEMBER(subsurface, packed_float3, albedo, KERNEL_FEATURE_SUBSURFACE)
-KERNEL_STRUCT_MEMBER(subsurface, packed_float3, radius, KERNEL_FEATURE_SUBSURFACE)
+KERNEL_STRUCT_MEMBER(subsurface, PackedSpectrum, albedo, KERNEL_FEATURE_SUBSURFACE)
+KERNEL_STRUCT_MEMBER(subsurface, PackedSpectrum, radius, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_MEMBER(subsurface, float, anisotropy, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_MEMBER(subsurface, packed_float3, Ng, KERNEL_FEATURE_SUBSURFACE)
 KERNEL_STRUCT_END(subsurface)
@@ -98,3 +101,33 @@ KERNEL_STRUCT_ARRAY_MEMBER(volume_stack, int, shader, KERNEL_FEATURE_VOLUME)
 KERNEL_STRUCT_END_ARRAY(volume_stack,
                         KERNEL_STRUCT_VOLUME_STACK_SIZE,
                         KERNEL_STRUCT_VOLUME_STACK_SIZE)
+
+/************************************ Path Guiding *****************************/
+KERNEL_STRUCT_BEGIN(guiding)
+#ifdef __PATH_GUIDING__
+/* Current path segment of the random walk/path. */
+KERNEL_STRUCT_MEMBER(guiding,
+                     openpgl::cpp::PathSegment *,
+                     path_segment,
+                     KERNEL_FEATURE_PATH_GUIDING)
+#else
+/* Current path segment of the random walk/path. */
+KERNEL_STRUCT_MEMBER(guiding, uint64_t, path_segment, KERNEL_FEATURE_PATH_GUIDING)
+#endif
+/* If surface guiding is enabled */
+KERNEL_STRUCT_MEMBER(guiding, bool, use_surface_guiding, KERNEL_FEATURE_PATH_GUIDING)
+/* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
+ * or BSDF sampling) */
+KERNEL_STRUCT_MEMBER(guiding, float, sample_surface_guiding_rand, KERNEL_FEATURE_PATH_GUIDING)
+/* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob)*/
+KERNEL_STRUCT_MEMBER(guiding, float, surface_guiding_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
+/* Probability of sampling a BSSRDF closure instead of a BSDF closure*/
+KERNEL_STRUCT_MEMBER(guiding, float, bssrdf_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
+/* If volume guiding is enabled */
+KERNEL_STRUCT_MEMBER(guiding, bool, use_volume_guiding, KERNEL_FEATURE_PATH_GUIDING)
+/* Random number used for additional guiding decisions (e.g., cache query, selection to use guiding
+ * or BSDF sampling) */
+KERNEL_STRUCT_MEMBER(guiding, float, sample_volume_guiding_rand, KERNEL_FEATURE_PATH_GUIDING)
+/* The probability to use surface guiding (i.e., diffuse sampling prob * guiding prob). */
+KERNEL_STRUCT_MEMBER(guiding, float, volume_guiding_sampling_prob, KERNEL_FEATURE_PATH_GUIDING)
+KERNEL_STRUCT_END(guiding)

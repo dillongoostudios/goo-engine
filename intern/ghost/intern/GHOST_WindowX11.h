@@ -11,7 +11,7 @@
 #include "GHOST_Window.h"
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
-// For tablets
+/* For tablets. */
 #ifdef WITH_X11_XINPUT
 #  include <X11/extensions/XInput.h>
 #endif
@@ -47,7 +47,6 @@ class GHOST_WindowX11 : public GHOST_Window {
    * \param parentWindow: Parent (embedder) window.
    * \param type: The type of drawing context installed in this window.
    * \param stereoVisual: Stereo visual for quad buffered stereo.
-   * \param alphaBackground: Enable alpha blending of window with display background.
    */
   GHOST_WindowX11(GHOST_SystemX11 *system,
                   Display *display,
@@ -62,7 +61,6 @@ class GHOST_WindowX11 : public GHOST_Window {
                   const bool is_dialog = false,
                   const bool stereoVisual = false,
                   const bool exclusive = false,
-                  const bool alphaBackground = false,
                   const bool is_debug = false);
 
   bool getValid() const;
@@ -236,7 +234,7 @@ class GHOST_WindowX11 : public GHOST_Window {
   Cursor m_visible_cursor;
 
   /** Cache of XC_* ID's to XCursor structures */
-  std::map<unsigned int, Cursor> m_standard_cursors;
+  std::map<uint, Cursor> m_standard_cursors;
 
   GHOST_TaskBarX11 m_taskbar;
 

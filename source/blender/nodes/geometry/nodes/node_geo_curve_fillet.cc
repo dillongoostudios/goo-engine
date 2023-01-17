@@ -32,12 +32,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Curve"));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "mode", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryCurveFillet *data = MEM_cnew<NodeGeometryCurveFillet>(__func__);
   data->mode = GEO_NODE_CURVE_FILLET_BEZIER;
@@ -48,7 +48,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
 {
   const NodeGeometryCurveFillet &storage = node_storage(*node);
   const GeometryNodeCurveFilletMode mode = (GeometryNodeCurveFilletMode)storage.mode;
-  bNodeSocket *poly_socket = ((bNodeSocket *)node->inputs.first)->next;
+  bNodeSocket *poly_socket = static_cast<bNodeSocket *>(node->inputs.first)->next;
   nodeSetSocketAvailability(ntree, poly_socket, mode == GEO_NODE_CURVE_FILLET_POLY);
 }
 
@@ -72,10 +72,9 @@ static void node_geo_exec(GeoNodeExecParams params)
       return;
     }
 
-    const CurveComponent &component = *geometry_set.get_component_for_read<CurveComponent>();
-    const Curves &curves_id = *component.get_for_read();
+    const Curves &curves_id = *geometry_set.get_curves_for_read();
     const bke::CurvesGeometry &curves = bke::CurvesGeometry::wrap(curves_id.geometry);
-    GeometryComponentFieldContext context{component, ATTR_DOMAIN_POINT};
+    bke::CurvesFieldContext context{curves, ATTR_DOMAIN_POINT};
     fn::FieldEvaluator evaluator{context, curves.points_num()};
     evaluator.add(radius_field);
 

@@ -439,9 +439,9 @@ bool Scene::need_data_update()
           film->is_modified() || procedural_manager->need_update());
 }
 
-bool Scene::need_reset()
+bool Scene::need_reset(const bool check_camera)
 {
-  return need_data_update() || camera->is_modified();
+  return need_data_update() || (check_camera && camera->is_modified());
 }
 
 void Scene::reset()
@@ -488,6 +488,8 @@ void Scene::update_kernel_features()
     return;
   }
 
+  thread_scoped_lock scene_lock(mutex);
+
   /* These features are not being tweaked as often as shaders,
    * so could be done selective magic for the viewport as well. */
   uint kernel_features = shader_manager->get_kernel_features(this);
@@ -496,9 +498,6 @@ void Scene::update_kernel_features()
   kernel_features |= KERNEL_FEATURE_PATH_TRACING;
   if (params.hair_shape == CURVE_THICK) {
     kernel_features |= KERNEL_FEATURE_HAIR_THICK;
-  }
-  if (use_motion && camera->use_motion()) {
-    kernel_features |= KERNEL_FEATURE_CAMERA_MOTION;
   }
 
   /* Figure out whether the scene will use shader ray-trace we need at least
@@ -519,9 +518,6 @@ void Scene::update_kernel_features()
     if (use_motion) {
       if (object->use_motion() || geom->get_use_motion_blur()) {
         kernel_features |= KERNEL_FEATURE_OBJECT_MOTION;
-      }
-      if (geom->get_use_motion_blur()) {
-        kernel_features |= KERNEL_FEATURE_CAMERA_MOTION;
       }
     }
     if (object->get_is_shadow_catcher()) {
@@ -555,6 +551,10 @@ void Scene::update_kernel_features()
     kernel_features |= KERNEL_FEATURE_MNEE;
   }
 
+  if (integrator->get_guiding_params(device).use) {
+    kernel_features |= KERNEL_FEATURE_PATH_GUIDING;
+  }
+
   if (bake_manager->get_baking()) {
     kernel_features |= KERNEL_FEATURE_BAKING;
   }
@@ -576,9 +576,6 @@ bool Scene::update(Progress &progress)
     return false;
   }
 
-  /* Load render kernels, before device update where we upload data to the GPU. */
-  load_kernels(progress, false);
-
   /* Upload scene data to the GPU. */
   progress.set_status("Updating Scene");
   MEM_GUARDED_CALL(&progress, device_update, device, progress);
@@ -590,8 +587,6 @@ static void log_kernel_features(const uint features)
 {
   VLOG_INFO << "Requested features:\n";
   VLOG_INFO << "Use BSDF " << string_from_bool(features & KERNEL_FEATURE_NODE_BSDF) << "\n";
-  VLOG_INFO << "Use Principled BSDF " << string_from_bool(features & KERNEL_FEATURE_PRINCIPLED)
-            << "\n";
   VLOG_INFO << "Use Emission " << string_from_bool(features & KERNEL_FEATURE_NODE_EMISSION)
             << "\n";
   VLOG_INFO << "Use Volume " << string_from_bool(features & KERNEL_FEATURE_NODE_VOLUME) << "\n";
@@ -611,8 +606,6 @@ static void log_kernel_features(const uint features)
             << "\n";
   VLOG_INFO << "Use Object Motion " << string_from_bool(features & KERNEL_FEATURE_OBJECT_MOTION)
             << "\n";
-  VLOG_INFO << "Use Camera Motion " << string_from_bool(features & KERNEL_FEATURE_CAMERA_MOTION)
-            << "\n";
   VLOG_INFO << "Use Baking " << string_from_bool(features & KERNEL_FEATURE_BAKING) << "\n";
   VLOG_INFO << "Use Subsurface " << string_from_bool(features & KERNEL_FEATURE_SUBSURFACE) << "\n";
   VLOG_INFO << "Use Volume " << string_from_bool(features & KERNEL_FEATURE_VOLUME) << "\n";
@@ -622,13 +615,8 @@ static void log_kernel_features(const uint features)
             << "\n";
 }
 
-bool Scene::load_kernels(Progress &progress, bool lock_scene)
+bool Scene::load_kernels(Progress &progress)
 {
-  thread_scoped_lock scene_lock;
-  if (lock_scene) {
-    scene_lock = thread_scoped_lock(mutex);
-  }
-
   update_kernel_features();
 
   const uint kernel_features = dscene.data.kernel_features;

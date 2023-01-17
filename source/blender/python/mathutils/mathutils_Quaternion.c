@@ -543,13 +543,7 @@ static PyObject *Quaternion_rotate(QuaternionObject *self, PyObject *value)
   length = normalize_qt_qt(tquat, self->quat);
   quat_to_mat3(self_rmat, tquat);
   mul_m3_m3m3(rmat, other_rmat, self_rmat);
-  normalize_m3(rmat);
-  /* This check could also be performed on `other_rmat`, use the final result instead to ensure
-   * float imprecision doesn't allow the multiplication to make `rmat` negative. */
-  if (is_negative_m3(rmat)) {
-    negate_m3(rmat);
-  }
-  mat3_normalized_to_quat(self->quat, rmat);
+  mat3_to_quat(self->quat, rmat);
   mul_qt_fl(self->quat, length); /* maintain length after rotating */
 
   (void)BaseMath_WriteCallback(self);
@@ -836,7 +830,7 @@ static PyObject *Quaternion_richcmpr(PyObject *a, PyObject *b, int op)
       return NULL;
     }
 
-    ok = (EXPP_VectorsAreEqual(quatA->quat, quatB->quat, QUAT_SIZE, 1)) ? 0 : -1;
+    ok = EXPP_VectorsAreEqual(quatA->quat, quatB->quat, QUAT_SIZE, 1) ? 0 : -1;
   }
 
   switch (op) {
@@ -887,13 +881,13 @@ static Py_hash_t Quaternion_hash(QuaternionObject *self)
  * \{ */
 
 /** Sequence length: `len(object)`. */
-static int Quaternion_len(QuaternionObject *UNUSED(self))
+static Py_ssize_t Quaternion_len(QuaternionObject *UNUSED(self))
 {
   return QUAT_SIZE;
 }
 
 /** Sequence accessor (get): `x = object[i]`. */
-static PyObject *Quaternion_item(QuaternionObject *self, int i)
+static PyObject *Quaternion_item(QuaternionObject *self, Py_ssize_t i)
 {
   if (i < 0) {
     i = QUAT_SIZE - i;
@@ -914,7 +908,7 @@ static PyObject *Quaternion_item(QuaternionObject *self, int i)
 }
 
 /** Sequence accessor (set): `object[i] = x`. */
-static int Quaternion_ass_item(QuaternionObject *self, int i, PyObject *ob)
+static int Quaternion_ass_item(QuaternionObject *self, Py_ssize_t i, PyObject *ob)
 {
   float f;
 
@@ -1183,7 +1177,7 @@ static PyObject *Quaternion_mul(PyObject *q1, PyObject *q2)
     }
   }
   else if (quat1) { /* QUAT * FLOAT */
-    if ((((scalar = PyFloat_AsDouble(q2)) == -1.0f && PyErr_Occurred()) == 0)) {
+    if (((scalar = PyFloat_AsDouble(q2)) == -1.0f && PyErr_Occurred()) == 0) {
       return quat_mul_float(quat1, scalar);
     }
   }
@@ -1668,9 +1662,9 @@ PyDoc_STRVAR(quaternion_doc,
              "\n"
              "   This object gives access to Quaternions in Blender.\n"
              "\n"
-             "   :param seq: size 3 or 4\n"
+             "   :arg seq: size 3 or 4\n"
              "   :type seq: :class:`Vector`\n"
-             "   :param angle: rotation angle, in radians\n"
+             "   :arg angle: rotation angle, in radians\n"
              "   :type angle: float\n"
              "\n"
              "   The constructor takes arguments in various forms:\n"
@@ -1730,7 +1724,7 @@ PyTypeObject quaternion_Type = {
     NULL,                                                          /* tp_alloc */
     Quaternion_new,                                                /* tp_new */
     NULL,                                                          /* tp_free */
-    NULL,                                                          /* tp_is_gc */
+    (inquiry)BaseMathObject_is_gc,                                 /* tp_is_gc */
     NULL,                                                          /* tp_bases */
     NULL,                                                          /* tp_mro */
     NULL,                                                          /* tp_cache */
@@ -1806,6 +1800,7 @@ PyObject *Quaternion_CreatePyObject_cb(PyObject *cb_user, uchar cb_type, uchar c
     self->cb_user = cb_user;
     self->cb_type = cb_type;
     self->cb_subtype = cb_subtype;
+    BLI_assert(!PyObject_GC_IsTracked((PyObject *)self));
     PyObject_GC_Track(self);
   }
 

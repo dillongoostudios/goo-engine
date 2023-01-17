@@ -67,8 +67,8 @@ static bool geometry_attributes_remove_poll(bContext *C)
 }
 
 static const EnumPropertyItem *geometry_attribute_domain_itemf(bContext *C,
-                                                               PointerRNA *UNUSED(ptr),
-                                                               PropertyRNA *UNUSED(prop),
+                                                               PointerRNA * /*ptr*/,
+                                                               PropertyRNA * /*prop*/,
                                                                bool *r_free)
 {
   if (C == nullptr) {
@@ -275,14 +275,14 @@ static int geometry_attribute_convert_exec(bContext *C, wmOperator *op)
 {
   Object *ob = ED_object_context(C);
   ID *ob_data = static_cast<ID *>(ob->data);
-  CustomDataLayer *layer = BKE_id_attributes_active_get(ob_data);
+  const CustomDataLayer *layer = BKE_id_attributes_active_get(ob_data);
   const std::string name = layer->name;
 
   const ConvertAttributeMode mode = static_cast<ConvertAttributeMode>(
       RNA_enum_get(op->ptr, "mode"));
 
   Mesh *mesh = reinterpret_cast<Mesh *>(ob_data);
-  bke::MutableAttributeAccessor attributes = bke::mesh_attributes_for_write(*mesh);
+  bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
 
   /* General conversion steps are always the same:
    * 1. Convert old data to right domain and data type.
@@ -305,7 +305,7 @@ static int geometry_attribute_convert_exec(bContext *C, wmOperator *op)
       void *new_data = MEM_malloc_arrayN(src_varray.size(), cpp_type.size(), __func__);
       src_varray.materialize_to_uninitialized(new_data);
       attributes.remove(name);
-      attributes.add(name, dst_domain, dst_type, blender::bke::AttributeInitMove(new_data));
+      attributes.add(name, dst_domain, dst_type, blender::bke::AttributeInitMoveArray(new_data));
       break;
     }
     case ConvertAttributeMode::UVMap: {
@@ -352,7 +352,7 @@ static int geometry_attribute_convert_exec(bContext *C, wmOperator *op)
   return OPERATOR_FINISHED;
 }
 
-static void geometry_color_attribute_add_ui(bContext *UNUSED(C), wmOperator *op)
+static void geometry_color_attribute_add_ui(bContext * /*C*/, wmOperator *op)
 {
   uiLayout *layout = op->layout;
   uiLayoutSetPropSep(layout, true);
@@ -471,11 +471,6 @@ static int geometry_color_attribute_remove_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (GS(id->name) == ID_ME) {
-    Mesh *me = static_cast<Mesh *>(ob->data);
-    BKE_mesh_update_customdata_pointers(me, true);
-  }
-
   DEG_id_tag_update(id, ID_RECALC_GEOMETRY);
   WM_main_add_notifier(NC_GEOM | ND_DATA, id);
 
@@ -571,7 +566,7 @@ void GEOMETRY_OT_color_attribute_duplicate(wmOperatorType *ot)
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
-static void geometry_attribute_convert_ui(bContext *UNUSED(C), wmOperator *op)
+static void geometry_attribute_convert_ui(bContext * /*C*/, wmOperator *op)
 {
   uiLayout *layout = op->layout;
   uiLayoutSetPropSep(layout, true);
@@ -590,7 +585,7 @@ static void geometry_attribute_convert_ui(bContext *UNUSED(C), wmOperator *op)
 
 static int geometry_attribute_convert_invoke(bContext *C,
                                              wmOperator *op,
-                                             const wmEvent *UNUSED(event))
+                                             const wmEvent * /*event*/)
 {
   return WM_operator_props_dialog_popup(C, op, 300);
 }
@@ -617,8 +612,7 @@ void GEOMETRY_OT_attribute_convert(wmOperatorType *ot)
 
   PropertyRNA *prop;
 
-  RNA_def_enum(
-      ot->srna, "mode", mode_items, static_cast<int>(ConvertAttributeMode::Generic), "Mode", "");
+  RNA_def_enum(ot->srna, "mode", mode_items, int(ConvertAttributeMode::Generic), "Mode", "");
 
   prop = RNA_def_enum(ot->srna,
                       "domain",
@@ -651,8 +645,7 @@ bool ED_geometry_attribute_convert(Mesh *mesh,
     return false;
   }
 
-  blender::bke::MutableAttributeAccessor attributes = blender::bke::mesh_attributes_for_write(
-      *mesh);
+  blender::bke::MutableAttributeAccessor attributes = mesh->attributes_for_write();
 
   GVArray src_varray = attributes.lookup_or_default(name, new_domain, new_type);
 
@@ -660,7 +653,7 @@ bool ED_geometry_attribute_convert(Mesh *mesh,
   void *new_data = MEM_malloc_arrayN(src_varray.size(), cpp_type.size(), __func__);
   src_varray.materialize_to_uninitialized(new_data);
   attributes.remove(name);
-  attributes.add(name, new_domain, new_type, blender::bke::AttributeInitMove(new_data));
+  attributes.add(name, new_domain, new_type, blender::bke::AttributeInitMoveArray(new_data));
 
   int *active_index = BKE_id_attributes_active_index_p(&mesh->id);
   if (*active_index > 0) {

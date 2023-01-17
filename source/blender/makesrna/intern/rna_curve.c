@@ -439,7 +439,7 @@ static void rna_Curve_bevelObject_set(PointerRNA *ptr,
 
   if (ob) {
     /* If bevel object has got the save curve, as object, for which it's set as bevobj,
-     * there could be infinity loop in #DispList calculation. */
+     * there could be an infinite loop in curve evaluation. */
     if (ob->type == OB_CURVES_LEGACY && ob->data != cu) {
       cu->bevobj = ob;
       id_lib_extern((ID *)ob);
@@ -514,7 +514,7 @@ static void rna_Curve_taperObject_set(PointerRNA *ptr,
 
   if (ob) {
     /* If taper object has got the save curve, as object, for which it's set as bevobj,
-     * there could be infinity loop in #DispList calculation. */
+     * there could be an infinite loop in curve evaluation. */
     if (ob->type == OB_CURVES_LEGACY && ob->data != cu) {
       cu->taperobj = ob;
       id_lib_extern((ID *)ob);
@@ -1947,22 +1947,23 @@ static void rna_def_curve_nurb(BlenderRNA *brna)
   prop = RNA_def_property(srna, "order_u", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "orderu");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_range(prop, 2, 6);
-  RNA_def_property_ui_text(
-      prop,
-      "Order U",
-      "NURBS order in the U direction (for splines and surfaces, higher values "
-      "let points influence a greater area)");
+  RNA_def_property_range(prop, 2, 64);
+  RNA_def_property_ui_range(prop, 2, 6, 1, -1);
+  RNA_def_property_ui_text(prop,
+                           "Order U",
+                           "NURBS order in the U direction. Higher values make each point "
+                           "influence a greater area, but have worse performance");
   RNA_def_property_update(prop, 0, "rna_Nurb_update_knot_u");
 
   prop = RNA_def_property(srna, "order_v", PROP_INT, PROP_NONE);
   RNA_def_property_int_sdna(prop, NULL, "orderv");
   RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
-  RNA_def_property_range(prop, 2, 6);
+  RNA_def_property_range(prop, 2, 64);
+  RNA_def_property_ui_range(prop, 2, 6, 1, -1);
   RNA_def_property_ui_text(prop,
                            "Order V",
-                           "NURBS order in the V direction (for surfaces only, higher values "
-                           "let points influence a greater area)");
+                           "NURBS order in the V direction. Higher values make each point "
+                           "influence a greater area, but have worse performance");
   RNA_def_property_update(prop, 0, "rna_Nurb_update_knot_v");
 
   prop = RNA_def_property(srna, "resolution_u", PROP_INT, PROP_NONE);

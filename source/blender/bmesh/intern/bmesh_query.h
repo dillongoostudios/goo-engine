@@ -138,7 +138,6 @@ BMLoop *BM_face_other_vert_loop(BMFace *f, BMVert *v_prev, BMVert *v) ATTR_WARN_
  *     +----------+ <-- This loop defines the face and vertex..
  *                l
  * </pre>
- *
  */
 BMLoop *BM_loop_other_vert_loop_by_edge(BMLoop *l, BMEdge *e) ATTR_WARN_UNUSED_RESULT
     ATTR_NONNULL();
@@ -709,7 +708,7 @@ double BM_mesh_calc_volume(BMesh *bm, bool is_signed) ATTR_WARN_UNUSED_RESULT AT
  * Calculate isolated groups of faces with optional filtering.
  *
  * \param bm: the BMesh.
- * \param r_groups_array: Array of ints to fill in, length of bm->totface
+ * \param r_groups_array: Array of integers to fill in, length of `bm->totface`
  *        (or when hflag_test is set, the number of flagged faces).
  * \param r_group_index: index, length pairs into \a r_groups_array, size of return value
  *        int pairs: (array_start, array_length).

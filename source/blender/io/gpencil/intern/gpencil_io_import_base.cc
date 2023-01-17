@@ -31,11 +31,11 @@ Object *GpencilImporter::create_object()
   const float *cur_loc = scene_->cursor.location;
   const float rot[3] = {0.0f};
   ushort local_view_bits = (params_.v3d && params_.v3d->localvd) ? params_.v3d->local_view_uuid :
-                                                                   (ushort)0;
+                                                                   ushort(0);
 
   Object *ob_gpencil = ED_object_add_type(params_.C,
                                           OB_GPENCIL,
-                                          (params_.filename != nullptr) ? params_.filename :
+                                          (params_.filename[0] != '\0') ? params_.filename :
                                                                           nullptr,
                                           cur_loc,
                                           rot,

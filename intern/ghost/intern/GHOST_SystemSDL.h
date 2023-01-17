@@ -33,9 +33,9 @@ class GHOST_SystemSDL : public GHOST_System {
 
   bool processEvents(bool waitForEvent);
 
-  int setConsoleWindowState(GHOST_TConsoleWindowState /*action*/)
+  bool setConsoleWindowState(GHOST_TConsoleWindowState /*action*/)
   {
-    return 0;
+    return false;
   }
 
   GHOST_TSuccess getModifierKeys(GHOST_ModifierKeys &keys) const;
@@ -71,7 +71,6 @@ class GHOST_SystemSDL : public GHOST_System {
                               uint32_t width,
                               uint32_t height,
                               GHOST_TWindowState state,
-                              GHOST_TDrawingContextType type,
                               GHOST_GLSettings glSettings,
                               const bool exclusive = false,
                               const bool is_dialog = false,

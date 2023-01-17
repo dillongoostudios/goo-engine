@@ -84,7 +84,9 @@ class BlenderSync {
   }
 
   /* get parameters */
-  static SceneParams get_scene_params(BL::Scene &b_scene, bool background);
+  static SceneParams get_scene_params(BL::Scene &b_scene,
+                                      const bool background,
+                                      const bool use_developer_ui);
   static SessionParams get_session_params(BL::RenderEngine &b_engine,
                                           BL::Preferences &b_userpref,
                                           BL::Scene &b_scene,
@@ -117,6 +119,11 @@ class BlenderSync {
   void sync_world(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d, bool update_all);
   void sync_shaders(BL::Depsgraph &b_depsgraph, BL::SpaceView3D &b_v3d, bool update_all);
   void sync_nodes(Shader *shader, BL::ShaderNodeTree &b_ntree);
+
+  bool scene_attr_needs_recalc(Shader *shader, BL::Depsgraph &b_depsgraph);
+  void resolve_view_layer_attributes(Shader *shader,
+                                     ShaderGraph *graph,
+                                     BL::Depsgraph &b_depsgraph);
 
   /* Object */
   Object *sync_object(BL::Depsgraph &b_depsgraph,
@@ -205,13 +212,16 @@ class BlenderSync {
   bool object_is_geometry(BObjectInfo &b_ob_info);
   bool object_can_have_geometry(BL::Object &b_ob);
   bool object_is_light(BL::Object &b_ob);
+  bool object_is_camera(BL::Object &b_ob);
 
   /* variables */
   BL::RenderEngine b_engine;
   BL::BlendData b_data;
   BL::Scene b_scene;
 
-  id_map<void *, Shader> shader_map;
+  enum ShaderFlags { SHADER_WITH_LAYER_ATTRS };
+
+  id_map<void *, Shader, ShaderFlags> shader_map;
   id_map<ObjectKey, Object> object_map;
   id_map<void *, Procedural> procedural_map;
   id_map<GeometryKey, Geometry> geometry_map;

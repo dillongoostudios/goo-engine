@@ -32,23 +32,32 @@ namespace blender::eevee {
 
 void VelocityModule::init()
 {
-  if (inst_.render && (inst_.film.enabled_passes_get() & EEVEE_RENDER_PASS_VECTOR)) {
-    /* No motion blur and the vector pass was requested. Do the step sync here. */
+  if (inst_.render && (inst_.film.enabled_passes_get() & EEVEE_RENDER_PASS_VECTOR) != 0) {
+    /* No motion blur and the vector pass was requested. Do the steps sync here. */
     const Scene *scene = inst_.scene;
     float initial_time = scene->r.cfra + scene->r.subframe;
     step_sync(STEP_PREVIOUS, initial_time - 1.0f);
     step_sync(STEP_NEXT, initial_time + 1.0f);
+
     inst_.set_time(initial_time);
+    step_ = STEP_CURRENT;
+    /* Let the main sync loop handle the current step. */
   }
+
+  /* For viewport, only previous motion is supported.
+   * Still bind previous step to avoid undefined behavior. */
+  next_step_ = inst_.is_viewport() ? STEP_PREVIOUS : STEP_NEXT;
 }
 
 static void step_object_sync_render(void *velocity,
                                     Object *ob,
-                                    RenderEngine *UNUSED(engine),
-                                    Depsgraph *UNUSED(depsgraph))
+                                    RenderEngine * /*engine*/,
+                                    Depsgraph * /*depsgraph*/)
 {
   ObjectKey object_key(ob);
-  reinterpret_cast<VelocityModule *>(velocity)->step_object_sync(ob, object_key);
+  /* NOTE: Dummy resource handle since this will not be used for drawing. */
+  ResourceHandle resource_handle(0);
+  reinterpret_cast<VelocityModule *>(velocity)->step_object_sync(ob, object_key, resource_handle);
 }
 
 void VelocityModule::step_sync(eVelocityStep step, float time)
@@ -64,15 +73,18 @@ void VelocityModule::step_camera_sync()
 {
   inst_.camera.sync();
   *camera_steps[step_] = inst_.camera.data_get();
+  step_time[step_] = inst_.scene->r.cfra + inst_.scene->r.subframe;
   /* Fix undefined camera steps when rendering is starting. */
   if ((step_ == STEP_CURRENT) && (camera_steps[STEP_PREVIOUS]->initialized == false)) {
     *camera_steps[STEP_PREVIOUS] = *static_cast<CameraData *>(camera_steps[step_]);
     camera_steps[STEP_PREVIOUS]->initialized = true;
+    step_time[STEP_PREVIOUS] = step_time[step_];
   }
 }
 
 bool VelocityModule::step_object_sync(Object *ob,
                                       ObjectKey &object_key,
+                                      ResourceHandle resource_handle,
                                       int /*IDRecalcFlag*/ recalc)
 {
   bool has_motion = object_has_velocity(ob) || (recalc & ID_RECALC_TRANSFORM);
@@ -84,8 +96,6 @@ bool VelocityModule::step_object_sync(Object *ob,
     return false;
   }
 
-  uint32_t resource_id = DRW_object_resource_id_get(ob);
-
   /* Object motion. */
   /* FIXME(fclem) As we are using original objects pointers, there is a chance the previous
    * object key matches a totally different object if the scene was changed by user or python
@@ -94,18 +104,18 @@ bool VelocityModule::step_object_sync(Object *ob,
    * We live with that until we have a correct way of identifying new objects. */
   VelocityObjectData &vel = velocity_map.lookup_or_add_default(object_key);
   vel.obj.ofs[step_] = object_steps_usage[step_]++;
-  vel.obj.resource_id = resource_id;
+  vel.obj.resource_id = resource_handle.resource_index();
   vel.id = (ID *)ob->data;
-  object_steps[step_]->get_or_resize(vel.obj.ofs[step_]) = ob->obmat;
+  object_steps[step_]->get_or_resize(vel.obj.ofs[step_]) = ob->object_to_world;
   if (step_ == STEP_CURRENT) {
     /* Replace invalid steps. Can happen if object was hidden in one of those steps. */
     if (vel.obj.ofs[STEP_PREVIOUS] == -1) {
       vel.obj.ofs[STEP_PREVIOUS] = object_steps_usage[STEP_PREVIOUS]++;
-      object_steps[STEP_PREVIOUS]->get_or_resize(vel.obj.ofs[STEP_PREVIOUS]) = ob->obmat;
+      object_steps[STEP_PREVIOUS]->get_or_resize(vel.obj.ofs[STEP_PREVIOUS]) = ob->object_to_world;
     }
     if (vel.obj.ofs[STEP_NEXT] == -1) {
       vel.obj.ofs[STEP_NEXT] = object_steps_usage[STEP_NEXT]++;
-      object_steps[STEP_NEXT]->get_or_resize(vel.obj.ofs[STEP_NEXT]) = ob->obmat;
+      object_steps[STEP_NEXT]->get_or_resize(vel.obj.ofs[STEP_NEXT]) = ob->object_to_world;
     }
   }
 
@@ -212,14 +222,15 @@ void VelocityModule::step_swap()
     SWAP(VelocityObjectBuf *, object_steps[step_a], object_steps[step_b]);
     SWAP(VelocityGeometryBuf *, geometry_steps[step_a], geometry_steps[step_b]);
     SWAP(CameraDataBuf *, camera_steps[step_a], camera_steps[step_b]);
+    SWAP(float, step_time[step_a], step_time[step_b]);
 
     for (VelocityObjectData &vel : velocity_map.values()) {
       vel.obj.ofs[step_a] = vel.obj.ofs[step_b];
-      vel.obj.ofs[step_b] = (uint)-1;
+      vel.obj.ofs[step_b] = uint(-1);
       vel.geo.ofs[step_a] = vel.geo.ofs[step_b];
       vel.geo.len[step_a] = vel.geo.len[step_b];
-      vel.geo.ofs[step_b] = (uint)-1;
-      vel.geo.len[step_b] = (uint)-1;
+      vel.geo.ofs[step_b] = uint(-1);
+      vel.geo.len[step_b] = uint(-1);
     }
   };
 
@@ -238,10 +249,7 @@ void VelocityModule::step_swap()
 
 void VelocityModule::begin_sync()
 {
-  if (inst_.is_viewport()) {
-    /* Viewport always evaluate current step. */
-    step_ = STEP_CURRENT;
-  }
+  step_ = STEP_CURRENT;
   step_camera_sync();
   object_steps_usage[step_] = 0;
 }
@@ -254,7 +262,7 @@ void VelocityModule::end_sync()
   uint32_t max_resource_id_ = 0u;
 
   for (Map<ObjectKey, VelocityObjectData>::Item item : velocity_map.items()) {
-    if (item.value.obj.resource_id == (uint)-1) {
+    if (item.value.obj.resource_id == uint32_t(-1)) {
       deleted_obj.append(item.key);
     }
     else {
@@ -270,11 +278,11 @@ void VelocityModule::end_sync()
     inst_.sampling.reset();
   }
 
-  for (auto key : deleted_obj) {
+  for (auto &key : deleted_obj) {
     velocity_map.remove(key);
   }
 
-  indirection_buf.resize(power_of_2_max_u(max_resource_id_ + 1));
+  indirection_buf.resize(ceil_to_multiple_u(max_resource_id_, 128));
 
   /* Avoid uploading more data to the GPU as well as an extra level of
    * indirection on the GPU by copying back offsets the to VelocityIndex. */
@@ -294,7 +302,7 @@ void VelocityModule::end_sync()
     }
     indirection_buf[vel.obj.resource_id] = vel;
     /* Reset for next sync. */
-    vel.obj.resource_id = (uint)-1;
+    vel.obj.resource_id = uint(-1);
   }
 
   object_steps[STEP_PREVIOUS]->push_update();
@@ -358,6 +366,21 @@ bool VelocityModule::camera_has_motion() const
   }
   return *camera_steps[STEP_PREVIOUS] != *camera_steps[STEP_CURRENT] &&
          *camera_steps[STEP_NEXT] != *camera_steps[STEP_CURRENT];
+}
+
+bool VelocityModule::camera_changed_projection() const
+{
+  /* Only valid after sync. */
+  if (inst_.is_viewport()) {
+    return camera_steps[STEP_PREVIOUS]->type != camera_steps[STEP_CURRENT]->type;
+  }
+  /* Cannot happen in render mode since we set the type during the init phase. */
+  return false;
+}
+
+float VelocityModule::step_time_delta_get(eVelocityStep start, eVelocityStep end) const
+{
+  return step_time[end] - step_time[start];
 }
 
 /** \} */

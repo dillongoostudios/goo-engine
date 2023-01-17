@@ -70,8 +70,6 @@ void BKE_object_data_transfer_dttypes_to_cdmask(const int dtdata_types,
       r_data_masks->lmask |= CD_MASK_MLOOPUV;
     }
     else if (cddata_type == CD_FAKE_LNOR) {
-      r_data_masks->vmask |= CD_MASK_NORMAL;
-      r_data_masks->pmask |= CD_MASK_NORMAL;
       r_data_masks->lmask |= CD_MASK_NORMAL | CD_MASK_CUSTOMLOOPNORMAL;
     }
   }
@@ -194,16 +192,16 @@ int BKE_object_data_transfer_dttype_to_cdtype(const int dtdata_type)
     case DT_TYPE_SKIN:
       return CD_MVERT_SKIN;
     case DT_TYPE_BWEIGHT_VERT:
-      return CD_FAKE_BWEIGHT;
+      return CD_BWEIGHT;
 
     case DT_TYPE_SHARP_EDGE:
       return CD_FAKE_SHARP;
     case DT_TYPE_SEAM:
       return CD_FAKE_SEAM;
     case DT_TYPE_CREASE:
-      return CD_FAKE_CREASE;
+      return CD_CREASE;
     case DT_TYPE_BWEIGHT_EDGE:
-      return CD_FAKE_BWEIGHT;
+      return CD_BWEIGHT;
     case DT_TYPE_FREESTYLE_EDGE:
       return CD_FREESTYLE_EDGE;
 
@@ -258,13 +256,14 @@ static void data_transfer_dtdata_type_preprocess(Mesh *me_src,
 {
   if (dtdata_type == DT_TYPE_LNOR) {
     /* Compute custom normals into regular loop normals, which will be used for the transfer. */
-    MVert *verts_dst = me_dst->mvert;
+
+    const MVert *verts_dst = BKE_mesh_verts(me_dst);
     const int num_verts_dst = me_dst->totvert;
-    MEdge *edges_dst = me_dst->medge;
+    const MEdge *edges_dst = BKE_mesh_edges(me_dst);
     const int num_edges_dst = me_dst->totedge;
-    MPoly *polys_dst = me_dst->mpoly;
+    const MPoly *polys_dst = BKE_mesh_polys(me_dst);
     const int num_polys_dst = me_dst->totpoly;
-    MLoop *loops_dst = me_dst->mloop;
+    const MLoop *loops_dst = BKE_mesh_loops(me_dst);
     const int num_loops_dst = me_dst->totloop;
     CustomData *ldata_dst = &me_dst->ldata;
 
@@ -282,7 +281,8 @@ static void data_transfer_dtdata_type_preprocess(Mesh *me_src,
     loop_nors_dst = CustomData_get_layer(ldata_dst, CD_NORMAL);
     const bool do_loop_nors_dst = (loop_nors_dst == NULL);
     if (do_loop_nors_dst) {
-      loop_nors_dst = CustomData_add_layer(ldata_dst, CD_NORMAL, CD_CALLOC, NULL, num_loops_dst);
+      loop_nors_dst = CustomData_add_layer(
+          ldata_dst, CD_NORMAL, CD_SET_DEFAULT, NULL, num_loops_dst);
       CustomData_set_layer_flag(ldata_dst, CD_NORMAL, CD_FLAG_TEMPORARY);
     }
     if (dirty_nors_dst || do_loop_nors_dst) {
@@ -319,13 +319,13 @@ static void data_transfer_dtdata_type_postprocess(Object *UNUSED(ob_src),
     }
 
     /* Bake edited destination loop normals into custom normals again. */
-    MVert *verts_dst = me_dst->mvert;
+    const MVert *verts_dst = BKE_mesh_verts(me_dst);
     const int num_verts_dst = me_dst->totvert;
-    MEdge *edges_dst = me_dst->medge;
+    MEdge *edges_dst = BKE_mesh_edges_for_write(me_dst);
     const int num_edges_dst = me_dst->totedge;
-    MPoly *polys_dst = me_dst->mpoly;
+    MPoly *polys_dst = BKE_mesh_polys_for_write(me_dst);
     const int num_polys_dst = me_dst->totpoly;
-    MLoop *loops_dst = me_dst->mloop;
+    MLoop *loops_dst = BKE_mesh_loops_for_write(me_dst);
     const int num_loops_dst = me_dst->totloop;
     CustomData *ldata_dst = &me_dst->ldata;
 
@@ -335,7 +335,7 @@ static void data_transfer_dtdata_type_postprocess(Object *UNUSED(ob_src),
 
     if (!custom_nors_dst) {
       custom_nors_dst = CustomData_add_layer(
-          ldata_dst, CD_CUSTOMLOOPNORMAL, CD_CALLOC, NULL, num_loops_dst);
+          ldata_dst, CD_CUSTOMLOOPNORMAL, CD_SET_DEFAULT, NULL, num_loops_dst);
     }
 
     /* Note loop_nors_dst contains our custom normals as transferred from source... */
@@ -374,8 +374,8 @@ float data_transfer_interp_float_do(const int mix_mode,
 {
   float val_ret;
 
-  if (((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (val_dst < mix_factor)) ||
-       (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (val_dst > mix_factor)))) {
+  if ((mix_mode == CDT_MIX_REPLACE_ABOVE_THRESHOLD && (val_dst < mix_factor)) ||
+      (mix_mode == CDT_MIX_REPLACE_BELOW_THRESHOLD && (val_dst > mix_factor))) {
     return val_dst; /* Do not affect destination. */
   }
 
@@ -401,31 +401,6 @@ float data_transfer_interp_float_do(const int mix_mode,
       break;
   }
   return interpf(val_ret, val_dst, mix_factor);
-}
-
-static void data_transfer_interp_char(const CustomDataTransferLayerMap *laymap,
-                                      void *dest,
-                                      const void **sources,
-                                      const float *weights,
-                                      const int count,
-                                      const float mix_factor)
-{
-  const char **data_src = (const char **)sources;
-  char *data_dst = (char *)dest;
-
-  const int mix_mode = laymap->mix_mode;
-  float val_src = 0.0f;
-  const float val_dst = (float)(*data_dst) / 255.0f;
-
-  for (int i = count; i--;) {
-    val_src += ((float)(*data_src[i]) / 255.0f) * weights[i];
-  }
-
-  val_src = data_transfer_interp_float_do(mix_mode, val_dst, val_src, mix_factor);
-
-  CLAMP(val_src, 0.0f, 1.0f);
-
-  *data_dst = (char)(val_src * 255.0f);
 }
 
 /* Helpers to match sources and destinations data layers
@@ -563,7 +538,7 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(ListBase *r_map
         if (use_create) {
           /* Create as much data layers as necessary! */
           for (; idx_dst < idx_src; idx_dst++) {
-            CustomData_add_layer(cd_dst, cddata_type, CD_CALLOC, NULL, num_elem_dst);
+            CustomData_add_layer(cd_dst, cddata_type, CD_SET_DEFAULT, NULL, num_elem_dst);
           }
         }
         else {
@@ -624,7 +599,8 @@ static bool data_transfer_layersmapping_cdlayers_multisrc_to_dst(ListBase *r_map
 
         if ((idx_dst = CustomData_get_named_layer(cd_dst, cddata_type, name)) == -1) {
           if (use_create) {
-            CustomData_add_layer_named(cd_dst, cddata_type, CD_CALLOC, NULL, num_elem_dst, name);
+            CustomData_add_layer_named(
+                cd_dst, cddata_type, CD_SET_DEFAULT, NULL, num_elem_dst, name);
             idx_dst = CustomData_get_named_layer(cd_dst, cddata_type, name);
           }
           else {
@@ -712,7 +688,7 @@ static bool data_transfer_layersmapping_cdlayers(ListBase *r_map,
       if (!use_create) {
         return true;
       }
-      data_dst = CustomData_add_layer(cd_dst, cddata_type, CD_CALLOC, NULL, num_elem_dst);
+      data_dst = CustomData_add_layer(cd_dst, cddata_type, CD_SET_DEFAULT, NULL, num_elem_dst);
     }
     else if (use_dupref_dst && r_map) {
       /* If dest is a evaluated mesh (from modifier),
@@ -765,7 +741,7 @@ static bool data_transfer_layersmapping_cdlayers(ListBase *r_map,
         if (!use_create) {
           return true;
         }
-        data_dst = CustomData_add_layer(cd_dst, cddata_type, CD_CALLOC, NULL, num_elem_dst);
+        data_dst = CustomData_add_layer(cd_dst, cddata_type, CD_SET_DEFAULT, NULL, num_elem_dst);
       }
       else {
         /* If dest is a evaluated mesh (from modifier),
@@ -788,7 +764,7 @@ static bool data_transfer_layersmapping_cdlayers(ListBase *r_map,
         }
         /* Create as much data layers as necessary! */
         for (; num <= idx_dst; num++) {
-          CustomData_add_layer(cd_dst, cddata_type, CD_CALLOC, NULL, num_elem_dst);
+          CustomData_add_layer(cd_dst, cddata_type, CD_SET_DEFAULT, NULL, num_elem_dst);
         }
       }
       /* If dest is a evaluated mesh (from modifier),
@@ -807,7 +783,7 @@ static bool data_transfer_layersmapping_cdlayers(ListBase *r_map,
         if (!use_create) {
           return true;
         }
-        CustomData_add_layer_named(cd_dst, cddata_type, CD_CALLOC, NULL, num_elem_dst, name);
+        CustomData_add_layer_named(cd_dst, cddata_type, CD_SET_DEFAULT, NULL, num_elem_dst, name);
         idx_dst = CustomData_get_named_layer(cd_dst, cddata_type, name);
       }
       /* If dest is a evaluated mesh (from modifier),
@@ -927,38 +903,6 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
       }
       return true;
     }
-    if (cddata_type == CD_FAKE_BWEIGHT) {
-      const size_t elem_size = sizeof(*((MVert *)NULL));
-      const size_t data_size = sizeof(((MVert *)NULL)->bweight);
-      const size_t data_offset = offsetof(MVert, bweight);
-      const uint64_t data_flag = 0;
-
-      if (!(me_src->cd_flag & ME_CDFLAG_VERT_BWEIGHT)) {
-        if (use_delete) {
-          me_dst->cd_flag &= ~ME_CDFLAG_VERT_BWEIGHT;
-        }
-        return true;
-      }
-      me_dst->cd_flag |= ME_CDFLAG_VERT_BWEIGHT;
-      if (r_map) {
-        data_transfer_layersmapping_add_item(r_map,
-                                             cddata_type,
-                                             mix_mode,
-                                             mix_factor,
-                                             mix_weights,
-                                             me_src->mvert,
-                                             me_dst->mvert,
-                                             me_src->totvert,
-                                             me_dst->totvert,
-                                             elem_size,
-                                             data_size,
-                                             data_offset,
-                                             data_flag,
-                                             data_transfer_interp_char,
-                                             interp_data);
-      }
-      return true;
-    }
     if (cddata_type == CD_FAKE_MDEFORMVERT) {
       bool ret;
 
@@ -979,9 +923,6 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
                                                 me_dst != ob_dst->data,
                                                 fromlayers,
                                                 tolayers);
-
-      /* Mesh stores its dvert in a specific pointer too. :( */
-      me_dst->dvert = CustomData_get_layer(&me_dst->vdata, CD_MDEFORMVERT);
       return ret;
     }
     if (cddata_type == CD_FAKE_SHAPEKEY) {
@@ -1015,70 +956,6 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
       }
       return true;
     }
-    if (cddata_type == CD_FAKE_CREASE) {
-      const size_t elem_size = sizeof(*((MEdge *)NULL));
-      const size_t data_size = sizeof(((MEdge *)NULL)->crease);
-      const size_t data_offset = offsetof(MEdge, crease);
-      const uint64_t data_flag = 0;
-
-      if (!(me_src->cd_flag & ME_CDFLAG_EDGE_CREASE)) {
-        if (use_delete) {
-          me_dst->cd_flag &= ~ME_CDFLAG_EDGE_CREASE;
-        }
-        return true;
-      }
-      me_dst->cd_flag |= ME_CDFLAG_EDGE_CREASE;
-      if (r_map) {
-        data_transfer_layersmapping_add_item(r_map,
-                                             cddata_type,
-                                             mix_mode,
-                                             mix_factor,
-                                             mix_weights,
-                                             me_src->medge,
-                                             me_dst->medge,
-                                             me_src->totedge,
-                                             me_dst->totedge,
-                                             elem_size,
-                                             data_size,
-                                             data_offset,
-                                             data_flag,
-                                             data_transfer_interp_char,
-                                             interp_data);
-      }
-      return true;
-    }
-    if (cddata_type == CD_FAKE_BWEIGHT) {
-      const size_t elem_size = sizeof(*((MEdge *)NULL));
-      const size_t data_size = sizeof(((MEdge *)NULL)->bweight);
-      const size_t data_offset = offsetof(MEdge, bweight);
-      const uint64_t data_flag = 0;
-
-      if (!(me_src->cd_flag & ME_CDFLAG_EDGE_BWEIGHT)) {
-        if (use_delete) {
-          me_dst->cd_flag &= ~ME_CDFLAG_EDGE_BWEIGHT;
-        }
-        return true;
-      }
-      me_dst->cd_flag |= ME_CDFLAG_EDGE_BWEIGHT;
-      if (r_map) {
-        data_transfer_layersmapping_add_item(r_map,
-                                             cddata_type,
-                                             mix_mode,
-                                             mix_factor,
-                                             mix_weights,
-                                             me_src->medge,
-                                             me_dst->medge,
-                                             me_src->totedge,
-                                             me_dst->totedge,
-                                             elem_size,
-                                             data_size,
-                                             data_offset,
-                                             data_flag,
-                                             data_transfer_interp_char,
-                                             interp_data);
-      }
-      return true;
-    }
     if (r_map && ELEM(cddata_type, CD_FAKE_SHARP, CD_FAKE_SEAM)) {
       const size_t elem_size = sizeof(*((MEdge *)NULL));
       const size_t data_size = sizeof(((MEdge *)NULL)->flag);
@@ -1090,8 +967,8 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
                                            mix_mode,
                                            mix_factor,
                                            mix_weights,
-                                           me_src->medge,
-                                           me_dst->medge,
+                                           BKE_mesh_edges(me_src),
+                                           BKE_mesh_edges_for_write(me_dst),
                                            me_src->totedge,
                                            me_dst->totedge,
                                            elem_size,
@@ -1184,8 +1061,8 @@ static bool data_transfer_layersmapping_generate(ListBase *r_map,
                                            mix_mode,
                                            mix_factor,
                                            mix_weights,
-                                           me_src->mpoly,
-                                           me_dst->mpoly,
+                                           BKE_mesh_polys(me_src),
+                                           BKE_mesh_polys_for_write(me_dst),
                                            me_src->totpoly,
                                            me_dst->totpoly,
                                            elem_size,
@@ -1432,7 +1309,7 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
     }
 
     BKE_mesh_remap_find_best_match_from_mesh(
-        me_dst->mvert, me_dst->totvert, me_src, space_transform);
+        BKE_mesh_verts(me_dst), me_dst->totvert, me_src, space_transform);
   }
 
   /* Check all possible data types.
@@ -1460,7 +1337,7 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
     }
 
     if (DT_DATATYPE_IS_VERT(dtdata_type)) {
-      MVert *verts_dst = me_dst->mvert;
+      MVert *verts_dst = BKE_mesh_verts_for_write(me_dst);
       const int num_verts_dst = me_dst->totvert;
 
       if (!geom_map_init[VDATA]) {
@@ -1542,9 +1419,9 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
       }
     }
     if (DT_DATATYPE_IS_EDGE(dtdata_type)) {
-      MVert *verts_dst = me_dst->mvert;
+      const MVert *verts_dst = BKE_mesh_verts_for_write(me_dst);
       const int num_verts_dst = me_dst->totvert;
-      MEdge *edges_dst = me_dst->medge;
+      const MEdge *edges_dst = BKE_mesh_edges(me_dst);
       const int num_edges_dst = me_dst->totedge;
 
       if (!geom_map_init[EDATA]) {
@@ -1621,13 +1498,13 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
       }
     }
     if (DT_DATATYPE_IS_LOOP(dtdata_type)) {
-      MVert *verts_dst = me_dst->mvert;
+      const MVert *verts_dst = BKE_mesh_verts(me_dst);
       const int num_verts_dst = me_dst->totvert;
-      MEdge *edges_dst = me_dst->medge;
+      const MEdge *edges_dst = BKE_mesh_edges(me_dst);
       const int num_edges_dst = me_dst->totedge;
-      MPoly *polys_dst = me_dst->mpoly;
+      const MPoly *polys_dst = BKE_mesh_polys(me_dst);
       const int num_polys_dst = me_dst->totpoly;
-      MLoop *loops_dst = me_dst->mloop;
+      const MLoop *loops_dst = BKE_mesh_loops(me_dst);
       const int num_loops_dst = me_dst->totloop;
       CustomData *ldata_dst = &me_dst->ldata;
 
@@ -1716,11 +1593,11 @@ bool BKE_object_data_transfer_ex(struct Depsgraph *depsgraph,
       }
     }
     if (DT_DATATYPE_IS_POLY(dtdata_type)) {
-      MVert *verts_dst = me_dst->mvert;
+      const MVert *verts_dst = BKE_mesh_verts(me_dst);
       const int num_verts_dst = me_dst->totvert;
-      MPoly *polys_dst = me_dst->mpoly;
+      const MPoly *polys_dst = BKE_mesh_polys(me_dst);
       const int num_polys_dst = me_dst->totpoly;
-      MLoop *loops_dst = me_dst->mloop;
+      const MLoop *loops_dst = BKE_mesh_loops(me_dst);
       const int num_loops_dst = me_dst->totloop;
 
       if (!geom_map_init[PDATA]) {

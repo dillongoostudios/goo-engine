@@ -134,7 +134,7 @@ static int knifeproject_exec(bContext *C, wmOperator *op)
 
   uint objects_len;
   Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      vc.view_layer, vc.v3d, &objects_len);
+      vc.scene, vc.view_layer, vc.v3d, &objects_len);
 
   EDBM_mesh_knife(&vc, objects, objects_len, polys, true, cut_through);
 

@@ -8,6 +8,8 @@
 
 #include "../../../stroke/AdvancedFunctions0D.h"
 
+#include "BLI_sys_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,7 +49,7 @@ static int ReadSteerableViewMapPixelF0D___init__(BPy_ReadSteerableViewMapPixelF0
                                                  PyObject *kwds)
 {
   static const char *kwlist[] = {"orientation", "level", nullptr};
-  unsigned int u;
+  uint u;
   int i;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "Ii", (char **)kwlist, &u, &i)) {

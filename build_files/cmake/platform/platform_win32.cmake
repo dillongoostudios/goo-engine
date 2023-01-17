@@ -26,7 +26,7 @@ if(CMAKE_C_COMPILER_ID MATCHES "Clang")
     set(OPENMP_FOUND ON)
     set(OpenMP_C_FLAGS "/clang:-fopenmp")
     set(OpenMP_CXX_FLAGS "/clang:-fopenmp")
-    GET_FILENAME_COMPONENT(LLVMROOT "[HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\LLVM\\LLVM;]" ABSOLUTE CACHE)
+    get_filename_component(LLVMROOT "[HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\LLVM\\LLVM;]" ABSOLUTE CACHE)
     set(CLANG_OPENMP_DLL "${LLVMROOT}/bin/libomp.dll")
     set(CLANG_OPENMP_LIB "${LLVMROOT}/lib/libomp.lib")
     if(NOT EXISTS "${CLANG_OPENMP_DLL}")
@@ -73,27 +73,6 @@ add_definitions(-DWIN32)
 # Needed, otherwise system encoding causes utf-8 encoding to fail in some cases (C4819)
 add_compile_options("$<$<C_COMPILER_ID:MSVC>:/utf-8>")
 add_compile_options("$<$<CXX_COMPILER_ID:MSVC>:/utf-8>")
-
-# Minimum MSVC Version
-if(CMAKE_CXX_COMPILER_ID MATCHES MSVC)
-  if(MSVC_VERSION EQUAL 1800)
-    set(_min_ver "18.0.31101")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${_min_ver})
-      message(FATAL_ERROR
-        "Visual Studio 2013 (Update 4, ${_min_ver}) required, "
-        "found (${CMAKE_CXX_COMPILER_VERSION})")
-    endif()
-  endif()
-  if(MSVC_VERSION EQUAL 1900)
-    set(_min_ver "19.0.24210")
-    if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${_min_ver})
-      message(FATAL_ERROR
-        "Visual Studio 2015 (Update 3, ${_min_ver}) required, "
-        "found (${CMAKE_CXX_COMPILER_VERSION})")
-    endif()
-  endif()
-endif()
-unset(_min_ver)
 
 # needed for some MSVC installations
 # 4099 : PDB 'filename' was not found with 'object/library'
@@ -146,7 +125,7 @@ endif()
 if(WITH_COMPILER_ASAN AND MSVC AND NOT MSVC_CLANG)
   if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 19.28.29828)
     #set a flag so we don't have to do this comparison all the time
-    SET(MSVC_ASAN ON)
+    set(MSVC_ASAN ON)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /fsanitize=address")
     set(CMAKE_C_FLAGS     "${CMAKE_C_FLAGS} /fsanitize=address")
     string(APPEND CMAKE_EXE_LINKER_FLAGS_DEBUG " /INCREMENTAL:NO")
@@ -158,7 +137,7 @@ endif()
 
 
 # C++ standards conformace (/permissive-) is available on msvc 15.5 (1912) and up
-if(MSVC_VERSION GREATER 1911 AND NOT MSVC_CLANG)
+if(NOT MSVC_CLANG)
   string(APPEND CMAKE_CXX_FLAGS " /permissive-")
   # Two-phase name lookup does not place nicely with OpenMP yet, so disable for now
   string(APPEND CMAKE_CXX_FLAGS " /Zc:twoPhase-")
@@ -171,10 +150,11 @@ endif()
 
 # Debug Symbol format
 # sccache # MSVC_ASAN # format # why
-# ON      # ON        # Z7     # sccache will only play nice with Z7
-# ON      # OFF       # Z7     # sccache will only play nice with Z7
-# OFF     # ON        # Zi     # Asan will not play nice with Edit and Continue
-# OFF     # OFF       # ZI     # Neither asan nor sscache is enabled Edit and Continue is available
+# ON      # ON        # Z7     # sccache will only play nice with Z7.
+# ON      # OFF       # Z7     # sccache will only play nice with Z7.
+# OFF     # ON        # Zi     # Asan will not play nice with Edit and Continue.
+# OFF     # OFF       # ZI     # Neither ASAN nor sscache is enabled Edit and
+#                                Continue is available.
 
 # Release Symbol format
 # sccache # MSVC_ASAN # format # why
@@ -185,20 +165,20 @@ endif()
 
 
 if(WITH_WINDOWS_SCCACHE)
-    set(CMAKE_C_COMPILER_LAUNCHER sccache)
-    set(CMAKE_CXX_COMPILER_LAUNCHER sccache)
+  set(CMAKE_C_COMPILER_LAUNCHER sccache)
+  set(CMAKE_CXX_COMPILER_LAUNCHER sccache)
+  set(SYMBOL_FORMAT /Z7)
+  set(SYMBOL_FORMAT_RELEASE /Z7)
+else()
+  unset(CMAKE_C_COMPILER_LAUNCHER)
+  unset(CMAKE_CXX_COMPILER_LAUNCHER)
+  if(MSVC_ASAN)
     set(SYMBOL_FORMAT /Z7)
     set(SYMBOL_FORMAT_RELEASE /Z7)
-else()
-    unset(CMAKE_C_COMPILER_LAUNCHER)
-    unset(CMAKE_CXX_COMPILER_LAUNCHER)
-    if(MSVC_ASAN)
-      set(SYMBOL_FORMAT /Z7)
-      set(SYMBOL_FORMAT_RELEASE /Z7)
-    else()
-      set(SYMBOL_FORMAT /ZI)
-      set(SYMBOL_FORMAT_RELEASE /Zi)
-    endif()
+  else()
+    set(SYMBOL_FORMAT /ZI)
+    set(SYMBOL_FORMAT_RELEASE /Zi)
+  endif()
 endif()
 
 if(WITH_WINDOWS_PDB)
@@ -218,7 +198,7 @@ unset(SYMBOL_FORMAT)
 unset(SYMBOL_FORMAT_RELEASE)
 
 # JMC is available on msvc 15.8 (1915) and up
-if(MSVC_VERSION GREATER 1914 AND NOT MSVC_CLANG)
+if(NOT MSVC_CLANG)
   string(APPEND CMAKE_CXX_FLAGS_DEBUG " /JMC")
 endif()
 
@@ -251,9 +231,6 @@ if(NOT DEFINED LIBDIR)
   elseif(MSVC_VERSION GREATER 1919)
     message(STATUS "Visual Studio 2019 detected.")
     set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
-  elseif(MSVC_VERSION GREATER 1909)
-    message(STATUS "Visual Studio 2017 detected.")
-    set(LIBDIR ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_BASE}_vc15)
   endif()
 else()
   message(STATUS "Using pre-compiled LIBDIR: ${LIBDIR}")
@@ -264,10 +241,8 @@ endif()
 
 include(platform_old_libs_update)
 
-if(CMAKE_GENERATOR MATCHES "^Visual Studio.+" AND # Only supported in the VS IDE
-   MSVC_VERSION GREATER_EQUAL 1924            AND # Supported for 16.4+
-   WITH_CLANG_TIDY                                # And Clang Tidy needs to be on
-  )
+# Only supported in the VS IDE & Clang Tidy needs to be on.
+if(CMAKE_GENERATOR MATCHES "^Visual Studio.+" AND WITH_CLANG_TIDY)
   set(CMAKE_VS_GLOBALS
     "RunCodeAnalysis=false"
     "EnableMicrosoftCodeAnalysis=false"
@@ -278,8 +253,7 @@ endif()
 
 # Mark libdir as system headers with a lower warn level, to resolve some warnings
 # that we have very little control over
-if(MSVC_VERSION GREATER_EQUAL 1914 AND # Available with 15.7+
-   NOT MSVC_CLANG                  AND # But not for clang
+if(NOT MSVC_CLANG                  AND # Available with MSVC 15.7+ but not for CLANG.
    NOT WITH_WINDOWS_SCCACHE        AND # And not when sccache is enabled
    NOT VS_CLANG_TIDY)                  # Clang-tidy does not like these options
   add_compile_options(/experimental:external /external:templates- /external:I "${LIBDIR}" /external:W0)
@@ -323,6 +297,13 @@ if(NOT JPEG_FOUND)
   set(JPEG_LIBRARIES ${LIBDIR}/jpeg/lib/libjpeg.lib)
 endif()
 
+set(EPOXY_ROOT_DIR ${LIBDIR}/epoxy)
+windows_find_package(Epoxy REQUIRED)
+if(NOT EPOXY_FOUND)
+  set(Epoxy_INCLUDE_DIRS ${LIBDIR}/epoxy/include)
+  set(Epoxy_LIBRARIES ${LIBDIR}/epoxy/lib/epoxy.lib)
+endif()
+
 set(PTHREADS_INCLUDE_DIRS ${LIBDIR}/pthreads/include)
 set(PTHREADS_LIBRARIES ${LIBDIR}/pthreads/lib/pthreadVC3.lib)
 
@@ -346,18 +327,10 @@ if(WITH_FFTW3)
 endif()
 
 if(WITH_IMAGE_WEBP)
-  windows_find_package(WebP)
-  if(NOT WEBP_FOUND)
-    if(EXISTS ${LIBDIR}/webp)
-      set(WEBP_INCLUDE_DIRS ${LIBDIR}/webp/include)
-      set(WEBP_ROOT_DIR ${LIBDIR}/webp)
-      set(WEBP_LIBRARIES ${LIBDIR}/webp/lib/webp.lib ${LIBDIR}/webp/lib/webpdemux.lib ${LIBDIR}/webp/lib/webpmux.lib)
-      set(WEBP_FOUND ON)
-    else()
-      message(STATUS "WITH_IMAGE_WEBP is ON but WEBP libraries are not found, setting WITH_IMAGE_WEBP=OFF")
-      set(WITH_IMAGE_WEBP OFF)
-    endif()
-  endif()
+  set(WEBP_INCLUDE_DIRS ${LIBDIR}/webp/include)
+  set(WEBP_ROOT_DIR ${LIBDIR}/webp)
+  set(WEBP_LIBRARIES ${LIBDIR}/webp/lib/webp.lib ${LIBDIR}/webp/lib/webpdemux.lib ${LIBDIR}/webp/lib/webpmux.lib)
+  set(WEBP_FOUND ON)
 endif()
 
 if(WITH_OPENCOLLADA)
@@ -419,7 +392,7 @@ if(WITH_CODEC_FFMPEG)
       ${LIBDIR}/ffmpeg/lib/avdevice.lib
       ${LIBDIR}/ffmpeg/lib/avutil.lib
       ${LIBDIR}/ffmpeg/lib/swscale.lib
-      )
+    )
   endif()
 endif()
 
@@ -500,11 +473,15 @@ if(WITH_JACK)
 endif()
 
 if(WITH_PYTHON)
-  SET(PYTHON_VERSION 3.10 CACHE STRING "Python Version (major and minor only)")
+  # Cache version for make_bpy_wheel.py to detect.
+  unset(PYTHON_VERSION CACHE)
+  set(PYTHON_VERSION "3.10" CACHE STRING "Python version")
 
   string(REPLACE "." "" _PYTHON_VERSION_NO_DOTS ${PYTHON_VERSION})
   set(PYTHON_LIBRARY ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}.lib)
   set(PYTHON_LIBRARY_DEBUG ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/libs/python${_PYTHON_VERSION_NO_DOTS}_d.lib)
+
+  set(PYTHON_EXECUTABLE ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/bin/python$<$<CONFIG:Debug>:_d>.exe)
 
   set(PYTHON_INCLUDE_DIR ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/include)
   set(PYTHON_NUMPY_INCLUDE_DIRS ${LIBDIR}/python/${_PYTHON_VERSION_NO_DOTS}/lib/site-packages/numpy/core/include)
@@ -568,12 +545,14 @@ if(WITH_BOOST)
     if(WITH_CYCLES AND WITH_CYCLES_OSL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
         optimized ${BOOST_LIBPATH}/libboost_wave-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/libboost_wave-${BOOST_DEBUG_POSTFIX})
+        debug ${BOOST_LIBPATH}/libboost_wave-${BOOST_DEBUG_POSTFIX}
+      )
     endif()
     if(WITH_INTERNATIONAL)
       set(BOOST_LIBRARIES ${BOOST_LIBRARIES}
         optimized ${BOOST_LIBPATH}/libboost_locale-${BOOST_POSTFIX}
-        debug ${BOOST_LIBPATH}/libboost_locale-${BOOST_DEBUG_POSTFIX})
+        debug ${BOOST_LIBPATH}/libboost_locale-${BOOST_DEBUG_POSTFIX}
+      )
     endif()
   else() # we found boost using find_package
     set(BOOST_INCLUDE_DIR ${Boost_INCLUDE_DIRS})
@@ -680,7 +659,8 @@ if(WITH_OPENIMAGEDENOISE)
     optimized ${OPENIMAGEDENOISE_LIBPATH}/dnnl.lib
     debug ${OPENIMAGEDENOISE_LIBPATH}/OpenImageDenoise_d.lib
     debug ${OPENIMAGEDENOISE_LIBPATH}/common_d.lib
-    debug ${OPENIMAGEDENOISE_LIBPATH}/dnnl_d.lib)
+    debug ${OPENIMAGEDENOISE_LIBPATH}/dnnl_d.lib
+  )
   set(OPENIMAGEDENOISE_DEFINITIONS)
 endif()
 
@@ -750,7 +730,7 @@ if(WITH_TBB)
 endif()
 
 # used in many places so include globally, like OpenGL
-blender_include_dirs_sys("${PTHREADS_INCLUDE_DIRS}")
+include_directories(SYSTEM "${PTHREADS_INCLUDE_DIRS}")
 
 set(WINTAB_INC ${LIBDIR}/wintab/include)
 
@@ -783,9 +763,11 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
   find_library(OSL_LIB_EXEC NAMES oslexec PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_COMP NAMES oslcomp PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_QUERY NAMES oslquery PATHS ${CYCLES_OSL}/lib)
+  find_library(OSL_LIB_NOISE NAMES oslnoise PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_EXEC_DEBUG NAMES oslexec_d PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_COMP_DEBUG NAMES oslcomp_d PATHS ${CYCLES_OSL}/lib)
   find_library(OSL_LIB_QUERY_DEBUG NAMES oslquery_d PATHS ${CYCLES_OSL}/lib)
+  find_library(OSL_LIB_NOISE_DEBUG NAMES oslnoise_d PATHS ${CYCLES_OSL}/lib)
   list(APPEND OSL_LIBRARIES
     optimized ${OSL_LIB_COMP}
     optimized ${OSL_LIB_EXEC}
@@ -795,15 +777,14 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
     debug ${OSL_LIB_QUERY_DEBUG}
     ${PUGIXML_LIBRARIES}
   )
+  if(OSL_LIB_NOISE)
+    list(APPEND OSL_LIBRARIES optimized ${OSL_LIB_NOISE})
+  endif()
+  if(OSL_LIB_NOISE_DEBUG)
+    list(APPEND OSL_LIBRARIES debug ${OSL_LIB_NOISE_DEBUG})
+  endif()
   find_path(OSL_INCLUDE_DIR OSL/oslclosure.h PATHS ${CYCLES_OSL}/include)
   find_program(OSL_COMPILER NAMES oslc PATHS ${CYCLES_OSL}/bin)
-
-  if(OSL_INCLUDE_DIR AND OSL_LIBRARIES AND OSL_COMPILER)
-    set(OSL_FOUND TRUE)
-  else()
-    message(STATUS "OSL not found")
-    set(WITH_CYCLES_OSL OFF)
-  endif()
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
@@ -829,7 +810,8 @@ if(WITH_CYCLES AND WITH_CYCLES_EMBREE)
       debug ${LIBDIR}/embree/lib/math_d.lib
       debug ${LIBDIR}/embree/lib/simd_d.lib
       debug ${LIBDIR}/embree/lib/sys_d.lib
-      debug ${LIBDIR}/embree/lib/tasking_d.lib)
+      debug ${LIBDIR}/embree/lib/tasking_d.lib
+    )
   endif()
 endif()
 
@@ -856,8 +838,8 @@ endif()
 
 if(WINDOWS_PYTHON_DEBUG)
   # Include the system scripts in the blender_python_system_scripts project.
-  FILE(GLOB_RECURSE inFiles "${CMAKE_SOURCE_DIR}/release/scripts/*.*" )
-  ADD_CUSTOM_TARGET(blender_python_system_scripts SOURCES ${inFiles})
+  file(GLOB_RECURSE inFiles "${CMAKE_SOURCE_DIR}/release/scripts/*.*" )
+  add_custom_target(blender_python_system_scripts SOURCES ${inFiles})
   foreach(_source IN ITEMS ${inFiles})
     get_filename_component(_source_path "${_source}" PATH)
     string(REPLACE "${CMAKE_SOURCE_DIR}/release/scripts/" "" _source_path "${_source_path}")
@@ -877,8 +859,8 @@ if(WINDOWS_PYTHON_DEBUG)
   endif()
 
   file(TO_CMAKE_PATH ${USER_SCRIPTS_ROOT} USER_SCRIPTS_ROOT)
-  FILE(GLOB_RECURSE inFiles "${USER_SCRIPTS_ROOT}/*.*" )
-  ADD_CUSTOM_TARGET(blender_python_user_scripts SOURCES ${inFiles})
+  file(GLOB_RECURSE inFiles "${USER_SCRIPTS_ROOT}/*.*" )
+  add_custom_target(blender_python_user_scripts SOURCES ${inFiles})
   foreach(_source IN ITEMS ${inFiles})
     get_filename_component(_source_path "${_source}" PATH)
     string(REPLACE "${USER_SCRIPTS_ROOT}" "" _source_path "${_source_path}")
@@ -902,21 +884,16 @@ if(WINDOWS_PYTHON_DEBUG)
 endif()
 
 if(WITH_XR_OPENXR)
-  if(EXISTS ${LIBDIR}/xr_openxr_sdk)
-    set(XR_OPENXR_SDK ${LIBDIR}/xr_openxr_sdk)
-    set(XR_OPENXR_SDK_LIBPATH ${LIBDIR}/xr_openxr_sdk/lib)
-    set(XR_OPENXR_SDK_INCLUDE_DIR ${XR_OPENXR_SDK}/include)
-    # This is the old name of this library, it is checked to
-    # support the transition between the old and new lib versions
-    # this can be removed after the next lib update.
-    if(EXISTS ${XR_OPENXR_SDK_LIBPATH}/openxr_loader_d.lib)
-      set(XR_OPENXR_SDK_LIBRARIES optimized ${XR_OPENXR_SDK_LIBPATH}/openxr_loader.lib debug ${XR_OPENXR_SDK_LIBPATH}/openxr_loader_d.lib)
-    else()
-      set(XR_OPENXR_SDK_LIBRARIES optimized ${XR_OPENXR_SDK_LIBPATH}/openxr_loader.lib debug ${XR_OPENXR_SDK_LIBPATH}/openxr_loaderd.lib)
-    endif()
+  set(XR_OPENXR_SDK ${LIBDIR}/xr_openxr_sdk)
+  set(XR_OPENXR_SDK_LIBPATH ${LIBDIR}/xr_openxr_sdk/lib)
+  set(XR_OPENXR_SDK_INCLUDE_DIR ${XR_OPENXR_SDK}/include)
+  # This is the old name of this library, it is checked to
+  # support the transition between the old and new lib versions
+  # this can be removed after the next lib update.
+  if(EXISTS ${XR_OPENXR_SDK_LIBPATH}/openxr_loader_d.lib)
+    set(XR_OPENXR_SDK_LIBRARIES optimized ${XR_OPENXR_SDK_LIBPATH}/openxr_loader.lib debug ${XR_OPENXR_SDK_LIBPATH}/openxr_loader_d.lib)
   else()
-    message(WARNING "OpenXR-SDK was not found, disabling WITH_XR_OPENXR")
-    set(WITH_XR_OPENXR OFF)
+    set(XR_OPENXR_SDK_LIBRARIES optimized ${XR_OPENXR_SDK_LIBPATH}/openxr_loader.lib debug ${XR_OPENXR_SDK_LIBPATH}/openxr_loaderd.lib)
   endif()
 endif()
 
@@ -934,19 +911,45 @@ if(WITH_POTRACE)
 endif()
 
 if(WITH_HARU)
-  if(EXISTS ${LIBDIR}/haru)
-    set(HARU_FOUND ON)
-    set(HARU_ROOT_DIR ${LIBDIR}/haru)
-    set(HARU_INCLUDE_DIRS ${HARU_ROOT_DIR}/include)
-    set(HARU_LIBRARIES ${HARU_ROOT_DIR}/lib/libhpdfs.lib)
+  set(HARU_FOUND ON)
+  set(HARU_ROOT_DIR ${LIBDIR}/haru)
+  set(HARU_INCLUDE_DIRS ${HARU_ROOT_DIR}/include)
+  set(HARU_LIBRARIES ${HARU_ROOT_DIR}/lib/libhpdfs.lib)
+endif()
+
+if(WITH_CYCLES AND WITH_CYCLES_PATH_GUIDING)
+  find_package(openpgl QUIET)
+  if(openpgl_FOUND)
+    get_target_property(OPENPGL_LIBRARIES_RELEASE openpgl::openpgl LOCATION_RELEASE)
+    get_target_property(OPENPGL_LIBRARIES_DEBUG openpgl::openpgl LOCATION_DEBUG)
+    set(OPENPGL_LIBRARIES optimized ${OPENPGL_LIBRARIES_RELEASE} debug ${OPENPGL_LIBRARIES_DEBUG})
+    get_target_property(OPENPGL_INCLUDE_DIR openpgl::openpgl INTERFACE_INCLUDE_DIRECTORIES)
   else()
-    message(WARNING "Haru was not found, disabling WITH_HARU")
-    set(WITH_HARU OFF)
+    set(WITH_CYCLES_PATH_GUIDING OFF)
+    message(STATUS "OpenPGL not found, disabling WITH_CYCLES_PATH_GUIDING")
   endif()
 endif()
 
 set(ZSTD_INCLUDE_DIRS ${LIBDIR}/zstd/include)
 set(ZSTD_LIBRARIES ${LIBDIR}/zstd/lib/zstd_static.lib)
 
-set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
-set(SYCL_ROOT_DIR ${LIBDIR}/dpcpp)
+if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
+  set(LEVEL_ZERO_ROOT_DIR ${LIBDIR}/level_zero)
+  set(CYCLES_SYCL ${LIBDIR}/dpcpp CACHE PATH "Path to oneAPI DPC++ compiler")
+  if(EXISTS ${CYCLES_SYCL} AND NOT SYCL_ROOT_DIR)
+    set(SYCL_ROOT_DIR ${CYCLES_SYCL})
+  endif()
+  file(GLOB _sycl_runtime_libraries_glob
+    ${SYCL_ROOT_DIR}/bin/sycl.dll
+    ${SYCL_ROOT_DIR}/bin/sycl[0-9].dll
+  )
+  foreach(sycl_runtime_library IN LISTS _sycl_runtime_libraries_glob)
+    string(REPLACE ".dll" "$<$<CONFIG:Debug>:d>.dll" sycl_runtime_library ${sycl_runtime_library})
+    list(APPEND _sycl_runtime_libraries ${sycl_runtime_library})
+  endforeach()
+  unset(_sycl_runtime_libraries_glob)
+
+  list(APPEND _sycl_runtime_libraries ${SYCL_ROOT_DIR}/bin/pi_level_zero.dll)
+  list(APPEND PLATFORM_BUNDLED_LIBRARIES ${_sycl_runtime_libraries})
+  unset(_sycl_runtime_libraries)
+endif()

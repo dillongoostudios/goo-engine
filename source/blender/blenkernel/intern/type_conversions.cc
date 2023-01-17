@@ -49,7 +49,7 @@ static float3 float_to_float3(const float &a)
 }
 static int32_t float_to_int(const float &a)
 {
-  return (int32_t)a;
+  return int32_t(a);
 }
 static bool float_to_bool(const float &a)
 {
@@ -79,7 +79,7 @@ static float float2_to_float(const float2 &a)
 }
 static int float2_to_int(const float2 &a)
 {
-  return (int32_t)((a.x + a.y) / 2.0f);
+  return int32_t((a.x + a.y) / 2.0f);
 }
 static bool float2_to_bool(const float2 &a)
 {
@@ -112,7 +112,7 @@ static float float3_to_float(const float3 &a)
 }
 static int float3_to_int(const float3 &a)
 {
-  return (int)((a.x + a.y + a.z) / 3.0f);
+  return int((a.x + a.y + a.z) / 3.0f);
 }
 static float2 float3_to_float2(const float3 &a)
 {
@@ -138,19 +138,19 @@ static int8_t int_to_int8(const int32_t &a)
 }
 static float int_to_float(const int32_t &a)
 {
-  return (float)a;
+  return float(a);
 }
 static float2 int_to_float2(const int32_t &a)
 {
-  return float2((float)a);
+  return float2(float(a));
 }
 static float3 int_to_float3(const int32_t &a)
 {
-  return float3((float)a);
+  return float3(float(a));
 }
 static ColorGeometry4f int_to_color(const int32_t &a)
 {
-  return ColorGeometry4f((float)a, (float)a, (float)a, 1.0f);
+  return ColorGeometry4f(float(a), float(a), float(a), 1.0f);
 }
 static ColorGeometry4b int_to_byte_color(const int32_t &a)
 {
@@ -163,23 +163,23 @@ static bool int8_to_bool(const int8_t &a)
 }
 static int int8_to_int(const int8_t &a)
 {
-  return static_cast<int>(a);
+  return int(a);
 }
 static float int8_to_float(const int8_t &a)
 {
-  return (float)a;
+  return float(a);
 }
 static float2 int8_to_float2(const int8_t &a)
 {
-  return float2((float)a);
+  return float2(float(a));
 }
 static float3 int8_to_float3(const int8_t &a)
 {
-  return float3((float)a);
+  return float3(float(a));
 }
 static ColorGeometry4f int8_to_color(const int8_t &a)
 {
-  return ColorGeometry4f((float)a, (float)a, (float)a, 1.0f);
+  return ColorGeometry4f(float(a), float(a), float(a), 1.0f);
 }
 static ColorGeometry4b int8_to_byte_color(const int8_t &a)
 {
@@ -188,15 +188,15 @@ static ColorGeometry4b int8_to_byte_color(const int8_t &a)
 
 static float bool_to_float(const bool &a)
 {
-  return (bool)a;
+  return bool(a);
 }
 static int8_t bool_to_int8(const bool &a)
 {
-  return static_cast<int8_t>(a);
+  return int8_t(a);
 }
 static int32_t bool_to_int(const bool &a)
 {
-  return (int32_t)a;
+  return int32_t(a);
 }
 static float2 bool_to_float2(const bool &a)
 {
@@ -225,7 +225,7 @@ static float color_to_float(const ColorGeometry4f &a)
 }
 static int32_t color_to_int(const ColorGeometry4f &a)
 {
-  return (int)rgb_to_grayscale(a);
+  return int(rgb_to_grayscale(a));
 }
 static int8_t color_to_int8(const ColorGeometry4f &a)
 {
@@ -367,20 +367,38 @@ void DataTypeConversions::convert_to_uninitialized(const CPPType &from_type,
   functions->convert_single_to_uninitialized(from_value, to_value);
 }
 
+static void call_convert_to_uninitialized_fn(const GVArray &from,
+                                             const fn::MultiFunction &fn,
+                                             const IndexMask mask,
+                                             GMutableSpan to)
+{
+  fn::MFParamsBuilder params{fn, mask.min_array_size()};
+  params.add_readonly_single_input(from);
+  params.add_uninitialized_single_output(to);
+  fn::MFContextBuilder context;
+  fn.call_auto(mask, params, context);
+}
+
+static void call_convert_to_uninitialized_fn(const GVArray &from,
+                                             const fn::MultiFunction &fn,
+                                             GMutableSpan to)
+{
+  call_convert_to_uninitialized_fn(from, fn, IndexMask(from.size()), to);
+}
+
 void DataTypeConversions::convert_to_initialized_n(GSpan from_span, GMutableSpan to_span) const
 {
   const CPPType &from_type = from_span.type();
   const CPPType &to_type = to_span.type();
+
   BLI_assert(from_span.size() == to_span.size());
   BLI_assert(this->is_convertible(from_type, to_type));
+
   const fn::MultiFunction *fn = this->get_conversion_multi_function(
       MFDataType::ForSingle(from_type), MFDataType::ForSingle(to_type));
-  fn::MFParamsBuilder params{*fn, from_span.size()};
-  params.add_readonly_single_input(from_span);
+
   to_type.destruct_n(to_span.data(), to_span.size());
-  params.add_uninitialized_single_output(to_span);
-  fn::MFContextBuilder context;
-  fn->call_auto(IndexRange(from_span.size()), params, context);
+  call_convert_to_uninitialized_fn(GVArray::ForSpan(from_span), *fn, to_span);
 }
 
 class GVArray_For_ConvertedGVArray : public GVArrayImpl {
@@ -413,6 +431,20 @@ class GVArray_For_ConvertedGVArray : public GVArrayImpl {
     varray_.get(index, buffer);
     old_to_new_conversions_.convert_single_to_uninitialized(buffer, r_value);
     from_type_.destruct(buffer);
+  }
+
+  void materialize(const IndexMask mask, void *dst) const override
+  {
+    type_->destruct_n(dst, mask.min_array_size());
+    this->materialize_to_uninitialized(mask, dst);
+  }
+
+  void materialize_to_uninitialized(const IndexMask mask, void *dst) const override
+  {
+    call_convert_to_uninitialized_fn(varray_,
+                                     *old_to_new_conversions_.multi_function,
+                                     mask,
+                                     {this->type(), dst, mask.min_array_size()});
   }
 };
 
@@ -458,6 +490,20 @@ class GVMutableArray_For_ConvertedGVMutableArray : public GVMutableArrayImpl {
     new_to_old_conversions_.convert_single_to_uninitialized(value, buffer);
     varray_.set_by_relocate(index, buffer);
   }
+
+  void materialize(const IndexMask mask, void *dst) const override
+  {
+    type_->destruct_n(dst, mask.min_array_size());
+    this->materialize_to_uninitialized(mask, dst);
+  }
+
+  void materialize_to_uninitialized(const IndexMask mask, void *dst) const override
+  {
+    call_convert_to_uninitialized_fn(varray_,
+                                     *old_to_new_conversions_.multi_function,
+                                     mask,
+                                     {this->type(), dst, mask.min_array_size()});
+  }
 };
 
 GVArray DataTypeConversions::try_convert(GVArray varray, const CPPType &to_type) const
@@ -495,9 +541,8 @@ fn::GField DataTypeConversions::try_convert(fn::GField field, const CPPType &to_
   if (!this->is_convertible(from_type, to_type)) {
     return {};
   }
-  const fn::MultiFunction &fn =
-      *bke::get_implicit_type_conversions().get_conversion_multi_function(
-          fn::MFDataType::ForSingle(from_type), fn::MFDataType::ForSingle(to_type));
+  const fn::MultiFunction &fn = *this->get_conversion_multi_function(
+      fn::MFDataType::ForSingle(from_type), fn::MFDataType::ForSingle(to_type));
   return {std::make_shared<fn::FieldOperation>(fn, Vector<fn::GField>{std::move(field)})};
 }
 

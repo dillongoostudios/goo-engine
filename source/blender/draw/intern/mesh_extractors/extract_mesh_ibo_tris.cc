@@ -25,8 +25,8 @@ static void extract_tris_mat_task_reduce(void *_userdata_to, void *_userdata_fro
  * \{ */
 
 static void extract_tris_init(const MeshRenderData *mr,
-                              MeshBatchCache *UNUSED(cache),
-                              void *UNUSED(ibo),
+                              MeshBatchCache * /*cache*/,
+                              void * /*ibo*/,
                               void *tls_data)
 {
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(tls_data);
@@ -110,10 +110,10 @@ static void extract_tris_finish(const MeshRenderData *mr,
 }
 
 static void extract_tris_init_subdiv(const DRWSubdivCache *subdiv_cache,
-                                     const MeshRenderData *UNUSED(mr),
+                                     const MeshRenderData * /*mr*/,
                                      MeshBatchCache *cache,
                                      void *buffer,
-                                     void *UNUSED(data))
+                                     void * /*data*/)
 {
   GPUIndexBuf *ibo = static_cast<GPUIndexBuf *>(buffer);
   /* Initialize the index buffer, it was already allocated, it will be filled on the device. */
@@ -157,15 +157,15 @@ constexpr MeshExtract create_extractor_tris()
  * \{ */
 
 static void extract_tris_single_mat_init(const MeshRenderData *mr,
-                                         MeshBatchCache *UNUSED(cache),
-                                         void *UNUSED(ibo),
+                                         MeshBatchCache * /*cache*/,
+                                         void * /*ibo*/,
                                          void *tls_data)
 {
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(tls_data);
   GPU_indexbuf_init(elb, GPU_PRIM_TRIS, mr->tri_len, mr->loop_len);
 }
 
-static void extract_tris_single_mat_iter_looptri_bm(const MeshRenderData *UNUSED(mr),
+static void extract_tris_single_mat_iter_looptri_bm(const MeshRenderData * /*mr*/,
                                                     BMLoop **elt,
                                                     const int elt_index,
                                                     void *_data)
@@ -189,12 +189,12 @@ static void extract_tris_single_mat_iter_looptri_mesh(const MeshRenderData *mr,
                                                       void *_data)
 {
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(_data);
-  const MPoly *mp = &mr->mpoly[mlt->poly];
-  if (!(mr->use_hide && (mp->flag & ME_HIDE))) {
-    GPU_indexbuf_set_tri_verts(elb, mlt_index, mlt->tri[0], mlt->tri[1], mlt->tri[2]);
+  const bool hidden = mr->use_hide && mr->hide_poly && mr->hide_poly[mlt->poly];
+  if (hidden) {
+    GPU_indexbuf_set_tri_restart(elb, mlt_index);
   }
   else {
-    GPU_indexbuf_set_tri_restart(elb, mlt_index);
+    GPU_indexbuf_set_tri_verts(elb, mlt_index, mlt->tri[0], mlt->tri[1], mlt->tri[2]);
   }
 }
 

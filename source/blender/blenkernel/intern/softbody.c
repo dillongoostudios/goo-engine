@@ -133,9 +133,9 @@ typedef struct SB_thread_context {
 
 #define BSF_INTERSECT 1 /* edge intersects collider face */
 
-/* private definitions for bodypoint states */
-#define SBF_DOFUZZY 1        /* Bodypoint do fuzzy. */
-#define SBF_OUTOFCOLLISION 2 /* Bodypoint does not collide. */
+/* private definitions for body-point states */
+#define SBF_DOFUZZY 1        /* Body-point do fuzzy. */
+#define SBF_OUTOFCOLLISION 2 /* Body-point does not collide. */
 
 #define BFF_INTERSECT 1 /* collider edge   intrudes face. */
 #define BFF_CLOSEVERT 2 /* collider vertex repulses face. */
@@ -318,7 +318,7 @@ static ccd_Mesh *ccd_mesh_make(Object *ob)
   /* OBBs for idea1 */
   pccd_M->mima = MEM_mallocN(sizeof(ccdf_minmax) * pccd_M->tri_num, "ccd_Mesh_Faces_mima");
 
-  /* anyhoo we need to walk the list of faces and find OBB they live in */
+  /* Anyhow we need to walk the list of faces and find OBB they live in. */
   for (i = 0, mima = pccd_M->mima, vt = pccd_M->tri; i < pccd_M->tri_num; i++, mima++, vt++) {
     const float *v;
 
@@ -413,7 +413,7 @@ static void ccd_mesh_update(Object *ob, ccd_Mesh *pccd_M)
     pccd_M->bbmax[2] = max_ff(pccd_M->bbmax[2], v[2] + hull);
   }
 
-  /* anyhoo we need to walk the list of faces and find OBB they live in */
+  /* Anyhow we need to walk the list of faces and find OBB they live in. */
   for (i = 0, mima = pccd_M->mima, vt = pccd_M->tri; i < pccd_M->tri_num; i++, mima++, vt++) {
     const float *v;
 
@@ -510,7 +510,7 @@ static void ccd_build_deflector_hash(Depsgraph *depsgraph,
     return;
   }
 
-  unsigned int numobjects;
+  uint numobjects;
   Object **objects = BKE_collision_objects_create(
       depsgraph, vertexowner, collection, &numobjects, eModifierType_Collision);
 
@@ -547,7 +547,7 @@ static void ccd_update_deflector_hash(Depsgraph *depsgraph,
     return;
   }
 
-  unsigned int numobjects;
+  uint numobjects;
   Object **objects = BKE_collision_objects_create(
       depsgraph, vertexowner, collection, &numobjects, eModifierType_Collision);
 
@@ -567,7 +567,7 @@ static void ccd_update_deflector_hash(Depsgraph *depsgraph,
 static int count_mesh_quads(Mesh *me)
 {
   int a, result = 0;
-  const MPoly *mp = me->mpoly;
+  const MPoly *mp = BKE_mesh_polys(me);
 
   if (mp) {
     for (a = me->totpoly; a > 0; a--, mp++) {
@@ -591,8 +591,8 @@ static void add_mesh_quad_diag_springs(Object *ob)
 
     nofquads = count_mesh_quads(me);
     if (nofquads) {
-      const MLoop *mloop = me->mloop;
-      const MPoly *mp = me->mpoly;
+      const MLoop *mloop = BKE_mesh_loops(me);
+      const MPoly *mp = BKE_mesh_polys(me);
       BodySpring *bs;
 
       /* resize spring-array to hold additional quad springs */
@@ -750,10 +750,10 @@ static void build_bps_springlist(Object *ob)
     }
     /* scan for attached inner springs */
     for (b = sb->totspring, bs = sb->bspring; b > 0; b--, bs++) {
-      if (((sb->totpoint - a) == bs->v1)) {
+      if ((sb->totpoint - a) == bs->v1) {
         add_bp_springlist(bp, sb->totspring - b);
       }
-      if (((sb->totpoint - a) == bs->v2)) {
+      if ((sb->totpoint - a) == bs->v2) {
         add_bp_springlist(bp, sb->totspring - b);
       }
     } /* For springs. */
@@ -963,7 +963,7 @@ static void free_softbody_intern(SoftBody *sb)
  */
 static int query_external_colliders(Depsgraph *depsgraph, Collection *collection)
 {
-  unsigned int numobjects;
+  uint numobjects;
   Object **objects = BKE_collision_objects_create(
       depsgraph, NULL, collection, &numobjects, eModifierType_Collision);
   BKE_collision_objects_free(objects);
@@ -2632,6 +2632,7 @@ static void springs_from_mesh(Object *ob)
   BodyPoint *bp;
   int a;
   float scale = 1.0f;
+  const MVert *verts = BKE_mesh_verts(me);
 
   sb = ob->soft;
   if (me && sb) {
@@ -2642,8 +2643,8 @@ static void springs_from_mesh(Object *ob)
     if (me->totvert) {
       bp = ob->soft->bpoint;
       for (a = 0; a < me->totvert; a++, bp++) {
-        copy_v3_v3(bp->origS, me->mvert[a].co);
-        mul_m4_v3(ob->obmat, bp->origS);
+        copy_v3_v3(bp->origS, verts[a].co);
+        mul_m4_v3(ob->object_to_world, bp->origS);
       }
     }
     /* recalculate spring length for meshes here */
@@ -2663,7 +2664,7 @@ static void mesh_to_softbody(Object *ob)
 {
   SoftBody *sb;
   Mesh *me = ob->data;
-  MEdge *medge = me->medge;
+  const MEdge *medge = BKE_mesh_edges(me);
   BodyPoint *bp;
   BodySpring *bs;
   int a, totedge;
@@ -2683,10 +2684,11 @@ static void mesh_to_softbody(Object *ob)
   sb = ob->soft;
   bp = sb->bpoint;
 
-  defgroup_index = me->dvert ? (sb->vertgroup - 1) : -1;
-  defgroup_index_mass = me->dvert ? BKE_id_defgroup_name_index(&me->id, sb->namedVG_Mass) : -1;
-  defgroup_index_spring = me->dvert ? BKE_id_defgroup_name_index(&me->id, sb->namedVG_Spring_K) :
-                                      -1;
+  const MDeformVert *dvert = BKE_mesh_deform_verts(me);
+
+  defgroup_index = dvert ? (sb->vertgroup - 1) : -1;
+  defgroup_index_mass = dvert ? BKE_id_defgroup_name_index(&me->id, sb->namedVG_Mass) : -1;
+  defgroup_index_spring = dvert ? BKE_id_defgroup_name_index(&me->id, sb->namedVG_Spring_K) : -1;
 
   for (a = 0; a < me->totvert; a++, bp++) {
     /* get scalar values needed  *per vertex* from vertex group functions,
@@ -2699,7 +2701,7 @@ static void mesh_to_softbody(Object *ob)
       BLI_assert(bp->goal == sb->defgoal);
     }
     if ((ob->softflag & OB_SB_GOAL) && (defgroup_index != -1)) {
-      bp->goal *= BKE_defvert_find_weight(&me->dvert[a], defgroup_index);
+      bp->goal *= BKE_defvert_find_weight(&dvert[a], defgroup_index);
     }
 
     /* to proof the concept
@@ -2707,11 +2709,11 @@ static void mesh_to_softbody(Object *ob)
      */
 
     if (defgroup_index_mass != -1) {
-      bp->mass *= BKE_defvert_find_weight(&me->dvert[a], defgroup_index_mass);
+      bp->mass *= BKE_defvert_find_weight(&dvert[a], defgroup_index_mass);
     }
 
     if (defgroup_index_spring != -1) {
-      bp->springweight *= BKE_defvert_find_weight(&me->dvert[a], defgroup_index_spring);
+      bp->springweight *= BKE_defvert_find_weight(&dvert[a], defgroup_index_spring);
     }
   }
 
@@ -2753,19 +2755,23 @@ static void mesh_faces_to_scratch(Object *ob)
   MLoopTri *looptri, *lt;
   BodyFace *bodyface;
   int a;
+  const MVert *verts = BKE_mesh_verts(me);
+  const MPoly *polys = BKE_mesh_polys(me);
+  const MLoop *loops = BKE_mesh_loops(me);
+
   /* Allocate and copy faces. */
 
   sb->scratch->totface = poly_to_tri_count(me->totpoly, me->totloop);
   looptri = lt = MEM_mallocN(sizeof(*looptri) * sb->scratch->totface, __func__);
-  BKE_mesh_recalc_looptri(me->mloop, me->mpoly, me->mvert, me->totloop, me->totpoly, looptri);
+  BKE_mesh_recalc_looptri(loops, polys, verts, me->totloop, me->totpoly, looptri);
 
   bodyface = sb->scratch->bodyface = MEM_mallocN(sizeof(BodyFace) * sb->scratch->totface,
                                                  "SB_body_Faces");
 
   for (a = 0; a < sb->scratch->totface; a++, lt++, bodyface++) {
-    bodyface->v1 = me->mloop[lt->tri[0]].v;
-    bodyface->v2 = me->mloop[lt->tri[1]].v;
-    bodyface->v3 = me->mloop[lt->tri[2]].v;
+    bodyface->v1 = loops[lt->tri[0]].v;
+    bodyface->v2 = loops[lt->tri[1]].v;
+    bodyface->v3 = loops[lt->tri[2]].v;
     zero_v3(bodyface->ext_force);
     bodyface->ext_force[0] = bodyface->ext_force[1] = bodyface->ext_force[2] = 0.0f;
     bodyface->flag = 0;
@@ -2803,9 +2809,9 @@ static float globallen(float *v1, float *v2, Object *ob)
 {
   float p1[3], p2[3];
   copy_v3_v3(p1, v1);
-  mul_m4_v3(ob->obmat, p1);
+  mul_m4_v3(ob->object_to_world, p1);
   copy_v3_v3(p2, v2);
-  mul_m4_v3(ob->obmat, p2);
+  mul_m4_v3(ob->object_to_world, p2);
   return len_v3v3(p1, p2);
 }
 
@@ -3067,12 +3073,13 @@ static void softbody_to_object(Object *ob, float (*vertexCos)[3], int numVerts, 
       SB_estimate_transform(ob, sb->lcom, sb->lrot, sb->lscale);
     }
     /* Inverse matrix is not up to date. */
-    invert_m4_m4(ob->imat, ob->obmat);
+    invert_m4_m4(ob->world_to_object, ob->object_to_world);
 
     for (a = 0; a < numVerts; a++, bp++) {
       copy_v3_v3(vertexCos[a], bp->pos);
       if (local == 0) {
-        mul_m4_v3(ob->imat, vertexCos[a]); /* softbody is in global coords, baked optionally not */
+        mul_m4_v3(ob->world_to_object,
+                  vertexCos[a]); /* softbody is in global coords, baked optionally not */
       }
     }
   }
@@ -3217,7 +3224,7 @@ static void softbody_update_positions(Object *ob,
     /* copy the position of the goals at desired end time */
     copy_v3_v3(bp->origE, vertexCos[a]);
     /* vertexCos came from local world, go global */
-    mul_m4_v3(ob->obmat, bp->origE);
+    mul_m4_v3(ob->object_to_world, bp->origE);
     /* just to be save give bp->origT a defined value
      * will be calculated in interpolate_exciter() */
     copy_v3_v3(bp->origT, bp->origE);
@@ -3273,7 +3280,7 @@ static void softbody_reset(Object *ob, SoftBody *sb, float (*vertexCos)[3], int 
 
   for (a = 0, bp = sb->bpoint; a < numVerts; a++, bp++) {
     copy_v3_v3(bp->pos, vertexCos[a]);
-    mul_m4_v3(ob->obmat, bp->pos); /* Yep, soft-body is global coords. */
+    mul_m4_v3(ob->object_to_world, bp->pos); /* Yep, soft-body is global coords. */
     copy_v3_v3(bp->origS, bp->pos);
     copy_v3_v3(bp->origE, bp->pos);
     copy_v3_v3(bp->origT, bp->pos);

@@ -58,7 +58,7 @@ void schedule_children(DepsgraphEvalState *state,
                        ScheduleFunction *schedule_function,
                        ScheduleFunctionArgs... schedule_function_args);
 
-void schedule_node_to_pool(OperationNode *node, const int UNUSED(thread_id), TaskPool *pool)
+void schedule_node_to_pool(OperationNode *node, const int /*thread_id*/, TaskPool *pool)
 {
   BLI_task_pool_push(pool, deg_task_run_func, node, false, nullptr);
 }
@@ -273,7 +273,7 @@ void schedule_node(DepsgraphEvalState *state,
     return;
   }
   /* Actually schedule the node. */
-  bool is_scheduled = atomic_fetch_and_or_uint8((uint8_t *)&node->scheduled, (uint8_t) true);
+  bool is_scheduled = atomic_fetch_and_or_uint8((uint8_t *)&node->scheduled, uint8_t(true));
   if (!is_scheduled) {
     if (node->is_noop()) {
       /* skip NOOP node, schedule children right away */
@@ -437,7 +437,7 @@ void deg_evaluate_on_refresh(Depsgraph *graph)
 
   evaluate_graph_threaded_stage(&state, task_pool, EvaluationStage::COPY_ON_WRITE);
 
-  if (graph->has_animated_visibility) {
+  if (graph->has_animated_visibility || graph->need_update_nodes_visibility) {
     /* Update pending parents including only the ones which are affecting operations which are
      * affecting visibility. */
     state.need_update_pending_parents = true;

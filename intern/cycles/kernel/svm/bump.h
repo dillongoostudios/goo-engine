@@ -14,8 +14,7 @@ ccl_device_noinline void svm_node_enter_bump_eval(KernelGlobals kg,
 {
   /* save state */
   stack_store_float3(stack, offset + 0, sd->P);
-  stack_store_float3(stack, offset + 3, sd->dP.dx);
-  stack_store_float3(stack, offset + 6, sd->dP.dy);
+  stack_store_float(stack, offset + 3, sd->dP);
 
   /* set state as if undisplaced */
   const AttributeDescriptor desc = find_attribute(kg, sd, ATTR_STD_POSITION_UNDISPLACED);
@@ -28,12 +27,8 @@ ccl_device_noinline void svm_node_enter_bump_eval(KernelGlobals kg,
     object_dir_transform(kg, sd, &dP.dx);
     object_dir_transform(kg, sd, &dP.dy);
 
-    const float dP_radius = differential_make_compact(dP);
-
     sd->P = P;
-    make_orthonormals(sd->Ng, &sd->dP.dx, &sd->dP.dy);
-    sd->dP.dx *= dP_radius;
-    sd->dP.dy *= dP_radius;
+    sd->dP = differential_make_compact(dP);
   }
 }
 
@@ -44,8 +39,7 @@ ccl_device_noinline void svm_node_leave_bump_eval(KernelGlobals kg,
 {
   /* restore state */
   sd->P = stack_load_float3(stack, offset + 0);
-  sd->dP.dx = stack_load_float3(stack, offset + 3);
-  sd->dP.dy = stack_load_float3(stack, offset + 6);
+  sd->dP = stack_load_float(stack, offset + 3);
 }
 
 CCL_NAMESPACE_END

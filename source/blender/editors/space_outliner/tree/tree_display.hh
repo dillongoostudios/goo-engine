@@ -30,11 +30,11 @@ struct Main;
 struct Scene;
 struct Sequence;
 struct SpaceOutliner;
-struct TreeElement;
 struct ViewLayer;
 
 namespace blender::ed::outliner {
 
+struct TreeElement;
 class TreeElementID;
 
 /**
@@ -105,6 +105,7 @@ class AbstractTreeDisplay {
  * \brief Tree-Display for the View Layer display mode.
  */
 class TreeDisplayViewLayer final : public AbstractTreeDisplay {
+  Scene *scene_ = nullptr;
   ViewLayer *view_layer_ = nullptr;
   bool show_objects_ = true;
 

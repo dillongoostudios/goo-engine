@@ -25,7 +25,6 @@
  * they take into account to create the render passes. When accurate mode is off the number of
  * levels is used as the number of cryptomatte samples to take. When accuracy mode is on the number
  * of render samples is used.
- *
  */
 
 #include "DRW_engine.h"
@@ -423,8 +422,8 @@ void EEVEE_cryptomatte_output_accumulate(EEVEE_ViewLayerData *UNUSED(sldata), EE
 void EEVEE_cryptomatte_update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view_layer)
 {
   /* NOTE: Name channels lowercase rgba so that compression rules check in OpenEXR DWA code uses
-   * loseless compression. Reportedly this naming is the only one which works good from the
-   * interoperability point of view. Using xyzw naming is not portable. */
+   * lossless compression. Reportedly this naming is the only one which works good from the
+   * interoperability point of view. Using XYZW naming is not portable. */
 
   char cryptomatte_pass_name[MAX_NAME];
   const short num_passes = eevee_cryptomatte_passes_per_layer(view_layer);

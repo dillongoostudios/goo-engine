@@ -33,25 +33,17 @@
 #include "draw_manager.h"
 #include "draw_shader.h"
 
-#ifndef __APPLE__
-#  define USE_TRANSFORM_FEEDBACK
-#  define USE_COMPUTE_SHADERS
-#endif
-
 BLI_INLINE eParticleRefineShaderType drw_curves_shader_type_get()
 {
-#ifdef USE_COMPUTE_SHADERS
   if (GPU_compute_shader_support() && GPU_shader_storage_buffer_objects_support()) {
     return PART_REFINE_SHADER_COMPUTE;
   }
-#endif
-#ifdef USE_TRANSFORM_FEEDBACK
-  return PART_REFINE_SHADER_TRANSFORM_FEEDBACK;
-#endif
+  if (GPU_transform_feedback_support()) {
+    return PART_REFINE_SHADER_TRANSFORM_FEEDBACK;
+  }
   return PART_REFINE_SHADER_TRANSFORM_FEEDBACK_WORKAROUND;
 }
 
-#ifndef USE_TRANSFORM_FEEDBACK
 struct CurvesEvalCall {
   struct CurvesEvalCall *next;
   GPUVertBuf *vbo;
@@ -63,7 +55,6 @@ static CurvesEvalCall *g_tf_calls = nullptr;
 static int g_tf_id_offset;
 static int g_tf_target_width;
 static int g_tf_target_height;
-#endif
 
 static GPUVertBuf *g_dummy_vbo = nullptr;
 static GPUTexture *g_dummy_texture = nullptr;
@@ -106,18 +97,20 @@ void DRW_curves_init(DRWData *drw_data)
   CurvesUniformBufPool *pool = drw_data->curves_ubos;
   pool->reset();
 
-#if defined(USE_TRANSFORM_FEEDBACK) || defined(USE_COMPUTE_SHADERS)
-  g_tf_pass = DRW_pass_create("Update Curves Pass", (DRWState)0);
-#else
-  g_tf_pass = DRW_pass_create("Update Curves Pass", DRW_STATE_WRITE_COLOR);
-#endif
+  if (GPU_transform_feedback_support() || GPU_compute_shader_support()) {
+    g_tf_pass = DRW_pass_create("Update Curves Pass", (DRWState)0);
+  }
+  else {
+    g_tf_pass = DRW_pass_create("Update Curves Pass", DRW_STATE_WRITE_COLOR);
+  }
 
   if (g_dummy_vbo == nullptr) {
     /* initialize vertex format */
     GPUVertFormat format = {0};
     uint dummy_id = GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 4, GPU_FETCH_FLOAT);
 
-    g_dummy_vbo = GPU_vertbuf_create_with_format(&format);
+    g_dummy_vbo = GPU_vertbuf_create_with_format_ex(
+        &format, GPU_USAGE_STATIC | GPU_USAGE_FLAG_BUFFER_TEXTURE_ONLY);
 
     const float vert[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     GPU_vertbuf_data_alloc(g_dummy_vbo, 1);
@@ -136,25 +129,25 @@ void DRW_curves_ubos_pool_free(CurvesUniformBufPool *pool)
 
 static void drw_curves_cache_shgrp_attach_resources(DRWShadingGroup *shgrp,
                                                     CurvesEvalCache *cache,
-                                                    GPUTexture *tex,
+                                                    GPUVertBuf *point_buf,
                                                     const int subdiv)
 {
-  DRW_shgroup_uniform_texture(shgrp, "hairPointBuffer", tex);
-  DRW_shgroup_uniform_texture(shgrp, "hairStrandBuffer", cache->strand_tex);
-  DRW_shgroup_uniform_texture(shgrp, "hairStrandSegBuffer", cache->strand_seg_tex);
+  DRW_shgroup_buffer_texture(shgrp, "hairPointBuffer", point_buf);
+  DRW_shgroup_buffer_texture(shgrp, "hairStrandBuffer", cache->proc_strand_buf);
+  DRW_shgroup_buffer_texture(shgrp, "hairStrandSegBuffer", cache->proc_strand_seg_buf);
   DRW_shgroup_uniform_int(shgrp, "hairStrandsRes", &cache->final[subdiv].strands_res, 1);
 }
 
 static void drw_curves_cache_update_compute(CurvesEvalCache *cache,
                                             const int subdiv,
                                             const int strands_len,
-                                            GPUVertBuf *buffer,
-                                            GPUTexture *tex)
+                                            GPUVertBuf *output_buf,
+                                            GPUVertBuf *input_buf)
 {
   GPUShader *shader = curves_eval_shader_get(CURVES_EVAL_CATMULL_ROM);
   DRWShadingGroup *shgrp = DRW_shgroup_create(shader, g_tf_pass);
-  drw_curves_cache_shgrp_attach_resources(shgrp, cache, tex, subdiv);
-  DRW_shgroup_vertex_buffer(shgrp, "posTime", buffer);
+  drw_curves_cache_shgrp_attach_resources(shgrp, cache, input_buf, subdiv);
+  DRW_shgroup_vertex_buffer(shgrp, "posTime", output_buf);
 
   const int max_strands_per_call = GPU_max_work_group_count(0);
   int strands_start = 0;
@@ -176,7 +169,7 @@ static void drw_curves_cache_update_compute(CurvesEvalCache *cache, const int su
   }
 
   drw_curves_cache_update_compute(
-      cache, subdiv, strands_len, cache->final[subdiv].proc_buf, cache->point_tex);
+      cache, subdiv, strands_len, cache->final[subdiv].proc_buf, cache->proc_point_buf);
 
   const DRW_Attributes &attrs = cache->final[subdiv].attr_used;
   for (int i = 0; i < attrs.num_requests; i++) {
@@ -189,35 +182,38 @@ static void drw_curves_cache_update_compute(CurvesEvalCache *cache, const int su
                                     subdiv,
                                     strands_len,
                                     cache->final[subdiv].attributes_buf[i],
-                                    cache->proc_attributes_tex[i]);
+                                    cache->proc_attributes_buf[i]);
   }
 }
 
 static void drw_curves_cache_update_transform_feedback(CurvesEvalCache *cache,
-                                                       GPUVertBuf *vbo,
-                                                       GPUTexture *tex,
+                                                       GPUVertBuf *output_buf,
+                                                       GPUVertBuf *input_buf,
                                                        const int subdiv,
                                                        const int final_points_len)
 {
   GPUShader *tf_shader = curves_eval_shader_get(CURVES_EVAL_CATMULL_ROM);
 
-#ifdef USE_TRANSFORM_FEEDBACK
-  DRWShadingGroup *tf_shgrp = DRW_shgroup_transform_feedback_create(tf_shader, g_tf_pass, vbo);
-#else
-  DRWShadingGroup *tf_shgrp = DRW_shgroup_create(tf_shader, g_tf_pass);
+  DRWShadingGroup *tf_shgrp = nullptr;
+  if (GPU_transform_feedback_support()) {
+    tf_shgrp = DRW_shgroup_transform_feedback_create(tf_shader, g_tf_pass, output_buf);
+  }
+  else {
+    tf_shgrp = DRW_shgroup_create(tf_shader, g_tf_pass);
 
-  CurvesEvalCall *pr_call = MEM_new<CurvesEvalCall>(__func__);
-  pr_call->next = g_tf_calls;
-  pr_call->vbo = vbo;
-  pr_call->shgrp = tf_shgrp;
-  pr_call->vert_len = final_points_len;
-  g_tf_calls = pr_call;
-  DRW_shgroup_uniform_int(tf_shgrp, "targetHeight", &g_tf_target_height, 1);
-  DRW_shgroup_uniform_int(tf_shgrp, "targetWidth", &g_tf_target_width, 1);
-  DRW_shgroup_uniform_int(tf_shgrp, "idOffset", &g_tf_id_offset, 1);
-#endif
+    CurvesEvalCall *pr_call = MEM_new<CurvesEvalCall>(__func__);
+    pr_call->next = g_tf_calls;
+    pr_call->vbo = output_buf;
+    pr_call->shgrp = tf_shgrp;
+    pr_call->vert_len = final_points_len;
+    g_tf_calls = pr_call;
+    DRW_shgroup_uniform_int(tf_shgrp, "targetHeight", &g_tf_target_height, 1);
+    DRW_shgroup_uniform_int(tf_shgrp, "targetWidth", &g_tf_target_width, 1);
+    DRW_shgroup_uniform_int(tf_shgrp, "idOffset", &g_tf_id_offset, 1);
+  }
+  BLI_assert(tf_shgrp != nullptr);
 
-  drw_curves_cache_shgrp_attach_resources(tf_shgrp, cache, tex, subdiv);
+  drw_curves_cache_shgrp_attach_resources(tf_shgrp, cache, input_buf, subdiv);
   DRW_shgroup_call_procedural_points(tf_shgrp, nullptr, final_points_len);
 }
 
@@ -229,7 +225,7 @@ static void drw_curves_cache_update_transform_feedback(CurvesEvalCache *cache, c
   }
 
   drw_curves_cache_update_transform_feedback(
-      cache, cache->final[subdiv].proc_buf, cache->point_tex, subdiv, final_points_len);
+      cache, cache->final[subdiv].proc_buf, cache->proc_point_buf, subdiv, final_points_len);
 
   const DRW_Attributes &attrs = cache->final[subdiv].attr_used;
   for (int i = 0; i < attrs.num_requests; i++) {
@@ -240,7 +236,7 @@ static void drw_curves_cache_update_transform_feedback(CurvesEvalCache *cache, c
 
     drw_curves_cache_update_transform_feedback(cache,
                                                cache->final[subdiv].attributes_buf[i],
-                                               cache->proc_attributes_tex[i],
+                                               cache->proc_attributes_buf[i],
                                                subdiv,
                                                final_points_len);
   }
@@ -350,9 +346,9 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
         1.0f);
   }
 
-  DRW_shgroup_uniform_texture(shgrp, "hairPointBuffer", curves_cache->final[subdiv].proc_tex);
-  if (curves_cache->length_tex) {
-    DRW_shgroup_uniform_texture(shgrp, "hairLen", curves_cache->length_tex);
+  DRW_shgroup_buffer_texture(shgrp, "hairPointBuffer", curves_cache->final[subdiv].proc_buf);
+  if (curves_cache->proc_length_buf) {
+    DRW_shgroup_buffer_texture(shgrp, "hairLen", curves_cache->proc_length_buf);
   }
 
   const DRW_Attributes &attrs = curves_cache->final[subdiv].attr_used;
@@ -363,18 +359,18 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
     drw_curves_get_attribute_sampler_name(request.attribute_name, sampler_name);
 
     if (request.domain == ATTR_DOMAIN_CURVE) {
-      if (!curves_cache->proc_attributes_tex[i]) {
+      if (!curves_cache->proc_attributes_buf[i]) {
         continue;
       }
 
-      DRW_shgroup_uniform_texture(shgrp, sampler_name, curves_cache->proc_attributes_tex[i]);
+      DRW_shgroup_buffer_texture(shgrp, sampler_name, curves_cache->proc_attributes_buf[i]);
     }
     else {
-      if (!curves_cache->final[subdiv].attributes_tex[i]) {
+      if (!curves_cache->final[subdiv].attributes_buf[i]) {
         continue;
       }
-      DRW_shgroup_uniform_texture(
-          shgrp, sampler_name, curves_cache->final[subdiv].attributes_tex[i]);
+      DRW_shgroup_buffer_texture(
+          shgrp, sampler_name, curves_cache->final[subdiv].attributes_buf[i]);
     }
 
     /* Some attributes may not be used in the shader anymore and were not garbage collected yet, so
@@ -394,10 +390,15 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
   DRW_shgroup_uniform_int(shgrp, "hairStrandsRes", &curves_cache->final[subdiv].strands_res, 1);
   DRW_shgroup_uniform_int_copy(shgrp, "hairThicknessRes", thickness_res);
   DRW_shgroup_uniform_float_copy(shgrp, "hairRadShape", hair_rad_shape);
-  DRW_shgroup_uniform_mat4_copy(shgrp, "hairDupliMatrix", object->obmat);
+  DRW_shgroup_uniform_mat4_copy(shgrp, "hairDupliMatrix", object->object_to_world);
   DRW_shgroup_uniform_float_copy(shgrp, "hairRadRoot", hair_rad_root);
   DRW_shgroup_uniform_float_copy(shgrp, "hairRadTip", hair_rad_tip);
   DRW_shgroup_uniform_bool_copy(shgrp, "hairCloseTip", hair_close_tip);
+  if (gpu_material) {
+    /* \note: This needs to happen before the drawcall to allow correct attribute extraction.
+     * (see T101896) */
+    DRW_shgroup_add_material_resources(shgrp, gpu_material);
+  }
   /* TODO(fclem): Until we have a better way to cull the curves and render with orco, bypass
    * culling test. */
   GPUBatch *geom = curves_cache->final[subdiv].proc_hairs[thickness_res - 1];
@@ -411,82 +412,118 @@ void DRW_curves_update()
   /* Update legacy hair too, to avoid verbosity in callers. */
   DRW_hair_update();
 
-#ifndef USE_TRANSFORM_FEEDBACK
-  /**
-   * Workaround to transform feedback not working on mac.
-   * On some system it crashes (see T58489) and on some other it renders garbage (see T60171).
-   *
-   * So instead of using transform feedback we render to a texture,
-   * read back the result to system memory and re-upload as VBO data.
-   * It is really not ideal performance wise, but it is the simplest
-   * and the most local workaround that still uses the power of the GPU.
-   */
+  if (!GPU_transform_feedback_support()) {
+    /**
+     * Workaround to transform feedback not working on mac.
+     * On some system it crashes (see T58489) and on some other it renders garbage (see T60171).
+     *
+     * So instead of using transform feedback we render to a texture,
+     * read back the result to system memory and re-upload as VBO data.
+     * It is really not ideal performance wise, but it is the simplest
+     * and the most local workaround that still uses the power of the GPU.
+     */
 
-  if (g_tf_calls == nullptr) {
-    return;
-  }
-
-  /* Search ideal buffer size. */
-  uint max_size = 0;
-  for (CurvesEvalCall *pr_call = g_tf_calls; pr_call; pr_call = pr_call->next) {
-    max_size = max_ii(max_size, pr_call->vert_len);
-  }
-
-  /* Create target Texture / Frame-buffer */
-  /* Don't use max size as it can be really heavy and fail.
-   * Do chunks of maximum 2048 * 2048 hair points. */
-  int width = 2048;
-  int height = min_ii(width, 1 + max_size / width);
-  GPUTexture *tex = DRW_texture_pool_query_2d(
-      width, height, GPU_RGBA32F, (DrawEngineType *)DRW_curves_update);
-  g_tf_target_height = height;
-  g_tf_target_width = width;
-
-  GPUFrameBuffer *fb = nullptr;
-  GPU_framebuffer_ensure_config(&fb,
-                                {
-                                    GPU_ATTACHMENT_NONE,
-                                    GPU_ATTACHMENT_TEXTURE(tex),
-                                });
-
-  float *data = static_cast<float *>(
-      MEM_mallocN(sizeof(float[4]) * width * height, "tf fallback buffer"));
-
-  GPU_framebuffer_bind(fb);
-  while (g_tf_calls != nullptr) {
-    CurvesEvalCall *pr_call = g_tf_calls;
-    g_tf_calls = g_tf_calls->next;
-
-    g_tf_id_offset = 0;
-    while (pr_call->vert_len > 0) {
-      int max_read_px_len = min_ii(width * height, pr_call->vert_len);
-
-      DRW_draw_pass_subset(g_tf_pass, pr_call->shgrp, pr_call->shgrp);
-      /* Read back result to main memory. */
-      GPU_framebuffer_read_color(fb, 0, 0, width, height, 4, 0, GPU_DATA_FLOAT, data);
-      /* Upload back to VBO. */
-      GPU_vertbuf_use(pr_call->vbo);
-      GPU_vertbuf_update_sub(pr_call->vbo,
-                             sizeof(float[4]) * g_tf_id_offset,
-                             sizeof(float[4]) * max_read_px_len,
-                             data);
-
-      g_tf_id_offset += max_read_px_len;
-      pr_call->vert_len -= max_read_px_len;
+    if (g_tf_calls == nullptr) {
+      return;
     }
 
-    MEM_freeN(pr_call);
-  }
+    /* Search ideal buffer size. */
+    uint max_size = 0;
+    for (CurvesEvalCall *pr_call = g_tf_calls; pr_call; pr_call = pr_call->next) {
+      max_size = max_ii(max_size, pr_call->vert_len);
+    }
 
-  MEM_freeN(data);
-  GPU_framebuffer_free(fb);
-#else
-  /* Just render the pass when using compute shaders or transform feedback. */
-  DRW_draw_pass(g_tf_pass);
-  if (drw_curves_shader_type_get() == PART_REFINE_SHADER_COMPUTE) {
-    GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+    /* Create target Texture / Frame-buffer */
+    /* Don't use max size as it can be really heavy and fail.
+     * Do chunks of maximum 2048 * 2048 hair points. */
+    int width = 2048;
+    int height = min_ii(width, 1 + max_size / width);
+    GPUTexture *tex = DRW_texture_pool_query_2d(
+        width, height, GPU_RGBA32F, (DrawEngineType *)DRW_curves_update);
+    g_tf_target_height = height;
+    g_tf_target_width = width;
+
+    GPUFrameBuffer *fb = nullptr;
+    GPU_framebuffer_ensure_config(&fb,
+                                  {
+                                      GPU_ATTACHMENT_NONE,
+                                      GPU_ATTACHMENT_TEXTURE(tex),
+                                  });
+
+    float *data = static_cast<float *>(
+        MEM_mallocN(sizeof(float[4]) * width * height, "tf fallback buffer"));
+
+    GPU_framebuffer_bind(fb);
+    while (g_tf_calls != nullptr) {
+      CurvesEvalCall *pr_call = g_tf_calls;
+      g_tf_calls = g_tf_calls->next;
+
+      g_tf_id_offset = 0;
+      while (pr_call->vert_len > 0) {
+        int max_read_px_len = min_ii(width * height, pr_call->vert_len);
+
+        DRW_draw_pass_subset(g_tf_pass, pr_call->shgrp, pr_call->shgrp);
+        /* Read back result to main memory. */
+        GPU_framebuffer_read_color(fb, 0, 0, width, height, 4, 0, GPU_DATA_FLOAT, data);
+        /* Upload back to VBO. */
+        GPU_vertbuf_use(pr_call->vbo);
+        GPU_vertbuf_update_sub(pr_call->vbo,
+                               sizeof(float[4]) * g_tf_id_offset,
+                               sizeof(float[4]) * max_read_px_len,
+                               data);
+
+        g_tf_id_offset += max_read_px_len;
+        pr_call->vert_len -= max_read_px_len;
+      }
+
+      MEM_freeN(pr_call);
+    }
+
+    MEM_freeN(data);
+    GPU_framebuffer_free(fb);
   }
-#endif
+  else {
+    /* NOTE(Metal): If compute is not supported, bind a temporary frame-buffer to avoid
+     * side-effects from rendering in the active buffer.
+     * We also need to guarantee that a Frame-buffer is active to perform any rendering work,
+     * even if there is no output */
+    GPUFrameBuffer *temp_fb = nullptr;
+    GPUFrameBuffer *prev_fb = nullptr;
+    if (GPU_type_matches_ex(GPU_DEVICE_ANY, GPU_OS_MAC, GPU_DRIVER_ANY, GPU_BACKEND_METAL)) {
+      if (!GPU_compute_shader_support()) {
+        prev_fb = GPU_framebuffer_active_get();
+        char errorOut[256];
+        /* if the frame-buffer is invalid we need a dummy frame-buffer to be bound. */
+        if (!GPU_framebuffer_check_valid(prev_fb, errorOut)) {
+          int width = 64;
+          int height = 64;
+          GPUTexture *tex = DRW_texture_pool_query_2d(
+              width, height, GPU_DEPTH_COMPONENT32F, (DrawEngineType *)DRW_hair_update);
+          g_tf_target_height = height;
+          g_tf_target_width = width;
+
+          GPU_framebuffer_ensure_config(&temp_fb, {GPU_ATTACHMENT_TEXTURE(tex)});
+
+          GPU_framebuffer_bind(temp_fb);
+        }
+      }
+    }
+
+    /* Just render the pass when using compute shaders or transform feedback. */
+    DRW_draw_pass(g_tf_pass);
+    if (drw_curves_shader_type_get() == PART_REFINE_SHADER_COMPUTE) {
+      GPU_memory_barrier(GPU_BARRIER_SHADER_STORAGE);
+    }
+
+    /* Release temporary frame-buffer. */
+    if (temp_fb != nullptr) {
+      GPU_framebuffer_free(temp_fb);
+    }
+    /* Rebind existing frame-buffer */
+    if (prev_fb != nullptr) {
+      GPU_framebuffer_bind(prev_fb);
+    }
+  }
 }
 
 void DRW_curves_free()

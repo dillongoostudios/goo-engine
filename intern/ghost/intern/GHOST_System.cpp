@@ -8,7 +8,7 @@
 #include "GHOST_System.h"
 
 #include <chrono>
-#include <cstdio> /* just for printf */
+#include <cstdio> /* Just for #printf. */
 
 #include "GHOST_DisplayManager.h"
 #include "GHOST_EventManager.h"
@@ -111,8 +111,7 @@ bool GHOST_System::validWindow(GHOST_IWindow *window)
 
 GHOST_TSuccess GHOST_System::beginFullScreen(const GHOST_DisplaySetting &setting,
                                              GHOST_IWindow **window,
-                                             const bool stereoVisual,
-                                             const bool alphaBackground)
+                                             const bool stereoVisual)
 {
   GHOST_TSuccess success = GHOST_kFailure;
   GHOST_ASSERT(m_windowManager, "GHOST_System::beginFullScreen(): invalid window manager");
@@ -126,8 +125,7 @@ GHOST_TSuccess GHOST_System::beginFullScreen(const GHOST_DisplaySetting &setting
                                                            setting);
       if (success == GHOST_kSuccess) {
         // GHOST_PRINT("GHOST_System::beginFullScreen(): creating full-screen window\n");
-        success = createFullScreenWindow(
-            (GHOST_Window **)window, setting, stereoVisual, alphaBackground);
+        success = createFullScreenWindow((GHOST_Window **)window, setting, stereoVisual);
         if (success == GHOST_kSuccess) {
           m_windowManager->beginFullScreen(*window, stereoVisual);
         }
@@ -379,18 +377,14 @@ GHOST_TSuccess GHOST_System::exit()
 
 GHOST_TSuccess GHOST_System::createFullScreenWindow(GHOST_Window **window,
                                                     const GHOST_DisplaySetting &settings,
-                                                    const bool stereoVisual,
-                                                    const bool alphaBackground)
+                                                    const bool stereoVisual)
 {
   GHOST_GLSettings glSettings = {0};
 
   if (stereoVisual) {
     glSettings.flags |= GHOST_glStereoVisual;
   }
-  if (alphaBackground) {
-    glSettings.flags |= GHOST_glAlphaBackground;
-  }
-
+  glSettings.context_type = GHOST_kDrawingContextTypeOpenGL;
   /* NOTE: don't use #getCurrentDisplaySetting() because on X11 we may
    * be zoomed in and the desktop may be bigger than the viewport. */
   GHOST_ASSERT(m_displayManager,
@@ -402,7 +396,6 @@ GHOST_TSuccess GHOST_System::createFullScreenWindow(GHOST_Window **window,
                                          settings.xPixels,
                                          settings.yPixels,
                                          GHOST_kWindowStateNormal,
-                                         GHOST_kDrawingContextTypeOpenGL,
                                          glSettings,
                                          true /* exclusive */);
   return (*window == nullptr) ? GHOST_kFailure : GHOST_kSuccess;

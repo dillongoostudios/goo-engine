@@ -107,7 +107,7 @@ static void deformVerts(ModifierData *md,
   }
 
   if (mesh == NULL) {
-    mesh_src = MOD_deform_mesh_eval_get(ob, NULL, NULL, NULL, verts_num, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ob, NULL, NULL, NULL, verts_num, false);
   }
   else {
     /* Not possible to use get_mesh() in this case as we'll modify its vertices
@@ -145,11 +145,11 @@ static void deformVerts(ModifierData *md,
 
     if (collmd->time_xnew == -1000) { /* first time */
 
-      collmd->x = MEM_dupallocN(mesh_src->mvert); /* frame start position */
+      collmd->x = MEM_dupallocN(BKE_mesh_verts(mesh_src)); /* frame start position */
 
       for (uint i = 0; i < mvert_num; i++) {
         /* we save global positions */
-        mul_m4_v3(ob->obmat, collmd->x[i].co);
+        mul_m4_v3(ob->object_to_world, collmd->x[i].co);
       }
 
       collmd->xnew = MEM_dupallocN(collmd->x);         /* Frame end position. */
@@ -160,7 +160,7 @@ static void deformVerts(ModifierData *md,
       collmd->mvert_num = mvert_num;
 
       {
-        const MLoop *mloop = mesh_src->mloop;
+        const MLoop *mloop = BKE_mesh_loops(mesh_src);
         const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(mesh_src);
         collmd->tri_num = BKE_mesh_runtime_looptri_len(mesh_src);
         MVertTri *tri = MEM_mallocN(sizeof(*tri) * collmd->tri_num, __func__);
@@ -182,13 +182,13 @@ static void deformVerts(ModifierData *md,
       collmd->xnew = tempVert;
       collmd->time_x = collmd->time_xnew;
 
-      memcpy(collmd->xnew, mesh_src->mvert, mvert_num * sizeof(MVert));
+      memcpy(collmd->xnew, BKE_mesh_verts(mesh_src), mvert_num * sizeof(MVert));
 
       bool is_static = true;
 
       for (uint i = 0; i < mvert_num; i++) {
         /* we save global positions */
-        mul_m4_v3(ob->obmat, collmd->xnew[i].co);
+        mul_m4_v3(ob->object_to_world, collmd->xnew[i].co);
 
         /* detect motion */
         is_static = is_static && equals_v3v3(collmd->x[i].co, collmd->xnew[i].co);
@@ -236,7 +236,7 @@ static void deformVerts(ModifierData *md,
 
 static void updateDepsgraph(ModifierData *UNUSED(md), const ModifierUpdateDepsgraphContext *ctx)
 {
-  DEG_add_modifier_to_transform_relation(ctx->node, "Collision Modifier");
+  DEG_add_depends_on_transform_relation(ctx->node, "Collision Modifier");
 }
 
 static void panel_draw(const bContext *UNUSED(C), Panel *panel)

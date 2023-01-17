@@ -11,8 +11,10 @@ __all__ = (
 
 
 import bpy
-from bpy.app.translations import pgettext_iface as iface_
-from bpy.app.translations import contexts as i18n_contexts
+from bpy.app.translations import (
+    contexts as i18n_contexts,
+    pgettext_iface as iface_,
+)
 
 
 def _indented_layout(layout, level):
@@ -73,7 +75,7 @@ def draw_km(display_keymaps, kc, km, children, layout, level):
             subcol = _indented_layout(col, level + 1)
             subrow = subcol.row(align=True)
             subrow.prop(km, "show_expanded_items", text="", emboss=False)
-            subrow.label(text=iface_("%s (Global)") % km.name, translate=False)
+            subrow.label(text=iface_("%s (Global)") % iface_(km.name, i18n_contexts.id_windowmanager), translate=False)
         else:
             km.show_expanded_items = True
 
@@ -333,7 +335,8 @@ def draw_filtered(display_keymaps, filter_type, filter_text, layout):
             col = layout.column()
 
             row = col.row()
-            row.label(text=km.name, icon='DOT')
+            row.label(text=km.name, icon='DOT',
+                      text_ctxt=i18n_contexts.id_windowmanager)
 
             row.label()
             row.label()

@@ -76,7 +76,7 @@ GLContext::GLContext(void *ghost_window, GLSharedOrphanLists &shared_orphan_list
     }
   }
   else {
-    /* For off-screen contexts. Default frame-buffer is NULL. */
+    /* For off-screen contexts. Default frame-buffer is null. */
     back_left = new GLFrameBuffer("back_left", this, GL_NONE, 0, 0, 0);
   }
 
@@ -191,11 +191,11 @@ void GLSharedOrphanLists::orphans_clear()
 
   lists_mutex.lock();
   if (!buffers.is_empty()) {
-    glDeleteBuffers((uint)buffers.size(), buffers.data());
+    glDeleteBuffers(uint(buffers.size()), buffers.data());
     buffers.clear();
   }
   if (!textures.is_empty()) {
-    glDeleteTextures((uint)textures.size(), textures.data());
+    glDeleteTextures(uint(textures.size()), textures.data());
     textures.clear();
   }
   lists_mutex.unlock();
@@ -208,11 +208,11 @@ void GLContext::orphans_clear()
 
   lists_mutex_.lock();
   if (!orphaned_vertarrays_.is_empty()) {
-    glDeleteVertexArrays((uint)orphaned_vertarrays_.size(), orphaned_vertarrays_.data());
+    glDeleteVertexArrays(uint(orphaned_vertarrays_.size()), orphaned_vertarrays_.data());
     orphaned_vertarrays_.clear();
   }
   if (!orphaned_framebuffers_.is_empty()) {
-    glDeleteFramebuffers((uint)orphaned_framebuffers_.size(), orphaned_framebuffers_.data());
+    glDeleteFramebuffers(uint(orphaned_framebuffers_.size()), orphaned_framebuffers_.data());
     orphaned_framebuffers_.clear();
   }
   lists_mutex_.unlock();
@@ -304,12 +304,12 @@ void GLContext::vao_cache_unregister(GLVaoCache *cache)
 void GLContext::memory_statistics_get(int *r_total_mem, int *r_free_mem)
 {
   /* TODO(merwin): use Apple's platform API to get this info. */
-  if (GLEW_NVX_gpu_memory_info) {
+  if (epoxy_has_gl_extension("GL_NVX_gpu_memory_info")) {
     /* Returned value in Kb. */
     glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, r_total_mem);
     glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, r_free_mem);
   }
-  else if (GLEW_ATI_meminfo) {
+  else if (epoxy_has_gl_extension("GL_ATI_meminfo")) {
     int stats[4];
     glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, stats);
 

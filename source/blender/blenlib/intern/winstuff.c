@@ -63,23 +63,17 @@ bool BLI_windows_register_blend_extension(const bool background)
   char buffer[256];
 
   char BlPath[MAX_PATH];
-  char InstallDir[FILE_MAXDIR];
-  char SysDir[FILE_MAXDIR];
-  const char *ThumbHandlerDLL;
-  char RegCmd[MAX_PATH * 2];
   char MBox[256];
-  char *blender_app;
-#  ifndef _WIN64
-  BOOL IsWOW64;
-#  endif
 
   printf("Registering file extension...");
   GetModuleFileName(0, BlPath, MAX_PATH);
 
   /* Replace the actual app name with the wrapper. */
-  blender_app = strstr(BlPath, "blender.exe");
-  if (blender_app != NULL) {
-    strcpy(blender_app, "blender-launcher.exe");
+  {
+    char *blender_app = strstr(BlPath, "blender.exe");
+    if (blender_app != NULL) {
+      strcpy(blender_app, "blender-launcher.exe");
+    }
   }
 
   /* root is HKLM by default */
@@ -116,7 +110,7 @@ bool BLI_windows_register_blend_extension(const bool background)
                            &hkey,
                            &dwd);
   if (lresult == ERROR_SUCCESS) {
-    sprintf(buffer, "\"%s\" \"%%1\"", BlPath);
+    BLI_snprintf(buffer, sizeof(buffer), "\"%s\" \"%%1\"", BlPath);
     lresult = RegSetValueEx(hkey, NULL, 0, REG_SZ, (BYTE *)buffer, strlen(buffer) + 1);
     RegCloseKey(hkey);
   }
@@ -135,7 +129,7 @@ bool BLI_windows_register_blend_extension(const bool background)
                            &hkey,
                            &dwd);
   if (lresult == ERROR_SUCCESS) {
-    sprintf(buffer, "\"%s\", 1", BlPath);
+    BLI_snprintf(buffer, sizeof(buffer), "\"%s\", 1", BlPath);
     lresult = RegSetValueEx(hkey, NULL, 0, REG_SZ, (BYTE *)buffer, strlen(buffer) + 1);
     RegCloseKey(hkey);
   }
@@ -157,21 +151,28 @@ bool BLI_windows_register_blend_extension(const bool background)
   }
 
 #  ifdef WITH_BLENDER_THUMBNAILER
-  BLI_windows_get_executable_dir(InstallDir);
-  GetSystemDirectory(SysDir, FILE_MAXDIR);
-  ThumbHandlerDLL = "BlendThumb.dll";
-  snprintf(
-      RegCmd, MAX_PATH * 2, "%s\\regsvr32 /s \"%s\\%s\"", SysDir, InstallDir, ThumbHandlerDLL);
-  system(RegCmd);
+  {
+    char RegCmd[MAX_PATH * 2];
+    char InstallDir[FILE_MAXDIR];
+    char SysDir[FILE_MAXDIR];
+    BLI_windows_get_executable_dir(InstallDir);
+    GetSystemDirectory(SysDir, FILE_MAXDIR);
+    const char *ThumbHandlerDLL = "BlendThumb.dll";
+    snprintf(
+        RegCmd, MAX_PATH * 2, "%s\\regsvr32 /s \"%s\\%s\"", SysDir, InstallDir, ThumbHandlerDLL);
+    system(RegCmd);
+  }
 #  endif
 
   RegCloseKey(root);
   printf("success (%s)\n", usr_mode ? "user" : "system");
   if (!background) {
-    sprintf(MBox,
-            "File extension registered for %s.",
-            usr_mode ? "the current user. To register for all users, run as an administrator" :
-                       "all users");
+    BLI_snprintf(MBox,
+                 sizeof(MBox),
+                 "File extension registered for %s.",
+                 usr_mode ?
+                     "the current user. To register for all users, run as an administrator" :
+                     "all users");
     MessageBox(0, MBox, "Blender", MB_OK | MB_ICONINFORMATION);
   }
   return true;

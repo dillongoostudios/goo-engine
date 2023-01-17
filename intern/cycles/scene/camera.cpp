@@ -84,6 +84,7 @@ NODE_DEFINE(Camera)
 
   static NodeEnum panorama_type_enum;
   panorama_type_enum.insert("equirectangular", PANORAMA_EQUIRECTANGULAR);
+  panorama_type_enum.insert("equiangular_cubemap_face", PANORAMA_EQUIANGULAR_CUBEMAP_FACE);
   panorama_type_enum.insert("mirrorball", PANORAMA_MIRRORBALL);
   panorama_type_enum.insert("fisheye_equidistant", PANORAMA_FISHEYE_EQUIDISTANT);
   panorama_type_enum.insert("fisheye_equisolid", PANORAMA_FISHEYE_EQUISOLID);
@@ -761,9 +762,7 @@ float Camera::world_to_raster_size(float3 P)
     }
 #else
     camera_sample_panorama(&kernel_camera,
-#  ifdef __CAMERA_MOTION__
                            kernel_camera_motion.data(),
-#  endif
                            0.5f * full_width,
                            0.5f * full_height,
                            0.0f,
@@ -772,10 +771,7 @@ float Camera::world_to_raster_size(float3 P)
 #endif
 
     /* TODO: would it help to use more accurate differentials here? */
-    differential3 dP;
-    differential_transfer_compact(&dP, ray.dP, ray.D, ray.dD, ray.D, dist);
-
-    return max(len(dP.dx), len(dP.dy));
+    return differential_transfer_compact(ray.dP, ray.D, ray.dD, dist);
   }
 
   return res;

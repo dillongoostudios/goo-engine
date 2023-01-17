@@ -18,6 +18,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_context.h"
+#include "BKE_layer.h"
 #include "BKE_linestyle.h"
 #include "BKE_node.h"
 #include "BKE_paint.h"
@@ -46,7 +47,8 @@ static void texture_get_from_context(const bContext *C,
   SpaceNode *snode = CTX_wm_space_node(C);
   Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  Object *ob = OBACT(view_layer);
+  BKE_view_layer_synced_ensure(scene, view_layer);
+  Object *ob = BKE_view_layer_active_object_get(view_layer);
   Tex *tx = NULL;
 
   if (snode->texfrom == SNODE_TEX_BRUSH) {
@@ -140,6 +142,7 @@ void register_node_tree_type_tex(void)
 
   tt->type = NTREE_TEXTURE;
   strcpy(tt->idname, "TextureNodeTree");
+  strcpy(tt->group_idname, "TextureNodeGroup");
   strcpy(tt->ui_name, N_("Texture Node Editor"));
   tt->ui_icon = ICON_NODE_TEXTURE; /* Defined in `drawnode.c`. */
   strcpy(tt->ui_description, N_("Texture nodes"));
@@ -248,7 +251,7 @@ bNodeTreeExec *ntreeTexBeginExecTree(bNodeTree *ntree)
 
   exec = ntreeTexBeginExecTree_internal(&context, ntree, NODE_INSTANCE_KEY_BASE);
 
-  /* XXX this should not be necessary, but is still used for cmp/sha/tex nodes,
+  /* XXX this should not be necessary, but is still used for compositor/shading/texture nodes,
    * which only store the ntree pointer. Should be fixed at some point!
    */
   ntree->execdata = exec;
@@ -305,7 +308,8 @@ void ntreeTexEndExecTree(bNodeTreeExec *exec)
     bNodeTree *ntree = exec->nodetree;
     ntreeTexEndExecTree_internal(exec);
 
-    /* XXX clear nodetree backpointer to exec data, same problem as noted in ntreeBeginExecTree */
+    /* XXX: clear node-tree back-pointer to exec data,
+     * same problem as noted in #ntreeBeginExecTree. */
     ntree->execdata = NULL;
   }
 }

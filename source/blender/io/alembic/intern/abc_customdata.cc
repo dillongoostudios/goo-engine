@@ -57,7 +57,7 @@ static void get_uvs(const CDStreamConfig &config,
   }
 
   const int num_poly = config.totpoly;
-  MPoly *polygons = config.mpoly;
+  MPoly *mpoly = config.mpoly;
   MLoop *mloop = config.mloop;
 
   if (!config.pack_uvs) {
@@ -67,7 +67,7 @@ static void get_uvs(const CDStreamConfig &config,
 
     /* Iterate in reverse order to match exported polygons. */
     for (int i = 0; i < num_poly; i++) {
-      MPoly &current_poly = polygons[i];
+      MPoly &current_poly = mpoly[i];
       const MLoopUV *loopuv = mloopuv_array + current_poly.loopstart + current_poly.totloop;
 
       for (int j = 0; j < current_poly.totloop; j++, count++) {
@@ -85,7 +85,7 @@ static void get_uvs(const CDStreamConfig &config,
     int idx_count = 0;
 
     for (int i = 0; i < num_poly; i++) {
-      MPoly &current_poly = polygons[i];
+      MPoly &current_poly = mpoly[i];
       MLoop *looppoly = mloop + current_poly.loopstart + current_poly.totloop;
       const MLoopUV *loopuv = mloopuv_array + current_poly.loopstart + current_poly.totloop;
 
@@ -322,14 +322,14 @@ static void read_uvs(const CDStreamConfig &config,
   MLoop *mloops = config.mloop;
   MLoopUV *mloopuvs = static_cast<MLoopUV *>(data);
 
-  unsigned int uv_index, loop_index, rev_loop_index;
+  uint uv_index, loop_index, rev_loop_index;
 
   BLI_assert(uv_scope != ABC_UV_SCOPE_NONE);
   const bool do_uvs_per_loop = (uv_scope == ABC_UV_SCOPE_LOOP);
 
   for (int i = 0; i < config.totpoly; i++) {
     MPoly &poly = mpolys[i];
-    unsigned int rev_loop_offset = poly.loopstart + poly.totloop - 1;
+    uint rev_loop_offset = poly.loopstart + poly.totloop - 1;
 
     for (int f = 0; f < poly.totloop; f++) {
       rev_loop_index = rev_loop_offset - f;
@@ -540,7 +540,7 @@ void read_generated_coordinates(const ICompoundProperty &prop,
     cd_data = CustomData_get_layer(&mesh->vdata, CD_ORCO);
   }
   else {
-    cd_data = CustomData_add_layer(&mesh->vdata, CD_ORCO, CD_CALLOC, nullptr, totvert);
+    cd_data = CustomData_add_layer(&mesh->vdata, CD_ORCO, CD_CONSTRUCT, nullptr, totvert);
   }
 
   float(*orcodata)[3] = static_cast<float(*)[3]>(cd_data);

@@ -19,11 +19,13 @@
 #include "BLI_math_vec_types.hh"
 #include "BLI_math_vector.h"
 #include "BLI_span.hh"
+#include "BLI_task.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
 #include "BKE_attribute.h"
+#include "BKE_attribute.hh"
 #include "BKE_bvhutils.h"
 #include "BKE_customdata.h"
 #include "BKE_editmesh.h"
@@ -61,14 +63,15 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
                                void (*update_cb)(void *, float progress, int *cancel),
                                void *update_cb_data)
 {
-  /* Ensure that the triangulated mesh data is up to data */
+  const Span<MVert> input_verts = input_mesh->verts();
+  const Span<MLoop> input_loops = input_mesh->loops();
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(input_mesh);
 
   /* Gather the required data for export to the internal quadriflow mesh format. */
   MVertTri *verttri = (MVertTri *)MEM_callocN(
       sizeof(*verttri) * BKE_mesh_runtime_looptri_len(input_mesh), "remesh_looptri");
   BKE_mesh_runtime_verttri_from_looptri(
-      verttri, input_mesh->mloop, looptri, BKE_mesh_runtime_looptri_len(input_mesh));
+      verttri, input_loops.data(), looptri, BKE_mesh_runtime_looptri_len(input_mesh));
 
   const int totfaces = BKE_mesh_runtime_looptri_len(input_mesh);
   const int totverts = input_mesh->totvert;
@@ -76,7 +79,7 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
   Array<int> faces(totfaces * 3);
 
   for (const int i : IndexRange(totverts)) {
-    verts[i] = input_mesh->mvert[i].co;
+    verts[i] = input_verts[i].co;
   }
 
   for (const int i : IndexRange(totfaces)) {
@@ -123,20 +126,24 @@ static Mesh *remesh_quadriflow(const Mesh *input_mesh,
 
   /* Construct the new output mesh */
   Mesh *mesh = BKE_mesh_new_nomain(qrd.out_totverts, 0, 0, qrd.out_totfaces * 4, qrd.out_totfaces);
+  BKE_mesh_copy_parameters(mesh, input_mesh);
+  MutableSpan<MVert> mesh_verts = mesh->verts_for_write();
+  MutableSpan<MPoly> polys = mesh->polys_for_write();
+  MutableSpan<MLoop> loops = mesh->loops_for_write();
 
   for (const int i : IndexRange(qrd.out_totverts)) {
-    copy_v3_v3(mesh->mvert[i].co, &qrd.out_verts[i * 3]);
+    copy_v3_v3(mesh_verts[i].co, &qrd.out_verts[i * 3]);
   }
 
   for (const int i : IndexRange(qrd.out_totfaces)) {
-    MPoly &poly = mesh->mpoly[i];
+    MPoly &poly = polys[i];
     const int loopstart = i * 4;
     poly.loopstart = loopstart;
     poly.totloop = 4;
-    mesh->mloop[loopstart].v = qrd.out_faces[loopstart];
-    mesh->mloop[loopstart + 1].v = qrd.out_faces[loopstart + 1];
-    mesh->mloop[loopstart + 2].v = qrd.out_faces[loopstart + 2];
-    mesh->mloop[loopstart + 3].v = qrd.out_faces[loopstart + 3];
+    loops[loopstart].v = qrd.out_faces[loopstart];
+    loops[loopstart + 1].v = qrd.out_faces[loopstart + 1];
+    loops[loopstart + 2].v = qrd.out_faces[loopstart + 2];
+    loops[loopstart + 3].v = qrd.out_faces[loopstart + 3];
   }
 
   BKE_mesh_calc_edges(mesh, false, false);
@@ -186,22 +193,22 @@ Mesh *BKE_mesh_remesh_quadriflow(const Mesh *mesh,
 static openvdb::FloatGrid::Ptr remesh_voxel_level_set_create(const Mesh *mesh,
                                                              const float voxel_size)
 {
-  Span<MLoop> mloop{mesh->mloop, mesh->totloop};
-  Span<MLoopTri> looptris{BKE_mesh_runtime_looptri_ensure(mesh),
-                          BKE_mesh_runtime_looptri_len(mesh)};
+  const Span<MVert> verts = mesh->verts();
+  const Span<MLoop> loops = mesh->loops();
+  const Span<MLoopTri> looptris = mesh->looptris();
 
   std::vector<openvdb::Vec3s> points(mesh->totvert);
   std::vector<openvdb::Vec3I> triangles(looptris.size());
 
   for (const int i : IndexRange(mesh->totvert)) {
-    const float3 co = mesh->mvert[i].co;
+    const float3 co = verts[i].co;
     points[i] = openvdb::Vec3s(co.x, co.y, co.z);
   }
 
   for (const int i : IndexRange(looptris.size())) {
     const MLoopTri &loop_tri = looptris[i];
     triangles[i] = openvdb::Vec3I(
-        mloop[loop_tri.tri[0]].v, mloop[loop_tri.tri[1]].v, mloop[loop_tri.tri[2]].v);
+        loops[loop_tri.tri[0]].v, loops[loop_tri.tri[1]].v, loops[loop_tri.tri[2]].v);
   }
 
   openvdb::math::Transform::Ptr transform = openvdb::math::Transform::createLinearTransform(
@@ -225,34 +232,34 @@ static Mesh *remesh_voxel_volume_to_mesh(const openvdb::FloatGrid::Ptr level_set
 
   Mesh *mesh = BKE_mesh_new_nomain(
       vertices.size(), 0, 0, quads.size() * 4 + tris.size() * 3, quads.size() + tris.size());
-  MutableSpan<MVert> mverts{mesh->mvert, mesh->totvert};
-  MutableSpan<MLoop> mloops{mesh->mloop, mesh->totloop};
-  MutableSpan<MPoly> mpolys{mesh->mpoly, mesh->totpoly};
+  MutableSpan<MVert> mesh_verts = mesh->verts_for_write();
+  MutableSpan<MPoly> mesh_polys = mesh->polys_for_write();
+  MutableSpan<MLoop> mesh_loops = mesh->loops_for_write();
 
-  for (const int i : mverts.index_range()) {
-    copy_v3_v3(mverts[i].co, float3(vertices[i].x(), vertices[i].y(), vertices[i].z()));
+  for (const int i : mesh_verts.index_range()) {
+    copy_v3_v3(mesh_verts[i].co, float3(vertices[i].x(), vertices[i].y(), vertices[i].z()));
   }
 
   for (const int i : IndexRange(quads.size())) {
-    MPoly &poly = mpolys[i];
+    MPoly &poly = mesh_polys[i];
     const int loopstart = i * 4;
     poly.loopstart = loopstart;
     poly.totloop = 4;
-    mloops[loopstart].v = quads[i][0];
-    mloops[loopstart + 1].v = quads[i][3];
-    mloops[loopstart + 2].v = quads[i][2];
-    mloops[loopstart + 3].v = quads[i][1];
+    mesh_loops[loopstart].v = quads[i][0];
+    mesh_loops[loopstart + 1].v = quads[i][3];
+    mesh_loops[loopstart + 2].v = quads[i][2];
+    mesh_loops[loopstart + 3].v = quads[i][1];
   }
 
   const int triangle_loop_start = quads.size() * 4;
   for (const int i : IndexRange(tris.size())) {
-    MPoly &poly = mpolys[quads.size() + i];
+    MPoly &poly = mesh_polys[quads.size() + i];
     const int loopstart = triangle_loop_start + i * 3;
     poly.loopstart = loopstart;
     poly.totloop = 3;
-    mloops[loopstart].v = tris[i][2];
-    mloops[loopstart + 1].v = tris[i][1];
-    mloops[loopstart + 2].v = tris[i][0];
+    mesh_loops[loopstart].v = tris[i][2];
+    mesh_loops[loopstart + 1].v = tris[i][1];
+    mesh_loops[loopstart + 2].v = tris[i][0];
   }
 
   BKE_mesh_calc_edges(mesh, false, false);
@@ -268,18 +275,24 @@ Mesh *BKE_mesh_remesh_voxel(const Mesh *mesh,
 {
 #ifdef WITH_OPENVDB
   openvdb::FloatGrid::Ptr level_set = remesh_voxel_level_set_create(mesh, voxel_size);
-  return remesh_voxel_volume_to_mesh(level_set, isovalue, adaptivity, false);
+  Mesh *result = remesh_voxel_volume_to_mesh(level_set, isovalue, adaptivity, false);
+  BKE_mesh_copy_parameters(result, mesh);
+  return result;
 #else
   UNUSED_VARS(mesh, voxel_size, adaptivity, isovalue);
   return nullptr;
 #endif
 }
 
-void BKE_mesh_remesh_reproject_paint_mask(Mesh *target, Mesh *source)
+void BKE_mesh_remesh_reproject_paint_mask(Mesh *target, const Mesh *source)
 {
   BVHTreeFromMesh bvhtree = {nullptr};
   BKE_bvhtree_from_mesh_get(&bvhtree, source, BVHTREE_FROM_VERTS, 2);
-  MVert *target_verts = (MVert *)CustomData_get_layer(&target->vdata, CD_MVERT);
+  const MVert *target_verts = (const MVert *)CustomData_get_layer(&target->vdata, CD_MVERT);
+  const float *source_mask = (const float *)CustomData_get_layer(&source->vdata, CD_PAINT_MASK);
+  if (source_mask == nullptr) {
+    return;
+  }
 
   float *target_mask;
   if (CustomData_has_layer(&target->vdata, CD_PAINT_MASK)) {
@@ -287,77 +300,74 @@ void BKE_mesh_remesh_reproject_paint_mask(Mesh *target, Mesh *source)
   }
   else {
     target_mask = (float *)CustomData_add_layer(
-        &target->vdata, CD_PAINT_MASK, CD_CALLOC, nullptr, target->totvert);
+        &target->vdata, CD_PAINT_MASK, CD_CONSTRUCT, nullptr, target->totvert);
   }
 
-  const float *source_mask;
-  if (CustomData_has_layer(&source->vdata, CD_PAINT_MASK)) {
-    source_mask = (float *)CustomData_get_layer(&source->vdata, CD_PAINT_MASK);
-  }
-  else {
-    source_mask = (float *)CustomData_add_layer(
-        &source->vdata, CD_PAINT_MASK, CD_CALLOC, nullptr, source->totvert);
-  }
-
-  for (int i = 0; i < target->totvert; i++) {
-    float from_co[3];
-    BVHTreeNearest nearest;
-    nearest.index = -1;
-    nearest.dist_sq = FLT_MAX;
-    copy_v3_v3(from_co, target_verts[i].co);
-    BLI_bvhtree_find_nearest(bvhtree.tree, from_co, &nearest, bvhtree.nearest_callback, &bvhtree);
-    if (nearest.index != -1) {
-      target_mask[i] = source_mask[nearest.index];
+  blender::threading::parallel_for(IndexRange(target->totvert), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      float from_co[3];
+      BVHTreeNearest nearest;
+      nearest.index = -1;
+      nearest.dist_sq = FLT_MAX;
+      copy_v3_v3(from_co, target_verts[i].co);
+      BLI_bvhtree_find_nearest(
+          bvhtree.tree, from_co, &nearest, bvhtree.nearest_callback, &bvhtree);
+      if (nearest.index != -1) {
+        target_mask[i] = source_mask[nearest.index];
+      }
     }
-  }
+  });
   free_bvhtree_from_mesh(&bvhtree);
 }
 
-void BKE_remesh_reproject_sculpt_face_sets(Mesh *target, Mesh *source)
+void BKE_remesh_reproject_sculpt_face_sets(Mesh *target, const Mesh *source)
 {
-  BVHTreeFromMesh bvhtree = {nullptr};
-
+  using namespace blender;
+  using namespace blender::bke;
+  const AttributeAccessor src_attributes = source->attributes();
+  MutableAttributeAccessor dst_attributes = target->attributes_for_write();
   const MPoly *target_polys = (const MPoly *)CustomData_get_layer(&target->pdata, CD_MPOLY);
   const MVert *target_verts = (const MVert *)CustomData_get_layer(&target->vdata, CD_MVERT);
   const MLoop *target_loops = (const MLoop *)CustomData_get_layer(&target->ldata, CD_MLOOP);
 
-  int *target_face_sets;
-  if (CustomData_has_layer(&target->pdata, CD_SCULPT_FACE_SETS)) {
-    target_face_sets = (int *)CustomData_get_layer(&target->pdata, CD_SCULPT_FACE_SETS);
+  const VArray<int> src_face_sets = src_attributes.lookup<int>(".sculpt_face_set",
+                                                               ATTR_DOMAIN_FACE);
+  if (!src_face_sets) {
+    return;
   }
-  else {
-    target_face_sets = (int *)CustomData_add_layer(
-        &target->pdata, CD_SCULPT_FACE_SETS, CD_CALLOC, nullptr, target->totpoly);
+  SpanAttributeWriter<int> dst_face_sets = dst_attributes.lookup_or_add_for_write_only_span<int>(
+      ".sculpt_face_set", ATTR_DOMAIN_FACE);
+  if (!dst_face_sets) {
+    return;
   }
 
-  const int *source_face_sets;
-  if (CustomData_has_layer(&source->pdata, CD_SCULPT_FACE_SETS)) {
-    source_face_sets = (const int *)CustomData_get_layer(&source->pdata, CD_SCULPT_FACE_SETS);
-  }
-  else {
-    source_face_sets = (const int *)CustomData_add_layer(
-        &source->pdata, CD_SCULPT_FACE_SETS, CD_CALLOC, nullptr, source->totpoly);
-  }
+  const VArraySpan<int> src(src_face_sets);
+  MutableSpan<int> dst = dst_face_sets.span;
 
   const MLoopTri *looptri = BKE_mesh_runtime_looptri_ensure(source);
+  BVHTreeFromMesh bvhtree = {nullptr};
   BKE_bvhtree_from_mesh_get(&bvhtree, source, BVHTREE_FROM_LOOPTRI, 2);
 
-  for (int i = 0; i < target->totpoly; i++) {
-    float from_co[3];
-    BVHTreeNearest nearest;
-    nearest.index = -1;
-    nearest.dist_sq = FLT_MAX;
-    const MPoly *mpoly = &target_polys[i];
-    BKE_mesh_calc_poly_center(mpoly, &target_loops[mpoly->loopstart], target_verts, from_co);
-    BLI_bvhtree_find_nearest(bvhtree.tree, from_co, &nearest, bvhtree.nearest_callback, &bvhtree);
-    if (nearest.index != -1) {
-      target_face_sets[i] = source_face_sets[looptri[nearest.index].poly];
+  blender::threading::parallel_for(IndexRange(target->totpoly), 2048, [&](const IndexRange range) {
+    for (const int i : range) {
+      float from_co[3];
+      BVHTreeNearest nearest;
+      nearest.index = -1;
+      nearest.dist_sq = FLT_MAX;
+      const MPoly *mpoly = &target_polys[i];
+      BKE_mesh_calc_poly_center(mpoly, &target_loops[mpoly->loopstart], target_verts, from_co);
+      BLI_bvhtree_find_nearest(
+          bvhtree.tree, from_co, &nearest, bvhtree.nearest_callback, &bvhtree);
+      if (nearest.index != -1) {
+        dst[i] = src[looptri[nearest.index].poly];
+      }
+      else {
+        dst[i] = 1;
+      }
     }
-    else {
-      target_face_sets[i] = 1;
-    }
-  }
+  });
   free_bvhtree_from_mesh(&bvhtree);
+  dst_face_sets.finish();
 }
 
 void BKE_remesh_reproject_vertex_paint(Mesh *target, const Mesh *source)
@@ -386,7 +396,7 @@ void BKE_remesh_reproject_vertex_paint(Mesh *target, const Mesh *source)
       int elem_num = domain == ATTR_DOMAIN_POINT ? target->totvert : target->totloop;
 
       CustomData_add_layer_named(
-          target_cdata, layer->type, CD_CALLOC, nullptr, elem_num, layer->name);
+          target_cdata, layer->type, CD_SET_DEFAULT, nullptr, elem_num, layer->name);
       layer_i = CustomData_get_named_layer_index(target_cdata, layer->type, layer->name);
     }
 
@@ -396,19 +406,22 @@ void BKE_remesh_reproject_vertex_paint(Mesh *target, const Mesh *source)
     MVert *target_verts = (MVert *)CustomData_get_layer(&target->vdata, CD_MVERT);
 
     if (domain == ATTR_DOMAIN_POINT) {
-      for (int i = 0; i < target->totvert; i++) {
-        BVHTreeNearest nearest;
-        nearest.index = -1;
-        nearest.dist_sq = FLT_MAX;
-        BLI_bvhtree_find_nearest(
-            bvhtree.tree, target_verts[i].co, &nearest, bvhtree.nearest_callback, &bvhtree);
+      blender::threading::parallel_for(
+          IndexRange(target->totvert), 4096, [&](const IndexRange range) {
+            for (const int i : range) {
+              BVHTreeNearest nearest;
+              nearest.index = -1;
+              nearest.dist_sq = FLT_MAX;
+              BLI_bvhtree_find_nearest(
+                  bvhtree.tree, target_verts[i].co, &nearest, bvhtree.nearest_callback, &bvhtree);
 
-        if (nearest.index != -1) {
-          memcpy(POINTER_OFFSET(target_data, (size_t)i * data_size),
-                 POINTER_OFFSET(source_data, (size_t)nearest.index * data_size),
-                 data_size);
-        }
-      }
+              if (nearest.index != -1) {
+                memcpy(POINTER_OFFSET(target_data, size_t(i) * data_size),
+                       POINTER_OFFSET(source_data, size_t(nearest.index) * data_size),
+                       data_size);
+              }
+            }
+          });
     }
     else {
       /* Lazily init vertex -> loop maps. */
@@ -435,46 +448,50 @@ void BKE_remesh_reproject_vertex_paint(Mesh *target, const Mesh *source)
                                       target->totloop);
       }
 
-      for (int i = 0; i < target->totvert; i++) {
-        BVHTreeNearest nearest;
-        nearest.index = -1;
-        nearest.dist_sq = FLT_MAX;
-        BLI_bvhtree_find_nearest(
-            bvhtree.tree, target_verts[i].co, &nearest, bvhtree.nearest_callback, &bvhtree);
+      blender::threading::parallel_for(
+          IndexRange(target->totvert), 2048, [&](const IndexRange range) {
+            for (const int i : range) {
+              BVHTreeNearest nearest;
+              nearest.index = -1;
+              nearest.dist_sq = FLT_MAX;
+              BLI_bvhtree_find_nearest(
+                  bvhtree.tree, target_verts[i].co, &nearest, bvhtree.nearest_callback, &bvhtree);
 
-        if (nearest.index == -1) {
-          continue;
-        }
+              if (nearest.index == -1) {
+                continue;
+              }
 
-        MeshElemMap *source_loops = source_lmap + nearest.index;
-        MeshElemMap *target_loops = target_lmap + i;
+              MeshElemMap *source_loops = source_lmap + nearest.index;
+              MeshElemMap *target_loops = target_lmap + i;
 
-        if (target_loops->count == 0 || source_loops->count == 0) {
-          continue;
-        }
+              if (target_loops->count == 0 || source_loops->count == 0) {
+                continue;
+              }
 
-        /*
-         * Average color data for loops around the source vertex into
-         * the first target loop around the target vertex
-         */
+              /*
+               * Average color data for loops around the source vertex into
+               * the first target loop around the target vertex
+               */
 
-        CustomData_interp(source_cdata,
-                          target_cdata,
-                          source_loops->indices,
-                          nullptr,
-                          nullptr,
-                          source_loops->count,
-                          target_loops->indices[0]);
+              CustomData_interp(source_cdata,
+                                target_cdata,
+                                source_loops->indices,
+                                nullptr,
+                                nullptr,
+                                source_loops->count,
+                                target_loops->indices[0]);
 
-        void *elem = POINTER_OFFSET(target_data, (size_t)target_loops->indices[0] * data_size);
+              void *elem = POINTER_OFFSET(target_data,
+                                          size_t(target_loops->indices[0]) * data_size);
 
-        /* Copy to rest of target loops. */
-        for (int j = 1; j < target_loops->count; j++) {
-          memcpy(POINTER_OFFSET(target_data, (size_t)target_loops->indices[j] * data_size),
-                 elem,
-                 data_size);
-        }
-      }
+              /* Copy to rest of target loops. */
+              for (int j = 1; j < target_loops->count; j++) {
+                memcpy(POINTER_OFFSET(target_data, size_t(target_loops->indices[j]) * data_size),
+                       elem,
+                       data_size);
+              }
+            }
+          });
     }
   }
 
@@ -583,7 +600,7 @@ struct Mesh *BKE_mesh_remesh_voxel_fix_poles(const Mesh *mesh)
         BMVert *vert = BM_edge_other_vert(ed, v);
         add_v3_v3(co, vert->co);
       }
-      mul_v3_fl(co, 1.0f / (float)BM_vert_edge_count(v));
+      mul_v3_fl(co, 1.0f / float(BM_vert_edge_count(v)));
       mid_v3_v3v3(v->co, v->co, co);
     }
   }

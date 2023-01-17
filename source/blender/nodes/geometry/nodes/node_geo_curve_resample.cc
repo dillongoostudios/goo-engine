@@ -26,12 +26,12 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Geometry>(N_("Curve"));
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "mode", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryCurveResample *data = MEM_cnew<NodeGeometryCurveResample>(__func__);
 
@@ -44,7 +44,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
   const NodeGeometryCurveResample &storage = node_storage(*node);
   const GeometryNodeCurveResampleMode mode = (GeometryNodeCurveResampleMode)storage.mode;
 
-  bNodeSocket *count_socket = ((bNodeSocket *)node->inputs.first)->next->next;
+  bNodeSocket *count_socket = static_cast<bNodeSocket *>(node->inputs.first)->next->next;
   bNodeSocket *length_socket = count_socket->next;
 
   nodeSetSocketAvailability(ntree, count_socket, mode == GEO_NODE_CURVE_RESAMPLE_COUNT);
@@ -66,12 +66,14 @@ static void node_geo_exec(GeoNodeExecParams params)
     case GEO_NODE_CURVE_RESAMPLE_COUNT: {
       Field<int> count = params.extract_input<Field<int>>("Count");
       geometry_set.modify_geometry_sets([&](GeometrySet &geometry) {
-        if (const CurveComponent *component = geometry.get_component_for_read<CurveComponent>()) {
-          if (const Curves *src_curves = component->get_for_read()) {
-            Curves *dst_curves = geometry::resample_to_count(*component, selection, count);
-            bke::curves_copy_parameters(*src_curves, *dst_curves);
-            geometry.replace_curves(dst_curves);
-          }
+        if (const Curves *src_curves_id = geometry.get_curves_for_read()) {
+          const bke::CurvesGeometry &src_curves = bke::CurvesGeometry::wrap(
+              src_curves_id->geometry);
+          bke::CurvesGeometry dst_curves = geometry::resample_to_count(
+              src_curves, selection, count);
+          Curves *dst_curves_id = bke::curves_new_nomain(std::move(dst_curves));
+          bke::curves_copy_parameters(*src_curves_id, *dst_curves_id);
+          geometry.replace_curves(dst_curves_id);
         }
       });
       break;
@@ -79,24 +81,27 @@ static void node_geo_exec(GeoNodeExecParams params)
     case GEO_NODE_CURVE_RESAMPLE_LENGTH: {
       Field<float> length = params.extract_input<Field<float>>("Length");
       geometry_set.modify_geometry_sets([&](GeometrySet &geometry) {
-        if (const CurveComponent *component = geometry.get_component_for_read<CurveComponent>()) {
-          if (const Curves *src_curves = component->get_for_read()) {
-            Curves *dst_curves = geometry::resample_to_length(*component, selection, length);
-            bke::curves_copy_parameters(*src_curves, *dst_curves);
-            geometry.replace_curves(dst_curves);
-          }
+        if (const Curves *src_curves_id = geometry.get_curves_for_read()) {
+          const bke::CurvesGeometry &src_curves = bke::CurvesGeometry::wrap(
+              src_curves_id->geometry);
+          bke::CurvesGeometry dst_curves = geometry::resample_to_length(
+              src_curves, selection, length);
+          Curves *dst_curves_id = bke::curves_new_nomain(std::move(dst_curves));
+          bke::curves_copy_parameters(*src_curves_id, *dst_curves_id);
+          geometry.replace_curves(dst_curves_id);
         }
       });
       break;
     }
     case GEO_NODE_CURVE_RESAMPLE_EVALUATED:
       geometry_set.modify_geometry_sets([&](GeometrySet &geometry) {
-        if (const CurveComponent *component = geometry.get_component_for_read<CurveComponent>()) {
-          if (const Curves *src_curves = component->get_for_read()) {
-            Curves *dst_curves = geometry::resample_to_evaluated(*component, selection);
-            bke::curves_copy_parameters(*src_curves, *dst_curves);
-            geometry.replace_curves(dst_curves);
-          }
+        if (const Curves *src_curves_id = geometry.get_curves_for_read()) {
+          const bke::CurvesGeometry &src_curves = bke::CurvesGeometry::wrap(
+              src_curves_id->geometry);
+          bke::CurvesGeometry dst_curves = geometry::resample_to_evaluated(src_curves, selection);
+          Curves *dst_curves_id = bke::curves_new_nomain(std::move(dst_curves));
+          bke::curves_copy_parameters(*src_curves_id, *dst_curves_id);
+          geometry.replace_curves(dst_curves_id);
         }
       });
       break;

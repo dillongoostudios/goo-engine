@@ -689,7 +689,6 @@ static void update_vector_math_node_normalize_operator(bNodeTree *ntree)
  * a value of -1 just to be identified later in the versioning code:
  *
  * Average Operator : 2 -> -1
- *
  */
 static void update_vector_math_node_operators_enum_mapping(bNodeTree *ntree)
 {
@@ -867,7 +866,6 @@ static void update_mapping_node_fcurve_rna_path_callback(ID *UNUSED(id),
  * and check if they control a property of the node, if they do, we update
  * the path to be that of the corresponding socket in the node or the added
  * minimum/maximum node.
- *
  */
 static void update_mapping_node_inputs_and_properties(bNodeTree *ntree)
 {
@@ -1057,7 +1055,6 @@ static void update_voronoi_node_fac_output(bNodeTree *ntree)
  *    the inputs of the subtract node.
  * 6. The output of the subtract node is connected to the
  *    appropriate sockets.
- *
  */
 static void update_voronoi_node_crackle(bNodeTree *ntree)
 {
@@ -1197,7 +1194,7 @@ static void update_voronoi_node_square_distance(bNodeTree *ntree)
       NodeTexVoronoi *tex = (NodeTexVoronoi *)node->storage;
       bNodeSocket *sockDistance = nodeFindSocket(node, SOCK_OUT, "Distance");
       if (tex->distance == SHD_VORONOI_EUCLIDEAN &&
-          (ELEM(tex->feature, SHD_VORONOI_F1, SHD_VORONOI_F2)) && socket_is_used(sockDistance)) {
+          ELEM(tex->feature, SHD_VORONOI_F1, SHD_VORONOI_F2) && socket_is_used(sockDistance)) {
         bNode *multiplyNode = nodeAddStaticNode(NULL, ntree, SH_NODE_MATH);
         multiplyNode->custom1 = NODE_MATH_MULTIPLY;
         multiplyNode->locx = node->locx + node->width + 20.0f;

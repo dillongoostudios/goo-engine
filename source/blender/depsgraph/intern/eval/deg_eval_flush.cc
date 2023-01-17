@@ -129,7 +129,18 @@ inline void flush_handle_component_node(IDNode *id_node,
    *
    * TODO(sergey): Make this a more generic solution. */
   if (!ELEM(comp_node->type, NodeType::PARTICLE_SETTINGS, NodeType::PARTICLE_SYSTEM)) {
+    const bool is_geometry_component = comp_node->type == NodeType::GEOMETRY;
     for (OperationNode *op : comp_node->operations) {
+      /* Special case for the visibility operation in the geometry component.
+       *
+       * This operation is a part of the geometry component so that manual tag for geometry recalc
+       * ensures that the visibility is re-evaluated. This operation is not to be re-evaluated when
+       * an update is flushed to the geometry component via a time dependency or a driver targeting
+       * a modifier. Skipping update in this case avoids CPU time unnecessarily spent looping over
+       * modifiers and looking up operations by name in the visibility evaluation function. */
+      if (is_geometry_component && op->opcode == OperationCode::VISIBILITY) {
+        continue;
+      }
       op->flag |= DEPSOP_FLAG_NEEDS_UPDATE;
     }
   }
@@ -224,7 +235,7 @@ void flush_editors_id_update(Depsgraph *graph, const DEGEditorUpdateContext *upd
                      EVAL,
                      "Accumulated recalc bits for %s: %u\n",
                      id_orig->name,
-                     (unsigned int)id_cow->recalc);
+                     uint(id_cow->recalc));
 
     /* Inform editors. Only if the data-block is being evaluated a second
      * time, to distinguish between user edits and initial evaluation when
@@ -273,7 +284,7 @@ void invalidate_tagged_evaluated_transform(ID *id)
   switch (id_type) {
     case ID_OB: {
       Object *object = (Object *)id;
-      copy_vn_fl((float *)object->obmat, 16, NAN);
+      copy_vn_fl((float *)object->object_to_world, 16, NAN);
       break;
     }
     default:

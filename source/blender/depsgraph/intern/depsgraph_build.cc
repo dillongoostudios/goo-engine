@@ -138,9 +138,14 @@ void DEG_add_node_tree_output_relation(DepsNodeHandle *node_handle,
 {
   deg::OperationKey ntree_output_key(
       &node_tree->id, deg::NodeType::NTREE_OUTPUT, deg::OperationCode::NTREE_OUTPUT);
+  deg::OperationKey ntree_preprocess_key(&node_tree->id,
+                                         deg::NodeType::NTREE_GEOMETRY_PREPROCESS,
+                                         deg::OperationCode::NTREE_GEOMETRY_PREPROCESS);
   deg::DepsNodeHandle *deg_node_handle = get_node_handle(node_handle);
   deg_node_handle->builder->add_node_handle_relation(
       ntree_output_key, deg_node_handle, description);
+  deg_node_handle->builder->add_node_handle_relation(
+      ntree_preprocess_key, deg_node_handle, description, deg::RELATION_FLAG_NO_FLUSH);
 }
 
 void DEG_add_object_cache_relation(DepsNodeHandle *node_handle,
@@ -199,11 +204,11 @@ void DEG_add_generic_id_relation(struct DepsNodeHandle *node_handle,
   deg_node_handle->builder->add_node_handle_relation(operation_key, deg_node_handle, description);
 }
 
-void DEG_add_modifier_to_transform_relation(struct DepsNodeHandle *node_handle,
-                                            const char *description)
+void DEG_add_depends_on_transform_relation(struct DepsNodeHandle *node_handle,
+                                           const char *description)
 {
   deg::DepsNodeHandle *deg_node_handle = get_node_handle(node_handle);
-  deg_node_handle->builder->add_modifier_to_transform_relation(deg_node_handle, description);
+  deg_node_handle->builder->add_depends_on_transform_relation(deg_node_handle, description);
 }
 
 void DEG_add_special_eval_flag(struct DepsNodeHandle *node_handle, ID *id, uint32_t flag)

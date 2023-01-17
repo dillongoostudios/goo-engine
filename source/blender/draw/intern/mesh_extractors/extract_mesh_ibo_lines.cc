@@ -18,8 +18,8 @@ namespace blender::draw {
  * \{ */
 
 static void extract_lines_init(const MeshRenderData *mr,
-                               MeshBatchCache *UNUSED(cache),
-                               void *UNUSED(buf),
+                               MeshBatchCache * /*cache*/,
+                               void * /*buf*/,
                                void *tls_data)
 {
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(tls_data);
@@ -28,9 +28,9 @@ static void extract_lines_init(const MeshRenderData *mr,
       elb, GPU_PRIM_LINES, mr->edge_len + mr->edge_loose_len, mr->loop_len + mr->loop_loose_len);
 }
 
-static void extract_lines_iter_poly_bm(const MeshRenderData *UNUSED(mr),
+static void extract_lines_iter_poly_bm(const MeshRenderData * /*mr*/,
                                        const BMFace *f,
-                                       const int UNUSED(f_index),
+                                       const int /*f_index*/,
                                        void *data)
 {
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(data);
@@ -52,22 +52,20 @@ static void extract_lines_iter_poly_bm(const MeshRenderData *UNUSED(mr),
 
 static void extract_lines_iter_poly_mesh(const MeshRenderData *mr,
                                          const MPoly *mp,
-                                         const int UNUSED(mp_index),
+                                         const int /*mp_index*/,
                                          void *data)
 {
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(data);
   /* Using poly & loop iterator would complicate accessing the adjacent loop. */
   const MLoop *mloop = mr->mloop;
-  const MEdge *medge = mr->medge;
-  if (mr->use_hide || (mr->extract_type == MR_EXTRACT_MAPPED) || (mr->e_origindex != nullptr)) {
+  const int *e_origindex = (mr->edit_bmesh) ? mr->e_origindex : nullptr;
+  if (mr->use_hide || (e_origindex != nullptr)) {
     const int ml_index_last = mp->loopstart + (mp->totloop - 1);
     int ml_index = ml_index_last, ml_index_next = mp->loopstart;
     do {
       const MLoop *ml = &mloop[ml_index];
-      const MEdge *med = &medge[ml->e];
-      if (!((mr->use_hide && (med->flag & ME_HIDE)) ||
-            ((mr->extract_type == MR_EXTRACT_MAPPED) && (mr->e_origindex) &&
-             (mr->e_origindex[ml->e] == ORIGINDEX_NONE)))) {
+      if (!((mr->use_hide && mr->hide_edge && mr->hide_edge[ml->e]) ||
+            ((e_origindex) && (e_origindex[ml->e] == ORIGINDEX_NONE)))) {
         GPU_indexbuf_set_line_verts(elb, ml->e, ml_index, ml_index_next);
       }
       else {
@@ -111,9 +109,9 @@ static void extract_lines_iter_ledge_mesh(const MeshRenderData *mr,
   GPUIndexBufBuilder *elb = static_cast<GPUIndexBufBuilder *>(data);
   const int l_index_offset = mr->edge_len + ledge_index;
   const int e_index = mr->ledges[ledge_index];
-  if (!((mr->use_hide && (med->flag & ME_HIDE)) ||
-        ((mr->extract_type == MR_EXTRACT_MAPPED) && (mr->e_origindex) &&
-         (mr->e_origindex[e_index] == ORIGINDEX_NONE)))) {
+  const int *e_origindex = (mr->edit_bmesh) ? mr->e_origindex : nullptr;
+  if (!((mr->use_hide && mr->hide_edge && mr->hide_edge[med - mr->medge]) ||
+        ((e_origindex) && (e_origindex[e_index] == ORIGINDEX_NONE)))) {
     const int l_index = mr->loop_len + ledge_index * 2;
     GPU_indexbuf_set_line_verts(elb, l_index_offset, l_index, l_index + 1);
   }
@@ -131,8 +129,8 @@ static void extract_lines_task_reduce(void *_userdata_to, void *_userdata_from)
   GPU_indexbuf_join(elb_to, elb_from);
 }
 
-static void extract_lines_finish(const MeshRenderData *UNUSED(mr),
-                                 MeshBatchCache *UNUSED(cache),
+static void extract_lines_finish(const MeshRenderData * /*mr*/,
+                                 MeshBatchCache * /*cache*/,
                                  void *buf,
                                  void *data)
 {
@@ -142,10 +140,10 @@ static void extract_lines_finish(const MeshRenderData *UNUSED(mr),
 }
 
 static void extract_lines_init_subdiv(const DRWSubdivCache *subdiv_cache,
-                                      const MeshRenderData *UNUSED(mr),
-                                      MeshBatchCache *UNUSED(cache),
+                                      const MeshRenderData * /*mr*/,
+                                      MeshBatchCache * /*cache*/,
                                       void *buffer,
-                                      void *UNUSED(data))
+                                      void * /*data*/)
 {
   const DRWSubdivLooseGeom &loose_geom = subdiv_cache->loose_geom;
   GPUIndexBuf *ibo = static_cast<GPUIndexBuf *>(buffer);
@@ -162,7 +160,7 @@ static void extract_lines_init_subdiv(const DRWSubdivCache *subdiv_cache,
 static void extract_lines_loose_geom_subdiv(const DRWSubdivCache *subdiv_cache,
                                             const MeshRenderData *mr,
                                             void *buffer,
-                                            void *UNUSED(data))
+                                            void * /*data*/)
 {
   const DRWSubdivLooseGeom &loose_geom = subdiv_cache->loose_geom;
   if (loose_geom.edge_len == 0) {
@@ -185,32 +183,44 @@ static void extract_lines_loose_geom_subdiv(const DRWSubdivCache *subdiv_cache,
 
   switch (mr->extract_type) {
     case MR_EXTRACT_MESH: {
-      const MEdge *medge = mr->medge;
-      for (DRWSubdivLooseEdge edge : loose_edges) {
-        *flags_data++ = (medge[edge.coarse_edge_index].flag & ME_HIDE) != 0;
-      }
-      break;
-    }
-    case MR_EXTRACT_MAPPED: {
-      if (mr->bm) {
-        for (DRWSubdivLooseEdge edge : loose_edges) {
-          const BMEdge *bm_edge = bm_original_edge_get(mr, edge.coarse_edge_index);
-          *flags_data++ = BM_elem_flag_test_bool(bm_edge, BM_ELEM_HIDDEN) != 0;
+      const int *e_origindex = (mr->edit_bmesh) ? mr->e_origindex : nullptr;
+      if (mr->e_origindex == nullptr) {
+        const bool *hide_edge = mr->hide_edge;
+        if (hide_edge) {
+          for (DRWSubdivLooseEdge edge : loose_edges) {
+            *flags_data++ = hide_edge[edge.coarse_edge_index];
+          }
+        }
+        else {
+          MutableSpan<uint>(flags_data, loose_edges.size()).fill(0);
         }
       }
       else {
-        for (DRWSubdivLooseEdge edge : loose_edges) {
-          int e = edge.coarse_edge_index;
+        if (mr->bm) {
+          for (DRWSubdivLooseEdge edge : loose_edges) {
+            const BMEdge *bm_edge = bm_original_edge_get(mr, edge.coarse_edge_index);
+            *flags_data++ = BM_elem_flag_test_bool(bm_edge, BM_ELEM_HIDDEN) != 0;
+          }
+        }
+        else {
+          const bool *hide_edge = mr->hide_edge;
+          if (hide_edge) {
+            for (DRWSubdivLooseEdge edge : loose_edges) {
+              int e = edge.coarse_edge_index;
 
-          if (mr->e_origindex && mr->e_origindex[e] != ORIGINDEX_NONE) {
-            *flags_data++ = (mr->medge[mr->e_origindex[e]].flag & ME_HIDE) != 0;
+              if (e_origindex && e_origindex[e] != ORIGINDEX_NONE) {
+                *flags_data++ = hide_edge[edge.coarse_edge_index];
+              }
+              else {
+                *flags_data++ = false;
+              }
+            }
           }
           else {
-            *flags_data++ = false;
+            MutableSpan<uint>(flags_data, loose_edges.size()).fill(0);
           }
         }
       }
-
       break;
     }
     case MR_EXTRACT_BMESH: {
@@ -224,8 +234,7 @@ static void extract_lines_loose_geom_subdiv(const DRWSubdivCache *subdiv_cache,
   }
 
   GPUIndexBuf *ibo = static_cast<GPUIndexBuf *>(buffer);
-  draw_subdiv_build_lines_loose_buffer(
-      subdiv_cache, ibo, flags, static_cast<uint>(loose_geom.edge_len));
+  draw_subdiv_build_lines_loose_buffer(subdiv_cache, ibo, flags, uint(loose_geom.edge_len));
 
   GPU_vertbuf_discard(flags);
 }
@@ -278,10 +287,10 @@ static void extract_lines_with_lines_loose_finish(const MeshRenderData *mr,
 }
 
 static void extract_lines_with_lines_loose_finish_subdiv(const struct DRWSubdivCache *subdiv_cache,
-                                                         const MeshRenderData *UNUSED(mr),
+                                                         const MeshRenderData * /*mr*/,
                                                          MeshBatchCache *cache,
-                                                         void *UNUSED(buf),
-                                                         void *UNUSED(_data))
+                                                         void * /*buf*/,
+                                                         void * /*_data*/)
 {
   /* Multiply by 2 because these are edges indices. */
   const int start = subdiv_cache->num_subdiv_loops * 2;
@@ -320,18 +329,18 @@ constexpr MeshExtract create_extractor_lines_with_lines_loose()
 static void extract_lines_loose_only_init(const MeshRenderData *mr,
                                           MeshBatchCache *cache,
                                           void *buf,
-                                          void *UNUSED(tls_data))
+                                          void * /*tls_data*/)
 {
   BLI_assert(buf == cache->final.buff.ibo.lines_loose);
   UNUSED_VARS_NDEBUG(buf);
   extract_lines_loose_subbuffer(mr, cache);
 }
 
-static void extract_lines_loose_only_init_subdiv(const DRWSubdivCache *UNUSED(subdiv_cache),
+static void extract_lines_loose_only_init_subdiv(const DRWSubdivCache * /*subdiv_cache*/,
                                                  const MeshRenderData *mr,
                                                  MeshBatchCache *cache,
                                                  void *buffer,
-                                                 void *UNUSED(data))
+                                                 void * /*data*/)
 {
   BLI_assert(buffer == cache->final.buff.ibo.lines_loose);
   UNUSED_VARS_NDEBUG(buffer);

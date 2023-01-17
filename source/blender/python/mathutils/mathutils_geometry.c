@@ -1472,7 +1472,7 @@ static PyObject *M_Geometry_convex_hull_2d(PyObject *UNUSED(self), PyObject *poi
     int *index_map;
     Py_ssize_t len_ret, i;
 
-    index_map = MEM_mallocN(sizeof(*index_map) * len * 2, __func__);
+    index_map = MEM_mallocN(sizeof(*index_map) * len, __func__);
 
     /* Non Python function */
     len_ret = BLI_convexhull_2d(points, len, index_map);
@@ -1797,7 +1797,7 @@ static struct PyModuleDef M_Geometry_module_def = {
     M_Geometry_doc,       /* m_doc */
     0,                    /* m_size */
     M_Geometry_methods,   /* m_methods */
-    NULL,                 /* m_reload */
+    NULL,                 /* m_slots */
     NULL,                 /* m_traverse */
     NULL,                 /* m_clear */
     NULL,                 /* m_free */

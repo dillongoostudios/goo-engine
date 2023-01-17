@@ -228,6 +228,7 @@ typedef enum {
   /** outside range (mainly for short), (can't avoid) */
   V3D_PROJ_RET_OVERFLOW = 6,
 } eV3DProjStatus;
+ENUM_OPERATORS(eV3DProjStatus, V3D_PROJ_RET_OVERFLOW);
 
 /* some clipping tests are optional */
 typedef enum {
@@ -350,7 +351,7 @@ void ED_view3d_cursor_snap_draw_util(struct RegionView3D *rv3d,
                                      const uchar color_point[4],
                                      eSnapMode snap_elem_type);
 
-/* view3d_iterators.c */
+/* view3d_iterators.cc */
 
 /* foreach iterators */
 
@@ -456,7 +457,9 @@ void ED_view3d_project_float_v3_m4(const struct ARegion *region,
                                    float r_co[3],
                                    const float mat[4][4]);
 
-eV3DProjStatus ED_view3d_project_base(const struct ARegion *region, struct Base *base);
+eV3DProjStatus ED_view3d_project_base(const struct ARegion *region,
+                                      struct Base *base,
+                                      float r_co[2]);
 
 /* *** short *** */
 eV3DProjStatus ED_view3d_project_short_ex(const struct ARegion *region,
@@ -711,7 +714,7 @@ bool ED_view3d_win_to_segment_clipped(const struct Depsgraph *depsgraph,
                                       float r_ray_start[3],
                                       float r_ray_end[3],
                                       bool do_clip_planes);
-void ED_view3d_ob_project_mat_get(const struct RegionView3D *v3d,
+void ED_view3d_ob_project_mat_get(const struct RegionView3D *rv3d,
                                   const struct Object *ob,
                                   float r_pmat[4][4]);
 void ED_view3d_ob_project_mat_get_from_obmat(const struct RegionView3D *rv3d,
@@ -950,7 +953,7 @@ int view3d_opengl_select_with_id_filter(struct ViewContext *vc,
                                         eV3DSelectObjectFilter select_filter,
                                         uint select_id);
 
-/* view3d_select.c */
+/* view3d_select.cc */
 
 float ED_view3d_select_dist_px(void);
 void ED_view3d_viewcontext_init(struct bContext *C,
@@ -1171,7 +1174,7 @@ void ED_view3d_camera_lock_init(const struct Depsgraph *depsgraph,
  *
  * Apply the 3D Viewport transformation back to the camera object.
  *
- * \return true if the camera is moved.
+ * \return true if the camera (or one of it's parents) was moved.
  */
 bool ED_view3d_camera_lock_sync(const struct Depsgraph *depsgraph,
                                 struct View3D *v3d,
@@ -1211,8 +1214,8 @@ bool ED_view3d_camera_lock_undo_test(const View3D *v3d,
  * \return true when the call to push an undo step was made.
  */
 bool ED_view3d_camera_lock_undo_push(const char *str,
-                                     View3D *v3d,
-                                     struct RegionView3D *rv3d,
+                                     const View3D *v3d,
+                                     const struct RegionView3D *rv3d,
                                      struct bContext *C);
 
 /**
@@ -1222,8 +1225,8 @@ bool ED_view3d_camera_lock_undo_push(const char *str,
  * where adding a separate undo step each time isn't desirable.
  */
 bool ED_view3d_camera_lock_undo_grouped_push(const char *str,
-                                             View3D *v3d,
-                                             struct RegionView3D *rv3d,
+                                             const View3D *v3d,
+                                             const struct RegionView3D *rv3d,
                                              struct bContext *C);
 
 #define VIEW3D_MARGIN 1.4f
@@ -1311,7 +1314,7 @@ void ED_view3d_draw_bgpic_test(const struct Scene *scene,
                                bool do_foreground,
                                bool do_camera_frame);
 
-/* view3d_gizmo_preselect_type.c */
+/* view3d_gizmo_preselect_type.cc */
 
 void ED_view3d_gizmo_mesh_preselect_get_active(struct bContext *C,
                                                struct wmGizmo *gz,
@@ -1319,7 +1322,7 @@ void ED_view3d_gizmo_mesh_preselect_get_active(struct bContext *C,
                                                struct BMElem **r_ele);
 void ED_view3d_gizmo_mesh_preselect_clear(struct wmGizmo *gz);
 
-/* space_view3d.c */
+/* space_view3d.cc */
 
 void ED_view3d_buttons_region_layout_ex(const struct bContext *C,
                                         struct ARegion *region,

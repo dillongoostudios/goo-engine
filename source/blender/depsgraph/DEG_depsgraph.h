@@ -125,13 +125,13 @@ void DEG_tag_on_visible_update(struct Main *bmain, bool do_time);
 const char *DEG_update_tag_as_string(IDRecalcFlag flag);
 
 /** Tag given ID for an update in all the dependency graphs. */
-void DEG_id_tag_update(struct ID *id, int flag);
-void DEG_id_tag_update_ex(struct Main *bmain, struct ID *id, int flag);
+void DEG_id_tag_update(struct ID *id, unsigned int flags);
+void DEG_id_tag_update_ex(struct Main *bmain, struct ID *id, unsigned int flags);
 
 void DEG_graph_id_tag_update(struct Main *bmain,
                              struct Depsgraph *depsgraph,
                              struct ID *id,
-                             int flag);
+                             unsigned int flags);
 
 /** Tag all dependency graphs when time has changed. */
 void DEG_time_tag_update(struct Main *bmain);
@@ -220,6 +220,14 @@ bool DEG_is_evaluating(const struct Depsgraph *depsgraph);
 bool DEG_is_active(const struct Depsgraph *depsgraph);
 void DEG_make_active(struct Depsgraph *depsgraph);
 void DEG_make_inactive(struct Depsgraph *depsgraph);
+
+/**
+ * Disable the visibility optimization making it so IDs which affect hidden objects or disabled
+ * modifiers are still evaluated.
+ *
+ * For example, this ensures that an object which is needed by a modifier is ignoring checks about
+ * whether the object is hidden or the modifier is disabled. */
+void DEG_disable_visibility_optimization(struct Depsgraph *depsgraph);
 
 /** \} */
 

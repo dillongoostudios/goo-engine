@@ -47,6 +47,7 @@ set(SRC
   intern/MOD_gpencilnoise.c
   intern/MOD_gpenciloffset.c
   intern/MOD_gpencilopacity.c
+  intern/MOD_gpenciloutline.c
   intern/MOD_gpencilshrinkwrap.c
   intern/MOD_gpencilsimplify.c
   intern/MOD_gpencilsmooth.c
@@ -93,8 +94,6 @@ endif()
 
 set(LIB
 )
-
-add_definitions(${GL_DEFINITIONS})
 
 blender_add_lib(bf_gpencil_modifiers "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

@@ -784,7 +784,7 @@ IDProperty *IDP_GetProperties(ID *id, const bool create_if_needed)
   if (create_if_needed) {
     id->properties = MEM_callocN(sizeof(IDProperty), "IDProperty");
     id->properties->type = IDP_GROUP;
-    /* NOTE(campbell): Don't overwrite the data's name and type
+    /* NOTE(@campbellbarton): Don't overwrite the data's name and type
      * some functions might need this if they
      * don't have a real ID, should be named elsewhere. */
     // strcpy(id->name, "top_level_group");
@@ -829,8 +829,8 @@ bool IDP_EqualsProperties_ex(IDProperty *prop1, IDProperty *prop2, const bool is
     case IDP_DOUBLE:
       return (IDP_Double(prop1) == IDP_Double(prop2));
     case IDP_STRING: {
-      return (((prop1->len == prop2->len) &&
-               STREQLEN(IDP_String(prop1), IDP_String(prop2), (size_t)prop1->len)));
+      return ((prop1->len == prop2->len) &&
+              STREQLEN(IDP_String(prop1), IDP_String(prop2), (size_t)prop1->len));
     }
     case IDP_ARRAY:
       if (prop1->len == prop2->len && prop1->subtype == prop2->subtype) {

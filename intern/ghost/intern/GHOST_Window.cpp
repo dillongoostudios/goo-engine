@@ -92,7 +92,12 @@ GHOST_TSuccess GHOST_Window::getSwapInterval(int &intervalOut)
   return m_context->getSwapInterval(intervalOut);
 }
 
-unsigned int GHOST_Window::getDefaultFramebuffer()
+GHOST_Context *GHOST_Window::getContext()
+{
+  return m_context;
+}
+
+uint GHOST_Window::getDefaultFramebuffer()
 {
   return (m_context) ? m_context->getDefaultFramebuffer() : 0;
 }
@@ -154,7 +159,7 @@ GHOST_TSuccess GHOST_Window::setCursorGrab(GHOST_TGrabCursorMode mode,
   return GHOST_kFailure;
 }
 
-GHOST_TSuccess GHOST_Window::getCursorGrabBounds(GHOST_Rect &bounds)
+GHOST_TSuccess GHOST_Window::getCursorGrabBounds(GHOST_Rect &bounds) const
 {
   if (m_cursorGrab != GHOST_kGrabWrap) {
     return GHOST_kFailure;

@@ -5,11 +5,14 @@ float safe_divide(float a, float b)
   return (b != 0.0) ? a / b : 0.0;
 }
 
-/* fmod function compatible with OSL using nvidia reference example. */
+/* fmod function compatible with OSL (copy from OSL/dual.h) */
 float compatible_fmod(float a, float b)
 {
-  float c = (b != 0.0) ? fract(abs(a / b)) * abs(b) : 0.0;
-  return (a < 0.0) ? -c : c;
+  if (b != 0.0f) {
+    int N = int(a / b);
+    return a - N * b;
+  }
+  return 0.0f;
 }
 
 float compatible_pow(float x, float y)
@@ -29,6 +32,17 @@ float compatible_pow(float x, float y)
   }
   else if (x == 0.0) {
     return 0.0;
+  }
+
+  return pow(x, y);
+}
+
+/* A version of pow that returns a fallback value if the computation is undefined. From the spec:
+ * The result is undefined if x < 0 or if x = 0 and y is less than or equal 0. */
+float fallback_pow(float x, float y, float fallback)
+{
+  if (x < 0.0 || (x == 0.0 && y <= 0.0)) {
+    return fallback;
   }
 
   return pow(x, y);
@@ -114,7 +128,23 @@ void vector_copy(vec3 normal, out vec3 outnormal)
   outnormal = normal;
 }
 
-/* Matirx Math */
+vec3 fallback_pow(vec3 a, float b, vec3 fallback)
+{
+  return vec3(fallback_pow(a.x, b, fallback.x),
+              fallback_pow(a.y, b, fallback.y),
+              fallback_pow(a.z, b, fallback.z));
+}
+
+/* Matrix Math */
+
+/* Return a 2D rotation matrix with the angle that the input 2D vector makes with the x axis. */
+mat2 vector_to_rotation_matrix(vec2 vector)
+{
+  vec2 normalized_vector = normalize(vector);
+  float cos_angle = normalized_vector.x;
+  float sin_angle = normalized_vector.y;
+  return mat2(cos_angle, sin_angle, -sin_angle, cos_angle);
+}
 
 mat3 euler_to_mat3(vec3 euler)
 {

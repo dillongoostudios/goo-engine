@@ -30,7 +30,7 @@ void main()
   vec3 world_pos = pos;
 #elif defined(POINTCLOUD_SHADER)
   pointcloud_get_pos_and_radius(pointPosition, pointRadius);
-  pointID = gl_VertexID;
+  pointID = pointcloud_get_point_id();
 #else
   vec3 world_pos = point_object_to_world(pos);
 #endif
@@ -142,13 +142,3 @@ vec2 attr_load_float(vec2 attr)
   return attr;
 }
 #endif
-
-/* Passthrough. */
-float attr_load_temperature_post(float attr)
-{
-  return attr;
-}
-vec4 attr_load_color_post(vec4 attr)
-{
-  return attr;
-}

@@ -75,14 +75,18 @@ void ED_view3d_project_float_v3_m4(const ARegion *region,
 /* Clipping Projection Functions
  * ***************************** */
 
-eV3DProjStatus ED_view3d_project_base(const struct ARegion *region, struct Base *base)
+eV3DProjStatus ED_view3d_project_base(const struct ARegion *region,
+                                      struct Base *base,
+                                      float r_co[2])
 {
-  eV3DProjStatus ret = ED_view3d_project_short_global(
-      region, base->object->obmat[3], &base->sx, V3D_PROJ_TEST_CLIP_DEFAULT);
+  eV3DProjStatus ret = ED_view3d_project_float_global(
+      region, base->object->object_to_world[3], r_co, V3D_PROJ_TEST_CLIP_DEFAULT);
 
+  /* Prevent uninitialized values when projection fails,
+   * although the callers should check the return value. */
   if (ret != V3D_PROJ_RET_OK) {
-    base->sx = IS_CLIPPED;
-    base->sy = 0;
+    r_co[0] = -1.0;
+    r_co[1] = -1.0;
   }
 
   return ret;
@@ -683,7 +687,7 @@ void ED_view3d_ob_project_mat_get(const RegionView3D *rv3d, const Object *ob, fl
 {
   float vmat[4][4];
 
-  mul_m4_m4m4(vmat, rv3d->viewmat, ob->obmat);
+  mul_m4_m4m4(vmat, rv3d->viewmat, ob->object_to_world);
   mul_m4_m4m4(r_pmat, rv3d->winmat, vmat);
 }
 

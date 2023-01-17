@@ -6,6 +6,8 @@
 
 #include "BPy_EqualToTimeStampUP1D.h"
 
+#include "BLI_sys_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,7 +43,7 @@ static int EqualToTimeStampUP1D___init__(BPy_EqualToTimeStampUP1D *self,
                                          PyObject *kwds)
 {
   static const char *kwlist[] = {"ts", nullptr};
-  unsigned u;
+  uint u;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "I", (char **)kwlist, &u)) {
     return -1;

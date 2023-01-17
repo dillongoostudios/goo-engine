@@ -55,6 +55,14 @@
 
 #define USE_TABLET_SUPPORT
 
+/**
+ * Use alternative behavior when cursor warp is supported
+ * to prevent the cursor escaping the window bounds, see: T102346.
+ *
+ * \note this is not needed if cursor positioning is not supported.
+ */
+#define USE_CURSOR_WARP_HACK
+
 /* -------------------------------------------------------------------- */
 /** \name Modal Key-map
  * \{ */
@@ -170,7 +178,7 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
 
   wmKeyMap *keymap = WM_modalkeymap_find(keyconf, "View3D Walk Modal");
 
-  /* this function is called for each spacetype, only needs to add map once */
+  /* This function is called for each space-type, only needs to add map once. */
   if (keymap && keymap->modal_items) {
     return;
   }
@@ -220,6 +228,10 @@ typedef struct WalkInfo {
   bool anim_playing;
   bool need_rotation_keyframe;
   bool need_translation_keyframe;
+
+#ifdef USE_CURSOR_WARP_HACK
+  bool need_modal_cursor_warp_hack;
+#endif
 
   /** Previous 2D mouse values. */
   int prev_mval[2];
@@ -335,7 +347,7 @@ static void drawWalkPixel(const struct bContext *UNUSED(C), ARegion *region, voi
   GPUVertFormat *format = immVertexFormat();
   uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_I32, 2, GPU_FETCH_INT_TO_FLOAT);
 
-  immBindBuiltinProgram(GPU_SHADER_2D_UNIFORM_COLOR);
+  immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
 
   immUniformThemeColorAlpha(TH_VIEW_OVERLAY, 1.0f);
 
@@ -579,6 +591,10 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const int 
   walk->need_rotation_keyframe = false;
   walk->need_translation_keyframe = false;
 
+#ifdef USE_CURSOR_WARP_HACK
+  walk->need_modal_cursor_warp_hack = false;
+#endif
+
   walk->time_lastdraw = PIL_check_seconds_timer();
 
   walk->draw_handle_pixel = ED_region_draw_cb_activate(
@@ -594,7 +610,31 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const int 
   copy_v2_v2_int(walk->init_mval, mval);
   copy_v2_v2_int(walk->prev_mval, mval);
 
-  WM_cursor_grab_enable(win, 0, true, NULL);
+#ifdef USE_CURSOR_WARP_HACK
+  if (WM_capabilities_flag() & WM_CAPABILITY_CURSOR_WARP) {
+    int bounds[4];
+    const rcti *rect = &walk->region->winrct;
+    const int center[2] = {BLI_rcti_cent_x(rect), BLI_rcti_cent_y(rect)};
+    const int size[2] = {BLI_rcti_size_x(rect), BLI_rcti_size_y(rect)};
+    const int div = 4; /* Where 2 is the region size. */
+
+    bounds[0] = center[0] - (size[0] / div); /* X-min. */
+    bounds[1] = center[1] + (size[1] / div); /* Y-max. */
+    bounds[2] = center[0] + (size[0] / div); /* X-max. */
+    bounds[3] = center[1] - (size[1] / div); /* Y-min. */
+
+    WM_cursor_grab_enable(win, WM_CURSOR_WRAP_XY, false, bounds);
+
+    /* Important to hide afterwards (not part of grabbing),
+     * since enabling cursor and hiding at the same time ignores bounds. */
+    WM_cursor_modal_set(win, WM_CURSOR_NONE);
+    walk->need_modal_cursor_warp_hack = true;
+  }
+  else
+#endif /* USE_CURSOR_WARP_HACK */
+  {
+    WM_cursor_grab_enable(win, 0, true, NULL);
+  }
 
   return 1;
 }
@@ -643,7 +683,16 @@ static int walkEnd(bContext *C, WalkInfo *walk)
   }
 #endif
 
-  WM_cursor_grab_enable(win, 0, true, NULL);
+  WM_cursor_grab_disable(win, NULL);
+
+#ifdef USE_CURSOR_WARP_HACK
+  if (walk->need_modal_cursor_warp_hack) {
+    WM_cursor_warp(win,
+                   walk->region->winrct.xmin + walk->init_mval[0],
+                   walk->region->winrct.ymin + walk->init_mval[1]);
+    WM_cursor_modal_restore(win);
+  }
+#endif
 
   if (walk->state == WALK_CONFIRM) {
     MEM_freeN(walk);
@@ -1231,11 +1280,11 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
         /* keep moving if we were moving */
         copy_v2_v2(dvec, walk->teleport.direction);
 
-        z_cur = walk->rv3d->viewinv[3][2];
-        z_new = walk->teleport.origin[2] - getFreeFallDistance(walk->gravity, t) * walk->grid;
+        z_cur = walk->rv3d->viewinv[3][2] / walk->grid;
+        z_new = (walk->teleport.origin[2] / walk->grid) - getFreeFallDistance(walk->gravity, t);
 
         /* jump */
-        z_new += t * walk->speed_jump * walk->grid;
+        z_new += t * walk->speed_jump;
 
         /* duration is the jump duration */
         if (t > walk->teleport.duration) {

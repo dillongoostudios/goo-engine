@@ -16,6 +16,7 @@
 
 #include "GPU_capabilities.h"
 
+using namespace blender::gpu::shader;
 namespace blender::gpu {
 
 /* -------------------------------------------------------------------- */
@@ -151,8 +152,57 @@ static inline int ssbo_binding(int32_t program, uint32_t ssbo_index)
 /** \name Creation / Destruction
  * \{ */
 
+static Type gpu_type_from_gl_type(int gl_type)
+{
+  switch (gl_type) {
+    case GL_FLOAT:
+      return Type::FLOAT;
+    case GL_FLOAT_VEC2:
+      return Type::VEC2;
+    case GL_FLOAT_VEC3:
+      return Type::VEC3;
+    case GL_FLOAT_VEC4:
+      return Type::VEC4;
+    case GL_FLOAT_MAT3:
+      return Type::MAT3;
+    case GL_FLOAT_MAT4:
+      return Type::MAT4;
+    case GL_UNSIGNED_INT:
+      return Type::UINT;
+    case GL_UNSIGNED_INT_VEC2:
+      return Type::UVEC2;
+    case GL_UNSIGNED_INT_VEC3:
+      return Type::UVEC3;
+    case GL_UNSIGNED_INT_VEC4:
+      return Type::UVEC4;
+    case GL_INT:
+      return Type::INT;
+    case GL_INT_VEC2:
+      return Type::IVEC2;
+    case GL_INT_VEC3:
+      return Type::IVEC3;
+    case GL_INT_VEC4:
+      return Type::IVEC4;
+    case GL_BOOL:
+      return Type::BOOL;
+    case GL_FLOAT_MAT2:
+    case GL_FLOAT_MAT2x3:
+    case GL_FLOAT_MAT2x4:
+    case GL_FLOAT_MAT3x2:
+    case GL_FLOAT_MAT3x4:
+    case GL_FLOAT_MAT4x2:
+    case GL_FLOAT_MAT4x3:
+    default:
+      BLI_assert(0);
+  }
+  return Type::FLOAT;
+}
+
 GLShaderInterface::GLShaderInterface(GLuint program)
 {
+  GLuint last_program;
+  glGetIntegerv(GL_CURRENT_PROGRAM, (GLint *)&last_program);
+
   /* Necessary to make #glUniform works. */
   glUseProgram(program);
 
@@ -246,6 +296,9 @@ GLShaderInterface::GLShaderInterface(GLuint program)
 
     name_buffer_offset += set_input_name(input, name, name_len);
     enabled_attr_mask_ |= (1 << input->location);
+
+    /* Used in `GPU_shader_get_attribute_info`. */
+    attr_types_[input->location] = uint8_t(gpu_type_from_gl_type(type));
   }
 
   /* Uniform Blocks */
@@ -318,6 +371,13 @@ GLShaderInterface::GLShaderInterface(GLuint program)
     builtin_blocks_[u] = (block != nullptr) ? block->binding : -1;
   }
 
+  /* Builtin Storage Buffers */
+  for (int32_t u_int = 0; u_int < GPU_NUM_STORAGE_BUFFERS; u_int++) {
+    GPUStorageBufferBuiltin u = static_cast<GPUStorageBufferBuiltin>(u_int);
+    const ShaderInput *block = this->ssbo_get(builtin_storage_block_name(u));
+    builtin_buffers_[u] = (block != nullptr) ? block->binding : -1;
+  }
+
   MEM_freeN(uniforms_from_blocks);
 
   /* Resize name buffer to save some memory. */
@@ -328,6 +388,8 @@ GLShaderInterface::GLShaderInterface(GLuint program)
   // this->debug_print();
 
   this->sort_inputs();
+
+  glUseProgram(last_program);
 }
 
 GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateInfo &info)
@@ -385,6 +447,9 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
   uint32_t name_buffer_offset = 0;
 
   /* Necessary to make #glUniform works. TODO(fclem) Remove. */
+  GLuint last_program;
+  glGetIntegerv(GL_CURRENT_PROGRAM, (GLint *)&last_program);
+
   glUseProgram(program);
 
   /* Attributes */
@@ -398,7 +463,11 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
     }
     if (input->location != -1) {
       enabled_attr_mask_ |= (1 << input->location);
+
+      /* Used in `GPU_shader_get_attribute_info`. */
+      attr_types_[input->location] = uint8_t(attr.type);
     }
+
     input++;
   }
 
@@ -481,9 +550,18 @@ GLShaderInterface::GLShaderInterface(GLuint program, const shader::ShaderCreateI
     builtin_blocks_[u] = (block != nullptr) ? block->binding : -1;
   }
 
+  /* Builtin Storage Buffers */
+  for (int32_t u_int = 0; u_int < GPU_NUM_STORAGE_BUFFERS; u_int++) {
+    GPUStorageBufferBuiltin u = static_cast<GPUStorageBufferBuiltin>(u_int);
+    const ShaderInput *block = this->ssbo_get(builtin_storage_block_name(u));
+    builtin_buffers_[u] = (block != nullptr) ? block->binding : -1;
+  }
+
   this->sort_inputs();
 
   // this->debug_print();
+
+  glUseProgram(last_program);
 }
 
 GLShaderInterface::~GLShaderInterface()

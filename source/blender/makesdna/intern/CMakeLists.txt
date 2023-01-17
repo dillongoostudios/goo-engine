@@ -3,15 +3,28 @@
 
 # message(STATUS "Configuring makesdna")
 
-add_definitions(-DWITH_DNA_GHASH)
-
-blender_include_dirs(
-  ../../../../intern/atomic
-  ../../../../intern/guardedalloc
+set(INC
+  ..
   ../../blenlib
   ../../imbuf
-  ..
+  ../../../../intern/atomic
+  ../../../../intern/guardedalloc
+  ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+set(INC_SYS
+
+)
+
+set(LIB
+)
+
+add_definitions(-DWITH_DNA_GHASH)
+
+# Needed for `mallocn.c`.
+if(HAVE_MALLOC_STATS_H)
+  add_definitions(-DHAVE_MALLOC_STATS_H)
+endif()
 
 set(dna_header_include_file "${CMAKE_CURRENT_BINARY_DIR}/dna_includes_all.h")
 set(dna_header_string_file "${CMAKE_CURRENT_BINARY_DIR}/dna_includes_as_strings.h")
@@ -52,6 +65,8 @@ add_cc_flags_custom_test(makesdna)
 
 add_executable(makesdna ${SRC} ${SRC_DNA_INC})
 setup_platform_linker_flags(makesdna)
+blender_target_include_dirs(makesdna ${INC})
+blender_target_include_dirs_sys(makesdna ${INC_SYS})
 
 if(WIN32 AND NOT UNIX)
   target_link_libraries(makesdna ${PTHREADS_LIBRARIES})
@@ -75,14 +90,6 @@ add_custom_command(
 
 # -----------------------------------------------------------------------------
 # Build bf_dna library
-set(INC
-  ${CMAKE_CURRENT_BINARY_DIR}
-)
-
-set(INC_SYS
-
-)
-
 set(SRC
   dna_defaults.c
   dna_genfile.c
@@ -94,9 +101,6 @@ set(SRC
   ${CMAKE_CURRENT_BINARY_DIR}/dna_type_offsets.h
   dna_rename_defs.h
   dna_utils.h
-)
-
-set(LIB
 )
 
 set_source_files_properties(
@@ -112,7 +116,10 @@ blender_add_lib(bf_dna "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 # -----------------------------------------------------------------------------
 # Build bf_dna_blenlib library
 set(INC
-
+  ..
+  ../../blenlib
+  ../../../../intern/atomic
+  ../../../../intern/guardedalloc
 )
 
 set(INC_SYS

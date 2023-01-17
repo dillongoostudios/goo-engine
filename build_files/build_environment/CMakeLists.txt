@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-####################################################################################################
+##################################################################################################
 #
 # This is a build system used by platform maintainers to build library dependencies on
 # Windows, macOS and Linux.
@@ -22,7 +22,7 @@
 #   Install compiler cmake autoconf automake libtool yasm tcl
 #   Run "make deps" from main Blender directory
 #
-####################################################################################################
+##################################################################################################
 
 project("BlenderDependencies")
 cmake_minimum_required(VERSION 3.5)
@@ -30,7 +30,8 @@ cmake_minimum_required(VERSION 3.5)
 include(ExternalProject)
 include(cmake/check_software.cmake)
 include(cmake/options.cmake)
-# versions.cmake needs to be included after options.cmake due to the BLENDER_PLATFORM_ARM variable being needed.
+# `versions.cmake` needs to be included after `options.cmake`
+# due to the `BLENDER_PLATFORM_ARM` variable being needed.
 include(cmake/versions.cmake)
 include(cmake/boost_build_options.cmake)
 include(cmake/download.cmake)
@@ -53,8 +54,8 @@ include(cmake/imath.cmake)
 include(cmake/openexr.cmake)
 include(cmake/brotli.cmake)
 include(cmake/freetype.cmake)
+include(cmake/epoxy.cmake)
 include(cmake/freeglut.cmake)
-include(cmake/glew.cmake)
 include(cmake/alembic.cmake)
 include(cmake/opensubdiv.cmake)
 include(cmake/sdl.cmake)
@@ -88,12 +89,13 @@ include(cmake/package_python.cmake)
 include(cmake/usd.cmake)
 include(cmake/potrace.cmake)
 include(cmake/haru.cmake)
-# Boost needs to be included after python.cmake due to the PYTHON_BINARY variable being needed.
+# Boost needs to be included after `python.cmake` due to the PYTHON_BINARY variable being needed.
 include(cmake/boost.cmake)
 include(cmake/pugixml.cmake)
 include(cmake/ispc.cmake)
 include(cmake/openimagedenoise.cmake)
 include(cmake/embree.cmake)
+include(cmake/openpgl.cmake)
 include(cmake/fmt.cmake)
 include(cmake/robinmap.cmake)
 include(cmake/xml2.cmake)
@@ -170,6 +172,9 @@ if(UNIX AND NOT APPLE)
   include(cmake/libglu.cmake)
   include(cmake/mesa.cmake)
   include(cmake/wayland_protocols.cmake)
+  # Can be removed when the build-bot upgrades to v1.20.x or newer.
+  include(cmake/wayland.cmake)
+  include(cmake/wayland_libdecor.cmake)
 endif()
 
 include(cmake/harvest.cmake)

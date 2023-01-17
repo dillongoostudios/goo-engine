@@ -103,14 +103,14 @@
 static CLG_LogRef LOG = {"bke.pointcache"};
 
 static int ptcache_data_size[] = {
-    sizeof(unsigned int), /* BPHYS_DATA_INDEX */
-    sizeof(float[3]),     /* BPHYS_DATA_LOCATION */
-    sizeof(float[3]),     /* BPHYS_DATA_VELOCITY */
-    sizeof(float[4]),     /* BPHYS_DATA_ROTATION */
-    sizeof(float[3]),     /* BPHYS_DATA_AVELOCITY / BPHYS_DATA_XCONST */
-    sizeof(float),        /* BPHYS_DATA_SIZE */
-    sizeof(float[3]),     /* BPHYS_DATA_TIMES */
-    sizeof(BoidData),     /* case BPHYS_DATA_BOIDS */
+    sizeof(uint),     /* BPHYS_DATA_INDEX */
+    sizeof(float[3]), /* BPHYS_DATA_LOCATION */
+    sizeof(float[3]), /* BPHYS_DATA_VELOCITY */
+    sizeof(float[4]), /* BPHYS_DATA_ROTATION */
+    sizeof(float[3]), /* BPHYS_DATA_AVELOCITY / BPHYS_DATA_XCONST */
+    sizeof(float),    /* BPHYS_DATA_SIZE */
+    sizeof(float[3]), /* BPHYS_DATA_TIMES */
+    sizeof(BoidData), /* case BPHYS_DATA_BOIDS */
 };
 
 static int ptcache_extra_datasize[] = {
@@ -120,11 +120,11 @@ static int ptcache_extra_datasize[] = {
 };
 
 /* forward declarations */
-static int ptcache_file_compressed_read(PTCacheFile *pf, unsigned char *result, unsigned int len);
+static int ptcache_file_compressed_read(PTCacheFile *pf, uchar *result, uint len);
 static int ptcache_file_compressed_write(
-    PTCacheFile *pf, unsigned char *in, unsigned int in_len, unsigned char *out, int mode);
-static int ptcache_file_write(PTCacheFile *pf, const void *f, unsigned int tot, unsigned int size);
-static int ptcache_file_read(PTCacheFile *pf, void *f, unsigned int tot, unsigned int size);
+    PTCacheFile *pf, uchar *in, uint in_len, uchar *out, int mode);
+static int ptcache_file_write(PTCacheFile *pf, const void *f, uint tot, uint size);
+static int ptcache_file_read(PTCacheFile *pf, void *f, uint tot, uint size);
 
 /* Common functions */
 static int ptcache_basic_header_read(PTCacheFile *pf)
@@ -132,11 +132,11 @@ static int ptcache_basic_header_read(PTCacheFile *pf)
   int error = 0;
 
   /* Custom functions should read these basic elements too! */
-  if (!error && !fread(&pf->totpoint, sizeof(unsigned int), 1, pf->fp)) {
+  if (!error && !fread(&pf->totpoint, sizeof(uint), 1, pf->fp)) {
     error = 1;
   }
 
-  if (!error && !fread(&pf->data_types, sizeof(unsigned int), 1, pf->fp)) {
+  if (!error && !fread(&pf->data_types, sizeof(uint), 1, pf->fp)) {
     error = 1;
   }
 
@@ -145,20 +145,17 @@ static int ptcache_basic_header_read(PTCacheFile *pf)
 static int ptcache_basic_header_write(PTCacheFile *pf)
 {
   /* Custom functions should write these basic elements too! */
-  if (!fwrite(&pf->totpoint, sizeof(unsigned int), 1, pf->fp)) {
+  if (!fwrite(&pf->totpoint, sizeof(uint), 1, pf->fp)) {
     return 0;
   }
 
-  if (!fwrite(&pf->data_types, sizeof(unsigned int), 1, pf->fp)) {
+  if (!fwrite(&pf->data_types, sizeof(uint), 1, pf->fp)) {
     return 0;
   }
 
   return 1;
 }
-static void ptcache_add_extra_data(PTCacheMem *pm,
-                                   unsigned int type,
-                                   unsigned int count,
-                                   void *data)
+static void ptcache_add_extra_data(PTCacheMem *pm, uint type, uint count, void *data)
 {
   PTCacheExtra *extra = MEM_callocN(sizeof(PTCacheExtra), "Point cache: extra data descriptor");
 
@@ -683,8 +680,8 @@ static int ptcache_dynamicpaint_write(PTCacheFile *pf, void *dp_v)
 
   if (surface->format != MOD_DPAINT_SURFACE_F_IMAGESEQ && surface->data) {
     int total_points = surface->data->total_points;
-    unsigned int in_len;
-    unsigned char *out;
+    uint in_len;
+    uchar *out;
 
     /* cache type */
     ptcache_file_write(pf, &surface->type, 1, sizeof(int));
@@ -702,10 +699,10 @@ static int ptcache_dynamicpaint_write(PTCacheFile *pf, void *dp_v)
       return 0;
     }
 
-    out = (unsigned char *)MEM_callocN(LZO_OUT_LEN(in_len), "pointcache_lzo_buffer");
+    out = (uchar *)MEM_callocN(LZO_OUT_LEN(in_len), "pointcache_lzo_buffer");
 
     ptcache_file_compressed_write(
-        pf, (unsigned char *)surface->data->type_data, in_len, out, cache_compress);
+        pf, (uchar *)surface->data->type_data, in_len, out, cache_compress);
     MEM_freeN(out);
   }
   return 1;
@@ -723,7 +720,7 @@ static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
   }
 
   if (surface->format != MOD_DPAINT_SURFACE_F_IMAGESEQ && surface->data) {
-    unsigned int data_len;
+    uint data_len;
     int surface_type;
 
     /* cache type */
@@ -748,7 +745,7 @@ static int ptcache_dynamicpaint_read(PTCacheFile *pf, void *dp_v)
     }
 
     ptcache_file_compressed_read(
-        pf, (unsigned char *)surface->data->type_data, data_len * surface->data->total_points);
+        pf, (uchar *)surface->data->type_data, data_len * surface->data->total_points);
   }
   return 1;
 }
@@ -1304,7 +1301,7 @@ static int ptcache_frame_from_filename(const char *filename, const char *ext)
 #define MAX_PTCACHE_PATH FILE_MAX
 #define MAX_PTCACHE_FILE (FILE_MAX * 2)
 
-static int ptcache_path(PTCacheID *pid, char *filename)
+static int ptcache_path(PTCacheID *pid, char *dirname)
 {
   const char *blendfile_path = BKE_main_blendfile_path_from_global();
   Library *lib = (pid->owner_id) ? pid->owner_id->lib : NULL;
@@ -1314,13 +1311,13 @@ static int ptcache_path(PTCacheID *pid, char *filename)
   size_t i;
 
   if (pid->cache->flag & PTCACHE_EXTERNAL) {
-    strcpy(filename, pid->cache->path);
+    strcpy(dirname, pid->cache->path);
 
-    if (BLI_path_is_rel(filename)) {
-      BLI_path_abs(filename, blendfilename);
+    if (BLI_path_is_rel(dirname)) {
+      BLI_path_abs(dirname, blendfilename);
     }
 
-    return BLI_path_slash_ensure(filename); /* new strlen() */
+    return BLI_path_slash_ensure(dirname, MAX_PTCACHE_FILE); /* new strlen() */
   }
   if ((blendfile_path[0] != '\0') || lib) {
     char file[MAX_PTCACHE_PATH]; /* we don't want the dir, only the file */
@@ -1334,28 +1331,28 @@ static int ptcache_path(PTCacheID *pid, char *filename)
     }
 
     /* Add blend file name to pointcache dir. */
-    BLI_snprintf(filename, MAX_PTCACHE_PATH, "//" PTCACHE_PATH "%s", file);
+    BLI_snprintf(dirname, MAX_PTCACHE_PATH, "//" PTCACHE_PATH "%s", file);
 
-    BLI_path_abs(filename, blendfilename);
-    return BLI_path_slash_ensure(filename); /* new strlen() */
+    BLI_path_abs(dirname, blendfilename);
+    return BLI_path_slash_ensure(dirname, MAX_PTCACHE_FILE); /* new strlen() */
   }
 
   /* use the temp path. this is weak but better than not using point cache at all */
   /* temporary directory is assumed to exist and ALWAYS has a trailing slash */
-  BLI_snprintf(filename, MAX_PTCACHE_PATH, "%s" PTCACHE_PATH, BKE_tempdir_session());
+  BLI_snprintf(dirname, MAX_PTCACHE_PATH, "%s" PTCACHE_PATH, BKE_tempdir_session());
 
-  return BLI_path_slash_ensure(filename); /* new strlen() */
+  return BLI_path_slash_ensure(dirname, MAX_PTCACHE_FILE); /* new strlen() */
 }
 
-static size_t ptcache_filename_ext_append(PTCacheID *pid,
-                                          char *filename,
-                                          const size_t filename_len,
+static size_t ptcache_filepath_ext_append(PTCacheID *pid,
+                                          char *filepath,
+                                          const size_t filepath_len,
                                           const bool use_frame_number,
                                           const int cfra)
 {
-  size_t len = filename_len;
+  size_t len = filepath_len;
   char *filename_ext;
-  filename_ext = filename + filename_len;
+  filename_ext = filepath + filepath_len;
   *filename_ext = '\0';
 
   /* PointCaches are inserted in object's list on demand, we need a valid index now. */
@@ -1399,14 +1396,14 @@ static size_t ptcache_filename_ext_append(PTCacheID *pid,
   return len;
 }
 
-static int ptcache_filename(
-    PTCacheID *pid, char *filename, int cfra, const bool do_path, const bool do_ext)
+static int ptcache_filepath(
+    PTCacheID *pid, char *filepath, int cfra, const bool do_path, const bool do_ext)
 {
   int len = 0;
   char *idname;
   char *newname;
-  filename[0] = '\0';
-  newname = filename;
+  filepath[0] = '\0';
+  newname = filepath;
 
   if ((pid->cache->flag & PTCACHE_EXTERNAL) == 0) {
     const char *blendfile_path = BKE_main_blendfile_path_from_global();
@@ -1417,14 +1414,14 @@ static int ptcache_filename(
 
   /* start with temp dir */
   if (do_path) {
-    len = ptcache_path(pid, filename);
+    len = ptcache_path(pid, filepath);
     newname += len;
   }
   if (pid->cache->name[0] == '\0' && (pid->cache->flag & PTCACHE_EXTERNAL) == 0) {
     idname = (pid->owner_id->name + 2);
     /* convert chars to hex so they are always a valid filename */
     while ('\0' != *idname) {
-      BLI_snprintf(newname, MAX_PTCACHE_FILE - len, "%02X", (unsigned int)(*idname++));
+      BLI_snprintf(newname, MAX_PTCACHE_FILE - len, "%02X", (uint)(*idname++));
       newname += 2;
       len += 2;
     }
@@ -1437,7 +1434,7 @@ static int ptcache_filename(
   }
 
   if (do_ext) {
-    len += ptcache_filename_ext_append(pid, filename, (size_t)len, true, cfra);
+    len += ptcache_filepath_ext_append(pid, filepath, (size_t)len, true, cfra);
   }
 
   return len; /* make sure the above string is always 16 chars */
@@ -1465,7 +1462,7 @@ static PTCacheFile *ptcache_file_open(PTCacheID *pid, int mode, int cfra)
     }
   }
 
-  ptcache_filename(pid, filepath, cfra, true, true);
+  ptcache_filepath(pid, filepath, cfra, true, true);
 
   if (mode == PTCACHE_FILE_READ) {
     fp = BLI_fopen(filepath, "rb");
@@ -1500,29 +1497,28 @@ static void ptcache_file_close(PTCacheFile *pf)
   }
 }
 
-static int ptcache_file_compressed_read(PTCacheFile *pf, unsigned char *result, unsigned int len)
+static int ptcache_file_compressed_read(PTCacheFile *pf, uchar *result, uint len)
 {
   int r = 0;
-  unsigned char compressed = 0;
+  uchar compressed = 0;
   size_t in_len;
 #ifdef WITH_LZO
   size_t out_len = len;
 #endif
-  unsigned char *in;
-  unsigned char *props = MEM_callocN(sizeof(char[16]), "tmp");
+  uchar *in;
+  uchar *props = MEM_callocN(sizeof(char[16]), "tmp");
 
-  ptcache_file_read(pf, &compressed, 1, sizeof(unsigned char));
+  ptcache_file_read(pf, &compressed, 1, sizeof(uchar));
   if (compressed) {
-    unsigned int size;
-    ptcache_file_read(pf, &size, 1, sizeof(unsigned int));
+    uint size;
+    ptcache_file_read(pf, &size, 1, sizeof(uint));
     in_len = (size_t)size;
     if (in_len == 0) {
       /* do nothing */
     }
     else {
-      in = (unsigned char *)MEM_callocN(sizeof(unsigned char) * in_len,
-                                        "pointcache_compressed_buffer");
-      ptcache_file_read(pf, in, in_len, sizeof(unsigned char));
+      in = (uchar *)MEM_callocN(sizeof(uchar) * in_len, "pointcache_compressed_buffer");
+      ptcache_file_read(pf, in, in_len, sizeof(uchar));
 #ifdef WITH_LZO
       if (compressed == 1) {
         r = lzo1x_decompress_safe(in, (lzo_uint)in_len, result, (lzo_uint *)&out_len, NULL);
@@ -1532,9 +1528,9 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, unsigned char *result, 
       if (compressed == 2) {
         size_t sizeOfIt;
         size_t leni = in_len, leno = len;
-        ptcache_file_read(pf, &size, 1, sizeof(unsigned int));
+        ptcache_file_read(pf, &size, 1, sizeof(uint));
         sizeOfIt = (size_t)size;
-        ptcache_file_read(pf, props, sizeOfIt, sizeof(unsigned char));
+        ptcache_file_read(pf, props, sizeOfIt, sizeof(uchar));
         r = LzmaUncompress(result, &leno, in, &leni, props, sizeOfIt);
       }
 #endif
@@ -1542,7 +1538,7 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, unsigned char *result, 
     }
   }
   else {
-    ptcache_file_read(pf, result, len, sizeof(unsigned char));
+    ptcache_file_read(pf, result, len, sizeof(uchar));
   }
 
   MEM_freeN(props);
@@ -1550,12 +1546,12 @@ static int ptcache_file_compressed_read(PTCacheFile *pf, unsigned char *result, 
   return r;
 }
 static int ptcache_file_compressed_write(
-    PTCacheFile *pf, unsigned char *in, unsigned int in_len, unsigned char *out, int mode)
+    PTCacheFile *pf, uchar *in, uint in_len, uchar *out, int mode)
 {
   int r = 0;
-  unsigned char compressed = 0;
+  uchar compressed = 0;
   size_t out_len = 0;
-  unsigned char *props = MEM_callocN(sizeof(char[16]), "tmp");
+  uchar *props = MEM_callocN(sizeof(char[16]), "tmp");
   size_t sizeOfIt = 5;
 
   (void)mode; /* unused when building w/o compression */
@@ -1600,31 +1596,31 @@ static int ptcache_file_compressed_write(
   }
 #endif
 
-  ptcache_file_write(pf, &compressed, 1, sizeof(unsigned char));
+  ptcache_file_write(pf, &compressed, 1, sizeof(uchar));
   if (compressed) {
-    unsigned int size = out_len;
-    ptcache_file_write(pf, &size, 1, sizeof(unsigned int));
-    ptcache_file_write(pf, out, out_len, sizeof(unsigned char));
+    uint size = out_len;
+    ptcache_file_write(pf, &size, 1, sizeof(uint));
+    ptcache_file_write(pf, out, out_len, sizeof(uchar));
   }
   else {
-    ptcache_file_write(pf, in, in_len, sizeof(unsigned char));
+    ptcache_file_write(pf, in, in_len, sizeof(uchar));
   }
 
   if (compressed == 2) {
-    unsigned int size = sizeOfIt;
-    ptcache_file_write(pf, &sizeOfIt, 1, sizeof(unsigned int));
-    ptcache_file_write(pf, props, size, sizeof(unsigned char));
+    uint size = sizeOfIt;
+    ptcache_file_write(pf, &sizeOfIt, 1, sizeof(uint));
+    ptcache_file_write(pf, props, size, sizeof(uchar));
   }
 
   MEM_freeN(props);
 
   return r;
 }
-static int ptcache_file_read(PTCacheFile *pf, void *f, unsigned int tot, unsigned int size)
+static int ptcache_file_read(PTCacheFile *pf, void *f, uint tot, uint size)
 {
   return (fread(f, size, tot, pf->fp) == tot);
 }
-static int ptcache_file_write(PTCacheFile *pf, const void *f, unsigned int tot, unsigned int size)
+static int ptcache_file_write(PTCacheFile *pf, const void *f, uint tot, uint size)
 {
   return (fwrite(f, size, tot, pf->fp) == tot);
 }
@@ -1656,7 +1652,7 @@ static int ptcache_file_data_write(PTCacheFile *pf)
 }
 static int ptcache_file_header_begin_read(PTCacheFile *pf)
 {
-  unsigned int typeflag = 0;
+  uint typeflag = 0;
   int error = 0;
   char bphysics[8];
 
@@ -1670,7 +1666,7 @@ static int ptcache_file_header_begin_read(PTCacheFile *pf)
     error = 1;
   }
 
-  if (!error && !fread(&typeflag, sizeof(unsigned int), 1, pf->fp)) {
+  if (!error && !fread(&typeflag, sizeof(uint), 1, pf->fp)) {
     error = 1;
   }
 
@@ -1687,13 +1683,13 @@ static int ptcache_file_header_begin_read(PTCacheFile *pf)
 static int ptcache_file_header_begin_write(PTCacheFile *pf)
 {
   const char *bphysics = "BPHYSICS";
-  unsigned int typeflag = pf->type + pf->flag;
+  uint typeflag = pf->type + pf->flag;
 
   if (fwrite(bphysics, sizeof(char), 8, pf->fp) != 8) {
     return 0;
   }
 
-  if (!fwrite(&typeflag, sizeof(unsigned int), 1, pf->fp)) {
+  if (!fwrite(&typeflag, sizeof(uint), 1, pf->fp)) {
     return 0;
   }
 
@@ -1722,11 +1718,11 @@ static void ptcache_file_pointers_init(PTCacheFile *pf)
   pf->cur[BPHYS_DATA_BOIDS] = (data_types & (1 << BPHYS_DATA_BOIDS)) ? &pf->data.boids : NULL;
 }
 
-int BKE_ptcache_mem_index_find(PTCacheMem *pm, unsigned int index)
+int BKE_ptcache_mem_index_find(PTCacheMem *pm, uint index)
 {
   if (pm->totpoint > 0 && pm->data[BPHYS_DATA_INDEX]) {
-    unsigned int *data = pm->data[BPHYS_DATA_INDEX];
-    unsigned int mid, low = 0, high = pm->totpoint - 1;
+    uint *data = pm->data[BPHYS_DATA_INDEX];
+    uint mid, low = 0, high = pm->totpoint - 1;
 
     if (index < *data || index > *(data + high)) {
       return -1;
@@ -1868,7 +1864,7 @@ static int ptcache_old_elemsize(PTCacheID *pid)
   return 0;
 }
 
-static void ptcache_find_frames_around(PTCacheID *pid, unsigned int frame, int *fra1, int *fra2)
+static void ptcache_find_frames_around(PTCacheID *pid, uint frame, int *fra1, int *fra2)
 {
   if (pid->cache->flag & PTCACHE_DISK_CACHE) {
     int cfra1 = frame, cfra2 = frame + 1;
@@ -1930,7 +1926,7 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
 {
   PTCacheFile *pf = ptcache_file_open(pid, PTCACHE_FILE_READ, cfra);
   PTCacheMem *pm = NULL;
-  unsigned int i, error = 0;
+  uint i, error = 0;
 
   if (pf == NULL) {
     return NULL;
@@ -1955,9 +1951,9 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
 
     if (pf->flag & PTCACHE_TYPEFLAG_COMPRESS) {
       for (i = 0; i < BPHYS_TOT_DATA; i++) {
-        unsigned int out_len = pm->totpoint * ptcache_data_size[i];
+        uint out_len = pm->totpoint * ptcache_data_size[i];
         if (pf->data_types & (1 << i)) {
-          ptcache_file_compressed_read(pf, (unsigned char *)(pm->data[i]), out_len);
+          ptcache_file_compressed_read(pf, (uchar *)(pm->data[i]), out_len);
         }
       }
     }
@@ -1978,22 +1974,21 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
   }
 
   if (!error && pf->flag & PTCACHE_TYPEFLAG_EXTRADATA) {
-    unsigned int extratype = 0;
+    uint extratype = 0;
 
-    while (ptcache_file_read(pf, &extratype, 1, sizeof(unsigned int))) {
+    while (ptcache_file_read(pf, &extratype, 1, sizeof(uint))) {
       PTCacheExtra *extra = MEM_callocN(sizeof(PTCacheExtra), "Pointcache extradata");
 
       extra->type = extratype;
 
-      ptcache_file_read(pf, &extra->totdata, 1, sizeof(unsigned int));
+      ptcache_file_read(pf, &extra->totdata, 1, sizeof(uint));
 
       extra->data = MEM_callocN(extra->totdata * ptcache_extra_datasize[extra->type],
                                 "Pointcache extradata->data");
 
       if (pf->flag & PTCACHE_TYPEFLAG_COMPRESS) {
-        ptcache_file_compressed_read(pf,
-                                     (unsigned char *)(extra->data),
-                                     extra->totdata * ptcache_extra_datasize[extra->type]);
+        ptcache_file_compressed_read(
+            pf, (uchar *)(extra->data), extra->totdata * ptcache_extra_datasize[extra->type]);
       }
       else {
         ptcache_file_read(pf, extra->data, extra->totdata, ptcache_extra_datasize[extra->type]);
@@ -2020,7 +2015,7 @@ static PTCacheMem *ptcache_disk_frame_to_mem(PTCacheID *pid, int cfra)
 static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
 {
   PTCacheFile *pf = NULL;
-  unsigned int i, error = 0;
+  uint i, error = 0;
 
   BKE_ptcache_id_clear(pid, PTCACHE_CLEAR_FRAME, pm->frame);
 
@@ -2054,11 +2049,10 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
     if (pid->cache->compression) {
       for (i = 0; i < BPHYS_TOT_DATA; i++) {
         if (pm->data[i]) {
-          unsigned int in_len = pm->totpoint * ptcache_data_size[i];
-          unsigned char *out = (unsigned char *)MEM_callocN(LZO_OUT_LEN(in_len) * 4,
-                                                            "pointcache_lzo_buffer");
+          uint in_len = pm->totpoint * ptcache_data_size[i];
+          uchar *out = (uchar *)MEM_callocN(LZO_OUT_LEN(in_len) * 4, "pointcache_lzo_buffer");
           ptcache_file_compressed_write(
-              pf, (unsigned char *)(pm->data[i]), in_len, out, pid->cache->compression);
+              pf, (uchar *)(pm->data[i]), in_len, out, pid->cache->compression);
           MEM_freeN(out);
         }
       }
@@ -2087,15 +2081,14 @@ static int ptcache_mem_frame_to_disk(PTCacheID *pid, PTCacheMem *pm)
         continue;
       }
 
-      ptcache_file_write(pf, &extra->type, 1, sizeof(unsigned int));
-      ptcache_file_write(pf, &extra->totdata, 1, sizeof(unsigned int));
+      ptcache_file_write(pf, &extra->type, 1, sizeof(uint));
+      ptcache_file_write(pf, &extra->totdata, 1, sizeof(uint));
 
       if (pid->cache->compression) {
-        unsigned int in_len = extra->totdata * ptcache_extra_datasize[extra->type];
-        unsigned char *out = (unsigned char *)MEM_callocN(LZO_OUT_LEN(in_len) * 4,
-                                                          "pointcache_lzo_buffer");
+        uint in_len = extra->totdata * ptcache_extra_datasize[extra->type];
+        uchar *out = (uchar *)MEM_callocN(LZO_OUT_LEN(in_len) * 4, "pointcache_lzo_buffer");
         ptcache_file_compressed_write(
-            pf, (unsigned char *)(extra->data), in_len, out, pid->cache->compression);
+            pf, (uchar *)(extra->data), in_len, out, pid->cache->compression);
         MEM_freeN(out);
       }
       else {
@@ -2535,7 +2528,7 @@ static int ptcache_write_needed(PTCacheID *pid, int cfra, int *overwrite)
 
   return 0;
 }
-int BKE_ptcache_write(PTCacheID *pid, unsigned int cfra)
+int BKE_ptcache_write(PTCacheID *pid, uint cfra)
 {
   PointCache *cache = pid->cache;
   if (!pid->totpoint) {
@@ -2587,16 +2580,16 @@ int BKE_ptcache_write(PTCacheID *pid, unsigned int cfra)
 
 /* Clears & resets. */
 
-void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
+void BKE_ptcache_id_clear(PTCacheID *pid, int mode, uint cfra)
 {
-  unsigned int len; /* store the length of the string */
-  unsigned int sta, end;
+  uint len; /* store the length of the string */
+  uint sta, end;
 
   /* mode is same as fopen's modes */
   DIR *dir;
   struct dirent *de;
   char path[MAX_PTCACHE_PATH];
-  char filename[MAX_PTCACHE_FILE];
+  char filepath[MAX_PTCACHE_FILE];
   char path_full[MAX_PTCACHE_FILE];
   char ext[MAX_PTCACHE_PATH];
 
@@ -2618,7 +2611,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
   }
 #endif
 
-  /* clear all files in the temp dir with the prefix of the ID and the ".bphys" suffix */
+  /* Clear all files in the temp dir with the prefix of the ID and the `.bphys` suffix. */
   switch (mode) {
     case PTCACHE_CLEAR_ALL:
     case PTCACHE_CLEAR_BEFORE:
@@ -2631,23 +2624,23 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
           return;
         }
 
-        len = ptcache_filename(pid, filename, cfra, false, false); /* no path */
+        len = ptcache_filepath(pid, filepath, cfra, false, false); /* no path */
         /* append underscore terminator to ensure we don't match similar names
          * from objects whose names start with the same prefix
          */
-        if (len < sizeof(filename) - 2) {
-          BLI_strncpy(filename + len, "_", sizeof(filename) - 2 - len);
+        if (len < sizeof(filepath) - 2) {
+          BLI_strncpy(filepath + len, "_", sizeof(filepath) - 2 - len);
           len += 1;
         }
 
-        ptcache_filename_ext_append(pid, ext, 0, false, 0);
+        ptcache_filepath_ext_append(pid, ext, 0, false, 0);
 
         while ((de = readdir(dir)) != NULL) {
           if (strstr(de->d_name, ext)) {               /* Do we have the right extension? */
-            if (STREQLEN(filename, de->d_name, len)) { /* Do we have the right prefix. */
+            if (STREQLEN(filepath, de->d_name, len)) { /* Do we have the right prefix. */
               if (mode == PTCACHE_CLEAR_ALL) {
                 pid->cache->last_exact = MIN2(pid->cache->startframe, 0);
-                BLI_join_dirfile(path_full, sizeof(path_full), path, de->d_name);
+                BLI_path_join(path_full, sizeof(path_full), path, de->d_name);
                 BLI_delete(path_full, false, false);
               }
               else {
@@ -2657,7 +2650,7 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
                 if (frame != -1) {
                   if ((mode == PTCACHE_CLEAR_BEFORE && frame < cfra) ||
                       (mode == PTCACHE_CLEAR_AFTER && frame > cfra)) {
-                    BLI_join_dirfile(path_full, sizeof(path_full), path, de->d_name);
+                    BLI_path_join(path_full, sizeof(path_full), path, de->d_name);
                     BLI_delete(path_full, false, false);
                     if (pid->cache->cached_frames && frame >= sta && frame <= end) {
                       pid->cache->cached_frames[frame - sta] = 0;
@@ -2713,8 +2706,8 @@ void BKE_ptcache_id_clear(PTCacheID *pid, int mode, unsigned int cfra)
     case PTCACHE_CLEAR_FRAME:
       if (pid->cache->flag & PTCACHE_DISK_CACHE) {
         if (BKE_ptcache_id_exist(pid, cfra)) {
-          ptcache_filename(pid, filename, cfra, true, true); /* no path */
-          BLI_delete(filename, false, false);
+          ptcache_filepath(pid, filepath, cfra, true, true); /* no path */
+          BLI_delete(filepath, false, false);
         }
       }
       else {
@@ -2752,11 +2745,11 @@ bool BKE_ptcache_id_exist(PTCacheID *pid, int cfra)
   }
 
   if (pid->cache->flag & PTCACHE_DISK_CACHE) {
-    char filename[MAX_PTCACHE_FILE];
+    char filepath[MAX_PTCACHE_FILE];
 
-    ptcache_filename(pid, filename, cfra, true, true);
+    ptcache_filepath(pid, filepath, cfra, true, true);
 
-    return BLI_exists(filename);
+    return BLI_exists(filepath);
   }
 
   PTCacheMem *pm = pid->cache->mem_cache.first;
@@ -2782,7 +2775,7 @@ void BKE_ptcache_id_time(
   /* time handling for point cache:
    * - simulation time is scaled by result of bsystem_time
    * - for offsetting time only time offset is taken into account, since
-   *   that's always the same and can't be animated. a timeoffset which
+   *   that's always the same and can't be animated. a time-offset which
    *   varies over time is not simple to support.
    * - field and motion blur offsets are currently ignored, proper solution
    *   is probably to interpolate results from two frames for that ..
@@ -2812,8 +2805,8 @@ void BKE_ptcache_id_time(
   }
 
   if (cache->cached_frames == NULL && cache->endframe > cache->startframe) {
-    unsigned int sta = cache->startframe;
-    unsigned int end = cache->endframe;
+    uint sta = cache->startframe;
+    uint end = cache->endframe;
 
     cache->cached_frames_len = cache->endframe - cache->startframe + 1;
     cache->cached_frames = MEM_callocN(sizeof(char) * cache->cached_frames_len,
@@ -2824,24 +2817,24 @@ void BKE_ptcache_id_time(
       DIR *dir;
       struct dirent *de;
       char path[MAX_PTCACHE_PATH];
-      char filename[MAX_PTCACHE_FILE];
+      char filepath[MAX_PTCACHE_FILE];
       char ext[MAX_PTCACHE_PATH];
-      unsigned int len; /* store the length of the string */
+      uint len; /* store the length of the string */
 
       ptcache_path(pid, path);
 
-      len = ptcache_filename(pid, filename, (int)cfra, 0, 0); /* no path */
+      len = ptcache_filepath(pid, filepath, (int)cfra, 0, 0); /* no path */
 
       dir = opendir(path);
       if (dir == NULL) {
         return;
       }
 
-      ptcache_filename_ext_append(pid, ext, 0, false, 0);
+      ptcache_filepath_ext_append(pid, ext, 0, false, 0);
 
       while ((de = readdir(dir)) != NULL) {
         if (strstr(de->d_name, ext)) {               /* Do we have the right extension? */
-          if (STREQLEN(filename, de->d_name, len)) { /* Do we have the right prefix. */
+          if (STREQLEN(filepath, de->d_name, len)) { /* Do we have the right prefix. */
             /* read the number of the file */
             const int frame = ptcache_frame_from_filename(de->d_name, ext);
 
@@ -3139,15 +3132,15 @@ static void ptcache_dt_to_str(char *str, double dtime)
 {
   if (dtime > 60.0) {
     if (dtime > 3600.0) {
-      sprintf(
+      BLI_sprintf(
           str, "%ih %im %is", (int)(dtime / 3600), ((int)(dtime / 60)) % 60, ((int)dtime) % 60);
     }
     else {
-      sprintf(str, "%im %is", ((int)(dtime / 60)) % 60, ((int)dtime) % 60);
+      BLI_sprintf(str, "%im %is", ((int)(dtime / 60)) % 60, ((int)dtime) % 60);
     }
   }
   else {
-    sprintf(str, "%is", ((int)dtime) % 60);
+    BLI_sprintf(str, "%is", ((int)dtime) % 60);
   }
 }
 
@@ -3494,7 +3487,7 @@ void BKE_ptcache_disk_cache_rename(PTCacheID *pid, const char *name_src, const c
   DIR *dir;
   struct dirent *de;
   char path[MAX_PTCACHE_PATH];
-  char old_filename[MAX_PTCACHE_FILE];
+  char old_filepath[MAX_PTCACHE_FILE];
   char new_path_full[MAX_PTCACHE_FILE];
   char old_path_full[MAX_PTCACHE_FILE];
   char ext[MAX_PTCACHE_PATH];
@@ -3510,7 +3503,7 @@ void BKE_ptcache_disk_cache_rename(PTCacheID *pid, const char *name_src, const c
   /* get "from" filename */
   BLI_strncpy(pid->cache->name, name_src, sizeof(pid->cache->name));
 
-  len = ptcache_filename(pid, old_filename, 0, false, false); /* no path */
+  len = ptcache_filepath(pid, old_filepath, 0, false, false); /* no path */
 
   ptcache_path(pid, path);
   dir = opendir(path);
@@ -3519,20 +3512,20 @@ void BKE_ptcache_disk_cache_rename(PTCacheID *pid, const char *name_src, const c
     return;
   }
 
-  ptcache_filename_ext_append(pid, ext, 0, false, 0);
+  ptcache_filepath_ext_append(pid, ext, 0, false, 0);
 
   /* put new name into cache */
   BLI_strncpy(pid->cache->name, name_dst, sizeof(pid->cache->name));
 
   while ((de = readdir(dir)) != NULL) {
     if (strstr(de->d_name, ext)) {                   /* Do we have the right extension? */
-      if (STREQLEN(old_filename, de->d_name, len)) { /* Do we have the right prefix. */
+      if (STREQLEN(old_filepath, de->d_name, len)) { /* Do we have the right prefix. */
         /* read the number of the file */
         const int frame = ptcache_frame_from_filename(de->d_name, ext);
 
         if (frame != -1) {
-          BLI_join_dirfile(old_path_full, sizeof(old_path_full), path, de->d_name);
-          ptcache_filename(pid, new_path_full, frame, true, true);
+          BLI_path_join(old_path_full, sizeof(old_path_full), path, de->d_name);
+          ptcache_filepath(pid, new_path_full, frame, true, true);
           BLI_rename(old_path_full, new_path_full);
         }
       }
@@ -3556,7 +3549,7 @@ void BKE_ptcache_load_external(PTCacheID *pid)
   DIR *dir;
   struct dirent *de;
   char path[MAX_PTCACHE_PATH];
-  char filename[MAX_PTCACHE_FILE];
+  char filepath[MAX_PTCACHE_FILE];
   char ext[MAX_PTCACHE_PATH];
 
   if (!cache) {
@@ -3565,7 +3558,7 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 
   ptcache_path(pid, path);
 
-  len = ptcache_filename(pid, filename, 1, false, false); /* no path */
+  len = ptcache_filepath(pid, filepath, 1, false, false); /* no path */
 
   dir = opendir(path);
   if (dir == NULL) {
@@ -3583,7 +3576,7 @@ void BKE_ptcache_load_external(PTCacheID *pid)
 
   while ((de = readdir(dir)) != NULL) {
     if (strstr(de->d_name, ext)) {               /* Do we have the right extension? */
-      if (STREQLEN(filename, de->d_name, len)) { /* Do we have the right prefix. */
+      if (STREQLEN(filepath, de->d_name, len)) { /* Do we have the right prefix. */
         /* read the number of the file */
         const int frame = ptcache_frame_from_filename(de->d_name, ext);
 

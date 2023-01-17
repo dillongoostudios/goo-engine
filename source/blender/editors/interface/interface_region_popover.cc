@@ -46,7 +46,7 @@
 #include "UI_interface.h"
 
 #include "interface_intern.h"
-#include "interface_regions_intern.h"
+#include "interface_regions_intern.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Popup Menu with Callback or String
@@ -146,8 +146,8 @@ static uiBlock *ui_block_func_POPOVER(bContext *C, uiPopupBlockHandle *handle, v
       ui_block_to_window_fl(handle->ctx_region, pup->but->block, &center[0], &center[1]);
       /* These variables aren't used for popovers,
        * we could add new variables if there is a conflict. */
-      block->bounds_offset[0] = (int)center[0];
-      block->bounds_offset[1] = (int)center[1];
+      block->bounds_offset[0] = int(center[0]);
+      block->bounds_offset[1] = int(center[1]);
       copy_v2_v2_int(handle->prev_bounds_offset, block->bounds_offset);
     }
     else {
@@ -245,7 +245,7 @@ uiPopupBlockHandle *ui_popover_panel_create(
     /* Scale width by changes to Text Style point size. */
     const int text_points_max = MAX2(style->widget.points, style->widgetlabel.points);
     pup->ui_size_x = ui_units_x * U.widget_unit *
-                     (text_points_max / (float)UI_DEFAULT_TEXT_POINTS);
+                     (text_points_max / float(UI_DEFAULT_TEXT_POINTS));
   }
 
   pup->menu_func = menu_func;
@@ -355,7 +355,7 @@ uiPopover *UI_popover_begin(bContext *C, int ui_menu_width, bool from_active_but
   return pup;
 }
 
-static void popover_keymap_fn(wmKeyMap *UNUSED(keymap), wmKeyMapItem *UNUSED(kmi), void *user_data)
+static void popover_keymap_fn(wmKeyMap * /*keymap*/, wmKeyMapItem * /*kmi*/, void *user_data)
 {
   uiPopover *pup = static_cast<uiPopover *>(user_data);
   pup->block->handle->menuretval = UI_RETURN_OK;
@@ -397,7 +397,7 @@ void UI_popover_end(bContext *C, uiPopover *pup, wmKeyMap *keymap)
 
   pup->window = window;
 
-  /* TODO(campbell): we may want to make this configurable.
+  /* TODO(@campbellbarton): we may want to make this configurable.
    * The begin/end stype of calling popups doesn't allow 'can_refresh' to be set.
    * For now close this style of popovers when accessed. */
   UI_block_flag_disable(pup->block, UI_BLOCK_KEEP_OPEN);

@@ -907,8 +907,6 @@ class GeometryNode : public ShaderNode {
     return true;
   }
   int get_group();
-
-  NODE_SOCKET_API(float3, normal_osl)
 };
 
 class TextureCoordinateNode : public ShaderNode {
@@ -924,7 +922,6 @@ class TextureCoordinateNode : public ShaderNode {
     return true;
   }
 
-  NODE_SOCKET_API(float3, normal_osl)
   NODE_SOCKET_API(bool, from_dupli)
   NODE_SOCKET_API(bool, use_transform)
   NODE_SOCKET_API(Transform, ob_tfm)
@@ -1099,6 +1096,52 @@ class MixNode : public ShaderNode {
   NODE_SOCKET_API(float3, color1)
   NODE_SOCKET_API(float3, color2)
   NODE_SOCKET_API(float, fac)
+};
+
+class MixColorNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixColorNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float3, a)
+  NODE_SOCKET_API(float3, b)
+  NODE_SOCKET_API(float, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+  NODE_SOCKET_API(bool, use_clamp_result)
+  NODE_SOCKET_API(NodeMix, blend_type)
+};
+
+class MixFloatNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixFloatNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float, a)
+  NODE_SOCKET_API(float, b)
+  NODE_SOCKET_API(float, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+};
+
+class MixVectorNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixVectorNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float3, a)
+  NODE_SOCKET_API(float3, b)
+  NODE_SOCKET_API(float, fac)
+  NODE_SOCKET_API(bool, use_clamp)
+};
+
+class MixVectorNonUniformNode : public ShaderNode {
+ public:
+  SHADER_NODE_CLASS(MixVectorNonUniformNode)
+  void constant_fold(const ConstantFolder &folder);
+
+  NODE_SOCKET_API(float3, a)
+  NODE_SOCKET_API(float3, b)
+  NODE_SOCKET_API(float3, fac)
+  NODE_SOCKET_API(bool, use_clamp)
 };
 
 class CombineColorNode : public ShaderNode {
@@ -1482,7 +1525,7 @@ class OSLNode final : public ShaderNode {
   ShaderNode *clone(ShaderGraph *graph) const;
 
   char *input_default_value();
-  void add_input(ustring name, SocketType::Type type);
+  void add_input(ustring name, SocketType::Type type, const int flags = 0);
   void add_output(ustring name, SocketType::Type type);
 
   SHADER_NODE_NO_CLONE_CLASS(OSLNode)
@@ -1523,7 +1566,6 @@ class NormalMapNode : public ShaderNode {
   NODE_SOCKET_API(ustring, attribute)
   NODE_SOCKET_API(float, strength)
   NODE_SOCKET_API(float3, color)
-  NODE_SOCKET_API(float3, normal_osl)
 };
 
 class TangentNode : public ShaderNode {
@@ -1542,7 +1584,6 @@ class TangentNode : public ShaderNode {
   NODE_SOCKET_API(NodeTangentDirectionType, direction_type)
   NODE_SOCKET_API(NodeTangentAxis, axis)
   NODE_SOCKET_API(ustring, attribute)
-  NODE_SOCKET_API(float3, normal_osl)
 };
 
 class BevelNode : public ShaderNode {

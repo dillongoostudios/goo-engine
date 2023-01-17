@@ -12,6 +12,8 @@
 #include "UnaryFunction0D/BPy_UnaryFunction0DFloat.h"
 #include "UnaryFunction0D/BPy_UnaryFunction0DUnsigned.h"
 
+#include "BLI_sys_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -82,8 +84,8 @@ static PyObject *Integrator_integrate(PyObject * /*self*/, PyObject *args, PyObj
     return PyFloat_FromDouble(res);
   }
   if (BPy_UnaryFunction0DUnsigned_Check(obj1)) {
-    UnaryFunction0D<unsigned int> *fun = ((BPy_UnaryFunction0DUnsigned *)obj1)->uf0D_unsigned;
-    unsigned int res = integrate(*fun, it, it_end, t);
+    UnaryFunction0D<uint> *fun = ((BPy_UnaryFunction0DUnsigned *)obj1)->uf0D_unsigned;
+    uint res = integrate(*fun, it, it_end, t);
     return PyLong_FromLong(res);
   }
 

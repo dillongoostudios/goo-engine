@@ -85,7 +85,7 @@ typedef struct uiViewItemHandle uiViewItemHandle;
 
 /* Separator for text in search menus (right pointing arrow).
  * keep in sync with `string_search.cc`. */
-#define UI_MENU_ARROW_SEP "\xe2\x96\xb6"
+#define UI_MENU_ARROW_SEP "\xe2\x96\xb8"
 
 /* names */
 #define UI_MAX_DRAW_STR 400
@@ -133,6 +133,8 @@ enum {
 /** #uiBlock.flag (controls) */
 enum {
   UI_BLOCK_LOOP = 1 << 0,
+  /** Indicate that items in a popup are drawn with inverted order. Used for arrow key navigation
+   *  so that it knows to invert the navigation direction to match the drawing order. */
   UI_BLOCK_IS_FLIP = 1 << 1,
   UI_BLOCK_NO_FLIP = 1 << 2,
   UI_BLOCK_NUMSELECT = 1 << 3,
@@ -354,7 +356,7 @@ typedef enum {
   UI_BTYPE_LABEL = 20 << 9,
   UI_BTYPE_KEY_EVENT = 24 << 9,
   UI_BTYPE_HSVCUBE = 26 << 9,
-  /** menu (often used in headers), **_MENU /w different draw-type */
+  /** Menu (often used in headers), `*_MENU` with different draw-type. */
   UI_BTYPE_PULLDOWN = 27 << 9,
   UI_BTYPE_ROUNDBOX = 28 << 9,
   UI_BTYPE_COLORBAND = 30 << 9,
@@ -532,6 +534,7 @@ typedef struct ARegion *(*uiButSearchTooltipFn)(struct bContext *C,
                                                 const struct rcti *item_rect,
                                                 void *arg,
                                                 void *active);
+typedef void (*uiButSearchListenFn)(const struct wmRegionListenerParams *params, void *arg);
 
 /* Must return allocated string. */
 typedef char *(*uiButToolTipFunc)(struct bContext *C, void *argN, const char *tip);
@@ -783,6 +786,9 @@ void UI_block_set_search_only(uiBlock *block, bool search_only);
  * Can be called with C==NULL.
  */
 void UI_block_free(const struct bContext *C, uiBlock *block);
+
+void UI_block_listen(const uiBlock *block, const struct wmRegionListenerParams *listener_params);
+
 /**
  * Can be called with C==NULL.
  */
@@ -1660,6 +1666,7 @@ void UI_but_func_search_set(uiBut *but,
                             void *active);
 void UI_but_func_search_set_context_menu(uiBut *but, uiButSearchContextMenuFn context_menu_fn);
 void UI_but_func_search_set_tooltip(uiBut *but, uiButSearchTooltipFn tooltip_fn);
+void UI_but_func_search_set_listen(uiBut *but, uiButSearchListenFn listen_fn);
 /**
  * \param search_sep_string: when not NULL, this string is used as a separator,
  * showing the icon and highlighted text after the last instance of this string.
@@ -1681,6 +1688,7 @@ int UI_search_items_find_index(uiSearchItems *items, const char *name);
  * Adds a hint to the button which draws right aligned, grayed out and never clipped.
  */
 void UI_but_hint_drawstr_set(uiBut *but, const char *string);
+void UI_but_icon_indicator_number_set(uiBut *but, const int indicator_number);
 
 void UI_but_node_link_set(uiBut *but, struct bNodeSocket *socket, const float draw_color[4]);
 
@@ -2483,7 +2491,7 @@ enum uiTemplateListFlags {
 ENUM_OPERATORS(enum uiTemplateListFlags, UI_TEMPLATE_LIST_FLAGS_LAST);
 
 void uiTemplateList(uiLayout *layout,
-                    struct bContext *C,
+                    const struct bContext *C,
                     const char *listtype_name,
                     const char *list_id,
                     struct PointerRNA *dataptr,
@@ -2497,7 +2505,7 @@ void uiTemplateList(uiLayout *layout,
                     int columns,
                     enum uiTemplateListFlags flags);
 struct uiList *uiTemplateList_ex(uiLayout *layout,
-                                 struct bContext *C,
+                                 const struct bContext *C,
                                  const char *listtype_name,
                                  const char *list_id,
                                  struct PointerRNA *dataptr,
@@ -2522,6 +2530,7 @@ void uiTemplateNodeView(uiLayout *layout,
                         struct bNodeTree *ntree,
                         struct bNode *node,
                         struct bNodeSocket *input);
+void uiTemplateNodeAssetMenuItems(uiLayout *layout, struct bContext *C, const char *catalog_path);
 void uiTemplateTextureUser(uiLayout *layout, struct bContext *C);
 /**
  * Button to quickly show texture in Properties Editor texture tab.
@@ -2567,7 +2576,7 @@ enum {
   UI_TEMPLATE_ASSET_DRAW_NO_LIBRARY = (1 << 2),
 };
 void uiTemplateAssetView(struct uiLayout *layout,
-                         struct bContext *C,
+                         const struct bContext *C,
                          const char *list_id,
                          struct PointerRNA *asset_library_dataptr,
                          const char *asset_library_propname,
@@ -2786,7 +2795,8 @@ typedef struct uiPropertySplitWrapper {
 uiPropertySplitWrapper uiItemPropertySplitWrapperCreate(uiLayout *parent_layout);
 
 void uiItemL(uiLayout *layout, const char *name, int icon); /* label */
-void uiItemL_ex(uiLayout *layout, const char *name, int icon, bool highlight, bool redalert);
+struct uiBut *uiItemL_ex(
+    uiLayout *layout, const char *name, int icon, bool highlight, bool redalert);
 /**
  * Helper to add a label and creates a property split layout if needed.
  */
@@ -3192,9 +3202,6 @@ void UI_interface_tag_script_reload(void);
 
 /* Support click-drag motion which presses the button and closes a popover (like a menu). */
 #define USE_UI_POPOVER_ONCE
-
-void UI_block_views_listen(const uiBlock *block,
-                           const struct wmRegionListenerParams *listener_params);
 
 bool UI_view_item_is_active(const uiViewItemHandle *item_handle);
 bool UI_view_item_matches(const uiViewItemHandle *a_handle, const uiViewItemHandle *b_handle);

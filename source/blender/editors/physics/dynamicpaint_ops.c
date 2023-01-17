@@ -21,6 +21,7 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
+#include "BKE_attribute.h"
 #include "BKE_context.h"
 #include "BKE_deform.h"
 #include "BKE_dynamicpaint.h"
@@ -233,7 +234,7 @@ static int output_toggle_exec(bContext *C, wmOperator *op)
         ED_mesh_color_add(ob->data, name, true, true, op->reports);
       }
       else {
-        ED_mesh_color_remove_named(ob->data, name);
+        BKE_id_attribute_remove(ob->data, name, NULL);
       }
     }
     /* Vertex Weight Layer */
@@ -404,7 +405,7 @@ static void dynamicPaint_bakeImageSequence(DynamicPaintBakeJob *job)
       /* primary output layer */
       if (surface->flags & MOD_DPAINT_OUT1) {
         /* set filepath */
-        BLI_join_dirfile(
+        BLI_path_join(
             filepath, sizeof(filepath), surface->image_output_path, surface->output_name);
         BLI_path_frame(filepath, frame, 4);
 
@@ -414,7 +415,7 @@ static void dynamicPaint_bakeImageSequence(DynamicPaintBakeJob *job)
       /* secondary output */
       if (surface->flags & MOD_DPAINT_OUT2 && surface->type == MOD_DPAINT_SURFACE_T_PAINT) {
         /* set filepath */
-        BLI_join_dirfile(
+        BLI_path_join(
             filepath, sizeof(filepath), surface->image_output_path, surface->output_name2);
         BLI_path_frame(filepath, frame, 4);
 

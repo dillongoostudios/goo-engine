@@ -27,19 +27,29 @@ KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, queued_kernel, KERNEL_FEATURE_PATH_T
 /* enum PathRayFlag */
 KERNEL_STRUCT_MEMBER(shadow_path, uint32_t, flag, KERNEL_FEATURE_PATH_TRACING)
 /* Throughput. */
-KERNEL_STRUCT_MEMBER(shadow_path, packed_float3, throughput, KERNEL_FEATURE_PATH_TRACING)
+KERNEL_STRUCT_MEMBER(shadow_path, PackedSpectrum, throughput, KERNEL_FEATURE_PATH_TRACING)
 /* Throughput for shadow pass. */
 KERNEL_STRUCT_MEMBER(shadow_path,
-                     packed_float3,
+                     PackedSpectrum,
                      unshadowed_throughput,
                      KERNEL_FEATURE_SHADOW_PASS | KERNEL_FEATURE_AO_ADDITIVE)
 /* Ratio of throughput to distinguish diffuse / glossy / transmission render passes. */
-KERNEL_STRUCT_MEMBER(shadow_path, packed_float3, pass_diffuse_weight, KERNEL_FEATURE_LIGHT_PASSES)
-KERNEL_STRUCT_MEMBER(shadow_path, packed_float3, pass_glossy_weight, KERNEL_FEATURE_LIGHT_PASSES)
+KERNEL_STRUCT_MEMBER(shadow_path, PackedSpectrum, pass_diffuse_weight, KERNEL_FEATURE_LIGHT_PASSES)
+KERNEL_STRUCT_MEMBER(shadow_path, PackedSpectrum, pass_glossy_weight, KERNEL_FEATURE_LIGHT_PASSES)
 /* Number of intersections found by ray-tracing. */
 KERNEL_STRUCT_MEMBER(shadow_path, uint16_t, num_hits, KERNEL_FEATURE_PATH_TRACING)
 /* Light group. */
 KERNEL_STRUCT_MEMBER(shadow_path, uint8_t, lightgroup, KERNEL_FEATURE_PATH_TRACING)
+/* Path guiding. */
+KERNEL_STRUCT_MEMBER(shadow_path, PackedSpectrum, unlit_throughput, KERNEL_FEATURE_PATH_GUIDING)
+#ifdef __PATH_GUIDING__
+KERNEL_STRUCT_MEMBER(shadow_path,
+                     openpgl::cpp::PathSegment *,
+                     path_segment,
+                     KERNEL_FEATURE_PATH_GUIDING)
+#else
+KERNEL_STRUCT_MEMBER(shadow_path, uint64_t, path_segment, KERNEL_FEATURE_PATH_GUIDING)
+#endif
 KERNEL_STRUCT_END(shadow_path)
 
 /********************************** Shadow Ray *******************************/

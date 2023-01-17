@@ -192,9 +192,7 @@ static void initData(ModifierData *md)
   MEMCPY_STRUCT_AFTER(smd, DNA_struct_default_get(SurfaceDeformModifierData), modifier);
 }
 
-static void requiredDataMask(Object *UNUSED(ob),
-                             ModifierData *md,
-                             CustomData_MeshMasks *r_cddata_masks)
+static void requiredDataMask(ModifierData *md, CustomData_MeshMasks *r_cddata_masks)
 {
   SurfaceDeformModifierData *smd = (SurfaceDeformModifierData *)md;
 
@@ -215,8 +213,7 @@ static void freeData(ModifierData *md)
           MEM_SAFE_FREE(smd->verts[i].binds[j].vert_inds);
           MEM_SAFE_FREE(smd->verts[i].binds[j].vert_weights);
         }
-
-        MEM_SAFE_FREE(smd->verts[i].binds);
+        MEM_freeN(smd->verts[i].binds);
       }
     }
 
@@ -1172,10 +1169,10 @@ static bool surfacedeformBind(Object *ob,
                               Mesh *mesh)
 {
   BVHTreeFromMesh treeData = {NULL};
-  const MVert *mvert = target->mvert;
-  const MPoly *mpoly = target->mpoly;
-  const MEdge *medge = target->medge;
-  const MLoop *mloop = target->mloop;
+  const MVert *mvert = BKE_mesh_verts(target);
+  const MPoly *mpoly = BKE_mesh_polys(target);
+  const MEdge *medge = BKE_mesh_edges(target);
+  const MLoop *mloop = BKE_mesh_loops(target);
   uint tedges_num = target->totedge;
   int adj_result;
   SDefAdjacencyArray *vert_edges;
@@ -1237,7 +1234,7 @@ static bool surfacedeformBind(Object *ob,
   smd_orig->target_polys_num = target_polys_num;
 
   int defgrp_index;
-  MDeformVert *dvert;
+  const MDeformVert *dvert;
   MOD_get_vgroup(ob, mesh, smd_orig->defgrp_name, &dvert, &defgrp_index);
   const bool invert_vgroup = (smd_orig->flags & MOD_SDEF_INVERT_VGROUP) != 0;
   const bool sparse_bind = (smd_orig->flags & MOD_SDEF_SPARSE_BIND) != 0;
@@ -1332,7 +1329,7 @@ static void deformVert(void *__restrict userdata,
   const SDefDeformData *const data = (SDefDeformData *)userdata;
   const SDefBind *sdbind = data->bind_verts[index].binds;
   const int sdbind_num = data->bind_verts[index].binds_num;
-  const unsigned int vertex_idx = data->bind_verts[index].vertex_idx;
+  const uint vertex_idx = data->bind_verts[index].vertex_idx;
   float *const vertexCos = data->vertexCos[vertex_idx];
   float norm[3], temp[3], offset[3];
 
@@ -1469,8 +1466,8 @@ static void surfacedeformModifier_do(ModifierData *md,
         ob, md);
     float tmp_mat[4][4];
 
-    invert_m4_m4(tmp_mat, ob->obmat);
-    mul_m4_m4m4(smd_orig->mat, tmp_mat, ob_target->obmat);
+    invert_m4_m4(tmp_mat, ob->object_to_world);
+    mul_m4_m4m4(smd_orig->mat, tmp_mat, ob_target->object_to_world);
 
     /* Avoid converting edit-mesh data, binding is an exception. */
     BKE_mesh_wrapper_ensure_mdata(target);
@@ -1506,7 +1503,7 @@ static void surfacedeformModifier_do(ModifierData *md,
         ob, md, "Target polygons changed from %u to %u", smd->target_polys_num, target_polys_num);
     return;
   }
-  if (smd->target_verts_num != 0 && smd->target_verts_num != target_verts_num) {
+  if (!ELEM(smd->target_verts_num, 0, target_verts_num)) {
     if (smd->target_verts_num > target_verts_num) {
       /* Number of vertices on the target did reduce. There is no usable recovery from this. */
       BKE_modifier_set_error(ob,
@@ -1539,7 +1536,7 @@ static void surfacedeformModifier_do(ModifierData *md,
   }
 
   int defgrp_index;
-  MDeformVert *dvert;
+  const MDeformVert *dvert;
   MOD_get_vgroup(ob, mesh, smd->defgrp_name, &dvert, &defgrp_index);
   const bool invert_vgroup = (smd->flags & MOD_SDEF_INVERT_VGROUP) != 0;
 
@@ -1578,7 +1575,7 @@ static void deformVerts(ModifierData *md,
 
   if (smd->defgrp_name[0] != '\0') {
     /* Only need to use mesh_src when a vgroup is used. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, NULL, mesh, NULL, verts_num, false);
   }
 
   surfacedeformModifier_do(md, ctx, vertexCos, verts_num, ctx->object, mesh_src);
@@ -1600,7 +1597,7 @@ static void deformVertsEM(ModifierData *md,
 
   if (smd->defgrp_name[0] != '\0') {
     /* Only need to use mesh_src when a vgroup is used. */
-    mesh_src = MOD_deform_mesh_eval_get(ctx->object, em, mesh, NULL, verts_num, false, false);
+    mesh_src = MOD_deform_mesh_eval_get(ctx->object, em, mesh, NULL, verts_num, false);
   }
 
   /* TODO(@campbellbarton): use edit-mode data only (remove this line). */

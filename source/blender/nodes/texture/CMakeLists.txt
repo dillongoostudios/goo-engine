@@ -2,7 +2,7 @@
 
 set(INC
   .
-  ../
+  ..
   ../intern
   ../../editors/include
   ../../blenkernel
@@ -15,6 +15,7 @@ set(INC
   ../../render
   ../../windowmanager
   ../../../../intern/guardedalloc
+  ../../bmesh
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -55,21 +56,6 @@ set(SRC
 set(LIB
   bf_nodes
 )
-
-if(WITH_PYTHON)
-  list(APPEND INC
-    ../../python
-  )
-  list(APPEND INC_SYS
-    ${PYTHON_INCLUDE_DIRS}
-  )
-  list(APPEND LIB
-    ${PYTHON_LINKFLAGS}
-    ${PYTHON_LIBRARIES}
-  )
-  add_definitions(-DWITH_PYTHON)
-endif()
-
 
 blender_add_lib(bf_nodes_texture "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 

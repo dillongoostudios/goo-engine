@@ -14,9 +14,23 @@ struct ResultBLF;
 struct rctf;
 struct rcti;
 
-/* Max number of fonts in memory. Take care that every font has a glyph cache per size/dpi,
+/* Max number of FontBLFs in memory. Take care that every font has a glyph cache per size/dpi,
  * so we don't need load the same font with different size, just load one and call BLF_size. */
-#define BLF_MAX_FONT 32
+#define BLF_MAX_FONT 64
+
+/* Maximum number of opened FT_Face objects managed by cache. 0 is default of 2. */
+#define BLF_CACHE_MAX_FACES 4
+/* Maximum number of opened FT_Size objects managed by cache. 0 is default of 4 */
+#define BLF_CACHE_MAX_SIZES 8
+/* Maximum number of bytes to use for cached data nodes. 0 is default of 200,000. */
+#define BLF_CACHE_BYTES 400000
+
+/* We assume square pixels at a fixed DPI of 72, scaling only the size. Therefore
+ * font size = points = pixels, i.e. a size of 20 will result in a 20-pixel EM square.
+ * Although we could use the actual monitor DPI instead, we would then have to scale
+ * the size to cancel that out. Other libraries like Skia use this same fixed value.
+ */
+#define BLF_DPI 72
 
 extern struct FontBLF *global_font[BLF_MAX_FONT];
 
@@ -39,17 +53,31 @@ void blf_font_exit(void);
 
 bool blf_font_id_is_valid(int fontid);
 
+/**
+ * Return glyph id from char-code.
+ */
+uint blf_get_char_index(struct FontBLF *font, uint charcode);
+
+bool blf_ensure_face(struct FontBLF *font);
+void blf_ensure_size(struct FontBLF *font);
+
 void blf_draw_buffer__start(struct FontBLF *font);
 void blf_draw_buffer__end(void);
 
+struct FontBLF *blf_font_new_ex(const char *name,
+                                const char *filepath,
+                                const unsigned char *mem,
+                                size_t mem_size,
+                                void *ft_library);
+
 struct FontBLF *blf_font_new(const char *name, const char *filepath);
-struct FontBLF *blf_font_new_from_mem(const char *name, const unsigned char *mem, int mem_size);
-void blf_font_attach_from_mem(struct FontBLF *font, const unsigned char *mem, int mem_size);
+struct FontBLF *blf_font_new_from_mem(const char *name, const unsigned char *mem, size_t mem_size);
+void blf_font_attach_from_mem(struct FontBLF *font, const unsigned char *mem, size_t mem_size);
 
 /**
  * Change font's output size. Returns true if successful in changing the size.
  */
-bool blf_font_size(struct FontBLF *font, float size, unsigned int dpi);
+bool blf_font_size(struct FontBLF *font, float size);
 
 void blf_font_draw(struct FontBLF *font,
                    const char *str,
@@ -113,18 +141,19 @@ void blf_font_boundbox_foreach_glyph(struct FontBLF *font,
                                      size_t str_len,
                                      bool (*user_fn)(const char *str,
                                                      size_t str_step_ofs,
-                                                     const struct rcti *glyph_step_bounds,
-                                                     int glyph_advance_x,
-                                                     const struct rcti *glyph_bounds,
-                                                     const int glyph_bearing[2],
+                                                     const struct rcti *bounds,
                                                      void *user_data),
-                                     void *user_data,
-                                     struct ResultBLF *r_info);
+                                     void *user_data);
 
-int blf_font_count_missing_chars(struct FontBLF *font,
-                                 const char *str,
-                                 size_t str_len,
-                                 int *r_tot_chars);
+size_t blf_str_offset_from_cursor_position(struct FontBLF *font,
+                                           const char *str,
+                                           size_t str_len,
+                                           int location_x);
+
+void blf_str_offset_to_glyph_bounds(struct FontBLF *font,
+                                    const char *str,
+                                    size_t str_offset,
+                                    struct rcti *glyph_bounds);
 
 void blf_font_free(struct FontBLF *font);
 

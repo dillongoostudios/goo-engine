@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "BLI_color.hh"
 #include "BLI_function_ref.hh"
 #include "BLI_generic_span.hh"
@@ -14,6 +16,10 @@
 
 struct Mesh;
 struct PointCloud;
+namespace blender::fn {
+class MultiFunction;
+class GField;
+}  // namespace blender::fn
 
 namespace blender::bke {
 
@@ -71,8 +77,13 @@ struct AttributeKind {
  */
 struct AttributeInit {
   enum class Type {
-    Default,
+    /** #AttributeInitConstruct. */
+    Construct,
+    /** #AttributeInitDefaultValue. */
+    DefaultValue,
+    /** #AttributeInitVArray. */
     VArray,
+    /** #AttributeInitMoveArray. */
     MoveArray,
   };
   Type type;
@@ -82,11 +93,20 @@ struct AttributeInit {
 };
 
 /**
- * Create an attribute using the default value for the data type.
- * The default values may depend on the attribute provider implementation.
+ * Default construct new attribute values. Does nothing for trivial types. This should be used
+ * if all attribute element values will be set by the caller after creating the attribute.
  */
-struct AttributeInitDefault : public AttributeInit {
-  AttributeInitDefault() : AttributeInit(Type::Default)
+struct AttributeInitConstruct : public AttributeInit {
+  AttributeInitConstruct() : AttributeInit(Type::Construct)
+  {
+  }
+};
+
+/**
+ * Create an attribute using the default value for the data type (almost always "zero").
+ */
+struct AttributeInitDefaultValue : public AttributeInit {
+  AttributeInitDefaultValue() : AttributeInit(Type::DefaultValue)
   {
   }
 };
@@ -94,14 +114,11 @@ struct AttributeInitDefault : public AttributeInit {
 /**
  * Create an attribute by copying data from an existing virtual array. The virtual array
  * must have the same type as the newly created attribute.
- *
- * Note that this can be used to fill the new attribute with the default
  */
 struct AttributeInitVArray : public AttributeInit {
-  blender::GVArray varray;
+  GVArray varray;
 
-  AttributeInitVArray(blender::GVArray varray)
-      : AttributeInit(Type::VArray), varray(std::move(varray))
+  AttributeInitVArray(GVArray varray) : AttributeInit(Type::VArray), varray(std::move(varray))
   {
   }
 };
@@ -117,10 +134,10 @@ struct AttributeInitVArray : public AttributeInit {
  * The array must be allocated with MEM_*, since `attribute_try_create` will free the array if it
  * can't be used directly, and that is generally how Blender expects custom data to be allocated.
  */
-struct AttributeInitMove : public AttributeInit {
+struct AttributeInitMoveArray : public AttributeInit {
   void *data = nullptr;
 
-  AttributeInitMove(void *data) : AttributeInit(Type::MoveArray), data(data)
+  AttributeInitMoveArray(void *data) : AttributeInit(Type::MoveArray), data(data)
   {
   }
 };
@@ -150,7 +167,28 @@ template<typename T> struct AttributeReader {
 };
 
 /**
- * Result when looking up an attribute from some geometry with read an write access. After writing
+ * A utility to make sure attribute values are valid, for attributes like "material_index" which
+ * can only be positive, or attributes that represent enum options. This is usually only necessary
+ * when writing attributes from an untrusted/arbitrary user input.
+ */
+struct AttributeValidator {
+  /**
+   * Single input, single output function that corrects attribute values if necessary.
+   */
+  const fn::MultiFunction *function;
+
+  operator bool() const
+  {
+    return this->function != nullptr;
+  }
+  /**
+   * Return a field that creates corrected attribute values.
+   */
+  fn::GField validate_field_if_necessary(const fn::GField &field) const;
+};
+
+/**
+ * Result when looking up an attribute from some geometry with read and write access. After writing
  * to the attribute, the #finish method has to be called. This may invalidate caches based on this
  * attribute.
  */
@@ -226,7 +264,9 @@ template<typename T> struct SpanAttributeWriter {
    */
   void finish()
   {
-    this->span.save();
+    if (this->span.varray()) {
+      this->span.save();
+    }
     if (this->tag_modified_fn) {
       this->tag_modified_fn();
     }
@@ -301,7 +341,9 @@ struct GSpanAttributeWriter {
 
   void finish()
   {
-    this->span.save();
+    if (this->span.varray()) {
+      this->span.save();
+    }
     if (this->tag_modified_fn) {
       this->tag_modified_fn();
     }
@@ -330,7 +372,7 @@ struct AttributeAccessorFunctions {
                           eAttrDomain to_domain);
   bool (*for_all)(const void *owner,
                   FunctionRef<bool(const AttributeIDRef &, const AttributeMetaData &)> fn);
-
+  AttributeValidator (*lookup_validator)(const void *owner, const AttributeIDRef &attribute_id);
   GAttributeWriter (*lookup_for_write)(void *owner, const AttributeIDRef &attribute_id);
   bool (*remove)(void *owner, const AttributeIDRef &attribute_id);
   bool (*add)(void *owner,
@@ -485,6 +527,14 @@ class AttributeAccessor {
   }
 
   /**
+   * Same as the generic version above, but should be used when the type is known at compile time.
+   */
+  AttributeValidator lookup_validator(const AttributeIDRef &attribute_id) const
+  {
+    return fn_->lookup_validator(owner_, attribute_id);
+  }
+
+  /**
    * Interpolate data from one domain to another.
    */
   GVArray adapt_domain(const GVArray &varray,
@@ -540,6 +590,11 @@ class MutableAttributeAccessor : public AttributeAccessor {
   GAttributeWriter lookup_for_write(const AttributeIDRef &attribute_id);
 
   /**
+   * Same as above, but returns a type that makes it easier to work with the attribute as a span.
+   */
+  GSpanAttributeWriter lookup_for_write_span(const AttributeIDRef &attribute_id);
+
+  /**
    * Get a writable attribute or non if it does not exist.
    * Make sure to call #finish after changes are done.
    */
@@ -553,6 +608,19 @@ class MutableAttributeAccessor : public AttributeAccessor {
       return {};
     }
     return attribute.typed<T>();
+  }
+
+  /**
+   * Same as above, but returns a type that makes it easier to work with the attribute as a span.
+   */
+  template<typename T>
+  SpanAttributeWriter<T> lookup_for_write_span(const AttributeIDRef &attribute_id)
+  {
+    AttributeWriter<T> attribute = this->lookup_for_write<T>(attribute_id);
+    if (attribute) {
+      return SpanAttributeWriter<T>{std::move(attribute), true};
+    }
+    return {};
   }
 
   /**
@@ -577,7 +645,7 @@ class MutableAttributeAccessor : public AttributeAccessor {
       const AttributeIDRef &attribute_id,
       const eAttrDomain domain,
       const eCustomDataType data_type,
-      const AttributeInit &initializer = AttributeInitDefault());
+      const AttributeInit &initializer = AttributeInitDefaultValue());
 
   /**
    * Same as above, but returns a type that makes it easier to work with the attribute as a span.
@@ -588,7 +656,7 @@ class MutableAttributeAccessor : public AttributeAccessor {
       const AttributeIDRef &attribute_id,
       const eAttrDomain domain,
       const eCustomDataType data_type,
-      const AttributeInit &initializer = AttributeInitDefault());
+      const AttributeInit &initializer = AttributeInitDefaultValue());
 
   /**
    * Same as above, but should be used when the type is known at compile time.
@@ -597,7 +665,7 @@ class MutableAttributeAccessor : public AttributeAccessor {
   AttributeWriter<T> lookup_or_add_for_write(
       const AttributeIDRef &attribute_id,
       const eAttrDomain domain,
-      const AttributeInit &initializer = AttributeInitDefault())
+      const AttributeInit &initializer = AttributeInitDefaultValue())
   {
     const CPPType &cpp_type = CPPType::get<T>();
     const eCustomDataType data_type = cpp_type_to_custom_data_type(cpp_type);
@@ -611,7 +679,7 @@ class MutableAttributeAccessor : public AttributeAccessor {
   SpanAttributeWriter<T> lookup_or_add_for_write_span(
       const AttributeIDRef &attribute_id,
       const eAttrDomain domain,
-      const AttributeInit &initializer = AttributeInitDefault())
+      const AttributeInit &initializer = AttributeInitDefaultValue())
   {
     AttributeWriter<T> attribute = this->lookup_or_add_for_write<T>(
         attribute_id, domain, initializer);
@@ -628,6 +696,8 @@ class MutableAttributeAccessor : public AttributeAccessor {
    * The "only" in the name indicates that the caller should not read existing values from the
    * span. If the attribute is not stored as span internally, the existing values won't be copied
    * over to the span.
+   *
+   * For trivial types, the values in a newly created attribute will not be initialized.
    */
   GSpanAttributeWriter lookup_or_add_for_write_only_span(const AttributeIDRef &attribute_id,
                                                          const eAttrDomain domain,
@@ -640,7 +710,9 @@ class MutableAttributeAccessor : public AttributeAccessor {
   SpanAttributeWriter<T> lookup_or_add_for_write_only_span(const AttributeIDRef &attribute_id,
                                                            const eAttrDomain domain)
   {
-    AttributeWriter<T> attribute = this->lookup_or_add_for_write<T>(attribute_id, domain);
+    AttributeWriter<T> attribute = this->lookup_or_add_for_write<T>(
+        attribute_id, domain, AttributeInitConstruct());
+
     if (attribute) {
       return SpanAttributeWriter<T>{std::move(attribute), false};
     }
@@ -679,6 +751,19 @@ Vector<AttributeTransferData> retrieve_attributes_for_transfer(
     eAttrDomainMask domain_mask,
     const Set<std::string> &skip = {});
 
+/**
+ * Copy attributes for the domain based on the elementwise mask.
+ *
+ * \param mask_indices: Indexed elements to copy from the source data-block.
+ * \param domain: Attribute domain to transfer.
+ * \param skip: Named attributes to ignore/skip.
+ */
+void copy_attribute_domain(AttributeAccessor src_attributes,
+                           MutableAttributeAccessor dst_attributes,
+                           IndexMask selection,
+                           eAttrDomain domain,
+                           const Set<std::string> &skip = {});
+
 bool allow_procedural_attribute_access(StringRef attribute_name);
 extern const char *no_procedural_access_message;
 
@@ -708,7 +793,9 @@ class CustomDataAttributes {
   ~CustomDataAttributes();
   CustomDataAttributes(const CustomDataAttributes &other);
   CustomDataAttributes(CustomDataAttributes &&other);
+
   CustomDataAttributes &operator=(const CustomDataAttributes &other);
+  CustomDataAttributes &operator=(CustomDataAttributes &&other);
 
   void reallocate(int size);
 
@@ -739,19 +826,8 @@ class CustomDataAttributes {
   bool create_by_move(const AttributeIDRef &attribute_id, eCustomDataType data_type, void *buffer);
   bool remove(const AttributeIDRef &attribute_id);
 
-  /**
-   * Change the order of the attributes to match the order of IDs in the argument.
-   */
-  void reorder(Span<AttributeIDRef> new_order);
-
   bool foreach_attribute(const AttributeForeachCallback callback, eAttrDomain domain) const;
 };
-
-AttributeAccessor mesh_attributes(const Mesh &mesh);
-MutableAttributeAccessor mesh_attributes_for_write(Mesh &mesh);
-
-AttributeAccessor pointcloud_attributes(const PointCloud &pointcloud);
-MutableAttributeAccessor pointcloud_attributes_for_write(PointCloud &pointcloud);
 
 /* -------------------------------------------------------------------- */
 /** \name #AttributeIDRef Inline Methods

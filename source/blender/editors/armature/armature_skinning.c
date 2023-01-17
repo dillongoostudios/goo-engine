@@ -21,6 +21,7 @@
 #include "BKE_action.h"
 #include "BKE_armature.h"
 #include "BKE_deform.h"
+#include "BKE_mesh.h"
 #include "BKE_mesh_iterators.h"
 #include "BKE_mesh_runtime.h"
 #include "BKE_modifier.h"
@@ -202,10 +203,13 @@ static void envelope_bone_weighting(Object *ob,
     use_mask = true;
   }
 
+  const bool *select_vert = (const bool *)CustomData_get_layer_named(
+      &mesh->vdata, CD_PROP_BOOL, ".select_vert");
+
   /* for each vertex in the mesh */
   for (int i = 0; i < mesh->totvert; i++) {
 
-    if (use_mask && !(mesh->mvert[i].flag & SELECT)) {
+    if (use_mask && !(select_vert && select_vert[i])) {
       continue;
     }
 
@@ -361,8 +365,8 @@ static void add_verts_to_dgroups(ReportList *reports,
       copy_v3_v3(tip[j], bone->arm_tail);
     }
 
-    mul_m4_v3(par->obmat, root[j]);
-    mul_m4_v3(par->obmat, tip[j]);
+    mul_m4_v3(par->object_to_world, root[j]);
+    mul_m4_v3(par->object_to_world, tip[j]);
 
     /* set selected */
     if (wpmode) {
@@ -405,11 +409,12 @@ static void add_verts_to_dgroups(ReportList *reports,
   }
 
   /* transform verts to global space */
+  const MVert *mesh_verts = BKE_mesh_verts(mesh);
   for (int i = 0; i < mesh->totvert; i++) {
     if (!vertsfilled) {
-      copy_v3_v3(verts[i], mesh->mvert[i].co);
+      copy_v3_v3(verts[i], mesh_verts[i].co);
     }
-    mul_m4_v3(ob->obmat, verts[i]);
+    mul_m4_v3(ob->object_to_world, verts[i]);
   }
 
   /* compute the weights based on gathered vertices and bones */
@@ -433,7 +438,7 @@ static void add_verts_to_dgroups(ReportList *reports,
                             root,
                             tip,
                             selected,
-                            mat4_to_scale(par->obmat));
+                            mat4_to_scale(par->object_to_world));
   }
 
   /* only generated in some cases but can call anyway */

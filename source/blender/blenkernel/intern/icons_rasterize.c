@@ -67,16 +67,14 @@ static void tri_fill_smooth(int x, int x_end, int y, void *user_data)
   }
 }
 
-ImBuf *BKE_icon_geom_rasterize(const struct Icon_Geom *geom,
-                               const unsigned int size_x,
-                               const unsigned int size_y)
+ImBuf *BKE_icon_geom_rasterize(const struct Icon_Geom *geom, const uint size_x, const uint size_y)
 {
   const int coords_len = geom->coords_len;
 
   const uchar(*pos)[2] = geom->coords;
   const uint *col = (void *)geom->colors;
 
-  /* TODO(campbell): Currently rasterizes to fixed size, then scales.
+  /* TODO(@campbellbarton): Currently rasterizes to fixed size, then scales.
    * Should rasterize to double size for eg instead. */
   const int rect_size[2] = {max_ii(256, (int)size_x * 2), max_ii(256, (int)size_y * 2)};
 

@@ -55,11 +55,11 @@ ptrdiff_t BLI_str_utf8_invalid_byte(const char *str, size_t length)
    * length is in bytes, since without knowing whether the string is valid
    * it's hard to know how many characters there are! */
 
-  const unsigned char *p, *perr, *pend = (const unsigned char *)str + length;
-  unsigned char c;
+  const uchar *p, *perr, *pend = (const uchar *)str + length;
+  uchar c;
   int ab;
 
-  for (p = (const unsigned char *)str; p < pend; p++, length--) {
+  for (p = (const uchar *)str; p < pend; p++, length--) {
     c = *p;
     perr = p; /* Erroneous char is always the first of an invalid utf8 sequence... */
     if (ELEM(c, 0xfe, 0xff, 0x00)) {
@@ -403,7 +403,7 @@ int BLI_str_utf8_char_width_safe(const char *p)
 
 /* copied from glib's gutf8.c, added 'Err' arg */
 
-/* NOTE(campbell): glib uses uint for unicode, best we do the same,
+/* NOTE(@campbellbarton): glib uses uint for unicode, best we do the same,
  * though we don't typedef it. */
 
 #define UTF8_COMPUTE(Char, Mask, Len, Err) \
@@ -454,7 +454,7 @@ int BLI_str_utf8_size(const char *p)
   /* NOTE: uses glib functions but not from GLIB. */
 
   int mask = 0, len;
-  const unsigned char c = (unsigned char)*p;
+  const uchar c = (uchar)*p;
 
   UTF8_COMPUTE(c, mask, len, -1);
 
@@ -466,7 +466,7 @@ int BLI_str_utf8_size(const char *p)
 int BLI_str_utf8_size_safe(const char *p)
 {
   int mask = 0, len;
-  const unsigned char c = (unsigned char)*p;
+  const uchar c = (uchar)*p;
 
   UTF8_COMPUTE(c, mask, len, 1);
 
@@ -482,7 +482,7 @@ uint BLI_str_utf8_as_unicode(const char *p)
   int i, len;
   uint mask = 0;
   uint result;
-  const unsigned char c = (unsigned char)*p;
+  const uchar c = (uchar)*p;
 
   UTF8_COMPUTE(c, mask, len, -1);
   if (UNLIKELY(len == -1)) {
@@ -500,7 +500,7 @@ uint BLI_str_utf8_as_unicode_step_or_error(const char *__restrict p,
   int i, len;
   uint mask = 0;
   uint result;
-  const unsigned char c = (unsigned char)*(p += *index);
+  const uchar c = (uchar) * (p += *index);
 
   BLI_assert(*index < p_len);
   BLI_assert(c != '\0');
@@ -692,25 +692,25 @@ const char *BLI_str_find_next_char_utf8(const char *p, const char *str_end)
 
 size_t BLI_str_partition_utf8(const char *str,
                               const uint delim[],
-                              const char **sep,
-                              const char **suf)
+                              const char **r_sep,
+                              const char **r_suf)
 {
-  return BLI_str_partition_ex_utf8(str, NULL, delim, sep, suf, false);
+  return BLI_str_partition_ex_utf8(str, NULL, delim, r_sep, r_suf, false);
 }
 
 size_t BLI_str_rpartition_utf8(const char *str,
                                const uint delim[],
-                               const char **sep,
-                               const char **suf)
+                               const char **r_sep,
+                               const char **r_suf)
 {
-  return BLI_str_partition_ex_utf8(str, NULL, delim, sep, suf, true);
+  return BLI_str_partition_ex_utf8(str, NULL, delim, r_sep, r_suf, true);
 }
 
 size_t BLI_str_partition_ex_utf8(const char *str,
                                  const char *end,
                                  const uint delim[],
-                                 const char **sep,
-                                 const char **suf,
+                                 const char **r_sep,
+                                 const char **r_suf,
                                  const bool from_right)
 {
   const size_t str_len = end ? (size_t)(end - str) : strlen(str);
@@ -721,36 +721,32 @@ size_t BLI_str_partition_ex_utf8(const char *str,
   /* Note that here, we assume end points to a valid utf8 char! */
   BLI_assert((end >= str) && (BLI_str_utf8_as_unicode(end) != BLI_UTF8_ERR));
 
-  *suf = (char *)(str + str_len);
-
-  size_t index;
-  for (*sep = (char *)(from_right ? BLI_str_find_prev_char_utf8(end, str) : str), index = 0;
-       from_right ? (*sep > str) : ((*sep < end) && (**sep != '\0'));
-       *sep = (char *)(from_right ? (str != *sep ? BLI_str_find_prev_char_utf8(*sep, str) : NULL) :
-                                    str + index)) {
+  char *suf = (char *)(str + str_len);
+  size_t index = 0;
+  for (char *sep = (char *)(from_right ? BLI_str_find_prev_char_utf8(end, str) : str);
+       from_right ? (sep > str) : ((sep < end) && (*sep != '\0'));
+       sep = (char *)(from_right ? (str != sep ? BLI_str_find_prev_char_utf8(sep, str) : NULL) :
+                                   str + index)) {
     size_t index_ofs = 0;
-    const uint c = BLI_str_utf8_as_unicode_step_or_error(*sep, (size_t)(end - *sep), &index_ofs);
-    index += index_ofs;
-
-    if (c == BLI_UTF8_ERR) {
-      *suf = *sep = NULL;
+    const uint c = BLI_str_utf8_as_unicode_step_or_error(sep, (size_t)(end - sep), &index_ofs);
+    if (UNLIKELY(c == BLI_UTF8_ERR)) {
       break;
     }
+    index += index_ofs;
 
     for (const uint *d = delim; *d != '\0'; d++) {
       if (*d == c) {
-        /* *suf is already correct in case from_right is true. */
-        if (!from_right) {
-          *suf = (char *)(str + index);
-        }
-        return (size_t)(*sep - str);
+        /* `suf` is already correct in case from_right is true. */
+        *r_sep = sep;
+        *r_suf = from_right ? suf : (char *)(str + index);
+        return (size_t)(sep - str);
       }
     }
 
-    *suf = *sep; /* Useful in 'from_right' case! */
+    suf = sep; /* Useful in 'from_right' case! */
   }
 
-  *suf = *sep = NULL;
+  *r_suf = *r_sep = NULL;
   return str_len;
 }
 
@@ -790,9 +786,9 @@ int BLI_str_utf8_offset_to_column(const char *str, int offset)
 
 int BLI_str_utf8_offset_from_column(const char *str, int column)
 {
-  int offset = 0, pos = 0, col;
+  int offset = 0, pos = 0;
   while (*(str + offset) && pos < column) {
-    col = BLI_str_utf8_char_width_safe(str + offset);
+    const int col = BLI_str_utf8_char_width_safe(str + offset);
     if (pos + col > column) {
       break;
     }

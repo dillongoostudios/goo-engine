@@ -725,6 +725,11 @@ static void rna_Modifier_name_set(PointerRNA *ptr, const char *value)
   BKE_animdata_fix_paths_rename_all(NULL, "modifiers", oldname, md->name);
 }
 
+static void rna_Modifier_name_update(Main *bmain, Scene *UNUSED(scene), PointerRNA *UNUSED(ptr))
+{
+  DEG_relations_tag_update(bmain);
+}
+
 static char *rna_Modifier_path(const PointerRNA *ptr)
 {
   const ModifierData *md = ptr->data;
@@ -2755,6 +2760,24 @@ static void rna_def_modifier_boolean(BlenderRNA *brna)
       {0, NULL, 0, NULL, NULL},
   };
 
+  static const EnumPropertyItem material_mode_items[] = {
+      {eBooleanModifierMaterialMode_Index,
+       "INDEX",
+       0,
+       "Index Based",
+       "Set the material on new faces based on the order of the material slot lists. If a "
+       "material doesn't exist on the modifier object, the face will use the same material slot "
+       "or the first if the object doesn't have enough slots"},
+      {eBooleanModifierMaterialMode_Transfer,
+       "TRANSFER",
+       0,
+       "Transfer",
+       "Transfer materials from non-empty slots to the result mesh, adding new materials as "
+       "necessary. For empty slots, fall back to using the same material index as the operand "
+       "mesh"},
+      {0, NULL, 0, NULL, NULL},
+  };
+
   srna = RNA_def_struct(brna, "BooleanModifier", "Modifier");
   RNA_def_struct_ui_text(srna, "Boolean Modifier", "Boolean operations modifier");
   RNA_def_struct_sdna(srna, "BooleanModifierData");
@@ -2812,6 +2835,12 @@ static void rna_def_modifier_boolean(BlenderRNA *brna)
   prop = RNA_def_property(srna, "use_hole_tolerant", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", eBooleanModifierFlag_HoleTolerant);
   RNA_def_property_ui_text(prop, "Hole Tolerant", "Better results when there are holes (slower)");
+  RNA_def_property_update(prop, 0, "rna_Modifier_update");
+
+  prop = RNA_def_property(srna, "material_mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_items(prop, material_mode_items);
+  RNA_def_property_enum_default(prop, eBooleanModifierMaterialMode_Index);
+  RNA_def_property_ui_text(prop, "Material Mode", "Method for setting materials on the new faces");
   RNA_def_property_update(prop, 0, "rna_Modifier_update");
 
   /* BMesh debugging options, only used when G_DEBUG is set */
@@ -7249,7 +7278,7 @@ void RNA_def_modifier(BlenderRNA *brna)
   prop = RNA_def_property(srna, "name", PROP_STRING, PROP_NONE);
   RNA_def_property_string_funcs(prop, NULL, NULL, "rna_Modifier_name_set");
   RNA_def_property_ui_text(prop, "Name", "Modifier name");
-  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER | NA_RENAME, NULL);
+  RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER | NA_RENAME, "rna_Modifier_name_update");
   RNA_def_struct_name_property(srna, prop);
 
   /* enums */

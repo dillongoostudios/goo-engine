@@ -10,8 +10,7 @@
 #include <iostream>
 #include <string>
 
-#include <GL/glew.h>
-#include <GL/wglew.h>
+#include <epoxy/wgl.h>
 
 #include "GHOST_ContextD3D.h"
 #include "GHOST_ContextWGL.h" /* For shared drawing */
@@ -124,8 +123,6 @@ class GHOST_SharedOpenGLResource {
                              ID3D11RenderTargetView *render_target = nullptr)
       : m_device(device), m_device_ctx(device_ctx), m_cur_width(width), m_cur_height(height)
   {
-    ID3D11Resource *backbuffer_res;
-
     if (!render_target) {
       D3D11_TEXTURE2D_DESC texDesc{};
       D3D11_RENDER_TARGET_VIEW_DESC renderTargetViewDesc{};
@@ -158,11 +155,12 @@ class GHOST_SharedOpenGLResource {
 
     m_render_target = render_target;
     if (m_render_target) {
+      ID3D11Resource *backbuffer_res = nullptr;
       m_render_target->GetResource(&backbuffer_res);
-    }
-    if (backbuffer_res) {
-      backbuffer_res->QueryInterface<ID3D11Texture2D>(&m_render_target_tex);
-      backbuffer_res->Release();
+      if (backbuffer_res) {
+        backbuffer_res->QueryInterface<ID3D11Texture2D>(&m_render_target_tex);
+        backbuffer_res->Release();
+      }
     }
 
     if (!m_render_target || !m_render_target_tex) {
@@ -181,13 +179,14 @@ class GHOST_SharedOpenGLResource {
     }
 
     if (m_is_initialized) {
-      if (m_shared.render_target
-#if 1
+#if 0 /* TODO: Causes an access violation since Blender 3.4 (a296b8f694d1). */
+        if (m_shared.render_target
+#  if 1
           /* TODO: #wglDXUnregisterObjectNV() causes an access violation on AMD when the shared
            * resource is a GL texture. Since there is currently no good alternative, just skip
            * unregistering the shared resource. */
           && !m_use_gl_texture2d
-#endif
+#  endif
       ) {
         wglDXUnregisterObjectNV(m_shared.device, m_shared.render_target);
       }
@@ -201,6 +200,12 @@ class GHOST_SharedOpenGLResource {
       else {
         glDeleteRenderbuffers(1, &m_gl_render_target);
       }
+#else
+      glDeleteFramebuffers(1, &m_shared.fbo);
+      if (m_use_gl_texture2d) {
+        glDeleteTextures(1, &m_gl_render_target);
+      }
+#endif
     }
   }
 

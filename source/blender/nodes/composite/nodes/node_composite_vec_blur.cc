@@ -8,6 +8,8 @@
 #include "UI_interface.h"
 #include "UI_resources.h"
 
+#include "COM_node_operation.hh"
+
 #include "node_composite_util.hh"
 
 /* **************** VECTOR BLUR ******************** */
@@ -27,7 +29,7 @@ static void cmp_node_vec_blur_declare(NodeDeclarationBuilder &b)
 }
 
 /* custom1: iterations, custom2: max_speed (0 = no_limit). */
-static void node_composit_init_vecblur(bNodeTree *UNUSED(ntree), bNode *node)
+static void node_composit_init_vecblur(bNodeTree * /*ntree*/, bNode *node)
 {
   NodeBlurData *nbd = MEM_cnew<NodeBlurData>(__func__);
   node->storage = nbd;
@@ -35,7 +37,7 @@ static void node_composit_init_vecblur(bNodeTree *UNUSED(ntree), bNode *node)
   nbd->fac = 1.0f;
 }
 
-static void node_composit_buts_vecblur(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_composit_buts_vecblur(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayout *col;
 
@@ -49,6 +51,23 @@ static void node_composit_buts_vecblur(uiLayout *layout, bContext *UNUSED(C), Po
   uiItemR(col, ptr, "speed_max", UI_ITEM_R_SPLIT_EMPTY_NAME, IFACE_("Max"), ICON_NONE);
 
   uiItemR(layout, ptr, "use_curved", UI_ITEM_R_SPLIT_EMPTY_NAME, nullptr, ICON_NONE);
+}
+
+using namespace blender::realtime_compositor;
+
+class VectorBlurOperation : public NodeOperation {
+ public:
+  using NodeOperation::NodeOperation;
+
+  void execute() override
+  {
+    get_input("Image").pass_through(get_result("Image"));
+  }
+};
+
+static NodeOperation *get_compositor_operation(Context &context, DNode node)
+{
+  return new VectorBlurOperation(context, node);
 }
 
 }  // namespace blender::nodes::node_composite_vec_blur_cc
@@ -65,6 +84,7 @@ void register_node_type_cmp_vecblur()
   node_type_init(&ntype, file_ns::node_composit_init_vecblur);
   node_type_storage(
       &ntype, "NodeBlurData", node_free_standard_storage, node_copy_standard_storage);
+  ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
   nodeRegisterType(&ntype);
 }

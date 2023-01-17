@@ -55,7 +55,7 @@ struct wmWindowManager;
 typedef struct wmSpaceTypeListenerParams {
   struct wmWindow *window;
   struct ScrArea *area;
-  struct wmNotifier *notifier;
+  const struct wmNotifier *notifier;
   const struct Scene *scene;
 } wmSpaceTypeListenerParams;
 
@@ -108,12 +108,29 @@ typedef struct SpaceType {
   void (*space_subtype_set)(struct ScrArea *area, int value);
   void (*space_subtype_item_extend)(struct bContext *C, EnumPropertyItem **item, int *totitem);
 
+  /**
+   * Update pointers for all structs directly owned by this space.
+   */
+  void (*blend_read_data)(struct BlendDataReader *reader, struct SpaceLink *space_link);
+
+  /**
+   * Update pointers to other id data blocks.
+   */
+  void (*blend_read_lib)(struct BlendLibReader *reader,
+                         struct ID *parent_id,
+                         struct SpaceLink *space_link);
+
+  /**
+   * Write all structs that should be saved in a .blend file.
+   */
+  void (*blend_write)(struct BlendWriter *writer, struct SpaceLink *space_link);
+
   /* region type definitions */
   ListBase regiontypes;
 
   /* read and write... */
 
-  /* default keymaps to add */
+  /** Default key-maps to add. */
   int keymapflag;
 
 } SpaceType;
@@ -124,7 +141,7 @@ typedef struct wmRegionListenerParams {
   struct wmWindow *window;
   struct ScrArea *area; /* Can be NULL when the region is not part of an area. */
   struct ARegion *region;
-  struct wmNotifier *notifier;
+  const struct wmNotifier *notifier;
   const struct Scene *scene;
 } wmRegionListenerParams;
 
@@ -291,7 +308,7 @@ enum {
 
 /* Draw an item in the uiList */
 typedef void (*uiListDrawItemFunc)(struct uiList *ui_list,
-                                   struct bContext *C,
+                                   const struct bContext *C,
                                    struct uiLayout *layout,
                                    struct PointerRNA *dataptr,
                                    struct PointerRNA *itemptr,
@@ -303,12 +320,12 @@ typedef void (*uiListDrawItemFunc)(struct uiList *ui_list,
 
 /* Draw the filtering part of an uiList */
 typedef void (*uiListDrawFilterFunc)(struct uiList *ui_list,
-                                     struct bContext *C,
+                                     const struct bContext *C,
                                      struct uiLayout *layout);
 
 /* Filter items of an uiList */
 typedef void (*uiListFilterItemsFunc)(struct uiList *ui_list,
-                                      struct bContext *C,
+                                      const struct bContext *C,
                                       struct PointerRNA *,
                                       const char *propname);
 
@@ -368,6 +385,7 @@ typedef struct MenuType {
   bool (*poll)(const struct bContext *C, struct MenuType *mt);
   /* draw entirely, view changes should be handled here */
   void (*draw)(const struct bContext *C, struct Menu *menu);
+  void (*listener)(const wmRegionListenerParams *params);
 
   /* RNA integration */
   ExtensionRNA rna_ext;

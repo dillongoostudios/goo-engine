@@ -32,7 +32,6 @@
 
 #include "RE_texture.h"
 
-#include "render_types.h"
 #include "texture_common.h"
 
 static void boxsample(ImBuf *ibuf,
@@ -890,7 +889,7 @@ static void alpha_clip_aniso(
   /* TXF alpha: we're doing the same alpha-clip here as box-sample, but I'm doubting
    * if this is actually correct for the all the filtering algorithms. */
 
-  if (!(ELEM(extflag, TXC_REPT, TXC_EXTD))) {
+  if (!ELEM(extflag, TXC_REPT, TXC_EXTD)) {
     rf.xmin = minx * (ibuf->x);
     rf.xmax = maxx * (ibuf->x);
     rf.ymin = miny * (ibuf->y);
@@ -1620,7 +1619,6 @@ int imagewraposa(Tex *tex,
   /* Choice: */
   if (tex->imaflag & TEX_MIPMAP) {
     ImBuf *previbuf, *curibuf;
-    float bumpscale;
 
     dx = minx;
     dy = miny;
@@ -1630,14 +1628,6 @@ int imagewraposa(Tex *tex,
     }
 
     pixsize = 1.0f / (float)MIN2(ibuf->x, ibuf->y);
-
-    bumpscale = pixsize / maxd;
-    if (bumpscale > 1.0f) {
-      bumpscale = 1.0f;
-    }
-    else {
-      bumpscale *= bumpscale;
-    }
 
     curmap = 0;
     previbuf = curibuf = ibuf;

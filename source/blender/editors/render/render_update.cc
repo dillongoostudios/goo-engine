@@ -95,20 +95,20 @@ void ED_render_view3d_update(Depsgraph *depsgraph,
 
       CTX_free(C);
     }
-    else {
-      RenderEngineType *engine_type = ED_view3d_engine_type(scene, v3d->shading.type);
-      if (updated) {
-        DRWUpdateContext drw_context = {nullptr};
-        drw_context.bmain = bmain;
-        drw_context.depsgraph = depsgraph;
-        drw_context.scene = scene;
-        drw_context.view_layer = view_layer;
-        drw_context.region = region;
-        drw_context.v3d = v3d;
-        drw_context.engine_type = engine_type;
-        DRW_notify_view_update(&drw_context);
-      }
+
+    if (!updated) {
+      continue;
     }
+
+    DRWUpdateContext drw_context = {nullptr};
+    drw_context.bmain = bmain;
+    drw_context.depsgraph = depsgraph;
+    drw_context.scene = scene;
+    drw_context.view_layer = view_layer;
+    drw_context.region = region;
+    drw_context.v3d = v3d;
+    drw_context.engine_type = ED_view3d_engine_type(scene, v3d->shading.type);
+    DRW_notify_view_update(&drw_context);
   }
 }
 
@@ -226,13 +226,13 @@ void ED_render_view_layer_changed(Main *bmain, bScreen *screen)
  * we can get rid of the manual dependency checks.
  * \{ */
 
-static void material_changed(Main *UNUSED(bmain), Material *ma)
+static void material_changed(Main * /*bmain*/, Material *ma)
 {
   /* icons */
   BKE_icon_changed(BKE_icon_id_ensure(&ma->id));
 }
 
-static void lamp_changed(Main *UNUSED(bmain), Light *la)
+static void lamp_changed(Main * /*bmain*/, Light *la)
 {
   /* icons */
   BKE_icon_changed(BKE_icon_id_ensure(&la->id));
@@ -265,7 +265,7 @@ static void texture_changed(Main *bmain, Tex *tex)
   }
 }
 
-static void world_changed(Main *UNUSED(bmain), World *wo)
+static void world_changed(Main * /*bmain*/, World *wo)
 {
   /* icons */
   BKE_icon_changed(BKE_icon_id_ensure(&wo->id));

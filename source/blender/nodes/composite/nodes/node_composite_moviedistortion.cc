@@ -12,6 +12,8 @@
 #include "UI_interface.h"
 #include "UI_resources.h"
 
+#include "COM_node_operation.hh"
+
 #include "node_composite_util.hh"
 
 /* **************** Translate  ******************** */
@@ -24,7 +26,7 @@ static void cmp_node_moviedistortion_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Color>(N_("Image"));
 }
 
-static void label(const bNodeTree *UNUSED(ntree), const bNode *node, char *label, int maxlen)
+static void label(const bNodeTree * /*ntree*/, const bNode *node, char *label, int maxlen)
 {
   if (node->custom1 == 0) {
     BLI_strncpy(label, IFACE_("Undistortion"), maxlen);
@@ -52,7 +54,7 @@ static void storage_free(bNode *node)
   node->storage = nullptr;
 }
 
-static void storage_copy(bNodeTree *UNUSED(dest_ntree), bNode *dest_node, const bNode *src_node)
+static void storage_copy(bNodeTree * /*dst_ntree*/, bNode *dest_node, const bNode *src_node)
 {
   if (src_node->storage) {
     dest_node->storage = BKE_tracking_distortion_copy((MovieDistortion *)src_node->storage);
@@ -81,6 +83,23 @@ static void node_composit_buts_moviedistortion(uiLayout *layout, bContext *C, Po
   uiItemR(layout, ptr, "distortion_type", UI_ITEM_R_SPLIT_EMPTY_NAME, "", ICON_NONE);
 }
 
+using namespace blender::realtime_compositor;
+
+class MovieDistortionOperation : public NodeOperation {
+ public:
+  using NodeOperation::NodeOperation;
+
+  void execute() override
+  {
+    get_input("Image").pass_through(get_result("Image"));
+  }
+};
+
+static NodeOperation *get_compositor_operation(Context &context, DNode node)
+{
+  return new MovieDistortionOperation(context, node);
+}
+
 }  // namespace blender::nodes::node_composite_moviedistortion_cc
 
 void register_node_type_cmp_moviedistortion()
@@ -95,6 +114,7 @@ void register_node_type_cmp_moviedistortion()
   ntype.labelfunc = file_ns::label;
   ntype.initfunc_api = file_ns::init;
   node_type_storage(&ntype, nullptr, file_ns::storage_free, file_ns::storage_copy);
+  ntype.get_compositor_operation = file_ns::get_compositor_operation;
 
   nodeRegisterType(&ntype);
 }

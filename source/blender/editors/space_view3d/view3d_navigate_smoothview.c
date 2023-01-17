@@ -22,13 +22,8 @@
 #include "view3d_intern.h"
 #include "view3d_navigate.h" /* own include */
 
-static void view3d_smoothview_apply_ex(bContext *C,
-                                       View3D *v3d,
-                                       ARegion *region,
-                                       bool sync_boxview,
-                                       bool use_autokey,
-                                       const float step,
-                                       const bool finished);
+static void view3d_smoothview_apply_with_interp(
+    bContext *C, View3D *v3d, RegionView3D *rv3d, const bool use_autokey, const float factor);
 
 /* -------------------------------------------------------------------- */
 /** \name Smooth View Undo Handling
@@ -45,7 +40,7 @@ static void view3d_smoothview_apply_ex(bContext *C,
  * operations are executed once smooth-view has started.
  * \{ */
 
-void ED_view3d_smooth_view_undo_begin(bContext *C, ScrArea *area)
+void ED_view3d_smooth_view_undo_begin(bContext *C, const ScrArea *area)
 {
   const View3D *v3d = area->spacedata.first;
   Object *camera = v3d->camera;
@@ -58,11 +53,11 @@ void ED_view3d_smooth_view_undo_begin(bContext *C, ScrArea *area)
    * NOTE: It doesn't matter if the actual object being manipulated is the camera or not. */
   camera->id.tag &= ~LIB_TAG_DOIT;
 
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+  LISTBASE_FOREACH (const ARegion *, region, &area->regionbase) {
     if (region->regiontype != RGN_TYPE_WINDOW) {
       continue;
     }
-    RegionView3D *rv3d = region->regiondata;
+    const RegionView3D *rv3d = region->regiondata;
     if (ED_view3d_camera_lock_undo_test(v3d, rv3d, C)) {
       camera->id.tag |= LIB_TAG_DOIT;
       break;
@@ -71,7 +66,7 @@ void ED_view3d_smooth_view_undo_begin(bContext *C, ScrArea *area)
 }
 
 void ED_view3d_smooth_view_undo_end(bContext *C,
-                                    ScrArea *area,
+                                    const ScrArea *area,
                                     const char *undo_str,
                                     const bool undo_grouped)
 {
@@ -94,15 +89,15 @@ void ED_view3d_smooth_view_undo_end(bContext *C,
    * so even in the case there is a quad-view with multiple camera views set, these will all
    * reference the same camera. In this case it doesn't matter which region is used.
    * If in the future multiple cameras are supported, this logic can be extended. */
-  ARegion *region_camera = NULL;
+  const ARegion *region_camera = NULL;
 
   /* An undo push should be performed. */
   bool is_interactive = false;
-  LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
+  LISTBASE_FOREACH (const ARegion *, region, &area->regionbase) {
     if (region->regiontype != RGN_TYPE_WINDOW) {
       continue;
     }
-    RegionView3D *rv3d = region->regiondata;
+    const RegionView3D *rv3d = region->regiondata;
     if (ED_view3d_camera_lock_undo_test(v3d, rv3d, C)) {
       region_camera = region;
       if (rv3d->sms) {
@@ -115,17 +110,13 @@ void ED_view3d_smooth_view_undo_end(bContext *C,
     return;
   }
 
-  /* Arguments to #view3d_smoothview_apply_ex to temporarily apply transformation. */
-  const bool sync_boxview = false;
-  const bool use_autokey = false;
-  const bool finished = false;
+  RegionView3D *rv3d = region_camera->regiondata;
 
   /* Fast forward, undo push, then rewind. */
   if (is_interactive) {
-    view3d_smoothview_apply_ex(C, v3d, region_camera, sync_boxview, use_autokey, 1.0f, finished);
+    view3d_smoothview_apply_with_interp(C, v3d, rv3d, false, 1.0f);
   }
 
-  RegionView3D *rv3d = region_camera->regiondata;
   if (undo_grouped) {
     ED_view3d_camera_lock_undo_grouped_push(undo_str, v3d, rv3d, C);
   }
@@ -134,7 +125,7 @@ void ED_view3d_smooth_view_undo_end(bContext *C,
   }
 
   if (is_interactive) {
-    view3d_smoothview_apply_ex(C, v3d, region_camera, sync_boxview, use_autokey, 0.0f, finished);
+    view3d_smoothview_apply_with_interp(C, v3d, rv3d, false, 0.0f);
   }
 }
 
@@ -268,7 +259,7 @@ void ED_view3d_smooth_view_ex(
     Object *ob_camera_eval = DEG_get_evaluated_object(depsgraph, sview->camera);
     if (sview->ofs != NULL) {
       sms.dst.dist = ED_view3d_offset_distance(
-          ob_camera_eval->obmat, sview->ofs, VIEW3D_DIST_FALLBACK);
+          ob_camera_eval->object_to_world, sview->ofs, VIEW3D_DIST_FALLBACK);
     }
     ED_view3d_from_object(ob_camera_eval, sms.dst.ofs, sms.dst.quat, &sms.dst.dist, &sms.dst.lens);
     sms.to_camera = true; /* restore view3d values in end */
@@ -291,7 +282,8 @@ void ED_view3d_smooth_view_ex(
     if (sview->camera_old) {
       Object *ob_camera_old_eval = DEG_get_evaluated_object(depsgraph, sview->camera_old);
       if (sview->ofs != NULL) {
-        sms.src.dist = ED_view3d_offset_distance(ob_camera_old_eval->obmat, sview->ofs, 0.0f);
+        sms.src.dist = ED_view3d_offset_distance(
+            ob_camera_old_eval->object_to_world, sview->ofs, 0.0f);
       }
       ED_view3d_from_object(
           ob_camera_old_eval, sms.src.ofs, sms.src.quat, &sms.src.dist, &sms.src.lens);
@@ -397,110 +389,112 @@ void ED_view3d_smooth_view(bContext *C,
   }
 }
 
-static void view3d_smoothview_apply_ex(bContext *C,
-                                       View3D *v3d,
-                                       ARegion *region,
-                                       bool sync_boxview,
-                                       bool use_autokey,
-                                       const float step,
-                                       const bool finished)
+/**
+ * Apply with interpolation, on completion run #view3d_smoothview_apply_and_finish.
+ */
+static void view3d_smoothview_apply_with_interp(
+    bContext *C, View3D *v3d, RegionView3D *rv3d, const bool use_autokey, const float factor)
 {
-  wmWindowManager *wm = CTX_wm_manager(C);
-  RegionView3D *rv3d = region->regiondata;
   struct SmoothView3DStore *sms = rv3d->sms;
 
-  /* end timer */
-  if (finished) {
-    wmWindow *win = CTX_wm_window(C);
+  interp_qt_qtqt(rv3d->viewquat, sms->src.quat, sms->dst.quat, factor);
 
-    /* if we went to camera, store the original */
-    if (sms->to_camera) {
-      rv3d->persp = RV3D_CAMOB;
-      view3d_smooth_view_state_restore(&sms->org, v3d, rv3d);
-    }
-    else {
-      const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-
-      view3d_smooth_view_state_restore(&sms->dst, v3d, rv3d);
-
-      ED_view3d_camera_lock_sync(depsgraph, v3d, rv3d);
-      ED_view3d_camera_lock_autokey(v3d, rv3d, C, true, true);
-    }
-
-    if ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ROTATION) == 0) {
-      rv3d->view = sms->org_view;
-    }
-
-    MEM_freeN(rv3d->sms);
-    rv3d->sms = NULL;
-
-    WM_event_remove_timer(wm, win, rv3d->smooth_timer);
-    rv3d->smooth_timer = NULL;
-    rv3d->rflag &= ~RV3D_NAVIGATING;
-
-    /* Event handling won't know if a UI item has been moved under the pointer. */
-    WM_event_add_mousemove(win);
+  if (sms->use_dyn_ofs) {
+    view3d_orbit_apply_dyn_ofs(
+        rv3d->ofs, sms->src.ofs, sms->src.quat, rv3d->viewquat, sms->dyn_ofs);
   }
   else {
-    /* ease in/out */
-    const float step_inv = 1.0f - step;
+    interp_v3_v3v3(rv3d->ofs, sms->src.ofs, sms->dst.ofs, factor);
+  }
 
-    interp_qt_qtqt(rv3d->viewquat, sms->src.quat, sms->dst.quat, step);
+  rv3d->dist = interpf(sms->dst.dist, sms->src.dist, factor);
+  v3d->lens = interpf(sms->dst.lens, sms->src.lens, factor);
 
-    if (sms->use_dyn_ofs) {
-      view3d_orbit_apply_dyn_ofs(
-          rv3d->ofs, sms->src.ofs, sms->src.quat, rv3d->viewquat, sms->dyn_ofs);
+  const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
+  if (ED_view3d_camera_lock_sync(depsgraph, v3d, rv3d)) {
+    if (use_autokey) {
+      ED_view3d_camera_lock_autokey(v3d, rv3d, C, true, true);
     }
-    else {
-      interp_v3_v3v3(rv3d->ofs, sms->src.ofs, sms->dst.ofs, step);
-    }
+  }
+}
 
-    rv3d->dist = sms->dst.dist * step + sms->src.dist * step_inv;
-    v3d->lens = sms->dst.lens * step + sms->src.lens * step_inv;
+/**
+ * Apply the view-port transformation & free smooth-view related data.
+ */
+static void view3d_smoothview_apply_and_finish(bContext *C, View3D *v3d, RegionView3D *rv3d)
+{
+  wmWindowManager *wm = CTX_wm_manager(C);
+  struct SmoothView3DStore *sms = rv3d->sms;
 
+  wmWindow *win = CTX_wm_window(C);
+
+  /* if we went to camera, store the original */
+  if (sms->to_camera) {
+    rv3d->persp = RV3D_CAMOB;
+    view3d_smooth_view_state_restore(&sms->org, v3d, rv3d);
+  }
+  else {
     const Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
-    ED_view3d_camera_lock_sync(depsgraph, v3d, rv3d);
-    if (use_autokey && ED_screen_animation_playing(wm)) {
+
+    view3d_smooth_view_state_restore(&sms->dst, v3d, rv3d);
+
+    if (ED_view3d_camera_lock_sync(depsgraph, v3d, rv3d)) {
       ED_view3d_camera_lock_autokey(v3d, rv3d, C, true, true);
     }
   }
 
-  if (sync_boxview && (RV3D_LOCK_FLAGS(rv3d) & RV3D_BOXVIEW)) {
-    view3d_boxview_copy(CTX_wm_area(C), region);
+  if ((RV3D_LOCK_FLAGS(rv3d) & RV3D_LOCK_ROTATION) == 0) {
+    rv3d->view = sms->org_view;
   }
+
+  MEM_freeN(rv3d->sms);
+  rv3d->sms = NULL;
+
+  WM_event_remove_timer(wm, win, rv3d->smooth_timer);
+  rv3d->smooth_timer = NULL;
+  rv3d->rflag &= ~RV3D_NAVIGATING;
+
+  /* Event handling won't know if a UI item has been moved under the pointer. */
+  WM_event_add_mousemove(win);
 
   /* NOTE: this doesn't work right because the v3d->lens is now used in ortho mode r51636,
    * when switching camera in quad-view the other ortho views would zoom & reset.
    *
    * For now only redraw all regions when smooth-view finishes.
    */
-  if (step >= 1.0f) {
-    WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
-  }
-  else {
-    ED_region_tag_redraw(region);
-  }
+  WM_event_add_notifier(C, NC_SPACE | ND_SPACE_VIEW3D, v3d);
 }
 
 /* only meant for timer usage */
 
-static void view3d_smoothview_apply(bContext *C, View3D *v3d, ARegion *region, bool sync_boxview)
+static void view3d_smoothview_apply_from_timer(bContext *C, View3D *v3d, ARegion *region)
 {
+  wmWindowManager *wm = CTX_wm_manager(C);
   RegionView3D *rv3d = region->regiondata;
   struct SmoothView3DStore *sms = rv3d->sms;
-  float step;
+  float factor;
 
   if (sms->time_allowed != 0.0) {
-    step = (float)((rv3d->smooth_timer->duration) / sms->time_allowed);
+    factor = (float)((rv3d->smooth_timer->duration) / sms->time_allowed);
   }
   else {
-    step = 1.0f;
+    factor = 1.0f;
   }
-  const bool finished = step >= 1.0f;
-  if (!finished) {
-    step = (3.0f * step * step - 2.0f * step * step * step);
+  if (factor >= 1.0f) {
+    view3d_smoothview_apply_and_finish(C, v3d, rv3d);
   }
-  view3d_smoothview_apply_ex(C, v3d, region, sync_boxview, true, step, finished);
+  else {
+    /* Ease in/out smoothing. */
+    factor = (3.0f * factor * factor - 2.0f * factor * factor * factor);
+    const bool use_autokey = ED_screen_animation_playing(wm);
+    view3d_smoothview_apply_with_interp(C, v3d, rv3d, use_autokey, factor);
+  }
+
+  if (RV3D_LOCK_FLAGS(rv3d) & RV3D_BOXVIEW) {
+    view3d_boxview_copy(CTX_wm_area(C), region);
+  }
+
+  ED_region_tag_redraw(region);
 }
 
 static int view3d_smoothview_invoke(bContext *C, wmOperator *UNUSED(op), const wmEvent *event)
@@ -514,7 +508,7 @@ static int view3d_smoothview_invoke(bContext *C, wmOperator *UNUSED(op), const w
     return OPERATOR_PASS_THROUGH;
   }
 
-  view3d_smoothview_apply(C, v3d, region, true);
+  view3d_smoothview_apply_from_timer(C, v3d, region);
 
   return OPERATOR_FINISHED;
 }
@@ -522,12 +516,10 @@ static int view3d_smoothview_invoke(bContext *C, wmOperator *UNUSED(op), const w
 void ED_view3d_smooth_view_force_finish(bContext *C, View3D *v3d, ARegion *region)
 {
   RegionView3D *rv3d = region->regiondata;
-
   if (rv3d && rv3d->sms) {
-    rv3d->sms->time_allowed = 0.0; /* force finishing */
-    view3d_smoothview_apply(C, v3d, region, false);
+    view3d_smoothview_apply_and_finish(C, v3d, rv3d);
 
-    /* force update of view matrix so tools that run immediately after
+    /* Force update of view matrix so tools that run immediately after
      * can use them without redrawing first */
     Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
     Scene *scene = CTX_data_scene(C);

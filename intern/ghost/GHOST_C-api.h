@@ -27,6 +27,7 @@ typedef bool (*GHOST_EventCallbackProcPtr)(GHOST_EventHandle event, GHOST_TUserD
  * \return a handle to the system.
  */
 extern GHOST_SystemHandle GHOST_CreateSystem(void);
+extern GHOST_SystemHandle GHOST_CreateSystemBackground(void);
 
 /**
  * Specifies whether debug messages are to be enabled for the specific system handle.
@@ -34,6 +35,10 @@ extern GHOST_SystemHandle GHOST_CreateSystem(void);
  * \param debug: Flag for systems to debug.
  */
 extern void GHOST_SystemInitDebug(GHOST_SystemHandle systemhandle, GHOST_Debug debug);
+
+#if !(defined(WIN32) || defined(__APPLE__))
+extern const char *GHOST_SystemBackend(void);
+#endif
 
 /**
  * Disposes the one and only system.
@@ -49,7 +54,7 @@ extern GHOST_TSuccess GHOST_DisposeSystem(GHOST_SystemHandle systemhandle);
  * \param message: Message of the message box.
  * \param help_label: Text to show on the help button that opens a link.
  * \param continue_label: Text to show on the ok button that continues.
- * \param link: Optional (hyper)link to a webpage to show when pressing help.
+ * \param link: Optional (hyper)link to a web-page to show when pressing help.
  * \param dialog_options: Options to configure the message box.
  */
 extern void GHOST_ShowMessageBox(GHOST_SystemHandle systemhandle,
@@ -157,7 +162,6 @@ extern void GHOST_GetAllDisplayDimensions(GHOST_SystemHandle systemhandle,
  * \param height: The height the window.
  * \param state: The state of the window when opened.
  * \param is_dialog: Stay on top of parent window, no icon in taskbar, can't be minimized.
- * \param type: The type of drawing context installed in this window.
  * \param glSettings: Misc OpenGL options.
  * \return A handle to the new window ( == NULL if creation failed).
  */
@@ -170,7 +174,6 @@ extern GHOST_WindowHandle GHOST_CreateWindow(GHOST_SystemHandle systemhandle,
                                              uint32_t height,
                                              GHOST_TWindowState state,
                                              bool is_dialog,
-                                             GHOST_TDrawingContextType type,
                                              GHOST_GLSettings glSettings);
 
 /**
@@ -740,7 +743,7 @@ extern unsigned int GHOST_GetContextDefaultOpenGLFramebuffer(GHOST_ContextHandle
 extern unsigned int GHOST_GetDefaultOpenGLFramebuffer(GHOST_WindowHandle windowhandle);
 
 /**
- * Use multitouch gestures if supported.
+ * Use multi-touch gestures if supported.
  * \param systemhandle: The handle to the system.
  * \param use: Enable or disable.
  */

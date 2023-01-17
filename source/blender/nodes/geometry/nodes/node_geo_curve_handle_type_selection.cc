@@ -16,13 +16,13 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Bool>(N_("Selection")).field_source();
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "mode", UI_ITEM_R_EXPAND, nullptr, ICON_NONE);
   uiItemR(layout, ptr, "handle_type", 0, "", ICON_NONE);
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryCurveSelectHandles *data = MEM_cnew<NodeGeometryCurveSelectHandles>(__func__);
 
@@ -70,41 +70,34 @@ static void select_by_handle_type(const bke::CurvesGeometry &curves,
   }
 }
 
-class HandleTypeFieldInput final : public GeometryFieldInput {
+class HandleTypeFieldInput final : public bke::CurvesFieldInput {
   HandleType type_;
   GeometryNodeCurveHandleMode mode_;
 
  public:
   HandleTypeFieldInput(HandleType type, GeometryNodeCurveHandleMode mode)
-      : GeometryFieldInput(CPPType::get<bool>(), "Handle Type Selection node"),
+      : bke::CurvesFieldInput(CPPType::get<bool>(), "Handle Type Selection node"),
         type_(type),
         mode_(mode)
   {
     category_ = Category::Generated;
   }
 
-  GVArray get_varray_for_context(const GeometryComponent &component,
+  GVArray get_varray_for_context(const bke::CurvesGeometry &curves,
                                  const eAttrDomain domain,
                                  IndexMask mask) const final
   {
-    if (component.type() != GEO_COMPONENT_TYPE_CURVE || domain != ATTR_DOMAIN_POINT) {
+    if (domain != ATTR_DOMAIN_POINT) {
       return {};
     }
-
-    const CurveComponent &curve_component = static_cast<const CurveComponent &>(component);
-    const Curves *curves_id = curve_component.get_for_read();
-    if (curves_id == nullptr) {
-      return {};
-    }
-
     Array<bool> selection(mask.min_array_size());
-    select_by_handle_type(bke::CurvesGeometry::wrap(curves_id->geometry), type_, mode_, selection);
+    select_by_handle_type(curves, type_, mode_, selection);
     return VArray<bool>::ForContainer(std::move(selection));
   }
 
   uint64_t hash() const override
   {
-    return get_default_hash_2((int)mode_, (int)type_);
+    return get_default_hash_2(int(mode_), int(type_));
   }
 
   bool is_equal_to(const fn::FieldNode &other) const override
@@ -114,6 +107,11 @@ class HandleTypeFieldInput final : public GeometryFieldInput {
       return mode_ == other_handle_selection->mode_ && type_ == other_handle_selection->type_;
     }
     return false;
+  }
+
+  std::optional<eAttrDomain> preferred_domain(const CurvesGeometry & /*curves*/) const
+  {
+    return ATTR_DOMAIN_POINT;
   }
 };
 

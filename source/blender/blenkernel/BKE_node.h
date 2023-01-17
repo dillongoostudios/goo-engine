@@ -101,6 +101,7 @@ typedef struct bNodeSocketTemplate {
 namespace blender {
 class CPPType;
 namespace nodes {
+class DNode;
 class NodeMultiFunctionBuilder;
 class GeoNodeExecParams;
 class NodeDeclarationBuilder;
@@ -109,6 +110,11 @@ class GatherLinkSearchOpParams;
 namespace fn {
 class MFDataType;
 }  // namespace fn
+namespace realtime_compositor {
+class Context;
+class NodeOperation;
+class ShaderNode;
+}  // namespace realtime_compositor
 }  // namespace blender
 
 using CPPTypeHandle = blender::CPPType;
@@ -123,7 +129,14 @@ using SocketGetGeometryNodesCPPValueFunction = void (*)(const struct bNodeSocket
 using NodeGatherSocketLinkOperationsFunction =
     void (*)(blender::nodes::GatherLinkSearchOpParams &params);
 
+using NodeGetCompositorOperationFunction = blender::realtime_compositor::NodeOperation
+    *(*)(blender::realtime_compositor::Context &context, blender::nodes::DNode node);
+using NodeGetCompositorShaderNodeFunction =
+    blender::realtime_compositor::ShaderNode *(*)(blender::nodes::DNode node);
+
 #else
+typedef void *NodeGetCompositorOperationFunction;
+typedef void *NodeGetCompositorShaderNodeFunction;
 typedef void *NodeMultiFunctionBuildFunction;
 typedef void *NodeGeometryExecFunction;
 typedef void *NodeDeclareFunction;
@@ -309,6 +322,14 @@ typedef struct bNodeType {
   /* gpu */
   NodeGPUExecFunction gpu_fn;
 
+  /* Get an instance of this node's compositor operation. Freeing the instance is the
+   * responsibility of the caller. */
+  NodeGetCompositorOperationFunction get_compositor_operation;
+
+  /* Get an instance of this node's compositor shader node. Freeing the instance is the
+   * responsibility of the caller. */
+  NodeGetCompositorShaderNodeFunction get_compositor_shader_node;
+
   /* Build a multi-function for this node. */
   NodeMultiFunctionBuildFunction build_multi_function;
 
@@ -373,6 +394,9 @@ typedef void (*bNodeClassCallback)(void *calldata, int nclass, const char *name)
 typedef struct bNodeTreeType {
   int type;        /* type identifier */
   char idname[64]; /* identifier name */
+
+  /* The ID name of group nodes for this type. */
+  char group_idname[64];
 
   char ui_name[64];
   char ui_description[256];
@@ -448,7 +472,12 @@ void ntreeSetTypes(const struct bContext *C, struct bNodeTree *ntree);
 
 struct bNodeTree *ntreeAddTree(struct Main *bmain, const char *name, const char *idname);
 
-/* copy/free funcs, need to manage ID users */
+struct bNodeTree *ntreeAddTreeEmbedded(struct Main *bmain,
+                                       struct ID *owner_id,
+                                       const char *name,
+                                       const char *idname);
+
+/* Copy/free functions, need to manage ID users. */
 
 /**
  * Free (or release) any data used by this node-tree.
@@ -516,7 +545,9 @@ void ntreeBlendWrite(struct BlendWriter *writer, struct bNodeTree *ntree);
 /**
  * \note `ntree` itself has been read!
  */
-void ntreeBlendReadData(struct BlendDataReader *reader, struct bNodeTree *ntree);
+void ntreeBlendReadData(struct BlendDataReader *reader,
+                        struct ID *owner_id,
+                        struct bNodeTree *ntree);
 void ntreeBlendReadLib(struct BlendLibReader *reader, struct bNodeTree *ntree);
 void ntreeBlendReadExpand(struct BlendExpander *expander, struct bNodeTree *ntree);
 
@@ -541,6 +572,11 @@ struct bNodeSocket *ntreeInsertSocketInterface(struct bNodeTree *ntree,
 struct bNodeSocket *ntreeAddSocketInterfaceFromSocket(struct bNodeTree *ntree,
                                                       struct bNode *from_node,
                                                       struct bNodeSocket *from_sock);
+struct bNodeSocket *ntreeAddSocketInterfaceFromSocketWithName(struct bNodeTree *ntree,
+                                                              struct bNode *from_node,
+                                                              struct bNodeSocket *from_sock,
+                                                              const char *idname,
+                                                              const char *name);
 struct bNodeSocket *ntreeInsertSocketInterfaceFromSocket(struct bNodeTree *ntree,
                                                          struct bNodeSocket *next_sock,
                                                          struct bNode *from_node,
@@ -683,7 +719,10 @@ struct bNodeLink *nodeAddLink(struct bNodeTree *ntree,
                               struct bNodeSocket *tosock);
 void nodeRemLink(struct bNodeTree *ntree, struct bNodeLink *link);
 void nodeRemSocketLinks(struct bNodeTree *ntree, struct bNodeSocket *sock);
-void nodeMuteLinkToggle(struct bNodeTree *ntree, struct bNodeLink *link);
+/**
+ * Set the mute status of a single link.
+ */
+void nodeLinkSetMute(struct bNodeTree *ntree, struct bNodeLink *link, const bool muted);
 bool nodeLinkIsHidden(const struct bNodeLink *link);
 bool nodeLinkIsSelected(const struct bNodeLink *link);
 void nodeInternalRelink(struct bNodeTree *ntree, struct bNode *node);
@@ -707,7 +746,14 @@ struct bNode *nodeFindNodebyName(struct bNodeTree *ntree, const char *name);
 /**
  * Finds a node based on given socket and returns true on success.
  */
-bool nodeFindNode(struct bNodeTree *ntree,
+bool nodeFindNodeTry(struct bNodeTree *ntree,
+                     struct bNodeSocket *sock,
+                     struct bNode **r_node,
+                     int *r_sockindex);
+/**
+ * Same as above but expects that the socket definitely is in the node tree.
+ */
+void nodeFindNode(struct bNodeTree *ntree,
                   struct bNodeSocket *sock,
                   struct bNode **r_node,
                   int *r_sockindex);
@@ -757,6 +803,12 @@ void nodeChainIterBackwards(const bNodeTree *ntree,
  * \note Recursive
  */
 void nodeParentsIter(bNode *node, bool (*callback)(bNode *, void *), void *userdata);
+
+/**
+ * A dangling reroute node is a reroute node that does *not* have a "data source", i.e. no
+ * non-reroute node is connected to its input.
+ */
+bool nodeIsDanglingReroute(const struct bNodeTree *ntree, const struct bNode *node);
 
 struct bNodeLink *nodeFindLink(struct bNodeTree *ntree,
                                const struct bNodeSocket *from,
@@ -926,8 +978,8 @@ void nodeLabel(const struct bNodeTree *ntree, const struct bNode *node, char *la
  */
 const char *nodeSocketLabel(const struct bNodeSocket *sock);
 
-bool nodeGroupPoll(struct bNodeTree *nodetree,
-                   struct bNodeTree *grouptree,
+bool nodeGroupPoll(const struct bNodeTree *nodetree,
+                   const struct bNodeTree *grouptree,
                    const char **r_disabled_hint);
 
 /**
@@ -1078,7 +1130,7 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 //#define SH_NODE_MATERIAL  100
 #define SH_NODE_RGB 101
 #define SH_NODE_VALUE 102
-#define SH_NODE_MIX_RGB 103
+#define SH_NODE_MIX_RGB_LEGACY 103
 #define SH_NODE_VALTORGB 104
 #define SH_NODE_RGBTOBW 105
 #define SH_NODE_SHADERTORGB 106
@@ -1181,6 +1233,7 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 #define SH_NODE_POINT_INFO 710
 #define SH_NODE_COMBINE_COLOR 711
 #define SH_NODE_SEPARATE_COLOR 712
+#define SH_NODE_MIX 713
 
 /* (Late): Custom nodes should start at 800 */
 #define SH_NODE_SHADER_INFO 800
@@ -1327,25 +1380,6 @@ void ntreeGPUMaterialNodes(struct bNodeTree *localtree,
 #define CMP_CHAN_RGB 1
 #define CMP_CHAN_A 2
 
-/* filter types */
-#define CMP_FILT_SOFT 0
-#define CMP_FILT_SHARP_BOX 1
-#define CMP_FILT_LAPLACE 2
-#define CMP_FILT_SOBEL 3
-#define CMP_FILT_PREWITT 4
-#define CMP_FILT_KIRSCH 5
-#define CMP_FILT_SHADOW 6
-#define CMP_FILT_SHARP_DIAMOND 7
-
-/* scale node type, in custom1 */
-#define CMP_SCALE_RELATIVE 0
-#define CMP_SCALE_ABSOLUTE 1
-#define CMP_SCALE_SCENEPERCENT 2
-#define CMP_SCALE_RENDERPERCENT 3
-/* custom2 */
-#define CMP_SCALE_RENDERSIZE_FRAME_ASPECT (1 << 0)
-#define CMP_SCALE_RENDERSIZE_FRAME_CROP (1 << 1)
-
 /* track position node, in custom1 */
 #define CMP_TRACKPOS_ABSOLUTE 0
 #define CMP_TRACKPOS_RELATIVE_START 1
@@ -1489,7 +1523,7 @@ struct TexResult;
 #define GEO_NODE_ROTATE_INSTANCES 1122
 #define GEO_NODE_SPLIT_EDGES 1123
 #define GEO_NODE_MESH_TO_CURVE 1124
-#define GEO_NODE_TRANSFER_ATTRIBUTE 1125
+#define GEO_NODE_TRANSFER_ATTRIBUTE_DEPRECATED 1125
 #define GEO_NODE_SUBDIVISION_SURFACE 1126
 #define GEO_NODE_CURVE_ENDPOINT_SELECTION 1127
 #define GEO_NODE_RAYCAST 1128
@@ -1534,6 +1568,24 @@ struct TexResult;
 #define GEO_NODE_INPUT_SHORTEST_EDGE_PATHS 1168
 #define GEO_NODE_EDGE_PATHS_TO_CURVES 1169
 #define GEO_NODE_EDGE_PATHS_TO_SELECTION 1170
+#define GEO_NODE_MESH_FACE_SET_BOUNDARIES 1171
+#define GEO_NODE_DISTRIBUTE_POINTS_IN_VOLUME 1172
+#define GEO_NODE_SELF_OBJECT 1173
+#define GEO_NODE_SAMPLE_INDEX 1174
+#define GEO_NODE_SAMPLE_NEAREST 1175
+#define GEO_NODE_SAMPLE_NEAREST_SURFACE 1176
+#define GEO_NODE_OFFSET_POINT_IN_CURVE 1177
+#define GEO_NODE_CURVE_TOPOLOGY_CURVE_OF_POINT 1178
+#define GEO_NODE_CURVE_TOPOLOGY_POINTS_OF_CURVE 1179
+#define GEO_NODE_MESH_TOPOLOGY_OFFSET_CORNER_IN_FACE 1180
+#define GEO_NODE_MESH_TOPOLOGY_CORNERS_OF_FACE 1181
+#define GEO_NODE_MESH_TOPOLOGY_CORNERS_OF_VERTEX 1182
+#define GEO_NODE_MESH_TOPOLOGY_EDGES_OF_CORNER 1183
+#define GEO_NODE_MESH_TOPOLOGY_EDGES_OF_VERTEX 1184
+#define GEO_NODE_MESH_TOPOLOGY_FACE_OF_CORNER 1185
+#define GEO_NODE_MESH_TOPOLOGY_VERTEX_OF_CORNER 1186
+#define GEO_NODE_SAMPLE_UV_SURFACE 1187
+#define GEO_NODE_SET_CURVE_NORMAL 1188
 
 /** \} */
 

@@ -13,7 +13,7 @@ namespace blender::eevee {
 
 class Instance;
 
-static const float cubeface_mat[6][4][4] = {
+inline constexpr float cubeface_mat[6][4][4] = {
     /* Pos X */
     {{0.0f, 0.0f, -1.0f, 0.0f},
      {0.0f, -1.0f, 0.0f, 0.0f},
@@ -82,7 +82,6 @@ class Camera {
  private:
   Instance &inst_;
 
-  /** Double buffered to detect changes and have history for re-projection. */
   CameraDataBuf data_;
 
  public:
@@ -100,7 +99,7 @@ class Camera {
     BLI_assert(data_.initialized);
     return data_;
   }
-  const GPUUniformBuf *ubo_get() const
+  GPUUniformBuf *ubo_get() const
   {
     return data_;
   }
@@ -111,6 +110,10 @@ class Camera {
   bool is_orthographic() const
   {
     return data_.type == CAMERA_ORTHO;
+  }
+  bool is_perspective() const
+  {
+    return data_.type == CAMERA_PERSP;
   }
   const float3 &position() const
   {

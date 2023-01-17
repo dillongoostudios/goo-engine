@@ -291,8 +291,8 @@ static void customdata_version_242(Mesh *me)
         MEM_freeN(me->mcol);
       }
 
-      me->mcol = CustomData_add_layer(&me->fdata, CD_MCOL, CD_CALLOC, NULL, me->totface);
-      me->mtface = CustomData_add_layer(&me->fdata, CD_MTFACE, CD_CALLOC, NULL, me->totface);
+      me->mcol = CustomData_add_layer(&me->fdata, CD_MCOL, CD_SET_DEFAULT, NULL, me->totface);
+      me->mtface = CustomData_add_layer(&me->fdata, CD_MTFACE, CD_SET_DEFAULT, NULL, me->totface);
 
       mtf = me->mtface;
       mcol = me->mcol;
@@ -342,8 +342,6 @@ static void customdata_version_242(Mesh *me)
       mcoln++;
     }
   }
-
-  BKE_mesh_update_customdata_pointers(me, true);
 }
 
 /* Only copy render texface layer from active. */
@@ -2533,7 +2531,7 @@ void blo_do_versions_pre250(FileData *fd, Library *lib, Main *bmain)
     Object *ob;
     for (ob = bmain->objects.first; ob; ob = ob->id.next) {
       if (ob->pd) {
-        ob->pd->seed = ((uint)(ceil(PIL_check_seconds_timer())) + 1) % 128;
+        ob->pd->seed = ((uint)ceil(PIL_check_seconds_timer()) + 1) % 128;
       }
     }
   }

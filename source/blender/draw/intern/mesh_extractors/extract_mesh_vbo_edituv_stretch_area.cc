@@ -20,9 +20,9 @@ namespace blender::draw {
  * \{ */
 
 static void extract_edituv_stretch_area_init(const MeshRenderData *mr,
-                                             MeshBatchCache *UNUSED(cache),
+                                             MeshBatchCache * /*cache*/,
                                              void *buf,
-                                             void *UNUSED(tls_data))
+                                             void * /*tls_data*/)
 {
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   static GPUVertFormat format = {0};
@@ -71,7 +71,7 @@ static void compute_area_ratio(const MeshRenderData *mr,
     }
   }
   else {
-    BLI_assert(ELEM(mr->extract_type, MR_EXTRACT_MAPPED, MR_EXTRACT_MESH));
+    BLI_assert(mr->extract_type == MR_EXTRACT_MESH);
     const MLoopUV *uv_data = (const MLoopUV *)CustomData_get_layer(&mr->me->ldata, CD_MLOOPUV);
     const MPoly *mp = mr->mpoly;
     for (int mp_index = 0; mp_index < mr->poly_len; mp_index++, mp++) {
@@ -90,7 +90,7 @@ static void compute_area_ratio(const MeshRenderData *mr,
 static void extract_edituv_stretch_area_finish(const MeshRenderData *mr,
                                                MeshBatchCache *cache,
                                                void *buf,
-                                               void *UNUSED(data))
+                                               void * /*data*/)
 {
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   float *area_ratio = static_cast<float *>(MEM_mallocN(sizeof(float) * mr->poly_len, __func__));
@@ -110,7 +110,7 @@ static void extract_edituv_stretch_area_finish(const MeshRenderData *mr,
     }
   }
   else {
-    BLI_assert(ELEM(mr->extract_type, MR_EXTRACT_MAPPED, MR_EXTRACT_MESH));
+    BLI_assert(mr->extract_type == MR_EXTRACT_MESH);
     const MPoly *mp = mr->mpoly;
     for (int mp_index = 0, l_index = 0; mp_index < mr->poly_len; mp_index++, mp++) {
       for (int i = 0; i < mp->totloop; i++, l_index++) {
@@ -126,7 +126,7 @@ static void extract_edituv_stretch_area_init_subdiv(const DRWSubdivCache *subdiv
                                                     const MeshRenderData *mr,
                                                     MeshBatchCache *cache,
                                                     void *buffer,
-                                                    void *UNUSED(data))
+                                                    void * /*data*/)
 {
 
   /* Initialize final buffer. */

@@ -24,7 +24,7 @@ static void node_declare(NodeDeclarationBuilder &b)
   b.add_output<decl::Bool>(N_("Intersecting Edges")).field_source();
 }
 
-static void node_layout(uiLayout *layout, bContext *UNUSED(C), PointerRNA *ptr)
+static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiItemR(layout, ptr, "operation", 0, "", ICON_NONE);
 }
@@ -37,7 +37,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
 {
   GeometryNodeBooleanOperation operation = (GeometryNodeBooleanOperation)node->custom1;
 
-  bNodeSocket *geometry_1_socket = (bNodeSocket *)node->inputs.first;
+  bNodeSocket *geometry_1_socket = static_cast<bNodeSocket *>(node->inputs.first);
   bNodeSocket *geometry_2_socket = geometry_1_socket->next;
 
   switch (operation) {
@@ -55,7 +55,7 @@ static void node_update(bNodeTree *ntree, bNode *node)
   }
 }
 
-static void node_init(bNodeTree *UNUSED(tree), bNode *node)
+static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   node->custom1 = GEO_NODE_BOOLEAN_DIFFERENCE;
 }
@@ -83,8 +83,12 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (mesh_in_a != nullptr) {
       meshes.append(mesh_in_a);
       transforms.append(nullptr);
-      for (Material *material : Span(mesh_in_a->mat, mesh_in_a->totcol)) {
-        materials.add(material);
+      if (mesh_in_a->totcol == 0) {
+        /* Necessary for faces using the default material when there are no material slots. */
+        materials.add(nullptr);
+      }
+      else {
+        materials.add_multiple({mesh_in_a->mat, mesh_in_a->totcol});
       }
       material_remaps.append({});
     }
@@ -93,7 +97,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   /* The instance transform matrices are owned by the instance group, so we have to
    * keep all of them around for use during the boolean operation. */
   Vector<bke::GeometryInstanceGroup> set_groups;
-  Vector<GeometrySet> geometry_sets = params.extract_multi_input<GeometrySet>("Mesh 2");
+  Vector<GeometrySet> geometry_sets = params.extract_input<Vector<GeometrySet>>("Mesh 2");
   for (const GeometrySet &geometry_set : geometry_sets) {
     bke::geometry_set_gather_instances(geometry_set, set_groups);
   }
@@ -101,17 +105,10 @@ static void node_geo_exec(GeoNodeExecParams params)
   for (const bke::GeometryInstanceGroup &set_group : set_groups) {
     const Mesh *mesh = set_group.geometry_set.get_mesh_for_read();
     if (mesh != nullptr) {
-      for (Material *material : Span(mesh->mat, mesh->totcol)) {
-        materials.add(material);
-      }
-    }
-  }
-  for (const bke::GeometryInstanceGroup &set_group : set_groups) {
-    const Mesh *mesh = set_group.geometry_set.get_mesh_for_read();
-    if (mesh != nullptr) {
       Array<short> map(mesh->totcol);
       for (const int i : IndexRange(mesh->totcol)) {
-        map[i] = materials.index_of(mesh->mat[i]);
+        Material *material = mesh->mat[i];
+        map[i] = material ? materials.index_of_or_add(material) : -1;
       }
       material_remaps.append(std::move(map));
     }
@@ -148,13 +145,14 @@ static void node_geo_exec(GeoNodeExecParams params)
   }
 
   MEM_SAFE_FREE(result->mat);
-  result->mat = (Material **)MEM_malloc_arrayN(materials.size(), sizeof(Material *), __func__);
+  result->mat = static_cast<Material **>(
+      MEM_malloc_arrayN(materials.size(), sizeof(Material *), __func__));
   result->totcol = materials.size();
   MutableSpan(result->mat, result->totcol).copy_from(materials);
 
   /* Store intersecting edges in attribute. */
   if (attribute_outputs.intersecting_edges_id) {
-    MutableAttributeAccessor attributes = bke::mesh_attributes_for_write(*result);
+    MutableAttributeAccessor attributes = result->attributes_for_write();
     SpanAttributeWriter<bool> selection = attributes.lookup_or_add_for_write_only_span<bool>(
         attribute_outputs.intersecting_edges_id.get(), ATTR_DOMAIN_EDGE);
 

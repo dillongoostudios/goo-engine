@@ -1,4 +1,6 @@
 
+#define COMMON_UNIFORMS_LIB
+
 layout(std140) uniform common_block
 {
   mat4 pastViewProjectionMatrix;
@@ -42,6 +44,9 @@ layout(std140) uniform common_block
   float rayDepth;
   float alphaHashOffset;
   float alphaHashScale;
+  /* Misc */
+  vec4 cameraUvScaleBias;
+  vec4 planarClipPlane;
   bool shadow_id_high_bitdepth;
   float pad7;
   float pad8;

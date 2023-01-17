@@ -111,7 +111,7 @@ set(SRC
   intern/bmesh_query.c
   intern/bmesh_query.h
   intern/bmesh_query_inline.h
-  intern/bmesh_query_uv.c
+  intern/bmesh_query_uv.cc
   intern/bmesh_query_uv.h
   intern/bmesh_structure.c
   intern/bmesh_structure.h
@@ -204,6 +204,22 @@ if(WITH_GMP)
 
   list(APPEND LIB
     ${GMP_LIBRARIES}
+  )
+endif()
+
+if(WITH_TBB)
+  add_definitions(-DWITH_TBB)
+  if(WIN32)
+    # TBB includes Windows.h which will define min/max macros
+    # that will collide with the stl versions.
+    add_definitions(-DNOMINMAX)
+  endif()
+  list(APPEND INC_SYS
+    ${TBB_INCLUDE_DIRS}
+  )
+
+  list(APPEND LIB
+    ${TBB_LIBRARIES}
   )
 endif()
 

@@ -125,7 +125,7 @@ enum eImbFileType {
 
 typedef struct ImbFormatOptions {
   short flag;
-  /** quality serves dual purpose as quality number for jpeg or compression amount for png */
+  /** Quality serves dual purpose as quality number for JPEG or compression amount for PNG. */
   char quality;
 } ImbFormatOptions;
 
@@ -166,8 +166,6 @@ typedef enum eImBufFlags {
  * \{ */
 
 typedef struct ImBuf {
-  struct ImBuf *next, *prev; /** < allow lists of #ImBufs, for caches or flip-books. */
-
   /* dimensions */
   /** Width and Height of our image buffer.
    * Should be 'unsigned int' since most formats use this.
@@ -253,9 +251,9 @@ typedef struct ImBuf {
   /* some parameters to pass along for packing images */
   /** Compressed image only used with PNG and EXR currently. */
   unsigned char *encodedbuffer;
-  /** Size of data written to encodedbuffer */
+  /** Size of data written to `encodedbuffer`. */
   unsigned int encodedsize;
-  /** Size of encodedbuffer */
+  /** Size of `encodedbuffer` */
   unsigned int encodedbuffersize;
 
   /* color management */

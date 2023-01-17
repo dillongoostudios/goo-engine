@@ -73,6 +73,9 @@
 
 #include "object_intern.h" /* own include */
 
+using blender::IndexRange;
+using blender::Span;
+
 /* TODO(sebpa): unstable, can lead to unrecoverable errors. */
 // #define USE_MESH_CURVATURE
 
@@ -128,7 +131,8 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
   }
 
   /* Output mesh will be all smooth or all flat shading. */
-  const bool smooth_normals = mesh->mpoly[0].flag & ME_SMOOTH;
+  const Span<MPoly> polys = mesh->polys();
+  const bool smooth_normals = polys.first().flag & ME_SMOOTH;
 
   float isovalue = 0.0f;
   if (mesh->flag & ME_REMESH_REPROJECT_VOLUME) {
@@ -144,7 +148,7 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
   }
 
   if (ob->mode == OB_MODE_SCULPT) {
-    ED_sculpt_undo_geometry_begin(ob, op->type->name);
+    ED_sculpt_undo_geometry_begin(ob, op);
   }
 
   if (mesh->flag & ME_REMESH_FIX_POLES && mesh->remesh_voxel_adaptivity <= 0.0f) {
@@ -175,14 +179,13 @@ static int voxel_remesh_exec(bContext *C, wmOperator *op)
     BKE_remesh_reproject_vertex_paint(new_mesh, mesh);
   }
 
-  BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob, &CD_MASK_MESH, true);
+  BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob);
 
   if (smooth_normals) {
     BKE_mesh_smooth_flag_set(static_cast<Mesh *>(ob->data), true);
   }
 
   if (ob->mode == OB_MODE_SCULPT) {
-    BKE_sculpt_ensure_orig_mesh_data(CTX_data_scene(C), ob);
     ED_sculpt_undo_geometry_end(ob);
   }
 
@@ -243,7 +246,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
                                            const float spacing)
 {
   const float total_len = len_v3v3(initial_co, end_co);
-  const int tot_lines = (int)(total_len / spacing);
+  const int tot_lines = int(total_len / spacing);
   const int tot_lines_half = (tot_lines / 2) + 1;
   float spacing_dir[3], lines_start[3];
   float line_dir[3];
@@ -258,7 +261,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
 
   mid_v3_v3v3(lines_start, initial_co, end_co);
 
-  immBegin(GPU_PRIM_LINES, (uint)tot_lines_half * 2);
+  immBegin(GPU_PRIM_LINES, uint(tot_lines_half) * 2);
   for (int i = 0; i < tot_lines_half; i++) {
     float line_start[3];
     float line_end[3];
@@ -271,7 +274,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
 
   mul_v3_fl(spacing_dir, -1.0f);
 
-  immBegin(GPU_PRIM_LINES, (uint)(tot_lines_half - 1) * 2);
+  immBegin(GPU_PRIM_LINES, uint(tot_lines_half - 1) * 2);
   for (int i = 1; i < tot_lines_half; i++) {
     float line_start[3];
     float line_end[3];
@@ -283,7 +286,7 @@ static void voxel_size_parallel_lines_draw(uint pos3d,
   immEnd();
 }
 
-static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *arg)
+static void voxel_size_edit_draw(const bContext *C, ARegion * /*region*/, void *arg)
 {
   VoxelSizeEditCustomData *cd = static_cast<VoxelSizeEditCustomData *>(arg);
 
@@ -293,7 +296,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
   uint pos3d = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
   immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
   GPU_matrix_push();
-  GPU_matrix_mul(cd->active_object->obmat);
+  GPU_matrix_mul(cd->active_object->object_to_world);
 
   /* Draw Rect */
   immUniformColor4f(0.9f, 0.9f, 0.9f, 0.8f);
@@ -317,7 +320,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
   GPU_line_width(1.0f);
 
   const float total_len = len_v3v3(cd->preview_plane[0], cd->preview_plane[1]);
-  const int tot_lines = (int)(total_len / cd->voxel_size);
+  const int tot_lines = int(total_len / cd->voxel_size);
 
   /* Smooth-step to reduce the alpha of the grid as the line number increases. */
   const float a = VOXEL_SIZE_EDIT_MAX_GRIDS_LINES * 0.1f;
@@ -343,7 +346,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
   UnitSettings *unit = &scene->unit;
   BKE_unit_value_as_string(str,
                            VOXEL_SIZE_EDIT_MAX_STR_LEN,
-                           (double)(cd->voxel_size * unit->scale_length),
+                           double(cd->voxel_size * unit->scale_length),
                            -3,
                            B_UNIT_LENGTH,
                            unit,
@@ -354,7 +357,7 @@ static void voxel_size_edit_draw(const bContext *C, ARegion *UNUSED(ar), void *a
 
   GPU_matrix_push();
   GPU_matrix_mul(cd->text_mat);
-  BLF_size(fontid, 10.0f * fstyle_points, U.dpi);
+  BLF_size(fontid, 10.0f * fstyle_points * U.dpi_fac);
   BLF_color3f(fontid, 1.0f, 1.0f, 1.0f);
   BLF_width_and_height(fontid, str, strdrawlen, &strwidth, &strheight);
   BLF_position(fontid, -0.5f * strwidth, -0.5f * strheight, 0.0f);
@@ -491,10 +494,10 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   float view_normal[3] = {0.0f, 0.0f, 1.0f};
 
   /* Calculate the view normal. */
-  invert_m4_m4(active_object->imat, active_object->obmat);
+  invert_m4_m4(active_object->world_to_object, active_object->object_to_world);
   copy_m3_m4(mat, rv3d->viewinv);
   mul_m3_v3(mat, view_normal);
-  copy_m3_m4(mat, active_object->imat);
+  copy_m3_m4(mat, active_object->world_to_object);
   mul_m3_v3(mat, view_normal);
   normalize_v3(view_normal);
 
@@ -532,7 +535,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
   /* Project the selected face in the previous step of the Bounding Box. */
   for (int i = 0; i < 4; i++) {
     float preview_plane_world_space[3];
-    mul_v3_m4v3(preview_plane_world_space, active_object->obmat, cd->preview_plane[i]);
+    mul_v3_m4v3(preview_plane_world_space, active_object->object_to_world, cd->preview_plane[i]);
     ED_view3d_project_v2(region, preview_plane_world_space, preview_plane_proj[i]);
   }
 
@@ -579,7 +582,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
   /* Invert object scale. */
   float scale[3];
-  mat4_to_size(scale, active_object->obmat);
+  mat4_to_size(scale, active_object->object_to_world);
   invert_v3(scale);
   size_to_mat4(scale_mat, scale);
 
@@ -590,7 +593,7 @@ static int voxel_size_edit_invoke(bContext *C, wmOperator *op, const wmEvent *ev
 
   /* Scale the text to constant viewport size. */
   float text_pos_word_space[3];
-  mul_v3_m4v3(text_pos_word_space, active_object->obmat, text_pos);
+  mul_v3_m4v3(text_pos_word_space, active_object->object_to_world, text_pos);
   const float pixelsize = ED_view3d_pixel_size(rv3d, text_pos_word_space);
   scale_m4_fl(scale_mat, pixelsize * 0.5f);
   mul_m4_m4_post(cd->text_mat, scale_mat);
@@ -654,6 +657,7 @@ struct QuadriFlowJob {
   short *stop, *do_update;
   float *progress;
 
+  const struct wmOperator *op;
   Scene *scene;
   int target_faces;
   int seed;
@@ -677,9 +681,11 @@ static bool mesh_is_manifold_consistent(Mesh *mesh)
    * check that the direction of the faces are consistent and doesn't suddenly
    * flip
    */
+  const Span<MVert> verts = mesh->verts();
+  const Span<MEdge> edges = mesh->edges();
+  const Span<MLoop> loops = mesh->loops();
 
   bool is_manifold_consistent = true;
-  const MLoop *mloop = mesh->mloop;
   char *edge_faces = (char *)MEM_callocN(mesh->totedge * sizeof(char), "remesh_manifold_check");
   int *edge_vert = (int *)MEM_malloc_arrayN(
       mesh->totedge, sizeof(uint), "remesh_consistent_check");
@@ -688,18 +694,17 @@ static bool mesh_is_manifold_consistent(Mesh *mesh)
     edge_vert[i] = -1;
   }
 
-  for (uint loop_idx = 0; loop_idx < mesh->totloop; loop_idx++) {
-    const MLoop *loop = &mloop[loop_idx];
-    edge_faces[loop->e] += 1;
-    if (edge_faces[loop->e] > 2) {
+  for (const MLoop &loop : loops) {
+    edge_faces[loop.e] += 1;
+    if (edge_faces[loop.e] > 2) {
       is_manifold_consistent = false;
       break;
     }
 
-    if (edge_vert[loop->e] == -1) {
-      edge_vert[loop->e] = loop->v;
+    if (edge_vert[loop.e] == -1) {
+      edge_vert[loop.e] = loop.v;
     }
-    else if (edge_vert[loop->e] == loop->v) {
+    else if (edge_vert[loop.e] == loop.v) {
       /* Mesh has flips in the surface so it is non consistent */
       is_manifold_consistent = false;
       break;
@@ -707,16 +712,16 @@ static bool mesh_is_manifold_consistent(Mesh *mesh)
   }
 
   if (is_manifold_consistent) {
-    for (uint i = 0; i < mesh->totedge; i++) {
+    for (const int i : edges.index_range()) {
       /* Check for wire edges. */
       if (edge_faces[i] == 0) {
         is_manifold_consistent = false;
         break;
       }
       /* Check for zero length edges */
-      MVert *v1 = &mesh->mvert[mesh->medge[i].v1];
-      MVert *v2 = &mesh->mvert[mesh->medge[i].v2];
-      if (compare_v3v3(v1->co, v2->co, 1e-4f)) {
+      const MVert &v1 = verts[edges[i].v1];
+      const MVert &v2 = verts[edges[i].v2];
+      if (compare_v3v3(v1.co, v2.co, 1e-4f)) {
         is_manifold_consistent = false;
         break;
       }
@@ -891,7 +896,7 @@ static void quadriflow_start_job(void *customdata, short *stop, short *do_update
   new_mesh = remesh_symmetry_mirror(qj->owner, new_mesh, qj->symmetry_axes);
 
   if (ob->mode == OB_MODE_SCULPT) {
-    ED_sculpt_undo_geometry_begin(ob, "QuadriFlow Remesh");
+    ED_sculpt_undo_geometry_begin(ob, qj->op);
   }
 
   if (qj->preserve_paint_mask) {
@@ -899,14 +904,13 @@ static void quadriflow_start_job(void *customdata, short *stop, short *do_update
     BKE_mesh_remesh_reproject_paint_mask(new_mesh, mesh);
   }
 
-  BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob, &CD_MASK_MESH, true);
+  BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob);
 
   if (qj->smooth_normals) {
     BKE_mesh_smooth_flag_set(static_cast<Mesh *>(ob->data), true);
   }
 
   if (ob->mode == OB_MODE_SCULPT) {
-    BKE_sculpt_ensure_orig_mesh_data(qj->scene, ob);
     ED_sculpt_undo_geometry_end(ob);
   }
 
@@ -949,6 +953,7 @@ static int quadriflow_remesh_exec(bContext *C, wmOperator *op)
 {
   QuadriFlowJob *job = (QuadriFlowJob *)MEM_mallocN(sizeof(QuadriFlowJob), "QuadriFlowJob");
 
+  job->op = op;
   job->owner = CTX_data_active_object(C);
   job->scene = CTX_data_scene(C);
 

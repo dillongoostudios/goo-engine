@@ -44,7 +44,13 @@ class DATA_PT_curves_surface(DataButtonsPanel, Panel):
         layout.use_property_split = True
 
         layout.prop(ob.data, "surface")
-        layout.prop(ob.data, "surface_uv_map", text="UV Map")
+        has_surface = ob.data.surface is not None
+        if has_surface:
+            layout.prop_search(ob.data, "surface_uv_map", ob.data.surface.data, "uv_layers", text="UV Map")
+        else:
+            row = layout.row()
+            row.prop(ob.data, "surface_uv_map", text="UV Map")
+            row.enabled = has_surface
 
 
 class CURVES_MT_add_attribute(Menu):
@@ -82,8 +88,16 @@ class CURVES_UL_attributes(UIList):
         flags = []
         indices = [i for i in range(len(attributes))]
 
-        for item in attributes:
-            flags.append(self.bitflag_filter_item if item.is_internal else 0)
+        # Filtering by name
+        if self.filter_name:
+            flags = bpy.types.UI_UL_list.filter_items_by_name(
+                self.filter_name, self.bitflag_filter_item, attributes, "name", reverse=self.use_filter_invert)
+        if not flags:
+            flags = [self.bitflag_filter_item] * len(attributes)
+
+        # Filtering internal attributes
+        for idx, item in enumerate(attributes):
+            flags[idx] = 0 if item.is_internal else flags[idx]
 
         return flags, indices
 

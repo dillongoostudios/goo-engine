@@ -14,9 +14,10 @@
 
 struct ListBase;
 struct SpaceOutliner;
-struct TreeElement;
 
 namespace blender::ed::outliner {
+
+struct TreeElement;
 
 /* -------------------------------------------------------------------- */
 /* Tree-Display Interface */
@@ -73,6 +74,16 @@ class AbstractTreeElement {
    * All elements should be ported to use this over #tree_element_get_icon().
    */
   virtual std::optional<BIFIconID> getIcon() const;
+
+  /**
+   * Debugging helper: Print effective path of this tree element, constructed out of the
+   * #TreeElement.name of each element. E.g.:
+   * - Lorem
+   *   - ipsum dolor sit
+   *     - amet
+   * will print: Lorem/ipsum dolor sit/amet.
+   */
+  void print_path();
 
   /**
    * Expand this tree element if it is displayed for the first time (as identified by its

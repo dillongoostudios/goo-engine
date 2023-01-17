@@ -49,7 +49,12 @@ typedef enum eGPUSamplerState {
  * #GPU_SAMPLER_MAX is not a valid enum value, but only a limit.
  * It also creates a bad mask for the `NOT` operator in #ENUM_OPERATORS.
  */
+#ifdef __cplusplus
+static constexpr eGPUSamplerState GPU_SAMPLER_MAX = eGPUSamplerState(GPU_SAMPLER_ICON + 1);
+#else
 static const int GPU_SAMPLER_MAX = (GPU_SAMPLER_ICON + 1);
+#endif
+
 ENUM_OPERATORS(eGPUSamplerState, GPU_SAMPLER_ICON)
 
 #ifdef __cplusplus
@@ -252,6 +257,15 @@ GPUTexture *GPU_texture_create_view(const char *name,
                                     int layer_len,
                                     bool cube_as_array);
 
+GPUTexture *GPU_texture_create_single_layer_view(const char *name, const GPUTexture *src);
+
+/**
+ * Create an alias of the source texture as a texture array with only one layer.
+ * Works for 1D, 2D and cube-map source texture.
+ * If \a src is freed, the texture view will continue to be valid.
+ */
+GPUTexture *GPU_texture_create_single_layer_array_view(const char *name, const GPUTexture *src);
+
 void GPU_texture_update_mipmap(GPUTexture *tex,
                                int miplvl,
                                eGPUDataFormat gpu_data_format,
@@ -331,6 +345,7 @@ int GPU_texture_orig_width(const GPUTexture *tex);
 int GPU_texture_orig_height(const GPUTexture *tex);
 void GPU_texture_orig_size_set(GPUTexture *tex, int w, int h);
 eGPUTextureFormat GPU_texture_format(const GPUTexture *tex);
+const char *GPU_texture_format_description(eGPUTextureFormat texture_format);
 bool GPU_texture_array(const GPUTexture *tex);
 bool GPU_texture_cube(const GPUTexture *tex);
 bool GPU_texture_depth(const GPUTexture *tex);

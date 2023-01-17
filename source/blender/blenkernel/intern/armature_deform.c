@@ -35,6 +35,7 @@
 #include "BKE_deform.h"
 #include "BKE_editmesh.h"
 #include "BKE_lattice.h"
+#include "BKE_mesh.h"
 
 #include "DEG_depsgraph_build.h"
 
@@ -300,12 +301,22 @@ static void armature_vert_task_with_dvert(const ArmatureUserdata *data,
   }
 
   /* check if there's any  point in calculating for this vert */
-  if (armature_weight == 0.0f) {
-    return;
-  }
+  if (vert_coords_prev) {
+    if (prevco_weight == 1.0f) {
+      return;
+    }
 
-  /* get the coord we work on */
-  co = vert_coords_prev ? vert_coords_prev[i] : vert_coords[i];
+    /* get the coord we work on */
+    co = vert_coords_prev[i];
+  }
+  else {
+    if (armature_weight == 0.0f) {
+      return;
+    }
+
+    /* get the coord we work on */
+    co = vert_coords[i];
+  }
 
   /* Apply the object's matrix */
   mul_m4_v3(data->premat, co);
@@ -313,7 +324,7 @@ static void armature_vert_task_with_dvert(const ArmatureUserdata *data,
   if (use_dverts && dvert && dvert->totweight) { /* use weight groups ? */
     const MDeformWeight *dw = dvert->dw;
     int deformed = 0;
-    unsigned int j;
+    uint j;
     for (j = dvert->totweight; j != 0; j--, dw++) {
       const uint index = dw->def_nr;
       if (index < data->defbase_len && (pchan = data->pchan_from_defbase[index])) {
@@ -406,8 +417,8 @@ static void armature_vert_task(void *__restrict userdata,
   if (data->use_dverts || data->armature_def_nr != -1) {
     if (data->me_target) {
       BLI_assert(i < data->me_target->totvert);
-      if (data->me_target->dvert != NULL) {
-        dvert = data->me_target->dvert + i;
+      if (data->dverts != NULL) {
+        dvert = data->dverts + i;
       }
       else {
         dvert = NULL;
@@ -488,7 +499,7 @@ static void armature_deform_coords_impl(const Object *ob_arm,
       target_data_id = me_target == NULL ? (const ID *)ob_target->data : &me_target->id;
       if (em_target == NULL) {
         const Mesh *me = (const Mesh *)target_data_id;
-        dverts = me->dvert;
+        dverts = BKE_mesh_deform_verts(me);
         if (dverts) {
           dverts_len = me->totvert;
         }
@@ -523,7 +534,7 @@ static void armature_deform_coords_impl(const Object *ob_arm,
         use_dverts = (cd_dvert_offset != -1);
       }
       else if (me_target) {
-        use_dverts = (me_target->dvert != NULL);
+        use_dverts = (BKE_mesh_deform_verts(me_target) != NULL);
       }
       else if (dverts) {
         use_dverts = true;
@@ -571,9 +582,9 @@ static void armature_deform_coords_impl(const Object *ob_arm,
   };
 
   float obinv[4][4];
-  invert_m4_m4(obinv, ob_target->obmat);
+  invert_m4_m4(obinv, ob_target->object_to_world);
 
-  mul_m4_m4m4(data.postmat, obinv, ob_arm->obmat);
+  mul_m4_m4m4(data.postmat, obinv, ob_arm->object_to_world);
   invert_m4_m4(data.premat, data.postmat);
 
   if (em_target != NULL) {

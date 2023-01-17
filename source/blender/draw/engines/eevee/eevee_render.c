@@ -157,8 +157,6 @@ void EEVEE_render_view_sync(EEVEE_Data *vedata, RenderEngine *engine, struct Dep
   DRW_view_reset();
   DRW_view_default_set(view);
   DRW_view_set_active(view);
-
-  DRW_view_camtexco_set(view, g_data->camtexcofac);
 }
 
 void EEVEE_render_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
@@ -224,7 +222,7 @@ void EEVEE_render_cache(void *vedata,
   }
 
   if (ob_visibility & OB_VISIBLE_SELF) {
-    if (ELEM(ob->type, OB_MESH, OB_SURF, OB_MBALL)) {
+    if (ob->type == OB_MESH) {
       EEVEE_materials_cache_populate(vedata, sldata, ob, &cast_shadow);
       if (do_cryptomatte) {
         EEVEE_cryptomatte_cache_populate(data, sldata, ob);

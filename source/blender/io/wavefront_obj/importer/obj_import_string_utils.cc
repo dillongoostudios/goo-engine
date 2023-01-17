@@ -41,12 +41,14 @@ void fixup_line_continuations(char *p, char *end)
   while (true) {
     /* Find next backslash, if any. */
     char *backslash = std::find(p, end, '\\');
-    if (backslash == end)
+    if (backslash == end) {
       break;
+    }
     /* Skip over possible whitespace right after it. */
     p = backslash + 1;
-    while (p < end && is_whitespace(*p) && *p != '\n')
+    while (p < end && is_whitespace(*p) && *p != '\n') {
       ++p;
+    }
     /* If then we have a newline, turn both backslash
      * and the newline into regular spaces. */
     if (p < end && *p == '\n') {
@@ -92,7 +94,7 @@ const char *parse_float(const char *p,
   }
   p = drop_plus(p, end);
   fast_float::from_chars_result res = fast_float::from_chars(p, end, dst);
-  if (res.ec == std::errc::invalid_argument || res.ec == std::errc::result_out_of_range) {
+  if (ELEM(res.ec, std::errc::invalid_argument, std::errc::result_out_of_range)) {
     dst = fallback;
   }
   else if (require_trailing_space && res.ptr < end && !is_whitespace(*res.ptr)) {
@@ -123,7 +125,7 @@ const char *parse_int(const char *p, const char *end, int fallback, int &dst, bo
   }
   p = drop_plus(p, end);
   std::from_chars_result res = std::from_chars(p, end, dst);
-  if (res.ec == std::errc::invalid_argument || res.ec == std::errc::result_out_of_range) {
+  if (ELEM(res.ec, std::errc::invalid_argument, std::errc::result_out_of_range)) {
     dst = fallback;
   }
   return res.ptr;

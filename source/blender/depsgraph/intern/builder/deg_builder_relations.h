@@ -14,14 +14,13 @@
 
 #include "DNA_ID.h"
 
-#include "RNA_access.h"
 #include "RNA_path.h"
-#include "RNA_types.h"
 
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
 #include "intern/builder/deg_builder.h"
+#include "intern/builder/deg_builder_key.h"
 #include "intern/builder/deg_builder_map.h"
 #include "intern/builder/deg_builder_rna.h"
 #include "intern/builder/deg_builder_stack.h"
@@ -69,8 +68,6 @@ struct bNodeTree;
 struct bPoseChannel;
 struct bSound;
 
-struct PropertyRNA;
-
 namespace blender::deg {
 
 struct ComponentNode;
@@ -83,66 +80,6 @@ struct OperationNode;
 struct Relation;
 struct RootPChanMap;
 struct TimeSourceNode;
-
-struct TimeSourceKey {
-  TimeSourceKey();
-  TimeSourceKey(ID *id);
-
-  string identifier() const;
-
-  ID *id;
-};
-
-struct ComponentKey {
-  ComponentKey();
-  ComponentKey(ID *id, NodeType type, const char *name = "");
-
-  string identifier() const;
-
-  ID *id;
-  NodeType type;
-  const char *name;
-};
-
-struct OperationKey {
-  OperationKey();
-  OperationKey(ID *id, NodeType component_type, const char *name, int name_tag = -1);
-  OperationKey(
-      ID *id, NodeType component_type, const char *component_name, const char *name, int name_tag);
-
-  OperationKey(ID *id, NodeType component_type, OperationCode opcode);
-  OperationKey(ID *id, NodeType component_type, const char *component_name, OperationCode opcode);
-
-  OperationKey(
-      ID *id, NodeType component_type, OperationCode opcode, const char *name, int name_tag = -1);
-  OperationKey(ID *id,
-               NodeType component_type,
-               const char *component_name,
-               OperationCode opcode,
-               const char *name,
-               int name_tag = -1);
-
-  string identifier() const;
-
-  ID *id;
-  NodeType component_type;
-  const char *component_name;
-  OperationCode opcode;
-  const char *name;
-  int name_tag;
-};
-
-struct RNAPathKey {
-  RNAPathKey(ID *id, const char *path, RNAPointerSource source);
-  RNAPathKey(ID *id, const PointerRNA &ptr, PropertyRNA *prop, RNAPointerSource source);
-
-  string identifier() const;
-
-  ID *id;
-  PointerRNA ptr;
-  PropertyRNA *prop;
-  RNAPointerSource source;
-};
 
 class DepsgraphRelationBuilder : public DepsgraphBuilder {
  public:
@@ -177,7 +114,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   /* Adds relation from proper transformation operation to the modifier.
    * Takes care of checking for possible physics solvers modifying position
    * of this object. */
-  void add_modifier_to_transform_relation(const DepsNodeHandle *handle, const char *description);
+  void add_depends_on_transform_relation(const DepsNodeHandle *handle, const char *description);
 
   void add_customdata_mask(Object *object, const DEGCustomDataMeshMasks &customdata_masks);
   void add_special_eval_flag(ID *id, uint32_t flag);
@@ -203,6 +140,7 @@ class DepsgraphRelationBuilder : public DepsgraphBuilder {
   virtual void build_object(Object *object);
   virtual void build_object_from_view_layer_base(Object *object);
   virtual void build_object_layer_component_relations(Object *object);
+  virtual void build_object_modifiers(Object *object);
   virtual void build_object_data(Object *object);
   virtual void build_object_data_camera(Object *object);
   virtual void build_object_data_geometry(Object *object);

@@ -8,6 +8,7 @@ import datetime
 import os
 import re
 import sys
+import glob
 
 # XXX Relative import does not work here when used from Blender...
 from bl_i18n_utils import settings as settings_i18n, utils
@@ -96,7 +97,7 @@ def check(check_ctxt, msgs, key, msgsrc, settings):
         if key in py_in_rna[1]:
             py_in_rna[0].add(key)
     if not_capitalized is not None:
-        if(key[1] not in settings.WARN_MSGID_NOT_CAPITALIZED_ALLOWED and
+        if (key[1] not in settings.WARN_MSGID_NOT_CAPITALIZED_ALLOWED and
            key[1][0].isalpha() and not key[1][0].isupper()):
             not_capitalized.add(key)
     if end_point is not None:
@@ -257,11 +258,12 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
         bl_rna_base_props = set()
         if bl_rna_base:
             bl_rna_base_props |= set(bl_rna_base.properties.values())
-        for cls_base in cls.__bases__:
-            bl_rna_base = getattr(cls_base, "bl_rna", None)
-            if not bl_rna_base:
-                continue
-            bl_rna_base_props |= set(bl_rna_base.properties.values())
+        if hasattr(cls, "__bases__"):
+            for cls_base in cls.__bases__:
+                bl_rna_base = getattr(cls_base, "bl_rna", None)
+                if not bl_rna_base:
+                    continue
+                bl_rna_base_props |= set(bl_rna_base.properties.values())
 
         props = sorted(bl_rna.properties, key=lambda p: p.identifier)
         for prop in props:
@@ -449,6 +451,19 @@ def dump_rna_messages(msgs, reports, settings, verbose=False):
         process_msg(msgs, bpy.app.translations.contexts.operator_default, cat_str, "Generated operator category",
                     reports, check_ctxt_rna, settings)
 
+    # Parse keymap preset preferences
+    for preset_filename in sorted(
+            os.listdir(os.path.join(settings.PRESETS_DIR, "keyconfig"))):
+        preset_path = os.path.join(settings.PRESETS_DIR, "keyconfig", preset_filename)
+        if not (os.path.isfile(preset_path) and preset_filename.endswith(".py")):
+            continue
+        preset_name, _ = os.path.splitext(preset_filename)
+
+        bpy.utils.keyconfig_set(preset_path)
+        preset = bpy.data.window_managers[0].keyconfigs[preset_name]
+        if preset.preferences is not None:
+            walk_properties(preset.preferences)
+
     # And parse keymaps!
     from bl_keymap_utils import keymap_hierarchy
     walk_keymap_hierarchy(keymap_hierarchy.generate(), "KM_HIERARCHY")
@@ -555,7 +570,7 @@ def dump_py_messages_from_files(msgs, reports, files, settings):
         bag = extract_strings_split(node)
         opname, _ = bag[0]
         if not opname:
-            return i18n_contexts.default
+            return i18n_contexts.operator_default
         op = bpy.ops
         for n in opname.split('.'):
             op = getattr(op, n)
@@ -883,6 +898,45 @@ def dump_preset_messages(msgs, reports, settings):
         process_msg(msgs, settings.DEFAULT_CONTEXT, msgid, msgsrc, reports, None, settings)
 
 
+def dump_template_messages(msgs, reports, settings):
+    bfiles = [""]  # General template, no name needed.
+    bfiles += glob.glob(settings.TEMPLATES_DIR + "/**/*.blend", recursive=True)
+
+    workspace_names = {}
+
+    for bfile in bfiles:
+        template = os.path.dirname(bfile)
+        template = os.path.basename(template)
+        bpy.ops.wm.read_homefile(use_factory_startup=True, app_template=template)
+        for ws in bpy.data.workspaces:
+            names = workspace_names.setdefault(ws.name, [])
+            names.append(template or "General")
+
+    from bpy.app.translations import contexts as i18n_contexts
+    msgctxt = i18n_contexts.id_workspace
+    for workspace_name in sorted(workspace_names):
+        for msgsrc in sorted(workspace_names[workspace_name]):
+            msgsrc = "Workspace from template " + msgsrc
+            process_msg(msgs, msgctxt, workspace_name, msgsrc,
+                        reports, None, settings)
+
+
+def dump_addon_bl_info(msgs, reports, module, settings):
+    for prop in ('name', 'location', 'description'):
+        process_msg(
+            msgs,
+            settings.DEFAULT_CONTEXT,
+            module.bl_info[prop],
+            "Add-on " +
+            module.bl_info['name'] +
+            " info: " +
+            prop,
+            reports,
+            None,
+            settings,
+        )
+
+
 ##### Main functions! #####
 def dump_messages(do_messages, do_checks, settings):
     bl_ver = "Blender " + bpy.app.version_string
@@ -918,13 +972,36 @@ def dump_messages(do_messages, do_checks, settings):
     # Get strings from presets.
     dump_preset_messages(msgs, reports, settings)
 
+    # Get strings from startup templates.
+    dump_template_messages(msgs, reports, settings)
+
+    # Get strings from addons' bl_info.
+    import addon_utils
+    for module in addon_utils.modules():
+        # Only process official add-ons, i.e. those marked as 'OFFICIAL' and
+        # existing in the system add-ons directory (not user-installed ones).
+        if (module.bl_info['support'] != 'OFFICIAL'
+                or not bpy.path.is_subdir(module.__file__, bpy.utils.system_resource('SCRIPTS'))):
+            continue
+        dump_addon_bl_info(msgs, reports, module, settings)
+
     # Get strings from addons' categories.
+    system_categories = set()
+    for module in addon_utils.modules():
+        if bpy.path.is_subdir(module.__file__, bpy.utils.system_resource('SCRIPTS')):
+            system_categories.add(module.bl_info['category'])
     for uid, label, tip in bpy.types.WindowManager.addon_filter.keywords['items'](
             bpy.context.window_manager,
             bpy.context,
     ):
-        process_msg(msgs, settings.DEFAULT_CONTEXT, label, "Add-ons' categories", reports, None, settings)
-        if tip:
+        if label in system_categories:
+            # Only process add-on if it a system one (i.e shipped with Blender). Also,
+            # we do want to translate official categories, even if they have no official add-ons,
+            # hence the different test than below.
+            process_msg(msgs, settings.DEFAULT_CONTEXT, label, "Add-ons' categories", reports, None, settings)
+        elif tip:
+            # Only special categories get a tip (All and User).
+            process_msg(msgs, settings.DEFAULT_CONTEXT, label, "Add-ons' categories", reports, None, settings)
             process_msg(msgs, settings.DEFAULT_CONTEXT, tip, "Add-ons' categories", reports, None, settings)
 
     # Get strings specific to translations' menu.
@@ -1013,6 +1090,9 @@ def dump_addon_messages(module_name, do_checks, settings):
     # get strings from UI layout definitions text="..." args
     reports["check_ctxt"] = check_ctxt
     dump_py_messages(msgs, reports, {addon}, settings, addons_only=True)
+
+    # Get strings from the addon's bl_info
+    dump_addon_bl_info(msgs, reports, addon, settings)
 
     pot.unescape()  # Strings gathered in py/C source code may contain escaped chars...
     print_info(reports, pot)

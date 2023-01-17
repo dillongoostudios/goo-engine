@@ -7,6 +7,7 @@
 
 #include "BLI_math.h"
 #include "BLI_sort.h"
+#include "BLI_string.h"
 
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
@@ -3118,7 +3119,7 @@ static Py_ssize_t bpy_bmelemseq_length(BPy_BMElemSeq *self)
   }
 }
 
-static PyObject *bpy_bmelemseq_subscript_int(BPy_BMElemSeq *self, int keynum)
+static PyObject *bpy_bmelemseq_subscript_int(BPy_BMElemSeq *self, Py_ssize_t keynum)
 {
   BPY_BM_CHECK_OBJ(self);
 
@@ -3740,7 +3741,7 @@ static struct PyModuleDef BPy_BM_types_module_def = {
     NULL,          /* m_doc */
     0,             /* m_size */
     NULL,          /* m_methods */
-    NULL,          /* m_reload */
+    NULL,          /* m_slots */
     NULL,          /* m_traverse */
     NULL,          /* m_clear */
     NULL,          /* m_free */
@@ -4247,16 +4248,16 @@ char *BPy_BMElem_StringFromHType_ex(const char htype, char ret[32])
   /* zero to ensure string is always NULL terminated */
   char *ret_ptr = ret;
   if (htype & BM_VERT) {
-    ret_ptr += sprintf(ret_ptr, "/%s", BPy_BMVert_Type.tp_name);
+    ret_ptr += BLI_sprintf(ret_ptr, "/%s", BPy_BMVert_Type.tp_name);
   }
   if (htype & BM_EDGE) {
-    ret_ptr += sprintf(ret_ptr, "/%s", BPy_BMEdge_Type.tp_name);
+    ret_ptr += BLI_sprintf(ret_ptr, "/%s", BPy_BMEdge_Type.tp_name);
   }
   if (htype & BM_FACE) {
-    ret_ptr += sprintf(ret_ptr, "/%s", BPy_BMFace_Type.tp_name);
+    ret_ptr += BLI_sprintf(ret_ptr, "/%s", BPy_BMFace_Type.tp_name);
   }
   if (htype & BM_LOOP) {
-    ret_ptr += sprintf(ret_ptr, "/%s", BPy_BMLoop_Type.tp_name);
+    ret_ptr += BLI_sprintf(ret_ptr, "/%s", BPy_BMLoop_Type.tp_name);
   }
   ret[0] = '(';
   *ret_ptr++ = ')';
@@ -4273,10 +4274,10 @@ char *BPy_BMElem_StringFromHType(const char htype)
 /* -------------------------------------------------------------------- */
 /* keep at bottom */
 
-/* this function is called on free, it should stay quite fast */
+/* This function is called on free, it should stay quite fast */
 static void bm_dealloc_editmode_warn(BPy_BMesh *self)
 {
   if (self->flag & BPY_BMFLAG_IS_WRAPPED) {
-    /* currently nop - this works without warnings now */
+    /* Currently NOP - this works without warnings now. */
   }
 }

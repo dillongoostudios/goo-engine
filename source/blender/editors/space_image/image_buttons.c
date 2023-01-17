@@ -654,7 +654,7 @@ static void uiblock_layer_pass_buttons(uiLayout *layout,
 
     /* view */
     if (BLI_listbase_count_at_most(&rr->views, 2) > 1 &&
-        ((!show_stereo) || (!RE_RenderResult_is_stereo(rr)))) {
+        ((!show_stereo) || !RE_RenderResult_is_stereo(rr))) {
       rview = BLI_findlink(&rr->views, iuser->view);
       display_name = rview ? rview->name : "";
 
@@ -869,7 +869,8 @@ void uiTemplateImage(uiLayout *layout,
     uiItemS(col);
 
     uiItemR(col, &imaptr, "generated_type", UI_ITEM_R_EXPAND, IFACE_("Type"), ICON_NONE);
-    if (ima->gen_type == IMA_GENTYPE_BLANK) {
+    ImageTile *base_tile = BKE_image_get_tile(ima, 0);
+    if (base_tile->gen_type == IMA_GENTYPE_BLANK) {
       uiItemR(col, &imaptr, "generated_color", 0, NULL, ICON_NONE);
     }
   }
@@ -973,8 +974,16 @@ void uiTemplateImageSettings(uiLayout *layout, PointerRNA *imfptr, bool color_ma
   uiLayoutSetPropDecorate(col, false);
 
   uiItemR(col, imfptr, "file_format", 0, NULL, ICON_NONE);
-  uiItemR(
-      uiLayoutRow(col, true), imfptr, "color_mode", UI_ITEM_R_EXPAND, IFACE_("Color"), ICON_NONE);
+
+  /* Multi-layer always saves raw unmodified channels. */
+  if (imf->imtype != R_IMF_IMTYPE_MULTILAYER) {
+    uiItemR(uiLayoutRow(col, true),
+            imfptr,
+            "color_mode",
+            UI_ITEM_R_EXPAND,
+            IFACE_("Color"),
+            ICON_NONE);
+  }
 
   /* only display depth setting if multiple depths can be used */
   if (ELEM(depth_ok,
@@ -1210,6 +1219,11 @@ void uiTemplateImageInfo(uiLayout *layout, bContext *C, Image *ima, ImageUser *i
     if (ibuf->zbuf || ibuf->zbuf_float) {
       ofs += BLI_strncpy_rlen(str + ofs, TIP_(" + Z"), len - ofs);
     }
+
+    eGPUTextureFormat texture_format = IMB_gpu_get_texture_format(
+        ibuf, ima->flag & IMA_HIGH_BITDEPTH, ibuf->planes >= 8);
+    const char *texture_format_description = GPU_texture_format_description(texture_format);
+    ofs += BLI_snprintf_rlen(str + ofs, len - ofs, TIP_(",  %s"), texture_format_description);
 
     uiItemL(col, str, ICON_NONE);
   }

@@ -37,7 +37,7 @@
 
 namespace blender ::io ::gpencil {
 
-static void error_handler(HPDF_STATUS error_no, HPDF_STATUS detail_no, void *UNUSED(user_data))
+static void error_handler(HPDF_STATUS error_no, HPDF_STATUS detail_no, void * /*user_data*/)
 {
   printf("ERROR: error_no=%04X, detail_no=%u\n", (HPDF_UINT)error_no, (HPDF_UINT)detail_no);
 }
@@ -177,7 +177,8 @@ void GpencilExporterPDF::export_gpencil_layers()
         /* Apply layer thickness change. */
         gps_duplicate->thickness += gpl->line_change;
         /* Apply object scale to thickness. */
-        gps_duplicate->thickness *= mat4_to_scale(ob->obmat);
+        const float scalef = mat4_to_scale(ob->object_to_world);
+        gps_duplicate->thickness = ceilf((float)gps_duplicate->thickness * scalef);
         CLAMP_MIN(gps_duplicate->thickness, 1.0f);
         /* Fill. */
         if ((is_fill) && (params_.flag & GP_EXPORT_FILL)) {
@@ -192,7 +193,7 @@ void GpencilExporterPDF::export_gpencil_layers()
           }
           else {
             bGPDstroke *gps_perimeter = BKE_gpencil_stroke_perimeter_from_view(
-                rv3d_, gpd_, gpl, gps_duplicate, 3, diff_mat_.values);
+                rv3d_->viewmat, gpd_, gpl, gps_duplicate, 3, diff_mat_.values, 0.0f);
 
             /* Sample stroke. */
             if (params_.stroke_sample > 0.0f) {
@@ -236,7 +237,9 @@ void GpencilExporterPDF::export_stroke_to_polyline(bGPDlayer *gpl,
 
   if (is_stroke && !do_fill) {
     HPDF_Page_SetLineJoin(page_, HPDF_ROUND_JOIN);
-    HPDF_Page_SetLineWidth(page_, MAX2((radius * 2.0f) - gpl->line_change, 1.0f));
+    const float width = MAX2(
+        MAX2(gps->thickness + gpl->line_change, (radius * 2.0f) + gpl->line_change), 1.0f);
+    HPDF_Page_SetLineWidth(page_, width);
   }
 
   /* Loop all points. */

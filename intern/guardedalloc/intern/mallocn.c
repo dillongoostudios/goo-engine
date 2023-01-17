@@ -43,12 +43,13 @@ void (*MEM_set_error_callback)(void (*func)(const char *)) = MEM_lockfree_set_er
 bool (*MEM_consistency_check)(void) = MEM_lockfree_consistency_check;
 void (*MEM_set_memory_debug)(void) = MEM_lockfree_set_memory_debug;
 size_t (*MEM_get_memory_in_use)(void) = MEM_lockfree_get_memory_in_use;
-unsigned int (*MEM_get_memory_blocks_in_use)(void) = MEM_lockfree_get_memory_blocks_in_use;
+uint (*MEM_get_memory_blocks_in_use)(void) = MEM_lockfree_get_memory_blocks_in_use;
 void (*MEM_reset_peak_memory)(void) = MEM_lockfree_reset_peak_memory;
 size_t (*MEM_get_peak_memory)(void) = MEM_lockfree_get_peak_memory;
 
 #ifndef NDEBUG
 const char *(*MEM_name_ptr)(void *vmemh) = MEM_lockfree_name_ptr;
+void (*MEM_name_ptr_set)(void *vmemh, const char *str) = MEM_lockfree_name_ptr_set;
 #endif
 
 void *aligned_malloc(size_t size, size_t alignment)
@@ -128,6 +129,7 @@ void MEM_use_lockfree_allocator(void)
 
 #ifndef NDEBUG
   MEM_name_ptr = MEM_lockfree_name_ptr;
+  MEM_name_ptr_set = MEM_lockfree_name_ptr_set;
 #endif
 }
 
@@ -159,5 +161,6 @@ void MEM_use_guarded_allocator(void)
 
 #ifndef NDEBUG
   MEM_name_ptr = MEM_guarded_name_ptr;
+  MEM_name_ptr_set = MEM_guarded_name_ptr_set;
 #endif
 }

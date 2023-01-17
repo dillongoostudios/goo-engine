@@ -686,7 +686,7 @@ ID *ui_template_id_liboverride_hierarchy_make(
    * NOTE: do not attempt to perform such hierarchy override at all cost, if there is not enough
    * context, better to abort than create random overrides all over the place. */
   if (!ID_IS_OVERRIDABLE_LIBRARY_HIERARCHY(id)) {
-    RNA_warning("The data-block %s is not overridable", id->name);
+    WM_reportf(RPT_ERROR, "The data-block %s is not overridable", id->name);
     return NULL;
   }
 
@@ -838,22 +838,27 @@ ID *ui_template_id_liboverride_hierarchy_make(
               bmain, scene, view_layer, NULL, id, &object_active->id, NULL, &id_override, false);
         }
       }
+      else {
+        BKE_lib_override_library_create(
+            bmain, scene, view_layer, NULL, id, id, NULL, &id_override, false);
+      }
       break;
     case ID_MA:
     case ID_TE:
     case ID_IM:
-      RNA_warning("The type of data-block %s could not yet implemented", id->name);
+      WM_reportf(RPT_WARNING, "The type of data-block %s is not yet implemented", id->name);
       break;
     case ID_WO:
-      RNA_warning("The type of data-block %s could not yet implemented", id->name);
+      WM_reportf(RPT_WARNING, "The type of data-block %s is not yet implemented", id->name);
       break;
     case ID_PA:
-      RNA_warning("The type of data-block %s could not yet implemented", id->name);
+      WM_reportf(RPT_WARNING, "The type of data-block %s is not yet implemented", id->name);
       break;
     default:
-      RNA_warning("The type of data-block %s could not yet implemented", id->name);
+      WM_reportf(RPT_WARNING, "The type of data-block %s is not yet implemented", id->name);
       break;
   }
+
   if (id_override != NULL) {
     id_override->override_library->flag &= ~IDOVERRIDE_LIBRARY_FLAG_SYSTEM_DEFINED;
     *r_undo_push_label = "Make Library Override Hierarchy";
@@ -897,7 +902,7 @@ static void template_id_liboverride_hierarchy_make(bContext *C,
     }
   }
   else {
-    RNA_warning("The data-block %s could not be overridden", id->name);
+    WM_reportf(RPT_ERROR, "The data-block %s could not be overridden", id->name);
   }
 }
 
@@ -1415,7 +1420,7 @@ static void template_ID(const bContext *C,
 
       UI_but_funcN_set(
           but, template_id_cb, MEM_dupallocN(template_ui), POINTER_FROM_INT(UI_ID_ALONE));
-      if ((!BKE_id_copy_is_allowed(id)) || (idfrom && idfrom->lib) || (!editable) ||
+      if (!BKE_id_copy_is_allowed(id) || (idfrom && idfrom->lib) || (!editable) ||
           /* object in editmode - don't change data */
           (idfrom && GS(idfrom->name) == ID_OB && (((Object *)idfrom)->mode & OB_MODE_EDIT))) {
         UI_but_flag_enable(but, UI_BUT_DISABLED);
@@ -1442,7 +1447,7 @@ static void template_ID(const bContext *C,
                       UI_UNIT_Y,
                       NULL);
       }
-      else if (!(ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS)) &&
+      else if (!ELEM(GS(id->name), ID_GR, ID_SCE, ID_SCR, ID_OB, ID_WS) &&
                (hide_buttons == false)) {
         uiDefIconButR(block,
                       UI_BTYPE_ICON_TOGGLE,
@@ -3269,7 +3274,7 @@ void uiTemplatePreview(uiLayout *layout,
         uiDefButS(block,
                   UI_BTYPE_ROW,
                   B_MATPRV,
-                  IFACE_("World"),
+                  CTX_IFACE_(BLT_I18NCONTEXT_ID_WORLD, "World"),
                   0,
                   0,
                   UI_UNIT_X * 10,
@@ -3665,7 +3670,7 @@ static void colorband_buttons_layout(uiLayout *layout,
                      UI_UNIT_Y,
                      &coba->cur,
                      0.0,
-                     (float)(MAX2(0, coba->tot - 1)),
+                     (float)MAX2(0, coba->tot - 1),
                      0,
                      0,
                      TIP_("Choose active color stop"));
@@ -3673,13 +3678,9 @@ static void colorband_buttons_layout(uiLayout *layout,
 
       row = uiLayoutRow(split, false);
       uiItemR(row, &ptr, "position", 0, IFACE_("Pos"), ICON_NONE);
-      bt = block->buttons.last;
-      UI_but_func_set(bt, colorband_update_cb, bt, coba);
 
       row = uiLayoutRow(layout, false);
       uiItemR(row, &ptr, "color", 0, "", ICON_NONE);
-      bt = block->buttons.last;
-      UI_but_funcN_set(bt, rna_update_cb, MEM_dupallocN(cb), NULL);
     }
     else {
       split = uiLayoutSplit(layout, 0.5f, false);
@@ -3696,7 +3697,7 @@ static void colorband_buttons_layout(uiLayout *layout,
                      UI_UNIT_Y,
                      &coba->cur,
                      0.0,
-                     (float)(MAX2(0, coba->tot - 1)),
+                     (float)MAX2(0, coba->tot - 1),
                      0,
                      0,
                      TIP_("Choose active color stop"));
@@ -3704,13 +3705,28 @@ static void colorband_buttons_layout(uiLayout *layout,
 
       row = uiLayoutRow(subsplit, false);
       uiItemR(row, &ptr, "position", UI_ITEM_R_SLIDER, IFACE_("Pos"), ICON_NONE);
-      bt = block->buttons.last;
-      UI_but_func_set(bt, colorband_update_cb, bt, coba);
 
       row = uiLayoutRow(split, false);
       uiItemR(row, &ptr, "color", 0, "", ICON_NONE);
-      bt = block->buttons.last;
-      UI_but_funcN_set(bt, rna_update_cb, MEM_dupallocN(cb), NULL);
+    }
+
+    /* Some special (rather awkward) treatment to update UI state on certain property changes. */
+    LISTBASE_FOREACH_BACKWARD (uiBut *, but, &block->buttons) {
+      if (but->rnapoin.data != ptr.data) {
+        continue;
+      }
+      if (!but->rnaprop) {
+        continue;
+      }
+
+      const char *prop_identifier = RNA_property_identifier(but->rnaprop);
+      if (STREQ(prop_identifier, "position")) {
+        UI_but_func_set(but, colorband_update_cb, but, coba);
+      }
+
+      if (STREQ(prop_identifier, "color")) {
+        UI_but_funcN_set(but, rna_update_cb, MEM_dupallocN(cb), NULL);
+      }
     }
   }
 }
@@ -5212,7 +5228,7 @@ static void CurveProfile_buttons_layout(uiLayout *layout, PointerRNA *ptr, RNAUp
                             0.0,
                             0.0,
                             0.0,
-                            "Reapply and update the preset, removing changes");
+                            TIP_("Reapply and update the preset, removing changes"));
       UI_but_funcN_set(bt, CurveProfile_buttons_reset, MEM_dupallocN(cb), profile);
     }
   }
@@ -6337,7 +6353,7 @@ void uiTemplateReportsBanner(uiLayout *layout, bContext *C)
                   0,
                   width + UI_UNIT_X,
                   UI_UNIT_Y,
-                  "Show in Info Log");
+                  TIP_("Show in Info Log"));
 
   UI_block_emboss_set(block, previous_emboss);
 }
@@ -6364,8 +6380,10 @@ void uiTemplateInputStatus(uiLayout *layout, struct bContext *C)
     uiLayout *row = uiLayoutRow(col, true);
     uiLayoutSetAlignment(row, UI_LAYOUT_ALIGN_LEFT);
 
-    const char *msg = TIP_(WM_window_cursor_keymap_status_get(win, i, 0));
-    const char *msg_drag = TIP_(WM_window_cursor_keymap_status_get(win, i, 1));
+    const char *msg = CTX_TIP_(BLT_I18NCONTEXT_OPERATOR_DEFAULT,
+                               WM_window_cursor_keymap_status_get(win, i, 0));
+    const char *msg_drag = CTX_TIP_(BLT_I18NCONTEXT_OPERATOR_DEFAULT,
+                                    WM_window_cursor_keymap_status_get(win, i, 1));
 
     if (msg || (msg_drag == NULL)) {
       uiItemL(row, msg ? msg : "", (ICON_MOUSE_LMB + i));
@@ -6739,7 +6757,7 @@ void uiTemplateCacheFileTimeSettings(uiLayout *layout, PointerRNA *fileptr)
 }
 
 static void cache_file_layer_item(uiList *UNUSED(ui_list),
-                                  bContext *UNUSED(C),
+                                  const bContext *UNUSED(C),
                                   uiLayout *layout,
                                   PointerRNA *UNUSED(dataptr),
                                   PointerRNA *itemptr,

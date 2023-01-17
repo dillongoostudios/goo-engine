@@ -70,47 +70,48 @@ static void set_crazy_vertex_quat(float r_quat[4],
   sub_qt_qtqt(r_quat, q2, q1);
 }
 
-static bool modifiers_disable_subsurf_temporary(struct Scene *scene, Object *ob)
+static bool modifiers_disable_subsurf_temporary(Object *ob, const int cageIndex)
 {
-  bool disabled = false;
-  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, 1);
+  bool changed = false;
 
   ModifierData *md = static_cast<ModifierData *>(ob->modifiers.first);
   for (int i = 0; md && i <= cageIndex; i++, md = md->next) {
     if (md->type == eModifierType_Subsurf) {
       md->mode ^= eModifierMode_DisableTemporary;
-      disabled = true;
+      changed = true;
     }
   }
 
-  return disabled;
+  return changed;
 }
 
 float (*BKE_crazyspace_get_mapped_editverts(struct Depsgraph *depsgraph, Object *obedit))[3]
 {
-  Scene *scene = DEG_get_input_scene(depsgraph);
   Scene *scene_eval = DEG_get_evaluated_scene(depsgraph);
   Object *obedit_eval = DEG_get_evaluated_object(depsgraph, obedit);
-  Mesh *mesh_eval = static_cast<Mesh *>(obedit_eval->data);
-  BMEditMesh *editmesh_eval = mesh_eval->edit_mesh;
+  const int cageIndex = BKE_modifiers_get_cage_index(scene_eval, obedit_eval, nullptr, true);
 
-  /* disable subsurf temporal, get mapped cos, and enable it */
-  if (modifiers_disable_subsurf_temporary(scene_eval, obedit_eval)) {
-    /* Need to make new derived-mesh. */
+  /* Disable subsurf temporal, get mapped cos, and enable it. */
+  if (modifiers_disable_subsurf_temporary(obedit_eval, cageIndex)) {
+    /* Need to make new cage.
+     * TODO: Avoid losing original evaluated geometry. */
     makeDerivedMesh(depsgraph, scene_eval, obedit_eval, &CD_MASK_BAREMESH);
   }
 
-  /* now get the cage */
-  Mesh *mesh_eval_cage = editbmesh_get_eval_cage_from_orig(
-      depsgraph, scene, obedit, &CD_MASK_BAREMESH);
+  /* Now get the cage. */
+  BMEditMesh *em_eval = BKE_editmesh_from_object(obedit_eval);
+  Mesh *mesh_eval_cage = editbmesh_get_eval_cage(
+      depsgraph, scene_eval, obedit_eval, em_eval, &CD_MASK_BAREMESH);
 
-  const int nverts = editmesh_eval->bm->totvert;
+  const int nverts = em_eval->bm->totvert;
   float(*vertexcos)[3] = static_cast<float(*)[3]>(
       MEM_mallocN(sizeof(*vertexcos) * nverts, "vertexcos map"));
   mesh_get_mapped_verts_coords(mesh_eval_cage, vertexcos, nverts);
 
-  /* set back the flag, no new cage needs to be built, transform does it */
-  modifiers_disable_subsurf_temporary(scene_eval, obedit_eval);
+  /* Set back the flag, and ensure new cage needs to be built. */
+  if (modifiers_disable_subsurf_temporary(obedit_eval, cageIndex)) {
+    DEG_id_tag_update(&obedit->id, ID_RECALC_GEOMETRY);
+  }
 
   return vertexcos;
 }
@@ -182,19 +183,22 @@ void BKE_crazyspace_set_quats_mesh(Mesh *me,
                                    float (*mappedcos)[3],
                                    float (*quats)[4])
 {
+  using namespace blender;
+  using namespace blender::bke;
   BLI_bitmap *vert_tag = BLI_BITMAP_NEW(me->totvert, __func__);
 
   /* first store two sets of tangent vectors in vertices, we derive it just from the face-edges */
-  MVert *mvert = me->mvert;
-  MPoly *mp = me->mpoly;
-  MLoop *mloop = me->mloop;
+  const Span<MVert> verts = me->verts();
+  const Span<MPoly> polys = me->polys();
+  const Span<MLoop> loops = me->loops();
 
-  for (int i = 0; i < me->totpoly; i++, mp++) {
-    MLoop *ml_next = &mloop[mp->loopstart];
-    MLoop *ml_curr = &ml_next[mp->totloop - 1];
-    MLoop *ml_prev = &ml_next[mp->totloop - 2];
+  for (int i = 0; i < me->totpoly; i++) {
+    const MPoly *poly = &polys[i];
+    const MLoop *ml_next = &loops[poly->loopstart];
+    const MLoop *ml_curr = &ml_next[poly->totloop - 1];
+    const MLoop *ml_prev = &ml_next[poly->totloop - 2];
 
-    for (int j = 0; j < mp->totloop; j++) {
+    for (int j = 0; j < poly->totloop; j++) {
       if (!BLI_BITMAP_TEST(vert_tag, ml_curr->v)) {
         const float *co_prev, *co_curr, *co_next; /* orig */
         const float *vd_prev, *vd_curr, *vd_next; /* deform */
@@ -210,9 +214,9 @@ void BKE_crazyspace_set_quats_mesh(Mesh *me,
           co_next = origcos[ml_next->v];
         }
         else {
-          co_prev = mvert[ml_prev->v].co;
-          co_curr = mvert[ml_curr->v].co;
-          co_next = mvert[ml_next->v].co;
+          co_prev = verts[ml_prev->v].co;
+          co_curr = verts[ml_curr->v].co;
+          co_next = verts[ml_next->v].co;
         }
 
         set_crazy_vertex_quat(
@@ -241,7 +245,7 @@ int BKE_crazyspace_get_first_deform_matrices_editbmesh(struct Depsgraph *depsgra
   Mesh *me_input = static_cast<Mesh *>(ob->data);
   Mesh *me = nullptr;
   int i, a, modifiers_left_num = 0, verts_num = 0;
-  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, 1);
+  int cageIndex = BKE_modifiers_get_cage_index(scene, ob, nullptr, true);
   float(*defmats)[3][3] = nullptr, (*deformedVerts)[3] = nullptr;
   VirtualModifierData virtualModifierData;
   ModifierEvalContext mectx = {depsgraph, ob, ModifierApplyFlag(0)};
@@ -265,7 +269,7 @@ int BKE_crazyspace_get_first_deform_matrices_editbmesh(struct Depsgraph *depsgra
         const int required_mode = eModifierMode_Realtime | eModifierMode_Editmode;
         CustomData_MeshMasks cd_mask_extra = CD_MASK_BAREMESH;
         CDMaskLink *datamasks = BKE_modifier_calc_data_masks(
-            scene, ob, md, &cd_mask_extra, required_mode, nullptr, nullptr);
+            scene, md, &cd_mask_extra, required_mode, nullptr, nullptr);
         cd_mask_extra = datamasks->mask;
         BLI_linklist_free((LinkNode *)datamasks, nullptr);
 
@@ -362,7 +366,7 @@ int BKE_sculpt_get_first_deform_matrices(struct Depsgraph *depsgraph,
   VirtualModifierData virtualModifierData;
   Object object_eval;
   crazyspace_init_object_for_eval(depsgraph, object, &object_eval);
-  MultiresModifierData *mmd = get_multires_modifier(scene, &object_eval, 0);
+  MultiresModifierData *mmd = get_multires_modifier(scene, &object_eval, false);
   const bool is_sculpt_mode = (object->mode & OB_MODE_SCULPT) != 0;
   const bool has_multires = mmd != nullptr && mmd->sculptlvl > 0;
   const ModifierEvalContext mectx = {depsgraph, &object_eval, ModifierApplyFlag(0)};

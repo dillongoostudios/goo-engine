@@ -15,7 +15,6 @@ set(INC
   ../../makesrna
   ../../sequencer
   ../../windowmanager
-  ../../../../intern/glew-mx
   ../../../../intern/guardedalloc
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -35,6 +34,7 @@ set(SRC
   screendump.c
   workspace_edit.c
   workspace_layout_edit.c
+  workspace_listen.cc
 
   screen_intern.h
 )

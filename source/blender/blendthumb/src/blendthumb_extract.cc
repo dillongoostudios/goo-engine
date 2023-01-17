@@ -103,7 +103,7 @@ static bool file_seek(FileReader *file, size_t len)
   blender::Array<char> dummy_data(dummy_data_size);
   while (len > 0) {
     const size_t len_chunk = std::min(len, dummy_data_size);
-    if ((size_t)file->read(file, dummy_data.data(), len_chunk) != len_chunk) {
+    if (size_t(file->read(file, dummy_data.data(), len_chunk)) != len_chunk) {
       return false;
     }
     len -= len_chunk;
@@ -136,9 +136,8 @@ static eThumbStatus blendthumb_extract_from_file_impl(FileReader *file,
         thumb->height = bytes_to_native_i32(&shape[4], endian_switch);
 
         /* Verify that image dimensions and data size make sense. */
-        size_t data_size = block_size - 8;
-        const uint64_t expected_size = static_cast<uint64_t>(thumb->width) *
-                                       static_cast<uint64_t>(thumb->height) * 4;
+        size_t data_size = block_size - sizeof(shape);
+        const uint64_t expected_size = uint64_t(thumb->width) * uint64_t(thumb->height) * 4;
         if (thumb->width < 0 || thumb->height < 0 || data_size != expected_size) {
           return BT_INVALID_THUMB;
         }

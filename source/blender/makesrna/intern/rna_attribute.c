@@ -21,6 +21,8 @@
 #include "BKE_attribute.h"
 #include "BKE_customdata.h"
 
+#include "BLT_translation.h"
+
 #include "WM_types.h"
 
 const EnumPropertyItem rna_enum_attribute_type_items[] = {
@@ -78,6 +80,14 @@ const EnumPropertyItem rna_enum_attribute_domain_items[] = {
     // {ATTR_DOMAIN_GRIDS, "GRIDS", 0, "Grids", "Attribute on mesh multires grids"},
     {ATTR_DOMAIN_CURVE, "CURVE", 0, "Spline", "Attribute on spline"},
     {ATTR_DOMAIN_INSTANCE, "INSTANCE", 0, "Instance", "Attribute on instance"},
+    {0, NULL, 0, NULL, NULL},
+};
+
+const EnumPropertyItem rna_enum_attribute_domain_only_mesh_items[] = {
+    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
+    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
+    {ATTR_DOMAIN_CORNER, "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
     {0, NULL, 0, NULL, NULL},
 };
 
@@ -194,7 +204,7 @@ const EnumPropertyItem *rna_enum_attribute_domain_itemf(ID *id,
   int totitem = 0, a;
 
   static EnumPropertyItem mesh_vertex_domain_item = {
-      ATTR_DOMAIN_POINT, "POINT", 0, "Vertex", "Attribute per point/vertex"};
+      ATTR_DOMAIN_POINT, "POINT", 0, N_("Vertex"), N_("Attribute per point/vertex")};
 
   for (a = 0; rna_enum_attribute_domain_items[a].identifier; a++) {
     domain_item = &rna_enum_attribute_domain_items[a];
@@ -241,7 +251,7 @@ static int rna_Attribute_domain_get(PointerRNA *ptr)
 static bool rna_Attribute_is_internal_get(PointerRNA *ptr)
 {
   const CustomDataLayer *layer = (const CustomDataLayer *)ptr->data;
-  return BKE_attribute_allow_procedural_access(layer->name);
+  return !BKE_attribute_allow_procedural_access(layer->name);
 }
 
 static void rna_Attribute_data_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)
@@ -319,6 +329,36 @@ static void rna_ByteColorAttributeValue_color_set(PointerRNA *ptr, const float *
 {
   MLoopCol *mlcol = (MLoopCol *)ptr->data;
   linearrgb_to_srgb_uchar4(&mlcol->r, values);
+}
+
+static void rna_ByteColorAttributeValue_color_srgb_get(PointerRNA *ptr, float *values)
+{
+  MLoopCol *col = (MLoopCol *)ptr->data;
+  values[0] = col->r / 255.0f;
+  values[1] = col->g / 255.0f;
+  values[2] = col->b / 255.0f;
+  values[3] = col->a / 255.0f;
+}
+
+static void rna_ByteColorAttributeValue_color_srgb_set(PointerRNA *ptr, const float *values)
+{
+  MLoopCol *col = (MLoopCol *)ptr->data;
+  col->r = round_fl_to_uchar_clamp(values[0] * 255.0f);
+  col->g = round_fl_to_uchar_clamp(values[1] * 255.0f);
+  col->b = round_fl_to_uchar_clamp(values[2] * 255.0f);
+  col->a = round_fl_to_uchar_clamp(values[3] * 255.0f);
+}
+
+static void rna_FloatColorAttributeValue_color_srgb_get(PointerRNA *ptr, float *values)
+{
+  MPropCol *col = (MPropCol *)ptr->data;
+  linearrgb_to_srgb_v4(values, col->color);
+}
+
+static void rna_FloatColorAttributeValue_color_srgb_set(PointerRNA *ptr, const float *values)
+{
+  MPropCol *col = (MPropCol *)ptr->data;
+  srgb_to_linearrgb_v4(col->color, values);
 }
 
 /* Int8 Attribute. */
@@ -611,6 +651,49 @@ static void rna_AttributeGroup_render_color_index_range(
   *softmin = *min;
   *softmax = *max;
 }
+
+static void rna_AttributeGroup_default_color_name_get(PointerRNA *ptr, char *value)
+{
+  const ID *id = ptr->owner_id;
+  const CustomDataLayer *layer = BKE_id_attributes_render_color_get(id);
+  if (!layer) {
+    value[0] = '\0';
+    return;
+  }
+  BLI_strncpy(value, layer->name, MAX_CUSTOMDATA_LAYER_NAME);
+}
+
+static int rna_AttributeGroup_default_color_name_length(PointerRNA *ptr)
+{
+  const ID *id = ptr->owner_id;
+  const CustomDataLayer *layer = BKE_id_attributes_render_color_get(id);
+  if (!layer) {
+    return 0;
+  }
+  return strlen(layer->name);
+}
+
+static void rna_AttributeGroup_active_color_name_get(PointerRNA *ptr, char *value)
+{
+  const ID *id = ptr->owner_id;
+  const CustomDataLayer *layer = BKE_id_attributes_active_color_get(id);
+  if (!layer) {
+    value[0] = '\0';
+    return;
+  }
+  BLI_strncpy(value, layer->name, MAX_CUSTOMDATA_LAYER_NAME);
+}
+
+static int rna_AttributeGroup_active_color_name_length(PointerRNA *ptr)
+{
+  const ID *id = ptr->owner_id;
+  const CustomDataLayer *layer = BKE_id_attributes_active_color_get(id);
+  if (!layer) {
+    return 0;
+  }
+  return strlen(layer->name);
+}
+
 #else
 
 static void rna_def_attribute_float(BlenderRNA *brna)
@@ -715,6 +798,16 @@ static void rna_def_attribute_float_color(BlenderRNA *brna)
   RNA_def_property_float_sdna(prop, NULL, "color");
   RNA_def_property_array(prop, 4);
   RNA_def_property_update(prop, 0, "rna_Attribute_update_data");
+
+  prop = RNA_def_property(srna, "color_srgb", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_ui_text(prop, "Color", "RGBA color in sRGB color space");
+  RNA_def_property_float_sdna(prop, NULL, "color");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_float_funcs(prop,
+                               "rna_FloatColorAttributeValue_color_srgb_get",
+                               "rna_FloatColorAttributeValue_color_srgb_set",
+                               NULL);
+  RNA_def_property_update(prop, 0, "rna_Attribute_update_data");
 }
 
 static void rna_def_attribute_byte_color(BlenderRNA *brna)
@@ -755,6 +848,16 @@ static void rna_def_attribute_byte_color(BlenderRNA *brna)
                                "rna_ByteColorAttributeValue_color_set",
                                NULL);
   RNA_def_property_ui_text(prop, "Color", "RGBA color in scene linear color space");
+  RNA_def_property_update(prop, 0, "rna_Attribute_update_data");
+
+  prop = RNA_def_property(srna, "color_srgb", PROP_FLOAT, PROP_COLOR);
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_float_funcs(prop,
+                               "rna_ByteColorAttributeValue_color_srgb_get",
+                               "rna_ByteColorAttributeValue_color_srgb_set",
+                               NULL);
+  RNA_def_property_ui_text(prop, "Color", "RGBA color in sRGB color space");
   RNA_def_property_update(prop, 0, "rna_Attribute_update_data");
 }
 
@@ -1050,6 +1153,29 @@ static void rna_def_attribute_group(BlenderRNA *brna)
                              "rna_AttributeGroup_render_color_index_set",
                              "rna_AttributeGroup_render_color_index_range");
   RNA_def_property_update(prop, 0, "rna_AttributeGroup_update_active_color");
+
+  prop = RNA_def_property(srna, "default_color_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_string_maxlength(prop, MAX_CUSTOMDATA_LAYER_NAME);
+  RNA_def_property_string_funcs(prop,
+                                "rna_AttributeGroup_default_color_name_get",
+                                "rna_AttributeGroup_default_color_name_length",
+                                NULL);
+  RNA_def_property_ui_text(
+      prop,
+      "Default Color Attribute",
+      "The name of the default color attribute used as a fallback for rendering");
+
+  prop = RNA_def_property(srna, "active_color_name", PROP_STRING, PROP_NONE);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_string_maxlength(prop, MAX_CUSTOMDATA_LAYER_NAME);
+  RNA_def_property_string_funcs(prop,
+                                "rna_AttributeGroup_active_color_name_get",
+                                "rna_AttributeGroup_active_color_name_length",
+                                NULL);
+  RNA_def_property_ui_text(prop,
+                           "Active Color Attribute",
+                           "The name of the active color attribute for display and editing");
 }
 
 void rna_def_attributes_common(StructRNA *srna)

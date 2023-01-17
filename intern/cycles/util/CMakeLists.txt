@@ -3,7 +3,6 @@
 
 set(INC
   ..
-  ../../glew-mx
 )
 
 set(INC_SYS
@@ -50,6 +49,7 @@ set(SRC_HEADERS
   foreach.h
   function.h
   guarded_allocator.h
+  guiding.h
   half.h
   hash.h
   ies.h
@@ -118,6 +118,7 @@ set(SRC_HEADERS
   types_int3_impl.h
   types_int4.h
   types_int4_impl.h
+  types_spectrum.h
   types_uchar2.h
   types_uchar2_impl.h
   types_uchar3.h
@@ -131,8 +132,6 @@ set(SRC_HEADERS
   types_uint4.h
   types_uint4_impl.h
   types_ushort4.h
-  types_vector3.h
-  types_vector3_impl.h
   unique_ptr.h
   vector.h
   version.h
@@ -149,7 +148,5 @@ endif()
 
 include_directories(${INC})
 include_directories(SYSTEM ${INC_SYS})
-
-add_definitions(${GL_DEFINITIONS})
 
 cycles_add_library(cycles_util "${LIB}" ${SRC} ${SRC_HEADERS})

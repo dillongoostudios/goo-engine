@@ -13,10 +13,6 @@ struct CustomData_MeshMasks;
 struct Main;
 struct Mesh;
 
-void BM_mesh_cd_flag_ensure(BMesh *bm, struct Mesh *mesh, char cd_flag);
-void BM_mesh_cd_flag_apply(BMesh *bm, char cd_flag);
-char BM_mesh_cd_flag_from_bmesh(BMesh *bm);
-
 struct BMeshFromMeshParams {
   bool calc_face_normal;
   bool calc_vert_normal;
@@ -61,8 +57,8 @@ struct BMeshToMeshParams {
   bool active_shapekey_to_mvert;
   struct CustomData_MeshMasks cd_mask_extra;
 };
+
 /**
- *
  * \param bmain: May be NULL in case \a calc_object_remap parameter option is not set.
  */
 void BM_mesh_bm_to_me(struct Main *bmain,

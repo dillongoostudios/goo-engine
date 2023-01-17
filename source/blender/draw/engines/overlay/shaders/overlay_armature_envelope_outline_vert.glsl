@@ -130,14 +130,14 @@ void main()
   gl_Position = p1;
 
   /* compute position from 3 vertex because the change in direction
-   * can happen very quicky and lead to very thin edges. */
+   * can happen very quickly and lead to very thin edges. */
   vec2 ss0 = proj(p0);
   vec2 ss1 = proj(p1);
   vec2 ss2 = proj(p2);
   vec2 ofs_dir = compute_dir(ss0, ss1, ss2);
 
   /* Offset away from the center to avoid overlap with solid shape. */
-  gl_Position.xy += ofs_dir * drw_view.viewport_size_inverse * gl_Position.w;
+  gl_Position.xy += ofs_dir * sizeViewportInv * gl_Position.w;
 
   edgeStart = edgePos = proj(gl_Position);
 

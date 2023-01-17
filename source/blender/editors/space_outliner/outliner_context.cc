@@ -14,14 +14,14 @@
 #include "outliner_intern.hh"
 #include "tree/tree_iterator.hh"
 
-using namespace blender::ed::outliner;
+namespace blender::ed::outliner {
 
 static void outliner_context_selected_ids_recursive(const SpaceOutliner &space_outliner,
                                                     bContextDataResult *result)
 {
   tree_iterator::all(space_outliner, [&](const TreeElement *te) {
     const TreeStoreElem *tse = TREESTORE(te);
-    if ((tse->flag & TSE_SELECTED) && (ELEM(tse->type, TSE_SOME_ID, TSE_LAYER_COLLECTION))) {
+    if ((tse->flag & TSE_SELECTED) && ELEM(tse->type, TSE_SOME_ID, TSE_LAYER_COLLECTION)) {
       CTX_data_id_list_add(result, tse->id);
     }
   });
@@ -55,3 +55,5 @@ int /*eContextResult*/ outliner_context(const bContext *C,
 
   return CTX_RESULT_MEMBER_NOT_FOUND;
 }
+
+}  // namespace blender::ed::outliner

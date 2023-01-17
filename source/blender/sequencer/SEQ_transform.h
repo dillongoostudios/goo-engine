@@ -23,14 +23,13 @@ bool SEQ_transform_sequence_can_be_translated(struct Sequence *seq);
  * since they work a bit differently to normal image seq's (during transform).
  */
 bool SEQ_transform_single_image_check(struct Sequence *seq);
-void SEQ_transform_fix_single_image_seq_offsets(const struct Scene *scene, struct Sequence *seq);
 bool SEQ_transform_test_overlap(const struct Scene *scene,
                                 struct ListBase *seqbasep,
                                 struct Sequence *test);
 bool SEQ_transform_test_overlap_seq_seq(const struct Scene *scene,
                                         struct Sequence *seq1,
                                         struct Sequence *seq2);
-void SEQ_transform_translate_sequence(struct Scene *scene, struct Sequence *seq, int delta);
+void SEQ_transform_translate_sequence(struct Scene *evil_scene, struct Sequence *seq, int delta);
 /**
  * \return 0 if there weren't enough space.
  */

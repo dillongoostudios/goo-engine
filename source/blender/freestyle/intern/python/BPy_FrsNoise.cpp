@@ -9,6 +9,8 @@
 
 #include "../system/RandGen.h"
 
+#include "BLI_sys_types.h"
+
 #include <sstream>
 
 #ifdef __cplusplus
@@ -109,7 +111,7 @@ static PyObject *FrsNoise_turbulence_smooth(BPy_FrsNoise *self, PyObject *args, 
   static const char *kwlist[] = {"v", "oct", nullptr};
 
   double x;  // NOTE: this has to be a double (not float)
-  unsigned nbOctaves = 8;
+  uint nbOctaves = 8;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "d|I", (char **)kwlist, &x, &nbOctaves)) {
     return nullptr;
@@ -121,7 +123,7 @@ static PyObject *FrsNoise_turbulence1(BPy_FrsNoise *self, PyObject *args, PyObje
 {
   static const char *kwlist[] = {"v", "freq", "amp", "oct", nullptr};
   float f1, f2, f3;
-  unsigned int i = 4;
+  uint i = 4;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "fff|I", (char **)kwlist, &f1, &f2, &f3, &i)) {
     return nullptr;
@@ -150,7 +152,7 @@ static PyObject *FrsNoise_turbulence2(BPy_FrsNoise *self, PyObject *args, PyObje
   static const char *kwlist[] = {"v", "freq", "amp", "oct", nullptr};
   PyObject *obj1;
   float f2, f3;
-  unsigned int i = 4;
+  uint i = 4;
   Vec2f vec;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "Off|I", (char **)kwlist, &obj1, &f2, &f3, &i)) {
@@ -186,7 +188,7 @@ static PyObject *FrsNoise_turbulence3(BPy_FrsNoise *self, PyObject *args, PyObje
   static const char *kwlist[] = {"v", "freq", "amp", "oct", nullptr};
   PyObject *obj1;
   float f2, f3;
-  unsigned int i = 4;
+  uint i = 4;
   Vec3f vec;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "Off|I", (char **)kwlist, &obj1, &f2, &f3, &i)) {

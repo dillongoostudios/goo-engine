@@ -5,6 +5,9 @@
  * \ingroup spoutliner
  */
 
+/* Allow using deprecated functionality for .blend file I/O. */
+#define DNA_DEPRECATED_ALLOW
+
 #include <cstdio>
 #include <cstring>
 
@@ -16,7 +19,7 @@
 
 #include "BKE_context.h"
 #include "BKE_lib_remap.h"
-#include "BKE_outliner_treehash.h"
+#include "BKE_outliner_treehash.hh"
 #include "BKE_screen.h"
 
 #include "ED_screen.h"
@@ -34,19 +37,16 @@
 #include "UI_resources.h"
 #include "UI_view2d.h"
 
+#include "BLO_read_write.h"
+
 #include "outliner_intern.hh"
 #include "tree/tree_display.hh"
 
-SpaceOutliner_Runtime::SpaceOutliner_Runtime(const SpaceOutliner_Runtime & /*other*/)
-    : tree_display(nullptr), treehash(nullptr)
-{
-}
+namespace blender::ed::outliner {
 
-SpaceOutliner_Runtime::~SpaceOutliner_Runtime()
+SpaceOutliner_Runtime::SpaceOutliner_Runtime(const SpaceOutliner_Runtime & /*other*/)
+    : tree_display(nullptr), tree_hash(nullptr)
 {
-  if (treehash) {
-    BKE_outliner_treehash_free(treehash);
-  }
 }
 
 static void outliner_main_region_init(wmWindowManager *wm, ARegion *region)
@@ -92,7 +92,7 @@ static void outliner_main_region_draw(const bContext *C, ARegion *region)
   UI_view2d_scrollers_draw(v2d, nullptr);
 }
 
-static void outliner_main_region_free(ARegion *UNUSED(region))
+static void outliner_main_region_free(ARegion * /*region*/)
 {
 }
 
@@ -100,8 +100,8 @@ static void outliner_main_region_listener(const wmRegionListenerParams *params)
 {
   ScrArea *area = params->area;
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
-  SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(area->spacedata.first);
+  const wmNotifier *wmn = params->notifier;
+  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
 
   /* context changes */
   switch (wmn->category) {
@@ -270,7 +270,7 @@ static void outliner_main_region_message_subscribe(const wmRegionMessageSubscrib
   struct wmMsgBus *mbus = params->message_bus;
   ScrArea *area = params->area;
   ARegion *region = params->region;
-  SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(area->spacedata.first);
+  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
 
   wmMsgSubscribeValue msg_sub_value_region_tag_redraw{};
   msg_sub_value_region_tag_redraw.owner = region;
@@ -285,7 +285,7 @@ static void outliner_main_region_message_subscribe(const wmRegionMessageSubscrib
 /* ************************ header outliner area region *********************** */
 
 /* add handlers, stuff you only do once or on area/region changes */
-static void outliner_header_region_init(wmWindowManager *UNUSED(wm), ARegion *region)
+static void outliner_header_region_init(wmWindowManager * /*wm*/, ARegion *region)
 {
   ED_region_header_init(region);
 }
@@ -295,14 +295,14 @@ static void outliner_header_region_draw(const bContext *C, ARegion *region)
   ED_region_header(C, region);
 }
 
-static void outliner_header_region_free(ARegion *UNUSED(region))
+static void outliner_header_region_free(ARegion * /*region*/)
 {
 }
 
 static void outliner_header_region_listener(const wmRegionListenerParams *params)
 {
   ARegion *region = params->region;
-  wmNotifier *wmn = params->notifier;
+  const wmNotifier *wmn = params->notifier;
 
   /* context changes */
   switch (wmn->category) {
@@ -321,7 +321,7 @@ static void outliner_header_region_listener(const wmRegionListenerParams *params
 
 /* ******************** default callbacks for outliner space ***************** */
 
-static SpaceLink *outliner_create(const ScrArea *UNUSED(area), const Scene *UNUSED(scene))
+static SpaceLink *outliner_create(const ScrArea * /*area*/, const Scene * /*scene*/)
 {
   ARegion *region;
   SpaceOutliner *space_outliner;
@@ -365,9 +365,9 @@ static void outliner_free(SpaceLink *sl)
 }
 
 /* spacetype; init callback */
-static void outliner_init(wmWindowManager *UNUSED(wm), ScrArea *area)
+static void outliner_init(wmWindowManager * /*wm*/, ScrArea *area)
 {
-  SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(area->spacedata.first);
+  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
 
   if (space_outliner->runtime == nullptr) {
     space_outliner->runtime = MEM_new<SpaceOutliner_Runtime>("SpaceOutliner_Runtime");
@@ -397,8 +397,6 @@ static void outliner_id_remap(ScrArea *area, SpaceLink *slink, const struct IDRe
 {
   SpaceOutliner *space_outliner = (SpaceOutliner *)slink;
 
-  BKE_id_remapper_apply(mappings, (ID **)&space_outliner->search_tse.id, ID_REMAP_APPLY_DEFAULT);
-
   if (!space_outliner->treestore) {
     return;
   }
@@ -426,7 +424,7 @@ static void outliner_id_remap(ScrArea *area, SpaceLink *slink, const struct IDRe
 
   /* Note that the Outliner may not be the active editor of the area, and hence not initialized.
    * So runtime data might not have been created yet. */
-  if (space_outliner->runtime && space_outliner->runtime->treehash && changed) {
+  if (space_outliner->runtime && space_outliner->runtime->tree_hash && changed) {
     /* rebuild hash table, because it depends on ids too */
     /* postpone a full rebuild because this can be called many times on-free */
     space_outliner->storeflag |= SO_TREESTORE_REBUILD;
@@ -443,18 +441,131 @@ static void outliner_id_remap(ScrArea *area, SpaceLink *slink, const struct IDRe
 static void outliner_deactivate(struct ScrArea *area)
 {
   /* Remove hover highlights */
-  SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(area->spacedata.first);
+  SpaceOutliner *space_outliner = static_cast<SpaceOutliner *>(area->spacedata.first);
   outliner_flag_set(*space_outliner, TSE_HIGHLIGHTED_ANY, false);
   ED_region_tag_redraw_no_rebuild(BKE_area_find_region_type(area, RGN_TYPE_WINDOW));
 }
 
+static void outliner_blend_read_data(BlendDataReader *reader, SpaceLink *sl)
+{
+  SpaceOutliner *space_outliner = (SpaceOutliner *)sl;
+
+  /* use #BLO_read_get_new_data_address_no_us and do not free old memory avoiding double
+   * frees and use of freed memory. this could happen because of a
+   * bug fixed in revision 58959 where the treestore memory address
+   * was not unique */
+  TreeStore *ts = static_cast<TreeStore *>(
+      BLO_read_get_new_data_address_no_us(reader, space_outliner->treestore));
+  space_outliner->treestore = nullptr;
+  if (ts) {
+    TreeStoreElem *elems = static_cast<TreeStoreElem *>(
+        BLO_read_get_new_data_address_no_us(reader, ts->data));
+
+    space_outliner->treestore = BLI_mempool_create(
+        sizeof(TreeStoreElem), ts->usedelem, 512, BLI_MEMPOOL_ALLOW_ITER);
+    if (ts->usedelem && elems) {
+      for (int i = 0; i < ts->usedelem; i++) {
+        TreeStoreElem *new_elem = static_cast<TreeStoreElem *>(
+            BLI_mempool_alloc(space_outliner->treestore));
+        *new_elem = elems[i];
+      }
+    }
+    /* we only saved what was used */
+    space_outliner->storeflag |= SO_TREESTORE_CLEANUP; /* at first draw */
+  }
+  space_outliner->tree.first = space_outliner->tree.last = nullptr;
+  space_outliner->runtime = nullptr;
+}
+
+static void outliner_blend_read_lib(BlendLibReader *reader, ID * /*parent_id*/, SpaceLink *sl)
+{
+  SpaceOutliner *space_outliner = (SpaceOutliner *)sl;
+
+  if (space_outliner->treestore) {
+    TreeStoreElem *tselem;
+    BLI_mempool_iter iter;
+
+    BLI_mempool_iternew(space_outliner->treestore, &iter);
+    while ((tselem = static_cast<TreeStoreElem *>(BLI_mempool_iterstep(&iter)))) {
+      BLO_read_id_address(reader, nullptr, &tselem->id);
+    }
+    /* rebuild hash table, because it depends on ids too */
+    space_outliner->storeflag |= SO_TREESTORE_REBUILD;
+  }
+}
+
+static void write_space_outliner(BlendWriter *writer, const SpaceOutliner *space_outliner)
+{
+  BLI_mempool *ts = space_outliner->treestore;
+
+  if (ts) {
+    const int elems = BLI_mempool_len(ts);
+    /* linearize mempool to array */
+    TreeStoreElem *data = elems ? static_cast<TreeStoreElem *>(
+                                      BLI_mempool_as_arrayN(ts, "TreeStoreElem")) :
+                                  nullptr;
+
+    if (data) {
+      BLO_write_struct(writer, SpaceOutliner, space_outliner);
+
+      /* To store #TreeStore (instead of the mempool), two unique memory addresses are needed,
+       * which can be used to identify the data on read:
+       * 1) One for the #TreeStore data itself.
+       * 2) One for the array of #TreeStoreElem's inside #TreeStore (#TreeStore.data).
+       *
+       * For 1) we just use the mempool's address (#SpaceOutliner::treestore).
+       * For 2) we don't have such a direct choice. We can't just use the array's address from
+       * above, since that may not be unique over all Outliners. So instead use an address relative
+       * to 1).
+       */
+      /* TODO the mempool could be moved to #SpaceOutliner_Runtime so that #SpaceOutliner could
+       * hold the #TreeStore directly. */
+
+      /* Address relative to the tree-store, as noted above.  */
+      void *data_addr = (void *)POINTER_OFFSET(ts, sizeof(void *));
+      /* There should be plenty of memory addresses within the mempool data that we can point into,
+       * just double-check we don't potentially end up with a memory address that another DNA
+       * struct might use. Assumes BLI_mempool uses the guarded allocator. */
+      BLI_assert(MEM_allocN_len(ts) >= sizeof(void *) * 2);
+
+      TreeStore ts_flat = {0};
+      ts_flat.usedelem = elems;
+      ts_flat.totelem = elems;
+      ts_flat.data = static_cast<TreeStoreElem *>(data_addr);
+
+      BLO_write_struct_at_address(writer, TreeStore, ts, &ts_flat);
+      BLO_write_struct_array_at_address(writer, TreeStoreElem, elems, data_addr, data);
+
+      MEM_freeN(data);
+    }
+    else {
+      SpaceOutliner space_outliner_flat = *space_outliner;
+      space_outliner_flat.treestore = nullptr;
+      BLO_write_struct_at_address(writer, SpaceOutliner, space_outliner, &space_outliner_flat);
+    }
+  }
+  else {
+    BLO_write_struct(writer, SpaceOutliner, space_outliner);
+  }
+}
+
+static void outliner_blend_write(BlendWriter *writer, SpaceLink *sl)
+{
+  SpaceOutliner *space_outliner = (SpaceOutliner *)sl;
+  write_space_outliner(writer, space_outliner);
+}
+
+}  // namespace blender::ed::outliner
+
 void ED_spacetype_outliner(void)
 {
+  using namespace blender::ed::outliner;
+
   SpaceType *st = MEM_cnew<SpaceType>("spacetype time");
   ARegionType *art;
 
   st->spaceid = SPACE_OUTLINER;
-  strncpy(st->name, "Outliner", BKE_ST_MAXNAME);
+  STRNCPY(st->name, "Outliner");
 
   st->create = outliner_create;
   st->free = outliner_free;
@@ -466,6 +577,9 @@ void ED_spacetype_outliner(void)
   st->id_remap = outliner_id_remap;
   st->deactivate = outliner_deactivate;
   st->context = outliner_context;
+  st->blend_read_data = outliner_blend_read_data;
+  st->blend_read_lib = outliner_blend_read_lib;
+  st->blend_write = outliner_blend_write;
 
   /* regions: main window */
   art = MEM_cnew<ARegionType>("spacetype outliner region");

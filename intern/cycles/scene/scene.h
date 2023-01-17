@@ -261,7 +261,7 @@ class Scene : public NodeOwner {
   float motion_shutter_time();
 
   bool need_update();
-  bool need_reset();
+  bool need_reset(const bool check_camera = true);
 
   void reset();
   void device_free();
@@ -270,6 +270,7 @@ class Scene : public NodeOwner {
 
   void enable_update_stats();
 
+  bool load_kernels(Progress &progress);
   bool update(Progress &progress);
 
   bool has_shadow_catcher();
@@ -333,7 +334,6 @@ class Scene : public NodeOwner {
   uint loaded_kernel_features;
 
   void update_kernel_features();
-  bool load_kernels(Progress &progress, bool lock_scene = true);
 
   bool has_shadow_catcher_ = false;
   bool shadow_catcher_modified_ = true;

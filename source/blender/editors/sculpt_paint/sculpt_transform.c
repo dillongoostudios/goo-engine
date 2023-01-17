@@ -7,31 +7,22 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BLI_blenlib.h"
 #include "BLI_math.h"
 #include "BLI_task.h"
 
-#include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
 #include "BKE_brush.h"
 #include "BKE_context.h"
 #include "BKE_kelvinlet.h"
-#include "BKE_mesh.h"
-#include "BKE_mesh_mapping.h"
-#include "BKE_object.h"
 #include "BKE_paint.h"
 #include "BKE_pbvh.h"
-#include "BKE_scene.h"
 
 #include "DEG_depsgraph.h"
 
 #include "WM_api.h"
-#include "WM_message.h"
-#include "WM_toolsystem.h"
 #include "WM_types.h"
 
-#include "ED_object.h"
 #include "ED_screen.h"
 #include "ED_sculpt.h"
 #include "ED_view3d.h"
@@ -46,7 +37,10 @@
 #include <math.h>
 #include <stdlib.h>
 
-void ED_sculpt_init_transform(struct bContext *C, Object *ob)
+void ED_sculpt_init_transform(struct bContext *C,
+                              Object *ob,
+                              const int mval[2],
+                              const char *undo_name)
 {
   Sculpt *sd = CTX_data_tool_settings(C)->sculpt;
   SculptSession *ss = ob->sculpt;
@@ -60,13 +54,14 @@ void ED_sculpt_init_transform(struct bContext *C, Object *ob)
   copy_v4_v4(ss->prev_pivot_rot, ss->pivot_rot);
   copy_v3_v3(ss->prev_pivot_scale, ss->pivot_scale);
 
-  SCULPT_undo_push_begin(ob, "Transform");
+  SCULPT_undo_push_begin_ex(ob, undo_name);
   BKE_sculpt_update_object_for_edit(depsgraph, ob, false, false, false);
 
   ss->pivot_rot[3] = 1.0f;
 
   SCULPT_vertex_random_access_ensure(ss);
-  SCULPT_filter_cache_init(C, ob, sd, SCULPT_UNDO_COORDS);
+
+  SCULPT_filter_cache_init(C, ob, sd, SCULPT_UNDO_COORDS, mval, 5.0);
 
   if (sd->transform_mode == SCULPT_TRANSFORM_MODE_RADIUS_ELASTIC) {
     ss->filter_cache->transform_displacement_mode = SCULPT_TRANSFORM_DISPLACEMENT_INCREMENTAL;
@@ -179,7 +174,7 @@ static void sculpt_transform_task_cb(void *__restrict userdata,
     add_v3_v3v3(vd.co, start_co, disp);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.index);
+      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -253,7 +248,7 @@ static void sculpt_elastic_transform_task_cb(void *__restrict userdata,
     copy_v3_v3(proxy[vd.i], final_disp);
 
     if (vd.mvert) {
-      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.index);
+      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.vertex);
     }
   }
   BKE_pbvh_vertex_iter_end;
@@ -351,11 +346,6 @@ void ED_sculpt_end_transform(struct bContext *C, Object *ob)
   if (ss->filter_cache) {
     SCULPT_filter_cache_free(ss);
   }
-  /* Force undo push to happen even inside transform operator, since the sculpt
-   * undo system works separate from regular undo and this is require to properly
-   * finish an undo step also when canceling. */
-  const bool use_nested_undo = true;
-  SCULPT_undo_push_end_ex(ob, use_nested_undo);
   SCULPT_flush_update_done(C, ob, SCULPT_UPDATE_COORDS);
 }
 

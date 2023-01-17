@@ -24,7 +24,7 @@ struct AssetLibraryReference;
 struct FreestyleSettings;
 struct ID;
 struct IDOverrideLibrary;
-struct IDOverrideLibraryPropertyOperation;
+struct IDOverrideLibraryenOperation;
 struct IDProperty;
 struct Main;
 struct Object;
@@ -322,7 +322,9 @@ void rna_object_vcollayer_name_set(struct PointerRNA *ptr,
 PointerRNA rna_object_shapekey_index_get(struct ID *id, int value);
 int rna_object_shapekey_index_set(struct ID *id, PointerRNA value, int current);
 
-void rna_def_object_type_visibility_flags_common(StructRNA *srna, int noteflag);
+void rna_def_object_type_visibility_flags_common(StructRNA *srna,
+                                                 int noteflag,
+                                                 const char *update_func);
 int rna_object_type_visibility_icon_get_common(int object_type_exclude_viewport,
                                                const int *object_type_exclude_select);
 
@@ -355,7 +357,7 @@ void rna_FreestyleSettings_module_remove(struct ID *id,
 void rna_Scene_use_view_map_cache_update(struct Main *bmain,
                                          struct Scene *scene,
                                          struct PointerRNA *ptr);
-void rna_Scene_glsl_update(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
+void rna_Scene_render_update(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
 void rna_Scene_freestyle_update(struct Main *bmain, struct Scene *scene, struct PointerRNA *ptr);
 void rna_ViewLayer_name_set(struct PointerRNA *ptr, const char *value);
 void rna_ViewLayer_material_override_update(struct Main *bmain,

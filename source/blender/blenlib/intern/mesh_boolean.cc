@@ -1675,7 +1675,7 @@ static Edge find_good_sorting_edge(const Vert *testp,
  * The algorithm is similar to the one for find_ambient_cell, except that
  * instead of an arbitrary point known to be outside the whole mesh, we
  * have a particular point (v) and we just want to determine the patches
- * that that point is between in sorting-around-an-edge order.
+ * that point is between in sorting-around-an-edge order.
  */
 static int find_containing_cell(const Vert *v,
                                 int t,
@@ -2527,7 +2527,7 @@ class InsideShapeTestData {
 static void inside_shape_callback(void *userdata,
                                   int index,
                                   const BVHTreeRay *ray,
-                                  BVHTreeRayHit *UNUSED(hit))
+                                  BVHTreeRayHit * /*hit*/)
 {
   const int dbg_level = 0;
   if (dbg_level > 0) {

@@ -6,6 +6,8 @@
 
 #include "BPy_ShapeUP1D.h"
 
+#include "BLI_sys_types.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -42,7 +44,7 @@ static char ShapeUP1D___doc__[] =
 static int ShapeUP1D___init__(BPy_ShapeUP1D *self, PyObject *args, PyObject *kwds)
 {
   static const char *kwlist[] = {"first", "second", nullptr};
-  unsigned u1, u2 = 0;
+  uint u1, u2 = 0;
 
   if (!PyArg_ParseTupleAndKeywords(args, kwds, "I|I", (char **)kwlist, &u1, &u2)) {
     return -1;

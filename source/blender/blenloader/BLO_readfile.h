@@ -182,6 +182,11 @@ void BLO_blendfiledata_free(BlendFileData *bfd);
 typedef struct BLODataBlockInfo {
   char name[64]; /* MAX_NAME */
   struct AssetMetaData *asset_data;
+  /* Optimization: Tag data-blocks for which we know there is no preview.
+   * Knowing this can be used to skip the (potentially expensive) preview loading process. If this
+   * is set to true it means we looked for a preview and couldn't find one. False may mean that
+   * either no preview was found, or that it wasn't looked for in the first place. */
+  bool no_preview_found;
 } BLODataBlockInfo;
 
 /**
@@ -229,10 +234,10 @@ struct LinkNode *BLO_blendhandle_get_datablock_names(BlendHandle *bh,
  * \return A BLI_linklist of `BLODataBlockInfo *`.
  * The links and #BLODataBlockInfo.asset_data should be freed with MEM_freeN.
  */
-struct LinkNode * /*BLODataBlockInfo */ BLO_blendhandle_get_datablock_info(BlendHandle *bh,
-                                                                           int ofblocktype,
-                                                                           bool use_assets_only,
-                                                                           int *r_tot_info_items);
+struct LinkNode * /*BLODataBlockInfo*/ BLO_blendhandle_get_datablock_info(BlendHandle *bh,
+                                                                          int ofblocktype,
+                                                                          bool use_assets_only,
+                                                                          int *r_tot_info_items);
 /**
  * Gets the previews of all the data-blocks in a file of a certain type
  * (e.g. all the scene previews in a file).

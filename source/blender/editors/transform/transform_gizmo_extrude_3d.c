@@ -101,7 +101,7 @@ static void gizmo_mesh_extrude_orientation_matrix_set_for_adjust(struct GizmoExt
   for (int j = 0; j < 3; j++) {
     copy_v3_v3(ggd->adjust[0]->matrix_basis[j], mat[j]);
   }
-  /* nop when (i == 2). */
+  /* NOP when (i == 2). */
   swap_v3_v3(ggd->adjust[0]->matrix_basis[ggd->adjust_axis], ggd->adjust[0]->matrix_basis[2]);
 }
 
@@ -261,7 +261,7 @@ static void gizmo_mesh_extrude_refresh(const bContext *C, wmGizmoGroup *gzgroup)
     copy_m3_m3(ggd->data.normal_mat3, tbounds_normal.axis);
   }
 
-  /* TODO(campbell): run second since this modifies the 3D view, it should not. */
+  /* TODO(@campbellbarton): run second since this modifies the 3D view, it should not. */
   if (!ED_transform_calc_gizmo_stats(C,
                                      &(struct TransformCalcParams){
                                          .orientation_index = ggd->data.orientation_index + 1,

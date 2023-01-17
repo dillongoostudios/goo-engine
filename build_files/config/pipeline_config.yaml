@@ -5,38 +5,38 @@
 update-code:
     git:
         submodules:
-        -   branch: blender-v3.3-release
+        -   branch: blender-v3.4-release
             commit_id: HEAD
             path: release/scripts/addons
-        -   branch: blender-v3.3-release
+        -   branch: blender-v3.4-release
             commit_id: HEAD
             path: release/scripts/addons_contrib
-        -   branch: blender-v3.3-release
+        -   branch: blender-v3.4-release
             commit_id: HEAD
             path: release/datafiles/locale
-        -   branch: blender-v3.3-release
+        -   branch: blender-v3.4-release
             commit_id: HEAD
             path: source/tools
     svn:
         libraries:
             darwin-arm64:
-                branch: tags/blender-3.3-release
+                branch: tags/blender-3.4-release
                 commit_id: HEAD
                 path: lib/darwin_arm64
             darwin-x86_64:
-                branch: tags/blender-3.3-release
+                branch: tags/blender-3.4-release
                 commit_id: HEAD
                 path: lib/darwin
             linux-x86_64:
-                branch: tags/blender-3.3-release
+                branch: tags/blender-3.4-release
                 commit_id: HEAD
                 path: lib/linux_centos7_x86_64
             windows-amd64:
-                branch: tags/blender-3.3-release
+                branch: tags/blender-3.4-release
                 commit_id: HEAD
                 path: lib/win64_vc15
         tests:
-            branch: tags/blender-3.3-release
+            branch: tags/blender-3.4-release
             commit_id: HEAD
             path: lib/tests
         benchmarks:
@@ -55,9 +55,11 @@ buildbot:
     cuda11:
         version: '11.4.1'
     hip:
-        version: '5.2.21440'
+        version: '5.3.22480'
     optix:
         version: '7.3.0'
+    ocloc:
+        version: '101.3430'
     cmake:
         default:
             version: any

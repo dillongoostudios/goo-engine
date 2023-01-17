@@ -29,7 +29,7 @@ if(WITH_OPENSUBDIV)
 
   list(APPEND INC_SYS
     ${OPENSUBDIV_INCLUDE_DIRS}
-    ${GLEW_INCLUDE_PATH}
+    ${Epoxy_INCLUDE_DIRS}
   )
 
   list(APPEND SRC
@@ -81,8 +81,6 @@ if(WITH_OPENSUBDIV)
     )
   endif()
 
-  add_definitions(${GL_DEFINITIONS})
-  add_definitions(-DOSD_USES_GLEW)
   if(WIN32)
     add_definitions(-DNOMINMAX)
     add_definitions(-D_USE_MATH_DEFINES)
@@ -106,7 +104,6 @@ if(WITH_GTESTS AND WITH_OPENSUBDIV)
 
   add_definitions(${GFLAGS_DEFINES})
   add_definitions(${GLOG_DEFINES})
-  add_definitions(-DBLENDER_GFLAGS_NAMESPACE=${GFLAGS_NAMESPACE})
 
   blender_add_test_executable(opensubdiv_mesh_topology_test "internal/topology/mesh_topology_test.cc" "${INC}" "${INC_SYS}" "${LIB};bf_intern_opensubdiv")
 endif()

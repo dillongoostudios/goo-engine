@@ -167,20 +167,20 @@ static bool gpencil_stroke_need_flip(Depsgraph *depsgraph,
 
   /* Line from start of strokes. */
   pt = &gps_from->points[0];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_from_start[0], &v_from_start[1]);
 
   pt = &gps_to->points[0];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_to_start[0], &v_to_start[1]);
 
   /* Line from end of strokes. */
   pt = &gps_from->points[gps_from->totpoints - 1];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_from_end[0], &v_from_end[1]);
 
   pt = &gps_to->points[gps_to->totpoints - 1];
-  gpencil_point_to_parent_space(pt, diff_mat, &pt_dummy_ps);
+  gpencil_point_to_world_space(pt, diff_mat, &pt_dummy_ps);
   gpencil_point_to_xy_fl(gsc, gps_from, &pt_dummy_ps, &v_to_end[0], &v_to_end[1]);
 
   const bool isect_lines = (isect_seg_seg_v2(v_from_start, v_to_start, v_from_end, v_to_end) ==
@@ -479,15 +479,20 @@ static void gpencil_interpolate_set_points(bContext *C, tGPDinterpolate *tgpi)
       continue;
     }
 
-    /* create temp data for each layer */
+    bGPDframe *gpf_prv = gpencil_get_previous_keyframe(gpl, scene->r.cfra);
+    if (gpf_prv == NULL) {
+      continue;
+    }
+    bGPDframe *gpf_next = gpencil_get_next_keyframe(gpl, scene->r.cfra);
+    if (gpf_next == NULL) {
+      continue;
+    }
+
+    /* Create temp data for each layer. */
     tgpil = MEM_callocN(sizeof(tGPDinterpolate_layer), "GPencil Interpolate Layer");
-
     tgpil->gpl = gpl;
-    bGPDframe *gpf = gpencil_get_previous_keyframe(gpl, scene->r.cfra);
-    tgpil->prevFrame = BKE_gpencil_frame_duplicate(gpf, true);
-
-    gpf = gpencil_get_next_keyframe(gpl, scene->r.cfra);
-    tgpil->nextFrame = BKE_gpencil_frame_duplicate(gpf, true);
+    tgpil->prevFrame = BKE_gpencil_frame_duplicate(gpf_prv, true);
+    tgpil->nextFrame = BKE_gpencil_frame_duplicate(gpf_next, true);
 
     BLI_addtail(&tgpi->ilayers, tgpil);
 
@@ -690,7 +695,7 @@ static bool gpencil_interpolate_set_init_values(bContext *C, wmOperator *op, tGP
       tgpi->flag, (RNA_enum_get(op->ptr, "layers") == 1), GP_TOOLFLAG_INTERPOLATE_ALL_LAYERS);
   SET_FLAG_FROM_TEST(
       tgpi->flag,
-      (GPENCIL_EDIT_MODE(tgpi->gpd) && (RNA_boolean_get(op->ptr, "interpolate_selected_only"))),
+      (GPENCIL_EDIT_MODE(tgpi->gpd) && RNA_boolean_get(op->ptr, "interpolate_selected_only")),
       GP_TOOLFLAG_INTERPOLATE_ONLY_SELECTED);
 
   tgpi->flipmode = RNA_enum_get(op->ptr, "flip");
@@ -1571,6 +1576,7 @@ void GPENCIL_OT_interpolate_sequence(wmOperatorType *ot)
   /* identifiers */
   ot->name = "Interpolate Sequence";
   ot->idname = "GPENCIL_OT_interpolate_sequence";
+  ot->translation_context = BLT_I18NCONTEXT_ID_GPENCIL;
   ot->description = "Generate 'in-betweens' to smoothly interpolate between Grease Pencil frames";
 
   /* api callbacks */
