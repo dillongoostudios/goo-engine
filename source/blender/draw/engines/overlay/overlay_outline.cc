@@ -191,7 +191,7 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
   float object_scale = mat4_to_scale(iter->ob->object_to_world);
   /* Negate thickness sign to tag that strokes are in screen space.
    * Convert to world units (by default, 1 meter = 2000 pixels). */
-  float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / 2000.0f);
+  float thickness_scale = (is_screenspace) ? -gpd->pixfactor : (gpd->pixfactor / 2000.0f);
 
   GPUVertBuf *position_tx = DRW_cache_gpencil_position_buffer_get(iter->ob, iter->cfra);
   GPUVertBuf *color_tx = DRW_cache_gpencil_color_buffer_get(iter->ob, iter->cfra);
