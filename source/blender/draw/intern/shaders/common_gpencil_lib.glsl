@@ -69,7 +69,8 @@ float gpencil_stroke_thickness_modulate(float thickness, vec4 ndc_pos, vec4 view
   if (gpThicknessIsScreenSpace) {
     /* Multiply offset by view Z so that offset is constant in screenspace.
      * (e.i: does not change with the distance to camera) */
-    thickness *= ndc_pos.w;
+    thickness *= ndc_pos.w *
+                 -gpThicknessWorldScale;  // Multiply by positive world scale (default 1.0).
   }
   else {
     /* World space point size. */
