@@ -1543,12 +1543,12 @@ static void outliner_draw_restrictbuts(uiBlock *block,
                                       0,
                                       0,
                                       0,
-                                      nullptr);
+                                      TIP_("* Shift to force-enable inside collections"));
               UI_but_flag_enable(bt, UI_BUT_DRAG_LOCK);
               UI_but_func_set(bt,
                               view_layer__layer_collection_set_exclude_recursive_fn,
                               layer_collection,
-                              (char *)"exclude");
+                              nullptr);
             }
 
             if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
