@@ -644,6 +644,37 @@ static void view_layer__layer_collection_set_flag_recursive_fn(bContext *C,
   outliner_collection_set_flag_recursive_fn(C, layer_collection, nullptr, propname);
 }
 
+static void layer_collection_clear_previous_exclude_recursive(LayerCollection *lc)
+{
+  lc->flag &= ~LAYER_COLLECTION_PREVIOUSLY_EXCLUDED;
+
+  LISTBASE_FOREACH (LayerCollection *, nlc, &lc->layer_collections) {
+    layer_collection_clear_previous_exclude_recursive(nlc);
+  }
+}
+
+static void view_layer__layer_collection_set_exclude_recursive_fn(bContext *C,
+                                                                  void *poin,
+                                                                  void *UNUSED(poin2))
+{
+  Main *bmain = CTX_data_main(C);
+  wmWindow *win = CTX_wm_window(C);
+
+  LayerCollection *lc = (LayerCollection *)poin;
+
+  bool force_include = (win != nullptr) && ((win->eventstate->modifier & KM_SHIFT) != 0);
+
+  /* When making collection visible, if shift is held then force-enable all children */
+  if (force_include && !(lc->flag & LAYER_COLLECTION_EXCLUDE)) {
+    layer_collection_clear_previous_exclude_recursive(lc);
+
+    BKE_layer_collection_set_flag(lc, LAYER_COLLECTION_EXCLUDE, false);
+
+    BKE_main_collection_sync_remap(bmain);
+    DEG_relations_tag_update(bmain);
+  }
+}
+
 /**
  * Collection properties called from the ViewLayer mode.
  * Change the (non-excluded) collection children, and the objects nested to them all.
@@ -1514,6 +1545,10 @@ static void outliner_draw_restrictbuts(uiBlock *block,
                                       0,
                                       nullptr);
               UI_but_flag_enable(bt, UI_BUT_DRAG_LOCK);
+              UI_but_func_set(bt,
+                              view_layer__layer_collection_set_exclude_recursive_fn,
+                              layer_collection,
+                              (char *)"exclude");
             }
 
             if (space_outliner->show_restrict_flags & SO_RESTRICT_HIDE) {
