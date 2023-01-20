@@ -1562,6 +1562,7 @@ void EEVEE_effects_draw_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
  * Simple down-sampling algorithm. Reconstruct mip chain up to mip level.
  */
 void EEVEE_effects_downsample_radiance_buffer(EEVEE_Data *vedata, struct GPUTexture *texture_src);
+void EEVEE_effects_radiance_copy(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata);
 void EEVEE_create_minmax_buffer(EEVEE_Data *vedata, struct GPUTexture *depth_src, int layer);
 /**
  * Simple down-sampling algorithm for cube-map. Reconstruct mip chain up to mip level.

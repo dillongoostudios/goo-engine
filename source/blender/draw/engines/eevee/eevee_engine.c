@@ -322,6 +322,9 @@ static void eevee_draw_scene(void *vedata)
     DRW_draw_pass(psl->material_refract_ps);
     DRW_stats_group_end();
 
+    /* Streamlined version of EEVEE_refraction_compute to just copy the colour buffer */
+    EEVEE_effects_radiance_copy(sldata, vedata);
+
     /* Volumetrics Resolve Opaque */
     EEVEE_volumes_resolve(sldata, vedata);
 

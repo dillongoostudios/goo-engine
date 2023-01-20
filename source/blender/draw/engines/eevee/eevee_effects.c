@@ -424,6 +424,23 @@ void EEVEE_effects_downsample_radiance_buffer(EEVEE_Data *vedata, GPUTexture *te
   DRW_stats_group_end();
 }
 
+void EEVEE_effects_radiance_copy(EEVEE_ViewLayerData *UNUSED(sldata), EEVEE_Data *vedata)
+{
+  EEVEE_FramebufferList *fbl = vedata->fbl;
+  EEVEE_PassList *psl = vedata->psl;
+  EEVEE_StorageList *stl = vedata->stl;
+  EEVEE_EffectsInfo *effects = stl->effects;
+
+  /* Copy color buffer to texture */
+  if ((effects->enabled_effects & EFFECT_REFRACT) != 0) {
+    GPU_framebuffer_bind(fbl->radiance_filtered_fb);
+    DRW_draw_pass(psl->color_copy_ps);
+
+    /* Restore */
+    GPU_framebuffer_bind(fbl->main_fb);
+  }
+}
+
 void EEVEE_downsample_cube_buffer(EEVEE_Data *vedata, GPUTexture *texture_src, int level)
 {
   EEVEE_FramebufferList *fbl = vedata->fbl;
