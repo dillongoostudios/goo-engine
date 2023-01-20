@@ -235,7 +235,7 @@ class ALightGroupPanel(Panel):
         col.operator('light_groups.unlink', icon='UNLINKED', text="")
         col.separator()
         col.operator('light_groups.new', icon='ADD', text="")
-        col.operator('light_groups.remove', icon='REMOVE', text="")
+        col.operator('light_groups.remove', icon='X', text="")
         col.separator()
         col.operator('light_groups.resync', icon='FILE_REFRESH', text="")
 
