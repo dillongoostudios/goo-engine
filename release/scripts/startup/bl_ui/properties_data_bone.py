@@ -272,6 +272,9 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
             col = layout.column()
             col.prop(bone, "hide", text="Hide", toggle=False)
 
+            if (pchan := context.object.pose.bones[bone.name]) and context.bone:
+                col.prop(pchan, "hide_outliner", text="Hide in Outliner", toggle=False)
+
 
 class BONE_PT_display_custom_shape(BoneButtonsPanel, Panel):
     bl_label = "Custom Shape"

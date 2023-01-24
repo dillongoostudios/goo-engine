@@ -339,6 +339,7 @@ typedef enum eSpaceOutliner_Filter {
   SO_FILTER_NO_VIEW_LAYERS = (1 << 18),
 
   SO_FILTER_ID_TYPE = (1 << 19),
+  SO_FILTER_NO_BONE_FLAG = (1 << 20),
 } eSpaceOutliner_Filter;
 
 #define SO_FILTER_OB_TYPE \
