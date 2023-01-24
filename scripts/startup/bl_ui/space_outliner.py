@@ -475,6 +475,9 @@ class OUTLINER_PT_filter(Panel):
             row = sub.row()
             row.label(icon='ARMATURE_DATA')
             row.prop(space, "use_filter_object_armature", text="Armatures")
+            row = sub.row()
+            row.label(icon='BONE_DATA')
+            row.prop(space, "use_filter_bone_flag", text="Hidden PoseBones")
         if bpy.data.lights:
             row = sub.row()
             row.label(icon='LIGHT_DATA')

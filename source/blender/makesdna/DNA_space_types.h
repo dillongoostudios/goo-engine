@@ -342,6 +342,7 @@ typedef enum eSpaceOutliner_Filter {
   SO_FILTER_ID_TYPE = (1 << 19),
 
   SO_FILTER_NO_OB_GPENCIL_LEGACY = (1 << 20),
+  SO_FILTER_NO_BONE_FLAG = (1 << 21),
 } eSpaceOutliner_Filter;
 
 #define SO_FILTER_OB_TYPE \
