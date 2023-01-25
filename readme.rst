@@ -4,6 +4,12 @@
    See 'release/text/readme.html' for the end user read-me.
 
 
+Goo Engine
+==========
+
+Goo Engine is a version of Blender with some key modifications to the source code that allow us to focus on NPR and Anime style rendering. Check out the `Professor Goo YouTube channel <https://www.youtube.com/@professorGoo>>`__ for tutorials.
+Get the pre-built download on the `Patreon page <https://www.patreon.com/dillongoo>`__ to support the development team. 
+
 Blender
 =======
 
