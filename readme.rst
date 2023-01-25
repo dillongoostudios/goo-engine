@@ -7,8 +7,11 @@
 Goo Engine
 ==========
 
-Goo Engine is a version of Blender with some key modifications to the source code that allow us to focus on NPR and Anime style rendering. Check out the `Professor Goo YouTube channel <https://www.youtube.com/@professorGoo>>`__ for tutorials.
-Get the pre-built download on the `Patreon page <https://www.patreon.com/dillongoo>`__ to support the development team. 
+Goo Engine is a version of Blender by DillonGoo Studios with some key modifications to the source code that allow us to focus on NPR and Anime style rendering. Check out the `Professor Goo YouTube channel <https://www.youtube.com/@professorGoo>`__ for tutorials.
+
+We actively update Goo Engine to keep up with the native Blender branch. We also regularly add and improve custom features as we use it on projects at the studio. `Stay tuned <https://twitter.com/dillongoostudio>`_ for updates.
+
+Get the pre-built download on the `Patreon page <https://www.patreon.com/dillongoo>`__ to support continued development of Goo Engine.
 
 Blender
 =======
