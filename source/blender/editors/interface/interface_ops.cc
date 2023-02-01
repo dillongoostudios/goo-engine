@@ -24,6 +24,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_context.h"
+#include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_layer.h"
@@ -54,6 +55,7 @@
 #include "WM_api.h"
 #include "WM_types.h"
 
+#include "ED_anim_api.h"
 #include "ED_object.h"
 #include "ED_paint.h"
 
@@ -255,6 +257,130 @@ static void UI_OT_copy_as_driver_button(wmOperatorType *ot)
 
   /* flags */
   ot->flag = OPTYPE_REGISTER;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Show FCurve in editor Operator
+ * \{ */
+
+static bool show_fcurve_in_editor_poll(bContext *C)
+{
+  uiBut *but = UI_context_active_but_get(C);
+
+  if (but) {
+    PointerRNA *ptr = &but->rnapoin;
+    PropertyRNA *prop = but->rnaprop;
+
+    return RNA_property_animated(ptr, prop);
+  }
+
+  return false;
+}
+
+static int show_fcurve_in_editor_exec(bContext *C, wmOperator *op)
+{
+  uiBut *but = UI_context_active_but_get(C);
+
+  /* Find any open FCurve Editor for Operator context */
+  bScreen *screen = CTX_wm_screen(C);
+  ScrArea *graph_area;
+  LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+    if (area->spacetype == SPACE_GRAPH) {
+      SpaceGraph *space = (SpaceGraph *)area->spacedata.first;
+      if (space->mode == SIPO_MODE_ANIMATION) {
+        graph_area = area;
+        break;
+      }
+    }
+  }
+
+  if (!graph_area) {
+    BKE_report(op->reports, RPT_ERROR, "No open Graph editors");
+    return OPERATOR_CANCELLED;
+  }
+
+  /* Find the correlated FCurve. */
+  bAction *action;
+  FCurve *fcu_active = BKE_fcurve_find_by_rna(
+      &but->rnapoin, but->rnaprop, but->rnaindex, nullptr, &action, nullptr, nullptr);
+
+  if (!fcu_active) {
+    BKE_report(op->reports, RPT_ERROR, "No FCurve on property");
+    return OPERATOR_CANCELLED;
+  }
+
+  { /* Context override begin */
+    ScrArea *cur_area = CTX_wm_area(C);
+    ARegion *cur_region = CTX_wm_region(C);
+    CTX_wm_area_set(C, graph_area);
+    CTX_wm_region_set(
+        C, BKE_region_find_in_listbase_by_type(&graph_area->regionbase, RGN_TYPE_WINDOW));
+
+    wmOperatorType *ot;
+    PointerRNA ptr;
+
+    /* Select all FCurves. */
+    ot = WM_operatortype_find("GRAPH_OT_select_all", true);
+    BLI_assert(ot);
+    WM_operator_properties_create_ptr(&ptr, ot);
+    RNA_enum_set(&ptr, "action", 1); /* SEL_SELECT */
+    WM_operator_name_call(C, "graph.select_all", WM_OP_EXEC_DEFAULT, &ptr, nullptr);
+    WM_operator_properties_free(&ptr);
+
+    /* Hide all fcurves. */
+    ot = WM_operatortype_find("GRAPH_OT_hide", true);
+    BLI_assert(ot);
+    WM_operator_properties_create_ptr(&ptr, ot);
+    RNA_boolean_set(&ptr, "unselected", false);
+    WM_operator_name_call(C, "graph.hide", WM_OP_EXEC_DEFAULT, &ptr, nullptr);
+    WM_operator_properties_free(&ptr);
+
+    /* Unhide FCurve of selected property path and make it Active. */
+    fcu_active->flag |= FCURVE_VISIBLE | FCURVE_ACTIVE | FCURVE_SELECTED;
+
+    /* Perform zoom-in on FCurve in all FCurve editor regions. */
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      if (area->spacetype == SPACE_GRAPH) {
+        SpaceGraph *space = (SpaceGraph *)area->spacedata.first;
+        if (space->mode == SIPO_MODE_ANIMATION) {
+          CTX_wm_area_set(C, area);
+          CTX_wm_region_set(
+              C, BKE_region_find_in_listbase_by_type(&area->regionbase, RGN_TYPE_WINDOW));
+          /* Focus view on active FCurve. */
+          ot = WM_operatortype_find("GRAPH_OT_view_all", true);
+          BLI_assert(ot);
+          WM_operator_properties_create_ptr(&ptr, ot);
+          /* Use INVOKE_DEFAULT to preserve UI animation. */
+          WM_operator_name_call(C, "graph.view_all", WM_OP_INVOKE_DEFAULT, &ptr, nullptr);
+          WM_operator_properties_free(&ptr);
+        }
+      }
+    }
+
+    CTX_wm_area_set(C, cur_area);
+    CTX_wm_region_set(C, cur_region);
+  } /* Context override end */
+
+  WM_event_add_notifier(C, NC_ANIMATION | ND_SPACE_GRAPH, nullptr);
+
+  return OPERATOR_FINISHED;
+}
+
+static void UI_OT_show_fcurve_in_editor(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Show FCurve in Editor";
+  ot->idname = "UI_OT_show_fcurve_in_editor";
+  ot->description = "Select and isolate this animation channel in Curve editors";
+
+  /* callbacks */
+  ot->exec = show_fcurve_in_editor_exec;
+  ot->poll = show_fcurve_in_editor_poll;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
 }
 
 /** \} */
@@ -2530,6 +2656,7 @@ void ED_operatortypes_ui(void)
 {
   WM_operatortype_append(UI_OT_copy_data_path_button);
   WM_operatortype_append(UI_OT_copy_as_driver_button);
+  WM_operatortype_append(UI_OT_show_fcurve_in_editor);
   WM_operatortype_append(UI_OT_copy_python_command_button);
   WM_operatortype_append(UI_OT_reset_default_button);
   WM_operatortype_append(UI_OT_assign_default_button);
