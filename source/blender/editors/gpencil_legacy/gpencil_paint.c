@@ -1257,6 +1257,11 @@ static void gpencil_stroke_newfrombuffer(tGPsdata *p)
       }
     }
 
+    /* Close stroke. */
+    if (ts->gpencil_flags & GP_TOOL_FLAG_AUTOCLOSE_STROKE) {
+      BKE_gpencil_stroke_close(gps);
+    }
+
     /* subdivide and smooth the stroke */
     if ((brush->gpencil_settings->flag & GP_BRUSH_GROUP_SETTINGS) && (subdivide > 0)) {
       gpencil_subdivide_stroke(gpd, gps, subdivide);
