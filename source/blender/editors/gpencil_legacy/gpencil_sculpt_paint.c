@@ -109,6 +109,13 @@ typedef struct tGP_BrushEditData {
   /* Is multiframe editing enabled, and are we using falloff for that? */
   bool is_multiframe;
   bool use_multiframe_falloff;
+  
+  int smooth_type;
+
+  bool use_position_prev;
+  bool use_strength_prev;
+  bool use_thickness_prev;
+  bool use_uv_prev;
 
   /* Current frame */
   int cfra;
@@ -1303,6 +1310,43 @@ static void gpencil_sculpt_brush_exit(bContext *C, wmOperator *op)
       break;
     }
 
+    case GPSCULPT_TOOL_SMOOTH: {
+      if (gso->use_position_prev){
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_POSITION;
+        if (gso->use_strength_prev){
+          gso->brush->gpencil_settings->sculpt_mode_flag |= GP_SCULPT_FLAGMODE_APPLY_STRENGTH;
+        }
+        if (gso->use_thickness_prev){
+          gso->brush->gpencil_settings->sculpt_mode_flag |= GP_SCULPT_FLAGMODE_APPLY_THICKNESS;
+        }
+        if (gso->use_uv_prev){
+          gso->brush->gpencil_settings->sculpt_mode_flag |= GP_SCULPT_FLAGMODE_APPLY_UV;
+        }
+      }
+
+      else if (gso->use_strength_prev){
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_STRENGTH;
+        if (gso->use_thickness_prev){
+          gso->brush->gpencil_settings->sculpt_mode_flag |= GP_SCULPT_FLAGMODE_APPLY_THICKNESS;
+        }
+        if (gso->use_uv_prev){
+          gso->brush->gpencil_settings->sculpt_mode_flag |= GP_SCULPT_FLAGMODE_APPLY_UV;
+        }
+      }
+
+      else if (gso->use_thickness_prev){
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_THICKNESS;
+        if (gso->use_uv_prev){
+          gso->brush->gpencil_settings->sculpt_mode_flag |= GP_SCULPT_FLAGMODE_APPLY_UV;
+        }
+      }
+
+      else if (gso->use_uv_prev){
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_UV;
+      }
+      break;
+    }
+
     default:
       if (gso->stroke_customdata != NULL) {
         BLI_ghash_free(gso->stroke_customdata, NULL, NULL);
@@ -2298,6 +2342,41 @@ static int gpencil_sculpt_brush_invoke(bContext *C, wmOperator *op, const wmEven
 
   /* register modal handler */
   WM_event_add_modal_handler(C, op);
+
+  if (event->modifier & KM_SHIFT) {
+
+    gso->brush_prev = gso->brush;
+
+    gso->brush = gpencil_sculpt_get_smooth_brush(gso);
+
+    gso->use_position_prev = gso->brush->gpencil_settings->sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_POSITION;
+    gso->use_strength_prev = gso->brush->gpencil_settings->sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_STRENGTH;
+    gso->use_thickness_prev = gso->brush->gpencil_settings->sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_THICKNESS;
+    gso->use_uv_prev = gso->brush->gpencil_settings->sculpt_mode_flag & GP_SCULPT_FLAGMODE_APPLY_UV;
+    
+    char tool = gso->brush_prev->gpencil_sculpt_tool;
+    switch (tool) {
+      case GPSCULPT_TOOL_THICKNESS: {
+        gso->smooth_type = 1;
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_THICKNESS;
+        break;
+      }
+
+      case GPSCULPT_TOOL_STRENGTH: {
+        gso->smooth_type = 2;
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_STRENGTH;
+        break;
+      }
+
+      default:
+        gso->smooth_type = 0;
+        gso->brush->gpencil_settings->sculpt_mode_flag = GP_SCULPT_FLAGMODE_APPLY_POSITION;
+        break;
+    }
+
+    gso->brush = gso->brush_prev;
+    gso->brush_prev = NULL;
+  }
 
   /* start drawing immediately? */
   if (is_modal == false) {
