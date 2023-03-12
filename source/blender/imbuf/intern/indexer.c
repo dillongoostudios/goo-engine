@@ -865,13 +865,6 @@ static IndexBuildContext *index_ffmpeg_create_context(struct anim *anim,
   avcodec_parameters_to_context(context->iCodecCtx, context->iStream->codecpar);
   context->iCodecCtx->workaround_bugs = FF_BUG_AUTODETECT;
 
-  if (context->iCodec->capabilities & AV_CODEC_CAP_AUTO_THREADS) {
-    context->iCodecCtx->thread_count = 0;
-  }
-  else {
-    context->iCodecCtx->thread_count = BLI_system_thread_count();
-  }
-
   if (context->iCodec->capabilities & AV_CODEC_CAP_FRAME_THREADS) {
     context->iCodecCtx->thread_type = FF_THREAD_FRAME;
   }
