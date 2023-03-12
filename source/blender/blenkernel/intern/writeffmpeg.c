@@ -855,13 +855,6 @@ static AVStream *alloc_video_stream(FFMpegContext *context,
                                                             255);
   st->avg_frame_rate = av_inv_q(c->time_base);
 
-  if (codec->capabilities & AV_CODEC_CAP_AUTO_THREADS) {
-    c->thread_count = 0;
-  }
-  else {
-    c->thread_count = BLI_system_thread_count();
-  }
-
   if (codec->capabilities & AV_CODEC_CAP_FRAME_THREADS) {
     c->thread_type = FF_THREAD_FRAME;
   }
