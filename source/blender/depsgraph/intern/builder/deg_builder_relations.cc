@@ -157,6 +157,21 @@ bool driver_depends_on_time(ChannelDriver *driver)
   return false;
 }
 
+bool driver_depends_on_scene_camera(ChannelDriver *driver)
+{
+  if (BKE_driver_has_simple_expression(driver))
+  {
+    return false;
+  }
+
+  if (strstr(driver->expression, "camera") != NULL) {
+    /* Variable `camera` appears in expression. */
+    return true;
+  }
+
+  return false;
+}
+
 bool particle_system_depends_on_time(ParticleSystem *psys)
 {
   ParticleSettings *part = psys->part;
@@ -1613,6 +1628,11 @@ void DepsgraphRelationBuilder::build_driver(ID *id, FCurve *fcu)
   if (driver_depends_on_time(driver)) {
     TimeSourceKey time_src_key;
     add_relation(time_src_key, driver_key, "TimeSrc -> Driver");
+  }
+
+  if (driver_depends_on_scene_camera(driver)) {
+    OperationKey camera_key(&graph_->scene->camera->id, NodeType::PARAMETERS, OperationCode::PARAMETERS_EVAL);
+    add_relation(camera_key, driver_key, "Scene Camera -> Driver");
   }
 }
 
