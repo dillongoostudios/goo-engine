@@ -559,13 +559,6 @@ static struct proxy_output_ctx *alloc_proxy_output_ffmpeg(
   av_dict_set(&codec_opts, "preset", "veryfast", 0);
   av_dict_set(&codec_opts, "tune", "fastdecode", 0);
 
-  if (rv->codec->capabilities & AV_CODEC_CAP_AUTO_THREADS) {
-    rv->c->thread_count = 0;
-  }
-  else {
-    rv->c->thread_count = BLI_system_thread_count();
-  }
-
   if (rv->codec->capabilities & AV_CODEC_CAP_FRAME_THREADS) {
     rv->c->thread_type = FF_THREAD_FRAME;
   }
