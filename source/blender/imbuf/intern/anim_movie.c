@@ -549,17 +549,10 @@ static int startffmpeg(struct anim *anim)
     avformat_close_input(&pFormatCtx);
     return -1;
   }
-
+  
   pCodecCtx = avcodec_alloc_context3(NULL);
   avcodec_parameters_to_context(pCodecCtx, video_stream->codecpar);
   pCodecCtx->workaround_bugs = FF_BUG_AUTODETECT;
-
-  if (pCodec->capabilities & AV_CODEC_CAP_AUTO_THREADS) {
-    pCodecCtx->thread_count = 0;
-  }
-  else {
-    pCodecCtx->thread_count = BLI_system_thread_count();
-  }
 
   if (pCodec->capabilities & AV_CODEC_CAP_FRAME_THREADS) {
     pCodecCtx->thread_type = FF_THREAD_FRAME;
