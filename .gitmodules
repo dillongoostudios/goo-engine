@@ -5,16 +5,16 @@
 	ignore = all
 [submodule "release/scripts/addons_contrib"]
 	path = release/scripts/addons_contrib
-	url = https://git.blender.org/blender-addons-contrib.git
-	branch = blender-v3.3-release 
+	url = https://projects.blender.org/blender/blender-addons-contrib.git
+	branch = blender-v3.4-release 
 	ignore = all
 [submodule "release/datafiles/locale"]
 	path = release/datafiles/locale
-	url = https://git.blender.org/blender-translations.git
-	branch = blender-v3.3-release
+	url = https://projects.blender.org/blender/blender-translations.git
+	branch = blender-v3.4-release
 	ignore = all
 [submodule "source/tools"]
 	path = source/tools
-	url = https://git.blender.org/blender-dev-tools.git
-	branch = blender-v3.3-release
+	url = https://projects.blender.org/blender/blender-dev-tools.git
+	branch = blender-v3.4-release
 	ignore = all
