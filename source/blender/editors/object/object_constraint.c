@@ -62,6 +62,7 @@
 #include "UI_resources.h"
 
 #include "object_intern.h"
+#include "BKE_lib_id.h"
 
 /* ------------------------------------------------------------------- */
 /** \name Constraint Data Accessors
@@ -2193,6 +2194,197 @@ void OBJECT_OT_constraints_copy(wmOperatorType *ot)
   /* api callbacks */
   ot->exec = object_constraint_copy_exec;
   ot->poll = ED_operator_object_active_editable;
+
+  /* flags */
+  ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
+}
+
+/** \} */
+
+/* ------------------------------------------------------------------- */
+/** \name Goo Merge Bone Constraints Operator
+ * \{ */
+
+struct IDRelinkUserData {
+    ID* src_object;
+    ID* dst_object;
+};
+
+static void con_relink_id_cb(bConstraint *con, ID **idpoin, bool is_reference, void *userdata)
+{
+  struct IDRelinkUserData* relink = (struct IDRelinkUserData* )userdata;
+  // Any references to the old rig are shifted to the new one
+  if (*idpoin == relink->src_object) {
+    if (is_reference) {
+      id_us_min(*idpoin);
+    }
+
+    // Link new ID
+    *idpoin = relink->dst_object;
+
+    if (is_reference) {
+      id_us_plus(relink->dst_object);
+    }
+  }
+}
+
+static int pose_constraints_merge_exec(bContext *C, wmOperator *op)
+{
+
+  Main *bmain = CTX_data_main(C);
+  // Object *obact = ED_object_active_context(C);
+
+  Object *obact = NULL;
+  {
+    PropertyRNA *prop = RNA_struct_find_property(op->ptr, "src_object_name");
+    EnumPropertyItem enumItem;
+    int enum_id = RNA_enum_get(op->ptr, "src_object_name");
+    bool result = RNA_property_enum_item_from_value(C, op->ptr, prop, enum_id, &enumItem);
+    if (!result) {
+      BKE_report(op->reports, RPT_ERROR, "No Source object set");
+      return OPERATOR_CANCELLED;
+    }
+
+    const char* obName = enumItem.identifier;
+
+    LISTBASE_FOREACH(Object*, main_ob, &bmain->objects) {
+      if (strcmp(main_ob->id.name, obName) == 0) {
+        obact = main_ob;
+        break;
+      }
+    }
+
+    if (obact == NULL) {
+      BKE_reportf(op->reports, RPT_ERROR, "Source object %s not found", obName);
+      return OPERATOR_CANCELLED;
+    }
+  }
+
+  // Only tag update once per object
+  Object *prev_ob = NULL;
+  int num_cons = 0;
+
+  CTX_DATA_BEGIN_WITH_ID (C, bPoseChannel *, pchan, selected_pose_bones, Object *, pose_ob)
+    // Skip over bones from the source object
+    if (pose_ob == obact) {
+      continue;
+    }
+
+    // Scan source object for matching bone name
+    bPoseChannel* pchan_src = NULL;
+    LISTBASE_FOREACH(bPoseChannel *, active_pchan, &obact->pose->chanbase) {
+      if (strcmp(pchan->name, active_pchan->name) == 0) {
+        pchan_src = active_pchan;
+        break;
+      }
+    }
+
+    // No matching source bone found.
+    if (pchan_src == NULL) {
+      continue;
+    }
+
+    // Copy all constraints (overwriting)
+    BKE_constraints_copy(&pchan->constraints, &pchan_src->constraints, false);
+
+    // Replace ID pointers that point to the old rig to the new one.
+    LISTBASE_FOREACH(bConstraint *, con, &pchan->constraints) {
+      num_cons += 1;
+      const bConstraintTypeInfo *cti = BKE_constraint_typeinfo_get(con);
+
+      struct IDRelinkUserData userdata = {
+              .src_object = (ID *) obact,
+              .dst_object = (ID *) pose_ob,
+      };
+
+      if (cti->id_looper) {
+        cti->id_looper(con, con_relink_id_cb, &userdata);
+      }
+
+      // Space object must be linked manually since it's not included in id_looper
+      con_relink_id_cb(con, (ID **)&con->space_object, false, &userdata);
+    }
+
+    pchan->constflag |= pchan_src->constflag;
+    if (prev_ob != pose_ob) {
+      BKE_pose_tag_recalc(bmain, pose_ob->pose);
+      DEG_id_tag_update((ID *)pose_ob, ID_RECALC_GEOMETRY);
+      prev_ob = pose_ob;
+    }
+  CTX_DATA_END;
+
+  DEG_relations_tag_update(bmain);
+
+  WM_event_add_notifier(C, NC_OBJECT | ND_CONSTRAINT, NULL);
+
+  BKE_reportf(op->reports, RPT_INFO, "%d constraints copied from %s", num_cons, obact->id.name);
+
+  return OPERATOR_FINISHED;
+}
+
+static int pose_constraints_merge_invoke(bContext *C, wmOperator *op, const wmEvent *UNUSED(event))
+{
+  PropertyRNA *prop;
+  prop = RNA_struct_find_property(op->ptr, "src_object_name");
+  if (RNA_property_is_set(op->ptr, prop)) {
+    return pose_constraints_merge_exec(C, op);
+  }
+
+  return WM_operator_props_dialog_popup(C, op, 200);
+}
+
+
+static const EnumPropertyItem *armature_names_enum_itemf(bContext *C,
+                                                         PointerRNA *UNUSED(ptr),
+                                                         PropertyRNA *UNUSED(prop),
+                                                         bool *r_free)
+{
+  EnumPropertyItem *item = NULL, item_tmp = {0};
+  int totitem = 0;
+  int i = 0;
+
+  if (C == NULL) {
+    return DummyRNA_DEFAULT_items;
+  }
+
+  Main* main = CTX_data_main(C);
+  LISTBASE_FOREACH(Object*, ob, &main->objects) {
+    if (ob->type != OB_ARMATURE) {
+      continue;
+    }
+
+    item_tmp.identifier = ob->id.name;
+    item_tmp.name = ob->id.name + 2;
+    item_tmp.value = ++i;
+    RNA_enum_item_add(&item, &totitem, &item_tmp);
+  }
+
+  RNA_enum_item_end(&item, &totitem);
+  *r_free = true;
+
+  return item;
+}
+
+
+void POSE_OT_constraints_merge(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Merge Bone Constraints from Object";
+  ot->idname = "POSE_OT_constraints_merge";
+  ot->description = "Copy pose constraints from the target object to selected pose bones";
+
+  /* api callbacks */
+  ot->exec = pose_constraints_merge_exec;
+  ot->invoke = pose_constraints_merge_invoke;
+  ot->poll = ED_operator_posemode_exclusive;
+
+  PropertyRNA *prop;
+  prop = RNA_def_enum(ot->srna, "src_object_name", DummyRNA_DEFAULT_items, 0,
+                      "Source",
+                      "Object name to copy constraints from");
+  RNA_def_enum_funcs(prop, armature_names_enum_itemf);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE);
+  ot->prop = prop;
 
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
