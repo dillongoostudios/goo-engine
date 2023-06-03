@@ -512,6 +512,10 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_principled.glsl
   shaders/material/gpu_shader_material_refraction.glsl
   shaders/material/gpu_shader_material_rgb_to_bw.glsl
+  shaders/material/gpu_shader_material_sdf_util.glsl
+  shaders/material/gpu_shader_material_sdf_primitive.glsl
+  shaders/material/gpu_shader_material_sdf_op.glsl
+  shaders/material/gpu_shader_material_sdf_vector_op.glsl
   shaders/material/gpu_shader_material_separate_color.glsl
   shaders/material/gpu_shader_material_separate_hsv.glsl
   shaders/material/gpu_shader_material_separate_rgb.glsl

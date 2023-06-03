@@ -180,6 +180,10 @@ DEF_ENUM(rna_enum_node_float_to_int_items)
 DEF_ENUM(rna_enum_node_map_range_items)
 DEF_ENUM(rna_enum_node_clamp_items)
 
+DEF_ENUM(rna_enum_node_sdf_primitive_items)
+DEF_ENUM(rna_enum_node_sdf_op_items)
+DEF_ENUM(rna_enum_node_sdf_vector_op_items)
+
 DEF_ENUM(rna_enum_ramp_blend_items)
 
 DEF_ENUM(rna_enum_prop_dynamicpaint_type_items)
