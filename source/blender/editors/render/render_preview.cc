@@ -496,6 +496,13 @@ static Scene *preview_prepare_scene(
     sce->world = preview_prepare_world(
         pr_main, sce, scene->world, static_cast<ID_Type>(id_type), sp->pr_method);
 
+    /* Add preview lights to every light group. */
+    LISTBASE_FOREACH (Light *, ld, &pr_main->lights) {
+      for (int i = 0; i < 4; i++) {
+        ld->light_group_bits[i] = 0xFFFFFFFF;
+      }
+    }
+
     if (id_type == ID_TE) {
       /* Texture is not actually rendered with engine, just set dummy value. */
       STRNCPY(sce->r.engine, RE_engine_id_BLENDER_EEVEE);

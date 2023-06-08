@@ -43,6 +43,11 @@ struct Closure {
 /* Prototype */
 Closure nodetree_exec();
 vec4 closure_to_rgba(Closure cl);
+
+/* Goo-engine node internals */
+void calc_shader_info(vec3 position, vec3 normal, ivec4 light_groups, ivec4 light_group_shadows, out vec4 half_light, out float shadows, out float self_shadows, out vec4 ambient);
+void calc_shader_info(vec3 position, vec3 normal, out vec4 half_light, out float shadows, out float self_shadows, out vec4 ambient);
+
 void output_aov(vec4 color, float value, uint hash);
 vec3 coordinate_camera(vec3 P);
 vec3 coordinate_screen(vec3 P);

@@ -55,6 +55,8 @@ GPU_SHADER_CREATE_INFO(eevee_legacy_lights_lib)
     .additional_info("eevee_legacy_raytrace_lib")
     .uniform_buf(5, "ShadowBlock", "shadow_block", Frequency::PASS)
     .uniform_buf(6, "LightBlock", "light_block", Frequency::PASS)
+    .push_constant(Type::IVEC4, "light_groups")
+    .push_constant(Type::IVEC4, "light_group_shadows")
     .sampler(8, ImageType::SHADOW_2D_ARRAY, "shadowCubeTexture")
     .sampler(9, ImageType::SHADOW_2D_ARRAY, "shadowCascadeTexture");
 

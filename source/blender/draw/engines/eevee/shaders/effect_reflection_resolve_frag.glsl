@@ -294,6 +294,10 @@ void main()
   in_Glossy_0.N = worldNormal;
   in_Glossy_0.roughness = roughness;
 
+  /* Goo-engine: use default light groups here */
+  in_common.light_groups = ivec4(0,0,0,1);
+  in_common.light_group_shadows = ivec4(0,0,0,1);
+
   /* Do a full deferred evaluation of the glossy BSDF. The only difference is that we inject the
    * SSR resolve before the cubemap iter. BRDF term is already computed during main pass and is
    * passed as specular color. */

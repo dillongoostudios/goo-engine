@@ -29,9 +29,10 @@
     .pr_type = MA_SPHERE, \
  \
     .alpha_threshold = 0.5f, \
- \
+                              \
     .blend_shadow = MA_BS_SOLID, \
-    \
+    .light_group_bits = {0,0,0,1}, \
+    .light_group_shadow_bits = {0,0,0,1},\
     .lineart.mat_occlusion = 1, \
   }
 

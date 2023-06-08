@@ -271,6 +271,9 @@ shader_node_categories = [
         NodeItem("NodeFrame"),
         NodeItem("NodeReroute"),
     ]),
+    ShaderNodeCategory("SH_NEW_GOO", "Goo Nodes", items=[
+        NodeItem("ShaderNodeShaderInfo"),
+    ]),
 ]
 
 compositor_node_categories = [

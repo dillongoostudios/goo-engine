@@ -881,6 +881,22 @@ void RNA_def_material(BlenderRNA *brna)
                            "events (0 is disabled)");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
+  prop = RNA_def_property(srna, "light_group_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Groups", "Light group bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, 0, "rna_Material_draw_update");
+
+  prop = RNA_def_property(srna, "light_group_shadow_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_shadow_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Group Shadows", "Light group shadow bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, 0, "rna_Material_draw_update");
+
   /* For Preview Render */
   prop = RNA_def_property(srna, "preview_render_type", PROP_ENUM, PROP_NONE);
   RNA_def_property_enum_sdna(prop, NULL, "pr_type");

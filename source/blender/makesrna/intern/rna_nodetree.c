@@ -6088,6 +6088,36 @@ static void def_sh_sdf_vector_op(StructRNA *srna)
   RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
 }
 
+static void def_sh_shader_info(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeShaderInfo", "storage");
+
+  prop = RNA_def_property(srna, "light_group_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Groups", "Light group bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "light_group_shadow_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_shadow_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Group Shadows", "Light group shadow bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "use_own_light_groups", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "use_own_light_groups", 1);
+  RNA_def_property_ui_text(
+      prop, "Light Groups", "Set light groups for this node separately");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+
 static void def_sh_tex_magic(StructRNA *srna)
 {
   PropertyRNA *prop;

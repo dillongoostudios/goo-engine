@@ -220,6 +220,10 @@ typedef struct Material {
   char blend_flag;
   char _pad3[1];
 
+  /* Goo-engine */
+  int light_group_bits[4];
+  int light_group_shadow_bits[4];
+
   /**
    * Cached slots for texture painting, must be refreshed in
    * refresh_texpaint_image_cache before using.
@@ -235,6 +239,8 @@ typedef struct Material {
 } Material;
 
 /* **************** MATERIAL ********************* */
+
+#define MA_GROUPS_ALL 0xFFFFFFFF
 
 /* maximum number of materials per material array.
  * (on object, mesh, light, etc.). limited by

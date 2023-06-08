@@ -444,6 +444,7 @@ typedef struct EEVEE_Light {
   float upvec[3], sizey;
   float forwardvec[3], light_type;
   float diff, spec, volume, volume_radius;
+  int light_group_bits[4];
 } EEVEE_Light;
 
 /* Special type for elliptic area lights, matches lamps_lib.glsl */

@@ -155,6 +155,7 @@ struct LightData {
   vec4 upvec_sizey;            /* xyz: Normalized right vector, w: area size Y or spot scale Y */
   vec4 forwardvec_type;        /* xyz: Normalized forward vector, w: Light Type */
   vec4 diff_spec_volume;       /* xyz: Diffuse/Spec/Volume power, w: radius for volumetric. */
+  ivec4 light_group_bits;      /* xyzw: Light groups bitfield (Goo-engine) */
 };
 BLI_STATIC_ASSERT_ALIGN(LightData, 16)
 
@@ -229,6 +230,8 @@ BLI_STATIC_ASSERT_ALIGN(SSSProfileBlock, 16)
 #    define alphaHashScale common_block._alphaHashScale
 #    define cameraUvScaleBias common_block._cameraUvScaleBias
 #    define planarClipPlane common_block._planarClipPlane
+#    define lightGroups light_groups
+#    define lightGroupShadows light_group_shadows
 
 /* ProbeBlock */
 #    define probes_data probe_block._probes_data

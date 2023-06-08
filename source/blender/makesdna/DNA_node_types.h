@@ -1146,6 +1146,13 @@ typedef struct NodeShaderAttribute {
   char _pad[4];
 } NodeShaderAttribute;
 
+typedef struct NodeShaderInfo {
+  int light_group_bits[4];
+  int light_group_shadow_bits[4];
+  char use_own_light_groups;
+  char _pad[7];
+} NodeShaderInfo;
+
 typedef struct NodeShaderVectTransform {
   int type;
   int convert_from, convert_to;

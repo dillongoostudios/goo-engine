@@ -187,6 +187,15 @@ static void rna_def_light(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Use Nodes", "Use shader nodes to render the light");
   RNA_def_property_update(prop, 0, "rna_Light_use_nodes_update");
 
+  prop = RNA_def_property(srna, "light_group_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Groups", "Light group bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, 0, "rna_Light_update");
+
+
   /* common */
   rna_def_animdata_common(srna);
 }

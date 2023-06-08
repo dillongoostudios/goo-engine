@@ -78,6 +78,9 @@ typedef struct Light {
   float diff_fac, volume_fac;
   float spec_fac, att_dist;
 
+  /* Goo-engine */
+  int light_group_bits[4];
+
   /* preview */
   struct PreviewImage *preview;
 
@@ -93,6 +96,8 @@ typedef struct Light {
  * otherwise anim-editors will not read correctly
  */
 #define LA_DS_SHOW_TEXS (1 << 2)
+
+#define LA_GROUPS_ALL 0xFFFFFFFF
 
 /* type */
 #define LA_LOCAL 0

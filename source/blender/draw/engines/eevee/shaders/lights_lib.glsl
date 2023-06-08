@@ -227,9 +227,19 @@ float spot_attenuation(LightData ld, vec3 l_vector)
   return spotmask;
 }
 
-float light_attenuation(LightData ld, vec4 l_vector)
+float light_attenuation(LightData ld, vec4 l_vector, ivec4 light_groups)
 {
   float vis = 1.0;
+#if !defined(VOLUME_LIGHTING) // && !defined(STEP_RESOLVE)
+  if (
+       (ld.light_group_bits.x & light_groups.x) == 0
+    && (ld.light_group_bits.y & light_groups.y) == 0
+    && (ld.light_group_bits.z & light_groups.z) == 0
+    && (ld.light_group_bits.w & light_groups.w) == 0
+  ) {
+    return 0.0;
+  }
+#endif
   if (ld.l_type == SPOT) {
     vis *= spot_attenuation(ld, l_vector.xyz);
   }
@@ -246,10 +256,15 @@ float light_attenuation(LightData ld, vec4 l_vector)
   return vis;
 }
 
-float light_shadowing(LightData ld, vec3 P, float vis)
+float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows)
 {
 #if !defined(VOLUMETRICS) || defined(VOLUME_SHADOW)
-  if (ld.l_shadowid >= 0.0 && vis > 0.001) {
+  if (ld.l_shadowid >= 0.0 && vis > 0.001 && !(
+        (ld.light_group_bits.x & light_group_shadows.x) == 0
+     && (ld.light_group_bits.y & light_group_shadows.y) == 0
+     && (ld.light_group_bits.z & light_group_shadows.z) == 0
+     && (ld.light_group_bits.w & light_group_shadows.w) == 0)
+  ) {
     if (ld.l_type == SUN) {
       vis *= sample_cascade_shadow(int(ld.l_shadowid), P);
     }
@@ -262,9 +277,14 @@ float light_shadowing(LightData ld, vec3 P, float vis)
 }
 
 #ifndef VOLUMETRICS
-float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_x, float vis)
+float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_x, float vis, ivec4 light_group_shadows)
 {
-  if (ld.l_shadowid >= 0.0 && vis > 0.001) {
+  if (ld.l_shadowid >= 0.0 && vis > 0.001 && !(
+     (ld.light_group_bits.x & light_group_shadows.x) == 0
+  && (ld.light_group_bits.y & light_group_shadows.y) == 0
+  && (ld.light_group_bits.z & light_group_shadows.z) == 0
+  && (ld.light_group_bits.w & light_group_shadows.w) == 0)
+  ) {
     ShadowData sd = shadows_data[int(ld.l_shadowid)];
     /* Only compute if not already in shadow. */
     if (sd.sh_contact_dist > 0.0) {
@@ -300,10 +320,10 @@ float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_
 }
 #endif /* VOLUMETRICS */
 
-float light_visibility(LightData ld, vec3 P, vec4 l_vector)
+float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups, ivec4 light_group_shadows)
 {
-  float l_atten = light_attenuation(ld, l_vector);
-  return light_shadowing(ld, P, l_atten);
+  float l_atten = light_attenuation(ld, l_vector, light_groups);
+  return light_shadowing(ld, P, l_atten, light_group_shadows);
 }
 
 float light_diffuse(LightData ld, vec3 N, vec3 V, vec4 l_vector)
