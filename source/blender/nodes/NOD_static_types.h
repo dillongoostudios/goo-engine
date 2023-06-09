@@ -128,6 +128,7 @@ DefNode(ShaderNode,     SH_NODE_SEPARATE_COLOR,     def_sh_combsep_color,   "SEP
 DefNode(ShaderNode,     SH_NODE_MIX,                def_sh_mix,             "MIX",                Mix,              "Mix",               "Mix values by a factor")
 DefNode(ShaderNode,     SH_NODE_SHADER_INFO,        def_sh_shader_info,     "SHADERINFO",         ShaderInfo,       "Shader Info",       "Separate internal lighting into multiple outputs, and allow for per-node light-groups.")
 DefNode(ShaderNode,     SH_NODE_SCREENSPACE_INFO,   0,                      "SCREENSPACEINFO",    ScreenspaceInfo,  "Screenspace Info",  "Sample internal colour and depth buffers")
+DefNode(ShaderNode,     SH_NODE_SET_DEPTH,          0,                      "SET_DEPTH",          SetDepth,         "Set Depth",         "Pixel depth offset")
 
 DefNode(CompositorNode, CMP_NODE_VIEWER,         def_cmp_viewer,         "VIEWER",         Viewer,           "Viewer",            ""              )
 DefNode(CompositorNode, CMP_NODE_RGB,            0,                      "RGB",            RGB,              "RGB",               ""              )

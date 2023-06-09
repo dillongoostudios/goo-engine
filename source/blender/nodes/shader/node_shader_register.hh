@@ -75,6 +75,7 @@ void register_node_type_sh_sepcolor();
 void register_node_type_sh_sephsv();
 void register_node_type_sh_seprgb();
 void register_node_type_sh_sepxyz();
+void register_node_type_sh_set_depth();
 void register_node_type_sh_shader_info();
 void register_node_type_sh_shadertorgb();
 void register_node_type_sh_squeeze();

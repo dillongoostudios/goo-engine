@@ -91,6 +91,7 @@ set(SRC
   nodes/node_shader_sepcomb_hsv.cc
   nodes/node_shader_sepcomb_rgb.cc
   nodes/node_shader_sepcomb_xyz.cc
+  nodes/node_shader_set_depth.cc
   nodes/node_shader_shader_to_rgb.cc
   nodes/node_shader_shader_info.cc
   nodes/node_shader_squeeze.cc

@@ -513,6 +513,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_refraction.glsl
   shaders/material/gpu_shader_material_rgb_to_bw.glsl
   shaders/material/gpu_shader_material_screenspace_info.glsl
+  shaders/material/gpu_shader_material_set_depth.glsl
   shaders/material/gpu_shader_material_sdf_util.glsl
   shaders/material/gpu_shader_material_sdf_primitive.glsl
   shaders/material/gpu_shader_material_sdf_op.glsl
