@@ -130,6 +130,7 @@ DefNode(ShaderNode,     SH_NODE_SHADER_INFO,        def_sh_shader_info,     "SHA
 DefNode(ShaderNode,     SH_NODE_SCREENSPACE_INFO,   0,                      "SCREENSPACEINFO",    ScreenspaceInfo,  "Screenspace Info",  "Sample internal colour and depth buffers")
 DefNode(ShaderNode,     SH_NODE_SET_DEPTH,          0,                      "SET_DEPTH",          SetDepth,         "Set Depth",         "Pixel depth offset")
 DefNode(ShaderNode,     SH_NODE_CURVATURE,          0,                      "CURVATURE",      Curvature,        "Curvature",         ""              )
+DefNode(ShaderNode,     SH_NODE_SDF_NOISE,          0,                      "SDF_NOISE",          SdfNoise,         "Sdf Noise",          ""      )
 
 
 DefNode(CompositorNode, CMP_NODE_VIEWER,         def_cmp_viewer,         "VIEWER",         Viewer,           "Viewer",            ""              )

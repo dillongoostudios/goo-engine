@@ -225,6 +225,7 @@ shader_node_categories = [
         NodeItem("ShaderNodeSdfPrimitive"),
         NodeItem("ShaderNodeSdfOp"),
         NodeItem("ShaderNodeSdfVectorOp"),
+        NodeItem("ShaderNodeSdfNoise"),
     ]),
     ShaderNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
         NodeItem("ShaderNodeMix", label="Mix Color", settings={"data_type": "'RGBA'"}),

@@ -115,3 +115,4 @@ void register_node_type_sh_wireframe();
 void register_node_type_sh_sdf_primitive();
 void register_node_type_sh_sdf_op();
 void register_node_type_sh_sdf_vector_op();
+void register_node_type_sh_sdf_noise();
