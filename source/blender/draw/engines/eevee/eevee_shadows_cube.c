@@ -200,6 +200,7 @@ void EEVEE_shadows_draw_cubemap(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata,
     DRW_view_set_active(g_data->cube_views[j]);
     int layer = cube_index * 6 + j;
     GPU_framebuffer_texture_layer_attach(sldata->shadow_fb, sldata->shadow_cube_pool, 0, layer, 0);
+    GPU_framebuffer_texture_layer_attach(sldata->shadow_fb, sldata->shadow_cube_id_pool, 1, layer, 0);
     GPU_framebuffer_bind(sldata->shadow_fb);
     GPU_framebuffer_clear_depth(sldata->shadow_fb, 1.0f);
     DRW_draw_pass(psl->shadow_pass);

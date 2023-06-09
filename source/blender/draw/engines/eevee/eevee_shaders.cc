@@ -1342,6 +1342,9 @@ static char *eevee_get_defines(int options)
   if ((options & VAR_MAT_HOLDOUT) != 0) {
     BLI_dynstr_append(ds, "#define HOLDOUT\n");
   }
+  if ((options & VAR_MAT_SHADOW_ID) != 0) {
+    BLI_dynstr_append(ds, "#define USE_SHADOW_ID\n");
+  }
 
   str = BLI_dynstr_get_cstring(ds);
   BLI_dynstr_free(ds);
@@ -1406,6 +1409,10 @@ struct GPUMaterial *EEVEE_material_get(
 {
   if ((ma && (!ma->use_nodes || !ma->nodetree)) || (wo && (!wo->use_nodes || !wo->nodetree))) {
     options |= VAR_DEFAULT;
+  }
+
+  if ((ma && ma->check_shadow_id)) {
+    options |= VAR_MAT_SHADOW_ID;
   }
 
   /* Meh, implicit option. World probe cannot be deferred because they need

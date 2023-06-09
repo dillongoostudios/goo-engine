@@ -369,10 +369,10 @@ float calc_self_shadows_only(LightData ld, vec3 P, vec4 l_vector)
   float vis = 1.0;
   if (ld.l_shadowid >= 0.0 && vis > 0.001) {
     if (ld.l_type == SUN) {
-      vis *= sample_cascade_shadow(int(ld.l_shadowid), P);
+      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, false);
     }
     else {
-      vis *= sample_cube_shadow(int(ld.l_shadowid), P);
+      vis *= sample_cube_shadow(int(ld.l_shadowid), P, false);
     }
   }
   return vis;

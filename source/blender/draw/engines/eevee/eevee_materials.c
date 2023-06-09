@@ -100,6 +100,8 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   if (use_diffuse || use_glossy || use_refract) {
     DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeTexture", &sldata->shadow_cube_pool);
     DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
   }
   if (use_diffuse || use_glossy || use_refract || use_ao) {
     DRW_shgroup_uniform_texture_ref(shgrp, "maxzBuffer", &vedata->txl->maxzbuffer);

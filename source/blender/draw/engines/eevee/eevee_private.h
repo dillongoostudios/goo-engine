@@ -145,7 +145,8 @@ enum {
   VAR_WORLD_BACKGROUND = (1 << 10),
   VAR_WORLD_PROBE = (1 << 11),
   VAR_WORLD_VOLUME = (1 << 12),
-  VAR_DEFAULT = (1 << 13),
+  VAR_MAT_SHADOW_ID = (1 << 13),
+  VAR_DEFAULT = (1 << 14),
 };
 
 /* Material shader cache keys */
@@ -506,7 +507,7 @@ typedef struct EEVEE_LightsInfo {
   int num_cascade_layer, cache_num_cascade_layer;
   int cube_len, cascade_len, shadow_len;
   int shadow_cube_size, shadow_cascade_size;
-  bool shadow_high_bitdepth, soft_shadows;
+  bool shadow_high_bitdepth, shadow_id_high_bitdepth, soft_shadows;
   /* UBO Storage : data used by UBO */
   struct EEVEE_Light light_data[MAX_LIGHT];
   struct EEVEE_Shadow shadow_data[MAX_SHADOW];
@@ -874,6 +875,8 @@ typedef struct EEVEE_CommonUniformBuffer {
   float alpha_hash_scale;                      /* float */
   float camera_uv_scale[2], camera_uv_bias[2]; /* vec4 */
   float planar_clip_plane[4];                  /* vec4 */
+  int shadow_id_high_bitdepth;
+  float pad[3];
 } EEVEE_CommonUniformBuffer;
 
 BLI_STATIC_ASSERT_ALIGN(EEVEE_CommonUniformBuffer, 16)
@@ -897,6 +900,9 @@ typedef struct EEVEE_ViewLayerData {
 
   struct GPUTexture *shadow_cube_pool;
   struct GPUTexture *shadow_cascade_pool;
+
+  struct GPUTexture *shadow_cube_id_pool;
+  struct GPUTexture *shadow_cascade_id_pool;
 
   struct EEVEE_ShadowCasterBuffer shcasters_buffers[2];
 

@@ -456,6 +456,7 @@ class RENDER_PT_eevee_shadows(RenderButtonsPanel, Panel):
         col.prop(props, "shadow_cube_size", text="Cube Size")
         col.prop(props, "shadow_cascade_size", text="Cascade Size")
         col.prop(props, "use_shadow_high_bitdepth")
+        col.prop(props, "use_shadow_id_high_bitdepth")
         col.prop(props, "use_soft_shadows")
         col.prop(props, "light_threshold")
 

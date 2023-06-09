@@ -199,6 +199,8 @@ void EEVEE_view_layer_data_free(void *storage)
   GPU_FRAMEBUFFER_FREE_SAFE(sldata->shadow_fb);
   DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_pool);
   DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_pool);
+  DRW_TEXTURE_FREE_SAFE(sldata->shadow_cube_id_pool);
+  DRW_TEXTURE_FREE_SAFE(sldata->shadow_cascade_id_pool);
   for (int i = 0; i < 2; i++) {
     MEM_SAFE_FREE(sldata->shcasters_buffers[i].bbox);
     MEM_SAFE_FREE(sldata->shcasters_buffers[i].update);

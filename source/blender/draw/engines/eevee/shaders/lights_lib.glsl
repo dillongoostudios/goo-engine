@@ -154,7 +154,38 @@ vec4 sample_cascade(sampler2DArray tex, vec2 co, float cascade_id)
 #define scube(x) shadows_cube_data[x]
 #define scascade(x) shadows_cascade_data[x]
 
-float sample_cube_shadow(int shadow_id, vec3 P)
+/*
+  Gather samples and manually compare against the resource_id, then interpolate the results.
+*/
+#ifdef USE_SHADOW_ID
+float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
+{
+  uvec4 id_kernel = textureGather(TEX_ID, coord);
+  vec4 matches;
+  if (match) {
+    matches = vec4(equal(id_kernel, uvec4(resource_id)));
+  } else {
+    matches = vec4(notEqual(id_kernel, uvec4(resource_id)));
+  }
+
+  ivec3 tex_size = textureSize(TEX_ID, 0);
+  // WHY THE FLYING FUCK DO WE NEED AN EXTRA 0.00195?
+  vec2 fra = fract((coord.xy * tex_size.xy) + vec2(0.50195, 0.50195));
+
+  return mix(
+    mix(matches.w, matches.z, fra.x),
+    mix(matches.x, matches.y, fra.x),
+    fra.y
+  );
+}
+#else
+float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match) {
+  return 0.0;
+}
+#endif
+
+
+float sample_cube_shadow(int shadow_id, vec3 P, bool match_shadow_id)
 {
   int data_id = int(sd(shadow_id).sh_data_index);
   vec3 cubevec = transform_point(scube(data_id).shadowmat, P);
@@ -166,10 +197,17 @@ float sample_cube_shadow(int shadow_id, vec3 P)
   vec2 coord = cubeFaceCoordEEVEE(cubevec, face, shadowCubeTexture);
   /* tex_id == data_id for cube shadowmap */
   float tex_id = float(data_id);
-  return texture(shadowCubeTexture, vec4(coord, tex_id * 6.0 + face, dist));
+
+  vec4 coord_f = vec4(coord, tex_id * 6.0 + face, dist);
+
+#ifdef USE_SHADOW_ID
+  return min(sample_ID_texture(shadowCubeIDTexture, coord_f.xyz, match_shadow_id) + texture(shadowCubeTexture, coord_f), 1.0);
+#else
+  return texture(shadowCubeTexture, coord_f);
+#endif
 }
 
-float sample_cascade_shadow(int shadow_id, vec3 P)
+float sample_cascade_shadow(int shadow_id, vec3 P, bool match_shadow_id)
 {
   int data_id = int(sd(shadow_id).sh_data_index);
   float tex_id = scascade(data_id).sh_tex_index;
@@ -186,13 +224,23 @@ float sample_cascade_shadow(int shadow_id, vec3 P)
   /* Main cascade. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
+#ifdef USE_SHADOW_ID
+  float id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz, match_shadow_id);
+  vis += min(texture(shadowCascadeTexture, coord) + id_sample, 1.0)  * (1.0 - blend);
+#else
   vis += texture(shadowCascadeTexture, coord) * (1.0 - blend);
+#endif
 
   cascade = min(3, cascade + 1);
   /* Second cascade. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
   coord = vec4(shpos.xy, tex_id + float(cascade), shpos.z - sd(shadow_id).sh_bias);
+#ifdef USE_SHADOW_ID
+  id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz, match_shadow_id);
+  vis += min(texture(shadowCascadeTexture, coord) + id_sample, 1.0) * blend;
+#else
   vis += texture(shadowCascadeTexture, coord) * blend;
+#endif
 
   return saturate(vis);
 }
@@ -266,10 +314,10 @@ float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows
      && (ld.light_group_bits.w & light_group_shadows.w) == 0)
   ) {
     if (ld.l_type == SUN) {
-      vis *= sample_cascade_shadow(int(ld.l_shadowid), P);
+      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, true);
     }
     else {
-      vis *= sample_cube_shadow(int(ld.l_shadowid), P);
+      vis *= sample_cube_shadow(int(ld.l_shadowid), P, true);
     }
   }
 #endif

@@ -415,6 +415,8 @@ void EEVEE_shadows_draw_cascades(EEVEE_ViewLayerData *sldata,
     int layer = csm_data->tex_id + j;
     GPU_framebuffer_texture_layer_attach(
         sldata->shadow_fb, sldata->shadow_cascade_pool, 0, layer, 0);
+    GPU_framebuffer_texture_layer_attach(
+        sldata->shadow_fb, sldata->shadow_cascade_id_pool, 1, layer, 0);
     GPU_framebuffer_bind(sldata->shadow_fb);
     GPU_framebuffer_clear_depth(sldata->shadow_fb, 1.0f);
     DRW_draw_pass(psl->shadow_pass);

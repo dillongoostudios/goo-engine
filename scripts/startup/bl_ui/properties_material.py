@@ -209,6 +209,8 @@ def draw_material_settings(self, context):
     layout.prop(mat, "blend_method")
     layout.prop(mat, "shadow_method")
 
+    layout.prop(mat, "check_shadow_id")
+
     row = layout.row()
     row.active = ((mat.blend_method == 'CLIP') or (mat.shadow_method == 'CLIP'))
     row.prop(mat, "alpha_threshold")
