@@ -446,6 +446,19 @@ void calc_shader_info(vec3 position,
   ambient = vec4(probe_evaluate_world_diff(n_n), 1.0);
 }
 
+void screenspace_info(vec3 viewPos, out vec4 scene_col, out float scene_depth)
+{
+  vec2 uvs = get_uvs_from_view(viewPos * vec3(1.0, 1.0, -1.0));
+
+#ifdef USE_REFRACTION
+  scene_col = texture(refractColorBuffer, uvs * hizUvScale.xy);
+#endif
+
+  float depth = textureLod(maxzBuffer, uvs * hizUvScale.xy, 0.0).r;
+  scene_depth = -get_view_z_from_depth(depth);
+}
+
+
 Closure closure_add(inout Closure cl1, inout Closure cl2)
 {
   Closure cl;

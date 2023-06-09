@@ -70,6 +70,7 @@ void register_shader_nodes()
   register_node_type_sh_point_info();
   register_node_type_sh_rgb();
   register_node_type_sh_rgbtobw();
+  register_node_type_sh_screenspace_info();
   register_node_type_sh_script();
   register_node_type_sh_sepcolor();
   register_node_type_sh_sephsv();

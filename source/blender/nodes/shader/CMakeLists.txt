@@ -82,6 +82,7 @@ set(SRC
   nodes/node_shader_point_info.cc
   nodes/node_shader_rgb.cc
   nodes/node_shader_rgb_to_bw.cc
+  nodes/node_shader_screenspace_info.cc
   nodes/node_shader_script.cc
   nodes/node_shader_sdf_op.cc
   nodes/node_shader_sdf_primitive.cc

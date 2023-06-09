@@ -273,6 +273,7 @@ shader_node_categories = [
     ]),
     ShaderNodeCategory("SH_NEW_GOO", "Goo Nodes", items=[
         NodeItem("ShaderNodeShaderInfo"),
+        NodeItem("ShaderNodeScreenspaceInfo"),
     ]),
 ]
 
