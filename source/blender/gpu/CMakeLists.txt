@@ -478,6 +478,7 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_combine_hsv.glsl
   shaders/material/gpu_shader_material_combine_rgb.glsl
   shaders/material/gpu_shader_material_combine_xyz.glsl
+  shaders/material/gpu_shader_material_curvature.glsl
   shaders/material/gpu_shader_material_diffuse.glsl
   shaders/material/gpu_shader_material_displacement.glsl
   shaders/material/gpu_shader_material_eevee_specular.glsl

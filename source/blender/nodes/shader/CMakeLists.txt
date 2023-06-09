@@ -49,6 +49,7 @@ set(SRC
   nodes/node_shader_clamp.cc
   nodes/node_shader_color_ramp.cc
   nodes/node_shader_common.cc
+  nodes/node_shader_curvature.cc
   nodes/node_shader_curves.cc
   nodes/node_shader_displacement.cc
   nodes/node_shader_eevee_specular.cc
