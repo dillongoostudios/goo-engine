@@ -240,7 +240,7 @@ void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
     else {
       STRNCPY(dirpath, seq->strip->proxy->dirpath);
     }
-    BLI_path_abs(dirpath, BKE_main_blendfile_path_from_global());
+    BLI_path_abs(dirpath, ID_BLEND_PATH_FROM_GLOBAL(&scene->id));
   }
 
   if (is_multiview && seq->views_format == R_IMF_VIEWS_INDIVIDUAL) {
