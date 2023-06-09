@@ -7,7 +7,9 @@
 
 #include <stdio.h>
 
+#include "BLI_hash.h"
 #include "BLI_listbase.h"
+#include "BLI_rand.h"
 #include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
@@ -58,7 +60,7 @@ static void deformStroke(GpencilModifierData *md,
                          Depsgraph *UNUSED(depsgraph),
                          Object *ob,
                          bGPDlayer *gpl,
-                         bGPDframe *UNUSED(gpf),
+                         bGPDframe *gpf,
                          bGPDstroke *gps)
 {
   TextureGpencilModifierData *mmd = (TextureGpencilModifierData *)md;
@@ -79,6 +81,7 @@ static void deformStroke(GpencilModifierData *md,
                                       mmd->flag & GP_TEX_INVERT_MATERIAL)) {
     return;
   }
+
   if (ELEM(mmd->mode, FILL, STROKE_AND_FILL)) {
     gps->uv_rotation += mmd->fill_rotation;
     gps->uv_translation[0] += mmd->fill_offset[0];
@@ -96,6 +99,33 @@ static void deformStroke(GpencilModifierData *md,
       }
     }
 
+    const bool is_randomized = (mmd->rnd_offset != 0.0f || mmd->rnd_scale != 0.0f);
+
+    int seed = mmd->seed;
+    /* Make sure different modifiers get different seeds. */
+    seed += BLI_hash_string(ob->id.name + 2);
+    seed += BLI_hash_string(md->name);
+
+    float rand_offset = BLI_hash_int_01(seed);
+    float rand_value;
+    float rand_scale;
+
+    if (is_randomized) {
+      /* Get stroke index for random offset. */
+      int rnd_index = BLI_findindex(&gpf->strokes, gps);
+
+      const uint primes[2] = {2, 3};
+      double offset[2] = {0.0f, 0.0f};
+      double r[2];
+      /* To ensure a nice distribution, we use halton sequence and offset using the seed. */
+      BLI_halton_2d(primes, offset, rnd_index, r);
+
+      rand_value = fmodf(r[0] * 2.0f - 1.0f + rand_offset, 1.0f);
+      rand_value = fmodf(sin(rand_value * 12.9898f) * 43758.5453f, 1.0f);
+      rand_scale = fmodf(r[1] * 2.0f - 1.0f + rand_offset, 1.0f);
+      rand_scale = fmodf(sin(rand_scale * 12.9898f + 78.233f) * 43758.5453f, 1.0f);
+    }
+
     for (int i = 0; i < gps->totpoints; i++) {
       bGPDspoint *pt = &gps->points[i];
       MDeformVert *dvert = gps->dvert != NULL ? &gps->dvert[i] : NULL;
@@ -104,6 +134,21 @@ static void deformStroke(GpencilModifierData *md,
           dvert, (mmd->flag & GP_TEX_INVERT_VGROUP) != 0, def_nr);
       if (weight < 0.0f) {
         continue;
+      }
+
+      /* Calculate Random matrix. */
+      if (is_randomized) {
+        float rnd_loc, rnd_scale_weight;
+        float rnd_scale = 1.0f;
+
+        rnd_loc = rand_value * weight;
+        rnd_loc *= mmd->rnd_offset * rnd_loc;
+
+        rnd_scale_weight = rand_scale * weight;
+        rnd_scale += mmd->rnd_scale * rnd_scale_weight;
+
+        pt->uv_fac *= rnd_scale;
+        pt->uv_fac += rnd_loc;
       }
 
       pt->uv_fac /= totlen;
@@ -164,6 +209,19 @@ static void panel_draw(const bContext *UNUSED(C), Panel *panel)
   gpencil_modifier_panel_end(layout, ptr);
 }
 
+static void random_panel_draw(const bContext *UNUSED(C), Panel *panel)
+{
+  uiLayout *layout = panel->layout;
+
+  PointerRNA *ptr = gpencil_modifier_panel_get_property_pointers(panel, NULL);
+
+  uiLayoutSetPropSep(layout, true);
+
+  uiItemR(layout, ptr, "random_offset", 0, IFACE_("Offset"), ICON_NONE);
+  uiItemR(layout, ptr, "random_scale", 0, IFACE_("Scale"), ICON_NONE);
+  uiItemR(layout, ptr, "seed", 0, NULL, ICON_NONE);
+}
+
 static void mask_panel_draw(const bContext *UNUSED(C), Panel *panel)
 {
   gpencil_modifier_masking_panel_draw(panel, true, true);
@@ -173,6 +231,8 @@ static void panelRegister(ARegionType *region_type)
 {
   PanelType *panel_type = gpencil_modifier_panel_register(
       region_type, eGpencilModifierType_Texture, panel_draw);
+  gpencil_modifier_subpanel_register(
+      region_type, "randomize", "Randomize", NULL, random_panel_draw, panel_type);
   gpencil_modifier_subpanel_register(
       region_type, "mask", "Influence", NULL, mask_panel_draw, panel_type);
 }
