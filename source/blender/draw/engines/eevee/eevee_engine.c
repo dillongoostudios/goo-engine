@@ -665,7 +665,7 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     NULL,
     NULL,
     EEVEE_ENGINE,
-    N_("Eevee"),
+    N_("Eevee (Goo Engine)"),
     RE_INTERNAL | RE_USE_PREVIEW | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
     NULL,
     &DRW_render_to_image,
