@@ -924,6 +924,7 @@ static bool seq_image_strip_is_multiview_render(
 
 static ImBuf *seq_render_image_strip(const SeqRenderData *context,
                                      Sequence *seq,
+                                     Scene *scene,
                                      float UNUSED(frame_index),
                                      float timeline_frame,
                                      bool *r_is_proxy_image)
@@ -939,7 +940,7 @@ static ImBuf *seq_render_image_strip(const SeqRenderData *context,
   }
 
   BLI_path_join(name, sizeof(name), seq->strip->dir, s_elem->name);
-  BLI_path_abs(name, BKE_main_blendfile_path_from_global());
+  BLI_path_abs(name, ID_BLEND_PATH_FROM_GLOBAL(&scene->id));
 
   /* Try to get a proxy image. */
   ibuf = seq_proxy_fetch(context, seq, timeline_frame);
@@ -1685,7 +1686,7 @@ static ImBuf *do_render_strip_uncached(const SeqRenderData *context,
     }
 
     case SEQ_TYPE_IMAGE: {
-      ibuf = seq_render_image_strip(context, seq, frame_index, timeline_frame, r_is_proxy_image);
+      ibuf = seq_render_image_strip(context, seq, context->scene, frame_index, timeline_frame, r_is_proxy_image);
       break;
     }
 

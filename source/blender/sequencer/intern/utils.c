@@ -225,7 +225,7 @@ void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
   SEQ_relations_sequence_free_anim(seq);
 
   BLI_path_join(name, sizeof(name), seq->strip->dir, seq->strip->stripdata->name);
-  BLI_path_abs(name, BKE_main_blendfile_path_from_global());
+  BLI_path_abs(name, ID_BLEND_PATH_FROM_GLOBAL(&scene->id));
 
   proxy = seq->strip->proxy;
 
@@ -244,7 +244,7 @@ void seq_open_anim_file(Scene *scene, Sequence *seq, bool openfile)
     else {
       BLI_strncpy(dir, seq->strip->proxy->dir, sizeof(dir));
     }
-    BLI_path_abs(dir, BKE_main_blendfile_path_from_global());
+    BLI_path_abs(name, ID_BLEND_PATH_FROM_GLOBAL(&scene->id));
   }
 
   if (is_multiview && seq->views_format == R_IMF_VIEWS_INDIVIDUAL) {
