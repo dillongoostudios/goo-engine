@@ -6409,6 +6409,13 @@ static void rna_def_userdef_filepaths(BlenderRNA *brna)
       "Tabs as Spaces",
       "Automatically convert all new tabs into spaces for new and loaded text files");
 
+  prop = RNA_def_property(srna, "save_version_warning", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", USER_FLAG_VERSION_SCRIPT);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop,
+                           "Embed version warning popup",
+                           "Embed a script that provides a warning pop-up if this file is opened in a non-GooEngine build");
+
   /* Directories. */
 
   prop = RNA_def_property(srna, "font_directory", PROP_STRING, PROP_DIRPATH);

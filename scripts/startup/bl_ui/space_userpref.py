@@ -1533,6 +1533,7 @@ class USERPREF_PT_saveload_blend(SaveLoadPanel, CenterAlignMixIn, Panel):
 
         col = layout.column(heading="Text Files")
         col.prop(paths, "use_tabs_as_spaces")
+        col.prop(paths, "save_version_warning")
 
         col = layout.column()
         col.prop(paths, "save_version")
