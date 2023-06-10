@@ -111,6 +111,8 @@ static void blender_version_init(void)
     BLI_assert_msg(0, "Invalid Blender version cycle");
   }
 
+  version_cycle = " Goo Engine";
+
   SNPRINTF(blender_version_string,
            "%d.%01d.%d%s",
            BLENDER_VERSION / 100,
