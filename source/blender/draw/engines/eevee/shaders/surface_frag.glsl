@@ -85,6 +85,24 @@ void main()
   float transmit = saturate(avg(cl.transmittance));
   float alpha = 1.0 - transmit;
 
+#ifdef OBINFO_LIB
+  int flag = int(abs(ObjectInfo.w));
+  if ((flag & DRW_BASE_HOLDOUT) != 0) {
+#ifdef USE_ALPHA_BLEND
+    /* A bit of a mess, but we basically need to remove all but the holdout output. */
+    cl.transmittance = vec3(1.0);
+    cl.radiance = vec3(0.0);
+    transmit = 1.0;
+    holdout = 1.0 - alpha;
+    alpha = 0.0;
+#else
+    /* We want "default" holdout behaviour, fully invisible */
+    cl.radiance = vec3(0.0);
+    holdout = 0.0;
+#endif
+  }
+#endif
+
 #ifdef USE_ALPHA_BLEND
   vec2 uvs = gl_FragCoord.xy * volCoordScale.zw;
   vec3 vol_transmit, vol_scatter;

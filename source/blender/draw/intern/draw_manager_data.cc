@@ -721,6 +721,7 @@ static void drw_call_obinfos_init(DRWObjectInfos *ob_infos, Object *ob)
   else {
     ob_infos->ob_flag += (ob == DST.draw_ctx.obact) ? (1 << 4) : 0;
   }
+  ob_infos->ob_flag += (ob->base_flag & BASE_HOLDOUT) ? (1 << 5) : 0;
   /* Negative scaling. */
   ob_infos->ob_flag *= (ob->transflag & OB_NEG_SCALE) ? -1.0f : 1.0f;
   /* Object Color. */

@@ -745,10 +745,11 @@ static EeveeMaterialCache material_transparent(EEVEE_Data *vedata,
 /* Return correct material or empty default material if slot is empty. */
 BLI_INLINE Material *eevee_object_material_get(Object *ob, int slot, bool holdout)
 {
-  if (holdout) {
+  Material *ma = BKE_object_material_get_eval(ob, slot + 1);
+  bool use_custom = BKE_material_use_custom_holdout(ma);
+  if (holdout && !use_custom) {
     return BKE_material_default_holdout();
   }
-  Material *ma = BKE_object_material_get_eval(ob, slot + 1);
   if (ma == NULL) {
     if (ob->type == OB_VOLUME) {
       ma = BKE_material_default_volume();

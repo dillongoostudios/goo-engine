@@ -858,6 +858,9 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   if (is_lookdev) {
     mat->flag |= GPU_MATFLAG_LOOKDEV_HACK;
   }
+  if (BKE_material_use_custom_holdout(ma)) {
+    mat->flag |= GPU_MATFLAG_OBJECT_INFO;
+  }
 
   /* Localize tree to create links for reroute and mute. */
   bNodeTree *localtree = ntreeLocalize(ntree);
