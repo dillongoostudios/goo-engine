@@ -218,7 +218,17 @@ void EEVEE_temporal_sampling_create_view(EEVEE_Data *vedata)
 int EEVEE_temporal_sampling_sample_count_get(const Scene *scene, const EEVEE_StorageList *stl)
 {
   const bool is_render = DRW_state_is_image_render();
-  int sample_count = is_render ? scene->eevee.taa_render_samples : scene->eevee.taa_samples;
+  const DRWContextState *draw_ctx = DRW_context_state_get();
+
+  uint render_samples = scene->eevee.taa_render_samples;
+  uint vl_samples = draw_ctx->view_layer->samples;
+
+  if (vl_samples > 0){
+    render_samples = vl_samples;
+  }
+
+  int sample_count = is_render ? render_samples : scene->eevee.taa_samples;
+
   int timesteps = is_render ? stl->g_data->render_timesteps : 1;
 
   sample_count = max_ii(0, sample_count);
