@@ -46,6 +46,7 @@ class VIEWLAYER_PT_layer(ViewLayerButtonsPanel, Panel):
         col = layout.column()
         col.prop(layer, "use", text="Use for Rendering")
         col.prop(rd, "use_single_layer", text="Render Single Layer")
+        col.prop(layer, "samples", text="Sample Override")
 
 
 class VIEWLAYER_PT_layer_passes(ViewLayerButtonsPanel, Panel):

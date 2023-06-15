@@ -164,7 +164,14 @@ static void eevee_cache_finish(void *vedata)
   EEVEE_volumes_draw_init(sldata, vedata);
 
   uint tot_samples = scene_eval->eevee.taa_render_samples;
+  uint vl_samples = draw_ctx->view_layer->samples;
+
+  if (vl_samples > 0){
+    tot_samples = vl_samples;
+  }
+  
   if (tot_samples == 0) {
+
     /* Use a high number of samples so the outputs accumulation buffers
      * will have the highest possible precision. */
     tot_samples = 1024;
