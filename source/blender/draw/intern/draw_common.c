@@ -170,6 +170,7 @@ void DRW_globals_update(void)
   gb->size_light_center = (UI_GetThemeValuef(TH_OBCENTER_DIA) + 1.5f) * U.pixelsize;
   gb->size_light_circle = U.pixelsize * 9.0f;
   gb->size_light_circle_shadow = gb->size_light_circle + U.pixelsize * 3.0f;
+  gb->size_viewport_line = max_ff(U.viewport_line_width, 1.0f);
 
   /* M_SQRT2 to be at least the same size of the old square */
   gb->size_vertex = U.pixelsize *
