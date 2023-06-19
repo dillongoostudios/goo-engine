@@ -4639,6 +4639,12 @@ static void rna_def_userdef_view(BlenderRNA *brna)
       "Changes the thickness of widget outlines, lines and dots in the interface");
   RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");
 
+  prop = RNA_def_property(srna, "viewport_line_width", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop, "Viewport Line Width", "Changes the appearance of only lines in the 3D viewport");
+  RNA_def_property_range(prop, 1.0f, 3.0f);
+  RNA_def_property_update(prop, 0, "rna_userdef_dpi_update");
+
   /* display */
   prop = RNA_def_property(srna, "show_tooltips", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", USER_TOOLTIPS);

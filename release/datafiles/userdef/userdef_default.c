@@ -71,6 +71,8 @@ const UserDef U_default = {
     .pixelsize = 1,
     .virtual_pixel = 0,
 
+    .viewport_line_width = 1.0,
+
     .scrollback = 256,
     .node_margin = 80,
     .transopts = USER_TR_TOOLTIPS,

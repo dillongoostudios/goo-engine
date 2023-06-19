@@ -772,6 +772,9 @@ typedef struct UserDef {
   /** Deprecated, for forward compatibility. */
   int virtual_pixel;
 
+  float viewport_line_width;
+  char _pad14[4];
+
   /** Console scroll-back limit. */
   int scrollback;
   /** Node insert offset (aka auto-offset) margin, but might be useful for later stuff as well. */
