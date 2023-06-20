@@ -236,20 +236,13 @@ static void snap_editmesh_minmax(SnapObjectContext *sctx,
   }
 }
 
-static void snap_object_data_mesh_get(SnapObjectContext *sctx,
-                                      Object *ob_eval,
-                                      const Mesh *me_eval,
+static void snap_object_data_mesh_get(const Mesh *me_eval,
                                       bool use_hide,
                                       BVHTreeFromMesh *r_treedata)
 {
   const Span<float3> vert_positions = me_eval->vert_positions();
   const blender::OffsetIndices polys = me_eval->polys();
   const Span<int> corner_verts = me_eval->corner_verts();
-
-  if (ob_eval->type == OB_MESH) {
-    /* Any existing #SnapData_EditMesh is now invalid. */
-    sctx->editmesh_caches.remove(BKE_editmesh_from_object(ob_eval));
-  }
 
   /* The BVHTree from looptris is always required. */
   BKE_bvhtree_from_mesh_get(
@@ -678,8 +671,7 @@ static void editmesh_looptri_raycast_backface_culling_cb(void *userdata,
   }
 }
 
-static bool raycastMesh(SnapObjectContext *sctx,
-                        const SnapObjectParams *params,
+static bool raycastMesh(const SnapObjectParams *params,
                         const float ray_start[3],
                         const float ray_dir[3],
                         Object *ob_eval,
@@ -747,7 +739,7 @@ static bool raycastMesh(SnapObjectContext *sctx,
   }
 
   BVHTreeFromMesh treedata;
-  snap_object_data_mesh_get(sctx, ob_eval, me_eval, use_hide, &treedata);
+  snap_object_data_mesh_get(me_eval, use_hide, &treedata);
 
   const blender::Span<int> looptri_polys = me_eval->looptri_polys();
 
@@ -1034,8 +1026,7 @@ static eSnapMode raycast_obj_fn(SnapObjectContext *sctx,
   }
   else {
     const Mesh *me_eval = (const Mesh *)ob_data;
-    retval = raycastMesh(sctx,
-                         params,
+    retval = raycastMesh(params,
                          dt->ray_start,
                          dt->ray_dir,
                          ob_eval,
@@ -1214,7 +1205,6 @@ static bool nearest_world_tree(SnapObjectContext * /*sctx*/,
 
 static bool nearest_world_mesh(SnapObjectContext *sctx,
                                const struct SnapObjectParams *params,
-                               Object *ob_eval,
                                const Mesh *me_eval,
                                const float (*obmat)[4],
                                bool use_hide,
@@ -1226,7 +1216,7 @@ static bool nearest_world_mesh(SnapObjectContext *sctx,
                                int *r_index)
 {
   BVHTreeFromMesh treedata;
-  snap_object_data_mesh_get(sctx, ob_eval, me_eval, use_hide, &treedata);
+  snap_object_data_mesh_get(me_eval, use_hide, &treedata);
   if (treedata.tree == nullptr) {
     return false;
   }
@@ -1325,7 +1315,6 @@ static eSnapMode nearest_world_object_fn(SnapObjectContext *sctx,
     const Mesh *me_eval = (const Mesh *)ob_data;
     retval = nearest_world_mesh(sctx,
                                 params,
-                                ob_eval,
                                 me_eval,
                                 obmat,
                                 use_hide,
@@ -2569,7 +2558,7 @@ static eSnapMode snapMesh(SnapObjectContext *sctx,
   }
 
   BVHTreeFromMesh treedata, treedata_dummy;
-  snap_object_data_mesh_get(sctx, ob_eval, me_eval, use_hide, &treedata);
+  snap_object_data_mesh_get(me_eval, use_hide, &treedata);
 
   BVHTree *bvhtree[2] = {nullptr};
   bvhtree[0] = BKE_bvhtree_from_mesh_get(&treedata_dummy, me_eval, BVHTREE_FROM_LOOSEEDGES, 2);
