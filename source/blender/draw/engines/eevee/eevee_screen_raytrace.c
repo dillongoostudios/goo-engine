@@ -185,6 +185,8 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *v
         DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &txl->maxzbuffer);
         DRW_shgroup_uniform_texture_ref(grp, "shadowCubeTexture", &sldata->shadow_cube_pool);
         DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
+        DRW_shgroup_uniform_texture_ref(grp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+        DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
         DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
         DRW_shgroup_uniform_block(grp, "light_block", sldata->light_ubo);
         DRW_shgroup_uniform_block(grp, "shadow_block", sldata->shadow_ubo);

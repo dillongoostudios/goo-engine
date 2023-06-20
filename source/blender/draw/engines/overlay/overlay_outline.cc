@@ -187,12 +187,13 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
   bGPdata *gpd = (bGPdata *)iter->ob->data;
 
   const bool is_screenspace = (gpd->flag & GP_DATA_STROKE_KEEPTHICKNESS) != 0;
+  const bool is_fixed_view_scale = (gpd->flag & GP_DATA_STROKE_VIEW_INDEPENDENT_THICKNESS) != 0;
   const bool is_stroke_order_3d = (gpd->draw_mode == GP_DRAWMODE_3D);
 
   float object_scale = mat4_to_scale(iter->ob->object_to_world);
   /* Negate thickness sign to tag that strokes are in screen space.
    * Convert to world units (by default, 1 meter = 2000 pixels). */
-  float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / 2000.0f);
+  float thickness_scale = (is_screenspace) ? -gpd->pixfactor : (gpd->pixfactor / 2000.0f);
 
   GPUVertBuf *position_tx = DRW_cache_gpencil_position_buffer_get(iter->ob, iter->cfra);
   GPUVertBuf *color_tx = DRW_cache_gpencil_color_buffer_get(iter->ob, iter->cfra);
@@ -202,6 +203,7 @@ static void gpencil_layer_cache_populate(bGPDlayer *gpl,
   DRW_shgroup_uniform_float_copy(grp, "gpThicknessScale", object_scale);
   DRW_shgroup_uniform_float_copy(grp, "gpThicknessOffset", float(gpl->line_change));
   DRW_shgroup_uniform_float_copy(grp, "gpThicknessWorldScale", thickness_scale);
+  DRW_shgroup_uniform_bool_copy(grp, "gpThicknessFixedWorldScale", is_fixed_view_scale);
   DRW_shgroup_uniform_vec4_copy(grp, "gpDepthPlane", iter->plane);
   DRW_shgroup_buffer_texture(grp, "gp_pos_tx", position_tx);
   DRW_shgroup_buffer_texture(grp, "gp_col_tx", color_tx);

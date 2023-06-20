@@ -70,6 +70,7 @@
 #include "BKE_node.hh"
 #include "BKE_screen.h"
 #include "BKE_simulation_state_serialize.hh"
+#include "BKE_text.h"
 #include "BKE_workspace.h"
 
 #include "RNA_access.h"
@@ -4266,6 +4267,17 @@ void blo_do_versions_300(FileData *fd, Library * /*lib*/, Main *bmain)
               1, 0.0f, 0.0f, 1.0f, 1.0f);
         }
       }
+    }
+  }
+
+  /* Goo engine version warning script - remove the old one if it exists. */
+  if (!MAIN_VERSION_ATLEAST(bmain, 306, 0)) {
+    LISTBASE_FOREACH_MUTABLE (Text *, text, &bmain->texts) {
+      if (strcmp(text->id.name, "TX.version_warning.py") > 0) {
+        continue;
+      }
+      BLI_remlink(&bmain->texts, text);
+      BKE_id_free(bmain, text);
     }
   }
 

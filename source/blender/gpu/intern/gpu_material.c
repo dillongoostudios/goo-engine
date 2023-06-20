@@ -802,6 +802,29 @@ uint64_t GPU_material_uuid_get(GPUMaterial *mat)
   return mat->uuid;
 }
 
+void GPU_material_light_group_bits_get(GPUMaterial *mat, int* out)
+{
+  Material* ma = mat->ma;
+  const int grps_all[4] = {MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL};
+  if (ma) {
+    copy_v4_v4_int(out, ma->light_group_bits);
+  } else {
+    copy_v4_v4_int(out, grps_all);
+  }
+}
+
+void GPU_material_light_group_shadow_bits_get(GPUMaterial *mat, int* out)
+{
+  Material* ma = mat->ma;
+  const int grps_all[4] = {MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL, MA_GROUPS_ALL};
+  if (ma) {
+    copy_v4_v4_int(out, ma->light_group_shadow_bits);
+  } else {
+    copy_v4_v4_int(out, grps_all);
+  }
+}
+
+
 GPUMaterial *GPU_material_from_nodetree(Scene *scene,
                                         Material *ma,
                                         bNodeTree *ntree,
@@ -835,6 +858,9 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   STRNCPY(mat->name, name);
   if (is_lookdev) {
     mat->flag |= GPU_MATFLAG_LOOKDEV_HACK;
+  }
+  if (BKE_material_use_custom_holdout(ma)) {
+    mat->flag |= GPU_MATFLAG_OBJECT_INFO;
   }
 
   /* Localize tree to create links for reroute and mute. */

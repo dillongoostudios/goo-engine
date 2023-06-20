@@ -333,6 +333,202 @@ const EnumPropertyItem rna_enum_node_boolean_math_items[] = {
     {0, nullptr, 0, nullptr, nullptr},
 };
 
+const EnumPropertyItem rna_enum_node_sdf_primitive_items[] = {
+    {0, "", 0, N_("3D Primitives"), ""},
+    {SHD_SDF_3D_SPHERE, "SPHERE_3D", 0, "Sphere", "3d sdf sphere"},
+    {SHD_SDF_3D_BOX, "BOX_3D", 0, "Box", "3d sdf box"},
+    {SHD_SDF_3D_TORUS, "TORUS_3D", 0, "Torus", "3d sdf torus"},
+    {SHD_SDF_3D_CONE, "CONE_3D", 0, "Cone", "3d sdf cone"},
+    {SHD_SDF_3D_POINT_CONE, "POINT_CONE_3D", 0, "Point Cone", "3d sdf point cone"},
+    {SHD_SDF_3D_CYLINDER, "CYLINDER_3D", 0, "Cylinder", "3d sdf cylinder"},
+    {SHD_SDF_3D_POINT_CYLINDER, "POINT_CYLINDER_3D", 0, "Point Cylinder", "3d sdf point cylinder"},
+    {SHD_SDF_3D_CAPSULE, "CAPSULE_3D", 0, "Capsule/Line", "3d sdf capsule"},
+    {SHD_SDF_3D_OCTAHEDRON, "OCTAHEDRON_3D", 0, "Octahedron", "3d sdf octahedron"},
+    {SHD_SDF_3D_HEX_PRISM, "HEX_PRISM_3D", 0, "Hex Prism", "3d sdf hex prism"},
+    {SHD_SDF_3D_HEX_PRISM_INCIRCLE,
+     "HEX_PRISM_INCIRCLE_3D",
+     0,
+     "Hex Prism Incircle",
+     "3d sdf hex prism incircle"},
+    {SHD_SDF_3D_PLANE, "PLANE_3D", 0, "Plane", "3d sdf plane"},
+    {SHD_SDF_3D_SOLID_ANGLE, "SOLID_ANGLE_3D", 0, "Solid Angle", "3d sdf solid angle"},
+    {SHD_SDF_3D_PYRAMID, "PYRAMID_3D", 0, "Pyramid", "3d sdf pyramid"},
+    {SHD_SDF_3D_DISC, "DISC_3D", 0, "Disc", "3d sdf disc"},
+    {SHD_SDF_3D_CIRCLE, "CIRCLE_3D", 0, "3D Circle", "3d sdf circle"},
+
+    {0, "", 0, N_("2D Primitives"), ""},
+    {SHD_SDF_2D_CIRCLE, "CIRCLE_2D", 0, "Circle", "2d sdf circle"},
+    {SHD_SDF_2D_RECTANGLE, "RECTANGLE_2D", 0, "Rectangle", "2d sdf rectangle"},
+    {SHD_SDF_2D_ELLIPSE, "ELLIPSE_2D", 0, "Ellipse", "2d sdf ellipse"},
+    {SHD_SDF_2D_TRIANGLE, "TRIANGLE_2D", 0, "Triangle", "2d sdf triangle"},
+    {SHD_SDF_2D_PENTAGON, "PENTAGON_2D", 0, "Pentagon", "2d sdf pentagon"},
+    {SHD_SDF_2D_HEXAGON, "HEXAGON_2D", 0, "Hexagon", "2d sdf hexagon"},
+    {SHD_SDF_2D_ISOSCELES, "ISOSCELES_2D", 0, "Isosceles Triangle", "2d sdf isosceles"},
+    {SHD_SDF_2D_TRAPEZOID, "TRAPEZOID_2D", 0, "Trapezoid", "2d sdf trapezoid"},
+    {SHD_SDF_2D_RHOMBUS, "RHOMBUS_2D", 0, "Rhombus", "2d sdf rhombus"},
+
+    {0, "", 0, N_("2D Primitives"), ""},
+    {SHD_SDF_2D_STAR, "STAR_2D", 0, "Star", "2d sdf star"},
+    {SHD_SDF_2D_HEART, "HEART_2D", 0, "Heart", "2d sdf heart"},
+    {SHD_SDF_2D_PIE, "PIE_2D", 0, "Pie", "2d sdf pie"},
+    {SHD_SDF_2D_ARC, "ARC_2D", 0, "Arc", "2d sdf arc"},
+    {SHD_SDF_2D_MOON, "MOON_2D", 0, "Moon", "2d sdf moon"},
+    {SHD_SDF_2D_VESICA, "VESICA_2D", 0, "Vesica", "2d sdf vesica"},
+    {SHD_SDF_2D_CROSS, "CROSS_2D", 0, "Cross", "2d sdf cross"},
+    {SHD_SDF_2D_ROUNDX, "ROUNDX_2D", 0, "Rounded X", "2d sdf round x"},
+    {SHD_SDF_2D_HORSESHOE, "HORSESHOE_2D", 0, "Horseshoe", "2d sdf horseshoe"},
+    {SHD_SDF_2D_ROUND_JOINT, "ROUND_JOINT_2D", 0, "Round Joint", "2d sdf round joint"},
+    {SHD_SDF_2D_FLAT_JOINT, "FLAT_JOINT_2D", 0, "Flat Joint", "2d sdf flat joint"},
+
+    {0, "", 0, N_("2D Primitives"), ""},
+    {SHD_SDF_2D_LINE, "LINE_2D", 0, "Line", "2d sdf line"},
+    {SHD_SDF_2D_CORNER, "CORNER_2D", 0, "Corner", "2d sdf corner"},
+    {SHD_SDF_2D_BEZIER, "BEZIER_2D", 0, "Quadratic Bezier", "2d sdf bezier"},
+    {SHD_SDF_2D_POINT_TRIANGLE,
+     "POINT_TRIANGLE_2D",
+     0,
+     "Point Triangle",
+     "2d sdf 3 point triangle"},
+    {SHD_SDF_2D_QUAD, "QUAD_2D", 0, "Quad", "2d sdf quad"},
+    {SHD_SDF_2D_PARABOLA, "PARABOLA_2D", 0, "Parabola", "2d sdf parabola"},
+    {SHD_SDF_2D_PARABOLA_SEGMENT,
+     "PARABOLA_SEGMENT_2D",
+     0,
+     "Parabola Segment",
+     "2d sdf parabola segment"},
+    {SHD_SDF_2D_UNEVEN_CAPSULE, "CAPSULE_2D", 0, "Uneven Capsule", "2d sdf capsule"},
+    {0, NULL, 0, NULL, NULL},
+};
+
+const EnumPropertyItem rna_enum_node_sdf_op_items[] = {
+    {0, "", 0, N_("1 Input SDF Ops"), ""},
+    {SHD_SDF_OP_DILATE, "DILATE", 0, "Dilate", "Grow or shrink SDF boundary"},
+    {SHD_SDF_OP_ONION, "ONION", 0, "Onion", "Create N edges"},
+    {SHD_SDF_OP_ANNULAR, "ANNULAR", 0, "Annular", "Create edge on boundary of zero values"},
+    {SHD_SDF_OP_MASK, "MASK", 0, "Mask", "Create clamped 0-1 mask from negative SDF values"},
+    {SHD_SDF_OP_FLATTEN, "FLATTEN", 0, "Flatten", "Clamp range and map to [0-1] range"},
+    {SHD_SDF_OP_INVERT, "INVERT", 0, "Invert", "Invert SDF values"},
+    {SHD_SDF_OP_PULSE,
+     "PULSE",
+     0,
+     "Hermite Pulse",
+     "Hermite pulse between min and max SDF values"},
+
+    {0, "", 0, N_("2 Input SDF Ops"), ""},
+    {SHD_SDF_OP_BLEND, "BLEND", 0, "Blend", "Blend between SDF values"},
+    {SHD_SDF_OP_EXCLUSION, "EXCLUSION", 0, "Exclusion XOR", "Union with intersection removed"},
+    {SHD_SDF_OP_DIVIDE, "DIVIDE", 0, "Divide", "Union with gap between SDFs"},
+    {SHD_SDF_OP_PIPE, "PIPE", 0, "Pipe", "Produces a cylindical pipe along the intersection"},
+    {SHD_SDF_OP_ENGRAVE, "ENGRAVE", 0, "Engrave", "Intersection with v-shaped cut out"},
+    {SHD_SDF_OP_GROOVE, "GROOVE", 0, "Groove", "Intersection with groove cut out"},
+    {SHD_SDF_OP_TONGUE, "TONGUE", 0, "Tongue", "Intersection with tongue cut out"},
+
+    {0, "", 0, N_("Union"), ""},
+    {SHD_SDF_OP_UNION, "UNION", 0, "Union", ""},
+    {SHD_SDF_OP_UNION_SMOOTH, "UNION_SMOOTH", 0, "Union Smooth", ""},
+    {SHD_SDF_OP_UNION_ROUND, "UNION_ROUND", 0, "Union Round", ""},
+    {SHD_SDF_OP_UNION_COLUMNS, "UNION_COLUMNS", 0, "Union Columns", ""},
+    {SHD_SDF_OP_UNION_STAIRS, "UNION_STAIRS", 0, "Union Stairs", ""},
+    {SHD_SDF_OP_UNION_CHAMFER, "UNION_CHAMFER", 0, "Union Chamfer", ""},
+
+    {0, "", 0, N_("Intersection"), ""},
+    {SHD_SDF_OP_INTERSECT, "INTERSECT", 0, "Intersect", ""},
+    {SHD_SDF_OP_INTERSECT_SMOOTH, "INTERSECT_SMOOTH", 0, "Intersect Smooth", ""},
+    {SHD_SDF_OP_INTERSECT_ROUND, "INTERSECT_ROUND", 0, "Intersect Round", ""},
+    {SHD_SDF_OP_INTERSECT_COLUMNS, "INTERSECT_COLUMNS", 0, "Intersect Columns", ""},
+    {SHD_SDF_OP_INTERSECT_STAIRS, "INTERSECT_STAIRS", 0, "Intersect Stairs", ""},
+    {SHD_SDF_OP_INTERSECT_CHAMFER, "INTERSECT_CHAMFER", 0, "Intersect Chamfer", ""},
+
+    {0, "", 0, N_("Difference"), ""},
+    {SHD_SDF_OP_DIFF, "DIFF", 0, "Difference", ""},
+    {SHD_SDF_OP_DIFF_SMOOTH, "DIFF_SMOOTH", 0, "Difference Smooth", ""},
+    {SHD_SDF_OP_DIFF_ROUND, "DIFF_ROUND", 0, "Difference Round", ""},
+    {SHD_SDF_OP_DIFF_COLUMNS, "DIFF_COLUMNS", 0, "Difference Columns", ""},
+    {SHD_SDF_OP_DIFF_STAIRS, "DIFF_STAIRS", 0, "Difference Stairs", ""},
+    {SHD_SDF_OP_DIFF_CHAMFER, "DIFF_CHAMFER", 0, "Difference Chamfer", ""},
+    {0, NULL, 0, NULL, NULL},
+};
+
+const EnumPropertyItem rna_enum_node_sdf_vector_op_items[] = {
+    {0, "", 0, N_("Vector Grid Ops"), ""},
+    {SHD_SDF_VEC_OP_REFLECT,
+     "VEC_REFLECT",
+     0,
+     "Plane Reflect",
+     "Reflect position with a plane and offset"},
+    {SHD_SDF_VEC_OP_MIRROR,
+     "VEC_MIRROR",
+     0,
+     "Mirror",
+     "Mirror at an axis-aligned plane which is at a specified distance <dist> from the origin"},
+    {SHD_SDF_VEC_OP_POLAR, "VEC_POLAR", 0, "Polar", "Repeat around the origin by a fixed angle"},
+    {SHD_SDF_VEC_OP_REPEAT_INF,
+     "VEC_REPEAT_INF",
+     0,
+     "Repeat Infinite",
+     "Repeat position infinitely with spacing control"},
+    {SHD_SDF_VEC_OP_REPEAT_INF_MIRROR,
+     "VEC_REPEAT_INF_MIRROR",
+     0,
+     "Repeat Infinite Mirror",
+     "Repeat position infinitely but mirror every second cell so all boundaries match"},
+    {SHD_SDF_VEC_OP_REPEAT_FINITE,
+     "VEC_REPEAT_FINITE",
+     0,
+     "Repeat Finite",
+     "Repeat position with limits"},
+    {SHD_SDF_VEC_OP_OCTANT, "OCTANT", 0, "Octant", "Mirror in Octant"},
+
+    {0, "", 0, N_("Vector FX Ops"), ""},
+    {SHD_SDF_VEC_OP_SWIZZLE, "VEC_SWIZZLE", 0, "Swizzle", "Swizzle axis"},
+    {SHD_SDF_VEC_OP_ROTATE, "VEC_ROTATE", 0, "Rotate", "Rotate position"},
+    {SHD_SDF_VEC_OP_SPIN, "VEC_SPIN", 0, "Spin", "Spin position around axis"},
+    {SHD_SDF_VEC_OP_EXTRUDE,
+     "VEC_EXTRUDE",
+     0,
+     "Extrude",
+     "Extrude position, doeas not preserve internal SDF"},
+    {SHD_SDF_VEC_OP_TWIST, "VEC_TWIST", 0, "Twist", "Twist around XY"},
+    {SHD_SDF_VEC_OP_SWIRL, "VEC_SWIRL", 0, "Swirl", "Swirl around XY"},
+    {SHD_SDF_VEC_OP_PINCH_INFLATE,
+     "VEC_PINCH_INFLATE",
+     0,
+     "Pinch Inflate",
+     "Pinch inflate around XYZ"},
+    {SHD_SDF_VEC_OP_RADIAL_SHEAR,
+     "VEC_RADIAL_SHEAR",
+     0,
+     "Radial Shear",
+     "Radially shear around XY"},
+    {SHD_SDF_VEC_OP_BEND, "VEC_BEND", 0, "Bend", "Bend position"},
+
+    {0, "", 0, N_("UV Ops"), ""},
+    {SHD_SDF_VEC_OP_ROTATE_UV,
+     "UV_ROTATE",
+     0,
+     "UV Rotate",
+     "Rotate UV around center point [.5,.5]"},
+    {SHD_SDF_VEC_OP_SCALE_UV, "UV_SCALE", 0, "UV Scale", "Scale UV from center point [.5,.5]"},
+    {SHD_SDF_VEC_OP_GRID, "UV_GRID", 0, "UV Grid", "UV grid"},
+    {SHD_SDF_VEC_OP_RND_UV,
+     "UV_RAND_ROTATE",
+     0,
+     "UV Random Rotate",
+     "Rotate UV coordinates by 90 degrees in grid"},
+    {SHD_SDF_VEC_OP_RND_UV_FLIP,
+     "UV_RAND_FLIP",
+     0,
+     "UV Random Flip",
+     "Flip and rotate UV coordinates"},
+    {SHD_SDF_VEC_OP_TILESET, "TILESET", 0, "UV Tileset", "Map UV grid to subset of a single UV"},
+
+    {0, "", 0, N_("Conversion"), ""},
+    {SHD_SDF_VEC_OP_MAP_11, "MAP_11", 0, "Map -1-1", "Map UV range [0,1] to [-1,1]"},
+    {SHD_SDF_VEC_OP_MAP_05, "MAP_05", 0, "Map -0.5-0.5", "Map UV range [0,1] to [-.5,.5]"},
+    {SHD_SDF_VEC_OP_MAP_UV, "MAP_UV", 0, "Map 0-1", "Map [-1,1] to UV range [0,1]"},
+    {0, NULL, 0, NULL, NULL},
+};
+
 const EnumPropertyItem rna_enum_node_float_compare_items[] = {
     {NODE_COMPARE_LESS_THAN,
      "LESS_THAN",
@@ -5918,6 +6114,102 @@ static void def_sh_tex_brick(StructRNA *srna)
   RNA_def_property_update(prop, 0, "rna_Node_update");
 }
 
+static void def_sh_sdf_primitive(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeSdfPrimitive", "storage");
+  def_sh_tex(srna);
+
+  prop = RNA_def_property(srna, "mode", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "mode");
+  RNA_def_property_enum_items(prop, rna_enum_node_sdf_primitive_items);
+  RNA_def_property_ui_text(prop, "Mode", "SDF Function");
+  RNA_def_property_update(prop, 0, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "invert", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "invert", 1);
+  RNA_def_property_ui_text(prop, "Invert", "Invert signed distance field");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_sh_sdf_op(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeSdfOp", "storage");
+
+  prop = RNA_def_property(srna, "operation", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "operation");
+  RNA_def_property_enum_items(prop, rna_enum_node_sdf_op_items);
+  RNA_def_property_ui_text(prop, "SDF Operation", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "invert", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "invert", 1);
+  RNA_def_property_ui_text(prop, "Invert", "Invert operation output value");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_sh_sdf_vector_op(StructRNA *srna)
+{
+  static const EnumPropertyItem sdf_op_axis_items[] = {
+      {SHD_SDF_AXIS_XYZ, "XYZ_AXIS", 0, "XYZ Axis", ""},
+      {SHD_SDF_AXIS_XZY, "XZY_AXIS", 0, "XZY Axis", ""},
+      {SHD_SDF_AXIS_YXZ, "YXZ_AXIS", 0, "YXZ Axis", ""},
+      {SHD_SDF_AXIS_YZX, "YZX_AXIS", 0, "YZX Axis", ""},
+      {SHD_SDF_AXIS_ZXY, "ZXY_AXIS", 0, "ZXY Axis", ""},
+      {SHD_SDF_AXIS_ZYX, "ZYX_AXIS", 0, "ZYX Axis", ""},
+      {0, NULL, 0, NULL, NULL},
+  };
+
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeSdfVectorOp", "storage");
+
+  prop = RNA_def_property(srna, "operation", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "operation");
+  RNA_def_property_enum_items(prop, rna_enum_node_sdf_vector_op_items);
+  RNA_def_property_ui_text(prop, "Operation", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_ShaderNode_socket_update");
+
+  prop = RNA_def_property(srna, "axis", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, NULL, "axis");
+  RNA_def_property_enum_items(prop, sdf_op_axis_items);
+  RNA_def_property_ui_text(prop, "Axis", "");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+static void def_sh_shader_info(StructRNA *srna)
+{
+  PropertyRNA *prop;
+
+  RNA_def_struct_sdna_from(srna, "NodeShaderInfo", "storage");
+
+  prop = RNA_def_property(srna, "light_group_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Groups", "Light group bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "light_group_shadow_bits", PROP_INT, PROP_NONE);
+  RNA_def_property_int_sdna(prop, NULL, "light_group_shadow_bits");
+  RNA_def_property_array(prop, 4);
+  RNA_def_property_ui_text(prop, "Light Group Shadows", "Light group shadow bitfield");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_flag(prop, PROP_SKIP_SAVE | PROP_LIB_EXCEPTION);
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+
+  prop = RNA_def_property(srna, "use_own_light_groups", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "use_own_light_groups", 1);
+  RNA_def_property_ui_text(
+      prop, "Light Groups", "Set light groups for this node separately");
+  RNA_def_property_update(prop, NC_NODE | NA_EDITED, "rna_Node_update");
+}
+
+
 static void def_sh_tex_magic(StructRNA *srna)
 {
   PropertyRNA *prop;
@@ -7895,7 +8187,7 @@ static void def_cmp_defocus(StructRNA *srna)
   static const EnumPropertyItem bokeh_items[] = {
       {8, "OCTAGON", 0, "Octagonal", "8 sides"},
       {7, "HEPTAGON", 0, "Heptagonal", "7 sides"},
-      {6, "HEXAGON", 0, "Hexagonal", "6 sides"},
+      {6, "SDF", 0, "Sdfal", "6 sides"},
       {5, "PENTAGON", 0, "Pentagonal", "5 sides"},
       {4, "SQUARE", 0, "Square", "4 sides"},
       {3, "TRIANGLE", 0, "Triangular", "3 sides"},

@@ -37,7 +37,7 @@ void main()
     l_vector.xyz = light_volume_light_vector(ld, P);
     l_vector.w = length(l_vector.xyz);
 
-    float vis = light_visibility(ld, P, l_vector);
+    float vis = light_visibility(ld, P, l_vector, ivec4(-1), ivec4(-1));
 
     if (vis < 1e-4) {
       continue;

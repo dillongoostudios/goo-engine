@@ -780,6 +780,9 @@ typedef struct UserDef {
   /** Deprecated, for forward compatibility. */
   int virtual_pixel;
 
+  float viewport_line_width;
+  char _pad14[4];
+
   /** Console scroll-back limit. */
   int scrollback;
   /** Node insert offset (aka auto-offset) margin, but might be useful for later stuff as well. */
@@ -1042,7 +1045,7 @@ typedef enum eUserPref_SpaceData_Flag {
 typedef enum eUserPref_Flag {
   USER_AUTOSAVE = (1 << 0),
   USER_FLAG_NUMINPUT_ADVANCED = (1 << 1),
-  USER_FLAG_UNUSED_2 = (1 << 2), /* cleared */
+  USER_FLAG_VERSION_SCRIPT = (1 << 2), /* cleared */
   USER_FLAG_UNUSED_3 = (1 << 3), /* cleared */
   USER_FLAG_UNUSED_4 = (1 << 4), /* cleared */
   USER_TRACKBALL = (1 << 5),

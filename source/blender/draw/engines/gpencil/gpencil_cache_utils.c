@@ -258,6 +258,7 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
 
   const bool is_in_front = (ob->dtx & OB_DRAW_IN_FRONT);
   const bool is_screenspace = (gpd->flag & GP_DATA_STROKE_KEEPTHICKNESS) != 0;
+  const bool is_fixed_view_scale = (gpd->flag & GP_DATA_STROKE_VIEW_INDEPENDENT_THICKNESS) != 0;
   const bool override_vertcol = (pd->v3d_color_type != -1);
   const bool is_vert_col_mode = (pd->v3d_color_type == V3D_SHADING_VERTEX_COLOR) ||
                                 GPENCIL_VERTEX_MODE(gpd) || pd->is_render;
@@ -275,7 +276,7 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
                                                 pd->vertex_paint_opacity);
   /* Negate thickness sign to tag that strokes are in screen space.
    * Convert to world units (by default, 1 meter = 2000 pixels). */
-  float thickness_scale = (is_screenspace) ? -1.0f : (gpd->pixfactor / GPENCIL_PIXEL_FACTOR);
+  float thickness_scale = (is_screenspace) ? -gpd->pixfactor : (gpd->pixfactor / GPENCIL_PIXEL_FACTOR);
   float layer_opacity = gpencil_layer_final_opacity_get(pd, ob, gpl);
   float layer_tint[4];
   float layer_alpha;
@@ -396,6 +397,7 @@ GPENCIL_tLayer *gpencil_layer_cache_add(GPENCIL_PrivateData *pd,
     DRW_shgroup_uniform_float_copy(grp, "gpThicknessOffset", (float)gpl->line_change);
     DRW_shgroup_uniform_float_copy(grp, "gpThicknessWorldScale", thickness_scale);
     DRW_shgroup_uniform_float_copy(grp, "gpVertexColorOpacity", vert_col_opacity);
+    DRW_shgroup_uniform_bool_copy(grp, "gpThicknessFixedWorldScale", is_fixed_view_scale);
 
     /* If random color type, need color by layer. */
     float gpl_color[4];

@@ -219,7 +219,11 @@ typedef struct Material {
   char blend_method;
   char blend_shadow;
   char blend_flag;
-  char _pad3[1];
+  char check_shadow_id;
+
+  /* Goo-engine */
+  int light_group_bits[4];
+  int light_group_shadow_bits[4];
 
   /**
    * Cached slots for texture painting, must be refreshed in
@@ -236,6 +240,8 @@ typedef struct Material {
 } Material;
 
 /* **************** MATERIAL ********************* */
+
+#define MA_GROUPS_ALL 0xFFFFFFFF
 
 /* maximum number of materials per material array.
  * (on object, mesh, light, etc.). limited by
@@ -344,6 +350,8 @@ enum {
   MA_BS_CLIP = 2,
   MA_BS_HASHED = 3,
 };
+
+#define MA_SHADOW_ID (1 << 0)
 
 /* Grease Pencil Stroke styles */
 enum {

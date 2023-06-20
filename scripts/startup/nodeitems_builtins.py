@@ -223,6 +223,12 @@ shader_node_categories = [
         NodeItem("ShaderNodeTexIES"),
         NodeItem("ShaderNodeTexWhiteNoise"),
     ]),
+    ShaderNodeCategory("SH_NEW_SDF", "SDF", items=[
+        NodeItem("ShaderNodeSdfPrimitive"),
+        NodeItem("ShaderNodeSdfOp"),
+        NodeItem("ShaderNodeSdfVectorOp"),
+        NodeItem("ShaderNodeSdfNoise"),
+    ]),
     ShaderNodeCategory("SH_NEW_OP_COLOR", "Color", items=[
         NodeItem("ShaderNodeMix", label="Mix Color", settings={"data_type": "'RGBA'"}),
         NodeItem("ShaderNodeRGBCurve"),
@@ -267,6 +273,12 @@ shader_node_categories = [
     ShaderNodeCategory("SH_NEW_LAYOUT", "Layout", items=[
         NodeItem("NodeFrame"),
         NodeItem("NodeReroute"),
+    ]),
+    ShaderNodeCategory("SH_NEW_GOO", "Goo Nodes", items=[
+        NodeItem("ShaderNodeShaderInfo"),
+        NodeItem("ShaderNodeScreenspaceInfo"),
+        NodeItem("ShaderNodeCurvature"),
+        NodeItem("ShaderNodeSetDepth"),
     ]),
 ]
 

@@ -193,6 +193,8 @@
 struct ClosureInputCommon {
   /** Custom occlusion value set by the user. */
   float occlusion;
+  ivec4 light_groups;
+  ivec4 light_group_shadows;
 };
 #ifdef GPU_METAL
 /* C++ struct initialization. */
@@ -201,7 +203,7 @@ struct ClosureInputCommon {
       1.0 \
     }
 #else
-#  define CLOSURE_INPUT_COMMON_DEFAULT ClosureInputCommon(1.0)
+#  define CLOSURE_INPUT_COMMON_DEFAULT ClosureInputCommon(1.0, lightGroups, lightGroupShadows)
 #endif
 
 struct ClosureEvalCommon {
@@ -227,6 +229,9 @@ struct ClosureEvalCommon {
   float specular_accum;
   /** Diffuse probe accumulator. */
   float diffuse_accum;
+  /** Light Group values, either from uniform or id buffer. */
+  ivec4 light_groups;
+  ivec4 light_group_shadows;
 };
 
 /* Common cl_out struct used by most closures. */
@@ -252,6 +257,8 @@ ClosureEvalCommon closure_Common_eval_init(ClosureInputCommon cl_in)
   cl_eval.Ng = cl_eval.N;
 #endif
   cl_eval.vNg = transform_direction(ViewMatrix, cl_eval.Ng);
+  cl_eval.light_groups = cl_in.light_groups;
+  cl_eval.light_group_shadows = cl_in.light_group_shadows;
 
   cl_eval.occlusion_data = occlusion_load(cl_eval.vP, cl_in.occlusion);
 
@@ -283,9 +290,9 @@ ClosureLightData closure_light_eval_init(ClosureEvalCommon cl_common, int light_
   light.L.xyz = light.data.l_position - cl_common.P;
   light.L.w = length(light.L.xyz);
 
-  light.vis = light_visibility(light.data, cl_common.P, light.L);
+  light.vis = light_visibility(light.data, cl_common.P, light.L, cl_common.light_groups, cl_common.light_group_shadows);
   light.contact_shadow = light_contact_shadows(
-      light.data, cl_common.P, cl_common.vP, cl_common.vNg, cl_common.rand.x, light.vis);
+    light.data, cl_common.P, cl_common.vP, cl_common.vNg, cl_common.rand.x, light.vis, cl_common.light_group_shadows);
 
   return light;
 }

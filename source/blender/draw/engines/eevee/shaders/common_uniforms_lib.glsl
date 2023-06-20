@@ -49,6 +49,7 @@ layout(std140) uniform common_block
   /* Misc */
   vec4 cameraUvScaleBias;
   vec4 planarClipPlane;
+  bool shadow_id_high_bitdepth;
 };
 
 #endif /* !USE_GPU_SHADER_CREATE_INFO */

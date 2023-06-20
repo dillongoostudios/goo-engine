@@ -85,7 +85,7 @@ void neighbor_blend(
 void main()
 {
   ivec2 center_texel = ivec2(gl_FragCoord.xy);
-  float line_kernel = sizePixel * 0.5 - 0.5;
+  float line_kernel = sizeLine * 0.5 - 0.5;
 
   fragColor = texelFetch(colorTex, center_texel, 0);
 

@@ -4652,6 +4652,12 @@ static void rna_def_userdef_view(BlenderRNA *brna)
       "Changes the thickness of widget outlines, lines and dots in the interface");
   RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
 
+  prop = RNA_def_property(srna, "viewport_line_width", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_ui_text(
+      prop, "Viewport Line Width", "Changes the appearance of only lines in the 3D viewport");
+  RNA_def_property_range(prop, 1.0f, 3.0f);
+  RNA_def_property_update(prop, 0, "rna_userdef_gpu_update");
+
   /* display */
   prop = RNA_def_property(srna, "show_tooltips", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, NULL, "flag", USER_TOOLTIPS);
@@ -6455,6 +6461,13 @@ static void rna_def_userdef_filepaths(BlenderRNA *brna)
       prop,
       "Tabs as Spaces",
       "Automatically convert all new tabs into spaces for new and loaded text files");
+
+  prop = RNA_def_property(srna, "save_version_warning", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", USER_FLAG_VERSION_SCRIPT);
+  RNA_def_property_boolean_default(prop, true);
+  RNA_def_property_ui_text(prop,
+                           "Embed version warning popup",
+                           "Embed a script that provides a warning pop-up if this file is opened in a non-GooEngine build");
 
   /* Directories. */
 

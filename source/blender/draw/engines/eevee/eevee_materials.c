@@ -101,6 +101,8 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   if (use_diffuse || use_glossy || use_refract) {
     DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeTexture", &sldata->shadow_cube_pool);
     DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
   }
   if (use_diffuse || use_glossy || use_refract || use_ao) {
     DRW_shgroup_uniform_texture_ref(shgrp, "maxzBuffer", &vedata->txl->maxzbuffer);
@@ -744,10 +746,11 @@ static EeveeMaterialCache material_transparent(EEVEE_Data *vedata,
 /* Return correct material or empty default material if slot is empty. */
 BLI_INLINE Material *eevee_object_material_get(Object *ob, int slot, bool holdout)
 {
-  if (holdout) {
+  Material *ma = BKE_object_material_get_eval(ob, slot + 1);
+  bool use_custom = BKE_material_use_custom_holdout(ma);
+  if (holdout && !use_custom) {
     return BKE_material_default_holdout();
   }
-  Material *ma = BKE_object_material_get_eval(ob, slot + 1);
   if (ma == NULL) {
     if (ob->type == OB_VOLUME) {
       ma = BKE_material_default_volume();

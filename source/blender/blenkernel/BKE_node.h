@@ -1024,6 +1024,15 @@ void BKE_nodetree_remove_layer_n(struct bNodeTree *ntree, struct Scene *scene, i
 #define SH_NODE_SEPARATE_COLOR 712
 #define SH_NODE_MIX 713
 
+#define SH_NODE_SHADER_INFO 800
+#define SH_NODE_SCREENSPACE_INFO 801
+#define SH_NODE_SDF_PRIMITIVE 802
+#define SH_NODE_SDF_OP 803
+#define SH_NODE_SDF_VECTOR_OP 804
+#define SH_NODE_SDF_NOISE 805
+#define SH_NODE_SET_DEPTH 806
+#define SH_NODE_CURVATURE 807
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
