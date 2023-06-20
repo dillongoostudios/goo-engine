@@ -24,13 +24,25 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Vector>(N_("Position")).hide_value();
   b.add_input<decl::Float>(N_("Distance"));
-  b.add_input<decl::Float>(N_("Detail")).default_value(4.f).max(12.f);
-  b.add_input<decl::Float>(N_("Roughness")).default_value(0.5f)
-      .max(1.f).subtype(PROP_FACTOR);
-  b.add_input<decl::Float>(N_("Detail Inflation")).default_value(0.1f)
-      .max(1.f).subtype(PROP_FACTOR);
-  b.add_input<decl::Float>(N_("Detail Blend")).default_value(0.3f)
-      .max(1.f).subtype(PROP_FACTOR);
+  b.add_input<decl::Float>(N_("Detail"))
+      .default_value(4.f)
+      .min(0.f)
+      .max(12.f);
+  b.add_input<decl::Float>(N_("Roughness"))
+      .default_value(0.5f)
+      .min(0.f)
+      .max(1.f)
+      .subtype(PROP_FACTOR);
+  b.add_input<decl::Float>(N_("Detail Inflation"))
+      .default_value(0.1f)
+      .min(0.f)
+      .max(1.f)
+      .subtype(PROP_FACTOR);
+  b.add_input<decl::Float>(N_("Detail Blend"))
+      .default_value(0.3f)
+      .min(0.f)
+      .max(1.f)
+      .subtype(PROP_FACTOR);
 
   b.add_output<decl::Float>(N_("Distance"));
 }
