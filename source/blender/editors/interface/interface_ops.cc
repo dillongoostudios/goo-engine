@@ -285,7 +285,7 @@ static int show_fcurve_in_editor_exec(bContext *C, wmOperator *op)
 
   /* Find any open FCurve Editor for Operator context */
   bScreen *screen = CTX_wm_screen(C);
-  ScrArea *graph_area;
+  ScrArea *graph_area = nullptr;
   LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
     if (area->spacetype == SPACE_GRAPH) {
       SpaceGraph *space = (SpaceGraph *)area->spacedata.first;
