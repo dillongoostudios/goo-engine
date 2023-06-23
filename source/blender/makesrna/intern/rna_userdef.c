@@ -6419,7 +6419,7 @@ static void rna_def_userdef_filepaths(BlenderRNA *brna)
   RNA_def_property_boolean_negative_sdna(prop, NULL, "flag", USER_FLAG_VERSION_SCRIPT);
   RNA_def_property_boolean_default(prop, true);
   RNA_def_property_ui_text(prop,
-                           "Embed version warning popup",
+                           "Embed Version Warning Popup",
                            "Embed a script that provides a warning pop-up if this file is opened in a non-GooEngine build");
 
   /* Directories. */
