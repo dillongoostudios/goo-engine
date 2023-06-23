@@ -829,6 +829,9 @@ typedef enum eGPdata_Flag {
   GP_DATA_CURVE_EDIT_MODE = (1 << 21),
   /* Use adaptive curve resolution */
   GP_DATA_CURVE_ADAPTIVE_RESOLUTION = (1 << 22),
+
+  /* Use world scale minus depth component. Like screenspace scale but takes zoom into account. */
+  GP_DATA_STROKE_VIEW_INDEPENDENT_THICKNESS = (1 << 23),
 } eGPdata_Flag;
 
 /* gpd->onion_flag */
