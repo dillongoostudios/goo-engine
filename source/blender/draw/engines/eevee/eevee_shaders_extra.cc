@@ -73,6 +73,11 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
     info.define("USE_BARYCENTRICS");
   }
 
+  /* GooEngine: Set Depth node can write to gl_FragDepth arbitrarily.
+   * This shouldn't incur a performance penalty according to
+   * https://registry.khronos.org/OpenGL/extensions/ARB/ARB_conservative_depth.txt */
+  info.depth_write(DepthWrite::ANY);
+
   /* Lookdev - Add FragDepth. */
   if (options & VAR_MAT_LOOKDEV) {
     info.define("LOOKDEV");
