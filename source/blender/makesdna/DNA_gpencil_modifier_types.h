@@ -975,6 +975,20 @@ typedef struct TextureGpencilModifierData {
   float fill_rotation;
   float fill_offset[2];
   float fill_scale;
+
+  /** Random UV Offset. */
+  float rnd_uv_offset;
+  /** Random UV Scales. */
+  float rnd_uv_scale;
+  /** Random Fill Offset. */
+  float rnd_fill_offset[2];
+  /** Random Fill Rotations. */
+  float rnd_fill_rot;
+  /** Random FillScales. */
+  float rnd_fill_scale;
+  /** (first element is the index) random values. */
+  int seed;
+
   /** Custom index for passes. */
   int layer_pass;
   /** Texture fit options. */
@@ -982,7 +996,6 @@ typedef struct TextureGpencilModifierData {
   short mode;
   /** Dot texture rotation */
   float alignment_rotation;
-  char _pad[4];
 } TextureGpencilModifierData;
 
 typedef enum eTextureGpencil_Flag {

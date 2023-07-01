@@ -243,6 +243,11 @@
     .fill_rotation = 0.0f, \
     .fill_offset = {0.0f, 0.0f}, \
     .fill_scale = 1.0f, \
+    .rnd_uv_offset = 0.0f, \
+    .rnd_uv_scale = 0.0f, \
+    .rnd_fill_offset = {0.0f, 0.0f}, \
+    .rnd_fill_rot = 0.0f, \
+    .rnd_fill_scale = 0.0f, \
     .layer_pass = 0, \
     .fit_method = GP_TEX_CONSTANT_LENGTH, \
     .mode = 0, \
