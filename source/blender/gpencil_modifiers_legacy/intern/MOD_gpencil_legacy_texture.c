@@ -7,8 +7,10 @@
 
 #include <stdio.h>
 
+#include "BLI_hash.h"
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
+#include "BLI_rand.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -58,7 +60,7 @@ static void deformStroke(GpencilModifierData *md,
                          Depsgraph *UNUSED(depsgraph),
                          Object *ob,
                          bGPDlayer *gpl,
-                         bGPDframe *UNUSED(gpf),
+                         bGPDframe *gpf,
                          bGPDstroke *gps)
 {
   TextureGpencilModifierData *mmd = (TextureGpencilModifierData *)md;
@@ -80,15 +82,115 @@ static void deformStroke(GpencilModifierData *md,
   {
     return;
   }
+
+  const bool is_fill_randomized = !(mmd->rnd_fill_rot == 0.0f &&
+                                    is_zero_v2(mmd->rnd_fill_offset) &&
+                                    mmd->rnd_fill_scale == 0.0f);
+  const bool is_uv_randomized = !(mmd->rnd_uv_offset == 0.0f && mmd->rnd_uv_scale == 0.0f);
+
+  int seed = mmd->seed;
+  /* Make sure different modifiers get different seeds. */
+  seed += BLI_hash_string(ob->id.name + 2);
+  seed += BLI_hash_string(md->name);
+
+  float fill_rot = mmd->fill_rotation;
+  float fill_offset[2];
+  fill_offset[0] = mmd->fill_offset[0];
+  fill_offset[1] = mmd->fill_offset[1];
+  float fill_scale = mmd->fill_scale;
+  float uv_offset = mmd->uv_offset;
+  float uv_scale = mmd->uv_scale;
+  float rand_offset = 0.0;
+  int rnd_index = 0;
+
+  if (is_fill_randomized || is_uv_randomized) {
+    rand_offset = BLI_hash_int_01(seed);
+
+    /* Get stroke index for random offset. */
+    rnd_index = BLI_findindex(&gpf->strokes, gps);
+  }
+
   if (ELEM(mmd->mode, FILL, STROKE_AND_FILL)) {
-    gps->uv_rotation += mmd->fill_rotation;
-    gps->uv_translation[0] += mmd->fill_offset[0];
-    gps->uv_translation[1] += mmd->fill_offset[1];
-    gps->uv_scale *= mmd->fill_scale;
+
+    if (!(mmd->rnd_fill_rot == 0.0f)) {
+      float rnd_fill_rot = 0.0f;
+
+      double r;
+      /* To ensure a nice distribution, we use halton sequence and offset using the seed. */
+      BLI_halton_1d(2, 0.0, rnd_index, &r);
+
+      rnd_fill_rot = fmodf(r * 2.0f - 1.0f + rand_offset, 1.0f);
+      rnd_fill_rot = fmodf(sin(rnd_fill_rot * 12.9898f) * 43758.5453f, 1.0f);
+
+      fill_rot += mmd->rnd_fill_rot * rnd_fill_rot;
+    }
+
+    if (!is_zero_v2(mmd->rnd_fill_offset)) {
+      float rnd_fill_offset[2] = {0.0f, 0.0f};
+
+      const uint primes[2] = {3, 7};
+      double offset[2] = {0.0f, 0.0f};
+      double r[2];
+      /* To ensure a nice distribution, we use halton sequence and offset using the seed. */
+      BLI_halton_2d(primes, offset, rnd_index, r);
+
+      rnd_fill_offset[0] = fmodf(r[0] * 2.0f - 1.0f + rand_offset, 1.0f);
+      rnd_fill_offset[0] = fmodf(sin(rnd_fill_offset[0] * 12.9898f) * 43758.5453f, 1.0f);
+      rnd_fill_offset[1] = fmodf(r[1] * 2.0f - 1.0f + rand_offset, 1.0f);
+      rnd_fill_offset[1] = fmodf(sin(rnd_fill_offset[1] * 12.9898f + 78.233f) * 43758.5453f, 1.0f);
+
+      fill_offset[0] += mmd->rnd_fill_offset[0] * rnd_fill_offset[0];
+      fill_offset[1] += mmd->rnd_fill_offset[1] * rnd_fill_offset[1];
+    }
+
+    if (!(mmd->rnd_fill_scale == 0.0f)) {
+      float rnd_fill_scale = 0.0f;
+
+      double r;
+      /* To ensure a nice distribution, we use halton sequence and offset using the seed. */
+      BLI_halton_1d(11, 0.0, rnd_index, &r);
+
+      rnd_fill_scale = fmodf(r * 2.0f - 1.0f + rand_offset, 1.0f);
+      rnd_fill_scale = fmodf(sin(rnd_fill_scale * 12.9898f) * 43758.5453f, 1.0f);
+
+      fill_scale += mmd->rnd_fill_scale * rnd_fill_scale;
+    }
+
+    gps->uv_rotation += fill_rot;
+    gps->uv_translation[0] += fill_offset[0];
+    gps->uv_translation[1] += fill_offset[1];
+    gps->uv_scale *= fill_scale;
     BKE_gpencil_stroke_geometry_update(gpd, gps);
   }
 
   if (ELEM(mmd->mode, STROKE, STROKE_AND_FILL)) {
+
+    if (!(mmd->rnd_uv_offset == 0.0f)) {
+      float rnd_uv_offset = 0.0f;
+
+      double r;
+      /* To ensure a nice distribution, we use halton sequence and offset using the seed. */
+      BLI_halton_1d(2, 0.0, rnd_index, &r);
+
+      rnd_uv_offset = fmodf(r * 2.0f - 1.0f + rand_offset, 1.0f);
+      rnd_uv_offset = fmodf(sin(rnd_uv_offset * 12.9898f) * 43758.5453f, 1.0f);
+
+      uv_offset += mmd->rnd_uv_offset * rnd_uv_offset;
+    }
+
+    if (!(mmd->rnd_uv_scale == 0.0f)) {
+      float rnd_uv_scale = 0.0f;
+
+      double r;
+      /* To ensure a nice distribution, we use halton sequence and offset using the seed. */
+      BLI_halton_1d(3, 0.0, rnd_index, &r);
+
+      rnd_uv_scale = fmodf(r * 2.0f - 1.0f + rand_offset, 1.0f);
+      rnd_uv_scale = fmodf(sin(rnd_uv_scale * 12.9898f) * 43758.5453f, 1.0f);
+
+      uv_scale += mmd->rnd_uv_scale * rnd_uv_scale;
+    }
+
     float totlen = 1.0f;
     if (mmd->fit_method == GP_TEX_FIT_STROKE) {
       totlen = 0.0f;
@@ -108,8 +210,8 @@ static void deformStroke(GpencilModifierData *md,
       }
 
       pt->uv_fac /= totlen;
-      pt->uv_fac *= mmd->uv_scale;
-      pt->uv_fac += mmd->uv_offset;
+      pt->uv_fac *= uv_scale;
+      pt->uv_fac += uv_offset;
       pt->uv_rot += mmd->alignment_rotation;
     }
   }
@@ -170,10 +272,29 @@ static void mask_panel_draw(const bContext *UNUSED(C), Panel *panel)
   gpencil_modifier_masking_panel_draw(panel, true, true);
 }
 
+static void random_panel_draw(const bContext *UNUSED(C), Panel *panel)
+{
+  uiLayout *layout = panel->layout;
+
+  PointerRNA *ptr = gpencil_modifier_panel_get_property_pointers(panel, NULL);
+  uiLayoutSetPropSep(layout, true);
+
+  uiItemR(layout, ptr, "rnd_uv_offset", 0, IFACE_("Stroke Offset"), ICON_NONE);
+  uiItemR(layout, ptr, "rnd_uv_scale", 0, IFACE_("Stroke Scale"), ICON_NONE);
+  uiItemR(layout, ptr, "rnd_fill_rot", 0, IFACE_("Fill Rot"), ICON_NONE);
+  uiItemR(layout, ptr, "rnd_fill_offset", 0, IFACE_("Fil Offset"), ICON_NONE);
+  uiItemR(layout, ptr, "rnd_fill_scale", 0, IFACE_("Fill Scale"), ICON_NONE);
+  uiItemR(layout, ptr, "seed", 0, NULL, ICON_NONE);
+
+  gpencil_modifier_panel_end(layout, ptr);
+}
+
 static void panelRegister(ARegionType *region_type)
 {
   PanelType *panel_type = gpencil_modifier_panel_register(
       region_type, eGpencilModifierType_Texture, panel_draw);
+  gpencil_modifier_subpanel_register(
+      region_type, "randomize", "Randomize", NULL, random_panel_draw, panel_type);
   gpencil_modifier_subpanel_register(
       region_type, "mask", "Influence", NULL, mask_panel_draw, panel_type);
 }
