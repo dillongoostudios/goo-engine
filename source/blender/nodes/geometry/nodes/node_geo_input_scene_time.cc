@@ -14,15 +14,21 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_output<decl::Float>("Seconds");
   b.add_output<decl::Float>("Frame");
+  b.add_output<decl::Float>("Start Frame");
+  b.add_output<decl::Float>("End Frame");
 }
 
 static void node_exec(GeoNodeExecParams params)
 {
   const Scene *scene = DEG_get_input_scene(params.depsgraph());
+  const float scene_sfra = scene->r.sfra;
+  const float scene_efra = scene->r.efra;
   const float scene_ctime = BKE_scene_ctime_get(scene);
   const double frame_rate = (double(scene->r.frs_sec) / double(scene->r.frs_sec_base));
   params.set_output("Seconds", float(scene_ctime / frame_rate));
   params.set_output("Frame", scene_ctime);
+  params.set_output("Start Frame", scene_sfra);
+  params.set_output("End Frame", scene_efra);
 }
 
 static void node_register()
