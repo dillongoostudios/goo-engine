@@ -1136,7 +1136,7 @@ typedef enum eUserpref_UI_Flag {
   USER_MENUOPENAUTO = (1 << 9),
   USER_DEPTH_CURSOR = (1 << 10),
   USER_AUTOPERSP = (1 << 11),
-  USER_UIFLAG_UNUSED_12 = (1 << 12), /* cleared */
+  USER_ACCUMULATE_TRACKBALL = (1 << 12), /* cleared */
   USER_GLOBALUNDO = (1 << 13),
   USER_ORBIT_SELECTION = (1 << 14),
   USER_DEPTH_NAVIGATE = (1 << 15),

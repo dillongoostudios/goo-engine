@@ -1612,6 +1612,7 @@ class USERPREF_PT_input_mouse(InputPanel, CenterAlignMixIn, Panel):
             rowsub.active = inputs.use_mouse_emulate_3_button
             rowsub.prop(inputs, "mouse_emulate_3_button_modifier")
         flow.prop(inputs, "use_mouse_continuous")
+        flow.prop(inputs, "use_accumulative_trackball")
         flow.prop(inputs, "use_drag_immediately")
         flow.prop(inputs, "mouse_double_click_time", text="Double Click Speed")
         flow.prop(inputs, "drag_threshold_mouse")
