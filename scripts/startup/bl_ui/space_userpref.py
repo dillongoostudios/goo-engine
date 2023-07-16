@@ -2600,6 +2600,7 @@ class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
                 ({"property": "use_asset_indexing"}, None),
                 ({"property": "use_viewport_debug"}, None),
                 ({"property": "use_eevee_debug"}, None),
+                ({"property": "disable_material_icon"}, None),
             ),
         )
 
