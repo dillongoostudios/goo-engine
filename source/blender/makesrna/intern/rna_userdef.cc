@@ -7000,6 +7000,15 @@ static void rna_def_userdef_experimental(BlenderRNA *brna)
       "reduces execution time and memory usage)");
   RNA_def_property_update(prop, 0, "rna_userdef_update");
 
+  prop = RNA_def_property(srna, "disable_material_icon", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "disable_material_icon", 1);
+  RNA_def_property_ui_text(
+      prop,
+      "Disable Material Icon Rendering",
+      "If true, Material Preview Icons will NOT be rendered. "
+      "This can prevent stuttering from opening the material ID menu");
+
+
   prop = RNA_def_property(srna, "use_new_curves_tools", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "use_new_curves_tools", 1);
   RNA_def_property_ui_text(
