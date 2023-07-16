@@ -6245,6 +6245,15 @@ static void rna_def_userdef_input(BlenderRNA *brna)
       "Let the mouse wrap around the view boundaries so mouse movements are not limited by the "
       "screen size (used by transform, dragging of UI controls, etc.)");
 
+  prop = RNA_def_property(srna, "use_accumulative_trackball", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, NULL, "uiflag", USER_ACCUMULATE_TRACKBALL);
+  RNA_def_property_ui_text(
+      prop,
+      "Continuous Trackball",
+      "Continuously accumulate trackball rotation as the mouse is moved, rather than applying it all at once. "
+      "Allows for more intuitive trackball rotations when moving the mouse a larger distance."
+      );
+
   prop = RNA_def_property(srna, "use_drag_immediately", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", USER_RELEASECONFIRM);
   RNA_def_property_ui_text(prop,
