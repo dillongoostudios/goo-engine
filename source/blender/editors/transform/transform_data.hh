@@ -136,6 +136,9 @@ struct TransData {
   TransDataCurveHandleFlags *hdata;
   /** If set, copy of Object or #bPoseChannel protection. */
   short protectflag;
+  /** Local rotation accumulator for Trackball (is initialized) */
+  short rotmtx_init;
+  float rotmtx[3][3];
 };
 
 #define TRANSDATA_THREAD_LIMIT 1024
