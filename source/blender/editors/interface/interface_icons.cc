@@ -1438,7 +1438,7 @@ static void icon_set_image(const bContext *C,
                            enum eIconSizes size,
                            const bool use_job)
 {
-  if (U.experimental.disable_material_icon && GS(id->name) == ID_MA) {
+  if (U.experimental.disable_material_icon && id != nullptr && GS(id->name) == ID_MA) {
     return;
   }
 
