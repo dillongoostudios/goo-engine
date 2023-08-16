@@ -433,8 +433,8 @@ void calc_shader_info(vec3 position,
           (ld.light_group_bits.z & light_group_shadows.z) == 0 &&
           (ld.light_group_bits.w & light_group_shadows.w) == 0)) {
       float light_fac = max(ld.l_color.x, max(ld.l_color.y, ld.l_color.z)) * ld.l_diff;
-      shadow_accum += (1 - light.vis * light.contact_shadow) * light_fac;
-      self_shadow_accum += (1 - calc_self_shadows_only(light.data, position, light.L)) * light_fac;
+      shadow_accum += (1.0 - light.vis * light.contact_shadow) * light_fac;
+      self_shadow_accum += (1.0 - calc_self_shadows_only(light.data, position, light.L)) * light_fac;
       light_accum += light_fac;
     }
 
@@ -442,8 +442,8 @@ void calc_shader_info(vec3 position,
     half_light += vec4(light.data.l_color * light.data.l_diff * radiance, 0.0);
   }
 
-  shadows = (1 - (shadow_accum / max(light_accum, 1)));
-  self_shadows = (1 - (self_shadow_accum / max(light_accum, 1)));
+  shadows = (1.0 - (shadow_accum / max(light_accum, 1.0)));
+  self_shadows = (1.0 - (self_shadow_accum / max(light_accum, 1.0)));
   ambient = vec4(probe_evaluate_world_diff(n_n), 1.0);
 }
 

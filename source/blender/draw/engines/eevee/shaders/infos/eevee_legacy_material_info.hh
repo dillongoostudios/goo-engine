@@ -140,6 +140,7 @@ GPU_SHADER_CREATE_INFO(eevee_legacy_material_prepass_frag_common)
     .additional_info("eevee_legacy_common_lib")
     .additional_info("eevee_legacy_common_utiltex_lib")
     .additional_info("draw_view")
+    .fragment_out(1, Type::UINT, "resource_id_out")
     .additional_info("eevee_legacy_closure_eval_surface_lib");
 
 /* Common info for all `prepass_frag_opaque` variants. */

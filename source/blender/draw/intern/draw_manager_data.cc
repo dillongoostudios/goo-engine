@@ -1870,10 +1870,10 @@ void DRW_shgroup_add_material_resources(DRWShadingGroup *grp, GPUMaterial *mater
 
   int light_groups[4];
   GPU_material_light_group_bits_get(material, light_groups);
-  DRW_shgroup_uniform_ivec4_copy(grp, "light_groups", light_groups);
+  DRW_shgroup_uniform_ivec4_copy(grp, "lightGroups", light_groups);
 
   GPU_material_light_group_shadow_bits_get(material, light_groups);
-  DRW_shgroup_uniform_ivec4_copy(grp, "light_group_shadows", light_groups);
+  DRW_shgroup_uniform_ivec4_copy(grp, "lightGroupShadows", light_groups);
 }
 
 GPUVertFormat *DRW_shgroup_instance_format_array(const DRWInstanceAttrFormat attrs[],
