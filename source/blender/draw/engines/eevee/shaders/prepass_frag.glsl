@@ -13,8 +13,6 @@
 #pragma BLENDER_REQUIRE(closure_eval_surface_lib.glsl)
 #pragma BLENDER_REQUIRE(surface_lib.glsl)
 
-layout(location = 1) out uint resource_id_out;
-
 #ifdef USE_ALPHA_HASH
 
 /* From the paper "Hashed Alpha Testing" by Chris Wyman and Morgan McGuire */
