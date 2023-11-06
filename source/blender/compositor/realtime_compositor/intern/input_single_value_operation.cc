@@ -1,7 +1,8 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include "BLI_assert.h"
 #include "BLI_math_vector_types.hh"
 
 #include "COM_input_single_value_operation.hh"
@@ -44,6 +45,10 @@ void InputSingleValueOperation::execute()
       break;
     case ResultType::Color:
       result.set_color_value(float4(bsocket->default_value_typed<bNodeSocketValueRGBA>()->value));
+      break;
+    default:
+      /* Other types are internal and needn't be handled by operations. */
+      BLI_assert_unreachable();
       break;
   }
 }

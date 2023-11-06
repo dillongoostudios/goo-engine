@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -70,8 +70,8 @@ Domain Operation::compute_domain()
       continue;
     }
 
-    /* An input that skips realization can't be a domain input. */
-    if (descriptor.skip_realization) {
+    /* An input that skips operation domain realization can't be a domain input. */
+    if (!descriptor.realization_options.realize_on_operation_domain) {
       continue;
     }
 

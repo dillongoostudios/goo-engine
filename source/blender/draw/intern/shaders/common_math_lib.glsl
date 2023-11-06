@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2020-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /* WORKAROUND: to guard against double include in EEVEE. */
 #ifndef COMMON_MATH_LIB_GLSL
@@ -54,6 +57,20 @@ mat2 rot2_from_angle(float a)
   return mat2(c, -s, s, c);
 }
 
+/* Computes the full argmax of the given vector, that is, the index of the greatest component will
+ * be in the returned x component, the index of the smallest component will be in the returned z
+ * component, and the index of the middle component will be in the returned y component.
+ *
+ * This is computed by utilizing the fact that booleans are converted to the integers 0 and 1 for
+ * false and true respectively. So if we compare every component to all other components using the
+ * greaterThan comparator, we get 0 for the greatest component, because no other component is
+ * greater, 1 for the middle component, and 2 for the smallest component. */
+ivec3 argmax(vec3 v)
+{
+  return ivec3(greaterThan(v, v.xxx)) + ivec3(greaterThan(v, v.yyy)) +
+         ivec3(greaterThan(v, v.zzz));
+}
+
 #define min3(a, b, c) min(a, min(b, c))
 #define min4(a, b, c, d) min(a, min3(b, c, d))
 #define min5(a, b, c, d, e) min(a, min4(b, c, d, e))
@@ -97,16 +114,14 @@ float avg(vec4 v) { return dot(vec4(1.0 / 4.0), v); }
 /* WORKAROUND: To be removed once we port all code to use gpu_shader_math_base_lib.glsl. */
 #ifndef GPU_SHADER_MATH_BASE_LIB_GLSL
 float safe_rcp(float a) { return (a != 0.0) ? (1.0 / a) : 0.0; }
+float safe_sqrt(float a) { return sqrt(max(a, 0.0)); }
+float safe_acos(float a) { return acos(clamp(a, -1.0, 1.0)); }
 #endif
 #ifndef GPU_SHADER_MATH_VECTOR_LIB_GLSL
 vec2 safe_rcp(vec2 a) { return select(vec2(0.0), (1.0 / a), notEqual(a, vec2(0.0))); }
 vec3 safe_rcp(vec3 a) { return select(vec3(0.0), (1.0 / a), notEqual(a, vec3(0.0))); }
 vec4 safe_rcp(vec4 a) { return select(vec4(0.0), (1.0 / a), notEqual(a, vec4(0.0))); }
 #endif
-
-float safe_sqrt(float a) { return sqrt(max(a, 0.0)); }
-
-float safe_acos(float a) { return acos(clamp(a, -1.0, 1.0)); }
 
 float sqr(float a) { return a * a; }
 vec2 sqr(vec2 a) { return a * a; }
@@ -129,10 +144,10 @@ bool flag_test(int flag, int val) { return (flag & val) != 0; }
 
 void set_flag_from_test(inout uint value, bool test, uint flag) { if (test) { value |= flag; } else { value &= ~flag; } }
 void set_flag_from_test(inout int value, bool test, int flag) { if (test) { value |= flag; } else { value &= ~flag; } }
-#endif
 
 #define weighted_sum(val0, val1, val2, val3, weights) ((val0 * weights[0] + val1 * weights[1] + val2 * weights[2] + val3 * weights[3]) * safe_rcp(sum(weights)))
 #define weighted_sum_array(val, weights) ((val[0] * weights[0] + val[1] * weights[1] + val[2] * weights[2] + val[3] * weights[3]) * safe_rcp(sum(weights)))
+#endif
 
 /* clang-format on */
 

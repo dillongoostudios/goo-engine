@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2017 Blender Foundation
+/* SPDX-FileCopyrightText: 2017 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -18,19 +18,20 @@
 #include "BKE_idprop.h"
 #include "BKE_layer.h"
 #include "BKE_node.hh"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "intern/depsgraph.h"
-#include "intern/node/deg_node_id.h"
+#include "intern/depsgraph.hh"
+#include "intern/node/deg_node_id.hh"
 
 #ifndef NDEBUG
 #  include "intern/eval/deg_eval_copy_on_write.h"

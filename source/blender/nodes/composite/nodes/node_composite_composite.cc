@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2006 Blender Foundation
+/* SPDX-FileCopyrightText: 2006 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,8 +8,8 @@
 
 #include "BLI_math_vector_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
 #include "GPU_shader.h"
 #include "GPU_state.h"
@@ -28,7 +28,6 @@ static void cmp_node_composite_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Color>("Image").default_value({0.0f, 0.0f, 0.0f, 1.0f});
   b.add_input<decl::Float>("Alpha").default_value(1.0f).min(0.0f).max(1.0f);
-  b.add_input<decl::Float>("Z").default_value(1.0f).min(0.0f).max(1.0f);
 }
 
 static void node_composit_buts_composite(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -89,7 +88,7 @@ class CompositeOperation : public NodeOperation {
      * that compositing region. */
     const rcti compositing_region = context().get_compositing_region();
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
-    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
 
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");
@@ -117,7 +116,7 @@ class CompositeOperation : public NodeOperation {
      * that compositing region. */
     const rcti compositing_region = context().get_compositing_region();
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
-    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
 
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");
@@ -144,7 +143,7 @@ class CompositeOperation : public NodeOperation {
      * that compositing region. */
     const rcti compositing_region = context().get_compositing_region();
     const int2 lower_bound = int2(compositing_region.xmin, compositing_region.ymin);
-    GPU_shader_uniform_2iv(shader, "compositing_region_lower_bound", lower_bound);
+    GPU_shader_uniform_2iv(shader, "lower_bound", lower_bound);
 
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");

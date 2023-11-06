@@ -1,6 +1,8 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#include "BLI_assert.h"
 
 #include "GPU_state.h"
 #include "GPU_texture.h"
@@ -42,6 +44,10 @@ void ReduceToSingleValueOperation::execute()
       break;
     case ResultType::Float:
       result.set_float_value(*pixel);
+      break;
+    default:
+      /* Other types are internal and needn't be handled by operations. */
+      BLI_assert_unreachable();
       break;
   }
 

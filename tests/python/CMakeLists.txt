@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2011-2023 Blender Foundation
+# SPDX-FileCopyrightText: 2011-2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -161,6 +161,15 @@ add_blender_test(
 )
 
 add_blender_test(
+  blendfile_versioning
+  --log "*blendfile*"
+  --debug-memory
+  --debug
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_blendfile_versioning.py --
+  --src-test-dir ${TEST_SRC_DIR}/
+)
+
+add_blender_test(
   blendfile_liblink
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_blendfile_liblink.py --
   --output-dir ${TEST_OUT_DIR}/blendfile_io/
@@ -311,6 +320,22 @@ add_blender_test(
   --python ${CMAKE_CURRENT_LIST_DIR}/bl_rigging_symmetrize.py
   --
   --testdir "${TEST_SRC_DIR}/animation"
+)
+
+# ------------------------------------------------------------------------------
+# NODE GROUP TESTS
+add_blender_test(
+  bl_node_group_compat
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_node_group_compat.py
+  --
+  --testdir "${TEST_SRC_DIR}/node_group"
+)
+
+add_blender_test(
+  bl_node_group_interface
+  --python ${CMAKE_CURRENT_LIST_DIR}/bl_node_group_interface.py
+  --
+  --testdir "${TEST_SRC_DIR}/node_group"
 )
 
 # ------------------------------------------------------------------------------
@@ -573,6 +598,7 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
       light_linking
       mesh
       pointcloud
+      principled
       shader
       shadow_catcher
       sss
@@ -632,7 +658,7 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
             -blacklist ${_cycles_blacklist}
           )
 
-          if(NOT("${_cycles_device_lower}" STREQUAL "cpu"))
+          if(NOT ("${_cycles_device_lower}" STREQUAL "cpu"))
             set_tests_properties(${_cycles_test_name} PROPERTIES RUN_SERIAL TRUE)
           endif()
           unset(_cycles_test_name)
@@ -654,6 +680,18 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
         )
       endforeach()
 
+      # Eevee Next
+      foreach(render_test ${render_tests})
+        add_python_test(
+          eevee_next_${render_test}_test
+          ${CMAKE_CURRENT_LIST_DIR}/eevee_next_render_tests.py
+          -blender "${TEST_BLENDER_EXE}"
+          -testdir "${TEST_SRC_DIR}/render/${render_test}"
+          -idiff "${OPENIMAGEIO_IDIFF}"
+          -outdir "${TEST_OUT_DIR}/eevee_next"
+        )
+      endforeach()
+
       foreach(render_test ${render_tests})
         # Workbench
         add_python_test(
@@ -665,6 +703,33 @@ if(WITH_CYCLES OR WITH_OPENGL_RENDER_TESTS)
           -outdir "${TEST_OUT_DIR}/workbench"
         )
       endforeach()
+
+      if(WITH_HYDRA)
+        # Hydra Storm
+        foreach(render_test ${render_tests})
+          add_python_test(
+            storm_hydra_${render_test}_test
+            ${CMAKE_CURRENT_LIST_DIR}/storm_render_tests.py
+            -blender "${TEST_BLENDER_EXE}"
+            -testdir "${TEST_SRC_DIR}/render/${render_test}"
+            -idiff "${OPENIMAGEIO_IDIFF}"
+            -outdir "${TEST_OUT_DIR}/storm_hydra"
+            -export_method "HYDRA"
+          )
+        endforeach()
+
+        foreach(render_test ${render_tests})
+          add_python_test(
+            storm_usd_${render_test}_test
+            ${CMAKE_CURRENT_LIST_DIR}/storm_render_tests.py
+            -blender "${TEST_BLENDER_EXE}"
+            -testdir "${TEST_SRC_DIR}/render/${render_test}"
+            -idiff "${OPENIMAGEIO_IDIFF}"
+            -outdir "${TEST_OUT_DIR}/storm_usd"
+            -export_method "USD"
+          )
+        endforeach()
+      endif()
     endif()
   endif()
 endif()
@@ -690,12 +755,46 @@ if(WITH_COMPOSITOR_CPU)
 
     foreach(comp_test ${compositor_tests})
       add_python_test(
-        compositor_${comp_test}_test
-        ${CMAKE_CURRENT_LIST_DIR}/compositor_render_tests.py
+        compositor_${comp_test}_cpu_test
+        ${CMAKE_CURRENT_LIST_DIR}/compositor_cpu_render_tests.py
         -blender "${TEST_BLENDER_EXE}"
         -testdir "${TEST_SRC_DIR}/compositor/${comp_test}"
         -idiff "${OPENIMAGEIO_IDIFF}"
-        -outdir "${TEST_OUT_DIR}/compositor"
+        -outdir "${TEST_OUT_DIR}/compositor_cpu"
+      )
+    endforeach()
+
+  endif()
+endif()
+
+# NOTE: WITH_COMPOSITOR_CPU is needed for rendering.
+if(WITH_COMPOSITOR_REALTIME_TESTS AND WITH_COMPOSITOR_CPU)
+  if(NOT OPENIMAGEIO_IDIFF)
+    message(WARNING "Disabling realtime compositor tests because OIIO idiff does not exist")
+  else()
+    set(compositor_tests
+        color
+        converter
+        filter
+        input
+        output
+        vector
+
+        multiple_node_setups
+      )
+
+    if(WITH_LIBMV)
+      list(APPEND compositor_tests distort matte)
+    endif()
+
+    foreach(comp_test ${compositor_tests})
+      add_python_test(
+        compositor_${comp_test}_realtime_test
+        ${CMAKE_CURRENT_LIST_DIR}/compositor_realtime_render_tests.py
+        -blender "${TEST_BLENDER_EXE}"
+        -testdir "${TEST_SRC_DIR}/compositor/${comp_test}"
+        -idiff "${OPENIMAGEIO_IDIFF}"
+        -outdir "${TEST_OUT_DIR}/compositor_realtime"
       )
     endforeach()
   endif()
@@ -708,6 +807,7 @@ set(geo_node_tests
   curves/interpolate_curves
   geometry
   instance
+  repeat_zone
   mesh_primitives
   mesh
   mesh/extrude
@@ -755,7 +855,7 @@ if(EXISTS "${TEST_SRC_DIR}/modeling/geometry_nodes/simulation/")
       geo_node_simulation_test_${filename}
       ${file}
       --python ${TEST_PYTHON_DIR}/geo_node_sim_test.py
-      )
+    )
   endforeach()
 else()
   message(STATUS "Directory named ${TEST_SRC_DIR}/modeling/geometry_nodes/simulation/ not found, disabling tests")
@@ -800,7 +900,7 @@ if(WITH_ALEMBIC)
   get_filename_component(ALEMBIC_ROOT_DIR ${real_include_dir} DIRECTORY)
 
   add_python_test(
-    alembic_export_tests
+    bf_io_alembic_export_tests
     ${CMAKE_CURRENT_LIST_DIR}/alembic_export_tests.py
     --blender "${TEST_BLENDER_EXE}"
     --testdir "${TEST_SRC_DIR}/alembic"
@@ -817,13 +917,13 @@ endif()
 
 if(WITH_USD)
   add_blender_test(
-          usd_export_test
-          --python ${CMAKE_CURRENT_LIST_DIR}/bl_usd_export_test.py
-          --
-          --testdir "${TEST_SRC_DIR}/usd"
+    bf_io_usd_export_test
+    --python ${CMAKE_CURRENT_LIST_DIR}/bl_usd_export_test.py
+    --
+    --testdir "${TEST_SRC_DIR}/usd"
   )
   add_blender_test(
-    usd_import_test
+    bf_io_usd_import_test
     --python ${CMAKE_CURRENT_LIST_DIR}/bl_usd_import_test.py
     --
     --testdir "${TEST_SRC_DIR}/usd"
@@ -842,7 +942,7 @@ endif()
 if(NOT OPENIMAGEIO_IDIFF)
   message(STATUS "Disabling ImBuf image format tests because OIIO idiff does not exist")
 else()
-  SET(OPTIONAL_FORMATS "")
+  set(OPTIONAL_FORMATS "")
   if(WITH_IMAGE_CINEON)
     set(OPTIONAL_FORMATS "${OPTIONAL_FORMATS} CINEON")
   endif()

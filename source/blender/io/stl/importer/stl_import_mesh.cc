@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -75,16 +75,8 @@ Mesh *STLMeshHelper::to_mesh()
   }
 
   Mesh *mesh = BKE_mesh_new_nomain(verts_.size(), 0, tris_.size(), tris_.size() * 3);
-
   mesh->vert_positions_for_write().copy_from(verts_);
-
-  MutableSpan<int> poly_offsets = mesh->poly_offsets_for_write();
-  threading::parallel_for(poly_offsets.index_range(), 4096, [&](const IndexRange range) {
-    for (const int i : range) {
-      poly_offsets[i] = i * 3;
-    }
-  });
-
+  offset_indices::fill_constant_group_size(3, 0, mesh->face_offsets_for_write());
   array_utils::copy(tris_.as_span().cast<int>(), mesh->corner_verts_for_write());
 
   /* NOTE: edges must be calculated first before setting custom normals. */
@@ -92,7 +84,6 @@ Mesh *STLMeshHelper::to_mesh()
 
   if (use_custom_normals_ && loop_normals_.size() == mesh->totloop) {
     BKE_mesh_set_custom_normals(mesh, reinterpret_cast<float(*)[3]>(loop_normals_.data()));
-    mesh->flag |= ME_AUTOSMOOTH;
   }
 
   return mesh;

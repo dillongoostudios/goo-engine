@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,10 +9,11 @@
 #include "MOD_gpencil_legacy_lineart.h"
 #include "MOD_lineart.h"
 
-#include "BLI_edgehash.h"
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
 #include "BLI_sort.hh"
 #include "BLI_task.h"
 #include "BLI_utildefines.h"
@@ -34,12 +35,12 @@
 #include "BKE_lib_id.h"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
-#include "BKE_mesh_mapping.h"
-#include "BKE_mesh_runtime.h"
-#include "BKE_object.h"
+#include "BKE_mesh_mapping.hh"
+#include "BKE_mesh_runtime.hh"
+#include "BKE_object.hh"
 #include "BKE_pointcache.h"
 #include "BKE_scene.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph_query.hh"
 #include "DNA_camera_types.h"
 #include "DNA_collection_types.h"
 #include "DNA_gpencil_legacy_types.h"
@@ -50,6 +51,9 @@
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 #include "MEM_guardedalloc.h"
+
+#include "RE_pipeline.h"
+#include "intern/render_types.h"
 
 #include "lineart_intern.h"
 
@@ -1338,9 +1342,8 @@ void lineart_main_cull_triangles(LineartData *ld, bool clip_far)
 
 void lineart_main_free_adjacent_data(LineartData *ld)
 {
-  LinkData *link;
-  while ((link = static_cast<LinkData *>(BLI_pophead(&ld->geom.triangle_adjacent_pointers))) !=
-         nullptr)
+  while (
+      LinkData *link = static_cast<LinkData *>(BLI_pophead(&ld->geom.triangle_adjacent_pointers)))
   {
     MEM_freeN(link->data);
   }
@@ -1467,7 +1470,7 @@ struct EdgeFeatData {
   blender::Span<int> corner_verts;
   blender::Span<int> corner_edges;
   blender::Span<MLoopTri> looptris;
-  blender::Span<int> looptri_polys;
+  blender::Span<int> looptri_faces;
   LineartTriangle *tri_array;
   blender::VArray<bool> sharp_edges;
   blender::VArray<bool> sharp_faces;
@@ -1505,7 +1508,7 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
   Object *ob_eval = e_feat_data->ob_eval;
   LineartEdgeNeighbor *edge_nabr = e_feat_data->edge_nabr;
   const blender::Span<MLoopTri> looptris = e_feat_data->looptris;
-  const blender::Span<int> looptri_polys = e_feat_data->looptri_polys;
+  const blender::Span<int> looptri_faces = e_feat_data->looptri_faces;
 
   uint16_t edge_flag_result = 0;
 
@@ -1523,10 +1526,11 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
     FreestyleFace *ff1, *ff2;
     int index = e_feat_data->freestyle_face_index;
     if (index > -1) {
-      ff1 = &((FreestyleFace *)me->pdata.layers[index].data)[looptri_polys[i / 3]];
+      ff1 = &((FreestyleFace *)me->face_data.layers[index].data)[looptri_faces[i / 3]];
     }
     if (edge_nabr[i].e > -1) {
-      ff2 = &((FreestyleFace *)me->pdata.layers[index].data)[looptri_polys[edge_nabr[i].e / 3]];
+      ff2 = &(
+          (FreestyleFace *)me->face_data.layers[index].data)[looptri_faces[edge_nabr[i].e / 3]];
     }
     else {
       /* Handle mesh boundary cases: We want mesh boundaries to respect
@@ -1640,8 +1644,8 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
     if (ld->conf.use_crease) {
       bool do_crease = true;
       if (!ld->conf.force_crease && !e_feat_data->use_auto_smooth &&
-          (!e_feat_data->sharp_faces[looptri_polys[f1]]) &&
-          (!e_feat_data->sharp_faces[looptri_polys[f2]]))
+          (!e_feat_data->sharp_faces[looptri_faces[f1]]) &&
+          (!e_feat_data->sharp_faces[looptri_faces[f2]]))
       {
         do_crease = false;
       }
@@ -1650,8 +1654,8 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
       }
     }
 
-    int mat1 = material_indices ? material_indices[looptri_polys[f1]] : 0;
-    int mat2 = material_indices ? material_indices[looptri_polys[f2]] : 0;
+    int mat1 = material_indices ? material_indices[looptri_faces[f1]] : 0;
+    int mat2 = material_indices ? material_indices[looptri_faces[f2]] : 0;
 
     if (mat1 != mat2) {
       Material *m1 = BKE_object_material_get_eval(ob_eval, mat1 + 1);
@@ -1691,7 +1695,7 @@ static void lineart_identify_mlooptri_feature_edges(void *__restrict userdata,
     if (ld->conf.use_edge_marks && e_feat_data->use_freestyle_edge) {
       FreestyleEdge *fe;
       int index = e_feat_data->freestyle_edge_index;
-      fe = &((FreestyleEdge *)me->edata.layers[index].data)[real_edges[i % 3]];
+      fe = &((FreestyleEdge *)me->edge_data.layers[index].data)[real_edges[i % 3]];
       if (fe->flag & FREESTYLE_EDGE_MARK) {
         edge_flag_result |= LRT_EDGE_FLAG_EDGE_MARK;
       }
@@ -1788,7 +1792,7 @@ struct TriData {
   blender::Span<blender::float3> positions;
   blender::Span<int> corner_verts;
   blender::Span<MLoopTri> looptris;
-  blender::Span<int> looptri_polys;
+  blender::Span<int> looptri_faces;
   const int *material_indices;
   LineartVert *vert_arr;
   LineartTriangle *tri_arr;
@@ -1805,7 +1809,7 @@ static void lineart_load_tri_task(void *__restrict userdata,
   const blender::Span<blender::float3> positions = tri_task_data->positions;
   const blender::Span<int> corner_verts = tri_task_data->corner_verts;
   const MLoopTri *looptri = &tri_task_data->looptris[i];
-  const int poly_i = tri_task_data->looptri_polys[i];
+  const int face_i = tri_task_data->looptri_faces[i];
   const int *material_indices = tri_task_data->material_indices;
   LineartVert *vert_arr = tri_task_data->vert_arr;
   LineartTriangle *tri = tri_task_data->tri_arr;
@@ -1822,7 +1826,7 @@ static void lineart_load_tri_task(void *__restrict userdata,
 
   /* Material mask bits and occlusion effectiveness assignment. */
   Material *mat = BKE_object_material_get(ob_info->original_ob_eval,
-                                          material_indices ? material_indices[poly_i] + 1 : 1);
+                                          material_indices ? material_indices[face_i] + 1 : 1);
   tri->material_mask_bits |= ((mat && (mat->lineart.flags & LRT_MATERIAL_MASK_ENABLED)) ?
                                   mat->lineart.material_mask_bits :
                                   0);
@@ -1864,7 +1868,7 @@ struct EdgeNeighborData {
   LineartAdjacentEdge *adj_e;
   blender::Span<int> corner_verts;
   blender::Span<MLoopTri> looptris;
-  blender::Span<int> looptri_polys;
+  blender::Span<int> looptri_faces;
 };
 
 static void lineart_edge_neighbor_init_task(void *__restrict userdata,
@@ -1927,7 +1931,7 @@ static LineartEdgeNeighbor *lineart_build_edge_neighbor(Mesh *me, int total_edge
   en_data.edge_nabr = edge_nabr;
   en_data.corner_verts = me->corner_verts();
   en_data.looptris = me->looptris();
-  en_data.looptri_polys = me->looptri_polys();
+  en_data.looptri_faces = me->looptri_faces();
 
   BLI_task_parallel_range(0, total_edges, &en_data, lineart_edge_neighbor_init_task, &en_settings);
 
@@ -1959,17 +1963,17 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   const blender::Span<MLoopTri> looptris = me->looptris();
 
   const int *material_indices = (const int *)CustomData_get_layer_named(
-      &me->pdata, CD_PROP_INT32, "material_index");
+      &me->face_data, CD_PROP_INT32, "material_index");
 
   /* Check if we should look for custom data tags like Freestyle edges or faces. */
   bool can_find_freestyle_edge = false;
-  int layer_index = CustomData_get_active_layer_index(&me->edata, CD_FREESTYLE_EDGE);
+  int layer_index = CustomData_get_active_layer_index(&me->edge_data, CD_FREESTYLE_EDGE);
   if (layer_index != -1) {
     can_find_freestyle_edge = true;
   }
 
   bool can_find_freestyle_face = false;
-  layer_index = CustomData_get_active_layer_index(&me->pdata, CD_FREESTYLE_FACE);
+  layer_index = CustomData_get_active_layer_index(&me->face_data, CD_FREESTYLE_FACE);
   if (layer_index != -1) {
     can_find_freestyle_face = true;
   }
@@ -2001,10 +2005,6 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   float crease_angle = 0;
   if (orig_ob->lineart.flags & OBJECT_LRT_OWN_CREASE) {
     crease_angle = cosf(M_PI - orig_ob->lineart.crease_threshold);
-  }
-  else if (ob_info->original_me->flag & ME_AUTOSMOOTH) {
-    crease_angle = cosf(ob_info->original_me->smoothresh);
-    use_auto_smooth = true;
   }
   else {
     crease_angle = la_data->conf.crease_threshold;
@@ -2067,7 +2067,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   tri_data.ob_info = ob_info;
   tri_data.positions = me->vert_positions();
   tri_data.looptris = looptris;
-  tri_data.looptri_polys = me->looptri_polys();
+  tri_data.looptri_faces = me->looptri_faces();
   tri_data.corner_verts = me->corner_verts();
   tri_data.material_indices = material_indices;
   tri_data.vert_arr = la_v_arr;
@@ -2107,7 +2107,7 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   edge_feat_data.corner_verts = me->corner_verts();
   edge_feat_data.corner_edges = me->corner_edges();
   edge_feat_data.looptris = looptris;
-  edge_feat_data.looptri_polys = me->looptri_polys();
+  edge_feat_data.looptri_faces = me->looptri_faces();
   edge_feat_data.sharp_edges = sharp_edges;
   edge_feat_data.sharp_faces = sharp_faces;
   edge_feat_data.edge_nabr = lineart_build_edge_neighbor(me, total_edges);
@@ -2118,11 +2118,11 @@ static void lineart_geometry_object_load(LineartObjectInfo *ob_info,
   edge_feat_data.use_freestyle_face = can_find_freestyle_face;
   edge_feat_data.use_freestyle_edge = can_find_freestyle_edge;
   if (edge_feat_data.use_freestyle_face) {
-    edge_feat_data.freestyle_face_index = CustomData_get_layer_index(&me->pdata,
+    edge_feat_data.freestyle_face_index = CustomData_get_layer_index(&me->face_data,
                                                                      CD_FREESTYLE_FACE);
   }
   if (edge_feat_data.use_freestyle_edge) {
-    edge_feat_data.freestyle_edge_index = CustomData_get_layer_index(&me->edata,
+    edge_feat_data.freestyle_edge_index = CustomData_get_layer_index(&me->edge_data,
                                                                      CD_FREESTYLE_EDGE);
   }
 
@@ -2519,7 +2519,7 @@ static void lineart_object_load_single_instance(LineartData *ld,
   obi->original_me = use_mesh;
   obi->original_ob = (ref_ob->id.orig_id ? (Object *)ref_ob->id.orig_id : (Object *)ref_ob);
   obi->original_ob_eval = DEG_get_evaluated_object(depsgraph, obi->original_ob);
-  lineart_geometry_load_assign_thread(olti, obi, thread_count, use_mesh->totpoly);
+  lineart_geometry_load_assign_thread(olti, obi, thread_count, use_mesh->faces_num);
 }
 
 void lineart_main_load_geometries(Depsgraph *depsgraph,
@@ -4990,34 +4990,42 @@ bool MOD_lineart_compute_feature_lines(Depsgraph *depsgraph,
   LineartData *ld;
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   int intersections_only = 0; /* Not used right now, but preserve for future. */
-  Object *use_camera;
+  Object *lineart_camera = nullptr;
 
   double t_start;
   if (G.debug_value == 4000) {
     t_start = PIL_check_seconds_timer();
   }
 
+  bool use_render_camera_override = false;
   if (lmd->calculation_flags & LRT_USE_CUSTOM_CAMERA) {
     if (!lmd->source_camera ||
-        (use_camera = DEG_get_evaluated_object(depsgraph, lmd->source_camera))->type != OB_CAMERA)
+        (lineart_camera = DEG_get_evaluated_object(depsgraph, lmd->source_camera))->type !=
+            OB_CAMERA)
     {
       return false;
     }
   }
   else {
-
-    BKE_scene_camera_switch_update(scene);
-
-    if (!scene->camera) {
-      return false;
+    Render *render = RE_GetSceneRender(scene);
+    if (render && render->camera_override) {
+      lineart_camera = DEG_get_evaluated_object(depsgraph, render->camera_override);
+      use_render_camera_override = true;
     }
-    use_camera = scene->camera;
+    if (!lineart_camera) {
+      BKE_scene_camera_switch_update(scene);
+      if (!scene->camera) {
+        return false;
+      }
+      lineart_camera = scene->camera;
+    }
   }
 
   LineartCache *lc = lineart_init_cache();
   *cached_result = lc;
 
-  ld = lineart_create_render_buffer(scene, lmd, use_camera, scene->camera, lc);
+  ld = lineart_create_render_buffer(
+      scene, lmd, lineart_camera, use_render_camera_override ? lineart_camera : scene->camera, lc);
 
   /* Triangle thread testing data size varies depending on the thread count.
    * See definition of LineartTriangleThread for details. */
@@ -5041,7 +5049,7 @@ bool MOD_lineart_compute_feature_lines(Depsgraph *depsgraph,
 
   lineart_main_load_geometries(depsgraph,
                                scene,
-                               use_camera,
+                               lineart_camera,
                                ld,
                                lmd->calculation_flags & LRT_ALLOW_DUPLI_OBJECTS,
                                false,
@@ -5104,7 +5112,7 @@ bool MOD_lineart_compute_feature_lines(Depsgraph *depsgraph,
 
     lineart_main_remove_unused_lines_from_tiles(ld);
 
-    /* Chaining is all single threaded. See lineart_chain.c
+    /* Chaining is all single threaded. See `lineart_chain.cc`.
      * In this particular call, only lines that are geometrically connected (share the _exact_
      * same end point) will be chained together. */
     MOD_lineart_chain_feature_lines(ld);

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -135,6 +135,9 @@ class GeometryInfoLog : public ValueLog {
   struct PointCloudInfo {
     int points_num;
   };
+  struct GreasePencilInfo {
+    int layers_num;
+  };
   struct InstancesInfo {
     int instances_num;
   };
@@ -146,6 +149,7 @@ class GeometryInfoLog : public ValueLog {
   std::optional<MeshInfo> mesh_info;
   std::optional<CurveInfo> curve_info;
   std::optional<PointCloudInfo> pointcloud_info;
+  std::optional<GreasePencilInfo> grease_pencil_info;
   std::optional<InstancesInfo> instances_info;
   std::optional<EditDataInfo> edit_data_info;
 
