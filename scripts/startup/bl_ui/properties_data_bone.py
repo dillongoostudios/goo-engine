@@ -359,8 +359,8 @@ class BONE_PT_display(BoneButtonsPanel, Panel):
         row.prop(bone_color.custom, "select", text="")
         row.prop(bone_color.custom, "active", text="")
 
-            if (pchan := context.object.pose.bones[bone.name]) and context.bone:
-                col.prop(pchan, "hide_outliner", text="Hide in Outliner", toggle=False)
+        if (pchan := context.object.pose.bones[bone.name]) and context.bone:
+            col.prop(pchan, "hide_outliner", text="Hide in Outliner", toggle=False)
 
 
 class BONE_PT_display_custom_shape(BoneButtonsPanel, Panel):

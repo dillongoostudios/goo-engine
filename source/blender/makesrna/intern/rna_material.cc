@@ -909,6 +909,15 @@ void RNA_def_material(BlenderRNA *brna)
       prop, "Shadow Backface Culling", "Use back face culling when casting shadows");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
+  prop = RNA_def_property(srna, "use_transparent_shadow", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "blend_flag", MA_BL_TRANSPARENT_SHADOW);
+  RNA_def_property_ui_text(
+      prop,
+      "Transparent Shadows",
+      "Use transparent shadows for this material if it contains a Transparent BSDF, "
+      "disabling will render faster but not give accurate shadows");
+  RNA_def_property_update(prop, 0, "rna_Material_draw_update");
+
   prop = RNA_def_property(srna, "lightprobe_volume_single_sided", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_negative_sdna(
       prop, nullptr, "blend_flag", MA_BL_LIGHTPROBE_VOLUME_DOUBLE_SIDED);
@@ -953,6 +962,15 @@ void RNA_def_material(BlenderRNA *brna)
       prop,
       "Volume Intersection Method",
       "Determines which inner part of the mesh will produce volumetric effect");
+  RNA_def_property_update(prop, 0, "rna_Material_draw_update");
+
+  prop = RNA_def_property(srna, "max_vertex_displacement", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, nullptr, "inflate_bounds");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_text(prop,
+                           "Max Vertex Displacement",
+                           "The max distance a vertex can be displaced."
+                           "Displacements over this threshold may cause visibility issues");
   RNA_def_property_update(prop, 0, "rna_Material_draw_update");
 
   prop = RNA_def_property(srna, "light_group_bits", PROP_INT, PROP_NONE);

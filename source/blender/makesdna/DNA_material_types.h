@@ -225,7 +225,9 @@ typedef struct Material {
 
   /* Volume. */
   char volume_intersection_method;
-  char _pad3[7];
+  char _pad3[3];
+  /* Displacement*/
+  float inflate_bounds;
   /**
    * Cached slots for texture painting, must be refreshed in
    * refresh_texpaint_image_cache before using.
@@ -367,6 +369,7 @@ enum {
   MA_BL_TRANSLUCENCY = (1 << 3),
   MA_BL_LIGHTPROBE_VOLUME_DOUBLE_SIDED = (1 << 4),
   MA_BL_CULL_BACKFACE_SHADOW = (1 << 5),
+  MA_BL_TRANSPARENT_SHADOW = (1 << 6),
 };
 
 /** #Material::blend_shadow */
