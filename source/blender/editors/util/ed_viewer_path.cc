@@ -1,9 +1,9 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "ED_viewer_path.hh"
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
 #include "BKE_context.h"
 #include "BKE_main.h"
@@ -12,19 +12,41 @@
 #include "BKE_workspace.h"
 
 #include "BLI_listbase.h"
+#include "BLI_string.h"
 #include "BLI_vector.hh"
 
 #include "DNA_modifier_types.h"
+#include "DNA_node_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "WM_api.h"
+#include "WM_api.hh"
 
 namespace blender::ed::viewer_path {
 
 using bke::bNodeTreeZone;
 using bke::bNodeTreeZones;
+
+static ViewerPathElem *viewer_path_elem_for_zone(const bNodeTreeZone &zone)
+{
+  switch (zone.output_node->type) {
+    case GEO_NODE_SIMULATION_OUTPUT: {
+      SimulationZoneViewerPathElem *node_elem = BKE_viewer_path_elem_new_simulation_zone();
+      node_elem->sim_output_node_id = zone.output_node->identifier;
+      return &node_elem->base;
+    }
+    case GEO_NODE_REPEAT_OUTPUT: {
+      const auto &storage = *static_cast<NodeGeometryRepeatOutput *>(zone.output_node->storage);
+      RepeatZoneViewerPathElem *node_elem = BKE_viewer_path_elem_new_repeat_zone();
+      node_elem->repeat_output_node_id = zone.output_node->identifier;
+      node_elem->iteration = storage.inspection_index;
+      return &node_elem->base;
+    }
+  }
+  BLI_assert_unreachable();
+  return nullptr;
+}
 
 static void viewer_path_for_geometry_node(const SpaceNode &snode,
                                           const bNode &node,
@@ -66,7 +88,11 @@ static void viewer_path_for_geometry_node(const SpaceNode &snode,
   modifier_elem->modifier_name = BLI_strdup(modifier->modifier.name);
   BLI_addtail(&r_dst.path, modifier_elem);
 
-  Vector<const bNodeTreePath *, 16> tree_path = snode.treepath;
+  Vector<const bNodeTreePath *, 16> tree_path;
+  LISTBASE_FOREACH (const bNodeTreePath *, item, &snode.treepath) {
+    tree_path.append(item);
+  }
+
   for (const int i : tree_path.index_range().drop_back(1)) {
     bNodeTree *tree = tree_path[i]->nodetree;
     /* The tree path contains the name of the node but not its ID. */
@@ -83,9 +109,8 @@ static void viewer_path_for_geometry_node(const SpaceNode &snode,
     const Vector<const bNodeTreeZone *> zone_stack = tree_zones->get_zone_stack_for_node(
         node->identifier);
     for (const bNodeTreeZone *zone : zone_stack) {
-      SimulationZoneViewerPathElem *node_elem = BKE_viewer_path_elem_new_simulation_zone();
-      node_elem->sim_output_node_id = zone->output_node->identifier;
-      BLI_addtail(&r_dst.path, node_elem);
+      ViewerPathElem *zone_elem = viewer_path_elem_for_zone(*zone);
+      BLI_addtail(&r_dst.path, zone_elem);
     }
 
     GroupNodeViewerPathElem *node_elem = BKE_viewer_path_elem_new_group_node();
@@ -102,9 +127,8 @@ static void viewer_path_for_geometry_node(const SpaceNode &snode,
   const Vector<const bNodeTreeZone *> zone_stack = tree_zones->get_zone_stack_for_node(
       node.identifier);
   for (const bNodeTreeZone *zone : zone_stack) {
-    SimulationZoneViewerPathElem *node_elem = BKE_viewer_path_elem_new_simulation_zone();
-    node_elem->sim_output_node_id = zone->output_node->identifier;
-    BLI_addtail(&r_dst.path, node_elem);
+    ViewerPathElem *zone_elem = viewer_path_elem_for_zone(*zone);
+    BLI_addtail(&r_dst.path, zone_elem);
   }
 
   ViewerNodeViewerPathElem *viewer_node_elem = BKE_viewer_path_elem_new_viewer_node();
@@ -190,7 +214,11 @@ Object *parse_object_only(const ViewerPath &viewer_path)
 std::optional<ViewerPathForGeometryNodesViewer> parse_geometry_nodes_viewer(
     const ViewerPath &viewer_path)
 {
-  const Vector<const ViewerPathElem *, 16> elems_vec = viewer_path.path;
+  Vector<const ViewerPathElem *, 16> elems_vec;
+  LISTBASE_FOREACH (const ViewerPathElem *, item, &viewer_path.path) {
+    elems_vec.append(item);
+  }
+
   if (elems_vec.size() < 3) {
     /* Need at least the object, modifier and viewer node name. */
     return std::nullopt;
@@ -221,7 +249,10 @@ std::optional<ViewerPathForGeometryNodesViewer> parse_geometry_nodes_viewer(
   remaining_elems = remaining_elems.drop_front(1);
   Vector<const ViewerPathElem *> node_path;
   for (const ViewerPathElem *elem : remaining_elems.drop_back(1)) {
-    if (!ELEM(elem->type, VIEWER_PATH_ELEM_TYPE_GROUP_NODE, VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE))
+    if (!ELEM(elem->type,
+              VIEWER_PATH_ELEM_TYPE_GROUP_NODE,
+              VIEWER_PATH_ELEM_TYPE_SIMULATION_ZONE,
+              VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE))
     {
       return std::nullopt;
     }
@@ -275,6 +306,19 @@ bool exists_geometry_nodes_viewer(const ViewerPathForGeometryNodesViewer &parsed
         zone = next_zone;
         break;
       }
+      case VIEWER_PATH_ELEM_TYPE_REPEAT_ZONE: {
+        const auto &typed_elem = *reinterpret_cast<const RepeatZoneViewerPathElem *>(path_elem);
+        const bNodeTreeZone *next_zone = tree_zones->get_zone_by_node(
+            typed_elem.repeat_output_node_id);
+        if (next_zone == nullptr) {
+          return false;
+        }
+        if (next_zone->parent_zone != zone) {
+          return false;
+        }
+        zone = next_zone;
+        break;
+      }
       case VIEWER_PATH_ELEM_TYPE_GROUP_NODE: {
         const auto &typed_elem = *reinterpret_cast<const GroupNodeViewerPathElem *>(path_elem);
         const bNode *group_node = ngroup->node_by_id(typed_elem.node_id);
@@ -312,14 +356,15 @@ bool exists_geometry_nodes_viewer(const ViewerPathForGeometryNodesViewer &parsed
   return true;
 }
 
-bool is_active_geometry_nodes_viewer(const bContext &C, const ViewerPath &viewer_path)
+UpdateActiveGeometryNodesViewerResult update_active_geometry_nodes_viewer(const bContext &C,
+                                                                          ViewerPath &viewer_path)
 {
   if (BLI_listbase_is_empty(&viewer_path.path)) {
-    return false;
+    return UpdateActiveGeometryNodesViewerResult::NotActive;
   }
   const ViewerPathElem *last_elem = static_cast<ViewerPathElem *>(viewer_path.path.last);
   if (last_elem->type != VIEWER_PATH_ELEM_TYPE_VIEWER_NODE) {
-    return false;
+    return UpdateActiveGeometryNodesViewerResult::NotActive;
   }
   const int32_t viewer_node_id =
       reinterpret_cast<const ViewerNodeViewerPathElem *>(last_elem)->node_id;
@@ -327,7 +372,7 @@ bool is_active_geometry_nodes_viewer(const bContext &C, const ViewerPath &viewer
   const Main *bmain = CTX_data_main(&C);
   const wmWindowManager *wm = static_cast<wmWindowManager *>(bmain->wm.first);
   if (wm == nullptr) {
-    return false;
+    return UpdateActiveGeometryNodesViewerResult::NotActive;
   }
   LISTBASE_FOREACH (const wmWindow *, window, &wm->windows) {
     const bScreen *active_screen = BKE_workspace_active_screen_get(window->workspace_hook);
@@ -363,14 +408,22 @@ bool is_active_geometry_nodes_viewer(const bContext &C, const ViewerPath &viewer
         ViewerPath tmp_viewer_path{};
         BLI_SCOPED_DEFER([&]() { BKE_viewer_path_clear(&tmp_viewer_path); });
         viewer_path_for_geometry_node(snode, *viewer_node, tmp_viewer_path);
-        if (!BKE_viewer_path_equal(&viewer_path, &tmp_viewer_path)) {
+        if (!BKE_viewer_path_equal(
+                &viewer_path, &tmp_viewer_path, VIEWER_PATH_EQUAL_FLAG_IGNORE_REPEAT_ITERATION))
+        {
           continue;
         }
-        return true;
+        if (!BKE_viewer_path_equal(&viewer_path, &tmp_viewer_path)) {
+          std::swap(viewer_path, tmp_viewer_path);
+          /* Make sure the viewed data becomes available. */
+          DEG_id_tag_update(snode.id, ID_RECALC_GEOMETRY);
+          return UpdateActiveGeometryNodesViewerResult::Updated;
+        }
+        return UpdateActiveGeometryNodesViewerResult::StillActive;
       }
     }
   }
-  return false;
+  return UpdateActiveGeometryNodesViewerResult::NotActive;
 }
 
 bNode *find_geometry_nodes_viewer(const ViewerPath &viewer_path, SpaceNode &snode)

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2004 Blender Foundation
+/* SPDX-FileCopyrightText: 2004 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -114,13 +114,6 @@ void SEQ_time_right_handle_frame_set(const struct Scene *scene,
  * This can change depending on scene FPS or strip speed factor.
  */
 int SEQ_time_strip_length_get(const struct Scene *scene, const struct Sequence *seq);
-/**
- * Set strip playback speed.
- * Strip length is affected by changing speed factor.
- */
-void SEQ_time_speed_factor_set(const struct Scene *scene,
-                               struct Sequence *seq,
-                               const float speed_factor);
 /**
  * Get timeline frame where strip content starts.
  */

@@ -25,8 +25,10 @@
 
 #include "BLI_array.hh"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_geom.h"
+#include "BLI_math_matrix.h"
 #include "BLI_math_matrix.hh"
+#include "BLI_math_rotation.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
@@ -45,29 +47,29 @@
 #include "BKE_main.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.hh"
-#include "BKE_multires.h"
-#include "BKE_object.h"
+#include "BKE_multires.hh"
+#include "BKE_object.hh"
 #include "BKE_pointcloud.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_tracking.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_query.hh"
 
-#include "RNA_access.h"
-#include "RNA_define.h"
+#include "RNA_access.hh"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_armature.h"
-#include "ED_gpencil_legacy.h"
-#include "ED_keyframing.h"
-#include "ED_mesh.h"
-#include "ED_object.h"
-#include "ED_screen.h"
-#include "ED_view3d.h"
+#include "ED_armature.hh"
+#include "ED_gpencil_legacy.hh"
+#include "ED_keyframing.hh"
+#include "ED_mesh.hh"
+#include "ED_object.hh"
+#include "ED_screen.hh"
+#include "ED_view3d.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -1525,8 +1527,8 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
       if (ID_REAL_USERS(arm) > 1) {
 #if 0
-          BKE_report(op->reports, RPT_ERROR, "Cannot apply to a multi user armature");
-          return;
+        BKE_report(op->reports, RPT_ERROR, "Cannot apply to a multi user armature");
+        return;
 #endif
         tot_multiuser_arm_error++;
       }
@@ -1538,7 +1540,7 @@ static int object_origin_set_exec(bContext *C, wmOperator *op)
 
         tot_change++;
         arm->id.tag |= LIB_TAG_DOIT;
-        /* do_inverse_offset = true; */ /* docenter_armature() handles this */
+        // do_inverse_offset = true; /* docenter_armature() handles this. */
 
         Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
         BKE_object_transform_copy(ob_eval, ob);

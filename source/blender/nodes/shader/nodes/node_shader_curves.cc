@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2005 Blender Foundation
+/* SPDX-FileCopyrightText: 2005 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,7 +8,15 @@
 
 #include "node_shader_util.hh"
 
-namespace blender::nodes::node_shader_curves_cc {
+#include "BKE_colortools.h"
+
+#include "BLI_math_vector.h"
+
+#include "NOD_multi_function.hh"
+
+#include "node_util.hh"
+
+namespace blender::nodes::node_shader_curves_cc::vec {
 
 static void sh_node_curve_vec_declare(NodeDeclarationBuilder &b)
 {
@@ -101,11 +109,20 @@ static void sh_node_curve_vec_build_multi_function(NodeMultiFunctionBuilder &bui
   builder.construct_and_set_matching_fn<CurveVecFunction>(*cumap);
 }
 
-}  // namespace blender::nodes::node_shader_curves_cc
+NODE_SHADER_MATERIALX_BEGIN
+#ifdef WITH_MATERIALX
+{
+  /* TODO: implement */
+  return get_input_value("Vector", NodeItem::Type::Vector3);
+}
+#endif
+NODE_SHADER_MATERIALX_END
+
+}  // namespace blender::nodes::node_shader_curves_cc::vec
 
 void register_node_type_sh_curve_vec()
 {
-  namespace file_ns = blender::nodes::node_shader_curves_cc;
+  namespace file_ns = blender::nodes::node_shader_curves_cc::vec;
 
   static bNodeType ntype;
 
@@ -116,13 +133,14 @@ void register_node_type_sh_curve_vec()
   node_type_storage(&ntype, "CurveMapping", node_free_curves, node_copy_curves);
   ntype.gpu_fn = file_ns::gpu_shader_curve_vec;
   ntype.build_multi_function = file_ns::sh_node_curve_vec_build_multi_function;
+  ntype.materialx_fn = file_ns::node_shader_materialx;
 
   nodeRegisterType(&ntype);
 }
 
 /* **************** CURVE RGB  ******************** */
 
-namespace blender::nodes::node_shader_curves_cc {
+namespace blender::nodes::node_shader_curves_cc::rgb {
 
 static void sh_node_curve_rgb_declare(NodeDeclarationBuilder &b)
 {
@@ -243,11 +261,20 @@ static void sh_node_curve_rgb_build_multi_function(NodeMultiFunctionBuilder &bui
   builder.construct_and_set_matching_fn<CurveRGBFunction>(*cumap);
 }
 
-}  // namespace blender::nodes::node_shader_curves_cc
+NODE_SHADER_MATERIALX_BEGIN
+#ifdef WITH_MATERIALX
+{
+  /* TODO: implement */
+  return get_input_value("Color", NodeItem::Type::Color4);
+}
+#endif
+NODE_SHADER_MATERIALX_END
+
+}  // namespace blender::nodes::node_shader_curves_cc::rgb
 
 void register_node_type_sh_curve_rgb()
 {
-  namespace file_ns = blender::nodes::node_shader_curves_cc;
+  namespace file_ns = blender::nodes::node_shader_curves_cc::rgb;
 
   static bNodeType ntype;
 
@@ -258,13 +285,14 @@ void register_node_type_sh_curve_rgb()
   node_type_storage(&ntype, "CurveMapping", node_free_curves, node_copy_curves);
   ntype.gpu_fn = file_ns::gpu_shader_curve_rgb;
   ntype.build_multi_function = file_ns::sh_node_curve_rgb_build_multi_function;
+  ntype.materialx_fn = file_ns::node_shader_materialx;
 
   nodeRegisterType(&ntype);
 }
 
 /* **************** CURVE FLOAT  ******************** */
 
-namespace blender::nodes::node_shader_curves_cc {
+namespace blender::nodes::node_shader_curves_cc::flt {
 
 static void sh_node_curve_float_declare(NodeDeclarationBuilder &b)
 {
@@ -361,11 +389,20 @@ static void sh_node_curve_float_build_multi_function(NodeMultiFunctionBuilder &b
   builder.construct_and_set_matching_fn<CurveFloatFunction>(*cumap);
 }
 
-}  // namespace blender::nodes::node_shader_curves_cc
+NODE_SHADER_MATERIALX_BEGIN
+#ifdef WITH_MATERIALX
+{
+  /* TODO: implement */
+  return get_input_value("Value", NodeItem::Type::Float);
+}
+#endif
+NODE_SHADER_MATERIALX_END
+
+}  // namespace blender::nodes::node_shader_curves_cc::flt
 
 void register_node_type_sh_curve_float()
 {
-  namespace file_ns = blender::nodes::node_shader_curves_cc;
+  namespace file_ns = blender::nodes::node_shader_curves_cc::flt;
 
   static bNodeType ntype;
 
@@ -376,6 +413,7 @@ void register_node_type_sh_curve_float()
   node_type_storage(&ntype, "CurveMapping", node_free_curves, node_copy_curves);
   ntype.gpu_fn = file_ns::gpu_shader_curve_float;
   ntype.build_multi_function = file_ns::sh_node_curve_float_build_multi_function;
+  ntype.materialx_fn = file_ns::node_shader_materialx;
 
   nodeRegisterType(&ntype);
 }

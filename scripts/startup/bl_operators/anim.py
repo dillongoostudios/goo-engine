@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2011-2023 Blender Foundation
+# SPDX-FileCopyrightText: 2011-2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -89,13 +89,13 @@ class ANIM_OT_keying_set_export(Operator):
             if ksp.id in id_to_paths_cache:
                 continue
 
-            # - idtype_list is used to get the list of id-datablocks from
-            #   bpy.data.* since this info isn't available elsewhere
-            # - id.bl_rna.name gives a name suitable for UI,
+            # - `idtype_list` is used to get the list of ID-data-blocks from
+            #   `bpy.data.*` since this info isn't available elsewhere.
+            # - `id.bl_rna.name` gives a name suitable for UI,
             #   with a capitalized first letter, but we need
-            #   the plural form that's all lower case
+            #   the plural form that's all lower case.
             # - special handling is needed for "nested" ID-blocks
-            #   (e.g. nodetree in Material)
+            #   (e.g. node-tree in Material).
             if ksp.id.bl_rna.identifier.startswith("ShaderNodeTree"):
                 # Find material or light using this node tree...
                 id_bpy_path = "bpy.data.nodes[\"%s\"]"
@@ -120,7 +120,7 @@ class ANIM_OT_keying_set_export(Operator):
                         tip_("Could not find material or light using Shader Node Tree - %s") %
                         (ksp.id))
             elif ksp.id.bl_rna.identifier.startswith("CompositorNodeTree"):
-                # Find compositor nodetree using this node tree...
+                # Find compositor node-tree using this node tree.
                 for scene in bpy.data.scenes:
                     if scene.node_tree == ksp.id:
                         id_bpy_path = "bpy.data.scenes[\"%s\"].node_tree" % (scene.name)
@@ -388,7 +388,7 @@ class UpdateAnimatedTransformConstraint(Operator):
             data = ...
             try:
                 data = eval("base." + old_path)
-            except:
+            except BaseException:
                 pass
             ret = (data, old_path)
             if isinstance(base, bpy.types.TransformConstraint) and data is not ...:
@@ -405,7 +405,7 @@ class UpdateAnimatedTransformConstraint(Operator):
                     data = ...
                     try:
                         data = eval("base." + new_path)
-                    except:
+                    except BaseException:
                         pass
                     ret = (data, new_path)
                     # print(ret)
@@ -429,9 +429,125 @@ class UpdateAnimatedTransformConstraint(Operator):
         return {'FINISHED'}
 
 
+class ARMATURE_OT_copy_bone_color_to_selected(Operator):
+    """Copy the bone color of the active bone to all selected bones"""
+    bl_idname = "armature.copy_bone_color_to_selected"
+    bl_label = "Copy Colors to Selected"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    _bone_type_enum = [
+        ('EDIT', 'Bone', 'Copy Bone colors from the active bone to all selected bones'),
+        ('POSE', 'Pose Bone', 'Copy Pose Bone colors from the active pose bone to all selected pose bones'),
+    ]
+
+    bone_type: EnumProperty(
+        name="Type",
+        items=_bone_type_enum)
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode in {'EDIT_ARMATURE', 'POSE'}
+
+    def execute(self, context):
+        match(self.bone_type, context.mode):
+            # Armature in edit mode:
+            case('POSE', 'EDIT_ARMATURE'):
+                self.report({'ERROR'}, "Go to pose mode to copy pose bone colors")
+                return {'OPERATOR_CANCELLED'}
+            case('EDIT', 'EDIT_ARMATURE'):
+                bone_source = context.active_bone
+                bones_dest = context.selected_bones
+                pose_bones_to_check = []
+
+            # Armature in pose mode:
+            case('POSE', 'POSE'):
+                bone_source = context.active_pose_bone
+                bones_dest = context.selected_pose_bones
+                pose_bones_to_check = []
+            case('EDIT', 'POSE'):
+                bone_source = context.active_bone
+                pose_bones_to_check = context.selected_pose_bones
+                bones_dest = [posebone.bone for posebone in pose_bones_to_check]
+
+            # Anything else:
+            case _:
+                self.report({'ERROR'}, "Cannot do anything in mode %r" % context.mode)
+                return {'CANCELLED'}
+
+        if not bone_source:
+            self.report({'ERROR'}, "No active bone to copy from.")
+            return {'CANCELLED'}
+
+        if not bones_dest:
+            self.report({'ERROR'}, "No selected bones to copy to.")
+            return {'CANCELLED'}
+
+        num_pose_color_overrides = 0
+        for index, bone_dest in enumerate(bones_dest):
+            bone_dest.color.palette = bone_source.color.palette
+            for custom_field in ("normal", "select", "active"):
+                color = getattr(bone_source.color.custom, custom_field)
+                setattr(bone_dest.color.custom, custom_field, color)
+
+            if self.bone_type == 'EDIT' and pose_bones_to_check:
+                pose_bone = pose_bones_to_check[index]
+                if pose_bone.color.palette != 'DEFAULT':
+                    # A pose color has been set, and we're now syncing edit bone
+                    # colors. This means that the synced color will not be
+                    # visible. Better to let the user know about this.
+                    num_pose_color_overrides += 1
+
+        if num_pose_color_overrides:
+            self.report(
+                {'INFO'},
+                "Bone colors were synced; for %d bones this will not be visible due to pose bone color overrides" %
+                num_pose_color_overrides)
+
+        return {'FINISHED'}
+
+
+class ARMATURE_OT_collection_solo_visibility(Operator):
+    """Hide all other bone collections and show the active one"""
+    bl_idname = "armature.collection_solo_visibility"
+    bl_label = "Solo Visibility"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    name: StringProperty(name='Bone Collection')
+
+    @classmethod
+    def poll(cls, context):
+        return context.object and context.object.type == 'ARMATURE' and context.object.data
+
+    def execute(self, context):
+        arm = context.object.data
+        for bcoll in arm.collections:
+            bcoll.is_visible = bcoll.name == self.name
+        return {'FINISHED'}
+
+
+class ARMATURE_OT_collection_show_all(Operator):
+    """Show all bone collections"""
+    bl_idname = "armature.collection_show_all"
+    bl_label = "Show All"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.object and context.object.type == 'ARMATURE' and context.object.data
+
+    def execute(self, context):
+        arm = context.object.data
+        for bcoll in arm.collections:
+            bcoll.is_visible = True
+        return {'FINISHED'}
+
+
 classes = (
     ANIM_OT_keying_set_export,
     NLA_OT_bake,
     ClearUselessActions,
     UpdateAnimatedTransformConstraint,
+    ARMATURE_OT_copy_bone_color_to_selected,
+    ARMATURE_OT_collection_solo_visibility,
+    ARMATURE_OT_collection_show_all,
 )

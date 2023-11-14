@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2017-2023 Blender Foundation
+# SPDX-FileCopyrightText: 2017-2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -88,7 +88,7 @@ else()
     export CFLAGS=${PYTHON_CFLAGS} &&
     export CPPFLAGS=${PYTHON_CFLAGS} &&
     export LDFLAGS=${PYTHON_LDFLAGS} &&
-    export PKG_CONFIG_PATH=${LIBDIR}/ffi/lib/pkgconfig:${LIBDIR}/ssl/lib64/pkgconfig)
+    export PKG_CONFIG_PATH=${LIBDIR}/ffi/lib/pkgconfig:${LIBDIR}/ssl/lib/pkgconfig:${LIBDIR}/ssl/lib64/pkgconfig)
 
   # NOTE: untested on APPLE so far.
   if(NOT APPLE)

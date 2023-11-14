@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -8,15 +8,15 @@
 
 #include "DRW_render.h"
 
-#include "ED_view3d.h"
+#include "ED_view3d.hh"
 
 #include "DNA_mesh_types.h"
 
 #include "BKE_customdata.h"
 #include "BKE_editmesh.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 
-#include "draw_cache_impl.h"
+#include "draw_cache_impl.hh"
 #include "draw_manager_text.h"
 
 #include "overlay_private.hh"

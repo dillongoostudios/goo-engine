@@ -19,7 +19,6 @@
 #include "PIL_time.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -28,21 +27,21 @@
 #include "DNA_userdef_types.h"
 
 #include "BKE_context.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "RNA_access.h"
+#include "RNA_access.hh"
 
 #include "BLF_api.h"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
-#include "ED_screen.h"
+#include "ED_screen.hh"
 
-#include "UI_interface.h"
-#include "UI_interface_icons.h"
-#include "UI_resources.h"
-#include "UI_view2d.h"
+#include "UI_interface.hh"
+#include "UI_interface_icons.hh"
+#include "UI_resources.hh"
+#include "UI_view2d.hh"
 
 #include "GPU_batch_presets.h"
 #include "GPU_immediate.h"
@@ -283,7 +282,7 @@ void UI_list_panel_unique_str(Panel *panel, char *r_name)
 {
   /* The panel sort-order will be unique for a specific panel type because the instanced
    * panel list is regenerated for every change in the data order / length. */
-  BLI_snprintf(r_name, INSTANCED_PANEL_UNIQUE_STR_LEN, "%d", panel->sortorder);
+  BLI_snprintf(r_name, INSTANCED_PANEL_UNIQUE_STR_SIZE, "%d", panel->sortorder);
 }
 
 /**
@@ -305,6 +304,7 @@ static void panel_delete(const bContext *C, ARegion *region, ListBase *panels, P
   if (panel->activedata) {
     MEM_freeN(panel->activedata);
   }
+  MEM_SAFE_FREE(panel->drawname);
   MEM_freeN(panel);
 }
 
@@ -696,7 +696,7 @@ Panel *UI_panel_begin(
 
   panel->runtime.block = block;
 
-  STRNCPY(panel->drawname, drawname);
+  UI_panel_drawname_set(panel, drawname);
 
   /* If a new panel is added, we insert it right after the panel that was last added.
    * This way new panels are inserted in the right place between versions. */
@@ -754,7 +754,7 @@ void UI_panel_header_buttons_end(Panel *panel)
   /* Repurpose the first header button group if it is empty, in case the first button added to
    * the panel doesn't add a new group (if the button is created directly rather than through an
    * interface layout call). */
-  if (block->button_groups.size() > 0) {
+  if (block->button_groups.size() == 1 && button_group.buttons.is_empty()) {
     button_group.flag &= ~UI_BUTTON_GROUP_PANEL_HEADER;
   }
   else {
@@ -830,6 +830,12 @@ void UI_panel_end(Panel *panel, int width, int height)
    * (including sub-panels) is calculated in #UI_panels_end. */
   panel->blocksizex = width;
   panel->blocksizey = height;
+}
+
+void UI_panel_drawname_set(Panel *panel, blender::StringRef name)
+{
+  MEM_SAFE_FREE(panel->drawname);
+  panel->drawname = BLI_strdupn(name.data(), name.size());
 }
 
 static void ui_offset_panel_block(uiBlock *block)
@@ -1109,7 +1115,7 @@ static void panel_draw_aligned_widgets(const uiStyle *style,
   }
 
   /* Draw text label. */
-  if (panel->drawname[0] != '\0') {
+  if (panel->drawname && panel->drawname[0] != '\0') {
     rcti title_rect;
     title_rect.xmin = widget_rect.xmin + (panel->labelofs / aspect) + scaled_unit * 1.1f;
     title_rect.xmax = widget_rect.xmax;
@@ -1119,7 +1125,7 @@ static void panel_draw_aligned_widgets(const uiStyle *style,
     uiFontStyleDraw_Params params{};
     params.align = UI_STYLE_TEXT_LEFT;
     UI_fontstyle_draw(
-        fontstyle, &title_rect, panel->drawname, sizeof(panel->drawname), title_color, &params);
+        fontstyle, &title_rect, panel->drawname, strlen(panel->drawname), title_color, &params);
   }
 
   /* Draw the pin icon. */
@@ -2503,6 +2509,8 @@ static void panel_handle_data_ensure(const bContext *C,
                                      Panel *panel,
                                      const uiHandlePanelState state)
 {
+  BLI_assert(ELEM(state, PANEL_STATE_DRAG, PANEL_STATE_ANIMATION));
+
   if (panel->activedata == nullptr) {
     panel->activedata = MEM_callocN(sizeof(uiHandlePanelData), __func__);
     WM_event_add_ui_handler(C,
@@ -2515,7 +2523,11 @@ static void panel_handle_data_ensure(const bContext *C,
 
   uiHandlePanelData *data = static_cast<uiHandlePanelData *>(panel->activedata);
 
-  data->animtimer = WM_event_add_timer(CTX_wm_manager(C), win, TIMER, ANIMATION_INTERVAL);
+  /* Only create a new timer if necessary. Reuse can occur when PANEL_STATE_ANIMATION follows
+   * PANEL_STATE_DRAG for example (i.e. panel->activedata was present already). */
+  if (!data->animtimer) {
+    data->animtimer = WM_event_timer_add(CTX_wm_manager(C), win, TIMER, ANIMATION_INTERVAL);
+  }
 
   data->state = state;
   data->startx = win->eventstate->xy[0];
@@ -2565,7 +2577,7 @@ static void panel_activate_state(const bContext *C, Panel *panel, const uiHandle
     BLI_assert(data != nullptr);
 
     if (data->animtimer) {
-      WM_event_remove_timer(CTX_wm_manager(C), win, data->animtimer);
+      WM_event_timer_remove(CTX_wm_manager(C), win, data->animtimer);
       data->animtimer = nullptr;
     }
 

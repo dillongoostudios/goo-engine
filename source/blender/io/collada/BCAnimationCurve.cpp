@@ -1,8 +1,8 @@
-/* SPDX-FileCopyrightText: 2008 Blender Foundation
+/* SPDX-FileCopyrightText: 2008 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "RNA_path.h"
+#include "RNA_path.hh"
 
 #include "BCAnimationCurve.h"
 
@@ -50,23 +50,28 @@ void BCAnimationCurve::init_pointer_rna(Object *ob)
   switch (this->curve_key.get_animation_type()) {
     case BC_ANIMATION_TYPE_BONE: {
       bArmature *arm = (bArmature *)ob->data;
-      RNA_id_pointer_create(&arm->id, &id_ptr);
-    } break;
+      id_ptr = RNA_id_pointer_create(&arm->id);
+      break;
+    }
     case BC_ANIMATION_TYPE_OBJECT: {
-      RNA_id_pointer_create(&ob->id, &id_ptr);
-    } break;
+      id_ptr = RNA_id_pointer_create(&ob->id);
+      break;
+    }
     case BC_ANIMATION_TYPE_MATERIAL: {
       Material *ma = BKE_object_material_get(ob, curve_key.get_subindex() + 1);
-      RNA_id_pointer_create(&ma->id, &id_ptr);
-    } break;
+      id_ptr = RNA_id_pointer_create(&ma->id);
+      break;
+    }
     case BC_ANIMATION_TYPE_CAMERA: {
       Camera *camera = (Camera *)ob->data;
-      RNA_id_pointer_create(&camera->id, &id_ptr);
-    } break;
+      id_ptr = RNA_id_pointer_create(&camera->id);
+      break;
+    }
     case BC_ANIMATION_TYPE_LIGHT: {
       Light *lamp = (Light *)ob->data;
-      RNA_id_pointer_create(&lamp->id, &id_ptr);
-    } break;
+      id_ptr = RNA_id_pointer_create(&lamp->id);
+      break;
+    }
     default:
       fprintf(
           stderr, "BC_animation_curve_type %d not supported", this->curve_key.get_array_index());
@@ -153,8 +158,8 @@ std::string BCAnimationCurve::get_animation_name(Object *ob) const
   switch (curve_key.get_animation_type()) {
     case BC_ANIMATION_TYPE_OBJECT: {
       name = id_name(ob);
-    } break;
-
+      break;
+    }
     case BC_ANIMATION_TYPE_BONE: {
       if (fcurve == nullptr || fcurve->rna_path == nullptr) {
         name = "";
@@ -168,23 +173,23 @@ std::string BCAnimationCurve::get_animation_name(Object *ob) const
           name = "";
         }
       }
-    } break;
-
+      break;
+    }
     case BC_ANIMATION_TYPE_CAMERA: {
       Camera *camera = (Camera *)ob->data;
       name = id_name(ob) + "-" + id_name(camera) + "-camera";
-    } break;
-
+      break;
+    }
     case BC_ANIMATION_TYPE_LIGHT: {
       Light *lamp = (Light *)ob->data;
       name = id_name(ob) + "-" + id_name(lamp) + "-light";
-    } break;
-
+      break;
+    }
     case BC_ANIMATION_TYPE_MATERIAL: {
       Material *ma = BKE_object_material_get(ob, this->curve_key.get_subindex() + 1);
       name = id_name(ob) + "-" + id_name(ma) + "-material";
-    } break;
-
+      break;
+    }
     default: {
       name = "";
     }

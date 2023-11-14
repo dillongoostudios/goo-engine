@@ -21,12 +21,15 @@
  * \ingroup shdnodes
  */
 
-#include "RNA_enum_types.h"
+#include "RNA_enum_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
+#include "BLI_string.h"
+#include "RNA_access.hh"
 
 #include "../node_shader_util.hh"
+#include "node_util.hh"
 
 using namespace blender::bke;
 
@@ -273,10 +276,10 @@ static void node_shader_init_sdf_op(bNodeTree * /* ntree */, bNode *node)
 
 static void node_shader_buts_sdf_op(uiLayout *layout, bContext * /* C */, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "operation", 0, "", ICON_NONE);
+  uiItemR(layout, ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
   int type = RNA_enum_get(ptr, "operation");
   if (ELEM(type, SHD_SDF_OP_MASK)) {
-    uiItemR(layout, ptr, "invert", 0, NULL, ICON_NONE);
+    uiItemR(layout, ptr, "invert", UI_ITEM_NONE, NULL, ICON_NONE);
   }
 }
 

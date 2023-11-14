@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2006 Blender Foundation
+/* SPDX-FileCopyrightText: 2006 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -77,10 +77,15 @@ struct CustomDataLayer *BKE_id_attribute_find(const struct ID *id,
                                               eCustomDataType type,
                                               eAttrDomain domain);
 
-struct CustomDataLayer *BKE_id_attribute_search(struct ID *id,
-                                                const char *name,
-                                                eCustomDataMask type,
-                                                eAttrDomainMask domain_mask);
+const struct CustomDataLayer *BKE_id_attribute_search(const struct ID *id,
+                                                      const char *name,
+                                                      eCustomDataMask type,
+                                                      eAttrDomainMask domain_mask);
+
+struct CustomDataLayer *BKE_id_attribute_search_for_write(struct ID *id,
+                                                          const char *name,
+                                                          eCustomDataMask type,
+                                                          eAttrDomainMask domain_mask);
 
 eAttrDomain BKE_id_attribute_domain(const struct ID *id, const struct CustomDataLayer *layer);
 int BKE_id_attribute_data_length(struct ID *id, struct CustomDataLayer *layer);
@@ -115,7 +120,7 @@ const char *BKE_id_attributes_default_color_name(const struct ID *id);
 void BKE_id_attributes_active_color_set(struct ID *id, const char *name);
 void BKE_id_attributes_default_color_set(struct ID *id, const char *name);
 
-struct CustomDataLayer *BKE_id_attributes_color_find(const struct ID *id, const char *name);
+const struct CustomDataLayer *BKE_id_attributes_color_find(const struct ID *id, const char *name);
 
 bool BKE_id_attribute_calc_unique_name(struct ID *id, const char *name, char *outname);
 

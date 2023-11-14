@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2020-2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2020-2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -141,20 +141,33 @@ class GHOST_WindowWayland : public GHOST_Window {
 
   /* WAYLAND direct-data access. */
 
-  int scale() const;
-  const struct GWL_WindowScaleParams &scale_params() const;
+  int scale_get() const;
+  const struct GWL_WindowScaleParams &scale_params_get() const;
 
-  struct wl_surface *wl_surface() const;
-  const std::vector<GWL_Output *> &outputs();
+  struct wl_surface *wl_surface_get() const;
+  const std::vector<GWL_Output *> &outputs_get();
 
   wl_fixed_t wl_fixed_from_window(wl_fixed_t value) const;
   wl_fixed_t wl_fixed_to_window(wl_fixed_t value) const;
 
   /* WAYLAND window-level functions. */
 
-  GHOST_TSuccess close();
+  /**
+   * Set the window as active and send an #GHOST_kEventWindowActivate event.
+   *
+   * \note The current active state is *not* checked, the caller is responsible for
+   * not activating windows which are already active.
+   */
   GHOST_TSuccess activate();
+  /**
+   * De-activate the window and send a #GHOST_kEventWindowDeactivate event.
+   *
+   * \note The current active state is *not* checked, the caller is responsible for
+   * not de-activating windows that aren't active.
+   */
   GHOST_TSuccess deactivate();
+
+  GHOST_TSuccess close();
   GHOST_TSuccess notify_size();
   GHOST_TSuccess notify_decor_redraw();
 

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -56,9 +56,6 @@ class Context {
    * composite output will be used as a fallback viewer if no other viewer exists */
   virtual bool use_composite_output() const = 0;
 
-  /* True if color management should be used for texture evaluation. */
-  virtual bool use_texture_color_management() const = 0;
-
   /* Get the render settings for compositing. */
   virtual const RenderData &get_render_data() const = 0;
 
@@ -84,7 +81,9 @@ class Context {
 
   /* Get the texture where the given render pass is stored. This should be called by the Render
    * Layer node to populate its outputs. */
-  virtual GPUTexture *get_input_texture(int view_layer, const char *pass_name) = 0;
+  virtual GPUTexture *get_input_texture(const Scene *scene,
+                                        int view_layer,
+                                        const char *pass_name) = 0;
 
   /* Get the name of the view currently being rendered. */
   virtual StringRef get_view_name() = 0;

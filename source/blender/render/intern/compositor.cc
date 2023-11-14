@@ -1,8 +1,9 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include <cstring>
+#include <string>
 
 #include "BLI_threads.h"
 #include "BLI_vector.hh"
@@ -19,11 +20,15 @@
 #include "IMB_colormanagement.h"
 #include "IMB_imbuf.h"
 
+#include "DEG_depsgraph_query.hh"
+
 #include "COM_context.hh"
 #include "COM_evaluator.hh"
 
 #include "RE_compositor.hh"
 #include "RE_pipeline.h"
+
+#include "render_types.h"
 
 namespace blender::render {
 
@@ -56,16 +61,40 @@ class TexturePool : public realtime_compositor::TexturePool {
   }
 };
 
-/* Render Context */
+/**
+ * Render Context Data
+ *
+ * Stored separately from the context so we can update it without losing any cached
+ * data from the context.
+ */
+class ContextInputData {
+ public:
+  const Scene *scene;
+  const RenderData *render_data;
+  const bNodeTree *node_tree;
+  bool use_file_output;
+  std::string view_name;
+
+  ContextInputData(const Scene &scene,
+                   const RenderData &render_data,
+                   const bNodeTree &node_tree,
+                   const bool use_file_output,
+                   const char *view_name)
+      : scene(&scene),
+        render_data(&render_data),
+        node_tree(&node_tree),
+        use_file_output(use_file_output),
+        view_name(view_name)
+  {
+  }
+};
+
+/* Render Context Data */
 
 class Context : public realtime_compositor::Context {
  private:
   /* Input data. */
-  const Scene &scene_;
-  const RenderData &render_data_;
-  const bNodeTree &node_tree_;
-  const bool use_file_output_;
-  const char *view_name_;
+  ContextInputData input_data_;
 
   /* Output combined texture. */
   GPUTexture *output_texture_ = nullptr;
@@ -77,18 +106,9 @@ class Context : public realtime_compositor::Context {
   TexturePool &render_texture_pool_;
 
  public:
-  Context(const Scene &scene,
-          const RenderData &render_data,
-          const bNodeTree &node_tree,
-          const bool use_file_output,
-          const char *view_name,
-          TexturePool &texture_pool)
+  Context(const ContextInputData &input_data, TexturePool &texture_pool)
       : realtime_compositor::Context(texture_pool),
-        scene_(scene),
-        render_data_(render_data),
-        node_tree_(node_tree),
-        use_file_output_(use_file_output),
-        view_name_(view_name),
+        input_data_(input_data),
         render_texture_pool_(texture_pool)
   {
   }
@@ -99,19 +119,24 @@ class Context : public realtime_compositor::Context {
     GPU_TEXTURE_FREE_SAFE(viewer_output_texture_);
   }
 
+  void update_input_data(const ContextInputData &input_data)
+  {
+    input_data_ = input_data;
+  }
+
   const Scene &get_scene() const override
   {
-    return scene_;
+    return *input_data_.scene;
   }
 
   const bNodeTree &get_node_tree() const override
   {
-    return node_tree_;
+    return *input_data_.node_tree;
   }
 
   bool use_file_output() const override
   {
-    return use_file_output_;
+    return input_data_.use_file_output;
   }
 
   bool use_composite_output() const override
@@ -119,20 +144,15 @@ class Context : public realtime_compositor::Context {
     return true;
   }
 
-  bool use_texture_color_management() const override
-  {
-    return BKE_scene_check_color_management_enabled(&scene_);
-  }
-
   const RenderData &get_render_data() const override
   {
-    return render_data_;
+    return *(input_data_.render_data);
   }
 
   int2 get_render_size() const override
   {
     int width, height;
-    BKE_render_resolution(&render_data_, false, &width, &height);
+    BKE_render_resolution(input_data_.render_data, false, &width, &height);
     return int2(width, height);
   }
 
@@ -168,8 +188,20 @@ class Context : public realtime_compositor::Context {
     /* TODO: support outputting previews.
      * TODO: just a temporary hack, needs to get stored in RenderResult,
      * once that supports GPU buffers. */
+    const int2 size = get_render_size();
+
+    /* Re-create texture if the viewer size changes. */
+    if (viewer_output_texture_) {
+      const int current_width = GPU_texture_width(viewer_output_texture_);
+      const int current_height = GPU_texture_height(viewer_output_texture_);
+
+      if (current_width != size.x || current_height != size.y) {
+        GPU_TEXTURE_FREE_SAFE(viewer_output_texture_);
+        viewer_output_texture_ = nullptr;
+      }
+    }
+
     if (viewer_output_texture_ == nullptr) {
-      const int2 size = get_render_size();
       viewer_output_texture_ = GPU_texture_create_2d("compositor_viewer_output_texture",
                                                      size.x,
                                                      size.y,
@@ -182,9 +214,11 @@ class Context : public realtime_compositor::Context {
     return viewer_output_texture_;
   }
 
-  GPUTexture *get_input_texture(int view_layer_id, const char *pass_name) override
+  GPUTexture *get_input_texture(const Scene *scene,
+                                int view_layer_id,
+                                const char *pass_name) override
   {
-    Render *re = RE_GetSceneRender(&scene_);
+    Render *re = RE_GetSceneRender(scene);
     RenderResult *rr = nullptr;
     GPUTexture *input_texture = nullptr;
 
@@ -193,14 +227,14 @@ class Context : public realtime_compositor::Context {
     }
 
     if (rr) {
-      ViewLayer *view_layer = (ViewLayer *)BLI_findlink(&scene_.view_layers, view_layer_id);
+      ViewLayer *view_layer = (ViewLayer *)BLI_findlink(&scene->view_layers, view_layer_id);
       if (view_layer) {
         RenderLayer *rl = RE_GetRenderLayer(rr, view_layer->name);
         if (rl) {
           RenderPass *rpass = (RenderPass *)BLI_findstring(
               &rl->passes, pass_name, offsetof(RenderPass, name));
 
-          if (rpass && rpass->buffer.data) {
+          if (rpass && rpass->ibuf && rpass->ibuf->float_buffer.data) {
             input_texture = RE_pass_ensure_gpu_texture_cache(re, rpass);
 
             if (input_texture) {
@@ -223,10 +257,10 @@ class Context : public realtime_compositor::Context {
 
   StringRef get_view_name() override
   {
-    return view_name_;
+    return input_data_.view_name;
   }
 
-  void set_info_message(StringRef /* message */) const override
+  void set_info_message(StringRef /*message*/) const override
   {
     /* TODO: ignored for now. Currently only used to communicate incomplete node support
      * which is already shown on the node itself.
@@ -235,7 +269,7 @@ class Context : public realtime_compositor::Context {
      * incomplete support, and leave more specific message to individual nodes? */
   }
 
-  IDRecalcFlag query_id_recalc_flag(ID * /* id */) const override
+  IDRecalcFlag query_id_recalc_flag(ID * /*id*/) const override
   {
     /* TODO: implement? */
     return IDRecalcFlag(0);
@@ -247,17 +281,18 @@ class Context : public realtime_compositor::Context {
       return;
     }
 
-    Render *re = RE_GetSceneRender(&scene_);
+    Render *re = RE_GetSceneRender(input_data_.scene);
     RenderResult *rr = RE_AcquireResultWrite(re);
 
     if (rr) {
-      RenderView *rv = RE_RenderViewGetByName(rr, view_name_);
+      RenderView *rv = RE_RenderViewGetByName(rr, input_data_.view_name.c_str());
 
       GPU_memory_barrier(GPU_BARRIER_TEXTURE_UPDATE);
       float *output_buffer = (float *)GPU_texture_read(output_texture_, GPU_DATA_FLOAT, 0);
 
       if (output_buffer) {
-        RE_RenderBuffer_assign_data(&rv->combined_buffer, output_buffer);
+        ImBuf *ibuf = RE_RenderViewEnsureImBuf(rr, rv);
+        IMB_assign_float_buffer(ibuf, output_buffer, IB_TAKE_OWNERSHIP);
       }
 
       /* TODO: z-buffer output. */
@@ -285,11 +320,14 @@ class Context : public realtime_compositor::Context {
 
     Image *image = BKE_image_ensure_viewer(G.main, IMA_TYPE_COMPOSITE, "Viewer Node");
 
-    ImageUser image_user = {0};
-    image_user.multi_index = BKE_scene_multiview_view_id_get(&render_data_, view_name_);
+    ImageUser image_user = {nullptr};
+    image_user.multi_index = BKE_scene_multiview_view_id_get(input_data_.render_data,
+                                                             input_data_.view_name.c_str());
 
-    if (BKE_scene_multiview_is_render_view_first(&render_data_, view_name_)) {
-      BKE_image_ensure_viewer_views(&render_data_, image, &image_user);
+    if (BKE_scene_multiview_is_render_view_first(input_data_.render_data,
+                                                 input_data_.view_name.c_str()))
+    {
+      BKE_image_ensure_viewer_views(input_data_.render_data, image, &image_user);
     }
 
     BLI_thread_lock(LOCK_DRAW_IMAGE);
@@ -301,7 +339,6 @@ class Context : public realtime_compositor::Context {
     if (image_buffer->x != render_size.x || image_buffer->y != render_size.y) {
       imb_freerectImBuf(image_buffer);
       imb_freerectfloatImBuf(image_buffer);
-      IMB_freezbuffloatImBuf(image_buffer);
       image_buffer->x = render_size.x;
       image_buffer->y = render_size.y;
       imb_addrectfloatImBuf(image_buffer, 4);
@@ -321,53 +358,118 @@ class Context : public realtime_compositor::Context {
     MEM_freeN(output_buffer);
 
     BKE_image_partial_update_mark_full_update(image);
-    if (node_tree_.runtime->update_draw) {
-      node_tree_.runtime->update_draw(node_tree_.runtime->udh);
+    if (input_data_.node_tree->runtime->update_draw) {
+      input_data_.node_tree->runtime->update_draw(input_data_.node_tree->runtime->udh);
     }
   }
 };
 
 /* Render Realtime Compositor */
 
-RealtimeCompositor::RealtimeCompositor(Render &render,
-                                       const Scene &scene,
-                                       const RenderData &render_data,
-                                       const bNodeTree &node_tree,
-                                       const bool use_file_output,
-                                       const char *view_name)
-    : render_(render)
-{
-  /* Create resources with GPU context enabled. */
-  DRW_render_context_enable(&render_);
-  texture_pool_ = std::make_unique<TexturePool>();
-  context_ = std::make_unique<Context>(
-      scene, render_data, node_tree, use_file_output, view_name, *texture_pool_);
-  evaluator_ = std::make_unique<realtime_compositor::Evaluator>(*context_);
-  DRW_render_context_disable(&render_);
-}
+class RealtimeCompositor {
+ private:
+  /* Render instance for GPU context to run compositor in. */
+  Render &render_;
 
-RealtimeCompositor::~RealtimeCompositor()
-{
-  /* Free resources with GPU context enabled. */
-  DRW_render_context_enable(&render_);
-  evaluator_.reset();
-  context_.reset();
-  texture_pool_.reset();
-  DRW_render_context_disable(&render_);
-}
+  std::unique_ptr<TexturePool> texture_pool_;
+  std::unique_ptr<Context> context_;
 
-void RealtimeCompositor::execute()
-{
-  DRW_render_context_enable(&render_);
-  evaluator_->evaluate();
-  context_->output_to_render_result();
-  context_->viewer_output_to_viewer_image();
-  DRW_render_context_disable(&render_);
-}
+ public:
+  RealtimeCompositor(Render &render, const ContextInputData &input_data) : render_(render)
+  {
+    BLI_assert(!BLI_thread_is_main());
 
-void RealtimeCompositor::update(const Depsgraph * /* depsgraph */)
-{
-  /* TODO: implement */
-}
+    /* Create resources with GPU context enabled. */
+    DRW_render_context_enable(&render_);
+    texture_pool_ = std::make_unique<TexturePool>();
+    context_ = std::make_unique<Context>(input_data, *texture_pool_);
+    DRW_render_context_disable(&render_);
+  }
+
+  ~RealtimeCompositor()
+  {
+    /* Free resources with GPU context enabled. Cleanup may happen from the
+     * main thread, and we must use the main context there. */
+    if (BLI_thread_is_main()) {
+      DRW_gpu_context_enable();
+    }
+    else {
+      DRW_render_context_enable(&render_);
+    }
+
+    context_.reset();
+    texture_pool_.reset();
+
+    if (BLI_thread_is_main()) {
+      DRW_gpu_context_disable();
+    }
+    else {
+      DRW_render_context_disable(&render_);
+    }
+  }
+
+  /* Evaluate the compositor and output to the scene render result. */
+  void execute(const ContextInputData &input_data)
+  {
+    BLI_assert(!BLI_thread_is_main());
+
+    DRW_render_context_enable(&render_);
+    context_->update_input_data(input_data);
+
+    /* Always recreate the evaluator, as this only runs on compositing node changes and
+     * there is no reason to cache this. Unlike the viewport where it helps for navigation. */
+    {
+      realtime_compositor::Evaluator evaluator(*context_);
+      evaluator.evaluate();
+    }
+
+    context_->output_to_render_result();
+    context_->viewer_output_to_viewer_image();
+    DRW_render_context_disable(&render_);
+  }
+};
 
 }  // namespace blender::render
+
+void Render::compositor_execute(const Scene &scene,
+                                const RenderData &render_data,
+                                const bNodeTree &node_tree,
+                                const bool use_file_output,
+                                const char *view_name)
+{
+  std::unique_lock lock(gpu_compositor_mutex);
+
+  blender::render::ContextInputData input_data(
+      scene, render_data, node_tree, use_file_output, view_name);
+
+  if (gpu_compositor == nullptr) {
+    gpu_compositor = new blender::render::RealtimeCompositor(*this, input_data);
+  }
+
+  gpu_compositor->execute(input_data);
+}
+
+void Render::compositor_free()
+{
+  std::unique_lock lock(gpu_compositor_mutex);
+
+  if (gpu_compositor != nullptr) {
+    delete gpu_compositor;
+    gpu_compositor = nullptr;
+  }
+}
+
+void RE_compositor_execute(Render &render,
+                           const Scene &scene,
+                           const RenderData &render_data,
+                           const bNodeTree &node_tree,
+                           const bool use_file_output,
+                           const char *view_name)
+{
+  render.compositor_execute(scene, render_data, node_tree, use_file_output, view_name);
+}
+
+void RE_compositor_free(Render &render)
+{
+  render.compositor_free();
+}

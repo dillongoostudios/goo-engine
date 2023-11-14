@@ -1,9 +1,9 @@
-# SPDX-FileCopyrightText: 2021-2023 Blender Foundation
+# SPDX-FileCopyrightText: 2021-2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 ## Update and uncomment this in the release branch
-# set(BLENDER_VERSION 3.1)
+set(BLENDER_VERSION 4.0)
 
 function(download_source dep)
   set(TARGET_FILE ${${dep}_FILE})

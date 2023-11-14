@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #pragma once
@@ -188,6 +188,7 @@ enum {
 #define BLENDER_QUIT_FILE "quit.blend"
 #define BLENDER_BOOKMARK_FILE "bookmarks.txt"
 #define BLENDER_HISTORY_FILE "recent-files.txt"
+#define BLENDER_RECENT_SEARCHES_FILE "recent-searches.txt"
 #define BLENDER_PLATFORM_SUPPORT_FILE "platform_support.txt"
 
 #ifdef __cplusplus

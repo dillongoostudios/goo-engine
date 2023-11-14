@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -7,7 +7,7 @@
  */
 
 #include "../ABC_alembic.h"
-#include "IO_types.h"
+#include "IO_types.hh"
 
 #include <Alembic/AbcMaterial/IMaterial.h>
 
@@ -36,26 +36,28 @@
 #include "BKE_global.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
-#include "BKE_object.h"
+#include "BKE_object.hh"
 #include "BKE_scene.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
-#include "ED_undo.h"
+#include "ED_undo.hh"
 
 #include "BLI_compiler_compat.h"
 #include "BLI_fileops.h"
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
-#include "BLI_math.h"
+#include "BLI_math_matrix.h"
 #include "BLI_path_util.h"
 #include "BLI_string.h"
 #include "BLI_timeit.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "BLT_translation.h"
+
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 using Alembic::Abc::IV3fArrayProperty;
 using Alembic::Abc::ObjectHeader;
@@ -152,7 +154,7 @@ static bool gather_objects_paths(const IObject &object, ListBase *object_paths)
   return parent_is_part_of_this_object;
 }
 
-CacheArchiveHandle *ABC_create_handle(Main *bmain,
+CacheArchiveHandle *ABC_create_handle(const Main *bmain,
                                       const char *filepath,
                                       const CacheFileLayer *layers,
                                       ListBase *object_paths)
@@ -773,7 +775,7 @@ static AbcObjectReader *get_abc_reader(CacheReader *reader, Object *ob, const ch
   IObject iobject = abc_reader->iobject();
 
   if (!iobject.valid()) {
-    *err_str = "Invalid object: verify object path";
+    *err_str = TIP_("Invalid object: verify object path");
     return nullptr;
   }
 

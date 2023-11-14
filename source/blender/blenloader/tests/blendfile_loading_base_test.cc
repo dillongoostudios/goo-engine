@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2019 Blender Foundation
+/* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 #include "blendfile_loading_base_test.h"
@@ -25,8 +25,8 @@
 
 #include "BLO_readfile.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
 
 #include "DNA_genfile.h" /* for DNA_sdna_current_init() */
 #include "DNA_windowmanager_types.h"
@@ -35,10 +35,10 @@
 
 #include "ED_datafiles.h"
 
-#include "RNA_define.h"
+#include "RNA_define.hh"
 
-#include "WM_api.h"
-#include "wm.h"
+#include "WM_api.hh"
+#include "wm.hh"
 
 #include "GHOST_Path-api.hh"
 

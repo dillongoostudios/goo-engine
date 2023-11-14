@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -52,14 +52,13 @@ namespace detail {
  * Utility to implement #execute_lazy_function_eagerly.
  */
 template<typename... Inputs, typename... Outputs, size_t... InIndices, size_t... OutIndices>
-inline void execute_lazy_function_eagerly_impl(
-    const LazyFunction &fn,
-    UserData *user_data,
-    LocalUserData *local_user_data,
-    std::tuple<Inputs...> &inputs,
-    std::tuple<Outputs *...> &outputs,
-    std::index_sequence<InIndices...> /* in_indices */,
-    std::index_sequence<OutIndices...> /* out_indices */)
+inline void execute_lazy_function_eagerly_impl(const LazyFunction &fn,
+                                               UserData *user_data,
+                                               LocalUserData *local_user_data,
+                                               std::tuple<Inputs...> &inputs,
+                                               std::tuple<Outputs *...> &outputs,
+                                               std::index_sequence<InIndices...> /*in_indices*/,
+                                               std::index_sequence<OutIndices...> /*out_indices*/)
 {
   constexpr size_t InputsNum = sizeof...(Inputs);
   constexpr size_t OutputsNum = sizeof...(Outputs);

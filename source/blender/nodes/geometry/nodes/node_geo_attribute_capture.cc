@@ -1,13 +1,17 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "NOD_rna_define.hh"
+
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
 #include "BKE_attribute_math.hh"
 
 #include "NOD_socket_search_link.hh"
+
+#include "RNA_enum_types.hh"
 
 #include "node_geometry_util.hh"
 
@@ -38,8 +42,8 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 {
   uiLayoutSetPropSep(layout, true);
   uiLayoutSetPropDecorate(layout, false);
-  uiItemR(layout, ptr, "data_type", 0, "", ICON_NONE);
-  uiItemR(layout, ptr, "domain", 0, "", ICON_NONE);
+  uiItemR(layout, ptr, "data_type", UI_ITEM_NONE, "", ICON_NONE);
+  uiItemR(layout, ptr, "domain", UI_ITEM_NONE, "", ICON_NONE);
 }
 
 static void node_init(bNodeTree * /*tree*/, bNode *node)
@@ -111,6 +115,35 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
         params.update_and_connect_available_socket(node, "Value");
       });
     }
+  }
+}
+
+static void clean_unused_attributes(const AnonymousAttributePropagationInfo &propagation_info,
+                                    const Set<AttributeIDRef> &skip,
+                                    GeometryComponent &component)
+{
+  std::optional<MutableAttributeAccessor> attributes = component.attributes_for_write();
+  if (!attributes.has_value()) {
+    return;
+  }
+
+  Vector<std::string> unused_ids;
+  attributes->for_all([&](const AttributeIDRef &id, const AttributeMetaData /*meta_data*/) {
+    if (!id.is_anonymous()) {
+      return true;
+    }
+    if (skip.contains(id)) {
+      return true;
+    }
+    if (propagation_info.propagate(id.anonymous_id())) {
+      return true;
+    }
+    unused_ids.append(id.name());
+    return true;
+  });
+
+  for (const std::string &unused_id : unused_ids) {
+    attributes->remove(unused_id);
   }
 }
 
@@ -187,12 +220,18 @@ static void node_geo_exec(GeoNodeExecParams params)
       break;
   }
 
+  const auto capture_on = [&](GeometryComponent &component) {
+    bke::try_capture_field_on_geometry(component, *attribute_id, domain, field);
+    /* Changing of the anonymous attributes may require removing attributes that are no longer
+     * needed. */
+    clean_unused_attributes(
+        params.get_output_propagation_info("Geometry"), {*attribute_id}, component);
+  };
+
   /* Run on the instances component separately to only affect the top level of instances. */
   if (domain == ATTR_DOMAIN_INSTANCE) {
     if (geometry_set.has_instances()) {
-      GeometryComponent &component = geometry_set.get_component_for_write(
-          GeometryComponent::Type::Instance);
-      bke::try_capture_field_on_geometry(component, *attribute_id, domain, field);
+      capture_on(geometry_set.get_component_for_write(GeometryComponent::Type::Instance));
     }
   }
   else {
@@ -203,8 +242,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
       for (const GeometryComponent::Type type : types) {
         if (geometry_set.has(type)) {
-          GeometryComponent &component = geometry_set.get_component_for_write(type);
-          bke::try_capture_field_on_geometry(component, *attribute_id, domain, field);
+          capture_on(geometry_set.get_component_for_write(type));
         }
       }
     });
@@ -213,12 +251,28 @@ static void node_geo_exec(GeoNodeExecParams params)
   params.set_output("Geometry", geometry_set);
 }
 
-}  // namespace blender::nodes::node_geo_attribute_capture_cc
-
-void register_node_type_geo_attribute_capture()
+static void node_rna(StructRNA *srna)
 {
-  namespace file_ns = blender::nodes::node_geo_attribute_capture_cc;
+  RNA_def_node_enum(srna,
+                    "data_type",
+                    "Data Type",
+                    "Type of data stored in attribute",
+                    rna_enum_attribute_type_items,
+                    NOD_storage_enum_accessors(data_type),
+                    CD_PROP_FLOAT,
+                    enums::attribute_type_type_with_socket_fn);
 
+  RNA_def_node_enum(srna,
+                    "domain",
+                    "Domain",
+                    "Which domain to store the data in",
+                    rna_enum_attribute_domain_items,
+                    NOD_storage_enum_accessors(domain),
+                    ATTR_DOMAIN_POINT);
+}
+
+static void node_register()
+{
   static bNodeType ntype;
 
   geo_node_type_base(
@@ -227,11 +281,16 @@ void register_node_type_geo_attribute_capture()
                     "NodeGeometryAttributeCapture",
                     node_free_standard_storage,
                     node_copy_standard_storage);
-  ntype.initfunc = file_ns::node_init;
-  ntype.updatefunc = file_ns::node_update;
-  ntype.declare = file_ns::node_declare;
-  ntype.geometry_node_execute = file_ns::node_geo_exec;
-  ntype.draw_buttons = file_ns::node_layout;
-  ntype.gather_link_search_ops = file_ns::node_gather_link_searches;
+  ntype.initfunc = node_init;
+  ntype.updatefunc = node_update;
+  ntype.declare = node_declare;
+  ntype.geometry_node_execute = node_geo_exec;
+  ntype.draw_buttons = node_layout;
+  ntype.gather_link_search_ops = node_gather_link_searches;
   nodeRegisterType(&ntype);
+
+  node_rna(ntype.rna_ext.srna);
 }
+NOD_REGISTER_NODE(node_register)
+
+}  // namespace blender::nodes::node_geo_attribute_capture_cc

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2016 Blender Foundation
+/* SPDX-FileCopyrightText: 2016 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -14,7 +14,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_context.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
 #include "action_intern.hh" /* own include */
 

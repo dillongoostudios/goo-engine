@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -76,5 +76,6 @@ struct AnonymousAttributeInferencingResult {
 Array<const nodes::aal::RelationsInNode *> get_relations_by_node(const bNodeTree &tree,
                                                                  ResourceScope &scope);
 bool update_anonymous_attribute_relations(bNodeTree &tree);
+bool is_possible_field_socket(eNodeSocketDatatype type);
 
 }  // namespace blender::bke::anonymous_attribute_inferencing

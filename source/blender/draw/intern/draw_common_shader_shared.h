@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -92,7 +92,7 @@ struct GlobalsUboStorage {
   float4 color_bone_pose_constraint;
   float4 color_bone_pose_ik;
   float4 color_bone_pose_spline_ik;
-  float4 color_bone_pose_target;
+  float4 color_bone_pose_no_target;
   float4 color_bone_solid;
   float4 color_bone_locked;
   float4 color_bone_active;
@@ -135,7 +135,8 @@ struct GlobalsUboStorage {
   float size_checker;
   float size_vertex_gpencil;
   float size_viewport_line;
-  float _pad0, _pad1, _pad2;
+  float fresnel_mix_edit;
+  float _pad1, _pad2;
 };
 BLI_STATIC_ASSERT_ALIGN(GlobalsUboStorage, 16)
 
@@ -207,7 +208,7 @@ BLI_STATIC_ASSERT_ALIGN(GlobalsUboStorage, 16)
 #  define colorBonePoseConstraint globalsBlock.color_bone_pose_constraint
 #  define colorBonePoseIK globalsBlock.color_bone_pose_ik
 #  define colorBonePoseSplineIK globalsBlock.color_bone_pose_spline_ik
-#  define colorBonePoseTarget globalsBlock.color_bone_pose_target
+#  define colorBonePoseTarget globalsBlock.color_bone_pose_no_target
 #  define colorBoneSolid globalsBlock.color_bone_solid
 #  define colorBoneLocked globalsBlock.color_bone_locked
 #  define colorBoneActive globalsBlock.color_bone_active
@@ -247,9 +248,10 @@ BLI_STATIC_ASSERT_ALIGN(GlobalsUboStorage, 16)
 #  define sizeChecker globalsBlock.size_checker
 #  define sizeVertexGpencil globalsBlock.size_vertex_gpencil
 #  define sizeLine globalsBlock.size_viewport_line
+#  define fresnelMixEdit globalsBlock.fresnel_mix_edit
 #endif
 
-/* See: 'draw_cache_impl.h' for matching includes. */
+/* See: 'draw_cache_impl.hh' for matching includes. */
 #define VERT_GPENCIL_BEZT_HANDLE (1u << 30)
 /* data[0] (1st byte flags) */
 #define FACE_ACTIVE (1u << 0)

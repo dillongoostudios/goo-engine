@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# SPDX-FileCopyrightText: 2023 Blender Foundation
+# SPDX-FileCopyrightText: 2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -267,6 +267,20 @@ DEPS_CRITICAL_SUBPACKAGES = (
                                   DISTRO_ID_FEDORA: "dbus-devel",
                                   DISTRO_ID_SUSE: "dbus-1-devel",
                                   DISTRO_ID_ARCH: "dbus",
+                                  },
+            ),
+    Package(name="OpenGL Library",
+            distro_package_names={DISTRO_ID_DEBIAN: "libgl-dev",
+                                  DISTRO_ID_FEDORA: "mesa-libGL-devel",
+                                  DISTRO_ID_SUSE: "Mesa-libGL-devel",
+                                  DISTRO_ID_ARCH: "libglvnd",
+                                  },
+            ),
+    Package(name="EGL Library",
+            distro_package_names={DISTRO_ID_DEBIAN: "libegl-dev",
+                                  DISTRO_ID_FEDORA: "mesa-libEGL-devel",
+                                  DISTRO_ID_SUSE: "Mesa-libEGL-devel",
+                                  DISTRO_ID_ARCH: None,  # Included in `libglvnd`.
                                   },
             ),
 )

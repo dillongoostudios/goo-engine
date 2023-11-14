@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2022-2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(common_math_geom_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_ltc_lib.glsl)
@@ -22,6 +25,35 @@ void light_vector_get(LightData ld, vec3 P, out vec3 L, out float dist)
   }
 }
 
+/* Light vector to the closest point in the light shape. */
+void light_shape_vector_get(LightData ld, vec3 P, out vec3 L, out float dist)
+{
+  if (ld.type == LIGHT_RECT || ld.type == LIGHT_ELLIPSE) {
+    L = P - ld._position;
+    vec2 closest_point = vec2(dot(ld._right, L), dot(ld._up, L));
+    vec2 max_pos = vec2(ld._area_size_x, ld._area_size_y);
+    closest_point /= max_pos;
+
+    if (ld.type == LIGHT_ELLIPSE) {
+      closest_point /= max(1.0, length(closest_point));
+    }
+    else {
+      closest_point = clamp(closest_point, -1.0, 1.0);
+    }
+    closest_point *= max_pos;
+
+    vec3 L_prime = ld._right * closest_point.x + ld._up * closest_point.y;
+
+    L = L_prime - L;
+    dist = inversesqrt(len_squared(L));
+    L *= dist;
+    dist = 1.0 / dist;
+  }
+  else {
+    light_vector_get(ld, P, L, dist);
+  }
+}
+
 /* Rotate vector to light's local space. Does not translate. */
 vec3 light_world_to_local(LightData ld, vec3 L)
 {
@@ -32,6 +64,12 @@ vec3 light_world_to_local(LightData ld, vec3 L)
   lL.y = dot(ld.object_mat[1].xyz, L);
   lL.z = dot(ld.object_mat[2].xyz, L);
   return lL;
+}
+
+/* Transform position from light's local space to world space. Does translation. */
+vec3 light_local_position_to_world(LightData light, vec3 lP)
+{
+  return mat3(light.object_mat) * lP + light._position;
 }
 
 /* From Frostbite PBR Course
@@ -63,14 +101,11 @@ float light_attenuation(LightData ld, vec3 L, float dist)
     vis *= step(0.0, -dot(L, -ld._back));
   }
 
-  /* TODO(fclem): Static branching. */
-  if (!is_sun_light(ld.type)) {
 #ifdef VOLUME_LIGHTING
-    vis *= light_influence_attenuation(dist, ld.influence_radius_invsqr_volume);
+  vis *= light_influence_attenuation(dist, ld.influence_radius_invsqr_volume);
 #else
-    vis *= light_influence_attenuation(dist, ld.influence_radius_invsqr_surface);
+  vis *= light_influence_attenuation(dist, ld.influence_radius_invsqr_surface);
 #endif
-  }
   return vis;
 }
 
@@ -81,11 +116,10 @@ float light_point_light(LightData ld, const bool is_directional, vec3 L, float d
   if (is_directional) {
     return 1.0;
   }
-  /**
-   * Using "Point Light Attenuation Without Singularity" from Cem Yuksel
+  /* Using "Point Light Attenuation Without Singularity" from Cem Yuksel
    * http://www.cemyuksel.com/research/pointlightattenuation/pointlightattenuation.pdf
    * http://www.cemyuksel.com/research/pointlightattenuation/
-   **/
+   */
   float d_sqr = sqr(dist);
   float r_sqr = ld.radius_squared;
   /* Using reformulation that has better numerical precision. */
@@ -96,6 +130,18 @@ float light_point_light(LightData ld, const bool is_directional, vec3 L, float d
     power *= saturate(dot(ld._back, L));
   }
   return power;
+}
+
+/**
+ * Return the radius of the disk at the sphere origin spanning the same solid angle as the sphere
+ * from a given distance.
+ * Assumes `distance_to_sphere > sphere_radius`.
+ */
+float light_sphere_disk_radius(float sphere_radius, float distance_to_sphere)
+{
+  /* The sine of the half-angle spanned by a sphere light is equal to the tangent of the
+   * half-angle spanned by a disk light with the same radius. */
+  return sphere_radius * inversesqrt(1.0 - sqr(sphere_radius / distance_to_sphere));
 }
 
 float light_diffuse(sampler2DArray utility_tx,
@@ -176,7 +222,7 @@ float light_ltc(sampler2DArray utility_tx,
     if (ld.type == LIGHT_POINT) {
       /* The sine of the half-angle spanned by a sphere light is equal to the tangent of the
        * half-angle spanned by a disk light with the same radius. */
-      float radius = ld._radius * inversesqrt(1.0 - sqr(ld._radius / dist));
+      float radius = light_sphere_disk_radius(ld._radius, dist);
 
       points[0] = Px * -radius + Py * -radius;
       points[1] = Px * radius + Py * -radius;
@@ -211,8 +257,13 @@ float light_ltc(sampler2DArray utility_tx,
   }
 }
 
-vec3 light_translucent(sampler1D transmittance_tx,
-                       const bool is_directional,
+#ifdef SSS_TRANSMITTANCE
+float sample_transmittance_profile(float u)
+{
+  return utility_tx_sample(utility_tx, vec2(u, 0.0), UTIL_SSS_TRANSMITTANCE_PROFILE_LAYER).r;
+}
+
+vec3 light_translucent(const bool is_directional,
                        LightData ld,
                        vec3 N,
                        vec3 L,
@@ -231,10 +282,11 @@ vec3 light_translucent(sampler1D transmittance_tx,
   vec3 channels_co = saturate(delta / sss_radius) * SSS_TRANSMIT_LUT_SCALE + SSS_TRANSMIT_LUT_BIAS;
 
   vec3 translucency;
-  translucency.x = (sss_radius.x > 0.0) ? texture(transmittance_tx, channels_co.x).r : 0.0;
-  translucency.y = (sss_radius.y > 0.0) ? texture(transmittance_tx, channels_co.y).r : 0.0;
-  translucency.z = (sss_radius.z > 0.0) ? texture(transmittance_tx, channels_co.z).r : 0.0;
+  translucency.x = (sss_radius.x > 0.0) ? sample_transmittance_profile(channels_co.x) : 0.0;
+  translucency.y = (sss_radius.y > 0.0) ? sample_transmittance_profile(channels_co.y) : 0.0;
+  translucency.z = (sss_radius.z > 0.0) ? sample_transmittance_profile(channels_co.z) : 0.0;
   return translucency * power;
 }
+#endif
 
 /** \} */

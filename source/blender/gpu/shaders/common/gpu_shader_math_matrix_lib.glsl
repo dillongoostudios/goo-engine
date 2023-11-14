@@ -1,3 +1,6 @@
+/* SPDX-FileCopyrightText: 2023 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #pragma BLENDER_REQUIRE(gpu_shader_math_vector_lib.glsl)
 #pragma BLENDER_REQUIRE(gpu_shader_math_rotation_lib.glsl)
@@ -89,7 +92,7 @@ mat4x4 invert(mat4x4 mat, out bool r_success);
 /**
  * Flip the matrix across its diagonal. Also flips dimensions for non square matrices.
  */
-// mat3x3 transpose(mat3x3 mat); /* Built-In in GLSL language. */
+// mat3x3 transpose(mat3x3 mat); /* Built-In using GLSL language. */
 
 /**
  * Normalize each column of the matrix individually.
@@ -122,7 +125,7 @@ mat4x4 normalize_and_get_size(mat4x4 mat, out vec4 r_size);
  * Returns the determinant of the matrix.
  * It can be interpreted as the signed volume (or area) of the unit cube after transformation.
  */
-// float determinant(mat3x3 mat); /* Built-In in GLSL language. */
+// float determinant(mat3x3 mat); /* Built-In using GLSL language. */
 
 /**
  * Returns the adjoint of the matrix (also known as adjugate matrix).

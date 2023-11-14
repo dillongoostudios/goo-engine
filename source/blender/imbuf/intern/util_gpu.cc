@@ -8,7 +8,6 @@
 
 #include "imbuf.h"
 
-#include "BLI_math.h"
 #include "BLI_utildefines.h"
 #include "MEM_guardedalloc.h"
 
@@ -26,17 +25,24 @@
 
 static bool imb_is_grayscale_texture_format_compatible(const ImBuf *ibuf)
 {
-  if (ibuf->planes > 8) {
+  if (ibuf->byte_buffer.data && !ibuf->float_buffer.data) {
+    /* TODO: Support grayscale byte buffers.
+     * The challenge is that Blender always stores byte images as RGBA. */
     return false;
   }
+
+  if (ibuf->channels != 1) {
+    return false;
+  }
+
   /* Only imbufs with colorspace that do not modify the chrominance of the texture data relative
    * to the scene color space can be uploaded as single channel textures. */
-  if (IMB_colormanagement_space_is_data(ibuf->rect_colorspace) ||
-      IMB_colormanagement_space_is_srgb(ibuf->rect_colorspace) ||
-      IMB_colormanagement_space_is_scene_linear(ibuf->rect_colorspace))
+  if (IMB_colormanagement_space_is_data(ibuf->float_buffer.colorspace) ||
+      IMB_colormanagement_space_is_srgb(ibuf->float_buffer.colorspace) ||
+      IMB_colormanagement_space_is_scene_linear(ibuf->float_buffer.colorspace))
   {
     return true;
-  };
+  }
   return false;
 }
 
@@ -57,14 +63,14 @@ static void imb_gpu_get_format(const ImBuf *ibuf,
                                        (use_high_bitdepth ? GPU_RGBA32F : GPU_RGBA16F);
   }
   else {
-    if (IMB_colormanagement_space_is_data(ibuf->rect_colorspace) ||
-        IMB_colormanagement_space_is_scene_linear(ibuf->rect_colorspace))
+    if (IMB_colormanagement_space_is_data(ibuf->byte_buffer.colorspace) ||
+        IMB_colormanagement_space_is_scene_linear(ibuf->byte_buffer.colorspace))
     {
       /* Non-color data or scene linear, just store buffer as is. */
       *r_data_format = GPU_DATA_UBYTE;
       *r_texture_format = (is_grayscale) ? GPU_R8 : GPU_RGBA8;
     }
-    else if (IMB_colormanagement_space_is_srgb(ibuf->rect_colorspace)) {
+    else if (IMB_colormanagement_space_is_srgb(ibuf->byte_buffer.colorspace)) {
       /* sRGB, store as byte texture that the GPU can decode directly. */
       *r_data_format = (is_grayscale) ? GPU_DATA_FLOAT : GPU_DATA_UBYTE;
       *r_texture_format = (is_grayscale) ? GPU_R16F : GPU_SRGB8_A8;
@@ -87,8 +93,8 @@ static bool IMB_gpu_get_compressed_format(const ImBuf *ibuf, eGPUTextureFormat *
 {
   /* For DDS we only support data, scene linear and sRGB. Converting to
    * different colorspace would break the compression. */
-  const bool use_srgb = (!IMB_colormanagement_space_is_data(ibuf->rect_colorspace) &&
-                         !IMB_colormanagement_space_is_scene_linear(ibuf->rect_colorspace));
+  const bool use_srgb = (!IMB_colormanagement_space_is_data(ibuf->byte_buffer.colorspace) &&
+                         !IMB_colormanagement_space_is_scene_linear(ibuf->byte_buffer.colorspace));
 
   if (ibuf->dds_data.fourcc == FOURCC_DXT1) {
     *r_texture_format = (use_srgb) ? GPU_SRGB8_A8_DXT1 : GPU_RGBA8_DXT1;
@@ -142,11 +148,11 @@ static void *imb_gpu_get_data(const ImBuf *ibuf,
      *
      * We must also convert to premultiplied for correct texture interpolation
      * and consistency with float images. */
-    if (IMB_colormanagement_space_is_data(ibuf->rect_colorspace)) {
+    if (IMB_colormanagement_space_is_data(ibuf->byte_buffer.colorspace)) {
       /* Non-color data, just store buffer as is. */
     }
-    else if (IMB_colormanagement_space_is_srgb(ibuf->rect_colorspace) ||
-             IMB_colormanagement_space_is_scene_linear(ibuf->rect_colorspace))
+    else if (IMB_colormanagement_space_is_srgb(ibuf->byte_buffer.colorspace) ||
+             IMB_colormanagement_space_is_scene_linear(ibuf->byte_buffer.colorspace))
     {
       /* sRGB or scene linear, store as byte texture that the GPU can decode directly. */
       data_rect = MEM_mallocN(

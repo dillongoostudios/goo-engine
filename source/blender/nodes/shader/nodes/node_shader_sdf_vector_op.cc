@@ -21,10 +21,10 @@
  * \ingroup shdnodes
  */
 
-#include "RNA_enum_types.h"
+#include "RNA_enum_types.hh"
 
-#include "UI_interface.h"
-#include "UI_resources.h"
+#include "UI_interface.hh"
+#include "UI_resources.hh"
 
 #include "../node_shader_util.hh"
 
@@ -322,7 +322,7 @@ static void node_shader_init_sdf_vector_op(bNodeTree* /* ntree */, bNode *node)
 
 static void node_shader_buts_sdf_vector_op(uiLayout *layout, bContext* /* C */, PointerRNA *ptr)
 {
-  uiItemR(layout, ptr, "operation", 0, "", ICON_NONE);
+  uiItemR(layout, ptr, "operation", UI_ITEM_NONE, "", ICON_NONE);
   int type = RNA_enum_get(ptr, "operation");
   if (ELEM(type,
            SHD_SDF_VEC_OP_ROTATE_UV,
@@ -338,7 +338,7 @@ static void node_shader_buts_sdf_vector_op(uiLayout *layout, bContext* /* C */, 
            SHD_SDF_VEC_OP_BEND,
            SHD_SDF_VEC_OP_SPIN,
            SHD_SDF_VEC_OP_EXTRUDE)) {
-    uiItemR(layout, ptr, "axis", 0, "", ICON_NONE);
+    uiItemR(layout, ptr, "axis", UI_ITEM_NONE, "", ICON_NONE);
   }
 }
 

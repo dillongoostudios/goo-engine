@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2022 Blender Foundation
+/* SPDX-FileCopyrightText: 2022 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -54,6 +54,8 @@
 #include "draw_state.h"
 
 #include "intern/gpu_codegen.h"
+
+#include <sstream>
 
 namespace blender::draw {
 using namespace blender::draw;
@@ -671,8 +673,24 @@ inline void PassBase<T>::draw(GPUBatch *batch,
     return;
   }
   BLI_assert(shader_);
-  draw_commands_buf_.append_draw(
-      headers_, commands_, batch, instance_len, vertex_len, vertex_first, handle, custom_id);
+#ifdef WITH_METAL_BACKEND
+  /* TEMP: Note, shader_ is passed as part of the draw as vertex-expansion properties for SSBO
+   * vertex fetch need extracting at command generation time. */
+  GPUShader *draw_shader = GPU_shader_uses_ssbo_vertex_fetch(shader_) ? shader_ : nullptr;
+#endif
+  draw_commands_buf_.append_draw(headers_,
+                                 commands_,
+                                 batch,
+                                 instance_len,
+                                 vertex_len,
+                                 vertex_first,
+                                 handle,
+                                 custom_id
+#ifdef WITH_METAL_BACKEND
+                                 ,
+                                 draw_shader
+#endif
+  );
 }
 
 template<class T>
@@ -857,7 +875,7 @@ template<class T> inline void PassBase<T>::material_set(Manager &manager, GPUMat
 
   GPUUniformBuf *ubo = GPU_material_uniform_buffer_get(material);
   if (ubo != nullptr) {
-    bind_ubo(GPU_UBO_BLOCK_NAME, ubo);
+    bind_ubo(GPU_NODE_TREE_UBO_SLOT, ubo);
   }
 }
 

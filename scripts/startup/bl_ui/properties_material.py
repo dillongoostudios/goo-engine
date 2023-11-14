@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2009-2023 Blender Foundation
+# SPDX-FileCopyrightText: 2009-2023 Blender Authors
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
 
@@ -69,7 +69,7 @@ class MATERIAL_PT_custom_props(MaterialButtonsPanel, PropertyPanel, Panel):
         'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
-        'BLENDER_WORKBENCH_NEXT'}
+    }
     _context_path = "material"
     _property_type = bpy.types.Material
 
@@ -78,7 +78,7 @@ class EEVEE_MATERIAL_PT_context_material(MaterialButtonsPanel, Panel):
     bl_label = ""
     bl_context = "material"
     bl_options = {'HIDE_HEADER'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH', 'BLENDER_WORKBENCH_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT', 'BLENDER_WORKBENCH'}
 
     @classmethod
     def poll(cls, context):
@@ -269,6 +269,7 @@ class EEVEE_NEXT_MATERIAL_PT_settings(MaterialButtonsPanel, Panel):
         if mat.blend_method not in {'OPAQUE', 'CLIP', 'HASHED'}:
             layout.prop(mat, "show_transparent_back")
 
+        layout.prop(mat, "use_screen_refraction")
         layout.prop(mat, "pass_index")
 
 

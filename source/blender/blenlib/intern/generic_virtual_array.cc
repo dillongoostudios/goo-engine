@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2023 Blender Foundation
+/* SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -651,10 +651,7 @@ GVArray::GVArray(const GVArrayImpl *impl) : GVArrayCommon(impl) {}
 
 GVArray::GVArray(std::shared_ptr<const GVArrayImpl> impl) : GVArrayCommon(std::move(impl)) {}
 
-GVArray::GVArray(varray_tag::single /* tag */,
-                 const CPPType &type,
-                 int64_t size,
-                 const void *value)
+GVArray::GVArray(varray_tag::single /*tag*/, const CPPType &type, int64_t size, const void *value)
 {
   if (type.is_trivial() && type.size() <= 16 && type.alignment() <= 8) {
     this->emplace<GVArrayImpl_For_SmallTrivialSingleValue<16>>(type, size, value);

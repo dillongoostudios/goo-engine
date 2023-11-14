@@ -13,6 +13,8 @@
 #  include <shlwapi.h>
 #  include <stdio.h>
 #  include <stdlib.h>
+#  define COBJMACROS /* Remove this when converting to C++ */
+#  include <dxgi.h>
 
 #  include "MEM_guardedalloc.h"
 
@@ -216,6 +218,11 @@ bool BLI_windows_register_blend_extension(const bool all_users)
 
   if (lresult != ERROR_SUCCESS) {
     registry_error(root, "Unable to register Blend document type");
+    return false;
+  }
+
+  if (!BLI_windows_update_pinned_launcher(blender_path)) {
+    fprintf(stderr, "Update of pinned launcher failed.");
     return false;
   }
 
@@ -449,6 +456,37 @@ void BLI_windows_get_default_root_dir(char root[4])
       }
     }
   }
+}
+
+bool BLI_windows_get_directx_driver_version(const wchar_t *deviceSubString,
+                                            long long *r_driverVersion)
+{
+  IDXGIFactory *pFactory = NULL;
+  IDXGIAdapter *pAdapter = NULL;
+  if (CreateDXGIFactory(&IID_IDXGIFactory, (void **)&pFactory) == S_OK) {
+    for (UINT i = 0; IDXGIFactory_EnumAdapters(pFactory, i, &pAdapter) != DXGI_ERROR_NOT_FOUND;
+         ++i) {
+      LARGE_INTEGER version;
+      if (IDXGIAdapter_CheckInterfaceSupport(pAdapter, &IID_IDXGIDevice, &version) == S_OK) {
+        DXGI_ADAPTER_DESC desc;
+        if (IDXGIAdapter_GetDesc(pAdapter, &desc) == S_OK) {
+          if (wcsstr(desc.Description, deviceSubString)) {
+            *r_driverVersion = version.QuadPart;
+
+            IDXGIAdapter_Release(pAdapter);
+            IDXGIFactory_Release(pFactory);
+            return true;
+          }
+        }
+      }
+
+      IDXGIAdapter_Release(pAdapter);
+    }
+
+    IDXGIFactory_Release(pFactory);
+  }
+
+  return false;
 }
 
 #else

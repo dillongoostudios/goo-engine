@@ -18,7 +18,7 @@
 #include "DNA_space_types.h"
 
 #include "BLI_blenlib.h"
-#include "BLI_math.h"
+#include "BLI_math_vector.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -27,17 +27,17 @@
 #include "BKE_customdata.h"
 #include "BKE_editmesh.h"
 #include "BKE_layer.h"
-#include "BKE_screen.h"
+#include "BKE_screen.hh"
 
-#include "DEG_depsgraph.h"
+#include "DEG_depsgraph.hh"
 
-#include "ED_image.h"
-#include "ED_uvedit.h"
+#include "ED_image.hh"
+#include "ED_uvedit.hh"
 
-#include "UI_interface.h"
+#include "UI_interface.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #define B_UVEDIT_VERTEX 3
 

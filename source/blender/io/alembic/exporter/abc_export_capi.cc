@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2020 Blender Foundation
+/* SPDX-FileCopyrightText: 2020 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,9 +9,9 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DEG_depsgraph.h"
-#include "DEG_depsgraph_build.h"
-#include "DEG_depsgraph_query.h"
+#include "DEG_depsgraph.hh"
+#include "DEG_depsgraph_build.hh"
+#include "DEG_depsgraph_query.hh"
 
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
@@ -27,8 +27,8 @@
 #include "BLI_string.h"
 #include "BLI_timeit.hh"
 
-#include "WM_api.h"
-#include "WM_types.h"
+#include "WM_api.hh"
+#include "WM_types.hh"
 
 #include "CLG_log.h"
 static CLG_LogRef LOG = {"io.alembic"};

@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2013 Blender Foundation
+/* SPDX-FileCopyrightText: 2013 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -9,11 +9,11 @@
 #pragma once
 
 #include "intern/debug/deg_time_average.h"
-#include "intern/depsgraph_type.h"
+#include "intern/depsgraph_type.hh"
 
 #include "BKE_global.h"
 
-#include "DEG_depsgraph_debug.h"
+#include "DEG_depsgraph_debug.hh"
 
 namespace blender::deg {
 

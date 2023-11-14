@@ -1,5 +1,5 @@
 /* SPDX-FileCopyrightText: 2021 Tangent Animation. All rights reserved.
- * SPDX-FileCopyrightText: 2023 Blender Foundation
+ * SPDX-FileCopyrightText: 2023 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  *
@@ -99,7 +99,7 @@ class USDPrimReader {
   virtual bool valid() const;
 
   virtual void create_object(Main *bmain, double motionSampleTime) = 0;
-  virtual void read_object_data(Main * /* bmain */, double /* motionSampleTime */){};
+  virtual void read_object_data(Main * /*bmain*/, double /*motionSampleTime*/){};
 
   Object *object() const;
   void object(Object *ob);
