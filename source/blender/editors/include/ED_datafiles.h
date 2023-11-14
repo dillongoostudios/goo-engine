@@ -41,6 +41,9 @@ extern const char datatoc_blender_logo_png[];
 extern int datatoc_splash_png_size;
 extern const char datatoc_splash_png[];
 
+extern int datatoc_splash_alt_png_size;
+extern const char datatoc_splash_alt_png[];
+
 extern int datatoc_bfont_pfb_size;
 extern const char datatoc_bfont_pfb[];
 

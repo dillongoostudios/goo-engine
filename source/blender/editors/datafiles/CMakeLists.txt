@@ -908,6 +908,7 @@ if(WITH_BLENDER)
 
     # Images.
     data_to_c_simple(../../../../release/datafiles/splash.png SRC)
+    data_to_c_simple(../../../../release/datafiles/splash_alt.png SRC)
     data_to_c_simple(../../../../release/datafiles/alert_icons.png SRC)
     data_to_c_simple(../../../../release/datafiles/blender_logo.png SRC)
     # XXX These are handy, but give nasty "false changes" in svn :/
