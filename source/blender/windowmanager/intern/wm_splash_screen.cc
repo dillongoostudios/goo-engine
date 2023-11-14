@@ -146,8 +146,18 @@ static ImBuf *wm_block_splash_image(int width, int *r_height)
   }
 
   if (ibuf == nullptr) {
+    bTheme *btheme = UI_GetTheme();
+
+    unsigned char* menu_color = btheme->tui.wcol_menu_back.inner;
+    int sum = menu_color[0] + menu_color[1] + menu_color[2];
     const uchar *splash_data = (const uchar *)datatoc_splash_png;
     size_t splash_data_size = datatoc_splash_png_size;
+
+    if (sum > 380) {
+      splash_data = (const uchar *)datatoc_splash_alt_png;
+      splash_data_size = datatoc_splash_alt_png_size;
+    }
+
     ibuf = IMB_ibImageFromMemory(
         splash_data, splash_data_size, IB_rect, nullptr, "<splash screen>");
   }
