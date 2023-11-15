@@ -1297,7 +1297,6 @@ void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
         continue;
       }
       BLI_remlink(&bmain->texts, text);
-      BKE_id_free(bmain, text);
     }
   }
 
