@@ -1188,6 +1188,16 @@ static void versioning_grease_pencil_stroke_radii_scaling(GreasePencil *grease_p
 
 void blo_do_versions_400(FileData *fd, Library * /*lib*/, Main *bmain)
 {
+  /* Goo engine version warning script - remove if it exists. */
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 400, 0)) {
+    LISTBASE_FOREACH_MUTABLE (Text *, text, &bmain->texts) {
+      if (strcmp(text->id.name, "TX.version_warning.py") > 0) {
+        continue;
+      }
+      BLI_remlink(&bmain->texts, text);
+    }
+  }
+
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 400, 1)) {
     LISTBASE_FOREACH (Mesh *, mesh, &bmain->meshes) {
       version_mesh_legacy_to_struct_of_array_format(*mesh);
