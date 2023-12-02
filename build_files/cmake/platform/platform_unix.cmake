@@ -495,7 +495,7 @@ if(WITH_LLVM)
 
     # Symbol conflicts with same UTF library used by OpenCollada
     if(DEFINED LIBDIR)
-      if(WITH_OPENCOLLADA AND (${LLVM_VERSION} VERSION_LESS "4.0.0"))
+      if(WITH_OPENCOLLADA AND ("${LLVM_VERSION}" VERSION_LESS "4.0.0"))
         list(REMOVE_ITEM OPENCOLLADA_LIBRARIES ${OPENCOLLADA_UTF_LIBRARY})
       endif()
     endif()
