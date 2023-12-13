@@ -149,19 +149,19 @@ static bool buffer_from_filepath(const char *filepath, void **r_mem, size_t *r_s
 enum eWS_Qual {
   WS_QUAL_LSHIFT = (1 << 0),
   WS_QUAL_RSHIFT = (1 << 1),
-  WS_QUAL_SHIFT = (WS_QUAL_LSHIFT | WS_QUAL_RSHIFT),
+#define WS_QUAL_SHIFT (WS_QUAL_LSHIFT | WS_QUAL_RSHIFT)
   WS_QUAL_LALT = (1 << 2),
   WS_QUAL_RALT = (1 << 3),
-  WS_QUAL_ALT = (WS_QUAL_LALT | WS_QUAL_RALT),
+#define WS_QUAL_ALT (WS_QUAL_LALT | WS_QUAL_RALT)
   WS_QUAL_LCTRL = (1 << 4),
   WS_QUAL_RCTRL = (1 << 5),
-  WS_QUAL_CTRL = (WS_QUAL_LCTRL | WS_QUAL_RCTRL),
+#define WS_QUAL_CTRL (WS_QUAL_LCTRL | WS_QUAL_RCTRL)
   WS_QUAL_LMOUSE = (1 << 16),
   WS_QUAL_MMOUSE = (1 << 17),
   WS_QUAL_RMOUSE = (1 << 18),
-  WS_QUAL_MOUSE = (WS_QUAL_LMOUSE | WS_QUAL_MMOUSE | WS_QUAL_RMOUSE),
+#define WS_QUAL_MOUSE (WS_QUAL_LMOUSE | WS_QUAL_MMOUSE | WS_QUAL_RMOUSE)
 };
-ENUM_OPERATORS(eWS_Qual, WS_QUAL_MOUSE)
+ENUM_OPERATORS(eWS_Qual, WS_QUAL_RMOUSE)
 
 struct GhostData {
   GHOST_SystemHandle system;
@@ -2070,7 +2070,7 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
   BLF_exit();
 
   /* NOTE: Must happen before GPU Context destruction as GPU resources are released via
-   * Colour Management module. */
+   * Color Management module. Must be re-initialized in the case of drag & drop. */
   IMB_exit();
 
   if (ps.ghost_data.gpu_context) {
@@ -2086,6 +2086,9 @@ static char *wm_main_playanim_intern(int argc, const char **argv)
 
   /* early exit, IMB and BKE should be exited only in end */
   if (ps.dropped_file[0]) {
+    /* Ensure drag & drop runs with a valid IMB state. */
+    IMB_init();
+
     STRNCPY(filepath, ps.dropped_file);
     return filepath;
   }

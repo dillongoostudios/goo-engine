@@ -665,7 +665,6 @@ static void nearest_world_tree_co(BVHTree *tree,
                                   BVHTree_NearestPointCallback nearest_cb,
                                   void *treedata,
                                   const float3 &co,
-                                  const blender::float4x4 &obmat,
                                   BVHTreeNearest *r_nearest)
 {
   r_nearest->index = -1;
@@ -673,9 +672,6 @@ static void nearest_world_tree_co(BVHTree *tree,
   r_nearest->dist_sq = FLT_MAX;
 
   BLI_bvhtree_find_nearest(tree, co, r_nearest, nearest_cb, treedata);
-
-  float3 vec = float3(r_nearest->co) - co;
-  r_nearest->dist_sq = math::length(math::transform_direction(obmat, vec));
 }
 
 bool nearest_world_tree(SnapObjectContext *sctx,
@@ -690,19 +686,21 @@ bool nearest_world_tree(SnapObjectContext *sctx,
   float3 curr_co = math::transform_point(imat, sctx->runtime.curr_co);
 
   BVHTreeNearest nearest{};
-  float original_distance;
+  float3 vec;
   if (sctx->runtime.params.keep_on_same_target) {
-    nearest_world_tree_co(tree, nearest_cb, treedata, init_co, obmat, &nearest);
-    original_distance = nearest.dist_sq;
+    nearest_world_tree_co(tree, nearest_cb, treedata, init_co, &nearest);
+    vec = float3(nearest.co) - init_co;
   }
   else {
     /* NOTE: when `params->face_nearest_steps == 1`, the return variables of function below contain
      * the answer.  We could return immediately after updating r_loc, r_no, r_index, but that would
      * also complicate the code. Foregoing slight optimization for code clarity. */
-    nearest_world_tree_co(tree, nearest_cb, treedata, curr_co, obmat, &nearest);
+    nearest_world_tree_co(tree, nearest_cb, treedata, curr_co, &nearest);
+    vec = float3(nearest.co) - curr_co;
   }
 
-  if (r_nearest->dist_sq <= nearest.dist_sq) {
+  float original_distance = math::length(math::transform_direction(obmat, vec));
+  if (r_nearest->dist_sq <= original_distance) {
     return false;
   }
 
@@ -715,13 +713,20 @@ bool nearest_world_tree(SnapObjectContext *sctx,
   float3 co = init_co;
   for (int i = 0; i < sctx->runtime.params.face_nearest_steps; i++) {
     co += delta;
-    nearest_world_tree_co(tree, nearest_cb, treedata, co, obmat, &nearest);
+    nearest_world_tree_co(tree, nearest_cb, treedata, co, &nearest);
     co = nearest.co;
   }
 
   *r_nearest = nearest;
   if (sctx->runtime.params.keep_on_same_target) {
     r_nearest->dist_sq = original_distance;
+  }
+  else if (sctx->runtime.params.face_nearest_steps > 1) {
+    /* Recalculate the distance.
+     * When multiple steps are tested, we cannot depend on the distance calculated for
+     * `nearest.dist_sq`, as it reduces with each step. */
+    vec = co - curr_co;
+    r_nearest->dist_sq = math::length(math::transform_direction(obmat, vec));
   }
   return true;
 }
@@ -1483,12 +1488,22 @@ bool ED_transform_snap_object_project_all_view3d_ex(SnapObjectContext *sctx,
                                                     bool sort,
                                                     ListBase *r_hit_list)
 {
-  float ray_start[3], ray_normal[3];
+  float3 ray_start, ray_normal, ray_end;
+  const RegionView3D *rv3d = static_cast<const RegionView3D *>(region->regiondata);
 
   if (!ED_view3d_win_to_ray_clipped_ex(
-          depsgraph, region, v3d, mval, true, nullptr, ray_normal, ray_start, nullptr))
+          depsgraph, region, v3d, mval, false, nullptr, ray_normal, ray_start, ray_end))
   {
     return false;
+  }
+
+  if ((rv3d->rflag & RV3D_CLIPPING) &&
+      clip_segment_v3_plane_n(ray_start, ray_end, rv3d->clip, 6, ray_start, ray_end))
+  {
+    float ray_depth_max = math::dot(ray_end - ray_start, ray_normal);
+    if ((ray_depth == -1.0f) || (ray_depth > ray_depth_max)) {
+      ray_depth = ray_depth_max;
+    }
   }
 
   return ED_transform_snap_object_project_ray_all(
