@@ -1447,6 +1447,14 @@ static bool override_apply_property_check_skip(Main *bmain,
 {
   UNUSED_VARS_NDEBUG(bmain, id_ptr_src);
 
+  // HACK: Specifically prevent overriding actions when Resync Enforce is used
+  if ((rnaapply_ctx.flag & RNA_OVERRIDE_APPLY_FLAG_IGNORE_ID_POINTERS) != 0) {
+    StructRNA* rna_type = RNA_property_pointer_type(&rnaapply_ctx.ptr_dst, rnaapply_ctx.prop_dst);
+    if (RNA_struct_is_ID(rna_type) && RNA_type_to_ID_code(rna_type) == ID_AC) {
+      return false;
+    }
+  }
+
   if ((rnaapply_ctx.flag & RNA_OVERRIDE_APPLY_FLAG_IGNORE_ID_POINTERS) == 0) {
     return false;
   }
