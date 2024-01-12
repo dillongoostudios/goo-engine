@@ -10782,7 +10782,7 @@ static int ui_handle_menu_event(bContext *C,
 
             /* Menu search if spacebar or SearchOnKeyPress. */
             MenuType *mt = WM_menutype_find(menu->menu_idname, true);
-            if ((mt && bool(mt->flag & MenuTypeFlag::SearchOnKeyPress)) ||
+            if ((mt && bool(mt->flag & MenuTypeFlag::SearchOnKeyPress) && !bool(U.experimental.disable_search_on_keypress)) ||
                 event->type == EVT_SPACEKEY) {
               if ((level != 0) && (but == nullptr || !menu->menu_idname[0])) {
                 /* Search parent if the child is open but not activated or not searchable. */
