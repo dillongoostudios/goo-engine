@@ -17,12 +17,12 @@
 
 #include "DNA_mesh_types.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_report.h"
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 #include "UI_interface.hh"
 
@@ -198,7 +198,7 @@ static void ringsel_finish(bContext *C, wmOperator *op)
       /* When used in a macro the tessellation will be recalculated anyway,
        * this is needed here because modifiers depend on updated tessellation, see #45920 */
       EDBMUpdate_Params params{};
-      params.calc_looptri = true;
+      params.calc_looptris = true;
       params.calc_normals = false;
       params.is_destructive = true;
       EDBM_update(static_cast<Mesh *>(lcd->ob->data), &params);
@@ -477,7 +477,7 @@ static int loopcut_init(bContext *C, wmOperator *op, const wmEvent *event)
   if (is_interactive) {
     ED_workspace_status_text(
         C,
-        TIP_("Select a ring to be cut, use mouse-wheel or page-up/down for number of cuts, "
+        RPT_("Select a ring to be cut, use mouse-wheel or page-up/down for number of cuts, "
              "hold Alt for smooth"));
     return OPERATOR_RUNNING_MODAL;
   }
@@ -699,7 +699,7 @@ static int loopcut_modal(bContext *C, wmOperator *op, const wmEvent *event)
       BLI_snprintf(str_rep + NUM_STR_REP_LEN, NUM_STR_REP_LEN, "%.2f", smoothness);
     }
     SNPRINTF(
-        buf, TIP_("Number of Cuts: %s, Smooth: %s (Alt)"), str_rep, str_rep + NUM_STR_REP_LEN);
+        buf, RPT_("Number of Cuts: %s, Smooth: %s (Alt)"), str_rep, str_rep + NUM_STR_REP_LEN);
     ED_workspace_status_text(C, buf);
   }
 

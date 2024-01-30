@@ -603,7 +603,7 @@ static IDProperty *idp_from_PySequence(const char *name, PyObject *ob)
   bool use_buffer = false;
 
   if (PyObject_CheckBuffer(ob)) {
-    if (PyObject_GetBuffer(ob, &buffer, PyBUF_SIMPLE | PyBUF_FORMAT) == -1) {
+    if (PyObject_GetBuffer(ob, &buffer, PyBUF_ND | PyBUF_FORMAT) == -1) {
       /* Request failed. A `PyExc_BufferError` will have been raised,
        * so clear it to silently fall back to accessing as a sequence. */
       PyErr_Clear();
@@ -1418,7 +1418,8 @@ PyObject *BPy_Wrap_GetValues(ID *id, IDProperty *prop)
   int i;
 
   for (i = 0, loop = static_cast<IDProperty *>(prop->data.group.first); loop;
-       loop = loop->next, i++) {
+       loop = loop->next, i++)
+  {
     PyList_SET_ITEM(list, i, BPy_IDGroup_WrapData(id, loop, prop));
   }
 
@@ -1439,7 +1440,8 @@ PyObject *BPy_Wrap_GetItems(ID *id, IDProperty *prop)
   int i;
 
   for (i = 0, loop = static_cast<IDProperty *>(prop->data.group.first); loop;
-       loop = loop->next, i++) {
+       loop = loop->next, i++)
+  {
     PyObject *item = PyTuple_New(2);
     PyTuple_SET_ITEMS(
         item, PyUnicode_FromString(loop->name), BPy_IDGroup_WrapData(id, loop, prop));

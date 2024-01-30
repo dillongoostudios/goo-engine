@@ -10,6 +10,7 @@
 #include "RNA_access.hh"
 #include "RNA_enum_types.hh"
 
+#include "BKE_mesh.hh"
 #include "BKE_type_conversions.hh"
 
 #include "NOD_rna_define.hh"
@@ -27,15 +28,17 @@ NODE_STORAGE_FUNCS(NodeGeometryStoreNamedAttribute)
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
+  const bNode *node = b.node_or_null();
+
   b.add_input<decl::Geometry>("Geometry");
   b.add_input<decl::Bool>("Selection").default_value(true).hide_value().field_on_all();
   b.add_input<decl::String>("Name").is_attribute_name();
-  b.add_input<decl::Vector>("Value", "Value_Vector").field_on_all();
-  b.add_input<decl::Float>("Value", "Value_Float").field_on_all();
-  b.add_input<decl::Color>("Value", "Value_Color").field_on_all();
-  b.add_input<decl::Bool>("Value", "Value_Bool").field_on_all();
-  b.add_input<decl::Int>("Value", "Value_Int").field_on_all();
-  b.add_input<decl::Rotation>("Value", "Value_Rotation").field_on_all();
+
+  if (node != nullptr) {
+    const NodeGeometryStoreNamedAttribute &storage = node_storage(*node);
+    const eCustomDataType data_type = eCustomDataType(storage.data_type);
+    b.add_input(data_type, "Value").field_on_all();
+  }
 
   b.add_output<decl::Geometry>("Geometry").propagate_all();
 }
@@ -52,39 +55,15 @@ static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometryStoreNamedAttribute *data = MEM_cnew<NodeGeometryStoreNamedAttribute>(__func__);
   data->data_type = CD_PROP_FLOAT;
-  data->domain = ATTR_DOMAIN_POINT;
+  data->domain = int8_t(AttrDomain::Point);
   node->storage = data;
-}
-
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  const NodeGeometryStoreNamedAttribute &storage = node_storage(*node);
-  const eCustomDataType data_type = eCustomDataType(storage.data_type);
-
-  bNodeSocket *socket_geometry = static_cast<bNodeSocket *>(node->inputs.first);
-  bNodeSocket *socket_name = socket_geometry->next->next;
-  bNodeSocket *socket_vector = socket_name->next;
-  bNodeSocket *socket_float = socket_vector->next;
-  bNodeSocket *socket_color4f = socket_float->next;
-  bNodeSocket *socket_boolean = socket_color4f->next;
-  bNodeSocket *socket_int32 = socket_boolean->next;
-  bNodeSocket *socket_quat = socket_int32->next;
-
-  bke::nodeSetSocketAvailability(
-      ntree, socket_vector, ELEM(data_type, CD_PROP_FLOAT2, CD_PROP_FLOAT3));
-  bke::nodeSetSocketAvailability(ntree, socket_float, data_type == CD_PROP_FLOAT);
-  bke::nodeSetSocketAvailability(
-      ntree, socket_color4f, ELEM(data_type, CD_PROP_COLOR, CD_PROP_BYTE_COLOR));
-  bke::nodeSetSocketAvailability(ntree, socket_boolean, data_type == CD_PROP_BOOL);
-  bke::nodeSetSocketAvailability(ntree, socket_int32, data_type == CD_PROP_INT32);
-  bke::nodeSetSocketAvailability(ntree, socket_quat, data_type == CD_PROP_QUATERNION);
 }
 
 static void node_gather_link_searches(GatherLinkSearchOpParams &params)
 {
   const NodeDeclaration &declaration = *params.node_type().static_declaration;
-  search_link_ops_for_declarations(params, declaration.inputs.as_span().take_front(2));
-  search_link_ops_for_declarations(params, declaration.outputs.as_span().take_front(1));
+  search_link_ops_for_declarations(params, declaration.inputs);
+  search_link_ops_for_declarations(params, declaration.outputs);
 
   if (params.in_out() == SOCK_IN) {
     const std::optional<eCustomDataType> type = bke::socket_type_to_custom_data_type(
@@ -119,49 +98,24 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   const NodeGeometryStoreNamedAttribute &storage = node_storage(params.node());
   const eCustomDataType data_type = eCustomDataType(storage.data_type);
-  const eAttrDomain domain = eAttrDomain(storage.domain);
+  const AttrDomain domain = AttrDomain(storage.domain);
 
   const Field<bool> selection = params.extract_input<Field<bool>>("Selection");
 
-  GField field;
-  switch (data_type) {
-    case CD_PROP_FLOAT:
-      field = params.extract_input<GField>("Value_Float");
-      break;
-    case CD_PROP_FLOAT2: {
-      field = params.extract_input<GField>("Value_Vector");
-      field = bke::get_implicit_type_conversions().try_convert(field, CPPType::get<float2>());
-      break;
-    }
-    case CD_PROP_FLOAT3:
-      field = params.extract_input<GField>("Value_Vector");
-      break;
-    case CD_PROP_COLOR:
-      field = params.extract_input<GField>("Value_Color");
-      break;
-    case CD_PROP_BYTE_COLOR: {
-      field = params.extract_input<GField>("Value_Color");
-      field = bke::get_implicit_type_conversions().try_convert(field,
-                                                               CPPType::get<ColorGeometry4b>());
-      break;
-    }
-    case CD_PROP_BOOL:
-      field = params.extract_input<GField>("Value_Bool");
-      break;
-    case CD_PROP_INT32:
-      field = params.extract_input<GField>("Value_Int");
-      break;
-    case CD_PROP_QUATERNION:
-      field = params.extract_input<GField>("Value_Rotation");
-      break;
-    default:
-      break;
+  GField field = params.extract_input<GField>("Value");
+  if (data_type == CD_PROP_FLOAT2) {
+    field = bke::get_implicit_type_conversions().try_convert(std::move(field),
+                                                             CPPType::get<float2>());
+  }
+  if (data_type == CD_PROP_BYTE_COLOR) {
+    field = bke::get_implicit_type_conversions().try_convert(std::move(field),
+                                                             CPPType::get<ColorGeometry4b>());
   }
 
   std::atomic<bool> failure = false;
 
   /* Run on the instances component separately to only affect the top level of instances. */
-  if (domain == ATTR_DOMAIN_INSTANCE) {
+  if (domain == AttrDomain::Instance) {
     if (geometry_set.has_instances()) {
       GeometryComponent &component = geometry_set.get_component_for_write(
           GeometryComponent::Type::Instance);
@@ -181,10 +135,14 @@ static void node_geo_exec(GeoNodeExecParams params)
       {
         if (geometry_set.has(type)) {
           GeometryComponent &component = geometry_set.get_component_for_write(type);
-          if (!bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
-            if (component.attribute_domain_size(domain) != 0) {
-              failure.store(true);
+          if (bke::try_capture_field_on_geometry(component, name, domain, selection, field)) {
+            if (component.type() == GeometryComponent::Type::Mesh) {
+              Mesh &mesh = *geometry_set.get_mesh_for_write();
+              bke::mesh_ensure_default_color_attribute_on_add(mesh, name, domain, data_type);
             }
+          }
+          else if (component.attribute_domain_size(domain) != 0) {
+            failure.store(true);
           }
         }
       }
@@ -193,7 +151,7 @@ static void node_geo_exec(GeoNodeExecParams params)
 
   if (failure) {
     const char *domain_name = nullptr;
-    RNA_enum_name_from_value(rna_enum_attribute_domain_items, domain, &domain_name);
+    RNA_enum_name_from_value(rna_enum_attribute_domain_items, int(domain), &domain_name);
     const char *type_name = nullptr;
     RNA_enum_name_from_value(rna_enum_attribute_type_items, data_type, &type_name);
     const std::string message = fmt::format(
@@ -229,7 +187,7 @@ static void node_rna(StructRNA *srna)
                     "Which domain to store the data in",
                     rna_enum_attribute_domain_items,
                     NOD_storage_enum_accessors(domain),
-                    ATTR_DOMAIN_POINT,
+                    int(AttrDomain::Point),
                     enums::domain_experimental_grease_pencil_version3_fn);
 }
 
@@ -245,7 +203,6 @@ static void node_register()
                     node_copy_standard_storage);
   blender::bke::node_type_size(&ntype, 140, 100, 700);
   ntype.initfunc = node_init;
-  ntype.updatefunc = node_update;
   ntype.declare = node_declare;
   ntype.gather_link_search_ops = node_gather_link_searches;
   ntype.geometry_node_execute = node_geo_exec;

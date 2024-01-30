@@ -178,7 +178,6 @@ set(SRC_KERNEL_SVM_HEADERS
   svm/math.h
   svm/math_util.h
   svm/mix.h
-  svm/musgrave.h
   svm/node_types_template.h
   svm/noise.h
   svm/noisetex.h
@@ -328,6 +327,7 @@ set(SRC_KERNEL_UTIL_HEADERS
   util/color.h
   util/differential.h
   util/lookup_table.h
+  util/nanovdb.h
   util/profiling.h
 )
 
@@ -484,13 +484,17 @@ if(WITH_CYCLES_CUDA_BINARIES)
 
     if(WITH_NANOVDB)
       set(cuda_flags ${cuda_flags}
-        -D WITH_NANOVDB
-        -I "${NANOVDB_INCLUDE_DIR}")
+        -D WITH_NANOVDB)
     endif()
 
     if(WITH_CYCLES_DEBUG)
       set(cuda_flags ${cuda_flags} -D WITH_CYCLES_DEBUG)
       set(cuda_flags ${cuda_flags} --ptxas-options="-v")
+    endif()
+
+    if(${cuda_version} GREATER_EQUAL 110)
+      # Helps with compatibility when using recent clang host compiler.
+      set(cuda_flags ${cuda_flags} -std=c++17)
     endif()
 
     set(_cuda_nvcc_args
@@ -504,14 +508,12 @@ if(WITH_CYCLES_CUDA_BINARIES)
       add_custom_command(
         OUTPUT ${cuda_file}
         COMMAND ${CCACHE_PROGRAM} ${cuda_nvcc_executable} ${_cuda_nvcc_args}
-        DEPENDS ${kernel_sources}
-        USES_TERMINAL)
+        DEPENDS ${kernel_sources})
     else()
       add_custom_command(
         OUTPUT ${cuda_file}
         COMMAND ${cuda_nvcc_executable} ${_cuda_nvcc_args}
-        DEPENDS ${kernel_sources}
-        USES_TERMINAL)
+        DEPENDS ${kernel_sources})
     endif()
 
     unset(_cuda_nvcc_args)
@@ -529,9 +531,11 @@ if(WITH_CYCLES_CUDA_BINARIES)
       if(DEFINED CUDA10_NVCC_EXECUTABLE)
         set(cuda_nvcc_executable ${CUDA10_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA10_TOOLKIT_ROOT_DIR})
+        set(cuda_version 100)
       elseif("${CUDA_VERSION}" LESS 110) # Support for sm_30 was removed in CUDA 11
         set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
+        set(cuda_version ${CUDA_VERSION})
       else()
         message(STATUS "CUDA binaries for ${arch} require CUDA 10 or earlier, skipped.")
       endif()
@@ -539,9 +543,11 @@ if(WITH_CYCLES_CUDA_BINARIES)
       if(DEFINED CUDA11_NVCC_EXECUTABLE)
         set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA11_TOOLKIT_ROOT_DIR})
+        set(cuda_version 110)
       elseif("${CUDA_VERSION}" LESS 120) # Support for sm_35, sm_37 was removed in CUDA 12
         set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
+        set(cuda_version ${CUDA_VERSION})
       else()
         message(STATUS "CUDA binaries for ${arch} require CUDA 11 or earlier, skipped.")
       endif()
@@ -551,15 +557,18 @@ if(WITH_CYCLES_CUDA_BINARIES)
       if("${CUDA_VERSION}" GREATER_EQUAL 111) # Support for sm_86 was introduced in CUDA 11
         set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
+        set(cuda_version ${CUDA_VERSION})
       elseif(DEFINED CUDA11_NVCC_EXECUTABLE)
         set(cuda_nvcc_executable ${CUDA11_NVCC_EXECUTABLE})
         set(cuda_toolkit_root_dir ${CUDA11_TOOLKIT_ROOT_DIR})
+        set(cuda_version 110)
       else()
         message(STATUS "CUDA binaries for ${arch} require CUDA 11.1+, skipped.")
       endif()
     else()
       set(cuda_nvcc_executable ${CUDA_NVCC_EXECUTABLE})
       set(cuda_toolkit_root_dir ${CUDA_TOOLKIT_ROOT_DIR})
+      set(cuda_version ${CUDA_VERSION})
     endif()
     if(DEFINED cuda_nvcc_executable AND DEFINED cuda_toolkit_root_dir)
       # Compile regular kernel
@@ -637,8 +646,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
 
     if(WITH_NANOVDB)
       set(hip_flags ${hip_flags}
-        -D WITH_NANOVDB
-        -I "${NANOVDB_INCLUDE_DIR}")
+        -D WITH_NANOVDB)
     endif()
 
     if(WITH_CYCLES_DEBUG)
@@ -648,8 +656,7 @@ if(WITH_CYCLES_HIP_BINARIES AND WITH_CYCLES_DEVICE_HIP)
     add_custom_command(
       OUTPUT ${hip_file}
       COMMAND ${hip_command} ${hip_flags}
-      DEPENDS ${kernel_sources}
-      USES_TERMINAL)
+      DEPENDS ${kernel_sources})
     delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${hip_file}" ${CYCLES_INSTALL_PATH}/lib)
     list(APPEND hip_fatbins ${hip_file})
   endmacro()
@@ -717,8 +724,7 @@ if(WITH_CYCLES_DEVICE_HIPRT AND WITH_CYCLES_HIP_BINARIES)
   add_custom_command(
     OUTPUT  ${bitcode_file}
     COMMAND ${hiprt_compile_command} ${hiprt_compile_flags}
-    DEPENDS ${kernel_sources}
-    USES_TERMINAL)
+    DEPENDS ${kernel_sources})
   if(WIN32)
     set(hiprt_link_command ${CMAKE_COMMAND})
     set(hiprt_link_flags   -E env "HIP_PATH=${HIP_ROOT_DIR}"
@@ -738,8 +744,7 @@ if(WITH_CYCLES_DEVICE_HIPRT AND WITH_CYCLES_HIP_BINARIES)
   add_custom_command(
     OUTPUT  ${hiprt_file}
     COMMAND ${hiprt_link_command} ${hiprt_link_flags}
-    DEPENDS ${bitcode_file}
-    USES_TERMINAL)
+    DEPENDS ${bitcode_file})
   delayed_install("${CMAKE_CURRENT_BINARY_DIR}" "${hiprt_file}" ${CYCLES_INSTALL_PATH}/lib)
   add_custom_target(cycles_kernel_hiprt ALL DEPENDS ${hiprt_file})
   cycles_set_solution_folder(cycles_kernel_hiprt)
@@ -761,8 +766,7 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
 
     if(WITH_NANOVDB)
       set(cuda_flags ${cuda_flags}
-        -D WITH_NANOVDB
-        -I "${NANOVDB_INCLUDE_DIR}")
+        -D WITH_NANOVDB)
     endif()
     if(WITH_CYCLES_OSL)
       set(cuda_flags ${cuda_flags}
@@ -790,8 +794,7 @@ if(WITH_CYCLES_DEVICE_OPTIX AND WITH_CYCLES_CUDA_BINARIES)
         ${cuda_flags}
         ${input}
       WORKING_DIRECTORY
-        "${CMAKE_CURRENT_SOURCE_DIR}"
-      USES_TERMINAL)
+        "${CMAKE_CURRENT_SOURCE_DIR}")
 
     list(APPEND optix_ptx ${output})
 
@@ -943,8 +946,7 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
 
   if(WITH_NANOVDB)
     list(APPEND sycl_compiler_flags
-      -DWITH_NANOVDB
-      -I"${NANOVDB_INCLUDE_DIR}")
+      -DWITH_NANOVDB)
   endif()
 
   if(WITH_CYCLES_EMBREE AND EMBREE_SYCL_SUPPORT)
@@ -1084,8 +1086,7 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
               "$<$<CONFIG:Debug>:${sycl_compiler_flags_Debug}>"
               "$<$<CONFIG:MinSizeRel>:${sycl_compiler_flags_Release}>"
       COMMAND_EXPAND_LISTS
-      DEPENDS ${cycles_oneapi_kernel_sources}
-      USES_TERMINAL)
+      DEPENDS ${cycles_oneapi_kernel_sources})
   else()
     if(NOT IGC_INSTALL_DIR)
       get_filename_component(IGC_INSTALL_DIR "${sycl_compiler_root}/../lib/igc" ABSOLUTE)
@@ -1110,8 +1111,7 @@ if(WITH_CYCLES_DEVICE_ONEAPI)
               "$<$<CONFIG:Debug>:${sycl_compiler_flags_Debug_str}>"
               "$<$<CONFIG:MinSizeRel>:${sycl_compiler_flags_Release_str}>"
       COMMAND_EXPAND_LISTS
-      DEPENDS ${cycles_oneapi_kernel_sources}
-      USES_TERMINAL)
+      DEPENDS ${cycles_oneapi_kernel_sources})
   endif()
 
   if(NOT WITH_BLENDER)
@@ -1265,16 +1265,3 @@ delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_SVM_HEADERS}" ${CYCLES
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_TYPES_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_KERNEL_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/source/kernel/util)
 delayed_install(${CMAKE_CURRENT_SOURCE_DIR} "${SRC_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/source/util)
-
-if(WITH_NANOVDB)
-  set(SRC_NANOVDB_HEADERS
-    nanovdb/NanoVDB.h
-    nanovdb/CNanoVDB.h
-  )
-  set(SRC_NANOVDB_UTIL_HEADERS
-    nanovdb/util/CSampleFromVoxels.h
-    nanovdb/util/SampleFromVoxels.h
-  )
-  delayed_install(${NANOVDB_INCLUDE_DIR} "${SRC_NANOVDB_HEADERS}" ${CYCLES_INSTALL_PATH}/source/nanovdb)
-  delayed_install(${NANOVDB_INCLUDE_DIR} "${SRC_NANOVDB_UTIL_HEADERS}" ${CYCLES_INSTALL_PATH}/source/nanovdb/util)
-endif()

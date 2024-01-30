@@ -23,8 +23,8 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_mesh.hh"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
@@ -188,7 +188,7 @@ static Mesh *subdiv_as_ccg(SubsurfModifierData *smd,
   if (ccg_settings.resolution < 3) {
     return result;
   }
-  result = BKE_subdiv_to_ccg_mesh(subdiv, &ccg_settings, mesh);
+  result = BKE_subdiv_to_ccg_mesh(*subdiv, ccg_settings, *mesh);
   return result;
 }
 
@@ -258,7 +258,8 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   }
   const bool use_clnors = BKE_subsurf_modifier_use_custom_loop_normals(smd, mesh);
   if (use_clnors) {
-    void *data = CustomData_add_layer(&mesh->loop_data, CD_NORMAL, CD_CONSTRUCT, mesh->totloop);
+    void *data = CustomData_add_layer(
+        &mesh->corner_data, CD_NORMAL, CD_CONSTRUCT, mesh->corners_num);
     memcpy(data, mesh->corner_normals().data(), mesh->corner_normals().size_in_bytes());
   }
   /* TODO(sergey): Decide whether we ever want to use CCG for subsurf,
@@ -273,8 +274,8 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   if (use_clnors) {
     BKE_mesh_set_custom_normals(result,
                                 static_cast<float(*)[3]>(CustomData_get_layer_for_write(
-                                    &result->loop_data, CD_NORMAL, result->totloop)));
-    CustomData_free_layers(&result->loop_data, CD_NORMAL, result->totloop);
+                                    &result->corner_data, CD_NORMAL, result->corners_num)));
+    CustomData_free_layers(&result->corner_data, CD_NORMAL, result->corners_num);
   }
   // BKE_subdiv_stats_print(&subdiv->stats);
   if (!ELEM(subdiv, runtime_data->subdiv_cpu, runtime_data->subdiv_gpu)) {
@@ -286,9 +287,8 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 static void deform_matrices(ModifierData *md,
                             const ModifierEvalContext *ctx,
                             Mesh *mesh,
-                            float (*vertex_cos)[3],
-                            float (*deform_matrices)[3][3],
-                            int verts_num)
+                            blender::MutableSpan<blender::float3> positions,
+                            blender::MutableSpan<blender::float3x3> /*matrices*/)
 {
 #if !defined(WITH_OPENSUBDIV)
   BKE_modifier_set_error(ctx->object, md, "Disabled, built without OpenSubdiv");
@@ -296,7 +296,6 @@ static void deform_matrices(ModifierData *md,
 #endif
 
   /* Subsurf does not require extra space mapping, keep matrices as is. */
-  (void)deform_matrices;
 
   SubsurfModifierData *smd = (SubsurfModifierData *)md;
   if (!BKE_subsurf_modifier_runtime_init(smd, (ctx->flag & MOD_APPLY_RENDER) != 0)) {
@@ -308,7 +307,8 @@ static void deform_matrices(ModifierData *md,
     /* Happens on bad topology, but also on empty input mesh. */
     return;
   }
-  BKE_subdiv_deform_coarse_vertices(subdiv, mesh, vertex_cos, verts_num);
+  BKE_subdiv_deform_coarse_vertices(
+      subdiv, mesh, reinterpret_cast<float(*)[3]>(positions.data()), positions.size());
   if (!ELEM(subdiv, runtime_data->subdiv_cpu, runtime_data->subdiv_gpu)) {
     BKE_subdiv_free(subdiv);
   }
@@ -393,7 +393,7 @@ static void panel_draw(const bContext *C, Panel *panel)
                                  RNA_float_get(&ob_cycles_ptr, "dicing_rate"),
                              0.1f);
     char output[256];
-    SNPRINTF(output, TIP_("Final Scale: Render %.2f px, Viewport %.2f px"), render, preview);
+    SNPRINTF(output, RPT_("Final Scale: Render %.2f px, Viewport %.2f px"), render, preview);
     uiItemL(layout, output, ICON_NONE);
 
     uiItemS(layout);
@@ -489,7 +489,7 @@ ModifierTypeInfo modifierType_Subsurf = {
     /*struct_name*/ "SubsurfModifierData",
     /*struct_size*/ sizeof(SubsurfModifierData),
     /*srna*/ &RNA_SubsurfModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
         eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode |
         eModifierTypeFlag_AcceptsCVs,
@@ -517,4 +517,5 @@ ModifierTypeInfo modifierType_Subsurf = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
 };

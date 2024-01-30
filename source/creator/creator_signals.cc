@@ -44,7 +44,7 @@
 #  include "BKE_appdir.h" /* BKE_tempdir_base */
 #  include "BKE_blender_version.h"
 #  include "BKE_global.h"
-#  include "BKE_main.h"
+#  include "BKE_main.hh"
 #  include "BKE_report.h"
 
 #  include <csignal>
@@ -57,7 +57,7 @@
 
 // #define USE_WRITE_CRASH_BLEND
 #  ifdef USE_WRITE_CRASH_BLEND
-#    include "BKE_undo_system.h"
+#    include "BKE_undo_system.hh"
 #    include "BLO_undofile.hh"
 #  endif
 

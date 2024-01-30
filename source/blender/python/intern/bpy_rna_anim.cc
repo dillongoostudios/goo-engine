@@ -27,11 +27,11 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_idtype.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_report.h"
 
 #include "RNA_access.hh"
@@ -341,9 +341,8 @@ PyObject *pyrna_struct_keyframe_insert(BPy_StructRNA *self, PyObject *args, PyOb
    * it turns out to be necessary for some reason to insert keyframes on evaluated objects, we can
    * revisit this and add an explicit `depsgraph` keyword argument to the function call.
    *
-   * It is unlikely that driver code (which is the reason this depsgraph pointer is obtained) will
-   * be executed from this function call, as this only happens when `options` has
-   * `INSERTKEY_DRIVER`, which is not exposed to Python. */
+   * The depsgraph is only used for evaluating the NLA so this might not be needed in the future.
+   */
   bContext *C = BPY_context_get();
   Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
   const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(depsgraph,

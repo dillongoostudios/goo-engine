@@ -37,10 +37,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .description(
           "Index of the instance used for each point. This is only used when Pick Instances "
           "is on. By default the point index is used");
-  b.add_input<decl::Vector>("Rotation")
-      .subtype(PROP_EULER)
-      .field_on({0})
-      .description("Rotation of the instances");
+  b.add_input<decl::Rotation>("Rotation").field_on({0}).description("Rotation of the instances");
   b.add_input<decl::Vector>("Scale")
       .default_value({1.0f, 1.0f, 1.0f})
       .subtype(PROP_XYZ)
@@ -58,12 +55,12 @@ static void add_instances_from_component(
     const GeoNodeExecParams &params,
     const Map<AttributeIDRef, AttributeKind> &attributes_to_propagate)
 {
-  const eAttrDomain domain = ATTR_DOMAIN_POINT;
+  const AttrDomain domain = AttrDomain::Point;
   const int domain_num = src_attributes.domain_size(domain);
 
   VArray<bool> pick_instance;
   VArray<int> indices;
-  VArray<float3> rotations;
+  VArray<math::Quaternion> rotations;
   VArray<float3> scales;
 
   const Field<bool> selection_field = params.get_input<Field<bool>>("Selection");
@@ -73,7 +70,7 @@ static void add_instances_from_component(
    * selected indices should be copied. */
   evaluator.add(params.get_input<Field<bool>>("Pick Instance"), &pick_instance);
   evaluator.add(params.get_input<Field<int>>("Instance Index"), &indices);
-  evaluator.add(params.get_input<Field<float3>>("Rotation"), &rotations);
+  evaluator.add(params.get_input<Field<math::Quaternion>>("Rotation"), &rotations);
   evaluator.add(params.get_input<Field<float3>>("Scale"), &scales);
   evaluator.evaluate();
 
@@ -117,8 +114,7 @@ static void add_instances_from_component(
   selection.foreach_index(GrainSize(1024), [&](const int64_t i, const int64_t range_i) {
     /* Compute base transform for every instances. */
     float4x4 &dst_transform = dst_transforms[range_i];
-    dst_transform = math::from_loc_rot_scale<float4x4>(
-        positions[i], math::EulerXYZ(rotations[i]), scales[i]);
+    dst_transform = math::from_loc_rot_scale<float4x4>(positions[i], rotations[i], scales[i]);
 
     /* Reference that will be used by this new instance. */
     int dst_handle = empty_reference_handle;
@@ -163,7 +159,7 @@ static void add_instances_from_component(
   for (const auto item : attributes_to_propagate.items()) {
     const AttributeIDRef &id = item.key;
     const eCustomDataType data_type = item.value.data_type;
-    const bke::GAttributeReader src = src_attributes.lookup(id, ATTR_DOMAIN_POINT, data_type);
+    const bke::GAttributeReader src = src_attributes.lookup(id, AttrDomain::Point, data_type);
     if (!src) {
       /* Domain interpolation can fail if the source domain is empty. */
       continue;
@@ -171,13 +167,14 @@ static void add_instances_from_component(
 
     if (!dst_attributes.contains(id)) {
       if (src.varray.size() == dst_component.instances_num() && src.sharing_info &&
-          src.varray.is_span()) {
+          src.varray.is_span())
+      {
         const bke::AttributeInitShared init(src.varray.get_internal_span().data(),
                                             *src.sharing_info);
-        dst_attributes.add(id, ATTR_DOMAIN_INSTANCE, data_type, init);
+        dst_attributes.add(id, AttrDomain::Instance, data_type, init);
         continue;
       }
-      dst_attributes.add(id, ATTR_DOMAIN_INSTANCE, data_type, bke::AttributeInitConstruct());
+      dst_attributes.add(id, AttrDomain::Instance, data_type, bke::AttributeInitConstruct());
     }
 
     GSpanAttributeWriter dst = dst_attributes.lookup_for_write_span(id);
@@ -220,7 +217,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     for (const GeometryComponent::Type type : types) {
       if (geometry_set.has(type)) {
         const GeometryComponent &component = *geometry_set.get_component(type);
-        const bke::GeometryFieldContext field_context{component, ATTR_DOMAIN_POINT};
+        const bke::GeometryFieldContext field_context{component, AttrDomain::Point};
         add_instances_from_component(*dst_instances,
                                      *component.attributes(),
                                      instance,
@@ -249,7 +246,7 @@ static void node_geo_exec(GeoNodeExecParams params)
         /* TODO: Attributes are not propagating from the curves or the points. */
         bke::Instances *instances = new bke::Instances();
         const bke::GreasePencilLayerFieldContext field_context(
-            grease_pencil, ATTR_DOMAIN_POINT, layer_index);
+            grease_pencil, AttrDomain::Point, layer_index);
         add_instances_from_component(*instances,
                                      src_curves.attributes(),
                                      instance,

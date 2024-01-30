@@ -26,10 +26,11 @@
 #include "BKE_freestyle.h"
 #include "BKE_idprop.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "DNA_ID.h"
 #include "DNA_collection_types.h"
@@ -47,7 +48,7 @@
 #include "DEG_depsgraph_debug.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 #include "RE_engine.h"
 
@@ -402,6 +403,9 @@ Base *BKE_view_layer_base_find(ViewLayer *view_layer, Object *ob)
 
 void BKE_view_layer_base_deselect_all(const Scene *scene, ViewLayer *view_layer)
 {
+  BLI_assert(scene);
+  BLI_assert(view_layer);
+
   BKE_view_layer_synced_ensure(scene, view_layer);
   LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
     base->flag &= ~BASE_SELECTED;
@@ -986,6 +990,9 @@ void BKE_view_layer_need_resync_tag(ViewLayer *view_layer)
 
 void BKE_view_layer_synced_ensure(const Scene *scene, ViewLayer *view_layer)
 {
+  BLI_assert(scene);
+  BLI_assert(view_layer);
+
   if (view_layer->flag & VIEW_LAYER_OUT_OF_SYNC) {
     BKE_layer_collection_sync(scene, view_layer);
     view_layer->flag &= ~VIEW_LAYER_OUT_OF_SYNC;
@@ -1634,7 +1641,7 @@ bool BKE_object_is_visible_in_viewport(const View3D *v3d, const Object *ob)
   }
 
   if ((v3d->flag & V3D_LOCAL_COLLECTIONS) &&
-      ((v3d->local_collections_uuid & ob->runtime.local_collections_bits) == 0))
+      ((v3d->local_collections_uuid & ob->runtime->local_collections_bits) == 0))
   {
     return false;
   }
@@ -2670,7 +2677,8 @@ void BKE_view_layer_rename_lightgroup(Scene *scene,
 
     /* Update the scene's world to refer to the new name instead. */
     if (scene->world != nullptr && !ID_IS_LINKED(scene->world) &&
-        scene->world->lightgroup != nullptr) {
+        scene->world->lightgroup != nullptr)
+    {
       LightgroupMembership *lgm = scene->world->lightgroup;
       if (STREQ(lgm->name, old_name)) {
         STRNCPY_UTF8(lgm->name, lightgroup->name);

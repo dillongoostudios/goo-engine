@@ -214,7 +214,7 @@ void IrradianceCache::set_view(View & /*view*/)
                   return _a.z < _b.z;
                 }
                 else {
-                  /* Fallback to memory address, since there's no good alternative.*/
+                  /* Fallback to memory address, since there's no good alternative. */
                   return a < b;
                 }
               });
@@ -269,7 +269,7 @@ void IrradianceCache::set_view(View & /*view*/)
     draw::Texture irradiance_d_tx = {"irradiance_d_tx"};
     draw::Texture validity_tx = {"validity_tx"};
 
-    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_MIP_SWIZZLE_VIEW;
+    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ;
     int3 grid_size = int3(cache->size);
     if (cache->baking.L0) {
       irradiance_a_tx.ensure_3d(GPU_RGBA16F, grid_size, usage, (float *)cache->baking.L0);
@@ -636,7 +636,7 @@ void IrradianceBake::init(const Object &probe_object)
   capture_indirect_ = (lightprobe->grid_flag & LIGHTPROBE_GRID_CAPTURE_INDIRECT);
   capture_emission_ = (lightprobe->grid_flag & LIGHTPROBE_GRID_CAPTURE_EMISSION);
 
-  /* Initialize views data, since they're used by other modules.*/
+  /* Initialize views data, since they're used by other modules. */
   surfel_raster_views_sync(float3(0.0f), float3(1.0f), float4x4::identity());
 }
 
@@ -650,8 +650,8 @@ void IrradianceBake::sync()
     pass.bind_ssbo(SURFEL_BUF_SLOT, &surfels_buf_);
     pass.bind_ssbo(CAPTURE_BUF_SLOT, &capture_info_buf_);
     pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
-    inst_.lights.bind_resources(pass);
-    inst_.shadows.bind_resources(pass);
+    pass.bind_resources(inst_.lights);
+    pass.bind_resources(inst_.shadows);
     /* Sync with the surfel creation stage. */
     pass.barrier(GPU_BARRIER_SHADER_STORAGE);
     pass.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
@@ -701,7 +701,7 @@ void IrradianceBake::sync()
       sub.shader_set(inst_.shaders.static_shader_get(SURFEL_RAY));
       sub.bind_ssbo(SURFEL_BUF_SLOT, &surfels_buf_);
       sub.bind_ssbo(CAPTURE_BUF_SLOT, &capture_info_buf_);
-      inst_.reflection_probes.bind_resources(sub);
+      sub.bind_resources(inst_.reflection_probes);
       sub.push_constant("radiance_src", &radiance_src_);
       sub.push_constant("radiance_dst", &radiance_dst_);
       sub.barrier(GPU_BARRIER_SHADER_STORAGE);
@@ -714,7 +714,7 @@ void IrradianceBake::sync()
     pass.shader_set(inst_.shaders.static_shader_get(LIGHTPROBE_IRRADIANCE_RAY));
     pass.bind_ssbo(SURFEL_BUF_SLOT, &surfels_buf_);
     pass.bind_ssbo(CAPTURE_BUF_SLOT, &capture_info_buf_);
-    inst_.reflection_probes.bind_resources(pass);
+    pass.bind_resources(inst_.reflection_probes);
     pass.bind_ssbo("list_start_buf", &list_start_buf_);
     pass.bind_ssbo("list_info_buf", &list_info_buf_);
     pass.push_constant("radiance_src", &radiance_src_);
@@ -825,8 +825,10 @@ void IrradianceBake::surfels_create(const Object &probe_object)
   capture_info_buf_.capture_indirect = capture_indirect_;
   capture_info_buf_.capture_emission = capture_emission_;
 
-  ReflectionProbeAtlasCoordinate atlas_coord = inst_.reflection_probes.world_atlas_coord_get();
-  capture_info_buf_.world_atlas_coord = *reinterpret_cast<int4 *>(&atlas_coord);
+  ReflectionProbeModule &reflections = inst_.reflection_probes;
+  ReflectionProbeAtlasCoordinate atlas_coord = reflections.world_atlas_coord_get();
+  ReflectionProbeCoordinate coord = atlas_coord.as_sampling_coord(reflections.atlas_extent());
+  capture_info_buf_.world_atlas_coord = coord;
 
   dispatch_per_grid_sample_ = math::divide_ceil(grid_resolution, int3(IRRADIANCE_GRID_GROUP_SIZE));
   capture_info_buf_.irradiance_grid_size = grid_resolution;
@@ -1012,10 +1014,8 @@ void IrradianceBake::surfels_lights_eval()
   /* TODO(fclem): Remove this. It is only present to avoid crash inside `shadows.set_view` */
   inst_.render_buffers.acquire(int2(1));
   inst_.hiz_buffer.set_source(&inst_.render_buffers.depth_tx);
-  inst_.hiz_buffer.set_dirty();
-
   inst_.lights.set_view(view_z_, grid_pixel_extent_.xy());
-  inst_.shadows.set_view(view_z_);
+  inst_.shadows.set_view(view_z_, inst_.render_buffers.depth_tx);
   inst_.render_buffers.release();
 
   inst_.manager->submit(surfel_light_eval_ps_, view_z_);

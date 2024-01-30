@@ -14,10 +14,6 @@
 #  include <windows.h>
 #endif
 
-#ifdef __linux__
-#  include <unistd.h>
-#endif
-
 #if defined(WITH_TBB_MALLOC) && defined(_MSC_VER) && defined(NDEBUG)
 #  pragma comment(lib, "tbbmalloc_proxy.lib")
 #  pragma comment(linker, "/include:__TBB_malloc_proxy")
@@ -29,7 +25,6 @@
 
 #include "DNA_genfile.h"
 
-#include "BLI_path_util.h"
 #include "BLI_string.h"
 #include "BLI_system.h"
 #include "BLI_task.h"
@@ -42,20 +37,19 @@
 #include "BKE_brush.hh"
 #include "BKE_cachefile.h"
 #include "BKE_callbacks.h"
-#include "BKE_context.h"
-#include "BKE_cpp_types.h"
+#include "BKE_context.hh"
+#include "BKE_cpp_types.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_idtype.h"
-#include "BKE_main.h"
 #include "BKE_material.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_node.h"
 #include "BKE_particle.h"
 #include "BKE_shader_fx.h"
 #include "BKE_sound.h"
-#include "BKE_vfont.h"
-#include "BKE_volume.h"
+#include "BKE_vfont.hh"
+#include "BKE_volume.hh"
 
 #ifndef WITH_PYTHON_MODULE
 #  include "BLI_args.h"
@@ -71,7 +65,7 @@
 #include "ED_datafiles.h"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 
 #include "RNA_define.hh"
 
@@ -201,7 +195,7 @@ static void callback_clg_fatal(void *fp)
 /** \name Blender as a Stand-Alone Python Module (bpy)
  *
  * While not officially supported, this can be useful for Python developers.
- * See: https://wiki.blender.org/wiki/Building_Blender/Other/BlenderAsPyModule
+ * See: https://developer.blender.org/docs/handbook/building_blender/python_module/
  * \{ */
 
 #ifdef WITH_PYTHON_MODULE
@@ -333,19 +327,6 @@ int main(int argc,
   }
 #  endif /* USE_WIN32_UNICODE_ARGS */
 #endif   /* WIN32 */
-
-/* Here we check for Windows ARM64 or WSL, and override the Mesa reported OpenGL version */
-#if defined(WIN32) || defined(__linux__)
-#  if defined(WIN32)
-  if (strncmp(BLI_getenv("PROCESSOR_IDENTIFIER"), "ARM", 3) == 0)
-#  else /* Must be linux, so check if we're in WSL */
-  if (access("/proc/sys/fs/binfmt_misc/WSLInterop", F_OK) == 0)
-#  endif
-  {
-    BLI_setenv_if_new("MESA_GLSL_VERSION_OVERRIDE", "430");
-    BLI_setenv_if_new("MESA_GL_VERSION_OVERRIDE", "4.3");
-  }
-#endif
 
   /* NOTE: Special exception for guarded allocator type switch:
    *       we need to perform switch from lock-free to fully
@@ -486,16 +467,23 @@ int main(int argc,
   /* After parsing number of threads argument. */
   BLI_task_scheduler_init();
 
-  /* Initialize sub-systems that use `BKE_appdir.h`. */
-  IMB_init();
-
 #ifndef WITH_PYTHON_MODULE
-  /* First test for background-mode (#Global.background) */
+  /* The settings pass includes:
+   * - Background-mode assignment (#Global.background), checked by other subsystems
+   *   which may be skipped in background mode.
+   * - The animation player may be launched which takes over argument passing,
+   *   initializes the sub-systems it needs which have not yet been started.
+   *   The animation player will call `exit(..)` too, so code after this call
+   *   never runs when it's invoked.
+   * - All the `--debug-*` flags.
+   */
   BLI_args_parse(ba, ARG_PASS_SETTINGS, nullptr, nullptr);
 
   main_signal_setup();
 #endif
 
+  /* Must be initialized after #BKE_appdir_init to account for color-management paths. */
+  IMB_init();
 #ifdef WITH_FFMPEG
   /* Keep after #ARG_PASS_SETTINGS since debug flags are checked. */
   IMB_ffmpeg_init();

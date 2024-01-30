@@ -180,7 +180,7 @@ void BKE_constraints_copy_ex(struct ListBase *dst,
  * Run the given callback on all ID-blocks in list of constraints.
  *
  * \param flag: the `IDWALK_` flags controlling the behavior of the foreach_id code, see
- * `BKE_lib_query.h`
+ * `BKE_lib_query.hh`
  */
 void BKE_constraints_id_loop(struct ListBase *list,
                              ConstraintIDFunc func,
@@ -236,10 +236,7 @@ struct bConstraint *BKE_constraint_add_for_pose(struct Object *ob,
                                                 const char *name,
                                                 short type);
 
-bool BKE_constraint_remove_ex(ListBase *list,
-                              struct Object *ob,
-                              struct bConstraint *con,
-                              bool clear_dep);
+bool BKE_constraint_remove_ex(ListBase *list, struct Object *ob, struct bConstraint *con);
 /**
  * Remove the specified constraint from the given constraint stack.
  */

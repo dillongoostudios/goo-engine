@@ -88,6 +88,13 @@ bool ghost_wl_dynload_libraries_init();
 void ghost_wl_dynload_libraries_exit();
 #endif
 
+#if defined(WITH_GHOST_WAYLAND_LIBDECOR) && defined(WITH_VULKAN_BACKEND)
+/**
+ * Needed for temporary buffer creation.
+ */
+int memfd_create_sealed_for_vulkan_hack(const char *name);
+#endif
+
 struct GWL_Output {
 
   /** Wayland core types. */
@@ -153,6 +160,8 @@ class GHOST_SystemWayland : public GHOST_System {
   void putClipboard(const char *buffer, bool selection) const override;
 
   uint8_t getNumDisplays() const override;
+
+  uint64_t getMilliSeconds() const override;
 
   GHOST_TSuccess getCursorPositionClientRelative(const GHOST_IWindow *window,
                                                  int32_t &x,
@@ -236,19 +245,30 @@ class GHOST_SystemWayland : public GHOST_System {
 
   struct wl_shm *wl_shm_get() const;
 
-  void ime_begin(
-      GHOST_WindowWayland *win, int32_t x, int32_t y, int32_t w, int32_t h, bool completed) const;
-  void ime_end(GHOST_WindowWayland *win) const;
+  void ime_begin(const GHOST_WindowWayland *win,
+                 int32_t x,
+                 int32_t y,
+                 int32_t w,
+                 int32_t h,
+                 bool completed) const;
+  void ime_end(const GHOST_WindowWayland *win) const;
 
   static const char *xdg_app_id_get();
 
   /* WAYLAND utility functions. */
 
   /**
+   * Use this function instead of #GHOST_System::getMilliSeconds,
+   * passing in the time-stamp from WAYLAND input to get the event
+   * time-stamp with an offset applied to make it compatible with `getMilliSeconds`.
+   */
+  uint64_t ms_from_input_time(const uint32_t timestamp_as_uint);
+
+  /**
    * Push an event, with support for calling from a thread.
    * NOTE: only needed for `USE_EVENT_BACKGROUND_THREAD`.
    */
-  GHOST_TSuccess pushEvent_maybe_pending(GHOST_IEvent *event);
+  GHOST_TSuccess pushEvent_maybe_pending(const GHOST_IEvent *event);
 
   /** Set this seat to be active. */
   void seat_active_set(const struct GWL_Seat *seat);

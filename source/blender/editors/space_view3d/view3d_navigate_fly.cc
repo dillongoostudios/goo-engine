@@ -13,9 +13,9 @@
  */
 
 #ifdef WITH_INPUT_NDOF
-//#  define NDOF_FLY_DEBUG
+// #  define NDOF_FLY_DEBUG
 /* NOTE(@ideasman42): is this needed for NDOF? commented so redraw doesn't thrash. */
-//#  define NDOF_FLY_DRAW_TOOMUCH
+// #  define NDOF_FLY_DRAW_TOOMUCH
 #endif /* WITH_INPUT_NDOF */
 
 #include "DNA_object_types.h"
@@ -25,9 +25,10 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_rect.h"
+#include "BLI_time.h" /* Smooth-view. */
 
-#include "BKE_context.h"
-#include "BKE_lib_id.h"
+#include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_report.h"
 
 #include "BLT_translation.h"
@@ -37,8 +38,6 @@
 
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
-
-#include "PIL_time.h" /* Smooth-view. */
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -327,7 +326,8 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
   }
 
   if (fly->rv3d->persp == RV3D_CAMOB &&
-      !BKE_id_is_editable(CTX_data_main(C), &fly->v3d->camera->id)) {
+      !BKE_id_is_editable(CTX_data_main(C), &fly->v3d->camera->id))
+  {
     BKE_report(op->reports,
                RPT_ERROR,
                "Cannot navigate a camera from an external library or non-editable override");
@@ -371,7 +371,7 @@ static bool initFlyInfo(bContext *C, FlyInfo *fly, wmOperator *op, const wmEvent
   fly->ndof = nullptr;
 #endif
 
-  fly->time_lastdraw = fly->time_lastwheel = PIL_check_seconds_timer();
+  fly->time_lastdraw = fly->time_lastwheel = BLI_check_seconds_timer();
 
   fly->draw_handle_pixel = ED_region_draw_cb_activate(
       fly->region->type, drawFlyPixel, fly, REGION_DRAW_POST_PIXEL);
@@ -518,7 +518,7 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
           fly->ndof = nullptr;
         }
         /* Update the time else the view will jump when 2D mouse/timer resume. */
-        fly->time_lastdraw = PIL_check_seconds_timer();
+        fly->time_lastdraw = BLI_check_seconds_timer();
         break;
       }
       default: {
@@ -539,7 +539,7 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
         fly->state = FLY_CONFIRM;
         break;
       }
-      /* Speed adjusting with mouse-pan (track-pad). */
+      /* Speed adjusting with mouse-pan (trackpad). */
       case FLY_MODAL_SPEED: {
         float fac = 0.02f * float(event->prev_xy[1] - event->xy[1]);
 
@@ -566,7 +566,7 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
           fly->speed = fabsf(fly->speed);
         }
 
-        time_currwheel = PIL_check_seconds_timer();
+        time_currwheel = BLI_check_seconds_timer();
         time_wheel = float(time_currwheel - fly->time_lastwheel);
         fly->time_lastwheel = time_currwheel;
         /* Mouse wheel delays range from (0.5 == slow) to (0.01 == fast). */
@@ -591,7 +591,7 @@ static void flyEvent(FlyInfo *fly, const wmEvent *event)
           fly->speed = -fabsf(fly->speed);
         }
 
-        time_currwheel = PIL_check_seconds_timer();
+        time_currwheel = BLI_check_seconds_timer();
         time_wheel = float(time_currwheel - fly->time_lastwheel);
         fly->time_lastwheel = time_currwheel;
         /* 0-0.5 -> 0-5.0 */
@@ -848,7 +848,7 @@ static int flyApply(bContext *C, FlyInfo *fly, bool is_confirm)
 #ifdef NDOF_FLY_DRAW_TOOMUCH
       fly->redraw = 1;
 #endif
-      time_current = PIL_check_seconds_timer();
+      time_current = BLI_check_seconds_timer();
       time_redraw = float(time_current - fly->time_lastdraw);
 
       /* Clamp redraw time to avoid jitter in roll correction. */
@@ -1022,7 +1022,7 @@ static int flyApply(bContext *C, FlyInfo *fly, bool is_confirm)
     }
     else {
       /* We're not redrawing but we need to update the time else the view will jump. */
-      fly->time_lastdraw = PIL_check_seconds_timer();
+      fly->time_lastdraw = BLI_check_seconds_timer();
     }
     /* End drawing. */
     copy_v3_v3(fly->dvec_prev, dvec);
@@ -1115,10 +1115,9 @@ static int fly_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
   else
 #endif /* WITH_INPUT_NDOF */
-      if (event->type == TIMER && event->customdata == fly->timer)
-  {
-    flyApply(C, fly, false);
-  }
+    if (event->type == TIMER && event->customdata == fly->timer) {
+      flyApply(C, fly, false);
+    }
 
   do_draw |= fly->redraw;
 

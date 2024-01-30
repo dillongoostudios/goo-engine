@@ -12,8 +12,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
-#include "BKE_unit.h"
+#include "BKE_context.hh"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
@@ -48,12 +48,12 @@ static void headerBoneSize(TransInfo *t, const float vec[3], char str[UI_MAX_DRA
   if (t->con.mode & CON_APPLY) {
     if (t->num.idx_max == 0) {
       BLI_snprintf(
-          str, UI_MAX_DRAW_STR, TIP_("ScaleB: %s%s %s"), &tvec[0], t->con.text, t->proptext);
+          str, UI_MAX_DRAW_STR, RPT_("ScaleB: %s%s %s"), &tvec[0], t->con.text, t->proptext);
     }
     else {
       BLI_snprintf(str,
                    UI_MAX_DRAW_STR,
-                   TIP_("ScaleB: %s : %s : %s%s %s"),
+                   RPT_("ScaleB: %s : %s : %s%s %s"),
                    &tvec[0],
                    &tvec[NUM_STR_REP_LEN],
                    &tvec[NUM_STR_REP_LEN * 2],
@@ -64,7 +64,7 @@ static void headerBoneSize(TransInfo *t, const float vec[3], char str[UI_MAX_DRA
   else {
     BLI_snprintf(str,
                  UI_MAX_DRAW_STR,
-                 TIP_("ScaleB X: %s  Y: %s  Z: %s%s %s"),
+                 RPT_("ScaleB X: %s  Y: %s  Z: %s%s %s"),
                  &tvec[0],
                  &tvec[NUM_STR_REP_LEN],
                  &tvec[NUM_STR_REP_LEN * 2],

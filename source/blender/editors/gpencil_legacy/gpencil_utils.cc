@@ -21,10 +21,10 @@
 #include "BLI_math_color.h"
 #include "BLI_math_matrix.h"
 #include "BLI_rand.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
-#include "BLT_translation.h"
 
-#include "PIL_time.h"
+#include "BLT_translation.h"
 
 #include "DNA_brush_types.h"
 #include "DNA_collection_types.h"
@@ -40,20 +40,20 @@
 #include "BKE_action.h"
 #include "BKE_brush.hh"
 #include "BKE_collection.h"
-#include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_deform.h"
 #include "BKE_gpencil_curve_legacy.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
 #include "BKE_tracking.h"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
@@ -721,7 +721,8 @@ void gpencil_point_to_xy_fl(const GP_SpaceConversion *gsc,
 
   if (gps->flag & GP_STROKE_3DSPACE) {
     if (ED_view3d_project_float_global(region, &pt->x, xyval, V3D_PROJ_TEST_NOP) ==
-        V3D_PROJ_RET_OK) {
+        V3D_PROJ_RET_OK)
+    {
       *r_x = xyval[0];
       *r_y = xyval[1];
     }
@@ -877,7 +878,8 @@ void gpencil_stroke_convertcoords_tpoint(Scene *scene,
                                            rvec);
 
     if (ED_view3d_project_float_global(region, rvec, mval_prj, V3D_PROJ_TEST_NOP) ==
-        V3D_PROJ_RET_OK) {
+        V3D_PROJ_RET_OK)
+    {
       float dvec[3];
       float xy_delta[2];
       sub_v2_v2v2(xy_delta, mval_prj, point2D->m_xy);
@@ -2839,7 +2841,7 @@ void ED_gpencil_init_random_settings(Brush *brush,
                                      const int mval[2],
                                      GpRandomSettings *random_settings)
 {
-  int seed = (uint(ceil(PIL_check_seconds_timer())) + 1) % 128;
+  int seed = (uint(ceil(BLI_check_seconds_timer())) + 1) % 128;
   /* Use mouse position to get randomness. */
   int ix = mval[0] * seed;
   int iy = mval[1] * seed;
@@ -2885,7 +2887,7 @@ static void gpencil_sbuffer_vertex_color_random(
 {
   BrushGpencilSettings *brush_settings = brush->gpencil_settings;
   if (brush_settings->flag & GP_BRUSH_GROUP_RANDOM) {
-    int seed = (uint(ceil(PIL_check_seconds_timer())) + 1) % 128;
+    int seed = (uint(ceil(BLI_check_seconds_timer())) + 1) % 128;
 
     int ix = int(tpt->m_xy[0] * seed);
     int iy = int(tpt->m_xy[1] * seed);

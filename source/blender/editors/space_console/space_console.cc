@@ -14,7 +14,7 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_screen.hh"
 
@@ -174,7 +174,7 @@ static bool path_drop_poll(bContext * /*C*/, wmDrag *drag, const wmEvent * /*eve
 static void path_drop_copy(bContext * /*C*/, wmDrag *drag, wmDropBox *drop)
 {
   char pathname[FILE_MAX + 2];
-  SNPRINTF(pathname, "\"%s\"", WM_drag_get_path(drag));
+  SNPRINTF(pathname, "\"%s\"", WM_drag_get_single_path(drag));
   RNA_string_set(drop->ptr, "text", pathname);
 }
 

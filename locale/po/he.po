@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.0.0 Beta (b'551927bbe355')\n"
+"Project-Id-Version: Blender 4.1.0 Alpha (b'acbb91b192da')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-11-06 12:01:38\n"
+"POT-Creation-Date: 2024-01-15 10:52:30\n"
 "PO-Revision-Date: 2023-10-06 09:54+0000\n"
 "Last-Translator: Eitan Traurig <eitant13@gmail.com>\n"
 "Language-Team: Hebrew <https://translate.blender.org/projects/blender-ui/ui/he/>\n"
@@ -493,6 +493,14 @@ msgid "Blue"
 msgstr "לוחכ"
 
 
+msgid "Mask"
+msgstr "הכסמ"
+
+
+msgid "World"
+msgstr "םלוע"
+
+
 msgid "Full Name"
 msgstr "אלמ םש"
 
@@ -636,10 +644,6 @@ msgid "Grease Pencil Color"
 msgstr "Grease Pencil יאבצ"
 
 
-msgid "Mask"
-msgstr "הכסמ"
-
-
 msgid "Languages..."
 msgstr "..תופש"
 
@@ -678,10 +682,6 @@ msgstr "עלצ ינותנ"
 
 msgid "Vertex Data"
 msgstr "דוקדוק ינותנ"
-
-
-msgid "World"
-msgstr "םלוע"
 
 
 msgid "Lift"
@@ -813,10 +813,6 @@ msgstr "תרתוכ טסקט"
 
 msgid "Export Vertex Colors"
 msgstr "דוקדוק יעבצ אציי"
-
-
-msgid "Import Vertex Colors"
-msgstr "דוקדוק יעבצ אביי"
 
 
 msgid "UV Sculpting"
@@ -1145,16 +1141,16 @@ msgid "Image 2"
 msgstr "2 הנומת"
 
 
-msgid "Std Dev"
-msgstr "ןקת תייטס"
-
-
 msgid "Path:"
 msgstr ":ביתנ"
 
 
 msgid "Add Input"
 msgstr "טלק ףסוה"
+
+
+msgid "Std Dev"
+msgstr "ןקת תייטס"
 
 
 msgctxt "NodeTree"

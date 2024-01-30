@@ -17,7 +17,7 @@
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_particle.h"
 #include "BKE_screen.hh"
 
@@ -267,7 +267,7 @@ ModifierTypeInfo modifierType_Solidify = {
     /*struct_name*/ "SolidifyModifierData",
     /*struct_size*/ sizeof(SolidifyModifierData),
     /*srna*/ &RNA_SolidifyModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
 
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_AcceptsCVs |
         eModifierTypeFlag_SupportsMapping | eModifierTypeFlag_SupportsEditmode |
@@ -296,4 +296,5 @@ ModifierTypeInfo modifierType_Solidify = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

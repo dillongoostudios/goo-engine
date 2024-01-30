@@ -12,8 +12,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
-#include "BKE_unit.h"
+#include "BKE_context.hh"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
@@ -51,10 +51,10 @@ static void applyBoneRoll(TransInfo *t)
 
     outputNumInput(&(t->num), c, &t->scene->unit);
 
-    SNPRINTF(str, TIP_("Roll: %s"), &c[0]);
+    SNPRINTF(str, RPT_("Roll: %s"), &c[0]);
   }
   else {
-    SNPRINTF(str, TIP_("Roll: %.2f"), RAD2DEGF(final));
+    SNPRINTF(str, RPT_("Roll: %.2f"), RAD2DEGF(final));
   }
 
   /* set roll values */

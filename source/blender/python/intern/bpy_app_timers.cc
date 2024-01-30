@@ -6,9 +6,10 @@
  * \ingroup pythonintern
  */
 
+#include "BLI_time.h"
 #include "BLI_timer.h"
 #include "BLI_utildefines.h"
-#include "PIL_time.h"
+
 #include <Python.h>
 
 #include "BPY_extern.h"
@@ -107,7 +108,8 @@ static PyObject *bpy_app_timers_register(PyObject * /*self*/, PyObject *args, Py
       nullptr,
   };
   if (!_PyArg_ParseTupleAndKeywordsFast(
-          args, kw, &_parser, &function, &first_interval, &persistent)) {
+          args, kw, &_parser, &function, &first_interval, &persistent))
+  {
     return nullptr;
   }
 

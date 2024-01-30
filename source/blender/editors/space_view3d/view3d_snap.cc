@@ -11,17 +11,21 @@
 #include "DNA_armature_types.h"
 #include "DNA_object_types.h"
 
+#include "BLI_bounds.hh"
 #include "BLI_math_matrix.h"
+#include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
+#include "BLI_math_vector.hh"
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_crazyspace.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_mball.h"
 #include "BKE_object.hh"
 #include "BKE_report.h"
@@ -37,12 +41,13 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
+#include "ED_curves.hh"
 #include "ED_keyframing.hh"
 #include "ED_object.hh"
 #include "ED_screen.hh"
 #include "ED_transverts.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 #include "ANIM_keyframing.hh"
 
 #include "view3d_intern.h"
@@ -57,7 +62,7 @@ static bool snap_calc_active_center(bContext *C, const bool select_only, float r
  * \{ */
 
 /** Snaps every individual object center to its nearest point on the grid. */
-static int snap_sel_to_grid_exec(bContext *C, wmOperator * /*op*/)
+static int snap_sel_to_grid_exec(bContext *C, wmOperator *op)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewLayer *view_layer_eval = DEG_get_evaluated_view_layer(depsgraph);
@@ -86,6 +91,10 @@ static int snap_sel_to_grid_exec(bContext *C, wmOperator * /*op*/)
         if (em->bm->totvertsel == 0) {
           continue;
         }
+      }
+
+      if (ED_object_edit_report_if_shape_key_is_locked(obedit, op->reports)) {
+        continue;
       }
 
       if (ED_transverts_check_obedit(obedit)) {
@@ -293,6 +302,7 @@ void VIEW3D_OT_snap_selected_to_grid(wmOperatorType *ot)
  * or if every object origin should be snapped to the given location.
  */
 static bool snap_selected_to_location(bContext *C,
+                                      wmOperator *op,
                                       const float snap_target_global[3],
                                       const bool use_offset,
                                       const int pivot_point,
@@ -334,6 +344,10 @@ static bool snap_selected_to_location(bContext *C,
         if (em->bm->totvertsel == 0) {
           continue;
         }
+      }
+
+      if (ED_object_edit_report_if_shape_key_is_locked(obedit, op->reports)) {
+        continue;
       }
 
       if (ED_transverts_check_obedit(obedit)) {
@@ -517,7 +531,7 @@ static bool snap_selected_to_location(bContext *C,
       if (ob->parent) {
         float originmat[3][3], parentmat[4][4];
         /* Use the evaluated object here because sometimes
-         * `ob->parent->runtime.curve_cache` is required. */
+         * `ob->parent->runtime->curve_cache` is required. */
         BKE_scene_graph_evaluated_ensure(depsgraph, bmain);
         Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
 
@@ -563,6 +577,7 @@ static bool snap_selected_to_location(bContext *C,
 }
 
 bool ED_view3d_snap_selected_to_location(bContext *C,
+                                         wmOperator *op,
                                          const float snap_target_global[3],
                                          const int pivot_point)
 {
@@ -573,7 +588,7 @@ bool ED_view3d_snap_selected_to_location(bContext *C,
    * so this can be used as a low level function. */
   const bool use_toolsettings = false;
   return snap_selected_to_location(
-      C, snap_target_global, use_offset, pivot_point, use_toolsettings);
+      C, op, snap_target_global, use_offset, pivot_point, use_toolsettings);
 }
 
 /** \} */
@@ -591,7 +606,7 @@ static int snap_selected_to_cursor_exec(bContext *C, wmOperator *op)
   const float *snap_target_global = scene->cursor.location;
   const int pivot_point = scene->toolsettings->transform_pivot_point;
 
-  if (snap_selected_to_location(C, snap_target_global, use_offset, pivot_point, true)) {
+  if (snap_selected_to_location(C, op, snap_target_global, use_offset, pivot_point, true)) {
     return OPERATOR_FINISHED;
   }
   return OPERATOR_CANCELLED;
@@ -635,7 +650,7 @@ static int snap_selected_to_active_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  if (!snap_selected_to_location(C, snap_target_global, false, -1, true)) {
+  if (!snap_selected_to_location(C, op, snap_target_global, false, -1, true)) {
     return OPERATOR_CANCELLED;
   }
   return OPERATOR_FINISHED;
@@ -983,8 +998,32 @@ void VIEW3D_OT_snap_cursor_to_center(wmOperatorType *ot)
 /** \name Min/Max Object Vertices Utility
  * \{ */
 
+static std::optional<blender::Bounds<blender::float3>> bounds_min_max_with_transform(
+    const blender::float4x4 &transform,
+    const blender::Span<blender::float3> positions,
+    const blender::IndexMask &mask)
+{
+  using namespace blender;
+  if (mask.is_empty()) {
+    return std::nullopt;
+  }
+  return threading::parallel_reduce(
+      mask.index_range(),
+      1024,
+      Bounds<float3>(math::transform_point(transform, positions.first())),
+      [&](const IndexRange range, Bounds<float3> init) {
+        mask.slice(range).foreach_index([&](const int i) {
+          math::min_max(math::transform_point(transform, positions[i]), init.min, init.max);
+        });
+        return init;
+      },
+      [](const Bounds<float3> &a, const Bounds<float3> &b) { return bounds::merge(a, b); });
+}
+
 bool ED_view3d_minmax_verts(Object *obedit, float r_min[3], float r_max[3])
 {
+  using namespace blender;
+  using namespace blender::ed;
   TransVertStore tvs = {nullptr};
   TransVert *tv;
   float centroid[3], vec[3], bmat[3][3];
@@ -1004,6 +1043,27 @@ bool ED_view3d_minmax_verts(Object *obedit, float r_min[3], float r_max[3])
       minmax_v3v3_v3(r_min, r_max, ob_max);
     }
     return changed;
+  }
+  if (obedit->type == OB_CURVES) {
+    const Object &ob_orig = *DEG_get_original_object(obedit);
+    const Curves &curves_id = *static_cast<const Curves *>(ob_orig.data);
+    const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
+
+    IndexMaskMemory memory;
+    const IndexMask mask = curves::retrieve_selected_points(curves, memory);
+
+    const bke::crazyspace::GeometryDeformation deformation =
+        bke::crazyspace::get_evaluated_curves_deformation(obedit, ob_orig);
+
+    const std::optional<Bounds<float3>> curves_bounds = bounds_min_max_with_transform(
+        float4x4(obedit->object_to_world), deformation.positions, mask);
+
+    if (curves_bounds) {
+      minmax_v3v3_v3(r_min, r_max, curves_bounds->min);
+      minmax_v3v3_v3(r_min, r_max, curves_bounds->max);
+      return true;
+    }
+    return false;
   }
 
   if (ED_transverts_check_obedit(obedit)) {

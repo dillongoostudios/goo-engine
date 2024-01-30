@@ -8,7 +8,7 @@
 
 #include "AS_asset_representation.hh"
 
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 #include "BKE_idtype.h"
 
 #include "BLI_listbase.h"
@@ -110,7 +110,6 @@ AssetItemTree build_filtered_all_catalog_tree(
   Vector<asset_system::AssetRepresentation *> unassigned_assets;
 
   ED_assetlist_storage_fetch(&library_ref, &C);
-  ED_assetlist_ensure_previews_job(&library_ref, &C);
   asset_system::AssetLibrary *library = ED_assetlist_library_get_once_available(library_ref);
   if (!library) {
     return {};

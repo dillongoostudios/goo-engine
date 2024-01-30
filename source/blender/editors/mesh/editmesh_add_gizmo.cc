@@ -13,8 +13,8 @@
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_scene.h"
 
 #include "BLI_math_geom.h"
@@ -347,7 +347,7 @@ static int add_primitive_cube_gizmo_exec(bContext *C, wmOperator *op)
 
   EDBM_selectmode_flush_ex(em, SCE_SELECT_VERTEX);
   EDBMUpdate_Params params{};
-  params.calc_looptri = true;
+  params.calc_looptris = true;
   params.calc_normals = false;
   params.is_destructive = true;
   EDBM_update(static_cast<Mesh *>(obedit->data), &params);

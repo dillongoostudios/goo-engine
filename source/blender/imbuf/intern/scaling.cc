@@ -9,7 +9,7 @@
 #include <cmath>
 
 #include "BLI_math_color.h"
-#include "BLI_math_interp.h"
+#include "BLI_math_interp.hh"
 #include "BLI_utildefines.h"
 #include "MEM_guardedalloc.h"
 
@@ -1762,7 +1762,7 @@ static void *do_scale_thread(void *data_v)
 
       if (data->byte_buffer) {
         uchar *pixel = data->byte_buffer + 4 * offset;
-        BLI_bilinear_interpolation_char(ibuf->byte_buffer.data, pixel, ibuf->x, ibuf->y, 4, u, v);
+        BLI_bilinear_interpolation_char(ibuf->byte_buffer.data, pixel, ibuf->x, ibuf->y, u, v);
       }
 
       if (data->float_buffer) {

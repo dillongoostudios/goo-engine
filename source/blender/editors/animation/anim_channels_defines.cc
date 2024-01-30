@@ -9,6 +9,7 @@
 #include <cstdio>
 
 #include "ANIM_action.hh"
+#include "ANIM_animdata.hh"
 #include "ANIM_keyframing.hh"
 
 #include "MEM_guardedalloc.h"
@@ -52,13 +53,13 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_nla.h"
 
 #include "GPU_immediate.h"
@@ -1133,7 +1134,7 @@ static void acf_nla_controls_name(bAnimListElem * /*ale*/, char *name)
   BLI_strncpy_utf8(name, IFACE_("NLA Strip Controls"), ANIM_CHAN_NAME_SIZE);
 }
 
-/* check if some setting exists for this channel */
+/* check if some setting exists for this track */
 static bool acf_nla_controls_setting_valid(bAnimContext * /*ac*/,
                                            bAnimListElem * /*ale*/,
                                            eAnimChannel_Settings setting)
@@ -2585,20 +2586,20 @@ static void *acf_dsmesh_setting_ptr(bAnimListElem *ale,
                                     eAnimChannel_Settings setting,
                                     short *r_type)
 {
-  Mesh *me = (Mesh *)ale->data;
+  Mesh *mesh = (Mesh *)ale->data;
 
   /* Clear extra return data first. */
   *r_type = 0;
 
   switch (setting) {
     case ACHANNEL_SETTING_EXPAND: /* expanded */
-      return GET_ACF_FLAG_PTR(me->flag, r_type);
+      return GET_ACF_FLAG_PTR(mesh->flag, r_type);
 
     case ACHANNEL_SETTING_SELECT:  /* selected */
     case ACHANNEL_SETTING_MUTE:    /* muted (for NLA only) */
     case ACHANNEL_SETTING_VISIBLE: /* visible (for Graph Editor only) */
-      if (me->adt) {
-        return GET_ACF_FLAG_PTR(me->adt->flag, r_type);
+      if (mesh->adt) {
+        return GET_ACF_FLAG_PTR(mesh->adt->flag, r_type);
       }
       return nullptr;
 
@@ -4080,7 +4081,7 @@ static int acf_nlaaction_icon(bAnimListElem *ale)
   return ICON_ACTION;
 }
 
-/* Backdrop color for nla action channel
+/* Backdrop color for nla action track
  * Although this can't be used directly for NLA Action drawing,
  * it is still needed for use behind the RHS toggles
  */
@@ -4090,19 +4091,19 @@ static void acf_nlaaction_color(bAnimContext * /*ac*/, bAnimListElem *ale, float
 
   /* Action Line
    *   The alpha values action_get_color returns are only useful for drawing
-   *   strips backgrounds but here we're doing channel list backgrounds instead
+   *   strips backgrounds but here we're doing track list backgrounds instead
    *   so we ignore that and use our own when needed
    */
   nla_action_get_color(ale->adt, (bAction *)ale->data, color);
 
   /* NOTE: since the return types only allow rgb, we cannot do the alpha-blending we'd
    * like for the solo-drawing case. Hence, this method isn't actually used for drawing
-   * most of the channel...
+   * most of the track...
    */
   copy_v3_v3(r_color, color);
 }
 
-/* backdrop for nla action channel */
+/* backdrop for nla action track */
 static void acf_nlaaction_backdrop(bAnimContext *ac, bAnimListElem *ale, float yminc, float ymaxc)
 {
   const bAnimChannelType *acf = ANIM_channel_get_typeinfo(ale);
@@ -4113,7 +4114,7 @@ static void acf_nlaaction_backdrop(bAnimContext *ac, bAnimListElem *ale, float y
 
   /* Action Line
    *   The alpha values action_get_color returns are only useful for drawing
-   *   strips backgrounds but here we're doing channel list backgrounds instead
+   *   strips backgrounds but here we're doing track list backgrounds instead
    *   so we ignore that and use our own when needed
    */
   nla_action_get_color(adt, (bAction *)ale->data, color);
@@ -4125,19 +4126,19 @@ static void acf_nlaaction_backdrop(bAnimContext *ac, bAnimListElem *ale, float y
     color[3] = (adt && (adt->flag & ADT_NLA_SOLO_TRACK)) ? 0.3f : 1.0f;
   }
 
-  /* only on top left corner, to show that this channel sits on top of the preceding ones
+  /* only on top left corner, to show that this track sits on top of the preceding ones
    * while still linking into the action line strip to the right
    */
   UI_draw_roundbox_corner_set(UI_CNR_TOP_LEFT);
 
-  /* draw slightly shifted up vertically to look like it has more separation from other channels,
+  /* draw slightly shifted up vertically to look like it has more separation from other tracks,
    * but we then need to slightly shorten it so that it doesn't look like it overlaps
    */
   rctf box;
   box.xmin = offset;
   box.xmax = float(v2d->cur.xmax);
-  box.ymin = yminc + NLACHANNEL_SKIP;
-  box.ymax = ymaxc + NLACHANNEL_SKIP - 1;
+  box.ymin = yminc + NLATRACK_SKIP;
+  box.ymax = ymaxc + NLATRACK_SKIP - 1;
   UI_draw_roundbox_4fv(&box, true, 8, color);
 }
 
@@ -4170,7 +4171,7 @@ static bool acf_nlaaction_name_prop(bAnimListElem *ale, PointerRNA *r_ptr, Prope
   return false;
 }
 
-/* check if some setting exists for this channel */
+/* check if some setting exists for this track */
 static bool acf_nlaaction_setting_valid(bAnimContext * /*ac*/,
                                         bAnimListElem *ale,
                                         eAnimChannel_Settings setting)
@@ -4558,6 +4559,23 @@ static bool achannel_is_being_renamed(const bAnimContext *ac,
   return false;
 }
 
+/** Check if the animation channel name should be underlined in red due to errors. */
+static bool achannel_is_broken(const bAnimListElem *ale)
+{
+  switch (ale->type) {
+    case ANIMTYPE_FCURVE:
+    case ANIMTYPE_NLACURVE: {
+      const FCurve *fcu = static_cast<const FCurve *>(ale->data);
+
+      /* The channel is disabled (has a bad rna path), or it's a driver that failed to evaluate. */
+      return (ale->flag & FCURVE_DISABLED) ||
+             (fcu->driver != nullptr && (fcu->driver->flag & DRIVER_FLAG_INVALID));
+    }
+    default:
+      return false;
+  }
+}
+
 float ANIM_UI_get_keyframe_scale_factor()
 {
   bTheme *btheme = UI_GetTheme();
@@ -4741,7 +4759,7 @@ void ANIM_channel_draw(
     UI_fontstyle_draw_simple(fstyle, offset, ytext, name, col);
 
     /* draw red underline if channel is disabled */
-    if (ELEM(ale->type, ANIMTYPE_FCURVE, ANIMTYPE_NLACURVE) && (ale->flag & FCURVE_DISABLED)) {
+    if (achannel_is_broken(ale)) {
       uint pos = GPU_vertformat_attr_add(
           immVertexFormat(), "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
 
@@ -4853,9 +4871,9 @@ void ANIM_channel_draw(
       /* NOTE: technically, NLA Action "pushdown" should be here too,
        * but there are no sliders there. */
 
-      /* NLA action channels have slightly different spacing requirements... */
+      /* NLA action tracks have slightly different spacing requirements... */
       if (ale->type == ANIMTYPE_NLAACTION) {
-        ymin_ofs = NLACHANNEL_SKIP;
+        ymin_ofs = NLATRACK_SKIP;
       }
     }
 
@@ -5025,7 +5043,7 @@ static void achannel_setting_slider_cb(bContext *C, void *id_poin, void *fcu_poi
   cfra = BKE_nla_tweakedit_remap(adt, float(scene->r.cfra), NLATIME_CONVERT_UNMAP);
 
   /* Get flags for keyframing. */
-  flag = ANIM_get_keyframing_flags(scene, true);
+  flag = ANIM_get_keyframing_flags(scene);
 
   /* try to resolve the path stored in the F-Curve */
   if (RNA_path_resolve_property(&id_ptr, fcu->rna_path, &ptr, &prop)) {
@@ -5088,13 +5106,13 @@ static void achannel_setting_slider_shapekey_cb(bContext *C, void *key_poin, voi
       key->adt, anim_eval_context.eval_time, NLATIME_CONVERT_UNMAP);
 
   /* get flags for keyframing */
-  flag = ANIM_get_keyframing_flags(scene, true);
+  flag = ANIM_get_keyframing_flags(scene);
 
   /* try to resolve the path stored in the F-Curve */
   if (RNA_path_resolve_property(&id_ptr, rna_path, &ptr, &prop)) {
     /* find or create new F-Curve */
     /* XXX is the group name for this ok? */
-    bAction *act = ED_id_action_ensure(bmain, (ID *)key);
+    bAction *act = blender::animrig::id_action_ensure(bmain, (ID *)key);
     FCurve *fcu = blender::animrig::action_fcurve_ensure(bmain, act, nullptr, &ptr, rna_path, 0);
 
     /* set the special 'replace' flag if on a keyframe */
@@ -5148,7 +5166,7 @@ static void achannel_setting_slider_nla_curve_cb(bContext *C, void * /*id_poin*/
   cfra = float(scene->r.cfra);
 
   /* get flags for keyframing */
-  flag = ANIM_get_keyframing_flags(scene, true);
+  flag = ANIM_get_keyframing_flags(scene);
 
   /* Get pointer and property from the slider -
    * this should all match up with the NlaStrip required. */
@@ -5412,7 +5430,7 @@ static void draw_setting_widget(bAnimContext *ac,
        !BKE_id_is_editable(ac->bmain, ale->id)))
   {
     if (setting != ACHANNEL_SETTING_EXPAND) {
-      UI_but_disable(but, TIP_("Can't edit this property from a linked data-block"));
+      UI_but_disable(but, "Can't edit this property from a linked data-block");
     }
   }
 
@@ -5750,7 +5768,7 @@ void ANIM_channel_draw_widgets(const bContext *C,
                             nullptr);
 
         opptr_b = UI_but_operator_ptr_get(but);
-        RNA_int_set(opptr_b, "channel_index", channel_index);
+        RNA_int_set(opptr_b, "track_index", channel_index);
 
         UI_block_emboss_set(block, UI_EMBOSS_NONE);
       }

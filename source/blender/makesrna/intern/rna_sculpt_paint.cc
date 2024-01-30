@@ -33,6 +33,8 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+#include "bmesh.hh"
+
 const EnumPropertyItem rna_enum_particle_edit_hair_brush_items[] = {
     {PE_BRUSH_COMB, "COMB", 0, "Comb", "Comb hairs"},
     {PE_BRUSH_SMOOTH, "SMOOTH", 0, "Smooth", "Smooth hairs"},
@@ -108,7 +110,7 @@ const EnumPropertyItem rna_enum_symmetrize_direction_items[] = {
 #  include "MEM_guardedalloc.h"
 
 #  include "BKE_collection.h"
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_gpencil_legacy.h"
 #  include "BKE_object.hh"
 #  include "BKE_particle.h"

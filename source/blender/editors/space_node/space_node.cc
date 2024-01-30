@@ -8,32 +8,38 @@
 
 #include "AS_asset_representation.hh"
 
+#include "BLI_listbase.h"
 #include "BLI_string.h"
 
 #include "DNA_ID.h"
 #include "DNA_gpencil_legacy_types.h"
+#include "DNA_image_types.h"
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
+#include "DNA_screen_types.h"
+#include "DNA_space_types.h"
+#include "DNA_windowmanager_types.h"
 #include "DNA_world_types.h"
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 #include "BKE_compute_contexts.hh"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idprop.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
-#include "BKE_lib_remap.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_lib_remap.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_zones.hh"
 #include "BKE_screen.hh"
 
+#include "ED_image.hh"
 #include "ED_node.hh"
 #include "ED_node_preview.hh"
 #include "ED_render.hh"
@@ -371,7 +377,7 @@ bool push_compute_context_for_tree_path(const SpaceNode &snode,
         }
       }
     }
-    compute_context_builder.push<bke::NodeGroupComputeContext>(*group_node);
+    compute_context_builder.push<bke::GroupNodeComputeContext>(*group_node, *tree);
   }
   return true;
 }
@@ -562,9 +568,6 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
         case ND_TRANSFORM_DONE:
           node_area_tag_recalc_auto_compositing(snode, area);
           break;
-        case ND_LAYER_CONTENT:
-          node_area_tag_tree_recalc(snode, area);
-          break;
       }
       break;
 
@@ -619,7 +622,9 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
       break;
     case NC_NODE:
       if (wmn->action == NA_EDITED) {
-        node_area_tag_tree_recalc(snode, area);
+        if (ELEM(wmn->reference, snode->nodetree, snode->id, nullptr) || snode->id == nullptr) {
+          node_area_tag_tree_recalc(snode, area);
+        }
       }
       else if (wmn->action == NA_SELECTED) {
         ED_area_tag_redraw(area);
@@ -680,6 +685,28 @@ static void node_area_listener(const wmSpaceTypeListenerParams *params)
   }
 }
 
+/* Returns true if an image editor exists that views the compositor result. */
+static bool is_compositor_viewer_image_visible(const bContext *C)
+{
+  wmWindowManager *window_manager = CTX_wm_manager(C);
+  LISTBASE_FOREACH (wmWindow *, window, &window_manager->windows) {
+    bScreen *screen = WM_window_get_active_screen(window);
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      SpaceLink *space_link = static_cast<SpaceLink *>(area->spacedata.first);
+      if (!space_link || space_link->spacetype != SPACE_IMAGE) {
+        continue;
+      }
+      const SpaceImage *space_image = reinterpret_cast<const SpaceImage *>(space_link);
+      Image *image = ED_space_image(space_image);
+      if (image && image->source == IMA_SRC_VIEWER) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 static void node_area_refresh(const bContext *C, ScrArea *area)
 {
   /* default now: refresh node is starting preview */
@@ -699,7 +726,11 @@ static void node_area_refresh(const bContext *C, ScrArea *area)
         }
         else if (snode->runtime->recalc_regular_compositing) {
           snode->runtime->recalc_regular_compositing = false;
-          ED_node_composite_job(C, snode->nodetree, scene);
+          /* Only start compositing if its result will be visible either in the backdrop or in a
+           * viewer image. */
+          if (snode->flag & SNODE_BACKDRAW || is_compositor_viewer_image_visible(C)) {
+            ED_node_composite_job(C, snode->nodetree, scene);
+          }
         }
       }
     }
@@ -767,7 +798,7 @@ static void node_cursor(wmWindow *win, ScrArea *area, ARegion *region)
                            &snode->runtime->cursor[1]);
 
   /* here snode->runtime->cursor is used to detect the node edge for sizing */
-  node_set_cursor(*win, *snode, snode->runtime->cursor);
+  node_set_cursor(*win, *region, *snode, snode->runtime->cursor);
 
   /* XXX snode->runtime->cursor is in placing new nodes space */
   snode->runtime->cursor[0] /= UI_SCALE_FAC;
@@ -898,7 +929,7 @@ static void node_id_path_drop_copy(bContext *C, wmDrag *drag, wmDropBox *drop)
     return;
   }
 
-  const char *path = WM_drag_get_path(drag);
+  const char *path = WM_drag_get_single_path(drag);
   if (path) {
     RNA_string_set(drop->ptr, "filepath", path);
     RNA_struct_property_unset(drop->ptr, "name");
@@ -1156,6 +1187,11 @@ static void node_id_remap_cb(ID *old_id, ID *new_id, void *user_data)
     }
   }
   else if (GS(old_id->name) == ID_NT) {
+
+    if (&snode->geometry_nodes_tool_tree->id == old_id) {
+      snode->geometry_nodes_tool_tree = reinterpret_cast<bNodeTree *>(new_id);
+    }
+
     bNodeTreePath *path, *path_next;
 
     for (path = (bNodeTreePath *)snode->treepath.first; path; path = path->next) {

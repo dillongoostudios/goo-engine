@@ -17,9 +17,9 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_global.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 
 #include "DNA_ID.h"
 /* Those following are only to support hack of not listing some internal

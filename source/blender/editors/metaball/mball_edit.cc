@@ -27,14 +27,15 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_mball.h"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "DEG_depsgraph.hh"
 
-#include "GPU_select.h"
+#include "GPU_select.hh"
 
 #include "ED_mball.hh"
 #include "ED_object.hh"
@@ -748,7 +749,7 @@ Base *ED_mball_base_and_elem_from_select_buffer(Base **bases,
   MetaElem *ml = nullptr;
   /* TODO(@ideasman42): optimize, eg: sort & binary search. */
   for (uint base_index = 0; base_index < bases_len; base_index++) {
-    if (bases[base_index]->object->runtime.select_id == hit_object) {
+    if (bases[base_index]->object->runtime->select_id == hit_object) {
       base = bases[base_index];
       break;
     }
@@ -771,7 +772,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   int a, hits;
-  GPUSelectResult buffer[MAXPICKELEMS];
+  GPUSelectBuffer buffer;
   rcti rect;
   bool found = false;
 
@@ -780,8 +781,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
   BLI_rcti_init_pt_radius(&rect, mval, 12);
 
   hits = view3d_opengl_select(&vc,
-                              buffer,
-                              ARRAY_SIZE(buffer),
+                              &buffer,
                               &rect,
                               use_cycle ? VIEW3D_SELECT_PICK_ALL : VIEW3D_SELECT_PICK_NEAREST,
                               VIEW3D_SELECT_FILTER_NOP);
@@ -797,7 +797,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
   int hit_cycle_offset = 0;
   if (use_cycle) {
     /* When cycling, use the hit directly after the current active meta-element (when set). */
-    const int base_index = vc.obact->runtime.select_id;
+    const int base_index = vc.obact->runtime->select_id;
     MetaBall *mb = (MetaBall *)vc.obact->data;
     MetaElem *ml = mb->lastelem;
     if (ml && (ml->flag & SELECT)) {
@@ -808,13 +808,14 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
        * ensure this steps onto the next meta-element. */
       a = hits;
       while (a--) {
-        const int select_id = buffer[a].id;
+        const int select_id = buffer.storage[a].id;
         if (select_id == -1) {
           continue;
         }
 
         if (((select_id & 0xFFFF) == base_index) &&
-            ((select_id & ~MBALLSEL_ANY) >> 16 == ml_index)) {
+            ((select_id & ~MBALLSEL_ANY) >> 16 == ml_index))
+        {
           hit_cycle_offset = a + 1;
           break;
         }
@@ -824,7 +825,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
 
   for (a = 0; a < hits; a++) {
     const int index = (hit_cycle_offset == 0) ? a : ((a + hit_cycle_offset) % hits);
-    const uint select_id = buffer[index].id;
+    const uint select_id = buffer.storage[index].id;
     if (select_id == -1) {
       continue;
     }

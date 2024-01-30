@@ -669,7 +669,8 @@ void film_process_data(ivec2 texel_film, out vec4 out_color, out float out_depth
     else {
       out_depth = imageLoad(depth_img, texel_film).r;
       if (uniform_buf.film.display_id != -1 &&
-          uniform_buf.film.display_id == uniform_buf.film.normal_id) {
+          uniform_buf.film.display_id == uniform_buf.film.normal_id)
+      {
         out_color = imageLoad(color_accum_img, ivec3(texel_film, uniform_buf.film.display_id));
       }
     }
@@ -757,6 +758,23 @@ void film_process_data(ivec2 texel_film, out vec4 out_color, out float out_depth
     film_store_color(dst, uniform_buf.film.shadow_id, shadow_accum_color, out_color);
     film_store_color(dst, uniform_buf.film.ambient_occlusion_id, ao_accum_color, out_color);
     film_store_value(dst, uniform_buf.film.mist_id, mist_accum, out_color);
+  }
+
+  if (uniform_buf.film.any_render_pass_3) {
+    vec4 transparent_accum = vec4(0.0);
+
+    for (int i = 0; i < uniform_buf.film.samples_len; i++) {
+      FilmSample src = film_sample_get(i, texel_film);
+      film_sample_accum(src,
+                        uniform_buf.film.transparent_id,
+                        uniform_buf.render_pass.transparent_id,
+                        rp_color_tx,
+                        transparent_accum);
+    }
+    /* Alpha stores transmittance for transparent pass. */
+    transparent_accum.a = weight_accum - transparent_accum.a;
+
+    film_store_color(dst, uniform_buf.film.transparent_id, transparent_accum, out_color);
   }
 
   for (int aov = 0; aov < uniform_buf.film.aov_color_len; aov++) {

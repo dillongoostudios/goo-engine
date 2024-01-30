@@ -4,6 +4,10 @@
 
 #ifdef WITH_ONEAPI
 
+/* <algorithm> is needed until included upstream in sycl/detail/property_list_base.hpp */
+#  include <algorithm>
+#  include <sycl/sycl.hpp>
+
 #  include "device/oneapi/device_impl.h"
 
 #  include "util/debug.h"
@@ -24,6 +28,9 @@ extern "C" bool rtcIsSYCLDeviceSupported(const sycl::device sycl_device);
 #  endif
 
 CCL_NAMESPACE_BEGIN
+
+static std::vector<sycl::device> available_sycl_devices();
+static int parse_driver_build_version(const sycl::device &device);
 
 static void queue_error_cb(const char *message, void *user_ptr)
 {
@@ -545,7 +552,7 @@ void OneapiDevice::usm_free(void *usm_ptr)
 
 void OneapiDevice::check_usm(SyclQueue *queue_, const void *usm_ptr, bool allow_host = false)
 {
-#  ifdef _DEBUG
+#  ifndef NDEBUG
   sycl::queue *queue = reinterpret_cast<sycl::queue *>(queue_);
   sycl::info::device_type device_type =
       queue->get_device().get_info<sycl::info::device::device_type>();
@@ -574,7 +581,7 @@ bool OneapiDevice::create_queue(SyclQueue *&external_queue,
 {
   bool finished_correct = true;
   try {
-    std::vector<sycl::device> devices = OneapiDevice::available_devices();
+    std::vector<sycl::device> devices = available_sycl_devices();
     if (device_index < 0 || device_index >= devices.size()) {
       return false;
     }
@@ -862,7 +869,7 @@ static const int lowest_supported_driver_version_neo = 26957;
 static const int lowest_supported_driver_version_neo = 26918;
 #  endif
 
-int OneapiDevice::parse_driver_build_version(const sycl::device &device)
+int parse_driver_build_version(const sycl::device &device)
 {
   const std::string &driver_version = device.get_info<sycl::info::device::driver_version>();
   int driver_build_version = 0;
@@ -901,7 +908,7 @@ int OneapiDevice::parse_driver_build_version(const sycl::device &device)
   return driver_build_version;
 }
 
-std::vector<sycl::device> OneapiDevice::available_devices()
+std::vector<sycl::device> available_sycl_devices()
 {
   bool allow_all_devices = false;
   if (getenv("CYCLES_ONEAPI_ALL_DEVICES") != nullptr) {
@@ -971,7 +978,7 @@ char *OneapiDevice::device_capabilities()
 {
   std::stringstream capabilities;
 
-  const std::vector<sycl::device> &oneapi_devices = available_devices();
+  const std::vector<sycl::device> &oneapi_devices = available_sycl_devices();
   for (const sycl::device &device : oneapi_devices) {
 #  ifndef WITH_ONEAPI_SYCL_HOST_TASK
     const std::string &name = device.get_info<sycl::info::device::name>();
@@ -980,66 +987,96 @@ char *OneapiDevice::device_capabilities()
 #  endif
 
     capabilities << std::string("\t") << name << "\n";
+    capabilities << "\t\tsycl::info::platform::name\t\t\t"
+                 << device.get_platform().get_info<sycl::info::platform::name>() << "\n";
+
 #  define WRITE_ATTR(attribute_name, attribute_variable) \
     capabilities << "\t\tsycl::info::device::" #attribute_name "\t\t\t" << attribute_variable \
                  << "\n";
-#  define GET_NUM_ATTR(attribute) \
+#  define GET_ATTR(attribute) \
     { \
-      size_t attribute = (size_t)device.get_info<sycl::info::device ::attribute>(); \
-      capabilities << "\t\tsycl::info::device::" #attribute "\t\t\t" << attribute << "\n"; \
+      capabilities << "\t\tsycl::info::device::" #attribute "\t\t\t" \
+                   << device.get_info<sycl::info::device ::attribute>() << "\n"; \
+    }
+#  define GET_INTEL_ATTR(attribute) \
+    { \
+      if (device.has(sycl::aspect::ext_intel_##attribute)) { \
+        capabilities << "\t\tsycl::ext::intel::info::device::" #attribute "\t\t\t" \
+                     << device.get_info<sycl::ext::intel::info::device ::attribute>() << "\n"; \
+      } \
+    }
+#  define GET_ASPECT(aspect_) \
+    { \
+      capabilities << "\t\tdevice::has(" #aspect_ ")\t\t\t" << device.has(sycl::aspect ::aspect_) \
+                   << "\n"; \
     }
 
-    GET_NUM_ATTR(vendor_id)
-    GET_NUM_ATTR(max_compute_units)
-    GET_NUM_ATTR(max_work_item_dimensions)
-
+    GET_ATTR(vendor)
+    GET_ATTR(driver_version)
+    GET_ATTR(max_compute_units)
+    GET_ATTR(max_clock_frequency)
+    GET_ATTR(global_mem_size)
+    GET_INTEL_ATTR(pci_address)
+    GET_INTEL_ATTR(gpu_eu_simd_width)
+    GET_INTEL_ATTR(gpu_eu_count)
+    GET_INTEL_ATTR(gpu_slices)
+    GET_INTEL_ATTR(gpu_subslices_per_slice)
+    GET_INTEL_ATTR(gpu_eu_count_per_subslice)
+    GET_INTEL_ATTR(gpu_hw_threads_per_eu)
+    GET_INTEL_ATTR(max_mem_bandwidth)
+    GET_ATTR(max_work_group_size)
+    GET_ATTR(max_work_item_dimensions)
     sycl::id<3> max_work_item_sizes =
         device.get_info<sycl::info::device::max_work_item_sizes<3>>();
-    WRITE_ATTR(max_work_item_sizes_dim0, ((size_t)max_work_item_sizes.get(0)))
-    WRITE_ATTR(max_work_item_sizes_dim1, ((size_t)max_work_item_sizes.get(1)))
-    WRITE_ATTR(max_work_item_sizes_dim2, ((size_t)max_work_item_sizes.get(2)))
+    WRITE_ATTR(max_work_item_sizes[0], max_work_item_sizes.get(0))
+    WRITE_ATTR(max_work_item_sizes[1], max_work_item_sizes.get(1))
+    WRITE_ATTR(max_work_item_sizes[2], max_work_item_sizes.get(2))
 
-    GET_NUM_ATTR(max_work_group_size)
-    GET_NUM_ATTR(max_num_sub_groups)
-    GET_NUM_ATTR(sub_group_independent_forward_progress)
+    GET_ATTR(max_num_sub_groups)
+    for (size_t sub_group_size : device.get_info<sycl::info::device::sub_group_sizes>()) {
+      WRITE_ATTR(sub_group_size[], sub_group_size)
+    }
+    GET_ATTR(sub_group_independent_forward_progress)
 
-    GET_NUM_ATTR(preferred_vector_width_char)
-    GET_NUM_ATTR(preferred_vector_width_short)
-    GET_NUM_ATTR(preferred_vector_width_int)
-    GET_NUM_ATTR(preferred_vector_width_long)
-    GET_NUM_ATTR(preferred_vector_width_float)
-    GET_NUM_ATTR(preferred_vector_width_double)
-    GET_NUM_ATTR(preferred_vector_width_half)
+    GET_ATTR(preferred_vector_width_char)
+    GET_ATTR(preferred_vector_width_short)
+    GET_ATTR(preferred_vector_width_int)
+    GET_ATTR(preferred_vector_width_long)
+    GET_ATTR(preferred_vector_width_float)
+    GET_ATTR(preferred_vector_width_double)
+    GET_ATTR(preferred_vector_width_half)
 
-    GET_NUM_ATTR(native_vector_width_char)
-    GET_NUM_ATTR(native_vector_width_short)
-    GET_NUM_ATTR(native_vector_width_int)
-    GET_NUM_ATTR(native_vector_width_long)
-    GET_NUM_ATTR(native_vector_width_float)
-    GET_NUM_ATTR(native_vector_width_double)
-    GET_NUM_ATTR(native_vector_width_half)
+    GET_ATTR(address_bits)
+    GET_ATTR(max_mem_alloc_size)
+    GET_ATTR(mem_base_addr_align)
+    GET_ATTR(error_correction_support)
+    GET_ATTR(is_available)
 
-    size_t max_clock_frequency = device.get_info<sycl::info::device::max_clock_frequency>();
-    WRITE_ATTR(max_clock_frequency, max_clock_frequency)
+    GET_ASPECT(cpu)
+    GET_ASPECT(gpu)
+    GET_ASPECT(fp16)
+    GET_ASPECT(atomic64)
+    GET_ASPECT(usm_host_allocations)
+    GET_ASPECT(usm_device_allocations)
+    GET_ASPECT(usm_shared_allocations)
+    GET_ASPECT(usm_system_allocations)
 
-    GET_NUM_ATTR(address_bits)
-    GET_NUM_ATTR(max_mem_alloc_size)
+#  ifdef __SYCL_ANY_DEVICE_HAS_ext_oneapi_non_uniform_groups__
+    GET_ASPECT(ext_oneapi_non_uniform_groups)
+#  endif
+#  ifdef __SYCL_ANY_DEVICE_HAS_ext_oneapi_bindless_images__
+    GET_ASPECT(ext_oneapi_bindless_images)
+#  endif
+#  ifdef __SYCL_ANY_DEVICE_HAS_ext_oneapi_interop_semaphore_import__
+    GET_ASPECT(ext_oneapi_interop_semaphore_import)
+#  endif
+#  ifdef __SYCL_ANY_DEVICE_HAS_ext_oneapi_interop_semaphore_export__
+    GET_ASPECT(ext_oneapi_interop_semaphore_export)
+#  endif
 
-    /* NOTE(@nsirgien): Implementation doesn't use image support as bindless images aren't
-     * supported so we always return false, even if device supports HW texture usage acceleration.
-     */
-    bool image_support = false;
-    WRITE_ATTR(image_support, (size_t)image_support)
-
-    GET_NUM_ATTR(max_parameter_size)
-    GET_NUM_ATTR(mem_base_addr_align)
-    GET_NUM_ATTR(global_mem_size)
-    GET_NUM_ATTR(local_mem_size)
-    GET_NUM_ATTR(error_correction_support)
-    GET_NUM_ATTR(profiling_timer_resolution)
-    GET_NUM_ATTR(is_available)
-
-#  undef GET_NUM_ATTR
+#  undef GET_INTEL_ATTR
+#  undef GET_ASPECT
+#  undef GET_ATTR
 #  undef WRITE_ATTR
     capabilities << "\n";
   }
@@ -1050,7 +1087,7 @@ char *OneapiDevice::device_capabilities()
 void OneapiDevice::iterate_devices(OneAPIDeviceIteratorCallback cb, void *user_ptr)
 {
   int num = 0;
-  std::vector<sycl::device> devices = OneapiDevice::available_devices();
+  std::vector<sycl::device> devices = available_sycl_devices();
   for (sycl::device &device : devices) {
     const std::string &platform_name =
         device.get_platform().get_info<sycl::info::platform::name>();

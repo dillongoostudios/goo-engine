@@ -14,8 +14,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_lib_query.h"
+#include "BKE_context.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_screen.hh"
 
 #include "ED_screen.hh"
@@ -27,9 +27,6 @@
 #include "UI_view2d.hh"
 
 #include "BLO_read_write.hh"
-
-#ifdef WITH_PYTHON
-#endif
 
 #include "script_intern.h" /* own include */
 

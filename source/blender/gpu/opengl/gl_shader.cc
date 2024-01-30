@@ -6,6 +6,8 @@
  * \ingroup gpu
  */
 
+#include <iomanip>
+
 #include "BKE_global.h"
 
 #include "BLI_string.h"
@@ -13,6 +15,7 @@
 
 #include "GPU_capabilities.h"
 #include "GPU_platform.h"
+#include "gpu_shader_dependency_private.h"
 
 #include "gl_debug.hh"
 #include "gl_vertex_buffer.hh"
@@ -38,9 +41,6 @@ GLShader::GLShader(const char *name) : Shader(name)
        * does not have a GPUContext. */
   BLI_assert(GLContext::get() != nullptr);
 #endif
-  shader_program_ = glCreateProgram();
-
-  debug::object_label(GL_PROGRAM, shader_program_, name);
 }
 
 GLShader::~GLShader()
@@ -49,12 +49,14 @@ GLShader::~GLShader()
        * does not have a GPUContext. */
   BLI_assert(GLContext::get() != nullptr);
 #endif
-  /* Invalid handles are silently ignored. */
-  glDeleteShader(vert_shader_);
-  glDeleteShader(geom_shader_);
-  glDeleteShader(frag_shader_);
-  glDeleteShader(compute_shader_);
-  glDeleteProgram(shader_program_);
+}
+
+void GLShader::init(const shader::ShaderCreateInfo &info)
+{
+  /* Extract the constants names from info and store them locally. */
+  for (const ShaderCreateInfo::SpecializationConstant &constant : info.specialization_constants_) {
+    specialization_constant_names_.append(constant.name.c_str());
+  }
 }
 
 /** \} */
@@ -142,7 +144,7 @@ static const char *to_string(const Type &type)
   return "unknown";
 }
 
-static const int to_component_count(const Type &type)
+static int to_component_count(const Type &type)
 {
   switch (type) {
     case Type::FLOAT:
@@ -198,7 +200,7 @@ static const int to_component_count(const Type &type)
   return -1;
 }
 
-static const Type to_component_type(const Type &type)
+static Type to_component_type(const Type &type)
 {
   switch (type) {
     case Type::FLOAT:
@@ -376,6 +378,9 @@ static void print_image_type(std::ostream &os,
     case ImageType::INT_3D:
     case ImageType::INT_CUBE:
     case ImageType::INT_CUBE_ARRAY:
+    case ImageType::INT_2D_ATOMIC:
+    case ImageType::INT_2D_ARRAY_ATOMIC:
+    case ImageType::INT_3D_ATOMIC:
       os << "i";
       break;
     case ImageType::UINT_BUFFER:
@@ -386,6 +391,9 @@ static void print_image_type(std::ostream &os,
     case ImageType::UINT_3D:
     case ImageType::UINT_CUBE:
     case ImageType::UINT_CUBE_ARRAY:
+    case ImageType::UINT_2D_ATOMIC:
+    case ImageType::UINT_2D_ARRAY_ATOMIC:
+    case ImageType::UINT_3D_ATOMIC:
       os << "u";
       break;
     default:
@@ -417,8 +425,12 @@ static void print_image_type(std::ostream &os,
     case ImageType::FLOAT_2D_ARRAY:
     case ImageType::INT_2D:
     case ImageType::INT_2D_ARRAY:
+    case ImageType::INT_2D_ATOMIC:
+    case ImageType::INT_2D_ARRAY_ATOMIC:
     case ImageType::UINT_2D:
     case ImageType::UINT_2D_ARRAY:
+    case ImageType::UINT_2D_ATOMIC:
+    case ImageType::UINT_2D_ARRAY_ATOMIC:
     case ImageType::SHADOW_2D:
     case ImageType::SHADOW_2D_ARRAY:
     case ImageType::DEPTH_2D:
@@ -428,6 +440,8 @@ static void print_image_type(std::ostream &os,
     case ImageType::FLOAT_3D:
     case ImageType::INT_3D:
     case ImageType::UINT_3D:
+    case ImageType::INT_3D_ATOMIC:
+    case ImageType::UINT_3D_ATOMIC:
       os << "3D";
       break;
     case ImageType::FLOAT_CUBE:
@@ -455,6 +469,7 @@ static void print_image_type(std::ostream &os,
     case ImageType::INT_CUBE_ARRAY:
     case ImageType::UINT_1D_ARRAY:
     case ImageType::UINT_2D_ARRAY:
+    case ImageType::UINT_2D_ARRAY_ATOMIC:
     case ImageType::UINT_CUBE_ARRAY:
     case ImageType::SHADOW_2D_ARRAY:
     case ImageType::SHADOW_CUBE_ARRAY:
@@ -603,7 +618,6 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
   /* NOTE: We define macros in GLSL to trigger compilation error if the resource names
    * are reused for local variables. This is to match other backend behavior which needs accessors
    * macros. */
-
   ss << "\n/* Pass Resources. */\n";
   for (const ShaderCreateInfo::Resource &res : info.pass_resources_) {
     print_resource(ss, res, info.auto_resource_location_);
@@ -634,6 +648,39 @@ std::string GLShader::resources_declare(const ShaderCreateInfo &info) const
   }
 #endif
   ss << "\n";
+  return ss.str();
+}
+
+std::string GLShader::constants_declare() const
+{
+  std::stringstream ss;
+
+  ss << "/* Specialization Constants. */\n";
+  for (int constant_index : IndexRange(constants.types.size())) {
+    const StringRefNull name = specialization_constant_names_[constant_index];
+    gpu::shader::Type constant_type = constants.types[constant_index];
+    const shader::ShaderCreateInfo::SpecializationConstant::Value &value =
+        constants.values[constant_index];
+
+    switch (constant_type) {
+      case Type::INT:
+        ss << "const int " << name << "=" << std::to_string(value.i) << ";\n";
+        break;
+      case Type::UINT:
+        ss << "const uint " << name << "=" << std::to_string(value.u) << "u;\n";
+        break;
+      case Type::BOOL:
+        ss << "const bool " << name << "=" << (value.u ? "true" : "false") << ";\n";
+        break;
+      case Type::FLOAT:
+        /* Use uint representation to allow exact same bit pattern even if NaN. */
+        ss << "const float " << name << "= uintBitsToFloat(" << std::to_string(value.u) << "u);\n";
+        break;
+      default:
+        BLI_assert_unreachable();
+        break;
+    }
+  }
   return ss.str();
 }
 
@@ -1009,115 +1056,120 @@ bool GLShader::do_geometry_shader_injection(const shader::ShaderCreateInfo *info
 /** \name Shader stage creation
  * \{ */
 
-static char *glsl_patch_default_get()
+static const char *glsl_patch_default_get()
 {
   /** Used for shader patching. Init once. */
-  static char patch[2048] = "\0";
-  if (patch[0] != '\0') {
-    return patch;
+  static std::string patch;
+  if (!patch.empty()) {
+    return patch.c_str();
   }
 
-  size_t slen = 0;
+  std::stringstream ss;
   /* Version need to go first. */
   if (epoxy_gl_version() >= 43) {
-    STR_CONCAT(patch, slen, "#version 430\n");
+    ss << "#version 430\n";
   }
   else {
-    STR_CONCAT(patch, slen, "#version 330\n");
+    ss << "#version 330\n";
   }
 
   /* Enable extensions for features that are not part of our base GLSL version
    * don't use an extension for something already available! */
   if (GLContext::texture_gather_support) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_texture_gather: enable\n");
+    ss << "#extension GL_ARB_texture_gather: enable\n";
     /* Some drivers don't agree on epoxy_has_gl_extension("GL_ARB_texture_gather") and the actual
      * support in the shader so double check the preprocessor define (see #56544). */
-    STR_CONCAT(patch, slen, "#ifdef GL_ARB_texture_gather\n");
-    STR_CONCAT(patch, slen, "#  define GPU_ARB_texture_gather\n");
-    STR_CONCAT(patch, slen, "#endif\n");
+    ss << "#ifdef GL_ARB_texture_gather\n";
+    ss << "#  define GPU_ARB_texture_gather\n";
+    ss << "#endif\n";
   }
   if (GLContext::shader_draw_parameters_support) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_shader_draw_parameters : enable\n");
-    STR_CONCAT(patch, slen, "#define GPU_ARB_shader_draw_parameters\n");
-    STR_CONCAT(patch, slen, "#define gpu_BaseInstance gl_BaseInstanceARB\n");
+    ss << "#extension GL_ARB_shader_draw_parameters : enable\n";
+    ss << "#define GPU_ARB_shader_draw_parameters\n";
+    ss << "#define gpu_BaseInstance gl_BaseInstanceARB\n";
   }
   if (GLContext::geometry_shader_invocations) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_gpu_shader5 : enable\n");
-    STR_CONCAT(patch, slen, "#define GPU_ARB_gpu_shader5\n");
+    ss << "#extension GL_ARB_gpu_shader5 : enable\n";
+    ss << "#define GPU_ARB_gpu_shader5\n";
   }
   if (GLContext::texture_cube_map_array_support) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_texture_cube_map_array : enable\n");
-    STR_CONCAT(patch, slen, "#define GPU_ARB_texture_cube_map_array\n");
+    ss << "#extension GL_ARB_texture_cube_map_array : enable\n";
+    ss << "#define GPU_ARB_texture_cube_map_array\n";
   }
   if (epoxy_has_gl_extension("GL_ARB_conservative_depth")) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_conservative_depth : enable\n");
+    ss << "#extension GL_ARB_conservative_depth : enable\n";
   }
   if (GPU_shader_image_load_store_support()) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_shader_image_load_store: enable\n");
-    STR_CONCAT(patch, slen, "#extension GL_ARB_shading_language_420pack: enable\n");
+    ss << "#extension GL_ARB_shader_image_load_store: enable\n";
+    ss << "#extension GL_ARB_shading_language_420pack: enable\n";
   }
   if (GLContext::layered_rendering_support) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_shader_viewport_layer_array: enable\n");
-    STR_CONCAT(patch, slen, "#define gpu_Layer gl_Layer\n");
-    STR_CONCAT(patch, slen, "#define gpu_ViewportIndex gl_ViewportIndex\n");
+    ss << "#extension GL_ARB_shader_viewport_layer_array: enable\n";
+    ss << "#define gpu_Layer gl_Layer\n";
+    ss << "#define gpu_ViewportIndex gl_ViewportIndex\n";
   }
   if (GLContext::native_barycentric_support) {
-    STR_CONCAT(patch, slen, "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n");
+    ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
   }
   if (GLContext::framebuffer_fetch_support) {
-    STR_CONCAT(patch, slen, "#extension GL_EXT_shader_framebuffer_fetch: enable\n");
+    ss << "#extension GL_EXT_shader_framebuffer_fetch: enable\n";
+  }
+  if (GPU_stencil_export_support()) {
+    ss << "#extension GL_ARB_shader_stencil_export: enable\n";
+    ss << "#define GPU_ARB_shader_stencil_export\n";
   }
 
   /* Fallbacks. */
   if (!GLContext::shader_draw_parameters_support) {
-    STR_CONCAT(patch, slen, "uniform int gpu_BaseInstance;\n");
+    ss << "uniform int gpu_BaseInstance;\n";
   }
 
   /* Vulkan GLSL compatibility. */
-  STR_CONCAT(patch, slen, "#define gpu_InstanceIndex (gl_InstanceID + gpu_BaseInstance)\n");
+  ss << "#define gpu_InstanceIndex (gl_InstanceID + gpu_BaseInstance)\n";
+  ss << "#define gpu_EmitVertex EmitVertex\n";
 
   /* Array compatibility. */
-  STR_CONCAT(patch, slen, "#define gpu_Array(_type) _type[]\n");
+  ss << "#define gpu_Array(_type) _type[]\n";
 
   /* Derivative sign can change depending on implementation. */
-  STR_CONCATF(patch, slen, "#define DFDX_SIGN %1.1f\n", GLContext::derivative_signs[0]);
-  STR_CONCATF(patch, slen, "#define DFDY_SIGN %1.1f\n", GLContext::derivative_signs[1]);
+  ss << "#define DFDX_SIGN " << std::setprecision(2) << GLContext::derivative_signs[0] << "\n";
+  ss << "#define DFDY_SIGN " << std::setprecision(2) << GLContext::derivative_signs[1] << "\n";
 
   /* GLSL Backend Lib. */
-  STR_CONCAT(patch, slen, datatoc_glsl_shader_defines_glsl);
+  ss << datatoc_glsl_shader_defines_glsl;
 
-  BLI_assert(slen < sizeof(patch));
-  return patch;
+  patch = ss.str();
+  return patch.c_str();
 }
 
-static char *glsl_patch_compute_get()
+static const char *glsl_patch_compute_get()
 {
   /** Used for shader patching. Init once. */
-  static char patch[2048] = "\0";
-  if (patch[0] != '\0') {
-    return patch;
+  static std::string patch;
+  if (!patch.empty()) {
+    return patch.c_str();
   }
 
-  size_t slen = 0;
+  std::stringstream ss;
   /* Version need to go first. */
-  STR_CONCAT(patch, slen, "#version 430\n");
-  STR_CONCAT(patch, slen, "#extension GL_ARB_compute_shader :enable\n");
+  ss << "#version 430\n";
+  ss << "#extension GL_ARB_compute_shader :enable\n";
 
   if (GLContext::texture_cube_map_array_support) {
-    STR_CONCAT(patch, slen, "#extension GL_ARB_texture_cube_map_array : enable\n");
-    STR_CONCAT(patch, slen, "#define GPU_ARB_texture_cube_map_array\n");
+    ss << "#extension GL_ARB_texture_cube_map_array : enable\n";
+    ss << "#define GPU_ARB_texture_cube_map_array\n";
   }
 
   /* Array compatibility. */
-  STR_CONCAT(patch, slen, "#define gpu_Array(_type) _type[]\n");
+  ss << "#define gpu_Array(_type) _type[]\n";
 
-  STR_CONCAT(patch, slen, datatoc_glsl_shader_defines_glsl);
+  ss << datatoc_glsl_shader_defines_glsl;
 
-  BLI_assert(slen < sizeof(patch));
-  return patch;
+  patch = ss.str();
+  return patch.c_str();
 }
 
-char *GLShader::glsl_patch_get(GLenum gl_stage)
+const char *GLShader::glsl_patch_get(GLenum gl_stage)
 {
   if (gl_stage == GL_COMPUTE_SHADER) {
     return glsl_patch_compute_get();
@@ -1125,7 +1177,9 @@ char *GLShader::glsl_patch_get(GLenum gl_stage)
   return glsl_patch_default_get();
 }
 
-GLuint GLShader::create_shader_stage(GLenum gl_stage, MutableSpan<const char *> sources)
+GLuint GLShader::create_shader_stage(GLenum gl_stage,
+                                     MutableSpan<const char *> sources,
+                                     const GLSources &gl_sources)
 {
   GLuint shader = glCreateShader(gl_stage);
   if (shader == 0) {
@@ -1133,8 +1187,21 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage, MutableSpan<const char *> 
     return 0;
   }
 
+  /* Patch the shader sources to include specialization constants. */
+  std::string constants_source;
+  Vector<const char *> recreated_sources;
+  const bool has_specialization_constants = !constants.types.is_empty();
+  if (has_specialization_constants) {
+    constants_source = constants_declare();
+    if (sources.is_empty()) {
+      recreated_sources = gl_sources.sources_get();
+      sources = recreated_sources;
+    }
+  }
+
   /* Patch the shader code using the first source slot. */
-  sources[0] = glsl_patch_get(gl_stage);
+  sources[SOURCES_INDEX_VERSION] = glsl_patch_get(gl_stage);
+  sources[SOURCES_INDEX_SPECIALIZATION_CONSTANTS] = constants_source.c_str();
 
   glShaderSource(shader, sources.size(), sources.data(), nullptr);
   glCompileShader(shader);
@@ -1170,28 +1237,47 @@ GLuint GLShader::create_shader_stage(GLenum gl_stage, MutableSpan<const char *> 
 
   debug::object_label(gl_stage, shader, name);
 
-  glAttachShader(shader_program_, shader);
+  glAttachShader(program_active_->program_id, shader);
   return shader;
+}
+
+void GLShader::update_program_and_sources(GLSources &stage_sources,
+                                          MutableSpan<const char *> sources)
+{
+  const bool has_specialization_constants = !constants.types.is_empty();
+  if (has_specialization_constants && stage_sources.is_empty()) {
+    stage_sources = sources;
+  }
+
+  init_program();
 }
 
 void GLShader::vertex_shader_from_glsl(MutableSpan<const char *> sources)
 {
-  vert_shader_ = this->create_shader_stage(GL_VERTEX_SHADER, sources);
+  update_program_and_sources(vertex_sources_, sources);
+  program_active_->vert_shader = this->create_shader_stage(
+      GL_VERTEX_SHADER, sources, vertex_sources_);
 }
 
 void GLShader::geometry_shader_from_glsl(MutableSpan<const char *> sources)
 {
-  geom_shader_ = this->create_shader_stage(GL_GEOMETRY_SHADER, sources);
+  update_program_and_sources(geometry_sources_, sources);
+  program_active_->geom_shader = this->create_shader_stage(
+      GL_GEOMETRY_SHADER, sources, geometry_sources_);
 }
 
 void GLShader::fragment_shader_from_glsl(MutableSpan<const char *> sources)
 {
-  frag_shader_ = this->create_shader_stage(GL_FRAGMENT_SHADER, sources);
+  update_program_and_sources(fragment_sources_, sources);
+  program_active_->frag_shader = this->create_shader_stage(
+      GL_FRAGMENT_SHADER, sources, fragment_sources_);
 }
 
 void GLShader::compute_shader_from_glsl(MutableSpan<const char *> sources)
 {
-  compute_shader_ = this->create_shader_stage(GL_COMPUTE_SHADER, sources);
+  update_program_and_sources(compute_sources_, sources);
+  program_active_->compute_shader = this->create_shader_stage(
+      GL_COMPUTE_SHADER, sources, compute_sources_);
 }
 
 bool GLShader::finalize(const shader::ShaderCreateInfo *info)
@@ -1206,26 +1292,21 @@ bool GLShader::finalize(const shader::ShaderCreateInfo *info)
     sources.append("version");
     sources.append(source.c_str());
     geometry_shader_from_glsl(sources);
+    if (!constants.types.is_empty()) {
+      geometry_sources_ = sources;
+    }
   }
 
-  glLinkProgram(shader_program_);
-
-  GLint status;
-  glGetProgramiv(shader_program_, GL_LINK_STATUS, &status);
-  if (!status) {
-    char log[5000];
-    glGetProgramInfoLog(shader_program_, sizeof(log), nullptr, log);
-    Span<const char *> sources;
-    GLLogParser parser;
-    this->print_log(sources, log, "Linking", true, &parser);
+  if (!program_link()) {
     return false;
   }
 
+  GLuint program_id = program_get();
   if (info != nullptr && info->legacy_resource_location_ == false) {
-    interface = new GLShaderInterface(shader_program_, *info);
+    interface = new GLShaderInterface(program_id, *info);
   }
   else {
-    interface = new GLShaderInterface(shader_program_);
+    interface = new GLShaderInterface(program_id);
   }
 
   return true;
@@ -1239,8 +1320,8 @@ bool GLShader::finalize(const shader::ShaderCreateInfo *info)
 
 void GLShader::bind()
 {
-  BLI_assert(shader_program_ != 0);
-  glUseProgram(shader_program_);
+  GLuint program_id = program_get();
+  glUseProgram(program_id);
 }
 
 void GLShader::unbind()
@@ -1262,7 +1343,7 @@ void GLShader::transform_feedback_names_set(Span<const char *> name_list,
                                             const eGPUShaderTFBType geom_type)
 {
   glTransformFeedbackVaryings(
-      shader_program_, name_list.size(), name_list.data(), GL_INTERLEAVED_ATTRIBS);
+      program_get(), name_list.size(), name_list.data(), GL_INTERLEAVED_ATTRIBS);
   transform_feedback_type_ = geom_type;
 }
 
@@ -1365,7 +1446,149 @@ void GLShader::uniform_int(int location, int comp_len, int array_size, const int
 
 int GLShader::program_handle_get() const
 {
-  return int(this->shader_program_);
+  BLI_assert(program_active_);
+  return program_active_->program_id;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Sources
+ * \{ */
+GLSource::GLSource(const char *other)
+{
+  if (!gpu_shader_dependency_get_filename_from_source_string(other).is_empty()) {
+    source = "";
+    source_ref = other;
+  }
+  else {
+    source = other;
+    source_ref = nullptr;
+  }
+}
+
+GLSources &GLSources::operator=(Span<const char *> other)
+{
+  clear();
+  reserve(other.size());
+
+  for (const char *other_source : other) {
+    /* Don't store empty string as compilers can optimize these away and result in pointing to a
+     * string that isn't c-str compliant anymore. */
+    if (other_source[0] == '\0') {
+      continue;
+    }
+    append(GLSource(other_source));
+  }
+
+  return *this;
+}
+
+Vector<const char *> GLSources::sources_get() const
+{
+  Vector<const char *> result;
+  result.reserve(size());
+
+  for (const GLSource &source : *this) {
+    if (source.source_ref) {
+      result.append(source.source_ref);
+    }
+    else {
+      result.append(source.source.c_str());
+    }
+  }
+  return result;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Specialization Constants
+ * \{ */
+
+GLShader::GLProgram::~GLProgram()
+{
+  /* Invalid handles are silently ignored. */
+  glDeleteShader(vert_shader);
+  glDeleteShader(geom_shader);
+  glDeleteShader(frag_shader);
+  glDeleteShader(compute_shader);
+  glDeleteProgram(program_id);
+}
+
+bool GLShader::program_link()
+{
+  GLuint program_id = program_active_->program_id;
+  glLinkProgram(program_id);
+
+  GLint status;
+  glGetProgramiv(program_id, GL_LINK_STATUS, &status);
+  if (!status) {
+    char log[5000];
+    glGetProgramInfoLog(program_id, sizeof(log), nullptr, log);
+    Span<const char *> sources;
+    GLLogParser parser;
+    print_log(sources, log, "Linking", true, &parser);
+  }
+
+  return bool(status);
+}
+
+void GLShader::init_program()
+{
+  if (program_active_) {
+    return;
+  }
+
+  program_active_ = &program_cache_.lookup_or_add_default(constants.values);
+  if (!program_active_->program_id) {
+    program_active_->program_id = glCreateProgram();
+    debug::object_label(GL_PROGRAM, program_active_->program_id, name);
+  }
+}
+
+GLuint GLShader::program_get()
+{
+  if (constants.types.is_empty()) {
+    /* Early exit for shaders that doesn't use specialization constants. The active shader should
+     * already be setup. */
+    BLI_assert(program_active_ && program_active_->program_id);
+    return program_active_->program_id;
+  }
+
+  if (!constants.is_dirty) {
+    /* Early exit when constants didn't change since the last call. */
+    BLI_assert(program_active_ && program_active_->program_id);
+    return program_active_->program_id;
+  }
+
+  program_active_ = &program_cache_.lookup_or_add_default(constants.values);
+  if (!program_active_->program_id) {
+    program_active_->program_id = glCreateProgram();
+    debug::object_label(GL_PROGRAM, program_active_->program_id, name);
+    MutableSpan<const char *> no_sources;
+    if (!vertex_sources_.is_empty()) {
+      program_active_->vert_shader = create_shader_stage(
+          GL_VERTEX_SHADER, no_sources, vertex_sources_);
+    }
+    if (!geometry_sources_.is_empty()) {
+      program_active_->geom_shader = create_shader_stage(
+          GL_GEOMETRY_SHADER, no_sources, geometry_sources_);
+    }
+    if (!fragment_sources_.is_empty()) {
+      program_active_->frag_shader = create_shader_stage(
+          GL_FRAGMENT_SHADER, no_sources, fragment_sources_);
+    }
+    if (!compute_sources_.is_empty()) {
+      program_active_->compute_shader = create_shader_stage(
+          GL_COMPUTE_SHADER, no_sources, compute_sources_);
+    }
+
+    program_link();
+  }
+
+  constants.is_dirty = false;
+  return program_active_->program_id;
 }
 
 /** \} */

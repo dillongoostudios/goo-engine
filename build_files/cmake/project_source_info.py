@@ -150,21 +150,21 @@ def build_info(
     print("parsing make log ...")
 
     for line in makelog:
-
-        args: Union[str, List[str]] = line.split()
-
-        if not any([(c in args) for c in compilers]):
+        args_orig: Union[str, List[str]] = line.split()
+        args = [fake_compiler if c in compilers else c for c in args_orig]
+        if args == args_orig:
+            # No compilers in the command, skip.
             continue
+        del args_orig
 
         # join args incase they are not.
-        args = ' '.join(args)
-        args = args.replace(" -isystem", " -I")
-        args = args.replace(" -D ", " -D")
-        args = args.replace(" -I ", " -I")
+        args_str = " ".join(args)
+        args_str = args_str.replace(" -isystem", " -I")
+        args_str = args_str.replace(" -D ", " -D")
+        args_str = args_str.replace(" -I ", " -I")
 
-        for c in compilers:
-            args = args.replace(c, fake_compiler)
-        args = shlex.split(args)
+        args = shlex.split(args_str)
+        del args_str
         # end
 
         # remove compiler

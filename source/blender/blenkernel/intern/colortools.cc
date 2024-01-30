@@ -22,8 +22,8 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_colortools.h"
-#include "BKE_curve.h"
+#include "BKE_colortools.hh"
+#include "BKE_curve.hh"
 #include "BKE_fcurve.h"
 
 #include "IMB_colormanagement.h"

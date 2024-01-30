@@ -253,7 +253,7 @@ template<typename MatT> [[nodiscard]] MatT orthogonalize(const MatT &mat, const 
 
 /**
  * Construct a transformation that is pivoted around the given origin point. So for instance,
- * from_origin_transform<MatT>(from_rotation(M_PI_2), float2(0.0f, 2.0f))
+ * from_origin_transform<MatT>(from_rotation(numbers::pi * 0.5), float2(0.0f, 2.0f))
  * will construct a transformation representing a 90 degree rotation around the point (0, 2).
  */
 template<typename MatT, typename VectorT>
@@ -758,7 +758,7 @@ void normalized_to_eul2(const MatBase<T, 3, 3> &mat, EulerXYZBase<T> &eul1, Eule
   BLI_assert(math::is_unit_scale(mat));
 
   const T cy = math::hypot(mat[0][0], mat[0][1]);
-  if (cy > T(16) * FLT_EPSILON) {
+  if (cy > T(16) * std::numeric_limits<T>::epsilon()) {
     eul1.x() = math::atan2(mat[1][2], mat[2][2]);
     eul1.y() = math::atan2(-mat[0][2], cy);
     eul1.z() = math::atan2(mat[0][1], mat[0][0]);
@@ -784,7 +784,7 @@ void normalized_to_eul2(const MatBase<T, 3, 3> &mat, Euler3Base<T> &eul1, Euler3
   const int k_index = eul1.k_index();
 
   const T cy = math::hypot(mat[i_index][i_index], mat[i_index][j_index]);
-  if (cy > T(16) * FLT_EPSILON) {
+  if (cy > T(16) * std::numeric_limits<T>::epsilon()) {
     eul1.i() = math::atan2(mat[j_index][k_index], mat[k_index][k_index]);
     eul1.j() = math::atan2(-mat[i_index][k_index], cy);
     eul1.k() = math::atan2(mat[i_index][j_index], mat[i_index][i_index]);
@@ -910,7 +910,7 @@ template<typename T> QuaternionBase<T> normalized_to_quat_fast(const MatBase<T, 
 template<typename T> QuaternionBase<T> normalized_to_quat_with_checks(const MatBase<T, 3, 3> &mat)
 {
   const T det = math::determinant(mat);
-  if (UNLIKELY(!isfinite(det))) {
+  if (UNLIKELY(!std::isfinite(det))) {
     return QuaternionBase<T>::identity();
   }
   else if (UNLIKELY(det < T(0))) {
@@ -985,10 +985,10 @@ MatBase<T, NumCol, NumRow> from_rotation(const QuaternionBase<T> &rotation)
 {
   using MatT = MatBase<T, NumCol, NumRow>;
   using DoublePrecision = typename TypeTraits<T>::DoublePrecision;
-  const DoublePrecision q0 = M_SQRT2 * DoublePrecision(rotation.w);
-  const DoublePrecision q1 = M_SQRT2 * DoublePrecision(rotation.x);
-  const DoublePrecision q2 = M_SQRT2 * DoublePrecision(rotation.y);
-  const DoublePrecision q3 = M_SQRT2 * DoublePrecision(rotation.z);
+  const DoublePrecision q0 = numbers::sqrt2 * DoublePrecision(rotation.w);
+  const DoublePrecision q1 = numbers::sqrt2 * DoublePrecision(rotation.x);
+  const DoublePrecision q2 = numbers::sqrt2 * DoublePrecision(rotation.y);
+  const DoublePrecision q3 = numbers::sqrt2 * DoublePrecision(rotation.z);
 
   const DoublePrecision qda = q0 * q1;
   const DoublePrecision qdb = q0 * q2;
@@ -1401,7 +1401,7 @@ template<typename MatT, typename VectorT> [[nodiscard]] MatT from_up_axis(const 
   using T = typename MatT::base_type;
   using Vec3T = VecBase<T, 3>;
   /* Duff, Tom, et al. "Building an orthonormal basis, revisited." JCGT 6.1 (2017). */
-  T sign = math::sign(up.z);
+  T sign = up.z >= T(0) ? T(1) : T(-1);
   T a = T(-1) / (sign + up.z);
   T b = up.x * up.y * a;
 

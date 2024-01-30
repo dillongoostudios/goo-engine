@@ -91,7 +91,6 @@ def find_dominating_file(
 # CMake Cache Access
 
 def cmake_cache_var_iter(filepath_cmake_cache: str) -> Generator[Tuple[str, str, str], None, None]:
-    import re
     re_cache = re.compile(r"([A-Za-z0-9_\-]+)?:?([A-Za-z0-9_\-]+)?=(.*)$")
     with open(filepath_cmake_cache, "r", encoding="utf-8") as cache_file:
         for l in cache_file:
@@ -232,7 +231,6 @@ def main() -> None:
         long_description_content_type='text/markdown',
         license="GPL-3.0",
         author="Blender Foundation",
-        author_email="bf-committers@blender.org",
         url="https://www.blender.org"
     )
 

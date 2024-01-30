@@ -23,6 +23,7 @@ struct BMeshNormalsUpdate_Params;
 struct Base;
 struct Depsgraph;
 struct ID;
+struct KeyBlock;
 struct MDeformVert;
 struct Mesh;
 struct Object;
@@ -112,7 +113,7 @@ bool EDBM_mesh_hide(BMEditMesh *em, bool swap);
 bool EDBM_mesh_reveal(BMEditMesh *em, bool select);
 
 struct EDBMUpdate_Params {
-  uint calc_looptri : 1;
+  uint calc_looptris : 1;
   uint calc_normals : 1;
   uint is_destructive : 1;
 };
@@ -120,11 +121,11 @@ struct EDBMUpdate_Params {
 /**
  * So many tools call these that we better make it a generic function.
  */
-void EDBM_update(Mesh *me, const EDBMUpdate_Params *params);
+void EDBM_update(Mesh *mesh, const EDBMUpdate_Params *params);
 /**
  * Bad level call from Python API.
  */
-void EDBM_update_extern(Mesh *me, bool do_tessellation, bool is_destructive);
+void EDBM_update_extern(Mesh *mesh, bool do_tessellation, bool is_destructive);
 
 /**
  * A specialized vert map used by stitch operator.
@@ -195,7 +196,7 @@ void ED_mesh_undosys_type(UndoType *ut);
 /* editmesh_select.cc */
 
 void EDBM_select_mirrored(
-    BMEditMesh *em, const Mesh *me, int axis, bool extend, int *r_totmirr, int *r_totfail);
+    BMEditMesh *em, const Mesh *mesh, int axis, bool extend, int *r_totmirr, int *r_totfail);
 
 /**
  * Nearest vertex under the cursor.
@@ -438,9 +439,9 @@ struct MirrTopoStore_t {
   bool prev_is_editmode;
 };
 
-bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *me, MirrTopoStore_t *mesh_topo_store);
+bool ED_mesh_mirrtopo_recalc_check(BMEditMesh *em, Mesh *mesh, MirrTopoStore_t *mesh_topo_store);
 void ED_mesh_mirrtopo_init(BMEditMesh *em,
-                           Mesh *me,
+                           Mesh *mesh,
                            MirrTopoStore_t *mesh_topo_store,
                            bool skip_em_vert_array_init);
 void ED_mesh_mirrtopo_free(MirrTopoStore_t *mesh_topo_store);
@@ -531,27 +532,30 @@ void ED_mesh_faces_remove(Mesh *mesh, ReportList *reports, int count);
 
 void ED_mesh_geometry_clear(Mesh *mesh);
 
-bool *ED_mesh_uv_map_vert_select_layer_ensure(Mesh *mesh, int uv_map_index);
-bool *ED_mesh_uv_map_edge_select_layer_ensure(Mesh *mesh, int uv_map_index);
-bool *ED_mesh_uv_map_pin_layer_ensure(Mesh *mesh, int uv_map_index);
-const bool *ED_mesh_uv_map_vert_select_layer_get(const Mesh *mesh, int uv_map_index);
-const bool *ED_mesh_uv_map_edge_select_layer_get(const Mesh *mesh, int uv_map_index);
-const bool *ED_mesh_uv_map_pin_layer_get(const Mesh *mesh, int uv_map_index);
+bool *ED_mesh_uv_map_vert_select_layer_ensure(Mesh *mesh, int uv_index);
+bool *ED_mesh_uv_map_edge_select_layer_ensure(Mesh *mesh, int uv_index);
+bool *ED_mesh_uv_map_pin_layer_ensure(Mesh *mesh, int uv_index);
+const bool *ED_mesh_uv_map_vert_select_layer_get(const Mesh *mesh, int uv_index);
+const bool *ED_mesh_uv_map_edge_select_layer_get(const Mesh *mesh, int uv_index);
+const bool *ED_mesh_uv_map_pin_layer_get(const Mesh *mesh, int uv_index);
 
-void ED_mesh_uv_ensure(Mesh *me, const char *name);
-int ED_mesh_uv_add(Mesh *me, const char *name, bool active_set, bool do_init, ReportList *reports);
+void ED_mesh_uv_ensure(Mesh *mesh, const char *name);
+int ED_mesh_uv_add(
+    Mesh *mesh, const char *name, bool active_set, bool do_init, ReportList *reports);
 
-void ED_mesh_uv_loop_reset(bContext *C, Mesh *me);
+void ED_mesh_uv_loop_reset(bContext *C, Mesh *mesh);
 /**
  * Without a #bContext, called when UV-editing.
  */
-void ED_mesh_uv_loop_reset_ex(Mesh *me, int layernum);
-bool ED_mesh_color_ensure(Mesh *me, const char *name);
+void ED_mesh_uv_loop_reset_ex(Mesh *mesh, int layernum);
+bool ED_mesh_color_ensure(Mesh *mesh, const char *name);
 int ED_mesh_color_add(
-    Mesh *me, const char *name, bool active_set, bool do_init, ReportList *reports);
+    Mesh *mesh, const char *name, bool active_set, bool do_init, ReportList *reports);
 
 void ED_mesh_report_mirror(wmOperator *op, int totmirr, int totfail);
 void ED_mesh_report_mirror_ex(wmOperator *op, int totmirr, int totfail, char selectmode);
+
+KeyBlock *ED_mesh_get_edit_shape_key(const Mesh *me);
 
 /**
  * Returns the pinned mesh, the mesh from the pinned object, or the mesh from the active object.
@@ -576,12 +580,12 @@ BMBackup EDBM_redo_state_store(BMEditMesh *em);
 /**
  * Restore a BMesh from backup.
  */
-void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, bool recalc_looptri)
+void EDBM_redo_state_restore(BMBackup *backup, BMEditMesh *em, bool recalc_looptris)
     ATTR_NONNULL(1, 2);
 /**
  * Delete the backup, flushing it to an edit-mesh.
  */
-void EDBM_redo_state_restore_and_free(BMBackup *backup, BMEditMesh *em, bool recalc_looptri)
+void EDBM_redo_state_restore_and_free(BMBackup *backup, BMEditMesh *em, bool recalc_looptris)
     ATTR_NONNULL(1, 2);
 void EDBM_redo_state_free(BMBackup *backup) ATTR_NONNULL(1);
 

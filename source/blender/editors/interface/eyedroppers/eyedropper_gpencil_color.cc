@@ -22,10 +22,10 @@
 #include "DNA_material_types.h"
 #include "DNA_space_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_gpencil_legacy.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_paint.hh"
 #include "BKE_report.h"
@@ -67,7 +67,7 @@ struct EyedropperGPencil {
 static void eyedropper_gpencil_status_indicators(bContext *C)
 {
   char msg_str[UI_MAX_DRAW_STR];
-  STRNCPY(msg_str, TIP_("LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"));
+  STRNCPY(msg_str, RPT_("LMB: Stroke - Shift: Fill - Shift+Ctrl: Stroke + Fill"));
 
   ED_workspace_status_text(C, msg_str);
 }

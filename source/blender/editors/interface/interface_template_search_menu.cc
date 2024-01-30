@@ -36,7 +36,7 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_screen.hh"
 
@@ -53,7 +53,7 @@
 #include "interface_intern.hh"
 
 /* For key-map item access. */
-#include "wm_event_system.h"
+#include "wm_event_system.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Menu Search Template Implementation
@@ -298,7 +298,6 @@ static bool menu_items_to_ui_button(MenuSearch_Item *item, uiBut *but)
     }
 
     but->icon = item->icon;
-    but->str = but->strdata;
   }
 
   return changed;
@@ -802,14 +801,15 @@ static MenuSearch_Data *menu_items_from_ui_create(bContext *C,
           }
 
           if (region) {
-            BLI_ghash_remove(region->runtime.block_name_map, sub_block->name, nullptr, nullptr);
+            BLI_ghash_remove(
+                region->runtime.block_name_map, sub_block->name.c_str(), nullptr, nullptr);
             BLI_remlink(&region->uiblocks, sub_block);
           }
           UI_block_free(nullptr, sub_block);
         }
       }
       if (region) {
-        BLI_ghash_remove(region->runtime.block_name_map, block->name, nullptr, nullptr);
+        BLI_ghash_remove(region->runtime.block_name_map, block->name.c_str(), nullptr, nullptr);
         BLI_remlink(&region->uiblocks, block);
       }
       UI_block_free(nullptr, block);

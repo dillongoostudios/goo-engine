@@ -8,7 +8,7 @@
 
 #include <cstdio>
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_layer.h"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
@@ -94,7 +94,7 @@ void importer_main(Main *bmain,
 
   if (import_params.use_mesh_validate) {
     bool verbose_validate = false;
-#ifdef DEBUG
+#ifndef NDEBUG
     verbose_validate = true;
 #endif
     BKE_mesh_validate(mesh, verbose_validate, false);

@@ -28,12 +28,12 @@
 #include "DNA_world_types.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_linestyle.h"
 #include "BKE_material.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
 #include "BKE_particle.h"
@@ -831,6 +831,7 @@ const char *buttons_context_dir[] = {
     "texture",
     "texture_user",
     "texture_user_property",
+    "texture_node",
     "bone",
     "edit_bone",
     "pose_bone",
@@ -846,7 +847,9 @@ const char *buttons_context_dir[] = {
     "line_style",
     "collection",
     "gpencil",
+#ifdef WITH_GREASE_PENCIL_V3
     "grease_pencil",
+#endif
     "curves",
 #ifdef WITH_POINT_CLOUD
     "pointcloud",

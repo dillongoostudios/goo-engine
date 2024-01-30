@@ -67,16 +67,7 @@ class InstructionCursor {
 
   Type type() const;
 
-  friend bool operator==(const InstructionCursor &a, const InstructionCursor &b)
-  {
-    return a.type_ == b.type_ && a.instruction_ == b.instruction_ &&
-           a.branch_output_ == b.branch_output_;
-  }
-
-  friend bool operator!=(const InstructionCursor &a, const InstructionCursor &b)
-  {
-    return !(a == b);
-  }
+  BLI_STRUCT_EQUALITY_OPERATORS_3(InstructionCursor, type_, instruction_, branch_output_)
 };
 
 /**
@@ -222,8 +213,7 @@ class DummyInstruction : public Instruction {
 /**
  * This instruction ends the procedure.
  */
-class ReturnInstruction : public Instruction {
-};
+class ReturnInstruction : public Instruction {};
 
 /**
  * Inputs and outputs of the entire procedure network.

@@ -12,7 +12,6 @@
 
 #  include "MEM_guardedalloc.h"
 
-#  include "DNA_meshdata_types.h"
 #  include "DNA_object_force_types.h"
 #  include "DNA_object_types.h"
 #  include "DNA_scene_types.h"
@@ -37,10 +36,10 @@
 #    define CLOTH_OPENMP_LIMIT 512
 #  endif
 
-//#define DEBUG_TIME
+// #define DEBUG_TIME
 
 #  ifdef DEBUG_TIME
-#    include "PIL_time.h"
+#    include "BLI_time.h"
 #  endif
 
 static float I[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
@@ -180,7 +179,7 @@ DO_INLINE float dot_lfvector(float (*fLongVectorA)[3], float (*fLongVectorB)[3],
    * due to non-commutative nature of floating point ops this makes the sim give
    * different results each time you run it!
    * schedule(guided, 2) */
-  //#pragma omp parallel for reduction(+: temp) if (verts > CLOTH_OPENMP_LIMIT)
+  // #pragma omp parallel for reduction(+: temp) if (verts > CLOTH_OPENMP_LIMIT)
   for (i = 0; i < long(verts); i++) {
     temp += dot_v3v3(fLongVectorA[i], fLongVectorB[i]);
   }
@@ -965,7 +964,7 @@ static int cg_filtered_pre(lfVector *dv,
   delta0 = deltaNew * sqrt(conjgrad_epsilon);
 
 #      ifdef DEBUG_TIME
-  double start = PIL_check_seconds_timer();
+  double start = BLI_check_seconds_timer();
 #      endif
 
   while ((deltaNew > delta0) && (iterations < conjgrad_looplimit)) {
@@ -993,7 +992,7 @@ static int cg_filtered_pre(lfVector *dv,
   }
 
 #      ifdef DEBUG_TIME
-  double end = PIL_check_seconds_timer();
+  double end = BLI_check_seconds_timer();
   printf("cg_filtered_pre time: %f\n", float(end - start));
 #      endif
 
@@ -1074,7 +1073,7 @@ static int cg_filtered_pre(lfVector *dv,
 #    endif
 
 #    ifdef DEBUG_TIME
-  double start = PIL_check_seconds_timer();
+  double start = BLI_check_seconds_timer();
 #    endif
 
   tol = (0.01 * 0.2);
@@ -1104,7 +1103,7 @@ static int cg_filtered_pre(lfVector *dv,
   }
 
 #    ifdef DEBUG_TIME
-  double end = PIL_check_seconds_timer();
+  double end = BLI_check_seconds_timer();
   printf("cg_filtered_pre time: %f\n", float(end - start));
 #    endif
 
@@ -1137,7 +1136,7 @@ bool SIM_mass_spring_solve_velocities(Implicit_Data *data, float dt, ImplicitSol
   add_lfvectorS_lfvectorS(data->B, data->F, dt, dFdXmV, (dt * dt), numverts);
 
 #  ifdef DEBUG_TIME
-  double start = PIL_check_seconds_timer();
+  double start = BLI_check_seconds_timer();
 #  endif
 
   /* Conjugate gradient algorithm to solve Ax=b. */
@@ -1146,7 +1145,7 @@ bool SIM_mass_spring_solve_velocities(Implicit_Data *data, float dt, ImplicitSol
   // cg_filtered_pre(id->dV, id->A, id->B, id->z, id->S, id->P, id->Pinv, id->bigI);
 
 #  ifdef DEBUG_TIME
-  double end = PIL_check_seconds_timer();
+  double end = BLI_check_seconds_timer();
   printf("cg_filtered calc time: %f\n", float(end - start));
 #  endif
 

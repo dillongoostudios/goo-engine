@@ -11,7 +11,7 @@
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "GPU_batch.h"
 
@@ -21,10 +21,10 @@
 
 #include "BKE_global.h"
 #include "BKE_idprop.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "ED_screen.hh"
@@ -40,8 +40,8 @@
 #include "wm.hh"
 
 /* own includes */
-#include "wm_gizmo_intern.h"
-#include "wm_gizmo_wmapi.h"
+#include "wm_gizmo_intern.hh"
+#include "wm_gizmo_wmapi.hh"
 
 static void wm_gizmo_register(wmGizmoGroup *gzgroup, wmGizmo *gz);
 
@@ -311,7 +311,7 @@ void WM_gizmo_set_flag(wmGizmo *gz, const int flag, const bool enable)
     gz->flag |= eWM_GizmoFlag(flag);
   }
   else {
-    gz->flag &= eWM_GizmoFlag(~flag);
+    gz->flag &= ~eWM_GizmoFlag(flag);
   }
 }
 

@@ -29,7 +29,6 @@ set(INC
   # For node muting stuff.
   ../nodes
 
-  ../../../intern/clog
   ../../../intern/ghost
   ../../../intern/mantaflow/extern
 )
@@ -102,7 +101,7 @@ set(SRC
   GPU_matrix.h
   GPU_platform.h
   GPU_primitive.h
-  GPU_select.h
+  GPU_select.hh
   GPU_shader.h
   GPU_shader_builtin.h
   GPU_shader_shared.h
@@ -223,12 +222,15 @@ set(VULKAN_SRC
   vulkan/vk_query.cc
   vulkan/vk_resource_tracker.cc
   vulkan/vk_sampler.cc
+  vulkan/vk_samplers.cc
   vulkan/vk_shader.cc
   vulkan/vk_shader_interface.cc
   vulkan/vk_shader_log.cc
+  vulkan/vk_staging_buffer.cc
   vulkan/vk_state_manager.cc
   vulkan/vk_storage_buffer.cc
   vulkan/vk_texture.cc
+  vulkan/vk_timeline_semaphore.cc
   vulkan/vk_uniform_buffer.cc
   vulkan/vk_vertex_attribute_object.cc
   vulkan/vk_vertex_buffer.cc
@@ -261,12 +263,15 @@ set(VULKAN_SRC
   vulkan/vk_query.hh
   vulkan/vk_resource_tracker.hh
   vulkan/vk_sampler.hh
+  vulkan/vk_samplers.hh
   vulkan/vk_shader.hh
   vulkan/vk_shader_interface.hh
   vulkan/vk_shader_log.hh
+  vulkan/vk_staging_buffer.hh
   vulkan/vk_state_manager.hh
   vulkan/vk_storage_buffer.hh
   vulkan/vk_texture.hh
+  vulkan/vk_timeline_semaphore.hh
   vulkan/vk_uniform_buffer.hh
   vulkan/vk_vertex_attribute_object.hh
   vulkan/vk_vertex_buffer.hh
@@ -326,6 +331,7 @@ set(LIB
   PRIVATE bf::blenlib
   PRIVATE bf::dna
   PRIVATE bf::intern::atomic
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
 )
 
@@ -560,7 +566,6 @@ set(GLSL_SRC
   shaders/material/gpu_shader_material_tex_gradient.glsl
   shaders/material/gpu_shader_material_tex_image.glsl
   shaders/material/gpu_shader_material_tex_magic.glsl
-  shaders/material/gpu_shader_material_tex_musgrave.glsl
   shaders/material/gpu_shader_material_tex_noise.glsl
   shaders/material/gpu_shader_material_tex_sky.glsl
   shaders/material/gpu_shader_material_texture_coordinates.glsl
@@ -607,6 +612,7 @@ set(GLSL_SRC_TEST
   tests/shaders/gpu_compute_ssbo_test.glsl
   tests/shaders/gpu_compute_vbo_test.glsl
   tests/shaders/gpu_compute_dummy_test.glsl
+  tests/shaders/gpu_specialization_test.glsl
   tests/shaders/gpu_framebuffer_layer_viewport_test.glsl
   tests/shaders/gpu_framebuffer_subpass_input_test.glsl
   tests/shaders/gpu_push_constants_test.glsl
@@ -630,7 +636,7 @@ set(MSL_SRC
 )
 
 if(WITH_GTESTS)
-  if(WITH_OPENGL_DRAW_TESTS)
+  if(WITH_GPU_DRAW_TESTS)
     list(APPEND GLSL_SRC ${GLSL_SRC_TEST})
   endif()
 endif()
@@ -682,6 +688,7 @@ set(SRC_SHADER_CREATE_INFOS
   ../draw/engines/eevee_next/shaders/infos/eevee_hiz_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_irradiance_cache_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_light_culling_info.hh
+  ../draw/engines/eevee_next/shaders/infos/eevee_lookdev_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_lut_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_material_info.hh
   ../draw/engines/eevee_next/shaders/infos/eevee_motion_blur_info.hh
@@ -778,7 +785,7 @@ set(SRC_SHADER_CREATE_INFOS_MTL
 )
 
 if(WITH_GTESTS)
-  if(WITH_OPENGL_DRAW_TESTS)
+  if(WITH_GPU_DRAW_TESTS)
     list(APPEND SRC_SHADER_CREATE_INFOS ${SRC_SHADER_CREATE_INFOS_TEST})
   endif()
 endif()
@@ -827,31 +834,26 @@ endif()
 
 
 if(WITH_GPU_BUILDTIME_SHADER_BUILDER)
-  # TODO(@fclem) Fix this mess.
-  if(APPLE)
-    add_executable(shader_builder
-      intern/gpu_shader_builder.cc
-      intern/gpu_shader_builder_stubs.cc
-      ${shader_create_info_list_file}
-      )
-    target_link_libraries(shader_builder PUBLIC buildinfoobj)
-  else()
-    if(WIN32)
-      # We can re-use the manifest from tests.exe here since it's
-      # rather generic and just selects the appropriate common
-      # controls version.
-      set(MANIFEST "${CMAKE_BINARY_DIR}/tests.exe.manifest")
-    endif()
-    add_executable(shader_builder
-      intern/gpu_shader_builder.cc
-      intern/gpu_shader_builder_stubs.cc
-      ${shader_create_info_list_file}
-      ${MANIFEST}
-    )
+  set(_manifest)
+  if(WIN32)
+    # We can re-use the manifest from tests.exe here since it's
+    # rather generic and just selects the appropriate common
+    # controls version.
+    set(_manifest "${CMAKE_BINARY_DIR}/tests.exe.manifest")
   endif()
+  add_executable(shader_builder
+    intern/gpu_shader_builder.cc
+    intern/gpu_shader_builder_stubs.cc
+    ${shader_create_info_list_file}
+    ${_manifest}
+  )
+  unset(_manifest)
   setup_platform_linker_flags(shader_builder)
 
-  target_link_libraries(shader_builder PUBLIC
+  if (WITH_BUILD_INFO)
+    target_link_libraries(shader_builder PRIVATE buildinfoobj)
+  endif()
+  target_link_libraries(shader_builder PRIVATE
     bf_gpu
     bf_intern_clog
     bf_blenlib
@@ -859,6 +861,7 @@ if(WITH_GPU_BUILDTIME_SHADER_BUILDER)
     ${PLATFORM_LINKLIBS}
     PRIVATE bf::intern::guardedalloc
   )
+  target_include_directories(shader_builder SYSTEM PRIVATE ${INC_SYS})
   target_include_directories(shader_builder PRIVATE ${INC} ${CMAKE_CURRENT_BINARY_DIR})
 
   set(SRC_BAKED_CREATE_INFOS_FILE ${CMAKE_CURRENT_BINARY_DIR}/shader_baked.hh)
@@ -883,36 +886,54 @@ endif()
 
 
 if(WITH_GTESTS)
-  if(WITH_OPENGL_DRAW_TESTS)
-    set(TEST_SRC
-      tests/gpu_testing.cc
+  set(TEST_SRC)
+  set(TEST_INC)
+  set(TEST_LIB
+    bf_intern_ghost
+    bf_imbuf
+    bf_windowmanager
+  )
 
+  if(WITH_GPU_DRAW_TESTS)
+    list(APPEND TEST_SRC
       tests/buffer_texture_test.cc
       tests/compute_test.cc
       tests/framebuffer_test.cc
       tests/immediate_test.cc
       tests/index_buffer_test.cc
       tests/push_constants_test.cc
+      tests/shader_create_info_test.cc
       tests/shader_test.cc
+      tests/specialization_constants_test.cc
       tests/state_blend_test.cc
       tests/storage_buffer_test.cc
       tests/texture_test.cc
       tests/vertex_buffer_test.cc
+    )
+  endif()
 
+  if(WITH_VULKAN_BACKEND)
+    list(APPEND TEST_SRC
+      vulkan/vk_data_conversion_test.cc
+      vulkan/vk_memory_layout_test.cc
+    )
+  endif()
+
+  # Enable shader validation on buildbot for Metal
+  if(WITH_METAL_BACKEND AND NOT WITH_GPU_DRAW_TESTS)
+    list(APPEND TEST_SRC
+      tests/shader_create_info_test.cc
+    )
+  endif()
+
+  if (TEST_SRC)
+    set(TEST_COMMON_SRC
+      tests/gpu_testing.cc
       tests/gpu_testing.hh
     )
-    if(WITH_VULKAN_BACKEND)
-      list(APPEND TEST_SRC
-        tests/memory_layout_test.cc
-        vulkan/vk_data_conversion_test.cc
-      )
-    endif()
 
-    set(TEST_INC
+    blender_add_test_suite_lib(gpu
+      "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}" "${TEST_COMMON_SRC}"
     )
-    set(TEST_LIB
-    )
-    include(GTestTesting)
-    blender_add_test_lib(bf_gpu_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
   endif()
 endif()

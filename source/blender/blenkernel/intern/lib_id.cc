@@ -31,6 +31,7 @@
 #include "BLI_utildefines.h"
 
 #include "BLI_alloca.h"
+#include "BLI_array.hh"
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
 #include "BLI_linklist.h"
@@ -40,21 +41,21 @@
 #include "BLT_translation.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_armature.h"
-#include "BKE_asset.h"
+#include "BKE_armature.hh"
+#include "BKE_asset.hh"
 #include "BKE_bpath.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
 #include "BKE_key.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_lib_query.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
-#include "BKE_main_namemap.h"
+#include "BKE_lib_query.hh"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
+#include "BKE_main_namemap.hh"
 #include "BKE_node.h"
 #include "BKE_rigidbody.h"
 
@@ -68,12 +69,12 @@
 
 #include "atomic_ops.h"
 
-#include "lib_intern.h"
+#include "lib_intern.hh"
 
-//#define DEBUG_TIME
+// #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "PIL_time_utildefines.h"
+#  include "BLI_time_utildefines.h"
 #endif
 
 static CLG_LogRef LOG = {"bke.lib_id"};
@@ -859,15 +860,10 @@ static void id_swap(Main *bmain,
 
   /* Finalize remapping of internal references to self broken by swapping, if requested. */
   if (do_self_remap) {
-    LinkNode ids{};
-    ids.next = nullptr;
-    ids.link = id_a;
-
     BKE_libblock_relink_multiple(
-        bmain, &ids, ID_REMAP_TYPE_REMAP, remapper_id_a, self_remap_flags);
-    ids.link = id_b;
+        bmain, {id_a}, ID_REMAP_TYPE_REMAP, remapper_id_a, self_remap_flags);
     BKE_libblock_relink_multiple(
-        bmain, &ids, ID_REMAP_TYPE_REMAP, remapper_id_b, self_remap_flags);
+        bmain, {id_b}, ID_REMAP_TYPE_REMAP, remapper_id_b, self_remap_flags);
   }
 
   if (input_remapper_id_a == nullptr && remapper_id_a != nullptr) {
@@ -1170,7 +1166,8 @@ void BKE_main_lib_objects_recalc_all(Main *bmain)
 
   /* flag for full recalc */
   for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next)) {
+       ob = static_cast<Object *>(ob->id.next))
+  {
     if (ID_IS_LINKED(ob)) {
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
     }
@@ -1636,6 +1633,9 @@ bool BKE_id_new_name_validate(
   }
 
   result = BKE_main_namemap_get_name(bmain, id, name, false);
+  if (!result && !STREQ(id->name + 2, name)) {
+    result = true;
+  }
 
   BLI_strncpy(id->name + 2, name, sizeof(id->name) - 2);
   id_sort_by_name(lb, id, nullptr);
@@ -2008,21 +2008,17 @@ void BKE_library_make_local(Main *bmain,
 #endif
 }
 
-void BLI_libblock_ensure_unique_name(Main *bmain, const char *name)
+void BKE_libblock_ensure_unique_name(Main *bmain, ID *id)
 {
   ListBase *lb;
-  ID *idtest;
 
-  lb = which_libbase(bmain, GS(name));
+  lb = which_libbase(bmain, GS(id->name));
   if (lb == nullptr) {
     return;
   }
 
-  /* search for id */
-  idtest = static_cast<ID *>(BLI_findstring(lb, name + 2, offsetof(ID, name) + 2));
-  if (idtest != nullptr && !ID_IS_LINKED(idtest)) {
-    /* BKE_id_new_name_validate also takes care of sorting. */
-    BKE_id_new_name_validate(bmain, lb, idtest, nullptr, false);
+  /* BKE_id_new_name_validate also takes care of sorting. */
+  if (!ID_IS_LINKED(id) && BKE_id_new_name_validate(bmain, lb, id, nullptr, false)) {
     bmain->is_memfile_undo_written = false;
   }
 }

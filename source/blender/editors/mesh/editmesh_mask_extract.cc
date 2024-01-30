@@ -12,16 +12,18 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_attribute.hh"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.h"
 #include "BKE_screen.hh"
-#include "BKE_shrinkwrap.h"
+#include "BKE_shrinkwrap.hh"
 
 #include "BLI_math_vector.h"
 
@@ -41,7 +43,7 @@
 #include "ED_undo.hh"
 #include "ED_view3d.hh"
 
-#include "bmesh_tools.h"
+#include "bmesh_tools.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -192,7 +194,7 @@ static int geometry_extract_apply(bContext *C,
   BKE_editmesh_free_data(em);
   MEM_freeN(em);
 
-  if (new_mesh->totvert == 0) {
+  if (new_mesh->verts_num == 0) {
     BKE_id_free(bmain, new_mesh);
     return OPERATOR_FINISHED;
   }
@@ -205,18 +207,19 @@ static int geometry_extract_apply(bContext *C,
       C, OB_MESH, nullptr, ob->loc, ob->rot, false, local_view_bits);
   BKE_mesh_nomain_to_mesh(new_mesh, static_cast<Mesh *>(new_ob->data), new_ob);
 
+  Mesh *new_ob_mesh = static_cast<Mesh *>(new_ob->data);
+
   /* Remove the Face Sets as they need to be recreated when entering Sculpt Mode in the new object.
    * TODO(pablodobarro): In the future we can try to preserve them from the original mesh. */
-  Mesh *new_ob_mesh = static_cast<Mesh *>(new_ob->data);
-  CustomData_free_layer_named(&new_ob_mesh->face_data, ".sculpt_face_set", new_ob_mesh->faces_num);
+  new_ob_mesh->attributes_for_write().remove(".sculpt_face_set");
 
   /* Remove the mask from the new object so it can be sculpted directly after extracting. */
-  CustomData_free_layers(&new_ob_mesh->vert_data, CD_PAINT_MASK, new_ob_mesh->totvert);
+  new_ob_mesh->attributes_for_write().remove(".sculpt_mask");
 
   BKE_mesh_copy_parameters_for_eval(new_ob_mesh, mesh);
 
   if (params->apply_shrinkwrap) {
-    BKE_shrinkwrap_mesh_nearest_surface_deform(C, new_ob, ob);
+    BKE_shrinkwrap_mesh_nearest_surface_deform(CTX_data_depsgraph_pointer(C), scene, new_ob, ob);
   }
 
   if (params->add_solidify) {
@@ -243,7 +246,8 @@ static void geometry_extract_tag_masked_faces(BMesh *bm, GeometryExtractParams *
   const float threshold = params->mask_threshold;
 
   BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_TAG, false);
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
 
   BMFace *f;
   BMIter iter;
@@ -363,6 +367,7 @@ void MESH_OT_paint_mask_extract(wmOperatorType *ot)
 
 static int face_set_extract_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
+  using namespace blender::ed;
   if (!CTX_wm_region_view3d(C)) {
     return OPERATOR_CANCELLED;
   }
@@ -372,7 +377,7 @@ static int face_set_extract_invoke(bContext *C, wmOperator *op, const wmEvent *e
                          float(event->xy[1] - region->winrct.ymin)};
 
   Object *ob = CTX_data_active_object(C);
-  const int face_set_id = ED_sculpt_face_sets_active_update_and_get(C, ob, mval);
+  const int face_set_id = sculpt_paint::face_set::active_update_and_get(C, ob, mval);
   if (face_set_id == SCULPT_FACE_SET_NONE) {
     return OPERATOR_CANCELLED;
   }
@@ -410,7 +415,8 @@ static void slice_paint_mask(BMesh *bm, bool invert, bool fill_holes, float mask
   BMIter face_iter;
 
   /* Delete all masked faces */
-  const int cd_vert_mask_offset = CustomData_get_offset(&bm->vdata, CD_PAINT_MASK);
+  const int cd_vert_mask_offset = CustomData_get_offset_named(
+      &bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
   BLI_assert(cd_vert_mask_offset != -1);
   BM_mesh_elem_hflag_disable_all(bm, BM_VERT | BM_EDGE | BM_FACE, BM_ELEM_TAG, false);
 
@@ -454,6 +460,8 @@ static void slice_paint_mask(BMesh *bm, bool invert, bool fill_holes, float mask
 
 static int paint_mask_slice_exec(bContext *C, wmOperator *op)
 {
+  using namespace blender;
+  using namespace blender::ed;
   Main *bmain = CTX_data_main(C);
   Object *ob = CTX_data_active_object(C);
   View3D *v3d = CTX_wm_view3d(C);
@@ -464,7 +472,7 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
   Mesh *new_mesh = (Mesh *)BKE_id_copy(bmain, &mesh->id);
 
   if (ob->mode == OB_MODE_SCULPT) {
-    ED_sculpt_undo_geometry_begin(ob, op);
+    sculpt_paint::undo::geometry_begin(ob, op);
   }
 
   const BMAllocTemplate allocsize = BMALLOC_TEMPLATE_FROM_ME(new_mesh);
@@ -507,7 +515,7 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
     BM_mesh_free(bm);
 
     /* Remove the mask from the new object so it can be sculpted directly after slicing. */
-    CustomData_free_layers(&new_ob_mesh->vert_data, CD_PAINT_MASK, new_ob_mesh->totvert);
+    new_ob_mesh->attributes_for_write().remove(".sculpt_mask");
 
     Mesh *new_mesh = static_cast<Mesh *>(new_ob->data);
     BKE_mesh_nomain_to_mesh(new_ob_mesh, new_mesh, new_ob);
@@ -522,15 +530,12 @@ static int paint_mask_slice_exec(bContext *C, wmOperator *op)
   BKE_mesh_nomain_to_mesh(new_mesh, mesh, ob);
 
   if (ob->mode == OB_MODE_SCULPT) {
-    SculptSession *ss = ob->sculpt;
-    ss->face_sets = static_cast<int *>(CustomData_get_layer_named_for_write(
-        &mesh->face_data, CD_PROP_INT32, ".sculpt_face_set", mesh->faces_num));
-    if (ss->face_sets) {
+    if (mesh->attributes().contains(".sculpt_face_set")) {
       /* Assign a new Face Set ID to the new faces created by the slice operation. */
-      const int next_face_set_id = ED_sculpt_face_sets_find_next_available_id(mesh);
-      ED_sculpt_face_sets_initialize_none_to_id(mesh, next_face_set_id);
+      const int next_face_set_id = sculpt_paint::face_set::find_next_available_id(*ob);
+      sculpt_paint::face_set::initialize_none_to_id(mesh, next_face_set_id);
     }
-    ED_sculpt_undo_geometry_end(ob);
+    sculpt_paint::undo::geometry_end(ob);
   }
 
   BKE_mesh_batch_cache_dirty_tag(mesh, BKE_MESH_BATCH_DIRTY_ALL);

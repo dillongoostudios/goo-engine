@@ -2,6 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
+#include <iostream>
+
 #include "BLI_generic_virtual_array.hh"
 
 namespace blender {
@@ -756,7 +758,7 @@ GVMutableArray::operator GVArray() const &
   return varray;
 }
 
-GVMutableArray::operator GVArray() &&noexcept
+GVMutableArray::operator GVArray() && noexcept
 {
   GVArray varray;
   varray.move_from(std::move(*this));

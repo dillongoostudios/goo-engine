@@ -25,14 +25,14 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "bmesh.h"
-#include "bmesh_beautify.h" /* own include */
+#include "bmesh.hh"
+#include "bmesh_beautify.hh" /* own include */
 
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "PIL_time.h"
-#  include "PIL_time_utildefines.h"
+#  include "BLI_time.h"
+#  include "BLI_time_utildefines.h"
 #endif
 
 /* -------------------------------------------------------------------- */

@@ -15,8 +15,8 @@
 #include "BLI_string.h"
 #include "BLI_task.h"
 
-#include "BKE_context.h"
-#include "BKE_unit.h"
+#include "BKE_context.hh"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
@@ -307,11 +307,11 @@ static void apply_shear(TransInfo *t)
   if (hasNumInput(&t->num)) {
     char c[NUM_STR_REP_LEN];
     outputNumInput(&(t->num), c, &t->scene->unit);
-    SNPRINTF(str, TIP_("Shear: %s %s"), c, t->proptext);
+    SNPRINTF(str, RPT_("Shear: %s %s"), c, t->proptext);
   }
   else {
     /* default header print */
-    SNPRINTF(str, TIP_("Shear: %.3f %s (Press X or Y to set shear axis)"), value, t->proptext);
+    SNPRINTF(str, RPT_("Shear: %.3f %s (Press X or Y to set shear axis)"), value, t->proptext);
   }
 
   ED_area_status_text(t->area, str);

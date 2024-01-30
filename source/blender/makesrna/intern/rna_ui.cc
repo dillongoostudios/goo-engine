@@ -13,6 +13,7 @@
 
 #include "BLT_translation.h"
 
+#include "BKE_file_handler.hh"
 #include "BKE_idprop.h"
 #include "BKE_screen.hh"
 
@@ -25,7 +26,7 @@
 
 #include "UI_interface.hh"
 
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 /* see WM_types.hh */
@@ -60,8 +61,8 @@ const EnumPropertyItem rna_enum_uilist_layout_type_items[] = {
 
 #  include "BLI_dynstr.h"
 
-#  include "BKE_context.h"
-#  include "BKE_main.h"
+#  include "BKE_context.hh"
+#  include "BKE_main.hh"
 #  include "BKE_report.h"
 #  include "BKE_screen.hh"
 
@@ -248,7 +249,7 @@ static StructRNA *rna_Panel_register(Main *bmain,
                                      StructCallbackFunc call,
                                      StructFreeFunc free)
 {
-  const char *error_prefix = TIP_("Registering panel class:");
+  const char *error_prefix = RPT_("Registering panel class:");
   ARegionType *art;
   PanelType *pt, *parent = nullptr, dummy_pt = {nullptr};
   Panel dummy_panel = {nullptr};
@@ -314,6 +315,12 @@ static StructRNA *rna_Panel_register(Main *bmain,
       PanelType *pt_next = pt->next;
       StructRNA *srna = pt->rna_ext.srna;
       if (srna) {
+        BKE_reportf(reports,
+                    RPT_INFO,
+                    "%s '%s', bl_idname '%s' has been registered before, unregistering previous",
+                    error_prefix,
+                    identifier,
+                    dummy_pt.idname);
         if (!rna_Panel_unregister(bmain, srna)) {
           BKE_reportf(reports,
                       RPT_ERROR,
@@ -720,6 +727,13 @@ static StructRNA *rna_UIList_register(Main *bmain,
   /* Check if we have registered this UI-list type before, and remove it. */
   ult = WM_uilisttype_find(dummy_ult.idname, true);
   if (ult) {
+    BKE_reportf(reports,
+                RPT_INFO,
+                "%s '%s', bl_idname '%s' has been registered before, unregistering previous",
+                error_prefix,
+                identifier,
+                dummy_ult.idname);
+
     StructRNA *srna = ult->rna_ext.srna;
     if (!(srna && rna_UIList_unregister(bmain, srna))) {
       BKE_reportf(reports,
@@ -851,6 +865,13 @@ static StructRNA *rna_Header_register(Main *bmain,
   ht = static_cast<HeaderType *>(
       BLI_findstring(&art->headertypes, dummy_ht.idname, offsetof(HeaderType, idname)));
   if (ht) {
+    BKE_reportf(reports,
+                RPT_INFO,
+                "%s '%s', bl_idname '%s' has been registered before, unregistering previous",
+                error_prefix,
+                identifier,
+                dummy_ht.idname);
+
     StructRNA *srna = ht->rna_ext.srna;
     if (!(srna && rna_Header_unregister(bmain, srna))) {
       BKE_reportf(reports,
@@ -1001,6 +1022,13 @@ static StructRNA *rna_Menu_register(Main *bmain,
   /* check if we have registered this menu type before, and remove it */
   mt = WM_menutype_find(dummy_mt.idname, true);
   if (mt) {
+    BKE_reportf(reports,
+                RPT_INFO,
+                "%s '%s', bl_idname '%s' has been registered before, unregistering previous",
+                error_prefix,
+                identifier,
+                dummy_mt.idname);
+
     StructRNA *srna = mt->rna_ext.srna;
     if (!(srna && rna_Menu_unregister(bmain, srna))) {
       BKE_reportf(reports,
@@ -1206,6 +1234,12 @@ static StructRNA *rna_AssetShelf_register(Main *bmain,
   LISTBASE_FOREACH (AssetShelfType *, iter_shelf_type, &space_type->asset_shelf_types) {
     if (STREQ(iter_shelf_type->idname, dummy_shelf_type.idname)) {
       if (iter_shelf_type->rna_ext.srna) {
+        BKE_reportf(reports,
+                    RPT_INFO,
+                    "Registering asset shelf class: '%s' has been registered before, "
+                    "unregistering previous",
+                    dummy_shelf_type.idname);
+
         rna_AssetShelf_unregister(bmain, iter_shelf_type->rna_ext.srna);
       }
       break;
@@ -1450,6 +1484,124 @@ static bool rna_UILayout_property_decorate_get(PointerRNA *ptr)
 static void rna_UILayout_property_decorate_set(PointerRNA *ptr, bool value)
 {
   uiLayoutSetPropDecorate(static_cast<uiLayout *>(ptr->data), value);
+}
+
+/* File Handler */
+
+static bool file_handler_poll_drop(const bContext *C,
+                                   blender::bke::FileHandlerType *file_handler_type)
+{
+  extern FunctionRNA rna_FileHandler_poll_drop_func;
+
+  PointerRNA ptr = RNA_pointer_create(
+      nullptr, file_handler_type->rna_ext.srna, nullptr); /* dummy */
+  FunctionRNA *func = &rna_FileHandler_poll_drop_func;
+
+  ParameterList list;
+  RNA_parameter_list_create(&list, &ptr, func);
+  RNA_parameter_set_lookup(&list, "context", &C);
+  file_handler_type->rna_ext.call((bContext *)C, &ptr, func, &list);
+
+  void *ret;
+  RNA_parameter_get_lookup(&list, "is_usable", &ret);
+  /* Get the value before freeing. */
+  const bool is_usable = *(bool *)ret;
+
+  RNA_parameter_list_free(&list);
+
+  return is_usable;
+}
+
+static bool rna_FileHandler_unregister(Main * /*bmain*/, StructRNA *type)
+{
+  using namespace blender;
+  bke::FileHandlerType *file_handler_type = static_cast<bke::FileHandlerType *>(
+      RNA_struct_blender_type_get(type));
+
+  if (!file_handler_type) {
+    return false;
+  }
+
+  RNA_struct_free_extension(type, &file_handler_type->rna_ext);
+  RNA_struct_free(&BLENDER_RNA, type);
+
+  bke::file_handler_remove(file_handler_type);
+
+  return true;
+}
+
+static StructRNA *rna_FileHandler_register(Main *bmain,
+                                           ReportList *reports,
+                                           void *data,
+                                           const char *identifier,
+                                           StructValidateFunc validate,
+                                           StructCallbackFunc call,
+                                           StructFreeFunc free)
+{
+  using namespace blender;
+  bke::FileHandlerType dummy_file_handler_type{};
+  FileHandler dummy_file_handler{};
+
+  dummy_file_handler.type = &dummy_file_handler_type;
+
+  /* Setup dummy file handler type to store static properties in. */
+  PointerRNA dummy_file_handler_ptr = RNA_pointer_create(
+      nullptr, &RNA_FileHandler, &dummy_file_handler);
+
+  bool have_function[1];
+
+  /* Validate the python class. */
+  if (validate(&dummy_file_handler_ptr, data, have_function) != 0) {
+    return nullptr;
+  }
+
+  if (strlen(identifier) >= sizeof(dummy_file_handler_type.idname)) {
+    BKE_reportf(reports,
+                RPT_ERROR,
+                "Registering file handler class: '%s' is too long, maximum length is %d",
+                identifier,
+                (int)sizeof(dummy_file_handler_type.idname));
+    return nullptr;
+  }
+
+  /* Check if there is a file handler registered with the same `idname`, and remove it. */
+  auto registered_file_handler = bke::file_handler_find(dummy_file_handler_type.idname);
+  if (registered_file_handler) {
+    rna_FileHandler_unregister(bmain, registered_file_handler->rna_ext.srna);
+  }
+
+  if (!RNA_struct_available_or_report(reports, dummy_file_handler_type.idname)) {
+    return nullptr;
+  }
+  if (!RNA_struct_bl_idname_ok_or_report(reports, dummy_file_handler_type.idname, "_FH_")) {
+    return nullptr;
+  }
+
+  /* Create the new file handler type. */
+  auto file_handler_type = std::make_unique<bke::FileHandlerType>();
+  *file_handler_type = dummy_file_handler_type;
+
+  file_handler_type->rna_ext.srna = RNA_def_struct_ptr(
+      &BLENDER_RNA, file_handler_type->idname, &RNA_FileHandler);
+  file_handler_type->rna_ext.data = data;
+  file_handler_type->rna_ext.call = call;
+  file_handler_type->rna_ext.free = free;
+  RNA_struct_blender_type_set(file_handler_type->rna_ext.srna, file_handler_type.get());
+
+  file_handler_type->poll_drop = have_function[0] ? file_handler_poll_drop : nullptr;
+
+  auto srna = file_handler_type->rna_ext.srna;
+  bke::file_handler_add(std::move(file_handler_type));
+
+  return srna;
+}
+
+static StructRNA *rna_FileHandler_refine(PointerRNA *file_handler_ptr)
+{
+  FileHandler *file_handler = (FileHandler *)file_handler_ptr->data;
+  return (file_handler->type && file_handler->type->rna_ext.srna) ?
+             file_handler->type->rna_ext.srna :
+             &RNA_FileHandler;
 }
 
 #else /* RNA_RUNTIME */
@@ -2198,6 +2350,84 @@ static void rna_def_asset_shelf(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SPACE | ND_REGIONS_ASSET_SHELF, nullptr);
 }
 
+static void rna_def_file_handler(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "FileHandler", nullptr);
+  RNA_def_struct_ui_text(srna,
+                         "File Handler Type",
+                         "Extends functionality to operators that manages files, such as adding "
+                         "drag and drop support");
+  RNA_def_struct_refine_func(srna, "rna_FileHandler_refine");
+  RNA_def_struct_register_funcs(
+      srna, "rna_FileHandler_register", "rna_FileHandler_unregister", nullptr);
+
+  RNA_def_struct_translation_context(srna, BLT_I18NCONTEXT_DEFAULT_BPYRNA);
+  RNA_def_struct_flag(srna, STRUCT_PUBLIC_NAMESPACE_INHERIT);
+
+  /* registration */
+
+  prop = RNA_def_property(srna, "bl_idname", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "type->idname");
+  RNA_def_property_flag(prop, PROP_REGISTER);
+  RNA_def_property_ui_text(
+      prop,
+      "ID Name",
+      "If this is set, the file handler gets a custom ID, otherwise it takes the "
+      "name of the class used to define the file handler (for example, if the "
+      "class name is \"OBJECT_FH_hello\", and bl_idname is not set by the "
+      "script, then bl_idname = \"OBJECT_FH_hello\")");
+
+  prop = RNA_def_property(srna, "bl_import_operator", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "type->import_operator");
+  RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
+  RNA_def_property_ui_text(
+      prop,
+      "Operator",
+      "Operator that can handle import files with the extensions given in bl_file_extensions");
+
+  prop = RNA_def_property(srna, "bl_label", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "type->label");
+  RNA_def_property_flag(prop, PROP_REGISTER);
+  RNA_def_property_ui_text(prop, "Label", "The file handler label");
+
+  prop = RNA_def_property(srna, "bl_file_extensions", PROP_STRING, PROP_NONE);
+  RNA_def_property_string_sdna(prop, nullptr, "type->file_extensions_str");
+  RNA_def_property_flag(prop, PROP_REGISTER);
+  RNA_def_property_ui_text(
+      prop,
+      "File Extensions",
+      "Formatted string of file extensions supported by the file handler, each extension should "
+      "start with a \".\" and be separated by \";\"."
+      "\nFor Example: `\".blend;.ble\"`");
+
+  PropertyRNA *parm;
+  FunctionRNA *func;
+
+  func = RNA_def_function(srna, "poll_drop", nullptr);
+  RNA_def_function_ui_description(
+      func,
+      "If this method returns True, can be used to handle the drop of a drag-and-drop action");
+  RNA_def_function_flag(func, FUNC_NO_SELF | FUNC_REGISTER_OPTIONAL);
+  RNA_def_function_return(func, RNA_def_boolean(func, "is_usable", true, "", ""));
+  parm = RNA_def_pointer(func, "context", "Context", "", "");
+  RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);
+}
+
+static void rna_def_layout_panel_state(BlenderRNA *brna)
+{
+  StructRNA *srna;
+  PropertyRNA *prop;
+
+  srna = RNA_def_struct(brna, "LayoutPanelState", nullptr);
+
+  prop = RNA_def_property(srna, "is_open", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", LAYOUT_PANEL_STATE_FLAG_OPEN);
+  RNA_def_property_ui_text(prop, "Is Open", "");
+}
+
 void RNA_def_ui(BlenderRNA *brna)
 {
   rna_def_ui_layout(brna);
@@ -2206,6 +2436,8 @@ void RNA_def_ui(BlenderRNA *brna)
   rna_def_header(brna);
   rna_def_menu(brna);
   rna_def_asset_shelf(brna);
+  rna_def_file_handler(brna);
+  rna_def_layout_panel_state(brna);
 }
 
 #endif /* RNA_RUNTIME */

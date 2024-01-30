@@ -12,7 +12,7 @@
 
 #include "BLI_sys_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_paint.hh"
 
 #include "DNA_brush_types.h"
@@ -22,7 +22,7 @@
 #include "DNA_space_types.h"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "RNA_access.hh"

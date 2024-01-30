@@ -30,9 +30,9 @@
  * TODO Currently disabled because UI data depends on asset library data, so we have to make sure
  * it's freed in the right order (UI first). Pre-load handlers don't give us this order.
  * Should be addressed with a proper ownership model for the asset system:
- * https://wiki.blender.org/wiki/Source/Architecture/Asset_System/Back_End#Ownership_Model
+ * https://developer.blender.org/docs/features/asset_system/backend/#ownership-model
  */
-//#define WITH_DESTROY_VIA_LOAD_HANDLER
+// #define WITH_DESTROY_VIA_LOAD_HANDLER
 
 static CLG_LogRef LOG = {"asset_system.asset_library_service"};
 
@@ -309,7 +309,8 @@ int64_t AssetLibraryService::rfind_blendfile_extension(StringRef path)
     }
 
     if ((blendfile_extension_pos == StringRef::not_found) ||
-        (blendfile_extension_pos < iter_ext_pos)) {
+        (blendfile_extension_pos < iter_ext_pos))
+    {
       blendfile_extension_pos = iter_ext_pos;
     }
   }

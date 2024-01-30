@@ -22,7 +22,7 @@
 #include "BLI_string_utf8.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_report.h"
 
 #include "WM_api.hh"
@@ -123,7 +123,7 @@ static int console_delete_editable_selection(SpaceConsole *sc)
   int del_end = sc->sel_end;
 
   if (del_end > cl->len) {
-    /* Adjust range to only editable portion.  */
+    /* Adjust range to only editable portion. */
     del_end = cl->len;
   }
 

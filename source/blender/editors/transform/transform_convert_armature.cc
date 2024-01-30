@@ -16,14 +16,13 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
-#include "BLI_string.h"
 
 #include "BKE_action.h"
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
-#include "BKE_main.h"
+#include "BKE_context.hh"
+#include "BKE_main.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 
@@ -38,8 +37,9 @@
 #include "RNA_access.hh"
 #include "RNA_prototypes.h"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 #include "ANIM_keyframing.hh"
+#include "ANIM_rna.hh"
 
 #include "transform.hh"
 #include "transform_orientations.hh"
@@ -69,149 +69,6 @@ static bool motionpath_need_update_pose(Scene *scene, Object *ob)
   }
 
   return false;
-}
-
-/**
- * Auto-keyframing feature - for poses/pose-channels
- *
- * \param tmode: A transform mode.
- *
- * targetless_ik: has targetless ik been done on any channels?
- *
- * \note Context may not always be available,
- * so must check before using it as it's a luxury for a few cases.
- */
-static void autokeyframe_pose(
-    bContext *C, Scene *scene, Object *ob, int tmode, short targetless_ik)
-{
-  Main *bmain = CTX_data_main(C);
-  ID *id = &ob->id;
-  AnimData *adt = ob->adt;
-  bAction *act = (adt) ? adt->action : nullptr;
-  bPose *pose = ob->pose;
-
-  if (!blender::animrig::autokeyframe_cfra_can_key(scene, id)) {
-    return;
-  }
-
-  ReportList *reports = CTX_wm_reports(C);
-  ToolSettings *ts = scene->toolsettings;
-  KeyingSet *active_ks = ANIM_scene_get_active_keyingset(scene);
-  Depsgraph *depsgraph = CTX_data_depsgraph_pointer(C);
-  const AnimationEvalContext anim_eval_context = BKE_animsys_eval_context_construct(
-      depsgraph, BKE_scene_frame_get(scene));
-  eInsertKeyFlags flag = eInsertKeyFlags(0);
-
-  /* flag is initialized from UserPref keyframing settings
-   * - special exception for targetless IK - INSERTKEY_MATRIX keyframes should get
-   *   visual keyframes even if flag not set, as it's not that useful otherwise
-   *   (for quick animation recording)
-   */
-  flag = ANIM_get_keyframing_flags(scene, true);
-
-  if (targetless_ik) {
-    flag |= INSERTKEY_MATRIX;
-  }
-
-  LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
-    if ((pchan->bone->flag & BONE_TRANSFORM) == 0 &&
-        !((pose->flag & POSE_MIRROR_EDIT) && (pchan->bone->flag & BONE_TRANSFORM_MIRROR)))
-    {
-      continue;
-    }
-
-    blender::Vector<PointerRNA> sources;
-    /* Add data-source override for the camera object. */
-    ANIM_relative_keyingset_add_source(sources, id, &RNA_PoseBone, pchan);
-
-    /* only insert into active keyingset? */
-    if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_ONLYKEYINGSET) && (active_ks)) {
-      /* Run the active Keying Set on the current data-source. */
-      ANIM_apply_keyingset(
-          C, &sources, active_ks, MODIFYKEY_MODE_INSERT, anim_eval_context.eval_time);
-    }
-    /* only insert into available channels? */
-    else if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAIL)) {
-      if (act) {
-        LISTBASE_FOREACH (FCurve *, fcu, &act->curves) {
-          /* only insert keyframes for this F-Curve if it affects the current bone */
-          char pchan_name[sizeof(pchan->name)];
-          if (!BLI_str_quoted_substr(fcu->rna_path, "bones[", pchan_name, sizeof(pchan_name))) {
-            continue;
-          }
-
-          /* only if bone name matches too...
-           * NOTE: this will do constraints too, but those are ok to do here too?
-           */
-          if (STREQ(pchan_name, pchan->name)) {
-            blender::animrig::insert_keyframe(bmain,
-                                              reports,
-                                              id,
-                                              act,
-                                              ((fcu->grp) ? (fcu->grp->name) : (nullptr)),
-                                              fcu->rna_path,
-                                              fcu->array_index,
-                                              &anim_eval_context,
-                                              eBezTriple_KeyframeType(ts->keyframe_type),
-                                              flag);
-          }
-        }
-      }
-    }
-    /* only insert keyframe if needed? */
-    else if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTNEEDED)) {
-      bool do_loc = false, do_rot = false, do_scale = false;
-
-      /* Filter the conditions when this happens
-       * (assume that 'curarea->spacetype == SPACE_VIEW3D'). */
-      if (tmode == TFM_TRANSLATION) {
-        if (targetless_ik) {
-          do_rot = true;
-        }
-        else {
-          do_loc = true;
-        }
-      }
-      else if (ELEM(tmode, TFM_ROTATION, TFM_TRACKBALL)) {
-        if (ELEM(scene->toolsettings->transform_pivot_point, V3D_AROUND_CURSOR, V3D_AROUND_ACTIVE))
-        {
-          do_loc = true;
-        }
-
-        if ((scene->toolsettings->transform_flag & SCE_XFORM_AXIS_ALIGN) == 0) {
-          do_rot = true;
-        }
-      }
-      else if (tmode == TFM_RESIZE) {
-        if (ELEM(scene->toolsettings->transform_pivot_point, V3D_AROUND_CURSOR, V3D_AROUND_ACTIVE))
-        {
-          do_loc = true;
-        }
-
-        if ((scene->toolsettings->transform_flag & SCE_XFORM_AXIS_ALIGN) == 0) {
-          do_scale = true;
-        }
-      }
-
-      if (do_loc) {
-        KeyingSet *ks = ANIM_builtin_keyingset_get_named(ANIM_KS_LOCATION_ID);
-        ANIM_apply_keyingset(C, &sources, ks, MODIFYKEY_MODE_INSERT, anim_eval_context.eval_time);
-      }
-      if (do_rot) {
-        KeyingSet *ks = ANIM_builtin_keyingset_get_named(ANIM_KS_ROTATION_ID);
-        ANIM_apply_keyingset(C, &sources, ks, MODIFYKEY_MODE_INSERT, anim_eval_context.eval_time);
-      }
-      if (do_scale) {
-        KeyingSet *ks = ANIM_builtin_keyingset_get_named(ANIM_KS_SCALING_ID);
-        ANIM_apply_keyingset(C, &sources, ks, MODIFYKEY_MODE_INSERT, anim_eval_context.eval_time);
-      }
-    }
-    /* insert keyframe in all (transform) channels */
-    else {
-      KeyingSet *ks = ANIM_builtin_keyingset_get_named(ANIM_KS_LOC_ROT_SCALE_ID);
-      ANIM_apply_keyingset(C, &sources, ks, MODIFYKEY_MODE_INSERT, anim_eval_context.eval_time);
-    }
-  }
 }
 
 static bConstraint *add_temporary_ik_constraint(bPoseChannel *pchan,
@@ -775,7 +632,8 @@ static void createTransPose(bContext * /*C*/, TransInfo *t)
         pchan->bone->flag &= ~BONE_TRANSFORM_MIRROR;
 
         if ((pchan->bone->flag & BONE_TRANSFORM) &&
-            BKE_pose_channel_get_mirrored(ob->pose, pchan->name)) {
+            BKE_pose_channel_get_mirrored(ob->pose, pchan->name))
+        {
           total_mirrored++;
         }
       }
@@ -1410,6 +1268,81 @@ static void restoreMirrorPoseBones(TransDataContainer *tc)
   }
 }
 
+/* Given the transform mode `tmode` return a Vector of RNA paths that were possibly modified during
+ * that transformation. */
+static blender::Vector<std::string> get_affected_rna_paths_from_transform_mode(
+    const eTfmMode tmode,
+    ToolSettings *toolsettings,
+    const blender::StringRef rotation_path,
+    const bool targetless_ik)
+{
+  blender::Vector<std::string> rna_paths;
+  switch (tmode) {
+    case TFM_TRANSLATION:
+      if (targetless_ik) {
+        rna_paths.append(rotation_path);
+      }
+      else {
+        rna_paths.append("location");
+      }
+      break;
+
+    case TFM_ROTATION:
+    case TFM_TRACKBALL:
+      if (ELEM(toolsettings->transform_pivot_point, V3D_AROUND_CURSOR, V3D_AROUND_ACTIVE)) {
+        rna_paths.append("location");
+      }
+
+      if ((toolsettings->transform_flag & SCE_XFORM_AXIS_ALIGN) == 0) {
+        rna_paths.append(rotation_path);
+      }
+      break;
+
+    case TFM_RESIZE:
+      if (ELEM(toolsettings->transform_pivot_point, V3D_AROUND_CURSOR, V3D_AROUND_ACTIVE)) {
+        rna_paths.append("location");
+      }
+
+      if ((toolsettings->transform_flag & SCE_XFORM_AXIS_ALIGN) == 0) {
+        rna_paths.append("scale");
+      }
+      break;
+
+    default:
+      break;
+  }
+  return rna_paths;
+}
+
+static void autokeyframe_pose(
+    bContext *C, Scene *scene, Object *ob, short targetless_ik, const eTfmMode tmode)
+{
+
+  bPose *pose = ob->pose;
+  LISTBASE_FOREACH (bPoseChannel *, pchan, &pose->chanbase) {
+    if ((pchan->bone->flag & BONE_TRANSFORM) == 0 &&
+        !((pose->flag & POSE_MIRROR_EDIT) && (pchan->bone->flag & BONE_TRANSFORM_MIRROR)))
+    {
+      continue;
+    }
+
+    blender::Vector<std::string> rna_paths;
+    const blender::StringRef rotation_path = blender::animrig::get_rotation_mode_path(
+        eRotationModes(pchan->rotmode));
+
+    if (blender::animrig::is_keying_flag(scene, AUTOKEY_FLAG_INSERTNEEDED)) {
+      rna_paths = get_affected_rna_paths_from_transform_mode(
+          tmode, scene->toolsettings, rotation_path, targetless_ik);
+    }
+    else {
+      rna_paths = {"location", rotation_path, "scale"};
+    }
+
+    blender::animrig::autokeyframe_pose_channel(
+        C, scene, ob, pchan, rna_paths.as_span(), targetless_ik);
+  }
+}
+
 static void recalcData_pose(TransInfo *t)
 {
   if (t->mode == TFM_BONESIZE) {
@@ -1470,7 +1403,7 @@ static void recalcData_pose(TransInfo *t)
         int targetless_ik = (t->flag & T_AUTOIK);
 
         animrecord_check_state(t, &ob->id);
-        autokeyframe_pose(t->context, t->scene, ob, t->mode, targetless_ik);
+        autokeyframe_pose(t->context, t->scene, ob, targetless_ik, t->mode);
       }
 
       if (motionpath_need_update_pose(t->scene, ob)) {
@@ -1733,7 +1666,7 @@ static void special_aftertrans_update__pose(bContext *C, TransInfo *t)
       /* automatic inserting of keys and unkeyed tagging -
        * only if transform wasn't canceled (or TFM_DUMMY) */
       if (!canceled && (t->mode != TFM_DUMMY)) {
-        autokeyframe_pose(C, t->scene, ob, t->mode, targetless_ik);
+        autokeyframe_pose(C, t->scene, ob, targetless_ik, t->mode);
         DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
       }
       else {

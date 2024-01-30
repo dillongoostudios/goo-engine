@@ -7,8 +7,7 @@
 #include "COM_ConstantOperation.h"
 
 #include "BLI_rand.h"
-
-#include "PIL_time.h"
+#include "BLI_time.h"
 
 namespace blender::compositor {
 
@@ -19,6 +18,7 @@ ScreenLensDistortionOperation::ScreenLensDistortionOperation()
   this->add_input_socket(DataType::Value);
   this->add_output_socket(DataType::Color);
   flags_.complex = true;
+  flags_.can_be_constant = true;
   input_program_ = nullptr;
   distortion_ = 0.0f;
   dispersion_ = 0.0f;
@@ -73,7 +73,7 @@ void ScreenLensDistortionOperation::init_execution()
   input_program_ = this->get_input_socket_reader(0);
   this->init_mutex();
 
-  uint rng_seed = uint(PIL_check_seconds_timer_i() & UINT_MAX);
+  uint rng_seed = uint(BLI_check_seconds_timer_i() & UINT_MAX);
   rng_seed ^= uint(POINTER_AS_INT(input_program_));
   rng_ = BLI_rng_new(rng_seed);
 }
@@ -485,6 +485,10 @@ void ScreenLensDistortionOperation::update_memory_buffer_partial(MemoryBuffer *o
                                                                  Span<MemoryBuffer *> inputs)
 {
   const MemoryBuffer *input_image = inputs[0];
+  if (input_image->is_a_single_elem()) {
+    copy_v4_v4(output->get_elem(0, 0), input_image->get_elem(0, 0));
+    return;
+  }
   for (BuffersIterator<float> it = output->iterate_with({}, area); !it.is_end(); ++it) {
     float xy[2] = {float(it.x), float(it.y)};
     float uv[2];

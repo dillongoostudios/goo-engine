@@ -12,10 +12,10 @@
 #include "DNA_view3d_types.h"
 #include "DNA_volume_types.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_displist.h"
 #include "BKE_duplilist.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_global.h"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
@@ -24,7 +24,7 @@
 #include "BLI_hash.h"
 #include "BLI_math_base.hh"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 #include "GPU_shader.h"
 
 #include "ED_view3d.hh"
@@ -66,7 +66,8 @@ void OVERLAY_wireframe_cache_init(OVERLAY_Data *vedata)
 
   const bool use_select = (DRW_state_is_select() || DRW_state_is_depth());
   GPUShader *wires_sh = use_select ? OVERLAY_shader_wireframe_select() :
-                                     OVERLAY_shader_wireframe(pd->antialiasing.enabled);
+                                     OVERLAY_shader_wireframe(pd->antialiasing.enabled &&
+                                                              !pd->xray_enabled);
 
   for (int xray = 0; xray < (is_material_shmode ? 1 : 2); xray++) {
     DRWState state = DRW_STATE_FIRST_VERTEX_CONVENTION | DRW_STATE_WRITE_COLOR |
@@ -175,17 +176,17 @@ void OVERLAY_wireframe_cache_populate(OVERLAY_Data *vedata,
   bool is_mesh_verts_only = false;
   if (is_mesh) {
     /* TODO: Should be its own function. */
-    Mesh *me = static_cast<Mesh *>(ob->data);
+    Mesh *mesh = static_cast<Mesh *>(ob->data);
     if (is_edit_mode) {
-      BLI_assert(me->edit_mesh);
+      BLI_assert(mesh->edit_mesh);
       Mesh *editmesh_eval_final = BKE_object_get_editmesh_eval_final(ob);
       Mesh *editmesh_eval_cage = BKE_object_get_editmesh_eval_cage(ob);
       has_edit_mesh_cage = editmesh_eval_cage && (editmesh_eval_cage != editmesh_eval_final);
       if (editmesh_eval_final) {
-        me = editmesh_eval_final;
+        mesh = editmesh_eval_final;
       }
     }
-    is_mesh_verts_only = me->totedge == 0 && me->totvert > 0;
+    is_mesh_verts_only = mesh->edges_num == 0 && mesh->verts_num > 0;
   }
 
   const bool use_wire = !is_mesh_verts_only && ((pd->overlay.flag & V3D_OVERLAY_WIREFRAMES) ||

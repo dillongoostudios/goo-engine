@@ -20,6 +20,8 @@
 #include "BLI_array.hh"
 #include "BLI_dynstr.h"
 #include "BLI_listbase.h"
+#include "BLI_math_base.h"
+#include "BLI_memory_utils.hh"
 #include "BLI_rect.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
@@ -27,8 +29,8 @@
 #include "BLT_translation.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_screen.hh"
@@ -89,6 +91,8 @@ enum uiItemType {
   ITEM_BUTTON,
 
   ITEM_LAYOUT_ROW,
+  ITEM_LAYOUT_PANEL_HEADER,
+  ITEM_LAYOUT_PANEL_BODY,
   ITEM_LAYOUT_COLUMN,
   ITEM_LAYOUT_COLUMN_FLOW,
   ITEM_LAYOUT_ROW_FLOW,
@@ -194,6 +198,16 @@ struct uiLayoutItemGridFlow {
 struct uiLayoutItemBx {
   uiLayout litem;
   uiBut *roundbox;
+};
+
+struct uiLayoutItemPanelHeader {
+  uiLayout litem;
+  PointerRNA open_prop_owner;
+  char open_prop_name[64];
+};
+
+struct uiLayoutItemPanelBody {
+  uiLayout litem;
 };
 
 struct uiLayoutItemSplit {
@@ -450,6 +464,7 @@ int uiLayoutGetLocalDir(const uiLayout *layout)
     case ITEM_LAYOUT_ROW:
     case ITEM_LAYOUT_ROOT:
     case ITEM_LAYOUT_OVERLAP:
+    case ITEM_LAYOUT_PANEL_HEADER:
       return UI_LAYOUT_HORIZONTAL;
     case ITEM_LAYOUT_COLUMN:
     case ITEM_LAYOUT_COLUMN_FLOW:
@@ -457,6 +472,7 @@ int uiLayoutGetLocalDir(const uiLayout *layout)
     case ITEM_LAYOUT_SPLIT:
     case ITEM_LAYOUT_ABSOLUTE:
     case ITEM_LAYOUT_BOX:
+    case ITEM_LAYOUT_PANEL_BODY:
     default:
       return UI_LAYOUT_VERTICAL;
   }
@@ -679,7 +695,8 @@ static void ui_item_array(uiLayout *layout,
       /* Show check-boxes for rna on a non-emboss block (menu for eg). */
       bool *boolarr = nullptr;
       if (type == PROP_BOOLEAN &&
-          ELEM(layout->root->block->emboss, UI_EMBOSS_NONE, UI_EMBOSS_PULLDOWN)) {
+          ELEM(layout->root->block->emboss, UI_EMBOSS_NONE, UI_EMBOSS_PULLDOWN))
+      {
         boolarr = static_cast<bool *>(MEM_callocN(sizeof(bool) * len, __func__));
         RNA_property_boolean_get_array(ptr, prop, boolarr);
       }
@@ -1162,7 +1179,8 @@ static void ui_but_tip_from_enum_item(uiBut *but, const EnumPropertyItem *item)
 {
   if (but->tip == nullptr || but->tip[0] == '\0') {
     if (item->description && item->description[0] &&
-        !(but->optype && but->optype->get_description)) {
+        !(but->optype && but->optype->get_description))
+    {
       but->tip = item->description;
     }
   }
@@ -1318,7 +1336,7 @@ static void ui_item_menu_hold(bContext *C, ARegion *butregion, uiBut *but)
     UI_menutype_draw(C, mt, layout);
   }
   else {
-    uiItemL(layout, TIP_("Menu Missing:"), ICON_NONE);
+    uiItemL(layout, RPT_("Menu Missing:"), ICON_NONE);
     uiItemL(layout, menu_id, ICON_NONE);
   }
   UI_popup_menu_end(C, pup);
@@ -1689,7 +1707,7 @@ void uiItemEnumO_value(uiLayout *layout,
                        int value)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   PointerRNA ptr;
   WM_operator_properties_create_ptr(&ptr, ot);
@@ -1726,7 +1744,7 @@ void uiItemEnumO_string(uiLayout *layout,
                         const char *value_str)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   PointerRNA ptr;
   WM_operator_properties_create_ptr(&ptr, ot);
@@ -1782,7 +1800,7 @@ void uiItemBooleanO(uiLayout *layout,
                     int value)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   PointerRNA ptr;
   WM_operator_properties_create_ptr(&ptr, ot);
@@ -1806,7 +1824,7 @@ void uiItemIntO(uiLayout *layout,
                 int value)
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   PointerRNA ptr;
   WM_operator_properties_create_ptr(&ptr, ot);
@@ -1831,7 +1849,7 @@ void uiItemFloatO(uiLayout *layout,
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
 
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   PointerRNA ptr;
   WM_operator_properties_create_ptr(&ptr, ot);
@@ -1856,7 +1874,7 @@ void uiItemStringO(uiLayout *layout,
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
 
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   PointerRNA ptr;
   WM_operator_properties_create_ptr(&ptr, ot);
@@ -2518,7 +2536,7 @@ void uiItemFullR(uiLayout *layout,
 
   /* ensure text isn't added to icon_only buttons */
   if (but && icon_only) {
-    BLI_assert(but->str[0] == '\0');
+    BLI_assert(but->str.empty());
   }
 }
 
@@ -2845,7 +2863,7 @@ uiBut *ui_but_add_search(uiBut *but,
     if (RNA_property_type(prop) == PROP_ENUM) {
       /* XXX, this will have a menu string,
        * but in this case we just want the text */
-      but->str[0] = 0;
+      but->str.clear();
     }
 
     UI_but_func_search_set_results_are_suggestions(but, results_are_suggestions);
@@ -3584,7 +3602,7 @@ static int menu_item_enum_opname_menu_active(bContext *C, uiBut *but, MenuItemLe
   WM_operator_properties_sanitize(&ptr, false);
   PropertyRNA *prop = RNA_struct_find_property(&ptr, lvl->propname);
   RNA_property_enum_items_gettexted(C, &ptr, prop, &item_array, &totitem, &free);
-  int active = RNA_enum_from_name(item_array, but->str);
+  int active = RNA_enum_from_name(item_array, but->str.c_str());
   if (free) {
     MEM_freeN((void *)item_array);
   }
@@ -3670,7 +3688,7 @@ void uiItemMenuEnumFullO(uiLayout *layout,
 {
   wmOperatorType *ot = WM_operatortype_find(opname, false); /* print error next */
 
-  UI_OPERATOR_ERROR_RET(ot, opname, return );
+  UI_OPERATOR_ERROR_RET(ot, opname, return);
 
   if (!ot->srna) {
     ui_item_disabled(layout, opname);
@@ -3940,6 +3958,31 @@ static void ui_litem_layout_row(uiLayout *litem)
   litem->y = y;
 }
 
+static int spaces_after_column_item(uiLayout *litem, uiItem *item, const bool is_box)
+{
+  uiItem *next_item = item->next;
+  if (next_item == nullptr) {
+    return 0;
+  }
+  if (item->type == ITEM_LAYOUT_PANEL_HEADER && next_item->type == ITEM_LAYOUT_PANEL_HEADER) {
+    /* No extra space between layout panel headers. */
+    return 0;
+  }
+  if (item->type == ITEM_LAYOUT_PANEL_BODY &&
+      !ELEM(next_item->type, ITEM_LAYOUT_PANEL_HEADER, ITEM_LAYOUT_PANEL_BODY))
+  {
+    /* One for the end of the panel and one at the start of the parent panel. */
+    return 2;
+  }
+  if (!is_box) {
+    return 1;
+  }
+  if (item != litem->items.first) {
+    return 1;
+  }
+  return 0;
+}
+
 /* single-column layout */
 static void ui_litem_estimate_column(uiLayout *litem, bool is_box)
 {
@@ -3957,9 +4000,8 @@ static void ui_litem_estimate_column(uiLayout *litem, bool is_box)
     litem->w = std::max(litem->w, itemw);
     litem->h += itemh;
 
-    if (item->next && (!is_box || item != litem->items.first)) {
-      litem->h += litem->space;
-    }
+    const int spaces_num = spaces_after_column_item(litem, item, is_box);
+    litem->h += spaces_num * litem->space;
   }
 
   if (min_size_flag) {
@@ -3979,9 +4021,8 @@ static void ui_litem_layout_column(uiLayout *litem, bool is_box, bool is_menu)
     y -= itemh;
     ui_item_position(item, x, y, is_menu ? itemw : litem->w, itemh);
 
-    if (item->next && (!is_box || item != litem->items.first)) {
-      y -= litem->space;
-    }
+    const int spaces_num = spaces_after_column_item(litem, item, is_box);
+    y -= spaces_num * litem->space;
 
     if (is_box) {
       item->flag |= UI_ITEM_BOX_ITEM;
@@ -4144,6 +4185,51 @@ static void ui_litem_layout_root(uiLayout *litem)
   else {
     ui_litem_layout_column(litem, false, false);
   }
+}
+
+/* panel header layout */
+static void ui_litem_estimate_panel_header(uiLayout *litem)
+{
+  BLI_assert(litem->items.first == litem->items.last);
+  uiItem *item = static_cast<uiItem *>(litem->items.first);
+
+  int w, h;
+  ui_item_size(item, &w, &h);
+  litem->w = w;
+  litem->h = h;
+}
+
+static void ui_litem_layout_panel_header(uiLayout *litem)
+{
+  uiLayoutItemPanelHeader *header_litem = reinterpret_cast<uiLayoutItemPanelHeader *>(litem);
+  Panel *panel = litem->root->block->panel;
+
+  BLI_assert(litem->items.first == litem->items.last);
+  uiItem *item = static_cast<uiItem *>(litem->items.first);
+
+  int w, h;
+  ui_item_size(item, &w, &h);
+  litem->y -= h;
+  ui_item_position(item, litem->x, litem->y, litem->w, h);
+
+  panel->runtime->layout_panels.headers.append({float(litem->y),
+                                                float(litem->y + litem->h),
+                                                header_litem->open_prop_owner,
+                                                header_litem->open_prop_name});
+}
+
+/* panel body layout */
+static void ui_litem_estimate_panel_body(uiLayout *litem)
+{
+  ui_litem_estimate_column(litem, false);
+}
+
+static void ui_litem_layout_panel_body(uiLayout *litem)
+{
+  Panel *panel = litem->root->block->panel;
+  ui_litem_layout_column(litem, false, false);
+  panel->runtime->layout_panels.bodies.append(
+      {float(litem->y - litem->space), float(litem->y + litem->h + litem->space)});
 }
 
 /* box layout */
@@ -4887,6 +4973,71 @@ uiLayout *uiLayoutRow(uiLayout *layout, bool align)
   return litem;
 }
 
+uiLayout *uiLayoutPanel(const bContext *C,
+                        uiLayout *layout,
+                        const char *name,
+                        PointerRNA *open_prop_owner,
+                        const char *open_prop_name)
+{
+  const ARegion *region = CTX_wm_region(C);
+
+  const bool is_real_open = RNA_boolean_get(open_prop_owner, open_prop_name);
+  const bool search_filter_active = region->flag & RGN_FLAG_SEARCH_FILTER_ACTIVE;
+  const bool is_open = is_real_open || search_filter_active;
+
+  {
+    uiLayoutItemPanelHeader *header_litem = MEM_cnew<uiLayoutItemPanelHeader>(__func__);
+    uiLayout *litem = &header_litem->litem;
+    ui_litem_init_from_parent(litem, layout, false);
+    litem->item.type = ITEM_LAYOUT_PANEL_HEADER;
+
+    header_litem->open_prop_owner = *open_prop_owner;
+    STRNCPY(header_litem->open_prop_name, open_prop_name);
+
+    UI_block_layout_set_current(layout->root->block, litem);
+
+    uiBlock *block = uiLayoutGetBlock(layout);
+    const int icon = is_open ? ICON_DOWNARROW_HLT : ICON_RIGHTARROW;
+    const int width = ui_text_icon_width(layout, name, icon, false);
+    uiDefIconTextBut(block,
+                     UI_BTYPE_LABEL,
+                     0,
+                     icon,
+                     name,
+                     0,
+                     0,
+                     width,
+                     UI_UNIT_Y * 1.2f,
+                     nullptr,
+                     0.0,
+                     0.0,
+                     0.0,
+                     0.0,
+                     "");
+  }
+
+  if (!is_open) {
+    return nullptr;
+  }
+
+  uiLayoutItemPanelBody *body_litem = MEM_cnew<uiLayoutItemPanelBody>(__func__);
+  uiLayout *litem = &body_litem->litem;
+  litem->item.type = ITEM_LAYOUT_PANEL_BODY;
+  litem->space = layout->root->style->templatespace;
+  ui_litem_init_from_parent(litem, layout, false);
+  UI_block_layout_set_current(layout->root->block, litem);
+  return litem;
+}
+
+bool uiLayoutEndsWithPanelHeader(const uiLayout &layout)
+{
+  if (BLI_listbase_is_empty(&layout.items)) {
+    return false;
+  }
+  const uiItem *item = static_cast<const uiItem *>(layout.items.last);
+  return item->type == ITEM_LAYOUT_PANEL_HEADER;
+}
+
 uiLayout *uiLayoutRowWithHeading(uiLayout *layout, bool align, const char *heading)
 {
   uiLayout *litem = uiLayoutRow(layout, align);
@@ -5156,6 +5307,11 @@ void uiLayoutSetPropDecorate(uiLayout *layout, bool is_sep)
   SET_FLAG_FROM_TEST(layout->item.flag, is_sep, UI_ITEM_PROP_DECORATE);
 }
 
+Panel *uiLayoutGetRootPanel(uiLayout *layout)
+{
+  return layout->root->block->panel;
+}
+
 bool uiLayoutGetActive(uiLayout *layout)
 {
   return layout->active;
@@ -5249,7 +5405,7 @@ static bool block_search_panel_label_matches(const uiBlock *block, const char *s
 static bool button_matches_search_filter(uiBut *but, const char *search_filter)
 {
   /* Do the shorter checks first for better performance in case there is a match. */
-  if (BLI_strcasestr(but->str, search_filter)) {
+  if (BLI_strcasestr(but->str.c_str(), search_filter)) {
     return true;
   }
 
@@ -5275,27 +5431,30 @@ static bool button_matches_search_filter(uiBut *but, const char *search_filter)
     if (but->type == UI_BTYPE_MENU) {
       PointerRNA *ptr = &but->rnapoin;
       PropertyRNA *enum_prop = but->rnaprop;
-
       int items_len;
       const EnumPropertyItem *items_array = nullptr;
       bool free;
       RNA_property_enum_items_gettexted(nullptr, ptr, enum_prop, &items_array, &items_len, &free);
-
       if (items_array == nullptr) {
         return false;
       }
 
+      bool found = false;
       for (int i = 0; i < items_len; i++) {
         /* Check for nullptr name field which enums use for separators. */
         if (items_array[i].name == nullptr) {
           continue;
         }
         if (BLI_strcasestr(items_array[i].name, search_filter)) {
-          return true;
+          found = true;
+          break;
         }
       }
       if (free) {
         MEM_freeN((EnumPropertyItem *)items_array);
+      }
+      if (found) {
+        return true;
       }
     }
   }
@@ -5438,6 +5597,12 @@ static void ui_item_estimate(uiItem *item)
       case ITEM_LAYOUT_ROW:
         ui_litem_estimate_row(litem);
         break;
+      case ITEM_LAYOUT_PANEL_HEADER:
+        ui_litem_estimate_panel_header(litem);
+        break;
+      case ITEM_LAYOUT_PANEL_BODY:
+        ui_litem_estimate_panel_body(litem);
+        break;
       case ITEM_LAYOUT_BOX:
         ui_litem_estimate_box(litem);
         break;
@@ -5543,6 +5708,12 @@ static void ui_item_layout(uiItem *item)
         break;
       case ITEM_LAYOUT_ROW:
         ui_litem_layout_row(litem);
+        break;
+      case ITEM_LAYOUT_PANEL_HEADER:
+        ui_litem_layout_panel_header(litem);
+        break;
+      case ITEM_LAYOUT_PANEL_BODY:
+        ui_litem_layout_panel_body(litem);
         break;
       case ITEM_LAYOUT_BOX:
         ui_litem_layout_box(litem);
@@ -5720,7 +5891,7 @@ void ui_layout_add_but(uiLayout *layout, uiBut *but)
   ui_item_size((uiItem *)bitem, &w, &h);
   /* XXX uiBut hasn't scaled yet
    * we can flag the button as not expandable, depending on its size */
-  if (w <= 2 * UI_UNIT_X && (!but->str || but->str[0] == '\0')) {
+  if (w <= 2 * UI_UNIT_X && but->str.empty()) {
     bitem->item.flag |= UI_ITEM_FIXED_SIZE;
   }
 
@@ -5943,7 +6114,7 @@ wmOperatorType *UI_but_operatortype_get_from_enum_menu(uiBut *but, PropertyRNA *
   return nullptr;
 }
 
-MenuType *UI_but_menutype_get(uiBut *but)
+MenuType *UI_but_menutype_get(const uiBut *but)
 {
   if (but->menu_create_func == ui_item_menutype_func) {
     return (MenuType *)but->poin;
@@ -5951,7 +6122,7 @@ MenuType *UI_but_menutype_get(uiBut *but)
   return nullptr;
 }
 
-PanelType *UI_but_paneltype_get(uiBut *but)
+PanelType *UI_but_paneltype_get(const uiBut *but)
 {
   if (but->menu_create_func == ui_item_paneltype_func) {
     return (PanelType *)but->poin;
@@ -5995,7 +6166,7 @@ static bool ui_layout_has_panel_label(const uiLayout *layout, const PanelType *p
     if (subitem->type == ITEM_BUTTON) {
       uiButtonItem *bitem = (uiButtonItem *)subitem;
       if (!(bitem->but->flag & UI_HIDDEN) &&
-          STREQ(bitem->but->str, CTX_IFACE_(pt->translation_context, pt->label)))
+          STREQ(bitem->but->str.c_str(), CTX_IFACE_(pt->translation_context, pt->label)))
       {
         return true;
       }
@@ -6151,6 +6322,8 @@ static void ui_layout_introspect_items(DynStr *ds, ListBase *lb)
     switch (item->type) {
       CASE_ITEM(ITEM_BUTTON);
       CASE_ITEM(ITEM_LAYOUT_ROW);
+      CASE_ITEM(ITEM_LAYOUT_PANEL_HEADER);
+      CASE_ITEM(ITEM_LAYOUT_PANEL_BODY);
       CASE_ITEM(ITEM_LAYOUT_COLUMN);
       CASE_ITEM(ITEM_LAYOUT_COLUMN_FLOW);
       CASE_ITEM(ITEM_LAYOUT_ROW_FLOW);

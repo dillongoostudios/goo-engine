@@ -23,7 +23,7 @@ CCL_NAMESPACE_BEGIN
       metal_printf("%s\n", str.c_str()); \
     }
 
-//#  define BVH_THROTTLE_DIAGNOSTICS
+// #  define BVH_THROTTLE_DIAGNOSTICS
 #  ifdef BVH_THROTTLE_DIAGNOSTICS
 #    define bvh_throttle_printf(...) printf("BVHMetalBuildThrottler::" __VA_ARGS__)
 #  else
@@ -976,7 +976,7 @@ bool BVHMetal::build_TLAS(Progress &progress,
         storage_mode = MTLResourceStorageModeShared;
       }
 
-      id<MTLBuffer> nullBuf = [device newBufferWithLength:0 options:storage_mode];
+      id<MTLBuffer> nullBuf = [device newBufferWithLength:sizeof(float3) options:storage_mode];
 
       /* Create an acceleration structure. */
       MTLAccelerationStructureTriangleGeometryDescriptor *geomDesc =

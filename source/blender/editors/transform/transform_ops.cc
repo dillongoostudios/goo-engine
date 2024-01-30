@@ -8,6 +8,7 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_curve_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 
@@ -16,8 +17,8 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_global.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -28,7 +29,7 @@
 
 #include "WM_api.hh"
 #include "WM_message.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "UI_interface.hh"
@@ -567,7 +568,8 @@ static bool transform_poll_property(const bContext *C, wmOperator *op, const Pro
         /* Special case: show constraint axis if we don't have values,
          * needed for mirror operator. */
         if (STREQ(prop_id, "constraint_axis") &&
-            (RNA_struct_find_property(op->ptr, "value") == nullptr)) {
+            (RNA_struct_find_property(op->ptr, "value") == nullptr))
+        {
           return true;
         }
 
@@ -807,12 +809,6 @@ void Transform_Properties(wmOperatorType *ot, int flags)
     RNA_def_property_flag(prop, PROP_HIDDEN);
   }
 
-  if (flags & P_VIEW3D_ALT_NAVIGATION) {
-    prop = RNA_def_boolean(
-        ot->srna, "alt_navigation", false, "Transform Navigation with Alt", nullptr);
-    RNA_def_property_flag(prop, PROP_HIDDEN);
-  }
-
   if (flags & P_POST_TRANSFORM) {
     prop = RNA_def_boolean(ot->srna,
                            "use_automerge_and_split",
@@ -847,7 +843,7 @@ static void TRANSFORM_OT_translate(wmOperatorType *ot)
   Transform_Properties(ot,
                        P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR | P_ALIGN_SNAP |
                            P_OPTIONS | P_GPENCIL_EDIT | P_CURSOR_EDIT | P_VIEW2D_EDGE_PAN |
-                           P_VIEW3D_ALT_NAVIGATION | P_POST_TRANSFORM);
+                           P_POST_TRANSFORM);
 }
 
 static void TRANSFORM_OT_resize(wmOperatorType *ot)
@@ -886,7 +882,7 @@ static void TRANSFORM_OT_resize(wmOperatorType *ot)
 
   Transform_Properties(ot,
                        P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR | P_GEO_SNAP |
-                           P_OPTIONS | P_GPENCIL_EDIT | P_CENTER | P_VIEW3D_ALT_NAVIGATION);
+                           P_OPTIONS | P_GPENCIL_EDIT | P_CENTER);
 }
 
 static void TRANSFORM_OT_skin_resize(wmOperatorType *ot)
@@ -963,7 +959,23 @@ static void TRANSFORM_OT_rotate(wmOperatorType *ot)
 
   Transform_Properties(ot,
                        P_ORIENT_AXIS | P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR |
-                           P_GEO_SNAP | P_GPENCIL_EDIT | P_CENTER | P_VIEW3D_ALT_NAVIGATION);
+                           P_GEO_SNAP | P_GPENCIL_EDIT | P_CENTER);
+}
+
+static bool tilt_poll(bContext *C)
+{
+  Object *obedit = CTX_data_edit_object(C);
+  if (!obedit) {
+    return false;
+  }
+  if (obedit->type == OB_CURVES_LEGACY) {
+    Curve *cu = (Curve *)obedit->data;
+    return (cu->flag & CU_3D) && (nullptr != cu->editnurb);
+  }
+  if (obedit->type == OB_CURVES) {
+    return true;
+  }
+  return true;
 }
 
 static void TRANSFORM_OT_tilt(wmOperatorType *ot)
@@ -982,7 +994,7 @@ static void TRANSFORM_OT_tilt(wmOperatorType *ot)
   ot->exec = transform_exec;
   ot->modal = transform_modal;
   ot->cancel = transform_cancel;
-  ot->poll = ED_operator_editcurve_3d;
+  ot->poll = tilt_poll;
   ot->poll_property = transform_poll_property;
 
   RNA_def_float_rotation(
@@ -1102,7 +1114,7 @@ static void TRANSFORM_OT_shrink_fatten(wmOperatorType *ot)
 
   WM_operatortype_props_advanced_begin(ot);
 
-  Transform_Properties(ot, P_PROPORTIONAL | P_MIRROR | P_SNAP | P_VIEW3D_ALT_NAVIGATION);
+  Transform_Properties(ot, P_PROPORTIONAL | P_MIRROR | P_SNAP);
 }
 
 static void TRANSFORM_OT_tosphere(wmOperatorType *ot)
@@ -1208,7 +1220,7 @@ static void TRANSFORM_OT_edge_slide(wmOperatorType *ot)
                   "When Even mode is active, flips between the two adjacent edge loops");
   RNA_def_boolean(ot->srna, "use_clamp", true, "Clamp", "Clamp within the edge extents");
 
-  Transform_Properties(ot, P_MIRROR | P_GEO_SNAP | P_CORRECT_UV | P_VIEW3D_ALT_NAVIGATION);
+  Transform_Properties(ot, P_MIRROR | P_GEO_SNAP | P_CORRECT_UV);
 }
 
 static void TRANSFORM_OT_vert_slide(wmOperatorType *ot)
@@ -1243,7 +1255,7 @@ static void TRANSFORM_OT_vert_slide(wmOperatorType *ot)
                   "When Even mode is active, flips between the two adjacent edge loops");
   RNA_def_boolean(ot->srna, "use_clamp", true, "Clamp", "Clamp within the edge extents");
 
-  Transform_Properties(ot, P_MIRROR | P_GEO_SNAP | P_CORRECT_UV | P_VIEW3D_ALT_NAVIGATION);
+  Transform_Properties(ot, P_MIRROR | P_GEO_SNAP | P_CORRECT_UV);
 }
 
 static void TRANSFORM_OT_edge_crease(wmOperatorType *ot)
@@ -1391,8 +1403,8 @@ static void TRANSFORM_OT_transform(wmOperatorType *ot)
 
   Transform_Properties(ot,
                        P_ORIENT_AXIS | P_ORIENT_MATRIX | P_CONSTRAINT | P_PROPORTIONAL | P_MIRROR |
-                           P_ALIGN_SNAP | P_GPENCIL_EDIT | P_CENTER | P_VIEW3D_ALT_NAVIGATION |
-                           P_POST_TRANSFORM | P_OPTIONS);
+                           P_ALIGN_SNAP | P_GPENCIL_EDIT | P_CENTER | P_POST_TRANSFORM |
+                           P_OPTIONS);
 }
 
 static int transform_from_gizmo_invoke(bContext *C, wmOperator * /*op*/, const wmEvent *event)

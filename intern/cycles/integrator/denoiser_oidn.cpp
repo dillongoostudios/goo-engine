@@ -151,7 +151,7 @@ class OIDNDenoiseContext {
 
     OIDNPass oidn_color_access_pass = read_input_pass(oidn_color_pass, oidn_output_pass);
 
-    oidn::DeviceRef oidn_device = oidn::newDevice();
+    oidn::DeviceRef oidn_device = oidn::newDevice(oidn::DeviceType::CPU);
     oidn_device.set("setAffinity", false);
     oidn_device.commit();
 
@@ -215,7 +215,8 @@ class OIDNDenoiseContext {
     DCHECK(!oidn_pass.use_compositing);
 
     if (denoise_params_.prefilter != DENOISER_PREFILTER_ACCURATE &&
-        !is_pass_scale_needed(oidn_pass)) {
+        !is_pass_scale_needed(oidn_pass))
+    {
       /* Pass data is available as-is from the render buffers. */
       return;
     }
@@ -630,7 +631,7 @@ Device *OIDNDenoiser::ensure_denoiser_device(Progress *progress)
 {
 #ifndef WITH_OPENIMAGEDENOISE
   (void)progress;
-  path_trace_device_->set_error("Build without OpenImageDenoiser");
+  path_trace_device_->set_error("Failed to denoise, build has no OpenImageDenoise support");
   return nullptr;
 #else
   if (!openimagedenoise_supported()) {

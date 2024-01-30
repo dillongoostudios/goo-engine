@@ -218,10 +218,20 @@ bool BKE_collection_object_cyclic_check(struct Main *bmain,
 
 struct ListBase BKE_collection_object_cache_get(struct Collection *collection);
 ListBase BKE_collection_object_cache_instanced_get(struct Collection *collection);
-/** Free the object cache of given `collection` and all of its ancestors (recursively). */
-void BKE_collection_object_cache_free(struct Collection *collection);
-/** Free the object cache of all collections in given `bmain`, including master collections of
- * scenes. */
+/** Free the object cache of given `collection` and all of its ancestors (recursively).
+ *
+ * \param bmain: The Main database owning the collection. May be `nullptr`, only used if doing
+ * depsgraph tagging.
+ * \param id_create_flag: Flags controlling ID creation, used here to enable or
+ * not depsgraph tagging of affected IDs (e.g. #LIB_ID_CREATE_NO_DEG_TAG would prevent depsgraph
+ * tagging). */
+void BKE_collection_object_cache_free(const struct Main *bmain,
+                                      struct Collection *collection,
+                                      const int id_create_flag);
+/**
+ * Free the object cache of all collections in given `bmain`, including master collections of
+ * scenes.
+ */
 void BKE_main_collections_object_cache_free(const struct Main *bmain);
 
 struct Base *BKE_collection_or_layer_objects(const struct Scene *scene,
@@ -259,7 +269,9 @@ bool BKE_collection_child_add(struct Main *bmain,
                               struct Collection *parent,
                               struct Collection *child);
 
-bool BKE_collection_child_add_no_sync(struct Collection *parent, struct Collection *child);
+bool BKE_collection_child_add_no_sync(struct Main *bmain,
+                                      struct Collection *parent,
+                                      struct Collection *child);
 
 bool BKE_collection_child_remove(struct Main *bmain,
                                  struct Collection *parent,
@@ -312,6 +324,12 @@ bool BKE_collection_validate(struct Collection *collection);
 
 /* .blend file I/O */
 
+/**
+ * Perform some pre-writing cleanup on the COllection data itself (_not_ in any sub-data
+ * referenced by pointers). To be called before writing the Collection struct itself.
+ */
+void BKE_collection_blend_write_prepare_nolib(struct BlendWriter *writer,
+                                              struct Collection *collection);
 void BKE_collection_blend_write_nolib(struct BlendWriter *writer, struct Collection *collection);
 void BKE_collection_blend_read_data(struct BlendDataReader *reader,
                                     struct Collection *collection,
@@ -368,10 +386,11 @@ void BKE_scene_objects_iterator_begin(struct BLI_Iterator *iter, void *data_in);
 void BKE_scene_objects_iterator_next(struct BLI_Iterator *iter);
 void BKE_scene_objects_iterator_end(struct BLI_Iterator *iter);
 
-/** Iterate over objects in the scene based on a flag.
+/**
+ * Iterate over objects in the scene based on a flag.
  *
  * \note The object->flag is tested against flag.
- * */
+ */
 typedef struct SceneObjectsIteratorExData {
   struct Scene *scene;
   int flag;

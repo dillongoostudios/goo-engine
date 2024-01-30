@@ -11,9 +11,6 @@
 #include "BLI_vector.hh"
 #include "BLI_virtual_array.hh"
 
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
-
 #include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
 #include "BKE_geometry_fields.hh"
@@ -36,23 +33,12 @@ namespace blender::nodes::node_geo_blur_attribute_cc {
 
 static void node_declare(NodeDeclarationBuilder &b)
 {
-  b.add_input<decl::Float>("Value", "Value_Float")
-      .supports_field()
-      .hide_value()
-      .is_default_link_socket();
-  b.add_input<decl::Int>("Value", "Value_Int")
-      .supports_field()
-      .hide_value()
-      .is_default_link_socket();
-  b.add_input<decl::Vector>("Value", "Value_Vector")
-      .supports_field()
-      .hide_value()
-      .is_default_link_socket();
-  b.add_input<decl::Color>("Value", "Value_Color")
-      .supports_field()
-      .hide_value()
-      .is_default_link_socket();
+  const bNode *node = b.node_or_null();
 
+  if (node != nullptr) {
+    const eCustomDataType data_type = eCustomDataType(node->custom1);
+    b.add_input(data_type, "Value").supports_field().hide_value().is_default_link_socket();
+  }
   b.add_input<decl::Int>("Iterations")
       .default_value(1)
       .min(0)
@@ -65,12 +51,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       .supports_field()
       .description("Relative mix weight of neighboring elements");
 
-  b.add_output<decl::Float>("Value", "Value_Float").field_source_reference_all().dependent_field();
-  b.add_output<decl::Int>("Value", "Value_Int").field_source_reference_all().dependent_field();
-  b.add_output<decl::Vector>("Value", "Value_Vector")
-      .field_source_reference_all()
-      .dependent_field();
-  b.add_output<decl::Color>("Value", "Value_Color").field_source_reference_all().dependent_field();
+  if (node != nullptr) {
+    const eCustomDataType data_type = eCustomDataType(node->custom1);
+    b.add_output(data_type, "Value").field_source_reference_all().dependent_field();
+  }
 }
 
 static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
@@ -89,7 +73,7 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
   const NodeDeclaration &declaration = *node_type.static_declaration;
 
   /* Weight and Iterations inputs don't change based on the data type. */
-  search_link_ops_for_declarations(params, declaration.inputs.as_span().take_back(2));
+  search_link_ops_for_declarations(params, declaration.inputs);
 
   const std::optional<eCustomDataType> new_node_type = bke::socket_type_to_custom_data_type(
       eNodeSocketDatatype(params.other_socket().type));
@@ -113,31 +97,6 @@ static void node_gather_link_searches(GatherLinkSearchOpParams &params)
     node.custom1 = fixed_data_type;
     params.update_and_connect_available_socket(node, "Value");
   });
-}
-
-static void node_update(bNodeTree *ntree, bNode *node)
-{
-  const eCustomDataType data_type = static_cast<eCustomDataType>(node->custom1);
-
-  bNodeSocket *socket_value_float = (bNodeSocket *)node->inputs.first;
-  bNodeSocket *socket_value_int32 = socket_value_float->next;
-  bNodeSocket *socket_value_vector = socket_value_int32->next;
-  bNodeSocket *socket_value_color4f = socket_value_vector->next;
-
-  bke::nodeSetSocketAvailability(ntree, socket_value_float, data_type == CD_PROP_FLOAT);
-  bke::nodeSetSocketAvailability(ntree, socket_value_int32, data_type == CD_PROP_INT32);
-  bke::nodeSetSocketAvailability(ntree, socket_value_vector, data_type == CD_PROP_FLOAT3);
-  bke::nodeSetSocketAvailability(ntree, socket_value_color4f, data_type == CD_PROP_COLOR);
-
-  bNodeSocket *out_socket_value_float = (bNodeSocket *)node->outputs.first;
-  bNodeSocket *out_socket_value_int32 = out_socket_value_float->next;
-  bNodeSocket *out_socket_value_vector = out_socket_value_int32->next;
-  bNodeSocket *out_socket_value_color4f = out_socket_value_vector->next;
-
-  bke::nodeSetSocketAvailability(ntree, out_socket_value_float, data_type == CD_PROP_FLOAT);
-  bke::nodeSetSocketAvailability(ntree, out_socket_value_int32, data_type == CD_PROP_INT32);
-  bke::nodeSetSocketAvailability(ntree, out_socket_value_vector, data_type == CD_PROP_FLOAT3);
-  bke::nodeSetSocketAvailability(ntree, out_socket_value_color4f, data_type == CD_PROP_COLOR);
 }
 
 static void build_vert_to_vert_by_edge_map(const Span<int2> edges,
@@ -240,20 +199,20 @@ static void build_face_to_face_by_edge_map(const OffsetIndices<int> faces,
 }
 
 static GroupedSpan<int> create_mesh_map(const Mesh &mesh,
-                                        const eAttrDomain domain,
+                                        const AttrDomain domain,
                                         Array<int> &r_offsets,
                                         Array<int> &r_indices)
 {
   switch (domain) {
-    case ATTR_DOMAIN_POINT:
-      build_vert_to_vert_by_edge_map(mesh.edges(), mesh.totvert, r_offsets, r_indices);
+    case AttrDomain::Point:
+      build_vert_to_vert_by_edge_map(mesh.edges(), mesh.verts_num, r_offsets, r_indices);
       break;
-    case ATTR_DOMAIN_EDGE:
-      build_edge_to_edge_by_vert_map(mesh.edges(), mesh.totvert, r_offsets, r_indices);
+    case AttrDomain::Edge:
+      build_edge_to_edge_by_vert_map(mesh.edges(), mesh.verts_num, r_offsets, r_indices);
       break;
-    case ATTR_DOMAIN_FACE:
+    case AttrDomain::Face:
       build_face_to_face_by_edge_map(
-          mesh.faces(), mesh.corner_edges(), mesh.totedge, r_offsets, r_indices);
+          mesh.faces(), mesh.corner_edges(), mesh.edges_num, r_offsets, r_indices);
       break;
     default:
       BLI_assert_unreachable();
@@ -294,7 +253,7 @@ static Span<T> blur_on_mesh_exec(const Span<float> neighbor_weights,
 }
 
 static GSpan blur_on_mesh(const Mesh &mesh,
-                          const eAttrDomain domain,
+                          const AttrDomain domain,
                           const int iterations,
                           const Span<float> neighbor_weights,
                           const GMutableSpan buffer_a,
@@ -434,7 +393,7 @@ class BlurAttributeFieldInput final : public bke::GeometryFieldInput {
     GSpan result_buffer = buffer_a.as_span();
     switch (context.type()) {
       case GeometryComponent::Type::Mesh:
-        if (ELEM(context.domain(), ATTR_DOMAIN_POINT, ATTR_DOMAIN_EDGE, ATTR_DOMAIN_FACE)) {
+        if (ELEM(context.domain(), AttrDomain::Point, AttrDomain::Edge, AttrDomain::Face)) {
           if (const Mesh *mesh = context.mesh()) {
             result_buffer = blur_on_mesh(
                 *mesh, context.domain(), iterations_, neighbor_weights, buffer_a, buffer_b);
@@ -443,7 +402,7 @@ class BlurAttributeFieldInput final : public bke::GeometryFieldInput {
         break;
       case GeometryComponent::Type::Curve:
       case GeometryComponent::Type::GreasePencil:
-        if (context.domain() == ATTR_DOMAIN_POINT) {
+        if (context.domain() == AttrDomain::Point) {
           if (const bke::CurvesGeometry *curves = context.curves_or_strokes()) {
             result_buffer = blur_on_curves(
                 *curves, iterations_, neighbor_weights, buffer_a, buffer_b);
@@ -483,49 +442,25 @@ class BlurAttributeFieldInput final : public bke::GeometryFieldInput {
     return false;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const GeometryComponent &component) const override
+  std::optional<AttrDomain> preferred_domain(const GeometryComponent &component) const override
   {
-    const std::optional<eAttrDomain> domain = bke::try_detect_field_domain(component,
-                                                                           value_field_);
-    if (domain.has_value() && *domain == ATTR_DOMAIN_CORNER) {
-      return ATTR_DOMAIN_POINT;
+    const std::optional<AttrDomain> domain = bke::try_detect_field_domain(component, value_field_);
+    if (domain.has_value() && *domain == AttrDomain::Corner) {
+      return AttrDomain::Point;
     }
     return domain;
   }
 };
 
-static StringRefNull identifier_suffix(eCustomDataType data_type)
-{
-  switch (data_type) {
-    case CD_PROP_FLOAT:
-      return "Float";
-    case CD_PROP_INT32:
-      return "Int";
-    case CD_PROP_COLOR:
-      return "Color";
-    case CD_PROP_FLOAT3:
-      return "Vector";
-    default:
-      BLI_assert_unreachable();
-      return "";
-  }
-}
-
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  const eCustomDataType data_type = static_cast<eCustomDataType>(params.node().custom1);
-
   const int iterations = params.extract_input<int>("Iterations");
   Field<float> weight_field = params.extract_input<Field<float>>("Weight");
 
-  bke::attribute_math::convert_to_static_type(data_type, [&](auto dummy) {
-    using T = decltype(dummy);
-    static const std::string identifier = "Value_" + identifier_suffix(data_type);
-    Field<T> value_field = params.extract_input<Field<T>>(identifier);
-    Field<T> output_field{std::make_shared<BlurAttributeFieldInput>(
-        std::move(weight_field), std::move(value_field), iterations)};
-    params.set_output(identifier, std::move(output_field));
-  });
+  GField value_field = params.extract_input<GField>("Value");
+  GField output_field{std::make_shared<BlurAttributeFieldInput>(
+      std::move(weight_field), std::move(value_field), iterations)};
+  params.set_output<GField>("Value", std::move(output_field));
 }
 
 static void node_rna(StructRNA *srna)
@@ -550,9 +485,8 @@ static void node_register()
 {
   static bNodeType ntype;
   geo_node_type_base(&ntype, GEO_NODE_BLUR_ATTRIBUTE, "Blur Attribute", NODE_CLASS_ATTRIBUTE);
-  ntype.declare = node_declare;
   ntype.initfunc = node_init;
-  ntype.updatefunc = node_update;
+  ntype.declare = node_declare;
   ntype.draw_buttons = node_layout;
   ntype.geometry_node_execute = node_geo_exec;
   ntype.gather_link_search_ops = node_gather_link_searches;

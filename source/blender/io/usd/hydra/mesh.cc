@@ -6,9 +6,12 @@
 #include <pxr/base/tf/staticTokens.h>
 #include <pxr/imaging/hd/tokens.h>
 
+#include "BLI_array_utils.hh"
 #include "BLI_string.h"
+#include "BLI_vector_set.hh"
 
-#include "BKE_attribute.h"
+#include "BKE_attribute.hh"
+#include "BKE_customdata.hh"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_runtime.hh"
@@ -16,11 +19,11 @@
 #include "hydra_scene_delegate.h"
 #include "mesh.h"
 
-PXR_NAMESPACE_OPEN_SCOPE
-TF_DEFINE_PRIVATE_TOKENS(tokens_, (st));
-PXR_NAMESPACE_CLOSE_SCOPE
-
 namespace blender::io::hydra {
+
+namespace usdtokens {
+static const pxr::TfToken st("st", pxr::TfToken::Immortal);
+}
 
 MeshData::MeshData(HydraSceneDelegate *scene_delegate,
                    const Object *object,
@@ -96,7 +99,7 @@ pxr::VtValue MeshData::get_data(pxr::SdfPath const &id, pxr::TfToken const &key)
   if (key == pxr::HdTokens->normals) {
     return pxr::VtValue(submesh(id).normals);
   }
-  if (key == pxr::tokens_->st) {
+  if (key == usdtokens::st) {
     return pxr::VtValue(submesh(id).uvs);
   }
   if (key == pxr::HdTokens->points) {
@@ -147,7 +150,7 @@ pxr::HdPrimvarDescriptorVector MeshData::primvar_descriptors(
     }
     if (!submeshes_[0].uvs.empty()) {
       primvars.emplace_back(
-          pxr::tokens_->st, interpolation, pxr::HdPrimvarRoleTokens->textureCoordinate);
+          usdtokens::st, interpolation, pxr::HdPrimvarRoleTokens->textureCoordinate);
     }
   }
   return primvars;
@@ -217,6 +220,148 @@ const MeshData::SubMesh &MeshData::submesh(pxr::SdfPath const &id) const
   return submeshes_[index];
 }
 
+/**
+ * #VtArray::resize() does value initialization of every new value, which ends up being `memset`
+ * for the trivial attribute types we deal with here. This is unnecessary since every item is
+ * initialized via copy from a Blender mesh here anyway. This specializes the resize call to skip
+ * initialization.
+ */
+template<typename T> static void resize_uninitialized(pxr::VtArray<T> &array, const int new_size)
+{
+  static_assert(std::is_trivial_v<T>);
+  array.resize(new_size, [](auto /*begin*/, auto /*end*/) {});
+}
+
+static std::pair<bke::MeshNormalDomain, Span<float3>> get_mesh_normals(const Mesh &mesh)
+{
+  switch (mesh.normals_domain()) {
+    case bke::MeshNormalDomain::Face:
+      return {bke::MeshNormalDomain::Face, mesh.face_normals()};
+    case bke::MeshNormalDomain::Point:
+      return {bke::MeshNormalDomain::Point, mesh.vert_normals()};
+    case bke::MeshNormalDomain::Corner:
+      return {bke::MeshNormalDomain::Corner, mesh.corner_normals()};
+  }
+  BLI_assert_unreachable();
+  return {};
+}
+
+template<typename T>
+void gather_vert_data(const Span<int> verts,
+                      const bool copy_all_verts,
+                      const Span<T> src_data,
+                      MutableSpan<T> dst_data)
+{
+  if (copy_all_verts) {
+    array_utils::copy(src_data, dst_data);
+  }
+  else {
+    array_utils::gather(src_data, verts, dst_data);
+  }
+}
+
+template<typename T>
+void gather_face_data(const Span<int> tri_faces,
+                      const IndexMask &triangles,
+                      const Span<T> src_data,
+                      MutableSpan<T> dst_data)
+{
+  triangles.foreach_index_optimized<int>(GrainSize(1024), [&](const int src, const int dst) {
+    dst_data[dst] = src_data[tri_faces[src]];
+  });
+}
+
+template<typename T>
+void gather_corner_data(const Span<int3> corner_tris,
+                        const IndexMask &triangles,
+                        const Span<T> src_data,
+                        MutableSpan<T> dst_data)
+{
+  triangles.foreach_index_optimized<int>(GrainSize(1024), [&](const int src, const int dst) {
+    const int3 &tri = corner_tris[src];
+    dst_data[dst * 3 + 0] = src_data[tri[0]];
+    dst_data[dst * 3 + 1] = src_data[tri[1]];
+    dst_data[dst * 3 + 2] = src_data[tri[2]];
+  });
+}
+
+static void copy_submesh(const Mesh &mesh,
+                         const Span<float3> vert_positions,
+                         const Span<int> corner_verts,
+                         const Span<int3> corner_tris,
+                         const Span<int> tri_faces,
+                         const std::pair<bke::MeshNormalDomain, Span<float3>> normals,
+                         const Span<float2> uv_map,
+                         const IndexMask &triangles,
+                         MeshData::SubMesh &sm)
+{
+  resize_uninitialized(sm.face_vertex_indices, triangles.size() * 3);
+
+  /* If all triangles are part of this submesh and there are no loose vertices that shouldn't be
+   * copied (Hydra will warn about this), vertex index compression can be completely skipped. */
+  const bool copy_all_verts = triangles.size() == corner_tris.size() &&
+                              mesh.verts_no_face().count == 0;
+
+  int dst_verts_num;
+  VectorSet<int> verts;
+  if (copy_all_verts) {
+    bke::mesh::vert_tris_from_corner_tris(
+        corner_verts,
+        corner_tris,
+        MutableSpan(sm.face_vertex_indices.data(), sm.face_vertex_indices.size()).cast<int3>());
+    dst_verts_num = vert_positions.size();
+  }
+  else {
+    /* Compress vertex indices to be contiguous so it's only necessary to copy values
+     * for vertices actually used by the subset of triangles. */
+    verts.reserve(triangles.size());
+    triangles.foreach_index([&](const int src, const int dst) {
+      const int3 &tri = corner_tris[src];
+      sm.face_vertex_indices[dst * 3 + 0] = verts.index_of_or_add(corner_verts[tri[0]]);
+      sm.face_vertex_indices[dst * 3 + 1] = verts.index_of_or_add(corner_verts[tri[1]]);
+      sm.face_vertex_indices[dst * 3 + 2] = verts.index_of_or_add(corner_verts[tri[2]]);
+    });
+    dst_verts_num = verts.size();
+  }
+
+  resize_uninitialized(sm.vertices, dst_verts_num);
+  gather_vert_data(verts,
+                   copy_all_verts,
+                   vert_positions,
+                   MutableSpan(sm.vertices.data(), sm.vertices.size()).cast<float3>());
+
+  resize_uninitialized(sm.face_vertex_counts, triangles.size());
+  std::fill(sm.face_vertex_counts.begin(), sm.face_vertex_counts.end(), 3);
+
+  const Span<float3> src_normals = normals.second;
+  resize_uninitialized(sm.normals, triangles.size() * 3);
+  MutableSpan dst_normals = MutableSpan(sm.normals.data(), sm.normals.size()).cast<float3>();
+  switch (normals.first) {
+    case bke::MeshNormalDomain::Face:
+      triangles.foreach_index(GrainSize(1024), [&](const int src, const int dst) {
+        std::fill_n(&dst_normals[dst * 3], 3, src_normals[tri_faces[src]]);
+      });
+      break;
+    case bke::MeshNormalDomain::Point:
+      triangles.foreach_index(GrainSize(1024), [&](const int src, const int dst) {
+        const int3 &tri = corner_tris[src];
+        dst_normals[dst * 3 + 0] = src_normals[corner_verts[tri[0]]];
+        dst_normals[dst * 3 + 1] = src_normals[corner_verts[tri[1]]];
+        dst_normals[dst * 3 + 2] = src_normals[corner_verts[tri[2]]];
+      });
+      break;
+    case bke::MeshNormalDomain::Corner:
+      gather_corner_data(corner_tris, triangles, src_normals, dst_normals);
+      break;
+  }
+
+  if (!uv_map.is_empty()) {
+    resize_uninitialized(sm.uvs, triangles.size() * 3);
+    gather_corner_data(
+        corner_tris, triangles, uv_map, MutableSpan(sm.uvs.data(), sm.uvs.size()).cast<float2>());
+  }
+}
+
 void MeshData::write_submeshes(const Mesh *mesh)
 {
   const int mat_count = BKE_object_material_count_eval(reinterpret_cast<const Object *>(id));
@@ -225,71 +370,55 @@ void MeshData::write_submeshes(const Mesh *mesh)
     submeshes_[i].mat_index = i;
   }
 
-  /* Fill submeshes data */
-  const int *material_indices = BKE_mesh_material_indices(mesh);
-
-  const Span<int> looptri_faces = mesh->looptri_faces();
+  const Span<float3> vert_positions = mesh->vert_positions();
   const Span<int> corner_verts = mesh->corner_verts();
-  const Span<MLoopTri> looptris = mesh->looptris();
+  const Span<int3> corner_tris = mesh->corner_tris();
+  const Span<int> tri_faces = mesh->corner_tri_faces();
+  const std::pair<bke::MeshNormalDomain, Span<float3>> normals = get_mesh_normals(*mesh);
+  const bke::AttributeAccessor attributes = mesh->attributes();
+  const StringRef active_uv = CustomData_get_active_layer_name(&mesh->corner_data, CD_PROP_FLOAT2);
+  const VArraySpan uv_map = *attributes.lookup<float2>(active_uv, bke::AttrDomain::Corner);
+  const VArraySpan material_indices = *attributes.lookup<int>("material_index",
+                                                              bke::AttrDomain::Face);
 
-  Span<float3> corner_normals;
-  if (mesh->normals_domain() == blender::bke::MeshNormalDomain::Corner) {
-    corner_normals = mesh->corner_normals();
-  }
-
-  const float2 *uv_map = static_cast<const float2 *>(
-      CustomData_get_layer(&mesh->loop_data, CD_PROP_FLOAT2));
-
-  for (const int i : looptris.index_range()) {
-    int mat_ind = material_indices ? material_indices[looptri_faces[i]] : 0;
-    const MLoopTri &lt = looptris[i];
-    SubMesh &sm = submeshes_[mat_ind];
-
-    sm.face_vertex_counts.push_back(3);
-    sm.face_vertex_indices.push_back(corner_verts[lt.tri[0]]);
-    sm.face_vertex_indices.push_back(corner_verts[lt.tri[1]]);
-    sm.face_vertex_indices.push_back(corner_verts[lt.tri[2]]);
-
-    if (!corner_normals.is_empty()) {
-      sm.normals.push_back(pxr::GfVec3f(&corner_normals[lt.tri[0]].x));
-      sm.normals.push_back(pxr::GfVec3f(&corner_normals[lt.tri[1]].x));
-      sm.normals.push_back(pxr::GfVec3f(&corner_normals[lt.tri[2]].x));
-    }
-
-    if (uv_map) {
-      sm.uvs.push_back(pxr::GfVec2f(&uv_map[lt.tri[0]].x));
-      sm.uvs.push_back(pxr::GfVec2f(&uv_map[lt.tri[1]].x));
-      sm.uvs.push_back(pxr::GfVec2f(&uv_map[lt.tri[2]].x));
-    }
-  }
-
-  /* Remove submeshes without faces */
-  submeshes_.remove_if([](const SubMesh &submesh) { return submesh.face_vertex_counts.empty(); });
-  if (submeshes_.is_empty()) {
+  if (material_indices.is_empty()) {
+    copy_submesh(*mesh,
+                 vert_positions,
+                 corner_verts,
+                 corner_tris,
+                 tri_faces,
+                 normals,
+                 uv_map,
+                 corner_tris.index_range(),
+                 submeshes_.first());
     return;
   }
 
-  pxr::VtVec3fArray vertices(mesh->totvert);
-  const Span<float3> positions = mesh->vert_positions();
-  MutableSpan(vertices.data(), vertices.size()).copy_from(positions.cast<pxr::GfVec3f>());
+  IndexMaskMemory memory;
+  Array<IndexMask> triangles_by_material(submeshes_.size());
+  const int max_index = std::max(mat_count - 1, 0);
+  IndexMask::from_groups<int>(
+      corner_tris.index_range(),
+      memory,
+      [&](const int i) { return std::min(material_indices[tri_faces[i]], max_index); },
+      triangles_by_material);
 
-  if (submeshes_.size() == 1) {
-    submeshes_[0].vertices = std::move(vertices);
-  }
-  else {
-    /* Optimizing submeshes: getting only used vertices, rearranged indices */
-    for (SubMesh &sm : submeshes_) {
-      Vector<int> index_map(vertices.size(), 0);
-      for (int &face_vertex_index : sm.face_vertex_indices) {
-        const int v = face_vertex_index;
-        if (index_map[v] == 0) {
-          sm.vertices.push_back(vertices[v]);
-          index_map[v] = sm.vertices.size();
-        }
-        face_vertex_index = index_map[v] - 1;
-      }
+  threading::parallel_for(submeshes_.index_range(), 1, [&](const IndexRange range) {
+    for (const int i : range) {
+      copy_submesh(*mesh,
+                   vert_positions,
+                   corner_verts,
+                   corner_tris,
+                   tri_faces,
+                   normals,
+                   uv_map,
+                   triangles_by_material[i],
+                   submeshes_[i]);
     }
-  }
+  });
+
+  /* Remove submeshes without faces */
+  submeshes_.remove_if([](const SubMesh &submesh) { return submesh.face_vertex_counts.empty(); });
 }
 
 void MeshData::update_prims()

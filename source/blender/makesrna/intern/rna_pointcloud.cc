@@ -22,8 +22,8 @@
 
 #  include "BLI_math_vector.h"
 
-#  include "BKE_customdata.h"
-#  include "BKE_pointcloud.h"
+#  include "BKE_customdata.hh"
+#  include "BKE_pointcloud.hh"
 
 #  include "DEG_depsgraph.hh"
 

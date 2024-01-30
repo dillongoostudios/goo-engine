@@ -21,11 +21,12 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_path.h"
-#include "BKE_armature.h"
-#include "BKE_curve.h"
+#include "BKE_armature.hh"
+#include "BKE_curve.hh"
 #include "BKE_displist.h"
 #include "BKE_fcurve.h"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_scene.h"
 
 #include "BIK_api.h"
@@ -92,7 +93,8 @@ static void splineik_init_tree_from_pchan(Scene * /*scene*/,
   /* Find the root bone and the chain of bones from the root to the tip.
    * NOTE: this assumes that the bones are connected, but that may not be true... */
   for (pchan = pchan_tip; pchan && (segcount < ik_data->chainlen);
-       pchan = pchan->parent, segcount++) {
+       pchan = pchan->parent, segcount++)
+  {
     /* Store this segment in the chain. */
     pchan_chain[segcount] = pchan;
 
@@ -216,7 +218,7 @@ static bool splineik_evaluate_init(tSplineIK_Tree *tree, tSplineIk_EvalState *st
     return false;
   }
 
-  CurveCache *cache = ik_data->tar->runtime.curve_cache;
+  CurveCache *cache = ik_data->tar->runtime->curve_cache;
 
   if (ELEM(nullptr, cache, cache->anim_path_accum_length)) {
     return false;
@@ -286,7 +288,7 @@ static int position_tail_on_spline(bSplineIKConstraint *ik_data,
   /* This is using the tessellated curve data.
    * So we are working with piece-wise linear curve segments.
    * The same method is used in #BKE_where_on_path to get curve location data. */
-  const CurveCache *cache = ik_data->tar->runtime.curve_cache;
+  const CurveCache *cache = ik_data->tar->runtime->curve_cache;
   const float *seg_accum_len = cache->anim_path_accum_length;
 
   int max_seg_idx = BKE_anim_path_get_array_size(cache) - 1;

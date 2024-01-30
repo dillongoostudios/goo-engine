@@ -24,10 +24,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_deform.h"
-#include "BKE_editmesh.h"
-#include "BKE_lib_id.h"
+#include "BKE_editmesh.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_screen.hh"
@@ -48,9 +48,9 @@
 
 // #define DEBUG_TIME
 
-#include "PIL_time.h"
+#include "BLI_time.h"
 #ifdef DEBUG_TIME
-#  include "PIL_time_utildefines.h"
+#  include "BLI_time_utildefines.h"
 
 #endif
 
@@ -168,7 +168,7 @@ static void smooth_iter__simple(CorrectiveSmoothModifierData *csmd,
   const float lambda = csmd->lambda;
   int i;
 
-  const int edges_num = mesh->totedge;
+  const int edges_num = mesh->edges_num;
   const blender::Span<blender::int2> edges = mesh->edges();
 
   struct SmoothingData_Simple {
@@ -243,7 +243,7 @@ static void smooth_iter__length_weight(CorrectiveSmoothModifierData *csmd,
                                        uint iterations)
 {
   const float eps = FLT_EPSILON * 10.0f;
-  const uint edges_num = uint(mesh->totedge);
+  const uint edges_num = uint(mesh->edges_num);
   /* NOTE: the way this smoothing method works, its approx half as strong as the simple-smooth,
    * and 2.0 rarely spikes, double the value for consistent behavior. */
   const float lambda = csmd->lambda * 2.0f;
@@ -431,7 +431,7 @@ static void calc_tangent_spaces(const Mesh *mesh,
                                 float *r_tangent_weights,
                                 float *r_tangent_weights_per_vertex)
 {
-  const uint mvert_num = uint(mesh->totvert);
+  const uint mvert_num = uint(mesh->verts_num);
   const blender::OffsetIndices faces = mesh->faces();
   blender::Span<int> corner_verts = mesh->corner_verts();
 
@@ -610,7 +610,8 @@ static void correctivesmooth_modifier_do(ModifierData *md,
   }
 
   if ((csmd->rest_source == MOD_CORRECTIVESMOOTH_RESTSOURCE_BIND) &&
-      (csmd->bind_coords == nullptr)) {
+      (csmd->bind_coords == nullptr))
+  {
     BKE_modifier_set_error(ob, md, "Bind data required");
     goto error;
   }
@@ -633,7 +634,7 @@ static void correctivesmooth_modifier_do(ModifierData *md,
       goto error;
     }
     else {
-      const int me_numVerts = (em) ? em->bm->totvert : ((Mesh *)ob->data)->totvert;
+      const int me_numVerts = (em) ? em->bm->totvert : ((Mesh *)ob->data)->verts_num;
 
       if (me_numVerts != vertexCos.size()) {
         BKE_modifier_set_error(ob,
@@ -667,9 +668,9 @@ static void correctivesmooth_modifier_do(ModifierData *md,
         is_rest_coords_alloc = true;
       }
       else {
-        const Mesh *me = static_cast<const Mesh *>(ob->data);
-        rest_coords = reinterpret_cast<const float(*)[3]>(me->vert_positions().data());
-        me_numVerts = me->totvert;
+        const Mesh *object_mesh = static_cast<const Mesh *>(ob->data);
+        rest_coords = reinterpret_cast<const float(*)[3]>(object_mesh->vert_positions().data());
+        me_numVerts = object_mesh->verts_num;
       }
 
       BLI_assert(me_numVerts == int(vertexCos.size()));
@@ -749,15 +750,9 @@ error:
 static void deform_verts(ModifierData *md,
                          const ModifierEvalContext *ctx,
                          Mesh *mesh,
-                         float (*vertexCos)[3],
-                         int verts_num)
+                         blender::MutableSpan<blender::float3> positions)
 {
-  correctivesmooth_modifier_do(md,
-                               ctx->depsgraph,
-                               ctx->object,
-                               mesh,
-                               {reinterpret_cast<blender::float3 *>(vertexCos), verts_num},
-                               nullptr);
+  correctivesmooth_modifier_do(md, ctx->depsgraph, ctx->object, mesh, positions, nullptr);
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
@@ -837,7 +832,7 @@ ModifierTypeInfo modifierType_CorrectiveSmooth = {
     /*struct_name*/ "CorrectiveSmoothModifierData",
     /*struct_size*/ sizeof(CorrectiveSmoothModifierData),
     /*srna*/ &RNA_CorrectiveSmoothModifier,
-    /*type*/ eModifierTypeType_OnlyDeform,
+    /*type*/ ModifierTypeType::OnlyDeform,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsEditmode,
     /*icon*/ ICON_MOD_SMOOTH,
 
@@ -863,4 +858,5 @@ ModifierTypeInfo modifierType_CorrectiveSmooth = {
     /*panel_register*/ panel_register,
     /*blend_write*/ blend_write,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
 };

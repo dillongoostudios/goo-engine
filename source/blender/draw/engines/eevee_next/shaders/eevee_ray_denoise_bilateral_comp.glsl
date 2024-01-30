@@ -21,6 +21,7 @@
 #pragma BLENDER_REQUIRE(gpu_shader_codegen_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_sampling_lib.glsl)
 #pragma BLENDER_REQUIRE(eevee_gbuffer_lib.glsl)
+#pragma BLENDER_REQUIRE(eevee_closure_lib.glsl)
 
 float bilateral_depth_weight(vec3 center_N, vec3 center_P, vec3 sample_P)
 {
@@ -53,47 +54,11 @@ float bilateral_normal_weight(vec3 center_N, vec3 sample_N)
 /* In order to remove some more fireflies, "tone-map" the color samples during the accumulation. */
 vec3 to_accumulation_space(vec3 color)
 {
-  return color / (1.0 + dot(color, vec3(1.0)));
+  return color / (1.0 + reduce_add(color));
 }
 vec3 from_accumulation_space(vec3 color)
 {
-  return color / (1.0 - dot(color, vec3(1.0)));
-}
-
-void gbuffer_load_closure_data(sampler2DArray gbuf_closure_tx,
-                               ivec2 texel,
-                               out ClosureDiffuse closure)
-{
-  vec4 data_in = texelFetch(gbuf_closure_tx, ivec3(texel, 1), 0);
-
-  closure.N = gbuffer_normal_unpack(data_in.xy);
-}
-
-void gbuffer_load_closure_data(sampler2DArray gbuf_closure_tx,
-                               ivec2 texel,
-                               out ClosureRefraction closure)
-{
-  vec4 data_in = texelFetch(gbuf_closure_tx, ivec3(texel, 1), 0);
-
-  closure.N = gbuffer_normal_unpack(data_in.xy);
-  if (gbuffer_is_refraction(data_in)) {
-    closure.roughness = data_in.z;
-    closure.ior = gbuffer_ior_unpack(data_in.w);
-  }
-  else {
-    closure.roughness = 1.0;
-    closure.ior = 1.1;
-  }
-}
-
-void gbuffer_load_closure_data(sampler2DArray gbuf_closure_tx,
-                               ivec2 texel,
-                               out ClosureReflection closure)
-{
-  vec4 data_in = texelFetch(gbuf_closure_tx, ivec3(texel, 0), 0);
-
-  closure.N = gbuffer_normal_unpack(data_in.xy);
-  closure.roughness = data_in.z;
+  return color / (1.0 - reduce_add(color));
 }
 
 void main()
@@ -101,28 +66,23 @@ void main()
   const uint tile_size = RAYTRACE_GROUP_SIZE;
   uvec2 tile_coord = unpackUvec2x16(tiles_coord_buf[gl_WorkGroupID.x]);
   ivec2 texel_fullres = ivec2(gl_LocalInvocationID.xy + tile_coord * tile_size);
-  vec2 center_uv = vec2(texel_fullres) * uniform_buf.raytrace.full_resolution_inv;
+  vec2 center_uv = (vec2(texel_fullres) + 0.5) * uniform_buf.raytrace.full_resolution_inv;
 
   float center_depth = texelFetch(depth_tx, texel_fullres, 0).r;
   vec3 center_P = drw_point_screen_to_world(vec3(center_uv, center_depth));
 
-#if defined(RAYTRACE_DIFFUSE)
-  ClosureDiffuse sample_closure, center_closure;
-#elif defined(RAYTRACE_REFRACT)
-  ClosureRefraction sample_closure, center_closure;
-#elif defined(RAYTRACE_REFLECT)
-  ClosureReflection sample_closure, center_closure;
-#else
-#  error
-#endif
-  gbuffer_load_closure_data(gbuf_closure_tx, texel_fullres, center_closure);
+  GBufferReader gbuf = gbuffer_read(
+      gbuf_header_tx, gbuf_closure_tx, gbuf_normal_tx, texel_fullres);
 
-#if defined(RAYTRACE_DIFFUSE)
-  float roughness = 1.0;
-#else
-  float roughness = center_closure.roughness;
-#endif
+  bool has_valid_closure = closure_index < gbuf.closure_count;
+  if (!has_valid_closure) {
+    /* Output nothing. This shouldn't even be loaded. */
+    return;
+  }
 
+  ClosureUndetermined center_closure = gbuffer_closure_get(gbuf, closure_index);
+
+  float roughness = closure_apparent_roughness_get(center_closure);
   float variance = imageLoad(in_variance_img, texel_fullres).r;
   vec3 in_radiance = imageLoad(in_radiance_img, texel_fullres).rgb;
 
@@ -155,15 +115,14 @@ void main()
     ivec2 offset = ivec2(floor(offset_f + 0.5));
 
     ivec2 sample_texel = texel_fullres + offset;
-    ivec2 sample_tile = sample_texel / RAYTRACE_GROUP_SIZE;
+    ivec3 sample_tile = ivec3(sample_texel / RAYTRACE_GROUP_SIZE, closure_index);
     /* Make sure the sample has been processed and do not contain garbage data. */
-    bool unprocessed_tile = imageLoad(tile_mask_img, sample_tile).r == 0;
-    if (unprocessed_tile) {
+    if (imageLoad(tile_mask_img, sample_tile).r == 0u) {
       continue;
     }
 
     float sample_depth = texelFetch(depth_tx, sample_texel, 0).r;
-    vec2 sample_uv = vec2(sample_texel) * uniform_buf.raytrace.full_resolution_inv;
+    vec2 sample_uv = (vec2(sample_texel) + 0.5) * uniform_buf.raytrace.full_resolution_inv;
     vec3 sample_P = drw_point_screen_to_world(vec3(sample_uv, sample_depth));
 
     /* Background case. */
@@ -171,19 +130,27 @@ void main()
       continue;
     }
 
-    gbuffer_load_closure_data(gbuf_closure_tx, sample_texel, sample_closure);
+    vec3 radiance = imageLoad(in_radiance_img, sample_texel).rgb;
+
+    /* Do not gather unprocessed pixels. */
+    if (all(equal(radiance, FLT_11_11_10_MAX))) {
+      continue;
+    }
+
+    GBufferReader sample_gbuf = gbuffer_read(
+        gbuf_header_tx, gbuf_closure_tx, gbuf_normal_tx, sample_texel);
+
+    if (closure_index >= sample_gbuf.closure_count) {
+      continue;
+    }
+
+    ClosureUndetermined sample_closure = gbuffer_closure_get(sample_gbuf, closure_index);
 
     float depth_weight = bilateral_depth_weight(center_closure.N, center_P, sample_P);
     float spatial_weight = bilateral_spatial_weight(filter_size, vec2(offset));
     float normal_weight = bilateral_normal_weight(center_closure.N, sample_closure.N);
-
     float weight = depth_weight * spatial_weight * normal_weight;
 
-    vec3 radiance = imageLoad(in_radiance_img, sample_texel).rgb;
-    /* Do not gather unprocessed pixels. */
-    if (all(equal(in_radiance, FLT_11_11_10_MAX))) {
-      continue;
-    }
     accum_radiance += to_accumulation_space(radiance) * weight;
     accum_weight += weight;
   }

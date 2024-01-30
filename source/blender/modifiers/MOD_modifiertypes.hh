@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
 /* ****************** Type structures for all modifiers ****************** */
 
@@ -73,10 +73,14 @@ extern ModifierTypeInfo modifierType_Nodes;
 extern ModifierTypeInfo modifierType_MeshToVolume;
 extern ModifierTypeInfo modifierType_VolumeDisplace;
 extern ModifierTypeInfo modifierType_VolumeToMesh;
+extern ModifierTypeInfo modifierType_GreasePencilOpacity;
+extern ModifierTypeInfo modifierType_GreasePencilSubdiv;
+extern ModifierTypeInfo modifierType_GreasePencilColor;
+extern ModifierTypeInfo modifierType_GreasePencilTint;
 
 /* MOD_util.cc */
 
 /**
- * Only called by `BKE_modifier.h/modifier.cc`
+ * Only called by `BKE_modifier.hh/modifier.cc`
  */
 void modifier_type_init(ModifierTypeInfo *types[]);

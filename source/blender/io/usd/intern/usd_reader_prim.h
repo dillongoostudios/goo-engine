@@ -9,12 +9,13 @@
 
 #include "usd.h"
 
+#include "BLI_map.hh"
+
 #include "WM_types.hh"
 
 #include <pxr/usd/sdf/path.h>
 #include <pxr/usd/usd/prim.h>
 
-#include <map>
 #include <string>
 
 struct CacheFile;
@@ -43,18 +44,18 @@ struct ImportSettings {
 
   bool validate_meshes;
 
-  CacheFile *cache_file;
+  std::function<CacheFile *()> get_cache_file;
 
   /* Map a USD material prim path to a Blender material name.
    * This map is updated by readers during stage traversal.
    * This field is mutable because it is used to keep track
    * of what the importer is doing. This is necessary even
    * when all the other import settings are to remain const. */
-  mutable std::map<std::string, std::string> usd_path_to_mat_name;
+  mutable blender::Map<std::string, std::string> usd_path_to_mat_name;
   /* Map a material name to Blender material.
    * This map is updated by readers during stage traversal,
    * and is mutable similar to the map above. */
-  mutable std::map<std::string, Material *> mat_name_to_mat;
+  mutable blender::Map<std::string, Material *> mat_name_to_mat;
 
   /* We use the stage metersPerUnit to convert camera properties from USD scene units to the
    * correct millimeter scale that Blender uses for camera parameters. */
@@ -73,7 +74,7 @@ struct ImportSettings {
         sequence_offset(0),
         read_flag(0),
         validate_meshes(false),
-        cache_file(NULL),
+        get_cache_file(nullptr),
         stage_meters_per_unit(1.0),
         skip_prefix(pxr::SdfPath{})
   {

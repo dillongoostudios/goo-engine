@@ -14,6 +14,7 @@ set(INC
 set(INC_SYS
   ../../../extern/wcwidth
   ../../../extern/json/include
+  ../../../extern/fmtlib/include
 
   ${EIGEN3_INCLUDE_DIRS}
   ${ZLIB_INCLUDE_DIRS}
@@ -42,8 +43,8 @@ set(SRC
   intern/BLI_mmap.c
   intern/BLI_timer.c
   intern/DLRB_tree.c
-  intern/array_store.c
-  intern/array_store_utils.c
+  intern/array_store.cc
+  intern/array_store_utils.cc
   intern/array_utils.c
   intern/array_utils.cc
   intern/astar.c
@@ -103,7 +104,7 @@ set(SRC
   intern/math_color_inline.c
   intern/math_geom.cc
   intern/math_geom_inline.c
-  intern/math_interp.c
+  intern/math_interp.cc
   intern/math_matrix.c
   intern/math_matrix.cc
   intern/math_rotation.c
@@ -120,6 +121,7 @@ set(SRC
   intern/noise.c
   intern/noise.cc
   intern/offset_indices.cc
+  intern/ordered_edge.cc
   intern/path_util.cc
   intern/polyfill_2d.c
   intern/polyfill_2d_beautify.c
@@ -132,7 +134,6 @@ set(SRC
   intern/serialize.cc
   intern/session_uuid.c
   intern/smaa_textures.c
-  intern/smallhash.c
   intern/sort.c
   intern/sort_utils.c
   intern/stack.c
@@ -158,7 +159,6 @@ set(SRC
   intern/uvproject.c
   intern/vector.cc
   intern/virtual_array.cc
-  intern/voronoi_2d.c
   intern/voxel.c
   intern/winstuff.cc
   intern/winstuff_dir.cc
@@ -210,7 +210,7 @@ set(SRC
   BLI_cpp_type_make.hh
   BLI_cpp_types.hh
   BLI_cpp_types_make.hh
-  BLI_delaunay_2d.h
+  BLI_delaunay_2d.hh
   BLI_devirtualize_parameters.hh
   BLI_dial_2d.h
   BLI_disjoint_set.hh
@@ -287,11 +287,12 @@ set(SRC
   BLI_math_euler_types.hh
   BLI_math_geom.h
   BLI_math_inline.h
-  BLI_math_interp.h
+  BLI_math_interp.hh
   BLI_math_matrix.h
   BLI_math_matrix.hh
   BLI_math_matrix_types.hh
   BLI_math_mpq.hh
+  BLI_math_numbers.hh
   BLI_math_quaternion.hh
   BLI_math_quaternion_types.hh
   BLI_math_rotation.h
@@ -340,7 +341,6 @@ set(SRC
   BLI_shared_cache.hh
   BLI_simd.h
   BLI_smaa_textures.h
-  BLI_smallhash.h
   BLI_sort.h
   BLI_sort.hh
   BLI_sort_utils.h
@@ -355,6 +355,7 @@ set(SRC
   BLI_string_utf8.h
   BLI_string_utf8_symbols.h
   BLI_string_utils.hh
+  BLI_struct_equality_utils.hh
   BLI_sub_frame.hh
   BLI_sys_types.h
   BLI_system.h
@@ -362,6 +363,8 @@ set(SRC
   BLI_task.hh
   BLI_tempfile.h
   BLI_threads.h
+  BLI_time.h
+  BLI_time_utildefines.h
   BLI_timecode.h
   BLI_timeit.hh
   BLI_timer.h
@@ -379,11 +382,9 @@ set(SRC
   BLI_vector_set_slots.hh
   BLI_virtual_array.hh
   BLI_virtual_vector_array.hh
-  BLI_voronoi_2d.h
   BLI_voxel.h
   BLI_winstuff.h
-  PIL_time.h
-  PIL_time_utildefines.h
+  BLI_winstuff_com.hh
 
   # Without these files listed, they aren't known to CMake.
   ../../../extern/json/include/json.hpp
@@ -395,6 +396,7 @@ set(LIB
   PRIVATE bf::intern::guardedalloc
   extern_wcwidth
   PRIVATE bf::intern::atomic
+  PRIVATE extern_fmtlib
   ${ZLIB_LIBRARIES}
   ${ZSTD_LIBRARIES}
 )
@@ -523,6 +525,7 @@ if(WITH_GTESTS)
     tests/BLI_math_bits_test.cc
     tests/BLI_math_color_test.cc
     tests/BLI_math_geom_test.cc
+    tests/BLI_math_interp_test.cc
     tests/BLI_math_matrix_test.cc
     tests/BLI_math_matrix_types_test.cc
     tests/BLI_math_rotation_test.cc
@@ -569,8 +572,7 @@ if(WITH_GTESTS)
   set(TEST_LIB
     bf_blenlib
   )
-  include(GTestTesting)
-  blender_add_test_executable(blenlib "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+  blender_add_test_suite_executable(BLI "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
 
   add_subdirectory(tests/performance)
 endif()

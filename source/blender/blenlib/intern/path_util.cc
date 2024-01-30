@@ -8,9 +8,9 @@
  */
 
 #include <algorithm> /* For `min/max`. */
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cctype>
+#include <cstdlib>
+#include <cstring>
 
 #include "DNA_listBase.h"
 
@@ -882,28 +882,28 @@ bool BLI_path_parent_dir(char *path)
   return true;
 }
 
-bool BLI_path_parent_dir_until_exists(char *dir)
+bool BLI_path_parent_dir_until_exists(char *path)
 {
   bool valid_path = true;
 
   /* Loop as long as cur path is not a dir, and we can get a parent path. */
-  while ((BLI_access(dir, R_OK) != 0) && (valid_path = BLI_path_parent_dir(dir))) {
+  while ((BLI_access(path, R_OK) != 0) && (valid_path = BLI_path_parent_dir(path))) {
     /* Pass. */
   }
-  return (valid_path && dir[0]);
+  return (valid_path && path[0]);
 }
 
 /**
  * Looks for a sequence of "#" characters in the last slash-separated component of `path`,
  * returning the indexes of the first and one past the last character in the sequence in
- * `char_start` and `char_end` respectively.
+ * `r_char_start` and `r_char_end` respectively.
  *
- * \param char_start: The first `#` character.
- * \param char_end: The last `#` character +1.
+ * \param r_char_start: The first `#` character.
+ * \param r_char_end: The last `#` character +1.
  *
  * \return true if a frame sequence range was found.
  */
-static bool path_frame_chars_find_range(const char *path, int *char_start, int *char_end)
+static bool path_frame_chars_find_range(const char *path, int *r_char_start, int *r_char_end)
 {
   uint ch_sta, ch_end, i;
   /* Insert current frame: `file###` -> `file001`. */
@@ -925,13 +925,13 @@ static bool path_frame_chars_find_range(const char *path, int *char_start, int *
   }
 
   if (ch_end) {
-    *char_start = ch_sta;
-    *char_end = ch_end;
+    *r_char_start = ch_sta;
+    *r_char_end = ch_end;
     return true;
   }
 
-  *char_start = -1;
-  *char_end = -1;
+  *r_char_start = -1;
+  *r_char_end = -1;
   return false;
 }
 

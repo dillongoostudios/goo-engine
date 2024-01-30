@@ -4,8 +4,8 @@
 
 #include "usd_reader_geom.h"
 
-#include "BKE_lib_id.h"
-#include "BKE_modifier.h"
+#include "BKE_lib_id.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 
 #include "BLI_listbase.h"
@@ -22,12 +22,16 @@ namespace blender::io::usd {
 
 void USDGeomReader::add_cache_modifier()
 {
+  if (!settings_->get_cache_file) {
+    return;
+  }
+
   ModifierData *md = BKE_modifier_new(eModifierType_MeshSequenceCache);
   BLI_addtail(&object_->modifiers, md);
 
   MeshSeqCacheModifierData *mcmd = reinterpret_cast<MeshSeqCacheModifierData *>(md);
 
-  mcmd->cache_file = settings_->cache_file;
+  mcmd->cache_file = settings_->get_cache_file();
   id_us_plus(&mcmd->cache_file->id);
   mcmd->read_flag = import_params_.mesh_read_flag;
 

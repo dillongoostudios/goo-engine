@@ -1,11 +1,11 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.0.0 Beta (b'551927bbe355')\n"
+"Project-Id-Version: Blender 4.1.0 Alpha (b'acbb91b192da')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-11-06 12:01:38\n"
-"PO-Revision-Date: 2023-10-08 06:34+0000\n"
-"Last-Translator: Wannes Malfait <wannes.malfait@gmail.com>\n"
+"POT-Creation-Date: 2024-01-15 10:52:30\n"
+"PO-Revision-Date: 2023-12-21 01:55+0000\n"
+"Last-Translator: Lisa <blendergirl@tutanota.com>\n"
 "Language-Team: Dutch <https://translate.blender.org/projects/blender-ui/ui/nl/>\n"
 "Language: nl\n"
 "MIME-Version: 1.0\n"
@@ -478,6 +478,14 @@ msgid "World"
 msgstr "Wereld"
 
 
+msgid "All"
+msgstr "Alle"
+
+
+msgid "Custom"
+msgstr "Aangepast"
+
+
 msgid "Options"
 msgstr "Opties"
 
@@ -487,7 +495,7 @@ msgstr "Data Type"
 
 
 msgid "Vector"
-msgstr "Punt"
+msgstr "Vector"
 
 
 msgid "True or false"
@@ -495,7 +503,7 @@ msgstr "Waar of niet waar"
 
 
 msgid "2D Vector"
-msgstr "2D Punt"
+msgstr "2D Vector"
 
 
 msgid "Domain"
@@ -512,6 +520,10 @@ msgstr "Rand"
 
 msgid "Face"
 msgstr "Vlak"
+
+
+msgid "Layer"
+msgstr "Laag"
 
 
 msgid "File Path"
@@ -818,12 +830,12 @@ msgid "Bones"
 msgstr "Botten"
 
 
+msgid "Index"
+msgstr "Index"
+
+
 msgid "Visible"
 msgstr "Zichtbaar"
-
-
-msgid "Custom"
-msgstr "Aangepast"
 
 
 msgid "Has Color"
@@ -856,10 +868,6 @@ msgstr "Kleur van Punt"
 
 msgid "Dissolve"
 msgstr "Oplossen"
-
-
-msgid "All"
-msgstr "Alle"
 
 
 msgid "Precision"
@@ -1193,10 +1201,6 @@ msgstr "Vlak"
 
 msgid "View"
 msgstr "Weergave"
-
-
-msgid "Index"
-msgstr "Index"
 
 
 msgid "Segments"
@@ -1747,10 +1751,6 @@ msgid "Locked"
 msgstr "Vergrendeld"
 
 
-msgid "Layer"
-msgstr "Laag"
-
-
 msgid "Grid"
 msgstr "Rooster"
 
@@ -1997,12 +1997,56 @@ msgid "Show Line"
 msgstr "Toon Lijn"
 
 
-msgid "Is Indirect"
-msgstr "Is Indirect"
+msgid "Brush"
+msgstr "Kwast"
+
+
+msgid "Font"
+msgstr "Lettertype"
+
+
+msgid "Key"
+msgstr "Sleutel"
 
 
 msgid "Library"
 msgstr "Bibliotheek"
+
+
+msgid "Light"
+msgstr "Licht"
+
+
+msgid "Mask"
+msgstr "Mask"
+
+
+msgid "Node Tree"
+msgstr "Node Boom"
+
+
+msgid "Particle"
+msgstr "Deeltje"
+
+
+msgid "Sound"
+msgstr "Geluid"
+
+
+msgid "Text"
+msgstr "Tekst"
+
+
+msgid "Workspace"
+msgstr "Werkomgeving"
+
+
+msgid "World"
+msgstr "Wereld"
+
+
+msgid "Is Indirect"
+msgstr "Is Indirect"
 
 
 msgid "Full Name"
@@ -2067,10 +2111,6 @@ msgstr "Geprojecteerd"
 
 msgid "Repeat"
 msgstr "Herhaal"
-
-
-msgid "Brush"
-msgstr "Kwast"
 
 
 msgid "Elastic"
@@ -2229,10 +2269,6 @@ msgid "Edit Format"
 msgstr "Bewerk Formaat"
 
 
-msgid "Font"
-msgstr "Lettertype"
-
-
 msgid "Font Size"
 msgstr "Groote Lettertype"
 
@@ -2263,10 +2299,6 @@ msgstr "Min"
 
 msgid "Max"
 msgstr "Max"
-
-
-msgid "Node Tree"
-msgstr "Node Boom"
 
 
 msgid "Rounds"
@@ -2469,10 +2501,6 @@ msgid "Material Slot"
 msgstr "Materiaal Plek"
 
 
-msgid "Particle"
-msgstr "Deeltje"
-
-
 msgid "Death"
 msgstr "Dood"
 
@@ -2566,10 +2594,6 @@ msgid "Mute the speaker"
 msgstr "Demp de speaker"
 
 
-msgid "Sound"
-msgstr "Geluid"
-
-
 msgid "Area"
 msgstr "Gebied"
 
@@ -2584,10 +2608,6 @@ msgstr "Spiegel Y"
 
 msgid "Sharp"
 msgstr "Scherp"
-
-
-msgid "Workspace"
-msgstr "Werkomgeving"
 
 
 msgid "Animation"
@@ -2812,10 +2832,6 @@ msgid "Active Point"
 msgstr "Actieve Punt"
 
 
-msgid "Mask"
-msgstr "Mask"
-
-
 msgctxt "MovieClip"
 msgid "Clip"
 msgstr "Clip"
@@ -2837,10 +2853,6 @@ msgid "Channel"
 msgstr "Kanaal"
 
 
-msgid "Key"
-msgstr "Sleutel"
-
-
 msgid "Select Linked"
 msgstr "Selecteer Aaneengesloten"
 
@@ -2848,10 +2860,6 @@ msgstr "Selecteer Aaneengesloten"
 msgctxt "Operator"
 msgid "Add"
 msgstr "Toevoegen"
-
-
-msgid "Text"
-msgstr "Tekst"
 
 
 msgid "Layout"
@@ -2937,10 +2945,6 @@ msgstr "Haken"
 
 msgid "Add Image"
 msgstr "Voeg Afbeelding Toe"
-
-
-msgid "Light"
-msgstr "Licht"
 
 
 msgid "Convert"
@@ -3049,10 +3053,6 @@ msgstr "Spiegel As"
 
 msgid "Copy"
 msgstr "Kopieer"
-
-
-msgid "World"
-msgstr "Wereld"
 
 
 msgctxt "Operator"
@@ -3523,6 +3523,10 @@ msgid "Set Start Frame"
 msgstr "Zet Startframe"
 
 
+msgid "Collection Index"
+msgstr "Collectie Index"
+
+
 msgctxt "Operator"
 msgid "Add Bone"
 msgstr "Voeg Bot Toe"
@@ -3836,6 +3840,10 @@ msgid "Delete Constraint"
 msgstr "Verwijder Beperking"
 
 
+msgid "Duplicate"
+msgstr "Dupliceren"
+
+
 msgctxt "Operator"
 msgid "Dissolve Vertices"
 msgstr "Los Punten Op"
@@ -3938,11 +3946,6 @@ msgstr "Exporteer Camera & Markeringen"
 msgctxt "Operator"
 msgid "Export BVH"
 msgstr "Exporteer BVH"
-
-
-msgctxt "Operator"
-msgid "Export STL"
-msgstr "Exporteer STL"
 
 
 msgid "Apply Modifiers"
@@ -4406,6 +4409,10 @@ msgid "Reveal Curves"
 msgstr "Toon Krommes"
 
 
+msgid "Flat"
+msgstr "Vlak"
+
+
 msgctxt "Operator"
 msgid "New Image"
 msgstr "Nieuwe Afbeelding"
@@ -4477,11 +4484,6 @@ msgstr "Importeer SVG"
 msgctxt "Operator"
 msgid "Import Images as Planes"
 msgstr "Importeer Afbeeldingen als Vlakken"
-
-
-msgctxt "Operator"
-msgid "Import STL"
-msgstr "Importeer STL"
 
 
 msgctxt "Operator"
@@ -4655,10 +4657,6 @@ msgstr "Los Vlakken Op"
 msgctxt "Operator"
 msgid "Dissolve Selection"
 msgstr "Los Selectie Op"
-
-
-msgid "Duplicate"
-msgstr "Dupliceren"
 
 
 msgctxt "Operator"
@@ -4952,6 +4950,15 @@ msgid "Toggle Force Field"
 msgstr "Krachtveld Aan/Uit"
 
 
+msgctxt "Operator"
+msgid "Add Grease Pencil"
+msgstr "Voeg Vetkrijt Toe"
+
+
+msgid "Add a Grease Pencil object to the scene"
+msgstr "Voeg een vetkrijt object toe in de scene"
+
+
 msgid "Monkey"
 msgstr "Aap"
 
@@ -4971,21 +4978,8 @@ msgstr "Kopieer Aanpasser"
 
 
 msgctxt "Operator"
-msgid "Add Grease Pencil"
-msgstr "Voeg Vetkrijt Toe"
-
-
-msgid "Add a Grease Pencil object to the scene"
-msgstr "Voeg een vetkrijt object toe in de scene"
-
-
-msgctxt "Operator"
 msgid "Hide Collection"
 msgstr "Verberg Collectie"
-
-
-msgid "Collection Index"
-msgstr "Collectie Index"
 
 
 msgctxt "Operator"
@@ -6445,6 +6439,16 @@ msgstr "Over Blender"
 
 
 msgctxt "Operator"
+msgid "Export STL"
+msgstr "Exporteer STL"
+
+
+msgctxt "Operator"
+msgid "Import STL"
+msgstr "Importeer STL"
+
+
+msgctxt "Operator"
 msgid "Save System Info"
 msgstr "Systeem Informatie Opslaan"
 
@@ -7127,10 +7131,6 @@ msgid "3D"
 msgstr "3D"
 
 
-msgid "Flat"
-msgstr "Vlak"
-
-
 msgid "Force Field"
 msgstr "Krachtveld"
 
@@ -7189,10 +7189,6 @@ msgstr "Alle Punten"
 
 msgid "Lock Markers"
 msgstr "Vergrendel Markeringen"
-
-
-msgid "Second"
-msgstr "Seconde"
 
 
 msgid "Only Endpoints"
@@ -7742,16 +7738,16 @@ msgid "Resume"
 msgstr "Hervat"
 
 
+msgid "Second"
+msgstr "Seconde"
+
+
 msgid "Auto-Step"
 msgstr "Auto-Stap"
 
 
 msgid "Paths:"
 msgstr "Paden:"
-
-
-msgid "XYZ to RGB"
-msgstr "XYZ naar RGB"
 
 
 msgctxt "Operator"
@@ -7935,6 +7931,16 @@ msgstr "Selectie"
 
 
 msgctxt "Operator"
+msgid "Save As..."
+msgstr "Opslaan Als..."
+
+
+msgctxt "Operator"
+msgid "Horizontally"
+msgstr "Horizontaal"
+
+
+msgctxt "Operator"
 msgid "Unpin"
 msgstr "Haal Prikker Los"
 
@@ -7999,6 +8005,11 @@ msgstr "Volledig Scherm Gebied aan/uit"
 
 
 msgctxt "Operator"
+msgid "Sound"
+msgstr "Geluid"
+
+
+msgctxt "Operator"
 msgid "Rename..."
 msgstr "Hernoem..."
 
@@ -8030,11 +8041,6 @@ msgstr "Ververs Alles"
 msgctxt "Operator"
 msgid "Movie"
 msgstr "Film"
-
-
-msgctxt "Operator"
-msgid "Sound"
-msgstr "Geluid"
 
 
 msgctxt "Operator"
@@ -8218,6 +8224,11 @@ msgstr "Volgende Werkomgeving"
 
 
 msgctxt "Operator"
+msgid "Save Incremental"
+msgstr "Incrementeel Opslaan"
+
+
+msgctxt "Operator"
 msgid "Save Copy..."
 msgstr "Sla Kopie Op..."
 
@@ -8260,6 +8271,10 @@ msgstr "Blender Versie"
 
 msgid "Show Warning"
 msgstr "Toon Waarschuwing"
+
+
+msgid "XYZ to RGB"
+msgstr "XYZ naar RGB"
 
 
 msgctxt "Operator"
@@ -8452,11 +8467,6 @@ msgstr "Achtergrond"
 msgctxt "Operator"
 msgid "Make Local..."
 msgstr "Maak Lokaal..."
-
-
-msgctxt "Operator"
-msgid "Insert Keyframe..."
-msgstr "Voeg Sleutelframe toe..."
 
 
 msgctxt "Operator"
@@ -8699,11 +8709,6 @@ msgstr "Verwijder Punt"
 
 
 msgctxt "Operator"
-msgid "Registered Trademark"
-msgstr "Geregistreerd Handelsmerk"
-
-
-msgctxt "Operator"
 msgid "Hide Active Layer"
 msgstr "Verberg Actieve Laag"
 
@@ -8839,6 +8844,10 @@ msgid "Hidden %d"
 msgstr "Verborgen %d"
 
 
+msgid "Nothing selected"
+msgstr "Niets geselecteerd"
+
+
 msgid "Delete Modifier"
 msgstr "Verwijder Aanpasser"
 
@@ -8919,10 +8928,6 @@ msgid "Object created"
 msgstr "Object gecreëerd"
 
 
-msgid "Nothing selected"
-msgstr "Niets geselecteerd"
-
-
 msgid "Pin"
 msgstr "Prik"
 
@@ -8984,6 +8989,14 @@ msgstr "Verwijder punten"
 
 msgid "Choose Screen layout"
 msgstr "Kies Scherm indeling"
+
+
+msgid "Today"
+msgstr "Vandaag"
+
+
+msgid "Yesterday"
+msgstr "Gisteren"
 
 
 msgctxt "Object"
@@ -9282,14 +9295,6 @@ msgid "Active Keyframe"
 msgstr "Actieve Sleutelframe"
 
 
-msgid "Today"
-msgstr "Vandaag"
-
-
-msgid "Yesterday"
-msgstr "Gisteren"
-
-
 msgid "File does not exist"
 msgstr "Bestand bestaat niet"
 
@@ -9535,16 +9540,20 @@ msgid "Hue Correct"
 msgstr "Hue Corrigeren"
 
 
+msgid "Save As..."
+msgstr "Opslaan Als..."
+
+
 msgid "Don't Save"
 msgstr "Niet Opslaan"
 
 
-msgid "unable to open the file"
-msgstr "kan het bestand niet openen"
-
-
 msgid "File Not Found"
 msgstr "Bestand Niet Gevonden"
+
+
+msgid "unable to open the file"
+msgstr "kan het bestand niet openen"
 
 
 msgid "This may lead to unexpected behavior"

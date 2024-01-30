@@ -17,22 +17,23 @@
 
 #include "WM_api.hh"
 
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 #include "BKE_attribute_math.hh"
 #include "BKE_compute_contexts.hh"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_curves.hh"
-#include "BKE_editmesh.h"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
-#include "BKE_pointcloud.h"
+#include "BKE_pointcloud.hh"
 #include "BKE_report.h"
 #include "BKE_screen.hh"
 
@@ -69,6 +70,8 @@
 #include "AS_asset_representation.hh"
 
 #include "geometry_intern.hh"
+
+namespace geo_log = blender::nodes::geo_eval_log;
 
 namespace blender::ed::geometry {
 
@@ -206,7 +209,7 @@ static void store_result_geometry(
       Mesh &mesh = *static_cast<Mesh *>(object.data);
 
       if (object.mode == OB_MODE_SCULPT) {
-        ED_sculpt_undo_geometry_begin(&object, &op);
+        sculpt_paint::undo::geometry_begin(&object, &op);
       }
 
       Mesh *new_mesh = geometry.get_component_for_write<bke::MeshComponent>().release();
@@ -223,10 +226,10 @@ static void store_result_geometry(
 
       if (object.mode == OB_MODE_EDIT) {
         EDBM_mesh_make(&object, scene.toolsettings->selectmode, true);
-        BKE_editmesh_looptri_and_normals_calc(mesh.edit_mesh);
+        BKE_editmesh_looptris_and_normals_calc(mesh.edit_mesh);
       }
       else if (object.mode == OB_MODE_SCULPT) {
-        ED_sculpt_undo_geometry_end(&object);
+        sculpt_paint::undo::geometry_end(&object);
       }
       break;
     }
@@ -247,8 +250,11 @@ static Depsgraph *build_depsgraph_from_indirect_ids(Main &bmain,
 {
   Set<ID *> ids_for_relations;
   bool needs_own_transform_relation = false;
-  nodes::find_node_tree_dependencies(
-      node_tree_orig, ids_for_relations, needs_own_transform_relation);
+  bool needs_scene_camera_relation = false;
+  nodes::find_node_tree_dependencies(node_tree_orig,
+                                     ids_for_relations,
+                                     needs_own_transform_relation,
+                                     needs_scene_camera_relation);
   IDP_foreach_property(
       &const_cast<IDProperty &>(properties),
       IDP_TYPE_FILTER_ID,
@@ -287,6 +293,39 @@ static IDProperty *replace_inputs_evaluated_data_blocks(const IDProperty &op_pro
   return properties;
 }
 
+static bool object_has_editable_data(const Main &bmain, const Object &object)
+{
+  if (!ELEM(object.type, OB_CURVES, OB_POINTCLOUD, OB_MESH)) {
+    return false;
+  }
+  if (!BKE_id_is_editable(&bmain, static_cast<const ID *>(object.data))) {
+    return false;
+  }
+  return true;
+}
+
+static Vector<Object *> gather_supported_objects(const bContext &C,
+                                                 const Main &bmain,
+                                                 const eObjectMode mode)
+{
+  Vector<Object *> objects;
+  Set<const ID *> unique_object_data;
+  CTX_DATA_BEGIN (&C, Object *, object, selected_objects) {
+    if (object->mode != mode) {
+      continue;
+    }
+    if (!unique_object_data.add(static_cast<const ID *>(object->data))) {
+      continue;
+    }
+    if (!object_has_editable_data(bmain, *object)) {
+      continue;
+    }
+    objects.append(object);
+  }
+  CTX_DATA_END;
+  return objects;
+}
+
 static int run_node_group_exec(bContext *C, wmOperator *op)
 {
   Main *bmain = CTX_data_main(C);
@@ -296,9 +335,6 @@ static int run_node_group_exec(bContext *C, wmOperator *op)
   if (!active_object) {
     return OPERATOR_CANCELLED;
   }
-  if (active_object->mode == OB_MODE_OBJECT) {
-    return OPERATOR_CANCELLED;
-  }
   const eObjectMode mode = eObjectMode(active_object->mode);
 
   const bNodeTree *node_tree_orig = get_node_group(*C, *op->ptr, op->reports);
@@ -306,13 +342,10 @@ static int run_node_group_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len, mode);
-  BLI_SCOPED_DEFER([&]() { MEM_SAFE_FREE(objects); });
+  const Vector<Object *> objects = gather_supported_objects(*C, *bmain, mode);
 
   Depsgraph *depsgraph = build_depsgraph_from_indirect_ids(
-      *bmain, *scene, *view_layer, *node_tree_orig, {objects, objects_len}, *op->properties);
+      *bmain, *scene, *view_layer, *node_tree_orig, objects, *op->properties);
   DEG_evaluate_on_refresh(depsgraph);
   BLI_SCOPED_DEFER([&]() { DEG_graph_free(depsgraph); });
 
@@ -330,37 +363,56 @@ static int run_node_group_exec(bContext *C, wmOperator *op)
     BKE_report(op->reports, RPT_ERROR, "Node group must have a group output node");
     return OPERATOR_CANCELLED;
   }
+  for (const bNodeTreeInterfaceSocket *input : node_tree->interface_inputs()) {
+    if (STR_ELEM(input->socket_type,
+                 "NodeSocketObject",
+                 "NodeSocketImage",
+                 "NodeSocketCollection",
+                 "NodeSocketTexture",
+                 "NodeSocketMaterial"))
+    {
+      BKE_report(op->reports, RPT_ERROR, "Data-block inputs are unsupported");
+      return OPERATOR_CANCELLED;
+    }
+  }
 
   IDProperty *properties = replace_inputs_evaluated_data_blocks(*op->properties, *depsgraph);
   BLI_SCOPED_DEFER([&]() { IDP_FreeProperty_ex(properties, false); });
 
   OperatorComputeContext compute_context(op->type->idname);
+  auto eval_log = std::make_unique<geo_log::GeoModifierLog>();
 
-  for (Object *object : Span(objects, objects_len)) {
-    if (!ELEM(object->type, OB_CURVES, OB_POINTCLOUD, OB_MESH)) {
-      continue;
-    }
+  for (Object *object : objects) {
     nodes::GeoNodesOperatorData operator_eval_data{};
+    operator_eval_data.mode = mode;
     operator_eval_data.depsgraph = depsgraph;
     operator_eval_data.self_object = DEG_get_evaluated_object(depsgraph, object);
     operator_eval_data.scene = DEG_get_evaluated_scene(depsgraph);
 
+    nodes::GeoNodesCallData call_data{};
+    call_data.operator_data = &operator_eval_data;
+    call_data.eval_log = eval_log.get();
+
     bke::GeometrySet geometry_orig = get_original_geometry_eval_copy(*object);
 
     bke::GeometrySet new_geometry = nodes::execute_geometry_nodes_on_geometry(
-        *node_tree,
-        properties,
-        compute_context,
-        std::move(geometry_orig),
-        [&](nodes::GeoNodesLFUserData &user_data) {
-          user_data.operator_data = &operator_eval_data;
-          user_data.log_socket_values = false;
-        });
+        *node_tree, properties, compute_context, call_data, std::move(geometry_orig));
 
     store_result_geometry(*op, *bmain, *scene, *object, std::move(new_geometry));
 
     DEG_id_tag_update(static_cast<ID *>(object->data), ID_RECALC_GEOMETRY);
     WM_event_add_notifier(C, NC_GEOM | ND_DATA, object->data);
+  }
+
+  geo_log::GeoTreeLog &tree_log = eval_log->get_tree_log(compute_context.hash());
+  tree_log.ensure_node_warnings();
+  for (const geo_log::NodeWarning &warning : tree_log.all_warnings) {
+    if (warning.type == geo_log::NodeWarningType::Info) {
+      BKE_report(op->reports, RPT_INFO, warning.message.c_str());
+    }
+    else {
+      BKE_report(op->reports, RPT_WARNING, warning.message.c_str());
+    }
   }
 
   return OPERATOR_FINISHED;
@@ -588,72 +640,138 @@ static bool asset_menu_poll(const bContext *C, MenuType * /*mt*/)
   return CTX_wm_view3d(C);
 }
 
-static GeometryNodeAssetTraitFlag asset_flag_for_context(const eContextObjectMode ctx_mode)
+static GeometryNodeAssetTraitFlag asset_flag_for_context(const ObjectType type,
+                                                         const eObjectMode mode)
 {
-  switch (ctx_mode) {
-    case CTX_MODE_EDIT_MESH:
-      return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_EDIT | GEO_NODE_ASSET_MESH);
-    case CTX_MODE_EDIT_CURVES:
-      return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_EDIT | GEO_NODE_ASSET_CURVE);
-    case CTX_MODE_EDIT_POINT_CLOUD:
-      return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_EDIT | GEO_NODE_ASSET_POINT_CLOUD);
-    case CTX_MODE_SCULPT:
-      return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_SCULPT | GEO_NODE_ASSET_MESH);
-    case CTX_MODE_SCULPT_CURVES:
-      return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_SCULPT | GEO_NODE_ASSET_CURVE);
+  switch (type) {
+    case OB_MESH: {
+      switch (mode) {
+        case OB_MODE_OBJECT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_OBJECT | GEO_NODE_ASSET_MESH);
+        case OB_MODE_EDIT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_EDIT | GEO_NODE_ASSET_MESH);
+        case OB_MODE_SCULPT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_SCULPT | GEO_NODE_ASSET_MESH);
+        default:
+          break;
+      }
+      break;
+    }
+    case OB_CURVES: {
+      switch (mode) {
+        case OB_MODE_OBJECT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_OBJECT | GEO_NODE_ASSET_CURVE);
+        case OB_MODE_EDIT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_EDIT | GEO_NODE_ASSET_CURVE);
+        case OB_MODE_SCULPT_CURVES:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_SCULPT | GEO_NODE_ASSET_CURVE);
+        default:
+          break;
+      }
+      break;
+    }
+    case OB_POINTCLOUD: {
+      switch (mode) {
+        case OB_MODE_OBJECT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_OBJECT | GEO_NODE_ASSET_POINT_CLOUD);
+        case OB_MODE_EDIT:
+          return (GEO_NODE_ASSET_TOOL | GEO_NODE_ASSET_EDIT | GEO_NODE_ASSET_POINT_CLOUD);
+        default:
+          break;
+      }
+      break;
+    }
     default:
-      BLI_assert_unreachable();
-      return GeometryNodeAssetTraitFlag(0);
+      break;
   }
+  BLI_assert_unreachable();
+  return GeometryNodeAssetTraitFlag(0);
 }
 
-static asset::AssetItemTree *get_static_item_tree(const eContextObjectMode mode)
+static GeometryNodeAssetTraitFlag asset_flag_for_context(const Object &active_object)
 {
-  switch (mode) {
-    case CTX_MODE_EDIT_MESH: {
-      static asset::AssetItemTree tree;
-      return &tree;
+  return asset_flag_for_context(ObjectType(active_object.type), eObjectMode(active_object.mode));
+}
+
+static asset::AssetItemTree *get_static_item_tree(const ObjectType type, const eObjectMode mode)
+{
+  switch (type) {
+    case OB_MESH: {
+      switch (mode) {
+        case OB_MODE_OBJECT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        case OB_MODE_EDIT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        case OB_MODE_SCULPT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        default:
+          return nullptr;
+      }
     }
-    case CTX_MODE_EDIT_CURVES: {
-      static asset::AssetItemTree tree;
-      return &tree;
+    case OB_CURVES: {
+      switch (mode) {
+        case OB_MODE_OBJECT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        case OB_MODE_EDIT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        case OB_MODE_SCULPT_CURVES: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        default:
+          return nullptr;
+      }
     }
-    case CTX_MODE_EDIT_POINT_CLOUD: {
-      static asset::AssetItemTree tree;
-      return &tree;
-    }
-    case CTX_MODE_SCULPT: {
-      static asset::AssetItemTree tree;
-      return &tree;
-    }
-    case CTX_MODE_SCULPT_CURVES: {
-      static asset::AssetItemTree tree;
-      return &tree;
+    case OB_POINTCLOUD: {
+      switch (mode) {
+        case OB_MODE_OBJECT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        case OB_MODE_EDIT: {
+          static asset::AssetItemTree tree;
+          return &tree;
+        }
+        default:
+          return nullptr;
+      }
     }
     default:
       return nullptr;
   }
 }
 
-static asset::AssetItemTree *get_static_item_tree(const bContext &C)
+static asset::AssetItemTree *get_static_item_tree(const Object &active_object)
 {
-  return get_static_item_tree(eContextObjectMode(CTX_data_mode_enum(&C)));
+  return get_static_item_tree(ObjectType(active_object.type), eObjectMode(active_object.mode));
 }
 
 void clear_operator_asset_trees()
 {
-  for (const int mode : IndexRange(CTX_MODE_NUM)) {
-    if (asset::AssetItemTree *tree = get_static_item_tree(eContextObjectMode(mode)))
-      *tree = {};
+  for (const ObjectType type : {OB_MESH, OB_CURVES, OB_POINTCLOUD}) {
+    for (const eObjectMode mode : {OB_MODE_OBJECT, OB_MODE_EDIT, OB_MODE_SCULPT_CURVES}) {
+      if (asset::AssetItemTree *tree = get_static_item_tree(type, mode)) {
+        *tree = {};
+      }
+    }
   }
 }
 
-static asset::AssetItemTree build_catalog_tree(const bContext &C)
+static asset::AssetItemTree build_catalog_tree(const bContext &C, const Object &active_object)
 {
-  const eContextObjectMode ctx_mode = eContextObjectMode(CTX_data_mode_enum(&C));
   AssetFilterSettings type_filter{};
   type_filter.id_types = FILTER_ID_NT;
-  const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(ctx_mode);
+  const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(active_object);
   auto meta_data_filter = [&](const AssetMetaData &meta_data) {
     const IDProperty *tree_type = BKE_asset_metadata_idprop_find(&meta_data, "type");
     if (tree_type == nullptr || IDP_Int(tree_type) != NTREE_GEOMETRY) {
@@ -691,6 +809,15 @@ static Set<std::string> get_builtin_menus(const ObjectType object_type, const eO
       break;
     case OB_MESH:
       switch (mode) {
+        case OB_MODE_OBJECT:
+          menus.add_new("View");
+          menus.add_new("Select");
+          menus.add_new("Add");
+          menus.add_new("Object");
+          menus.add_new("Object/Apply");
+          menus.add_new("Object/Convert");
+          menus.add_new("Object/Quick Effects");
+          break;
         case OB_MODE_EDIT:
           menus.add_new("View");
           menus.add_new("Select");
@@ -740,7 +867,7 @@ static void catalog_assets_draw(const bContext *C, Menu *menu)
   if (!active_object) {
     return;
   }
-  asset::AssetItemTree *tree = get_static_item_tree(*C);
+  asset::AssetItemTree *tree = get_static_item_tree(*active_object);
   if (!tree) {
     return;
   }
@@ -810,16 +937,19 @@ MenuType node_group_operator_assets_menu()
 static bool unassigned_local_poll(const bContext &C)
 {
   Main &bmain = *CTX_data_main(&C);
-  const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(
-      eContextObjectMode(CTX_data_mode_enum(&C)));
-
+  const Object *active_object = CTX_data_active_object(&C);
+  if (!active_object) {
+    return false;
+  }
+  const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(*active_object);
   LISTBASE_FOREACH (const bNodeTree *, group, &bmain.nodetrees) {
     /* Assets are displayed in other menus, and non-local data-blocks aren't added to this menu. */
     if (group->id.library_weak_reference || group->id.asset_data) {
       continue;
     }
     if (!group->geometry_node_asset_traits ||
-        (group->geometry_node_asset_traits->flag & flag) != flag) {
+        (group->geometry_node_asset_traits->flag & flag) != flag)
+    {
       continue;
     }
     return true;
@@ -829,7 +959,11 @@ static bool unassigned_local_poll(const bContext &C)
 
 static void catalog_assets_draw_unassigned(const bContext *C, Menu *menu)
 {
-  asset::AssetItemTree *tree = get_static_item_tree(*C);
+  const Object *active_object = CTX_data_active_object(C);
+  if (!active_object) {
+    return;
+  }
+  asset::AssetItemTree *tree = get_static_item_tree(*active_object);
   if (!tree) {
     return;
   }
@@ -848,8 +982,7 @@ static void catalog_assets_draw_unassigned(const bContext *C, Menu *menu)
     asset::operator_asset_reference_props_set(*asset, props_ptr);
   }
 
-  const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(
-      eContextObjectMode(CTX_data_mode_enum(C)));
+  const GeometryNodeAssetTraitFlag flag = asset_flag_for_context(*active_object);
 
   bool first = true;
   bool add_separator = !tree->unassigned_assets.is_empty();
@@ -860,7 +993,8 @@ static void catalog_assets_draw_unassigned(const bContext *C, Menu *menu)
       continue;
     }
     if (!group->geometry_node_asset_traits ||
-        (group->geometry_node_asset_traits->flag & flag) != flag) {
+        (group->geometry_node_asset_traits->flag & flag) != flag)
+    {
       continue;
     }
 
@@ -907,7 +1041,11 @@ void ui_template_node_operator_asset_menu_items(uiLayout &layout,
                                                 const StringRef catalog_path)
 {
   bScreen &screen = *CTX_wm_screen(&C);
-  asset::AssetItemTree *tree = get_static_item_tree(C);
+  const Object *active_object = CTX_data_active_object(&C);
+  if (!active_object) {
+    return;
+  }
+  asset::AssetItemTree *tree = get_static_item_tree(*active_object);
   if (!tree) {
     return;
   }
@@ -936,12 +1074,12 @@ void ui_template_node_operator_asset_root_items(uiLayout &layout, const bContext
   if (!active_object) {
     return;
   }
-  asset::AssetItemTree *tree = get_static_item_tree(C);
+  asset::AssetItemTree *tree = get_static_item_tree(*active_object);
   if (!tree) {
     return;
   }
   if (tree->assets_per_path.size() == 0) {
-    *tree = build_catalog_tree(C);
+    *tree = build_catalog_tree(C, *active_object);
   }
 
   asset_system::AssetLibrary *all_library = ED_assetlist_library_get_once_available(

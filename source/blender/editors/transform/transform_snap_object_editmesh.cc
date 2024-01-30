@@ -9,8 +9,8 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_math_vector.h"
 
-#include "BKE_bvhutils.h"
-#include "BKE_editmesh.h"
+#include "BKE_bvhutils.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_global.h"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
@@ -52,7 +52,7 @@ struct SnapCache_EditMesh : public SnapObjectContext::SnapCache {
     }
   }
 
-  ~SnapCache_EditMesh()
+  ~SnapCache_EditMesh() override
   {
     this->clear();
   }
@@ -110,7 +110,7 @@ static SnapCache_EditMesh *snap_object_data_editmesh_get(SnapObjectContext *sctx
   bool init = false;
 
   if (std::unique_ptr<SnapObjectContext::SnapCache> *em_cache_p = sctx->editmesh_caches.lookup_ptr(
-          em))
+          ob_eval->runtime->data_orig))
   {
     em_cache = static_cast<SnapCache_EditMesh *>(em_cache_p->get());
     bool is_dirty = false;
@@ -157,7 +157,7 @@ static SnapCache_EditMesh *snap_object_data_editmesh_get(SnapObjectContext *sctx
   else if (create) {
     std::unique_ptr<SnapCache_EditMesh> em_cache_ptr = std::make_unique<SnapCache_EditMesh>();
     em_cache = em_cache_ptr.get();
-    sctx->editmesh_caches.add_new(em, std::move(em_cache_ptr));
+    sctx->editmesh_caches.add_new(ob_eval->runtime->data_orig, std::move(em_cache_ptr));
     init = true;
   }
 
@@ -184,13 +184,13 @@ static void snap_cache_tri_ensure(SnapCache_EditMesh *em_cache, SnapObjectContex
       BLI_assert(poly_to_tri_count(bm->totface, bm->totloop) == em->tottri);
 
       blender::BitVector<> elem_mask(em->tottri);
-      int looptri_num_active = BM_iter_mesh_bitmap_from_filter_tessface(
+      int looptris_num_active = BM_iter_mesh_bitmap_from_filter_tessface(
           bm,
           elem_mask,
           sctx->callbacks.edit_mesh.test_face_fn,
           sctx->callbacks.edit_mesh.user_data);
 
-      bvhtree_from_editmesh_looptri_ex(&treedata, em, elem_mask, looptri_num_active, 0.0f, 4, 6);
+      bvhtree_from_editmesh_looptris_ex(&treedata, em, elem_mask, looptris_num_active, 0.0f, 4, 6);
     }
     else {
       /* Only cache if BVH-tree is created without a mask.
@@ -198,7 +198,7 @@ static void snap_cache_tri_ensure(SnapCache_EditMesh *em_cache, SnapObjectContex
       BKE_bvhtree_from_editmesh_get(&treedata,
                                     em,
                                     4,
-                                    BVHTREE_FROM_EM_LOOPTRI,
+                                    BVHTREE_FROM_EM_LOOPTRIS,
                                     /* WORKAROUND: avoid updating while transforming. */
                                     G.moving ? nullptr : &em_cache->mesh_runtime->bvh_cache,
                                     &em_cache->mesh_runtime->eval_mutex);
@@ -261,13 +261,13 @@ static SnapCache_EditMesh *editmesh_snapdata_init(SnapObjectContext *sctx,
  * \{ */
 
 /* Callback to ray-cast with back-face culling (#EditMesh). */
-static void editmesh_looptri_raycast_backface_culling_cb(void *userdata,
-                                                         int index,
-                                                         const BVHTreeRay *ray,
-                                                         BVHTreeRayHit *hit)
+static void editmesh_looptris_raycast_backface_culling_cb(void *userdata,
+                                                          int index,
+                                                          const BVHTreeRay *ray,
+                                                          BVHTreeRayHit *hit)
 {
   BMEditMesh *em = static_cast<BMEditMesh *>(userdata);
-  const BMLoop **ltri = (const BMLoop **)em->looptris[index];
+  const BMLoop **ltri = const_cast<const BMLoop **>(em->looptris[index]);
 
   const float *t0, *t1, *t2;
   t0 = ltri[0]->v->co;
@@ -314,7 +314,7 @@ static bool raycastEditMesh(SnapCache_EditMesh *em_cache,
     local_depth *= local_scale;
   }
 
-  /* Test BoundBox */
+  /* Test bounding box */
 
   /* was BKE_boundbox_ray_hit_check, see: cf6ca226fa58 */
   if (!isect_ray_aabb_v3_simple(
@@ -372,7 +372,7 @@ static bool raycastEditMesh(SnapCache_EditMesh *em_cache,
                              0.0f,
                              &hit,
                              sctx->runtime.params.use_backface_culling ?
-                                 editmesh_looptri_raycast_backface_culling_cb :
+                                 editmesh_looptris_raycast_backface_culling_cb :
                                  em_cache->raycast_callback,
                              em) != -1)
     {
@@ -430,20 +430,20 @@ class SnapData_EditMesh : public SnapData {
   SnapData_EditMesh(SnapObjectContext *sctx, BMesh *bm, const float4x4 &obmat)
       : SnapData(sctx, obmat), bm(bm){};
 
-  void get_vert_co(const int index, const float **r_co)
+  void get_vert_co(const int index, const float **r_co) override
   {
     BMVert *eve = BM_vert_at_index(this->bm, index);
     *r_co = eve->co;
   }
 
-  void get_edge_verts_index(const int index, int r_v_index[2])
+  void get_edge_verts_index(const int index, int r_v_index[2]) override
   {
     BMEdge *eed = BM_edge_at_index(this->bm, index);
     r_v_index[0] = BM_elem_index_get(eed->v1);
     r_v_index[1] = BM_elem_index_get(eed->v2);
   }
 
-  void copy_vert_no(const int index, float r_no[3])
+  void copy_vert_no(const int index, float r_no[3]) override
   {
     BMVert *eve = BM_vert_at_index(this->bm, index);
     copy_v3_v3(r_no, eve->no);

@@ -13,6 +13,7 @@
 
 #include "DNA_curves_types.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 
 #include "GPU_batch.h"
@@ -24,13 +25,16 @@
 #include "GPU_vertex_buffer.h"
 
 #include "DRW_gpu_wrapper.hh"
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "draw_cache_impl.hh"
+#include "draw_common.hh"
 #include "draw_curves_private.hh"
 #include "draw_hair_private.h"
 #include "draw_manager.h"
-#include "draw_shader.h"
+#include "draw_shader.hh"
+
+namespace blender::draw {
 
 BLI_INLINE eParticleRefineShaderType drw_curves_shader_type_get()
 {
@@ -62,10 +66,10 @@ static int g_tf_target_height;
 static GPUVertBuf *g_dummy_vbo = nullptr;
 static DRWPass *g_tf_pass; /* XXX can be a problem with multiple DRWManager in the future */
 
-using CurvesInfosBuf = blender::draw::UniformBuffer<CurvesInfos>;
+using CurvesInfosBuf = UniformBuffer<CurvesInfos>;
 
 struct CurvesUniformBufPool {
-  blender::Vector<std::unique_ptr<CurvesInfosBuf>> ubos;
+  Vector<std::unique_ptr<CurvesInfosBuf>> ubos;
   int used = 0;
 
   void reset()
@@ -168,6 +172,7 @@ static void drw_curves_cache_update_compute(CurvesEvalCache *cache,
 
 static void drw_curves_cache_update_compute(CurvesEvalCache *cache, const int subdiv)
 {
+  using namespace blender;
   const int strands_len = cache->strands_len;
   const int final_points_len = cache->final[subdiv].strands_res * strands_len;
   if (final_points_len == 0) {
@@ -180,7 +185,7 @@ static void drw_curves_cache_update_compute(CurvesEvalCache *cache, const int su
   const DRW_Attributes &attrs = cache->final[subdiv].attr_used;
   for (int i = 0; i < attrs.num_requests; i++) {
     /* Only refine point attributes. */
-    if (attrs.requests[i].domain == ATTR_DOMAIN_CURVE) {
+    if (attrs.requests[i].domain == bke::AttrDomain::Curve) {
       continue;
     }
 
@@ -225,6 +230,7 @@ static void drw_curves_cache_update_transform_feedback(CurvesEvalCache *cache,
 
 static void drw_curves_cache_update_transform_feedback(CurvesEvalCache *cache, const int subdiv)
 {
+  using namespace blender;
   const int final_points_len = cache->final[subdiv].strands_res * cache->strands_len;
   if (final_points_len == 0) {
     return;
@@ -236,7 +242,7 @@ static void drw_curves_cache_update_transform_feedback(CurvesEvalCache *cache, c
   const DRW_Attributes &attrs = cache->final[subdiv].attr_used;
   for (int i = 0; i < attrs.num_requests; i++) {
     /* Only refine point attributes. */
-    if (attrs.requests[i].domain == ATTR_DOMAIN_CURVE) {
+    if (attrs.requests[i].domain == bke::AttrDomain::Curve) {
       continue;
     }
 
@@ -335,18 +341,18 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
 
   /* Use the radius of the root and tip of the first curve for now. This is a workaround that we
    * use for now because we can't use a per-point radius yet. */
-  const blender::bke::CurvesGeometry &curves = curves_id.geometry.wrap();
+  const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
   if (curves.curves_num() >= 1) {
-    blender::VArray<float> radii = *curves.attributes().lookup_or_default(
-        "radius", ATTR_DOMAIN_POINT, 0.005f);
-    const blender::IndexRange first_curve_points = curves.points_by_curve()[0];
+    VArray<float> radii = *curves.attributes().lookup_or_default(
+        "radius", bke::AttrDomain::Point, 0.005f);
+    const IndexRange first_curve_points = curves.points_by_curve()[0];
     const float first_radius = radii[first_curve_points.first()];
     const float last_radius = radii[first_curve_points.last()];
     const float middle_radius = radii[first_curve_points.size() / 2];
     hair_rad_root = radii[first_curve_points.first()];
     hair_rad_tip = radii[first_curve_points.last()];
     hair_rad_shape = std::clamp(
-        safe_divide(middle_radius - first_radius, last_radius - first_radius) * 2.0f - 1.0f,
+        math::safe_divide(middle_radius - first_radius, last_radius - first_radius) * 2.0f - 1.0f,
         -1.0f,
         1.0f);
   }
@@ -363,7 +369,7 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
     char sampler_name[32];
     drw_curves_get_attribute_sampler_name(request.attribute_name, sampler_name);
 
-    if (request.domain == ATTR_DOMAIN_CURVE) {
+    if (request.domain == bke::AttrDomain::Curve) {
       if (!curves_cache->proc_attributes_buf[i]) {
         continue;
       }
@@ -384,7 +390,7 @@ DRWShadingGroup *DRW_shgroup_curves_create_sub(Object *object,
      * attributes. */
     const int index = attribute_index_in_material(gpu_material, request.attribute_name);
     if (index != -1) {
-      curves_infos.is_point_attribute[index][0] = request.domain == ATTR_DOMAIN_POINT;
+      curves_infos.is_point_attribute[index][0] = request.domain == bke::AttrDomain::Point;
     }
   }
 
@@ -555,9 +561,6 @@ void DRW_curves_free()
 }
 
 /* New Draw Manager. */
-#include "draw_common.hh"
-
-namespace blender::draw {
 
 static PassSimple *g_pass = nullptr;
 
@@ -615,7 +618,7 @@ static CurvesEvalCache *curves_cache_get(Curves &curves,
     const DRW_Attributes &attrs = cache->final[subdiv].attr_used;
     for (int i : IndexRange(attrs.num_requests)) {
       /* Only refine point attributes. */
-      if (attrs.requests[i].domain != ATTR_DOMAIN_CURVE) {
+      if (attrs.requests[i].domain != bke::AttrDomain::Curve) {
         cache_update(cache->final[subdiv].attributes_buf[i], cache->proc_attributes_buf[i]);
       }
     }
@@ -681,18 +684,18 @@ GPUBatch *curves_sub_pass_setup_implementation(PassT &sub_ps,
 
   /* Use the radius of the root and tip of the first curve for now. This is a workaround that we
    * use for now because we can't use a per-point radius yet. */
-  const blender::bke::CurvesGeometry &curves = curves_id.geometry.wrap();
+  const bke::CurvesGeometry &curves = curves_id.geometry.wrap();
   if (curves.curves_num() >= 1) {
-    blender::VArray<float> radii = *curves.attributes().lookup_or_default(
-        "radius", ATTR_DOMAIN_POINT, 0.005f);
-    const blender::IndexRange first_curve_points = curves.points_by_curve()[0];
+    VArray<float> radii = *curves.attributes().lookup_or_default(
+        "radius", bke::AttrDomain::Point, 0.005f);
+    const IndexRange first_curve_points = curves.points_by_curve()[0];
     const float first_radius = radii[first_curve_points.first()];
     const float last_radius = radii[first_curve_points.last()];
     const float middle_radius = radii[first_curve_points.size() / 2];
     hair_rad_root = radii[first_curve_points.first()];
     hair_rad_tip = radii[first_curve_points.last()];
     hair_rad_shape = std::clamp(
-        safe_divide(middle_radius - first_radius, last_radius - first_radius) * 2.0f - 1.0f,
+        math::safe_divide(middle_radius - first_radius, last_radius - first_radius) * 2.0f - 1.0f,
         -1.0f,
         1.0f);
   }
@@ -709,7 +712,7 @@ GPUBatch *curves_sub_pass_setup_implementation(PassT &sub_ps,
     char sampler_name[32];
     drw_curves_get_attribute_sampler_name(request.attribute_name, sampler_name);
 
-    if (request.domain == ATTR_DOMAIN_CURVE) {
+    if (request.domain == bke::AttrDomain::Curve) {
       if (!curves_cache->proc_attributes_buf[i]) {
         continue;
       }
@@ -728,7 +731,7 @@ GPUBatch *curves_sub_pass_setup_implementation(PassT &sub_ps,
      * attributes. */
     const int index = attribute_index_in_material(gpu_material, request.attribute_name);
     if (index != -1) {
-      curves_infos.is_point_attribute[index][0] = request.domain == ATTR_DOMAIN_POINT;
+      curves_infos.is_point_attribute[index][0] = request.domain == bke::AttrDomain::Point;
     }
   }
 

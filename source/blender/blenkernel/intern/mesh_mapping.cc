@@ -13,9 +13,6 @@
 
 #include "atomic_ops.h"
 
-#include "DNA_meshdata_types.h"
-#include "DNA_vec_types.h"
-
 #include "BLI_array.hh"
 #include "BLI_bitmap.h"
 #include "BLI_buffer.h"
@@ -25,7 +22,7 @@
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BLI_memarena.h"
@@ -52,7 +49,7 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const blender::OffsetIndices<int> faces,
   UvMapVert *buf;
   int i, totuv, nverts;
 
-  BLI_buffer_declare_static(vec2f, tf_uv_buf, BLI_BUFFER_NOP, 32);
+  BLI_buffer_declare_static(blender::float2, tf_uv_buf, BLI_BUFFER_NOP, 32);
 
   totuv = 0;
 
@@ -88,7 +85,8 @@ UvVertMap *BKE_mesh_uv_vert_map_create(const blender::OffsetIndices<int> faces,
       float(*tf_uv)[2] = nullptr;
 
       if (use_winding) {
-        tf_uv = (float(*)[2])BLI_buffer_reinit_data(&tf_uv_buf, vec2f, size_t(face.size()));
+        tf_uv = (float(*)[2])BLI_buffer_reinit_data(
+            &tf_uv_buf, blender::float2, size_t(face.size()));
       }
 
       nverts = int(face.size());
@@ -188,24 +186,23 @@ void BKE_mesh_uv_vert_map_free(UvVertMap *vmap)
   }
 }
 
-void BKE_mesh_vert_looptri_map_create(MeshElemMap **r_map,
-                                      int **r_mem,
-                                      const int totvert,
-                                      const MLoopTri *mlooptri,
-                                      const int totlooptri,
-                                      const int *corner_verts,
-                                      const int /*totloop*/)
+void BKE_mesh_vert_corner_tri_map_create(MeshElemMap **r_map,
+                                         int **r_mem,
+                                         const int totvert,
+                                         const blender::int3 *corner_tris,
+                                         const int tris_num,
+                                         const int *corner_verts,
+                                         const int /*corners_num*/)
 {
   MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(totvert), __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(totlooptri) * 3, __func__));
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(tris_num) * 3, __func__));
   int *index_step;
-  const MLoopTri *mlt;
   int i;
 
   /* count face users */
-  for (i = 0, mlt = mlooptri; i < totlooptri; mlt++, i++) {
+  for (i = 0; i < tris_num; i++) {
     for (int j = 3; j--;) {
-      map[corner_verts[mlt->tri[j]]].count++;
+      map[corner_verts[corner_tris[i][j]]].count++;
     }
   }
 
@@ -219,10 +216,10 @@ void BKE_mesh_vert_looptri_map_create(MeshElemMap **r_map,
     map[i].count = 0;
   }
 
-  /* assign looptri-edge users */
-  for (i = 0, mlt = mlooptri; i < totlooptri; mlt++, i++) {
+  /* assign corner_tri-edge users */
+  for (i = 0; i < tris_num; i++) {
     for (int j = 3; j--;) {
-      MeshElemMap *map_ele = &map[corner_verts[mlt->tri[j]]];
+      MeshElemMap *map_ele = &map[corner_verts[corner_tris[i][j]]];
       map_ele->indices[map_ele->count++] = i;
     }
   }
@@ -272,14 +269,14 @@ void BKE_mesh_origindex_map_create(MeshElemMap **r_map,
   *r_mem = indices;
 }
 
-void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
-                                           int **r_mem,
-                                           const blender::OffsetIndices<int> faces,
-                                           const int *looptri_faces,
-                                           const int looptri_num)
+void BKE_mesh_origindex_map_create_corner_tri(MeshElemMap **r_map,
+                                              int **r_mem,
+                                              const blender::OffsetIndices<int> faces,
+                                              const int *corner_tri_faces,
+                                              const int corner_tris_num)
 {
   MeshElemMap *map = MEM_cnew_array<MeshElemMap>(size_t(faces.size()), __func__);
-  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(looptri_num), __func__));
+  int *indices = static_cast<int *>(MEM_mallocN(sizeof(int) * size_t(corner_tris_num), __func__));
   int *index_step;
 
   /* create offsets */
@@ -290,8 +287,8 @@ void BKE_mesh_origindex_map_create_looptri(MeshElemMap **r_map,
   }
 
   /* Assign face-tessellation users. */
-  for (int i = 0; i < looptri_num; i++) {
-    MeshElemMap *map_ele = &map[looptri_faces[i]];
+  for (int i = 0; i < corner_tris_num; i++) {
+    MeshElemMap *map_ele = &map[corner_tri_faces[i]];
     map_ele->indices[map_ele->count++] = i;
   }
 
@@ -347,6 +344,25 @@ static Array<int> reverse_indices_in_groups(const Span<int> group_indices,
   return results;
 }
 
+/* A version of #reverse_indices_in_groups that stores face indices instead of corner indices. */
+static void reverse_group_indices_in_groups(const OffsetIndices<int> groups,
+                                            const Span<int> group_to_elem,
+                                            const OffsetIndices<int> offsets,
+                                            MutableSpan<int> results)
+{
+  int *counts = MEM_cnew_array<int>(size_t(offsets.size()), __func__);
+  BLI_SCOPED_DEFER([&]() { MEM_freeN(counts); })
+  threading::parallel_for(groups.index_range(), 1024, [&](const IndexRange range) {
+    for (const int64_t face : range) {
+      for (const int elem : group_to_elem.slice(groups[face])) {
+        const int index_in_group = atomic_fetch_and_add_int32(&counts[elem], 1);
+        results[offsets[elem][index_in_group]] = int(face);
+      }
+    }
+  });
+  sort_small_groups(offsets, 1024, results);
+}
+
 static GroupedSpan<int> gather_groups(const Span<int> group_indices,
                                       const int groups_num,
                                       Array<int> &r_offsets,
@@ -357,7 +373,7 @@ static GroupedSpan<int> gather_groups(const Span<int> group_indices,
   return {OffsetIndices<int>(r_offsets), r_indices};
 }
 
-Array<int> build_loop_to_face_map(const OffsetIndices<int> faces)
+Array<int> build_corner_to_face_map(const OffsetIndices<int> faces)
 {
   Array<int> map(faces.total_size());
   offset_indices::build_reverse_map(faces, map);
@@ -370,30 +386,30 @@ GroupedSpan<int> build_vert_to_edge_map(const Span<int2> edges,
                                         Array<int> &r_indices)
 {
   r_offsets = create_reverse_offsets(edges.cast<int>(), verts_num);
-  r_indices.reinitialize(r_offsets.last());
-  Array<int> counts(verts_num, 0);
+  const OffsetIndices<int> offsets(r_offsets);
+  r_indices.reinitialize(offsets.total_size());
 
-  for (const int64_t edge_i : edges.index_range()) {
-    for (const int vert : {edges[edge_i][0], edges[edge_i][1]}) {
-      r_indices[r_offsets[vert] + counts[vert]] = int(edge_i);
-      counts[vert]++;
+  /* Version of #reverse_indices_in_groups that accounts for storing two indices for each edge. */
+  int *counts = MEM_cnew_array<int>(size_t(offsets.size()), __func__);
+  BLI_SCOPED_DEFER([&]() { MEM_freeN(counts); })
+  threading::parallel_for(edges.index_range(), 1024, [&](const IndexRange range) {
+    for (const int64_t edge : range) {
+      for (const int vert : {edges[edge][0], edges[edge][1]}) {
+        const int index_in_group = atomic_fetch_and_add_int32(&counts[vert], 1);
+        r_indices[offsets[vert][index_in_group]] = int(edge);
+      }
     }
-  }
-  return {OffsetIndices<int>(r_offsets), r_indices};
+  });
+  sort_small_groups(offsets, 1024, r_indices);
+  return {offsets, r_indices};
 }
 
 void build_vert_to_face_indices(const OffsetIndices<int> faces,
                                 const Span<int> corner_verts,
                                 const OffsetIndices<int> offsets,
-                                MutableSpan<int> r_indices)
+                                MutableSpan<int> face_indices)
 {
-  Array<int> counts(offsets.size(), 0);
-  for (const int64_t face_i : faces.index_range()) {
-    for (const int vert : corner_verts.slice(faces[face_i])) {
-      r_indices[offsets[vert].start() + counts[vert]] = int(face_i);
-      counts[vert]++;
-    }
-  }
+  reverse_group_indices_in_groups(faces, corner_verts, offsets, face_indices);
 }
 
 GroupedSpan<int> build_vert_to_face_map(const OffsetIndices<int> faces,
@@ -414,18 +430,18 @@ Array<int> build_vert_to_corner_indices(const Span<int> corner_verts,
   return reverse_indices_in_groups(corner_verts, offsets);
 }
 
-GroupedSpan<int> build_vert_to_loop_map(const Span<int> corner_verts,
-                                        const int verts_num,
-                                        Array<int> &r_offsets,
-                                        Array<int> &r_indices)
+GroupedSpan<int> build_vert_to_corner_map(const Span<int> corner_verts,
+                                          const int verts_num,
+                                          Array<int> &r_offsets,
+                                          Array<int> &r_indices)
 {
   return gather_groups(corner_verts, verts_num, r_offsets, r_indices);
 }
 
-GroupedSpan<int> build_edge_to_loop_map(const Span<int> corner_edges,
-                                        const int edges_num,
-                                        Array<int> &r_offsets,
-                                        Array<int> &r_indices)
+GroupedSpan<int> build_edge_to_corner_map(const Span<int> corner_edges,
+                                          const int edges_num,
+                                          Array<int> &r_offsets,
+                                          Array<int> &r_indices)
 {
   return gather_groups(corner_edges, edges_num, r_offsets, r_indices);
 }
@@ -438,14 +454,7 @@ GroupedSpan<int> build_edge_to_face_map(const OffsetIndices<int> faces,
 {
   r_offsets = create_reverse_offsets(corner_edges, edges_num);
   r_indices.reinitialize(r_offsets.last());
-  Array<int> counts(edges_num, 0);
-
-  for (const int64_t face_i : faces.index_range()) {
-    for (const int edge : corner_edges.slice(faces[face_i])) {
-      r_indices[r_offsets[edge] + counts[edge]] = int(face_i);
-      counts[edge]++;
-    }
-  }
+  reverse_group_indices_in_groups(faces, corner_edges, OffsetIndices<int>(r_offsets), r_indices);
   return {OffsetIndices<int>(r_offsets), r_indices};
 }
 
@@ -494,7 +503,7 @@ static void face_edge_loop_islands_calc(const int totedge,
   int tot_group = 0;
   bool group_id_overflow = false;
 
-  if (faces.size() == 0) {
+  if (faces.is_empty()) {
     *r_totgroup = 0;
     *r_face_groups = nullptr;
     if (r_edge_borders) {
@@ -576,7 +585,8 @@ static void face_edge_loop_islands_calc(const int totedge,
             for (; i--; p++) {
               int bit = face_groups[*p];
               if (!ELEM(bit, 0, face_group_id, face_group_id_overflowed) &&
-                  !(bit_face_group_mask & bit)) {
+                  !(bit_face_group_mask & bit))
+              {
                 bit_face_group_mask |= bit;
               }
             }
@@ -651,14 +661,14 @@ static void face_edge_loop_islands_calc(const int totedge,
 int *BKE_mesh_calc_smoothgroups(int edges_num,
                                 const blender::OffsetIndices<int> faces,
                                 const blender::Span<int> corner_edges,
-                                const bool *sharp_edges,
-                                const bool *sharp_faces,
+                                const blender::Span<bool> sharp_edges,
+                                const blender::Span<bool> sharp_faces,
                                 int *r_totgroup,
                                 bool use_bitflags)
 {
   int *face_groups = nullptr;
 
-  auto face_is_smooth = [&](const int i) { return !(sharp_faces && sharp_faces[i]); };
+  auto face_is_smooth = [&](const int i) { return sharp_faces.is_empty() || !sharp_faces[i]; };
 
   auto face_is_island_boundary_smooth = [&](const int face_index,
                                             const int /*loop_index*/,
@@ -667,7 +677,7 @@ int *BKE_mesh_calc_smoothgroups(int edges_num,
                                             const blender::Span<int> edge_face_map_elem) {
     /* Edge is sharp if one of its faces is flat, or edge itself is sharp,
      * or edge is not used by exactly two faces. */
-    if (face_is_smooth(face_index) && !(sharp_edges && sharp_edges[edge_index]) &&
+    if (face_is_smooth(face_index) && !(!sharp_edges.is_empty() && sharp_edges[edge_index]) &&
         (edge_user_count == 2))
     {
       /* In that case, edge appears to be smooth, but we need to check its other face too. */
@@ -812,7 +822,7 @@ static bool mesh_calc_islands_loop_face_uv(const int totedge,
                                            const blender::OffsetIndices<int> faces,
                                            const int *corner_verts,
                                            const int *corner_edges,
-                                           const int totloop,
+                                           const int corners_num,
                                            const float (*luvs)[2],
                                            MeshIslandStore *r_island_store)
 {
@@ -837,19 +847,19 @@ static bool mesh_calc_islands_loop_face_uv(const int totedge,
 
   BKE_mesh_loop_islands_clear(r_island_store);
   BKE_mesh_loop_islands_init(
-      r_island_store, MISLAND_TYPE_LOOP, totloop, MISLAND_TYPE_POLY, MISLAND_TYPE_EDGE);
+      r_island_store, MISLAND_TYPE_LOOP, corners_num, MISLAND_TYPE_POLY, MISLAND_TYPE_EDGE);
 
   Array<int> edge_to_face_offsets;
   Array<int> edge_to_face_indices;
   const GroupedSpan<int> edge_to_face_map = bke::mesh::build_edge_to_face_map(
-      faces, {corner_edges, totloop}, totedge, edge_to_face_offsets, edge_to_face_indices);
+      faces, {corner_edges, corners_num}, totedge, edge_to_face_offsets, edge_to_face_indices);
 
   Array<int> edge_to_loop_offsets;
   Array<int> edge_to_loop_indices;
   GroupedSpan<int> edge_to_loop_map;
   if (luvs) {
-    edge_to_loop_map = bke::mesh::build_edge_to_loop_map(
-        {corner_edges, totloop}, totedge, edge_to_loop_offsets, edge_to_loop_indices);
+    edge_to_loop_map = bke::mesh::build_edge_to_corner_map(
+        {corner_edges, corners_num}, totedge, edge_to_loop_offsets, edge_to_loop_indices);
   }
 
   /* TODO: I'm not sure edge seam flag is enough to define UV islands?
@@ -899,7 +909,7 @@ static bool mesh_calc_islands_loop_face_uv(const int totedge,
 
   face_edge_loop_islands_calc(totedge,
                               faces,
-                              {corner_edges, totloop},
+                              {corner_edges, corners_num},
                               edge_to_face_map,
                               false,
                               mesh_check_island_boundary_uv,
@@ -925,7 +935,7 @@ static bool mesh_calc_islands_loop_face_uv(const int totedge,
   face_indices = static_cast<int *>(
       MEM_mallocN(sizeof(*face_indices) * size_t(faces.size()), __func__));
   loop_indices = static_cast<int *>(
-      MEM_mallocN(sizeof(*loop_indices) * size_t(totloop), __func__));
+      MEM_mallocN(sizeof(*loop_indices) * size_t(corners_num), __func__));
 
   /* NOTE: here we ignore '0' invalid group - this should *never* happen in this case anyway? */
   for (grp_idx = 1; grp_idx <= num_face_groups; grp_idx++) {
@@ -944,7 +954,8 @@ static bool mesh_calc_islands_loop_face_uv(const int totedge,
         const int edge_i = corner_edges[corner];
         loop_indices[num_lidx++] = int(corner);
         if (num_edge_borders && BLI_BITMAP_TEST(edge_borders, edge_i) &&
-            (edge_border_count[edge_i] < 2)) {
+            (edge_border_count[edge_i] < 2))
+        {
           edge_border_count[edge_i]++;
           if (edge_border_count[edge_i] == 2) {
             edge_innercut_indices[num_einnercuts++] = edge_i;
@@ -985,12 +996,12 @@ bool BKE_mesh_calc_islands_loop_face_edgeseam(const float (*vert_positions)[3],
                                               const blender::OffsetIndices<int> faces,
                                               const int *corner_verts,
                                               const int *corner_edges,
-                                              const int totloop,
+                                              const int corners_num,
                                               MeshIslandStore *r_island_store)
 {
   UNUSED_VARS(vert_positions, totvert, edges);
   return mesh_calc_islands_loop_face_uv(
-      totedge, uv_seams, faces, corner_verts, corner_edges, totloop, nullptr, r_island_store);
+      totedge, uv_seams, faces, corner_verts, corner_edges, corners_num, nullptr, r_island_store);
 }
 
 bool BKE_mesh_calc_islands_loop_face_uvmap(float (*vert_positions)[3],
@@ -1001,14 +1012,14 @@ bool BKE_mesh_calc_islands_loop_face_uvmap(float (*vert_positions)[3],
                                            const blender::OffsetIndices<int> faces,
                                            const int *corner_verts,
                                            const int *corner_edges,
-                                           const int totloop,
+                                           const int corners_num,
                                            const float (*luvs)[2],
                                            MeshIslandStore *r_island_store)
 {
   UNUSED_VARS(vert_positions, totvert, edges);
   BLI_assert(luvs != nullptr);
   return mesh_calc_islands_loop_face_uv(
-      totedge, uv_seams, faces, corner_verts, corner_edges, totloop, luvs, r_island_store);
+      totedge, uv_seams, faces, corner_verts, corner_edges, corners_num, luvs, r_island_store);
 }
 
 /** \} */

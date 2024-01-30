@@ -65,7 +65,7 @@ static FTC_CMapCache ftc_charmap_cache = nullptr;
 static ThreadMutex ft_lib_mutex;
 
 /* May be set to #UI_widgetbase_draw_cache_flush. */
-static void (*blf_draw_cache_flush)(void) = nullptr;
+static void (*blf_draw_cache_flush)() = nullptr;
 
 static ft_pix blf_font_height_max_ft_pix(FontBLF *font);
 static ft_pix blf_font_width_max_ft_pix(FontBLF *font);
@@ -193,6 +193,10 @@ static void blf_batch_draw_init()
   g_batch.offset_loc = GPU_vertformat_attr_add(&format, "offset", GPU_COMP_I32, 1, GPU_FETCH_INT);
   g_batch.glyph_size_loc = GPU_vertformat_attr_add(
       &format, "glyph_size", GPU_COMP_I32, 2, GPU_FETCH_INT);
+  g_batch.glyph_comp_len_loc = GPU_vertformat_attr_add(
+      &format, "comp_len", GPU_COMP_I32, 1, GPU_FETCH_INT);
+  g_batch.glyph_mode_loc = GPU_vertformat_attr_add(
+      &format, "mode", GPU_COMP_I32, 1, GPU_FETCH_INT);
 
   g_batch.verts = GPU_vertbuf_create_with_format_ex(&format, GPU_USAGE_STREAM);
   GPU_vertbuf_data_alloc(g_batch.verts, BLF_BATCH_DRAW_LEN_MAX);
@@ -201,6 +205,9 @@ static void blf_batch_draw_init()
   GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.col_loc, &g_batch.col_step);
   GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.offset_loc, &g_batch.offset_step);
   GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.glyph_size_loc, &g_batch.glyph_size_step);
+  GPU_vertbuf_attr_get_raw_data(
+      g_batch.verts, g_batch.glyph_comp_len_loc, &g_batch.glyph_comp_len_step);
+  GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.glyph_mode_loc, &g_batch.glyph_mode_step);
   g_batch.glyph_len = 0;
 
   /* A dummy VBO containing 4 points, attributes are not used. */
@@ -347,6 +354,9 @@ void blf_batch_draw()
   GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.col_loc, &g_batch.col_step);
   GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.offset_loc, &g_batch.offset_step);
   GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.glyph_size_loc, &g_batch.glyph_size_step);
+  GPU_vertbuf_attr_get_raw_data(
+      g_batch.verts, g_batch.glyph_comp_len_loc, &g_batch.glyph_comp_len_step);
+  GPU_vertbuf_attr_get_raw_data(g_batch.verts, g_batch.glyph_mode_loc, &g_batch.glyph_mode_step);
   g_batch.glyph_len = 0;
 }
 
@@ -759,7 +769,7 @@ size_t blf_font_width_to_rstrlen(
 
   i_tmp = i;
   g = blf_glyph_from_utf8_and_step(font, gc, nullptr, str, str_len, &i_tmp, nullptr);
-  for (width_new = pen_x = 0; (s != nullptr);
+  for (width_new = pen_x = 0; (s != nullptr && i > 0);
        i = i_prev, s = s_prev, g = g_prev, g_prev = nullptr, width_new = pen_x)
   {
     s_prev = BLI_str_find_prev_char_utf8(s, str);
@@ -1324,7 +1334,7 @@ void blf_font_exit()
   blf_batch_draw_exit();
 }
 
-void BLF_cache_flush_set_fn(void (*cache_flush_fn)(void))
+void BLF_cache_flush_set_fn(void (*cache_flush_fn)())
 {
   blf_draw_cache_flush = cache_flush_fn;
 }
@@ -1704,6 +1714,7 @@ static const FaceDetails static_face_details[] = {
     {"NotoSansHebrew-Regular.woff2", TT_UCR_HEBREW, 0, 0, 0},
     {"NotoSansJavanese-Regular.woff2", 0x80000003L, 0x2000L, 0, 0},
     {"NotoSansKannada-VariableFont_wdth,wght.woff2", TT_UCR_KANNADA, 0, 0, 0},
+    {"NotoSansKhmer-VariableFont_wdth,wght.woff2", 0, 0, TT_UCR_KHMER, 0},
     {"NotoSansMalayalam-VariableFont_wdth,wght.woff2", TT_UCR_MALAYALAM, 0, 0, 0},
     {"NotoSansMath-Regular.woff2", 0, TT_UCR_MATHEMATICAL_OPERATORS, 0, 0},
     {"NotoSansMyanmar-Regular.woff2", 0, 0, TT_UCR_MYANMAR, 0},

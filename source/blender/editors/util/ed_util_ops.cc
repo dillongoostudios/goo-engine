@@ -16,10 +16,10 @@
 #include "BLI_fileops.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_lib_id.h"
+#include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_report.h"
 

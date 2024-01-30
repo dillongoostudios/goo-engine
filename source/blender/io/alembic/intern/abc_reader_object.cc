@@ -16,8 +16,8 @@
 #include "DNA_space_types.h" /* for FILE_MAX */
 
 #include "BKE_constraint.h"
-#include "BKE_lib_id.h"
-#include "BKE_modifier.h"
+#include "BKE_lib_id.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 
 #include "BLI_listbase.h"

@@ -12,7 +12,7 @@
 
 #include <cstring>
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
@@ -31,7 +31,7 @@
 #include "WM_api.hh"
 
 #include "wm_surface.hh"
-#include "wm_xr_intern.h"
+#include "wm_xr_intern.hh"
 
 void wm_xr_pose_to_mat(const GHOST_XrPose *pose, float r_mat[4][4])
 {

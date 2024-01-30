@@ -8,7 +8,7 @@
 
 #include <cstdlib>
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "ED_screen.hh"
 
@@ -64,7 +64,7 @@ static void applyAlign(TransInfo *t)
 
   recalc_data(t);
 
-  ED_area_status_text(t->area, TIP_("Align"));
+  ED_area_status_text(t->area, RPT_("Align"));
 }
 
 static void initAlign(TransInfo *t, wmOperator * /*op*/)

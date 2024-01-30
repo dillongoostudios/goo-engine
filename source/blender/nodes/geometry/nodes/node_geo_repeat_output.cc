@@ -27,20 +27,19 @@ NODE_STORAGE_FUNCS(NodeGeometryRepeatOutput);
 static void node_declare(NodeDeclarationBuilder &b)
 {
   const bNode *node = b.node_or_null();
-  if (node == nullptr) {
-    return;
-  }
-  const NodeGeometryRepeatOutput &storage = node_storage(*node);
-  for (const int i : IndexRange(storage.items_num)) {
-    const NodeRepeatItem &item = storage.items[i];
-    const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
-    const StringRef name = item.name ? item.name : "";
-    const std::string identifier = RepeatItemsAccessor::socket_identifier_for_item(item);
-    auto &input_decl = b.add_input(socket_type, name, identifier);
-    auto &output_decl = b.add_output(socket_type, name, identifier);
-    if (socket_type_supports_fields(socket_type)) {
-      input_decl.supports_field();
-      output_decl.dependent_field({input_decl.input_index()});
+  if (node) {
+    const NodeGeometryRepeatOutput &storage = node_storage(*node);
+    for (const int i : IndexRange(storage.items_num)) {
+      const NodeRepeatItem &item = storage.items[i];
+      const eNodeSocketDatatype socket_type = eNodeSocketDatatype(item.socket_type);
+      const StringRef name = item.name ? item.name : "";
+      const std::string identifier = RepeatItemsAccessor::socket_identifier_for_item(item);
+      auto &input_decl = b.add_input(socket_type, name, identifier);
+      auto &output_decl = b.add_output(socket_type, name, identifier);
+      if (socket_type_supports_fields(socket_type)) {
+        input_decl.supports_field();
+        output_decl.dependent_field({input_decl.input_index()});
+      }
     }
   }
   b.add_input<decl::Extend>("", "__extend__");
@@ -90,6 +89,7 @@ static void node_register()
   ntype.initfunc = node_init;
   ntype.declare = node_declare;
   ntype.insert_link = node_insert_link;
+  ntype.no_muting = true;
   node_type_storage(&ntype, "NodeGeometryRepeatOutput", node_free_storage, node_copy_storage);
   nodeRegisterType(&ntype);
 }

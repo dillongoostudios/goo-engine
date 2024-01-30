@@ -88,6 +88,7 @@ LANGUAGES = (
     (49, "Tamil (தமிழ்)", "ta"),
     (50, "Khmer (ខ្មែរ)", "km"),
     (51, "Swahili (Kiswahili)", "sw"),
+    (52, "Belarusian (беларуску)", "be"),
 )
 
 # Default context, in py (keep in sync with `BLT_translation.h`)!
@@ -104,7 +105,7 @@ IMPORT_MIN_LEVEL = 0.0
 
 # Languages in the working repository that should not be imported in the Blender one currently...
 IMPORT_LANGUAGES_SKIP = {
-    'am_ET', 'et_EE', 'ro_RO', 'uz_UZ@latin', 'uz_UZ@cyrillic', 'kk_KZ', 'km',
+    'am_ET', 'et_EE', 'ro_RO', 'uz_UZ@latin', 'uz_UZ@cyrillic', 'kk_KZ',
 }
 
 # Languages that need RTL pre-processing.
@@ -242,20 +243,27 @@ _ctxt_re = _ctxt_re_gen("")
 _msg_re = r"(?P<msg_raw>" + _str_whole_re.format(_="_msg") + r")"
 PYGETTEXT_KEYWORDS = (() +
     tuple((r"{}\(\s*" + _msg_re + r"\s*\)").format(it)
-          for it in ("IFACE_", "TIP_", "DATA_", "N_")) +
+          for it in ("IFACE_", "TIP_", "RPT_", "DATA_", "N_")) +
 
     tuple((r"{}\(\s*" + _ctxt_re + r"\s*,\s*" + _msg_re + r"\s*\)").format(it)
-          for it in ("CTX_IFACE_", "CTX_TIP_", "CTX_DATA_", "CTX_N_")) +
+          for it in ("CTX_IFACE_", "CTX_TIP_", "CTX_RPT_", "CTX_DATA_", "CTX_N_")) +
 
     tuple(("{}\\((?:[^\"',]+,){{1,2}}\\s*" + _msg_re + r"\s*(?:\)|,)").format(it)
           for it in ("BKE_report", "BKE_reportf", "BKE_reports_prepend", "BKE_reports_prependf",
-                     "CTX_wm_operator_poll_msg_set", "WM_report", "WM_reportf")) +
+                     "CTX_wm_operator_poll_msg_set", "WM_report", "WM_reportf",
+                     "UI_but_disable")) +
 
+    # bmesh operator errors
     tuple(("{}\\((?:[^\"',]+,){{3}}\\s*" + _msg_re + r"\s*\)").format(it)
           for it in ("BMO_error_raise",)) +
 
+    # Modifier errors
     tuple(("{}\\((?:[^\"',]+,){{2}}\\s*" + _msg_re + r"\s*(?:\)|,)").format(it)
           for it in ("BKE_modifier_set_error",)) +
+
+    # Compositor error messages
+    tuple((r"\.{}\(\s*" + _msg_re + r"\s*\)").format(it)
+          for it in ("set_info_message",)) +
 
     # This one is a tad more risky, but in practice would not expect a name/uid string parameter
     # (the second one in those functions) to ever have a comma in it, so think this is fine.
@@ -296,13 +304,8 @@ PYGETTEXT_KEYWORDS = (() +
     # Geometry Nodes field inputs
     ((r"FieldInput\(CPPType::get<.*?>\(\),\s*" + _msg_re + r"\s*\)"),) +
 
-    # bUnitDef unit names.
-    # NOTE: regex is a bit more complex than it would need too. Since the actual
-    # identifier (`B_UNIT_DEF_`) is at the end, if it's simpler/too general it
-    # becomes extremely slow to process some (unrelated) source files.
-    ((r"\{(?:(?:\s*\"[^\",]+\"\s*,)|(?:\s*\"\\\"\",)|(?:\s*nullptr\s*,)){4}\s*" +
-      _msg_re + r"\s*,(?:(?:\s*\"[^\"',]+\"\s*,)|(?:\s*nullptr\s*,))(?:[^,]+,){2}"
-      + "(?:\|?\s*B_UNIT_DEF_[_A-Z]+\s*)+\}"),) +
+    # bUnitDef unit names
+    ((r"/\*name_display\*/\s*" + _msg_re + r"\s*,"),) +
 
     tuple((r"{}\(\s*" + _msg_re + r"\s*,\s*(?:" +
            r"\s*,\s*)?(?:".join(_ctxt_re_gen(i) for i in range(PYGETTEXT_MAX_MULTI_CTXT)) + r")?\s*\)").format(it)
@@ -343,9 +346,11 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "author",                        # Addons' field. :/
     "bItasc",
     "blender.org",
+    "bytes",
     "color_index is invalid",
     "cos(A)",
     "cosh(A)",
+    "dB",                            # dB audio power unit.
     "dbl-",                          # Compacted for 'double', for keymap items.
     "description",                   # Addons' field. :/
     "dx",
@@ -361,6 +366,8 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "glTF Material Output",
     "glTF Original PBR data",
     "glTF Separate (.gltf + .bin + textures)",
+    "gltfpack",
+    "glTFpack file path",
     "invoke() needs to be called before execute()",
     "iScale",
     "iso-8859-15",
@@ -380,10 +387,13 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "ogg",
     "oneAPI",
     "p0",
+    "parent_index should not be less than -1: %d",
+    "parent_index (%d) should be less than the number of bone collections (%d)",
     "px",
     "re",
     "res",
     "rv",
+    "seconds",
     "sin(A)",
     "sin(x) / x",
     "sinh(A)",
@@ -403,6 +413,45 @@ WARN_MSGID_NOT_CAPITALIZED_ALLOWED = {
     "wmOwnerID '%s' not in workspace '%s'",
     "y",
     "y = (Ax + B)",
+    # ID plural names, defined in IDTypeInfo.
+    "armatures",
+    "brushes",
+    "cache_files",
+    "cameras",
+    "collections",
+    "curves",
+    "fonts",
+    "grease_pencils",
+    "grease_pencils_v3",
+    "hair_curves",
+    "ipos",
+    "lattices",
+    "libraries",
+    "lightprobes",
+    "lights",
+    "linestyles",
+    "link_placeholders",
+    "masks",
+    "metaballs",
+    "materials",
+    "meshes",
+    "movieclips",
+    "node_groups",
+    "objects",
+    "paint_curves",
+    "palettes",
+    "particles",
+    "pointclouds",
+    "screens",
+    "shape_keys",
+    "sounds",
+    "speakers",
+    "texts",
+    "textures",
+    "volumes",
+    "window_managers",
+    "workspaces",
+    "worlds",
     # Sub-strings.
     "all",
     "all and invert unselected",
@@ -490,6 +539,7 @@ WARN_MSGID_END_POINT_ALLOWED = {
     "Float Neg. Exp.",
     "Max Ext.",
     "Newer graphics drivers may be available to improve Blender support.",
+    "Not assigned to any bone collection.",
     "Numpad .",
     "Pad.",
     "    RNA Path: bpy.types.",

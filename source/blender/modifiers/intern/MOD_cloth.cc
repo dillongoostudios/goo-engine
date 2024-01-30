@@ -26,14 +26,15 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_cloth.hh"
-#include "BKE_context.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
 #include "BKE_effect.h"
 #include "BKE_global.h"
 #include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_pointcache.h"
 #include "BKE_screen.hh"
 
@@ -78,8 +79,7 @@ static void init_data(ModifierData *md)
 static void deform_verts(ModifierData *md,
                          const ModifierEvalContext *ctx,
                          Mesh *mesh,
-                         float (*vertexCos)[3],
-                         int verts_num)
+                         blender::MutableSpan<blender::float3> positions)
 {
   ClothModifierData *clmd = (ClothModifierData *)md;
   Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
@@ -100,24 +100,30 @@ static void deform_verts(ModifierData *md,
    * Also hopefully new cloth system will arrive soon..
    */
   if (mesh == nullptr && clmd->sim_parms->shapekey_rest) {
-    KeyBlock *kb = BKE_keyblock_from_key(BKE_key_from_object(ctx->object),
-                                         clmd->sim_parms->shapekey_rest);
+    KeyBlock *kb = BKE_keyblock_find_by_index(BKE_key_from_object(ctx->object),
+                                              clmd->sim_parms->shapekey_rest);
     if (kb && kb->data != nullptr) {
       float(*layerorco)[3];
       if (!(layerorco = static_cast<float(*)[3]>(
-                CustomData_get_layer_for_write(&mesh->vert_data, CD_CLOTH_ORCO, mesh->totvert))))
+                CustomData_get_layer_for_write(&mesh->vert_data, CD_CLOTH_ORCO, mesh->verts_num))))
       {
-        layerorco = static_cast<float(*)[3]>(
-            CustomData_add_layer(&mesh->vert_data, CD_CLOTH_ORCO, CD_SET_DEFAULT, mesh->totvert));
+        layerorco = static_cast<float(*)[3]>(CustomData_add_layer(
+            &mesh->vert_data, CD_CLOTH_ORCO, CD_SET_DEFAULT, mesh->verts_num));
       }
 
-      memcpy(layerorco, kb->data, sizeof(float[3]) * verts_num);
+      memcpy(layerorco, kb->data, sizeof(float[3]) * positions.size());
     }
   }
 
-  BKE_mesh_vert_coords_apply(mesh, vertexCos);
+  mesh->vert_positions_for_write().copy_from(positions);
+  mesh->tag_positions_changed();
 
-  clothModifier_do(clmd, ctx->depsgraph, scene, ctx->object, mesh, vertexCos);
+  clothModifier_do(clmd,
+                   ctx->depsgraph,
+                   scene,
+                   ctx->object,
+                   mesh,
+                   reinterpret_cast<float(*)[3]>(positions.data()));
 }
 
 static void update_depsgraph(ModifierData *md, const ModifierUpdateDepsgraphContext *ctx)
@@ -255,7 +261,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiItemL(layout, TIP_("Settings are inside the Physics tab"), ICON_NONE);
+  uiItemL(layout, RPT_("Settings are inside the Physics tab"), ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
@@ -271,7 +277,7 @@ ModifierTypeInfo modifierType_Cloth = {
     /*struct_name*/ "ClothModifierData",
     /*struct_size*/ sizeof(ClothModifierData),
     /*srna*/ &RNA_ClothModifier,
-    /*type*/ eModifierTypeType_OnlyDeform,
+    /*type*/ ModifierTypeType::OnlyDeform,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_UsesPointCache |
         eModifierTypeFlag_Single,
     /*icon*/ ICON_MOD_CLOTH,
@@ -298,4 +304,5 @@ ModifierTypeInfo modifierType_Cloth = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

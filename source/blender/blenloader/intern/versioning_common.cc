@@ -21,10 +21,10 @@
 #include "BKE_animsys.h"
 #include "BKE_idprop.h"
 #include "BKE_ipo.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_main.h"
-#include "BKE_main_namemap.h"
+#include "BKE_main.hh"
+#include "BKE_main_namemap.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
@@ -104,7 +104,7 @@ ID *do_versions_rename_id(Main *bmain,
     BKE_main_namemap_remove_name(bmain, id, id->name + 2);
     BLI_strncpy(id->name + 2, name_dst, sizeof(id->name) - 2);
     /* We know it's unique, this just sorts. */
-    BLI_libblock_ensure_unique_name(bmain, id->name);
+    BKE_libblock_ensure_unique_name(bmain, id);
   }
   return id;
 }
@@ -284,20 +284,24 @@ void node_tree_relink_with_socket_id_map(bNodeTree &ntree,
   LISTBASE_FOREACH_MUTABLE (bNodeLink *, link, &ntree.links) {
     if (link->tonode == &old_node) {
       bNodeSocket *old_socket = link->tosock;
-      if (const std::string *new_identifier = map.lookup_ptr_as(old_socket->identifier)) {
-        bNodeSocket *new_socket = nodeFindSocket(&new_node, SOCK_IN, new_identifier->c_str());
-        link->tonode = &new_node;
-        link->tosock = new_socket;
-        old_socket->link = nullptr;
+      if (old_socket->is_available()) {
+        if (const std::string *new_identifier = map.lookup_ptr_as(old_socket->identifier)) {
+          bNodeSocket *new_socket = nodeFindSocket(&new_node, SOCK_IN, new_identifier->c_str());
+          link->tonode = &new_node;
+          link->tosock = new_socket;
+          old_socket->link = nullptr;
+        }
       }
     }
     if (link->fromnode == &old_node) {
       bNodeSocket *old_socket = link->fromsock;
-      if (const std::string *new_identifier = map.lookup_ptr_as(old_socket->identifier)) {
-        bNodeSocket *new_socket = nodeFindSocket(&new_node, SOCK_OUT, new_identifier->c_str());
-        link->fromnode = &new_node;
-        link->fromsock = new_socket;
-        old_socket->link = nullptr;
+      if (old_socket->is_available()) {
+        if (const std::string *new_identifier = map.lookup_ptr_as(old_socket->identifier)) {
+          bNodeSocket *new_socket = nodeFindSocket(&new_node, SOCK_OUT, new_identifier->c_str());
+          link->fromnode = &new_node;
+          link->fromsock = new_socket;
+          old_socket->link = nullptr;
+        }
       }
     }
   }

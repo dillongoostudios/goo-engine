@@ -23,15 +23,14 @@
 
 #include "DNA_image_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_space_types.h"
 
-#include "BKE_context.h"
-#include "BKE_customdata.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
 #include "BKE_mesh.hh"
 #include "BKE_report.h"
@@ -52,10 +51,10 @@
 
 #include "UI_view2d.hh"
 
-#include "intern/bmesh_marking.h"
+#include "intern/bmesh_marking.hh"
 #include "uvedit_intern.h"
 
-#include "bmesh_tools.h"
+#include "bmesh_tools.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Path Select Struct & Properties

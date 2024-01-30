@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 
 #include "BLI_map.hh"
 #include "BLI_math_base.hh"
@@ -16,7 +16,6 @@
 #include "BLI_set.hh"
 #include "BLI_vector.hh"
 
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
 namespace blender::io::obj {

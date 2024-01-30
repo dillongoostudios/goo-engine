@@ -17,7 +17,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_view3d_types.h"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BLI_listbase_wrapper.hh"
 #include "BLI_math_color.h"
@@ -26,23 +26,24 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_deform.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "ED_armature.hh"
 #include "ED_view3d.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 #include "ANIM_bonecolor.hh"
 
 #include "UI_resources.hh"
 
 #include "draw_common.h"
-#include "draw_manager_text.h"
+#include "draw_manager_text.hh"
 
 #include "overlay_private.hh"
 
@@ -848,6 +849,7 @@ static void drw_shgroup_bone_custom_solid_mesh(const ArmatureDrawContext *ctx,
                                                const float outline_color[4],
                                                Object *custom)
 {
+  using namespace blender::draw;
   /* TODO(fclem): arg... less than ideal but we never iter on this object
    * to assure batch cache is valid. */
   DRW_mesh_batch_cache_validate(custom, mesh);
@@ -892,6 +894,7 @@ static void drw_shgroup_bone_custom_mesh_wire(const ArmatureDrawContext *ctx,
                                               const float color[4],
                                               Object *custom)
 {
+  using namespace blender::draw;
   /* TODO(fclem): arg... less than ideal but we never iter on this object
    * to assure batch cache is valid. */
   DRW_mesh_batch_cache_validate(custom, mesh);
@@ -916,6 +919,7 @@ static void drw_shgroup_custom_bone_curve(const ArmatureDrawContext *ctx,
                                           const float outline_color[4],
                                           Object *custom)
 {
+  using namespace blender::draw;
   /* TODO(fclem): arg... less than ideal but we never iter on this object
    * to assure batch cache is valid. */
   DRW_curve_batch_cache_validate(curve);
@@ -1205,7 +1209,8 @@ static void get_pchan_color_constraint(const ThemeWireColor *bcolor,
   const ePchan_ConstFlag flags_to_color = PCHAN_HAS_NO_TARGET | PCHAN_HAS_IK | PCHAN_HAS_SPLINEIK |
                                           PCHAN_HAS_CONST;
   if ((constflag & flags_to_color) == 0 ||
-      (bcolor && (bcolor->flag & TH_WIRECOLOR_CONSTCOLS) == 0)) {
+      (bcolor && (bcolor->flag & TH_WIRECOLOR_CONSTCOLS) == 0))
+  {
     get_pchan_color_solid(bcolor, r_color);
     return;
   }
@@ -2553,7 +2558,7 @@ static void draw_armature_edit(ArmatureDrawContext *ctx)
   const ArmatureBoneDrawStrategy &draw_strat = strategy_for_armature_drawtype(
       eArmature_Drawtype(arm->drawtype));
 
-  for (eBone = static_cast<EditBone *>(arm->edbo->first), index = ob_orig->runtime.select_id;
+  for (eBone = static_cast<EditBone *>(arm->edbo->first), index = ob_orig->runtime->select_id;
        eBone;
        eBone = eBone->next, index += 0x10000)
   {
@@ -2643,7 +2648,7 @@ static void draw_armature_pose(ArmatureDrawContext *ctx)
 
     if (is_pose_select) {
       const Object *ob_orig = DEG_get_original_object(ob);
-      index = ob_orig->runtime.select_id;
+      index = ob_orig->runtime->select_id;
     }
   }
 

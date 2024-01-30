@@ -16,7 +16,7 @@
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_screen.hh"
 
 #include "GPU_state.h"
@@ -162,10 +162,12 @@ void ED_spacemacros_init()
   ED_operatormacros_action();
   ED_operatormacros_clip();
   ED_operatormacros_curve();
+  ED_operatormacros_curves();
   ED_operatormacros_mask();
   ED_operatormacros_sequencer();
   ED_operatormacros_paint();
   ED_operatormacros_gpencil();
+  ED_operatormacros_grease_pencil();
   ED_operatormacros_nla();
 
   /* Register dropboxes (can use macros). */

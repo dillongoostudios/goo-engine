@@ -11,23 +11,33 @@ namespace blender::nodes::node_shader_volume_principled_cc {
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Color>("Color").default_value({0.5f, 0.5f, 0.5f, 1.0f});
+#define SOCK_COLOR_ID 0
   b.add_input<decl::String>("Color Attribute");
+#define SOCK_COLOR_ATTR_ID 1
   b.add_input<decl::Float>("Density").default_value(1.0f).min(0.0f).max(1000.0f);
+#define SOCK_DENSITY_ID 2
   b.add_input<decl::String>("Density Attribute").default_value("density");
+#define SOCK_DENSITY_ATTR_ID 3
   b.add_input<decl::Float>("Anisotropy")
       .default_value(0.0f)
       .min(-1.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+#define SOCK_ANISOTROPY_ID 4
   b.add_input<decl::Color>("Absorption Color").default_value({0.0f, 0.0f, 0.0f, 1.0f});
+#define SOCK_ABSORPTION_COLOR_ID 5
   b.add_input<decl::Float>("Emission Strength").default_value(0.0f).min(0.0f).max(1000.0f);
+#define SOCK_EMISSION_ID 6
   b.add_input<decl::Color>("Emission Color").default_value({1.0f, 1.0f, 1.0f, 1.0f});
+#define SOCK_EMISSION_COLOR_ID 7
   b.add_input<decl::Float>("Blackbody Intensity")
       .default_value(0.0f)
       .min(0.0f)
       .max(1.0f)
       .subtype(PROP_FACTOR);
+#define SOCK_BLACKBODY_INTENSITY_ID 8
   b.add_input<decl::Color>("Blackbody Tint").default_value({1.0f, 1.0f, 1.0f, 1.0f});
+#define SOCK_BLACKBODY_TINT_ID 8
   b.add_input<decl::Float>("Temperature").default_value(1000.0f).min(0.0f).max(6500.0f);
   b.add_input<decl::String>("Temperature Attribute").default_value("temperature");
   b.add_input<decl::Float>("Weight").unavailable();
@@ -53,7 +63,18 @@ static int node_shader_gpu_volume_principled(GPUMaterial *mat,
                                              GPUNodeStack *out)
 {
   /* Test if blackbody intensity is enabled. */
-  bool use_blackbody = (in[8].link || in[8].vec[0] != 0.0f);
+  bool use_blackbody = node_socket_not_zero(in[SOCK_BLACKBODY_INTENSITY_ID]);
+
+  if (node_socket_not_zero(in[SOCK_DENSITY_ID]) && node_socket_not_black(in[SOCK_COLOR_ID])) {
+    /* Consider there is absorption phenomenon when there is scattering since
+     * `extinction = scattering + absorption`. */
+    GPU_material_flag_set(mat, GPU_MATFLAG_VOLUME_SCATTER | GPU_MATFLAG_VOLUME_ABSORPTION);
+  }
+  if (node_socket_not_zero(in[SOCK_DENSITY_ID]) &&
+      node_socket_not_white(in[SOCK_ABSORPTION_COLOR_ID]))
+  {
+    GPU_material_flag_set(mat, GPU_MATFLAG_VOLUME_ABSORPTION);
+  }
 
   /* Get volume attributes. */
   GPUNodeLink *density = nullptr, *color = nullptr, *temperature = nullptr;
@@ -118,6 +139,17 @@ static int node_shader_gpu_volume_principled(GPUMaterial *mat,
                         spectrummap,
                         GPU_constant(&layer));
 }
+
+#undef SOCK_COLOR_ID
+#undef SOCK_COLOR_ATTR_ID
+#undef SOCK_DENSITY_ID
+#undef SOCK_DENSITY_ATTR_ID
+#undef SOCK_ANISOTROPY_ID
+#undef SOCK_ABSORPTION_COLOR_ID
+#undef SOCK_EMISSION_ID
+#undef SOCK_EMISSION_COLOR_ID
+#undef SOCK_BLACKBODY_INTENSITY_ID
+#undef SOCK_BLACKBODY_TINT_ID
 
 }  // namespace blender::nodes::node_shader_volume_principled_cc
 

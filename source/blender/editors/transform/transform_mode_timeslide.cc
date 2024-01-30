@@ -15,9 +15,9 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_nla.h"
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
@@ -55,7 +55,7 @@ static void headerTimeSlide(TransInfo *t, const float sval, char str[UI_MAX_DRAW
     BLI_snprintf(&tvec[0], NUM_STR_REP_LEN, "%.4f", val);
   }
 
-  BLI_snprintf(str, UI_MAX_DRAW_STR, TIP_("TimeSlide: %s"), &tvec[0]);
+  BLI_snprintf(str, UI_MAX_DRAW_STR, RPT_("TimeSlide: %s"), &tvec[0]);
 }
 
 static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
@@ -85,8 +85,18 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
       /* only apply to data if in range */
       if ((sval > minx) && (sval < maxx)) {
         float cvalc = CLAMPIS(cval, minx, maxx);
-        float ival = td->ival;
         float timefac;
+        float *dst;
+        float ival;
+
+        if (td->val) {
+          dst = td->val;
+          ival = td->ival;
+        }
+        else {
+          dst = &td->loc[0];
+          ival = td->iloc[0];
+        }
 
         /* NLA mapping magic here works as follows:
          * - "ival" goes from strip time to global time
@@ -102,16 +112,16 @@ static void applyTimeSlideValue(TransInfo *t, float sval, float cval)
         /* left half? */
         if (ival < sval) {
           timefac = (sval - ival) / (sval - minx);
-          *(td->val) = cvalc - timefac * (cvalc - minx);
+          *dst = cvalc - timefac * (cvalc - minx);
         }
         else {
           timefac = (ival - sval) / (maxx - sval);
-          *(td->val) = cvalc + timefac * (maxx - cvalc);
+          *dst = cvalc + timefac * (maxx - cvalc);
         }
 
         if (adt) {
           /* global to strip */
-          *(td->val) = BKE_nla_tweakedit_remap(adt, *(td->val), NLATIME_CONVERT_UNMAP);
+          *dst = BKE_nla_tweakedit_remap(adt, *dst, NLATIME_CONVERT_UNMAP);
         }
       }
     }

@@ -22,12 +22,12 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_dynamicpaint.h"
 #include "BKE_layer.h"
-#include "BKE_lib_query.h"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_screen.hh"
 
 #include "UI_interface.hh"
@@ -180,7 +180,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiItemL(layout, TIP_("Settings are inside the Physics tab"), ICON_NONE);
+  uiItemL(layout, RPT_("Settings are inside the Physics tab"), ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
@@ -196,10 +196,9 @@ ModifierTypeInfo modifierType_DynamicPaint = {
     /*struct_name*/ "DynamicPaintModifierData",
     /*struct_size*/ sizeof(DynamicPaintModifierData),
     /*srna*/ &RNA_DynamicPaintModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
-        eModifierTypeFlag_UsesPointCache | eModifierTypeFlag_Single |
-        eModifierTypeFlag_UsesPreview,
+        eModifierTypeFlag_UsesPointCache | eModifierTypeFlag_Single,
     /*icon*/ ICON_MOD_DYNAMICPAINT,
 
     /*copy_data*/ copy_data,
@@ -224,4 +223,5 @@ ModifierTypeInfo modifierType_DynamicPaint = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

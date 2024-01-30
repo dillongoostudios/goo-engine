@@ -23,6 +23,7 @@
 #include "BLI_fileops.h"
 #include "BLI_ghash.h"
 #include "BLI_string.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -33,16 +34,16 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_image.h"
 #include "BKE_image_format.h"
 #include "BKE_image_save.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -82,11 +83,9 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "PIL_time.h"
-
 #include "RE_engine.h"
 
-#include "image_intern.h"
+#include "image_intern.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name View Navigation Utilities
@@ -540,7 +539,7 @@ static void image_view_zoom_init(bContext *C, wmOperator *op, const wmEvent *eve
   if (U.viewzoom == USER_ZOOM_CONTINUE) {
     /* needs a timer to continue redrawing */
     vpd->timer = WM_event_timer_add(CTX_wm_manager(C), CTX_wm_window(C), TIMER, 0.01f);
-    vpd->timer_lastdraw = PIL_check_seconds_timer();
+    vpd->timer_lastdraw = BLI_check_seconds_timer();
   }
 
   vpd->sima = sima;
@@ -650,7 +649,7 @@ static void image_zoom_apply(ViewZoomData *vpd,
   }
 
   if (viewzoom == USER_ZOOM_CONTINUE) {
-    double time = PIL_check_seconds_timer();
+    double time = BLI_check_seconds_timer();
     float time_step = float(time - vpd->timer_lastdraw);
     float zfac;
     zfac = 1.0f + ((delta / 20.0f) * time_step);
@@ -1287,7 +1286,7 @@ static Image *image_open_single(Main *bmain,
                 RPT_ERROR,
                 "Cannot read '%s': %s",
                 range->filepath,
-                errno ? strerror(errno) : TIP_("unsupported image format"));
+                errno ? strerror(errno) : RPT_("unsupported image format"));
     return nullptr;
   }
 
@@ -2305,9 +2304,9 @@ static bool image_should_be_saved_when_modified(Image *ima)
   return !ELEM(ima->type, IMA_TYPE_R_RESULT, IMA_TYPE_COMPOSITE);
 }
 
-static bool image_should_be_saved(Image *ima, bool *is_format_writable)
+static bool image_should_be_saved(Image *ima, bool *r_is_format_writable)
 {
-  if (BKE_image_is_dirty_writable(ima, is_format_writable) &&
+  if (BKE_image_is_dirty_writable(ima, r_is_format_writable) &&
       ELEM(ima->source, IMA_SRC_FILE, IMA_SRC_GENERATED, IMA_SRC_TILED))
   {
     return image_should_be_saved_when_modified(ima);
@@ -2859,21 +2858,19 @@ static int image_clipboard_copy_exec(bContext *C, wmOperator *op)
   }
 
   ImageUser *iuser = image_user_from_context(C);
-  WM_cursor_set(CTX_wm_window(C), WM_CURSOR_WAIT);
-
+  WM_cursor_wait(true);
   void *lock;
   ImBuf *ibuf = BKE_image_acquire_ibuf(ima, iuser, &lock);
-  if (ibuf == nullptr) {
-    BKE_image_release_ibuf(ima, ibuf, lock);
-    WM_cursor_set(CTX_wm_window(C), WM_CURSOR_DEFAULT);
-    return OPERATOR_CANCELLED;
+  bool changed = false;
+  if (ibuf) {
+    if (WM_clipboard_image_set(ibuf)) {
+      changed = true;
+    }
   }
-
-  WM_clipboard_image_set(ibuf);
   BKE_image_release_ibuf(ima, ibuf, lock);
-  WM_cursor_set(CTX_wm_window(C), WM_CURSOR_DEFAULT);
+  WM_cursor_wait(false);
 
-  return OPERATOR_FINISHED;
+  return changed ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 static bool image_clipboard_copy_poll(bContext *C)
@@ -2909,29 +2906,26 @@ void IMAGE_OT_clipboard_copy(wmOperatorType *ot)
 
 static int image_clipboard_paste_exec(bContext *C, wmOperator *op)
 {
+  bool changed = false;
 
-  WM_cursor_set(CTX_wm_window(C), WM_CURSOR_WAIT);
-
+  WM_cursor_wait(true);
   ImBuf *ibuf = WM_clipboard_image_get();
-  if (!ibuf) {
-    WM_cursor_set(CTX_wm_window(C), WM_CURSOR_DEFAULT);
-    return OPERATOR_CANCELLED;
+  if (ibuf) {
+    ED_undo_push_op(C, op);
+
+    Main *bmain = CTX_data_main(C);
+    SpaceImage *sima = CTX_wm_space_image(C);
+    Image *ima = BKE_image_add_from_imbuf(bmain, ibuf, "Clipboard");
+    IMB_freeImBuf(ibuf);
+
+    ED_space_image_set(bmain, sima, ima, false);
+    BKE_image_signal(bmain, ima, (sima) ? &sima->iuser : nullptr, IMA_SIGNAL_USER_NEW_IMAGE);
+    WM_event_add_notifier(C, NC_IMAGE | NA_ADDED, ima);
+    changed = true;
   }
+  WM_cursor_wait(false);
 
-  ED_undo_push_op(C, op);
-
-  Main *bmain = CTX_data_main(C);
-  SpaceImage *sima = CTX_wm_space_image(C);
-  Image *ima = BKE_image_add_from_imbuf(bmain, ibuf, "Clipboard");
-  IMB_freeImBuf(ibuf);
-
-  ED_space_image_set(bmain, sima, ima, false);
-  BKE_image_signal(bmain, ima, (sima) ? &sima->iuser : nullptr, IMA_SIGNAL_USER_NEW_IMAGE);
-  WM_event_add_notifier(C, NC_IMAGE | NA_ADDED, ima);
-
-  WM_cursor_set(CTX_wm_window(C), WM_CURSOR_DEFAULT);
-
-  return OPERATOR_FINISHED;
+  return changed ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
 
 static bool image_clipboard_paste_poll(bContext *C)

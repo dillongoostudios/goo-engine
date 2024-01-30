@@ -113,9 +113,7 @@ static PointerRNA rna_GreasePencil_active_layer_get(PointerRNA *ptr)
   GreasePencil *grease_pencil = rna_grease_pencil(ptr);
   if (grease_pencil->has_active_layer()) {
     return rna_pointer_inherit_refine(
-        ptr,
-        &RNA_GreasePencilLayer,
-        static_cast<void *>(grease_pencil->get_active_layer_for_write()));
+        ptr, &RNA_GreasePencilLayer, static_cast<void *>(grease_pencil->get_active_layer()));
   }
   return rna_pointer_inherit_refine(ptr, nullptr, nullptr);
 }
@@ -302,6 +300,22 @@ static void rna_def_grease_pencil_data(BlenderRNA *brna)
 
   /* Animation Data */
   rna_def_animdata_common(srna);
+
+  /* Materials */
+  prop = RNA_def_property(srna, "materials", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "material_array", "material_array_num");
+  RNA_def_property_struct_type(prop, "Material");
+  RNA_def_property_ui_text(prop, "Materials", "");
+  RNA_def_property_srna(prop, "IDMaterials"); /* see rna_ID.cc */
+  RNA_def_property_collection_funcs(prop,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    "rna_IDMaterials_assign_int");
 
   /* Layers */
   prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);

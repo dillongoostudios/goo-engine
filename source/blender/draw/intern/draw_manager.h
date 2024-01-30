@@ -10,8 +10,8 @@
 
 #pragma once
 
-#include "DRW_engine.h"
-#include "DRW_render.h"
+#include "DRW_engine.hh"
+#include "DRW_render.hh"
 
 #include "BLI_assert.h"
 #include "BLI_linklist.h"
@@ -30,12 +30,11 @@
 #include "draw_instance_data.h"
 #include "draw_shader_shared.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 struct DupliObject;
 struct Object;
+namespace blender::draw {
+struct CurvesUniformBufPool;
+}
 
 /** Use draw manager to call GPU_select, see: #DRW_draw_select_loop */
 #define USE_GPU_SELECT
@@ -54,24 +53,24 @@ struct Object;
 #define USE_PROFILE
 
 #ifdef USE_PROFILE
-#  include "PIL_time.h"
+#  include "BLI_time.h"
 
 #  define PROFILE_TIMER_FALLOFF 0.04
 
 #  define PROFILE_START(time_start) \
-    double time_start = PIL_check_seconds_timer(); \
+    double time_start = BLI_check_seconds_timer(); \
     ((void)0)
 
 #  define PROFILE_END_ACCUM(time_accum, time_start) \
     { \
-      time_accum += (PIL_check_seconds_timer() - time_start) * 1e3; \
+      time_accum += (BLI_check_seconds_timer() - time_start) * 1e3; \
     } \
     ((void)0)
 
 /* exp average */
 #  define PROFILE_END_UPDATE(time_update, time_start) \
     { \
-      double _time_delta = (PIL_check_seconds_timer() - time_start) * 1e3; \
+      double _time_delta = (BLI_check_seconds_timer() - time_start) * 1e3; \
       time_update = (time_update * (1.0 - PROFILE_TIMER_FALLOFF)) + \
                     (_time_delta * PROFILE_TIMER_FALLOFF); \
     } \
@@ -569,7 +568,7 @@ typedef struct DRWData {
   /** Per stereo view data. Contains engine data and default frame-buffers. */
   struct DRWViewData *view_data[2];
   /** Per draw-call curves object data. */
-  struct CurvesUniformBufPool *curves_ubos;
+  blender::draw::CurvesUniformBufPool *curves_ubos;
 } DRWData;
 
 /** \} */
@@ -721,9 +720,9 @@ GPUBatch *drw_cache_procedural_triangle_strips_get(void);
 void drw_uniform_attrs_pool_update(struct GHash *table,
                                    const struct GPUUniformAttrList *key,
                                    DRWResourceHandle *handle,
-                                   struct Object *ob,
-                                   struct Object *dupli_parent,
-                                   struct DupliObject *dupli_source);
+                                   const struct Object *ob,
+                                   const struct Object *dupli_parent,
+                                   const struct DupliObject *dupli_source);
 
 GPUUniformBuf *drw_ensure_layer_attribute_buffer(void);
 
@@ -734,21 +733,23 @@ bool drw_engine_data_engines_data_validate(GPUViewport *viewport, void **engine_
 void drw_engine_data_cache_release(GPUViewport *viewport);
 void drw_engine_data_free(GPUViewport *viewport);
 
+struct GPUMaterial;
+
+namespace blender::draw {
+
 struct DRW_Attributes;
 struct DRW_MeshCDMask;
-struct GPUMaterial;
-void DRW_mesh_get_attributes(struct Object *object,
-                             struct Mesh *me,
-                             struct GPUMaterial **gpumat_array,
+
+void DRW_mesh_get_attributes(const struct Object *object,
+                             const struct Mesh *mesh,
+                             const struct GPUMaterial *const *gpumat_array,
                              int gpumat_array_len,
-                             struct DRW_Attributes *r_attrs,
-                             struct DRW_MeshCDMask *r_cd_needed);
+                             DRW_Attributes *r_attrs,
+                             DRW_MeshCDMask *r_cd_needed);
+
+}  // namespace blender::draw
 
 void DRW_manager_begin_sync(void);
 void DRW_manager_end_sync(void);
 
 /** \} */
-
-#ifdef __cplusplus
-}
-#endif

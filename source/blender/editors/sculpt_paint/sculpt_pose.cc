@@ -14,23 +14,24 @@
 #include "BLI_task.h"
 
 #include "DNA_brush_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
 #include "BKE_brush.hh"
 #include "BKE_ccg.h"
-#include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_paint.hh"
 #include "BKE_pbvh_api.hh"
 
 #include "paint_intern.hh"
 #include "sculpt_intern.hh"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
 #include <cmath>
 #include <cstdlib>
+
+namespace blender::ed::sculpt_paint::pose {
 
 static void pose_solve_ik_chain(SculptPoseIKChain *ik_chain,
                                 const float initial_target[3],
@@ -148,13 +149,12 @@ static void do_pose_brush_task(Object *ob, const Brush *brush, PBVHNode *node)
   float final_pos[3];
 
   SculptOrigVertData orig_data;
-  SCULPT_orig_vert_data_init(&orig_data, ob, node, SCULPT_UNDO_COORDS);
-  AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(ob, ss, ss->cache->automasking, &automask_data, node);
+  SCULPT_orig_vert_data_init(&orig_data, ob, node, undo::Type::Position);
+  auto_mask::NodeData automask_data = auto_mask::node_begin(*ob, ss->cache->automasking, *node);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
     SCULPT_orig_vert_data_update(&orig_data, &vd);
-    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+    auto_mask::node_update(automask_data, vd);
 
     float total_disp[3];
     zero_v3(total_disp);
@@ -177,7 +177,7 @@ static void do_pose_brush_task(Object *ob, const Brush *brush, PBVHNode *node)
 
       /* Apply the vertex mask to the displacement. */
       const float mask = 1.0f - vd.mask;
-      const float automask = SCULPT_automasking_factor_get(
+      const float automask = auto_mask::factor_get(
           ss->cache->automasking, ss, vd.vertex, &automask_data);
       mul_v3_fl(disp, mask * automask);
 
@@ -190,10 +190,6 @@ static void do_pose_brush_task(Object *ob, const Brush *brush, PBVHNode *node)
 
     float *target_co = SCULPT_brush_deform_target_vertex_co_get(ss, brush->deform_target, &vd);
     copy_v3_v3(target_co, final_pos);
-
-    if (vd.is_mesh) {
-      BKE_pbvh_vert_tag_update_normal(ss->pbvh, vd.vertex);
-    }
   }
   BKE_pbvh_vertex_iter_end;
 }
@@ -247,10 +243,9 @@ static void sculpt_pose_grow_pose_factor(Object *ob,
                                          float *r_pose_origin,
                                          float *pose_factor)
 {
-  using namespace blender;
   PBVH *pbvh = ob->sculpt->pbvh;
 
-  Vector<PBVHNode *> nodes = blender::bke::pbvh::search_gather(pbvh, {});
+  Vector<PBVHNode *> nodes = bke::pbvh::search_gather(pbvh, {});
 
   PoseGrowFactorData gftd;
   gftd.pos_count = 0;
@@ -362,7 +357,7 @@ struct PoseFloodFillData {
   GSet *visited_face_sets;
 
   /* In face sets origin mode, each vertex can only be assigned to one face set. */
-  BLI_bitmap *is_weighted;
+  MutableBoundedBitSpan is_weighted;
 
   bool is_first_iteration;
 
@@ -436,16 +431,16 @@ static bool pose_face_sets_floodfill_cb(
   if (data->current_face_set == SCULPT_FACE_SET_NONE) {
 
     data->pose_factor[index] = 1.0f;
-    BLI_BITMAP_ENABLE(data->is_weighted, index);
+    data->is_weighted[index].set();
 
     if (sculpt_pose_brush_is_vertex_inside_brush_radius(
             co, data->pose_initial_co, data->radius, data->symm))
     {
-      const int visited_face_set = SCULPT_vertex_face_set_get(ss, vertex);
+      const int visited_face_set = face_set::vert_face_set_get(ss, vertex);
       BLI_gset_add(data->visited_face_sets, POINTER_FROM_INT(visited_face_set));
     }
     else if (symmetry_check) {
-      data->current_face_set = SCULPT_vertex_face_set_get(ss, vertex);
+      data->current_face_set = face_set::vert_face_set_get(ss, vertex);
       BLI_gset_add(data->visited_face_sets, POINTER_FROM_INT(data->current_face_set));
     }
     return true;
@@ -459,20 +454,20 @@ static bool pose_face_sets_floodfill_cb(
     GSetIterator gs_iter;
     GSET_ITER (gs_iter, data->visited_face_sets) {
       const int visited_face_set = POINTER_AS_INT(BLI_gsetIterator_getKey(&gs_iter));
-      is_vertex_valid |= SCULPT_vertex_has_face_set(ss, vertex, visited_face_set);
+      is_vertex_valid |= face_set::vert_has_face_set(ss, vertex, visited_face_set);
     }
   }
   else {
-    is_vertex_valid = SCULPT_vertex_has_face_set(ss, vertex, data->current_face_set);
+    is_vertex_valid = face_set::vert_has_face_set(ss, vertex, data->current_face_set);
   }
 
   if (!is_vertex_valid) {
     return visit_next;
   }
 
-  if (!BLI_BITMAP_TEST(data->is_weighted, index)) {
+  if (!data->is_weighted[index]) {
     data->pose_factor[index] = 1.0f;
-    BLI_BITMAP_ENABLE(data->is_weighted, index);
+    data->is_weighted[index].set();
     visit_next = true;
   }
 
@@ -482,7 +477,7 @@ static bool pose_face_sets_floodfill_cb(
     data->fallback_count++;
   }
 
-  if (!symmetry_check || SCULPT_vertex_has_unique_face_set(ss, vertex)) {
+  if (!symmetry_check || face_set::vert_has_unique_face_set(ss, vertex)) {
     return visit_next;
   }
 
@@ -492,10 +487,10 @@ static bool pose_face_sets_floodfill_cb(
 
   SculptVertexNeighborIter ni;
   SCULPT_VERTEX_NEIGHBORS_ITER_BEGIN (ss, vertex, ni) {
-    int next_face_set_candidate = SCULPT_vertex_face_set_get(ss, ni.vertex);
+    int next_face_set_candidate = face_set::vert_face_set_get(ss, ni.vertex);
 
     /* Check if we can get a valid face set for the next iteration from this neighbor. */
-    if (SCULPT_vertex_has_unique_face_set(ss, ni.vertex) &&
+    if (face_set::vert_has_unique_face_set(ss, ni.vertex) &&
         !BLI_gset_haskey(data->visited_face_sets, POINTER_FROM_INT(next_face_set_candidate)))
     {
       if (!data->next_face_set_found) {
@@ -518,21 +513,20 @@ static bool pose_face_sets_floodfill_cb(
 
 /* Public functions. */
 
-void SCULPT_pose_calc_pose_data(Sculpt *sd,
-                                Object *ob,
-                                SculptSession *ss,
-                                float initial_location[3],
-                                float radius,
-                                float pose_offset,
-                                float *r_pose_origin,
-                                float *r_pose_factor)
+void calc_pose_data(Object *ob,
+                    SculptSession *ss,
+                    float initial_location[3],
+                    float radius,
+                    float pose_offset,
+                    float *r_pose_origin,
+                    float *r_pose_factor)
 {
   SCULPT_vertex_random_access_ensure(ss);
 
   /* Calculate the pose rotation point based on the boundaries of the brush factor. */
   SculptFloodFill flood;
-  SCULPT_floodfill_init(ss, &flood);
-  SCULPT_floodfill_add_active(sd, ob, ss, &flood, (r_pose_factor) ? radius : 0.0f);
+  flood_fill::init_fill(ss, &flood);
+  flood_fill::add_active(ob, ss, &flood, (r_pose_factor) ? radius : 0.0f);
 
   PoseFloodFillData fdata{};
   fdata.radius = radius;
@@ -543,8 +537,7 @@ void SCULPT_pose_calc_pose_data(Sculpt *sd,
   zero_v3(fdata.pose_origin);
   copy_v3_v3(fdata.pose_initial_co, initial_location);
   copy_v3_v3(fdata.fallback_floodfill_origin, initial_location);
-  SCULPT_floodfill_execute(ss, &flood, pose_topology_floodfill_cb, &fdata);
-  SCULPT_floodfill_free(&flood);
+  flood_fill::execute(ss, &flood, pose_topology_floodfill_cb, &fdata);
 
   if (fdata.tot_co > 0) {
     mul_v3_fl(fdata.pose_origin, 1.0f / float(fdata.tot_co));
@@ -638,19 +631,15 @@ static int pose_brush_num_effective_segments(const Brush *brush)
   return brush->pose_ik_segments;
 }
 
-static SculptPoseIKChain *pose_ik_chain_init_topology(Sculpt *sd,
-                                                      Object *ob,
-                                                      SculptSession *ss,
-                                                      Brush *br,
-                                                      const float initial_location[3],
-                                                      const float radius)
+static SculptPoseIKChain *pose_ik_chain_init_topology(
+    Object *ob, SculptSession *ss, Brush *br, const float initial_location[3], const float radius)
 {
 
   const float chain_segment_len = radius * (1.0f + br->pose_offset);
   float next_chain_segment_target[3];
 
   int totvert = SCULPT_vertex_count_get(ss);
-  PBVHVertRef nearest_vertex = SCULPT_nearest_vertex_get(sd, ob, initial_location, FLT_MAX, true);
+  PBVHVertRef nearest_vertex = SCULPT_nearest_vertex_get(ob, initial_location, FLT_MAX, true);
   int nearest_vertex_index = BKE_pbvh_vertex_to_index(ss->pbvh, nearest_vertex);
 
   /* Init the buffers used to keep track of the changes in the pose factors as more segments are
@@ -669,14 +658,13 @@ static SculptPoseIKChain *pose_ik_chain_init_topology(Sculpt *sd,
 
   /* Calculate the first segment in the chain using the brush radius and the pose origin offset. */
   copy_v3_v3(next_chain_segment_target, initial_location);
-  SCULPT_pose_calc_pose_data(sd,
-                             ob,
-                             ss,
-                             next_chain_segment_target,
-                             radius,
-                             br->pose_offset,
-                             ik_chain->segments[0].orig,
-                             pose_factor_grow);
+  calc_pose_data(ob,
+                 ss,
+                 next_chain_segment_target,
+                 radius,
+                 br->pose_offset,
+                 ik_chain->segments[0].orig,
+                 pose_factor_grow);
 
   copy_v3_v3(next_chain_segment_target, ik_chain->segments[0].orig);
 
@@ -717,8 +705,10 @@ static SculptPoseIKChain *pose_ik_chain_init_topology(Sculpt *sd,
   return ik_chain;
 }
 
-static SculptPoseIKChain *pose_ik_chain_init_face_sets(
-    Sculpt *sd, Object *ob, SculptSession *ss, Brush *br, const float radius)
+static SculptPoseIKChain *pose_ik_chain_init_face_sets(Object *ob,
+                                                       SculptSession *ss,
+                                                       Brush *br,
+                                                       const float radius)
 {
 
   int totvert = SCULPT_vertex_count_get(ss);
@@ -729,7 +719,7 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets(
 
   GSet *visited_face_sets = BLI_gset_int_new_ex("visited_face_sets", ik_chain->tot_segments);
 
-  BLI_bitmap *is_weighted = BLI_BITMAP_NEW(totvert, "weighted");
+  BitVector<> is_weighted(totvert);
 
   int current_face_set = SCULPT_FACE_SET_NONE;
   int prev_face_set = SCULPT_FACE_SET_NONE;
@@ -739,8 +729,8 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets(
   for (int s = 0; s < ik_chain->tot_segments; s++) {
 
     SculptFloodFill flood;
-    SCULPT_floodfill_init(ss, &flood);
-    SCULPT_floodfill_add_initial_with_symmetry(sd, ob, ss, &flood, current_vertex, FLT_MAX);
+    flood_fill::init_fill(ss, &flood);
+    flood_fill::add_initial_with_symmetry(ob, ss, &flood, current_vertex, FLT_MAX);
 
     BLI_gset_add(visited_face_sets, POINTER_FROM_INT(current_face_set));
 
@@ -760,8 +750,7 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets(
     zero_v3(fdata.pose_origin);
     zero_v3(fdata.fallback_origin);
     copy_v3_v3(fdata.pose_initial_co, SCULPT_vertex_co_get(ss, current_vertex));
-    SCULPT_floodfill_execute(ss, &flood, pose_face_sets_floodfill_cb, &fdata);
-    SCULPT_floodfill_free(&flood);
+    flood_fill::execute(ss, &flood, pose_face_sets_floodfill_cb, &fdata);
 
     if (fdata.tot_co > 0) {
       mul_v3_fl(fdata.pose_origin, 1.0f / float(fdata.tot_co));
@@ -784,8 +773,6 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets(
 
   pose_ik_chain_origin_heads_init(ik_chain, SCULPT_active_vertex_co_get(ss));
 
-  MEM_SAFE_FREE(is_weighted);
-
   return ik_chain;
 }
 
@@ -804,11 +791,11 @@ static bool pose_face_sets_fk_find_masked_floodfill_cb(
     data->floodfill_it[to_v_i] = data->floodfill_it[from_v_i];
   }
 
-  const int to_face_set = SCULPT_vertex_face_set_get(ss, to_v);
+  const int to_face_set = face_set::vert_face_set_get(ss, to_v);
   if (!BLI_gset_haskey(data->visited_face_sets, POINTER_FROM_INT(to_face_set))) {
-    if (SCULPT_vertex_has_unique_face_set(ss, to_v) &&
-        !SCULPT_vertex_has_unique_face_set(ss, from_v) &&
-        SCULPT_vertex_has_face_set(ss, from_v, to_face_set))
+    if (face_set::vert_has_unique_face_set(ss, to_v) &&
+        !face_set::vert_has_unique_face_set(ss, from_v) &&
+        face_set::vert_has_face_set(ss, from_v, to_face_set))
     {
 
       BLI_gset_add(data->visited_face_sets, POINTER_FROM_INT(to_face_set));
@@ -824,7 +811,7 @@ static bool pose_face_sets_fk_find_masked_floodfill_cb(
     }
   }
 
-  return SCULPT_vertex_has_face_set(ss, to_v, data->initial_face_set);
+  return face_set::vert_has_face_set(ss, to_v, data->initial_face_set);
 }
 
 static bool pose_face_sets_fk_set_weights_floodfill_cb(SculptSession *ss,
@@ -838,11 +825,13 @@ static bool pose_face_sets_fk_set_weights_floodfill_cb(SculptSession *ss,
   int to_v_i = BKE_pbvh_vertex_to_index(ss->pbvh, to_v);
 
   data->fk_weights[to_v_i] = 1.0f;
-  return !SCULPT_vertex_has_face_set(ss, to_v, data->masked_face_set);
+  return !face_set::vert_has_face_set(ss, to_v, data->masked_face_set);
 }
 
-static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(
-    Sculpt *sd, Object *ob, SculptSession *ss, const float radius, const float *initial_location)
+static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(Object *ob,
+                                                          SculptSession *ss,
+                                                          const float radius,
+                                                          const float *initial_location)
 {
   const int totvert = SCULPT_vertex_count_get(ss);
 
@@ -851,11 +840,11 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(
   const PBVHVertRef active_vertex = SCULPT_active_vertex_get(ss);
   int active_vertex_index = BKE_pbvh_vertex_to_index(ss->pbvh, active_vertex);
 
-  const int active_face_set = SCULPT_active_face_set_get(ss);
+  const int active_face_set = face_set::active_face_set_get(ss);
 
   SculptFloodFill flood;
-  SCULPT_floodfill_init(ss, &flood);
-  SCULPT_floodfill_add_initial(&flood, active_vertex);
+  flood_fill::init_fill(ss, &flood);
+  flood_fill::add_initial(&flood, active_vertex);
   PoseFloodFillData fdata;
   fdata.floodfill_it = static_cast<int *>(MEM_calloc_arrayN(totvert, sizeof(int), __func__));
   fdata.floodfill_it[active_vertex_index] = 1;
@@ -864,8 +853,7 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(
   fdata.target_face_set = SCULPT_FACE_SET_NONE;
   fdata.masked_face_set_it = 0;
   fdata.visited_face_sets = BLI_gset_int_new_ex("visited_face_sets", 3);
-  SCULPT_floodfill_execute(ss, &flood, pose_face_sets_fk_find_masked_floodfill_cb, &fdata);
-  SCULPT_floodfill_free(&flood);
+  flood_fill::execute(ss, &flood, pose_face_sets_fk_find_masked_floodfill_cb, &fdata);
   BLI_gset_free(fdata.visited_face_sets, nullptr);
 
   int origin_count = 0;
@@ -874,8 +862,8 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(
     PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
 
     if (fdata.floodfill_it[i] != 0 &&
-        SCULPT_vertex_has_face_set(ss, vertex, fdata.initial_face_set) &&
-        SCULPT_vertex_has_face_set(ss, vertex, fdata.masked_face_set))
+        face_set::vert_has_face_set(ss, vertex, fdata.initial_face_set) &&
+        face_set::vert_has_face_set(ss, vertex, fdata.masked_face_set))
     {
       add_v3_v3(origin_acc, SCULPT_vertex_co_get(ss, vertex));
       origin_count++;
@@ -889,8 +877,8 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(
       PBVHVertRef vertex = BKE_pbvh_index_to_vertex(ss->pbvh, i);
 
       if (fdata.floodfill_it[i] != 0 &&
-          SCULPT_vertex_has_face_set(ss, vertex, fdata.initial_face_set) &&
-          SCULPT_vertex_has_face_set(ss, vertex, fdata.target_face_set))
+          face_set::vert_has_face_set(ss, vertex, fdata.initial_face_set) &&
+          face_set::vert_has_face_set(ss, vertex, fdata.target_face_set))
       {
         add_v3_v3(target_acc, SCULPT_vertex_co_get(ss, vertex));
         target_count++;
@@ -917,41 +905,36 @@ static SculptPoseIKChain *pose_ik_chain_init_face_sets_fk(
     copy_v3_v3(ik_chain->segments[0].head, initial_location);
   }
 
-  SCULPT_floodfill_init(ss, &flood);
-  SCULPT_floodfill_add_active(sd, ob, ss, &flood, radius);
+  flood_fill::init_fill(ss, &flood);
+  flood_fill::add_active(ob, ss, &flood, radius);
   fdata.fk_weights = ik_chain->segments[0].weights;
-  SCULPT_floodfill_execute(ss, &flood, pose_face_sets_fk_set_weights_floodfill_cb, &fdata);
-  SCULPT_floodfill_free(&flood);
+  flood_fill::execute(ss, &flood, pose_face_sets_fk_set_weights_floodfill_cb, &fdata);
 
   pose_ik_chain_origin_heads_init(ik_chain, ik_chain->segments[0].head);
   return ik_chain;
 }
 
-SculptPoseIKChain *SCULPT_pose_ik_chain_init(Sculpt *sd,
-                                             Object *ob,
-                                             SculptSession *ss,
-                                             Brush *br,
-                                             const float initial_location[3],
-                                             const float radius)
+SculptPoseIKChain *ik_chain_init(
+    Object *ob, SculptSession *ss, Brush *br, const float initial_location[3], const float radius)
 {
   SculptPoseIKChain *ik_chain = nullptr;
 
   const bool use_fake_neighbors = !(br->flag2 & BRUSH_USE_CONNECTED_ONLY);
 
   if (use_fake_neighbors) {
-    SCULPT_fake_neighbors_ensure(sd, ob, br->disconnected_distance_max);
+    SCULPT_fake_neighbors_ensure(ob, br->disconnected_distance_max);
     SCULPT_fake_neighbors_enable(ob);
   }
 
   switch (br->pose_origin_type) {
     case BRUSH_POSE_ORIGIN_TOPOLOGY:
-      ik_chain = pose_ik_chain_init_topology(sd, ob, ss, br, initial_location, radius);
+      ik_chain = pose_ik_chain_init_topology(ob, ss, br, initial_location, radius);
       break;
     case BRUSH_POSE_ORIGIN_FACE_SETS:
-      ik_chain = pose_ik_chain_init_face_sets(sd, ob, ss, br, radius);
+      ik_chain = pose_ik_chain_init_face_sets(ob, ss, br, radius);
       break;
     case BRUSH_POSE_ORIGIN_FACE_SETS_FK:
-      ik_chain = pose_ik_chain_init_face_sets_fk(sd, ob, ss, radius, initial_location);
+      ik_chain = pose_ik_chain_init_face_sets_fk(ob, ss, radius, initial_location);
       break;
   }
 
@@ -962,16 +945,15 @@ SculptPoseIKChain *SCULPT_pose_ik_chain_init(Sculpt *sd,
   return ik_chain;
 }
 
-void SCULPT_pose_brush_init(Sculpt *sd, Object *ob, SculptSession *ss, Brush *br)
+void pose_brush_init(Object *ob, SculptSession *ss, Brush *br)
 {
-  using namespace blender;
   PBVH *pbvh = ob->sculpt->pbvh;
 
-  Vector<PBVHNode *> nodes = blender::bke::pbvh::search_gather(pbvh, {});
+  Vector<PBVHNode *> nodes = bke::pbvh::search_gather(pbvh, {});
 
   /* Init the IK chain that is going to be used to deform the vertices. */
-  ss->cache->pose_ik_chain = SCULPT_pose_ik_chain_init(
-      sd, ob, ss, br, ss->cache->true_location, ss->cache->radius);
+  ss->cache->pose_ik_chain = ik_chain_init(
+      ob, ss, br, ss->cache->true_location, ss->cache->radius);
 
   /* Smooth the weights of each segment for cleaner deformation. */
   for (int ik = 0; ik < ss->cache->pose_ik_chain->tot_segments; ik++) {
@@ -1109,9 +1091,8 @@ static void sculpt_pose_align_pivot_local_space(float r_mat[4][4],
   ortho_basis_v3v3_v3(r_mat[0], r_mat[1], r_mat[2]);
 }
 
-void SCULPT_do_pose_brush(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes)
+void do_pose_brush(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes)
 {
-  using namespace blender;
   SculptSession *ss = ob->sculpt;
   Brush *brush = BKE_paint_brush(&sd->paint);
   const ePaintSymmetryFlags symm = SCULPT_mesh_symmetry_xyz_get(ob);
@@ -1202,7 +1183,7 @@ void SCULPT_do_pose_brush(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes)
   });
 }
 
-void SCULPT_pose_ik_chain_free(SculptPoseIKChain *ik_chain)
+void ik_chain_free(SculptPoseIKChain *ik_chain)
 {
   for (int i = 0; i < ik_chain->tot_segments; i++) {
     MEM_SAFE_FREE(ik_chain->segments[i].weights);
@@ -1210,3 +1191,5 @@ void SCULPT_pose_ik_chain_free(SculptPoseIKChain *ik_chain)
   MEM_SAFE_FREE(ik_chain->segments);
   MEM_SAFE_FREE(ik_chain);
 }
+
+}  // namespace blender::ed::sculpt_paint::pose

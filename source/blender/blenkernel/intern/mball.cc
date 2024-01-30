@@ -37,22 +37,23 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
 #include "BKE_anim_data.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_displist.h"
 #include "BKE_geometry_set.hh"
 #include "BKE_idtype.h"
-#include "BKE_lattice.h"
+#include "BKE_lattice.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_material.h"
 #include "BKE_mball.h"
 #include "BKE_mball_tessellate.h"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_scene.h"
 
 #include "DEG_depsgraph.hh"
@@ -223,13 +224,6 @@ MetaElem *BKE_mball_element_add(MetaBall *mb, const int type)
   BLI_addtail(&mb->elems, ml);
 
   return ml;
-}
-
-BoundBox *BKE_mball_boundbox_get(Object *ob)
-{
-  BLI_assert(ob->type == OB_MBALL);
-  BKE_object_boundbox_calc_from_evaluated_geometry(ob);
-  return ob->runtime.bb;
 }
 
 bool BKE_mball_is_basis(const Object *ob)
@@ -654,14 +648,12 @@ void BKE_mball_data_update(Depsgraph *depsgraph, Scene *scene, Object *ob)
         ob->parent,
         ob,
         reinterpret_cast<float(*)[3]>(mesh->vert_positions_for_write().data()),
-        mesh->totvert,
+        mesh->verts_num,
         0,
         nullptr,
         1.0f);
-    BKE_mesh_tag_positions_changed(mesh);
+    mesh->tag_positions_changed();
   }
 
-  ob->runtime.geometry_set_eval = new GeometrySet(GeometrySet::from_mesh(mesh));
-
-  BKE_object_boundbox_calc_from_evaluated_geometry(ob);
+  ob->runtime->geometry_set_eval = new GeometrySet(GeometrySet::from_mesh(mesh));
 };

@@ -24,7 +24,7 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 
 #include "BLI_math_base.h"
 #include "BLI_math_color.h"
@@ -33,7 +33,7 @@
 
 #include "BKE_deform.h"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 #include "bmesh_py_types_meshdata.h"
 
 #include "../generic/py_capi_utils.h"

@@ -13,12 +13,12 @@
 #include "BKE_blender_version.h"
 #include "BKE_cachefile.h"
 #include "BKE_cdderivedmesh.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_library.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_library.hh"
+#include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
@@ -183,6 +183,8 @@ struct ImportJobData {
   bool was_canceled;
   bool import_ok;
   timeit::TimePoint start_time;
+
+  CacheFile *cache_file;
 };
 
 static void report_job_duration(const ImportJobData *data)
@@ -203,6 +205,7 @@ static void import_startjob(void *customdata, wmJobWorkerStatus *worker_status)
   data->was_canceled = false;
   data->archive = nullptr;
   data->start_time = timeit::Clock::now();
+  data->cache_file = nullptr;
 
   data->params.worker_status = worker_status;
 
@@ -220,27 +223,33 @@ static void import_startjob(void *customdata, wmJobWorkerStatus *worker_status)
     DEG_id_tag_update(&import_collection->id, ID_RECALC_COPY_ON_WRITE);
     DEG_relations_tag_update(data->bmain);
 
-    WM_main_add_notifier(NC_SCENE | ND_LAYER, nullptr);
-
+    BKE_view_layer_synced_ensure(data->scene, data->view_layer);
     data->view_layer->active_collection = BKE_layer_collection_first_from_scene_collection(
         data->view_layer, import_collection);
   }
 
   BLI_path_abs(data->filepath, BKE_main_blendfile_path_from_global());
 
-  CacheFile *cache_file = static_cast<CacheFile *>(
-      BKE_cachefile_add(data->bmain, BLI_path_basename(data->filepath)));
+  /* Callback function to lazily create a cache file when converting
+   * time varying data. */
+  auto get_cache_file = [data]() {
+    if (!data->cache_file) {
+      data->cache_file = static_cast<CacheFile *>(
+          BKE_cachefile_add(data->bmain, BLI_path_basename(data->filepath)));
 
-  /* Decrement the ID ref-count because it is going to be incremented for each
-   * modifier and constraint that it will be attached to, so since currently
-   * it is not used by anyone, its use count will off by one. */
-  id_us_min(&cache_file->id);
+      /* Decrement the ID ref-count because it is going to be incremented for each
+       * modifier and constraint that it will be attached to, so since currently
+       * it is not used by anyone, its use count will off by one. */
+      id_us_min(&data->cache_file->id);
 
-  cache_file->is_sequence = data->params.is_sequence;
-  cache_file->scale = data->params.scale;
-  STRNCPY(cache_file->filepath, data->filepath);
+      data->cache_file->is_sequence = data->params.is_sequence;
+      data->cache_file->scale = data->params.scale;
+      STRNCPY(data->cache_file->filepath, data->filepath);
+    }
+    return data->cache_file;
+  };
 
-  data->settings.cache_file = cache_file;
+  data->settings.get_cache_file = get_cache_file;
 
   *data->do_update = true;
   *data->progress = 0.05f;
@@ -256,9 +265,8 @@ static void import_startjob(void *customdata, wmJobWorkerStatus *worker_status)
   std::string prim_path_mask(data->params.prim_path_mask);
   pxr::UsdStagePopulationMask pop_mask;
   if (!prim_path_mask.empty()) {
-    const std::vector<std::string> mask_tokens = pxr::TfStringTokenize(prim_path_mask, ",;");
-    for (const std::string &tok : mask_tokens) {
-      pxr::SdfPath prim_path(tok);
+    for (const std::string &mask_token : pxr::TfStringTokenize(prim_path_mask, ",;")) {
+      pxr::SdfPath prim_path(mask_token);
       if (!prim_path.IsEmpty()) {
         pop_mask.Add(prim_path);
       }
@@ -396,9 +404,16 @@ static void import_endjob(void *customdata)
 
     lc = BKE_layer_collection_get_active(view_layer);
 
+    /* Create prototype collections for instancing. */
+    data->archive->create_proto_collections(data->bmain, lc->collection);
+
     /* Add all objects to the collection. */
     for (USDPrimReader *reader : data->archive->readers()) {
       if (!reader) {
+        continue;
+      }
+      if (reader->prim().IsInPrototype()) {
+        /* Skip prototype prims, as these are added to prototype collections. */
         continue;
       }
       Object *ob = reader->object();
@@ -453,7 +468,7 @@ static void import_endjob(void *customdata)
 
   MEM_SAFE_FREE(data->params.prim_path_mask);
 
-  WM_main_add_notifier(NC_SCENE | ND_FRAME, data->scene);
+  WM_main_add_notifier(NC_ID | NA_ADDED, nullptr);
   report_job_duration(data);
 }
 
@@ -541,7 +556,7 @@ static USDPrimReader *get_usd_reader(CacheReader *reader,
   pxr::UsdPrim iobject = usd_reader->prim();
 
   if (!iobject.IsValid()) {
-    *err_str = TIP_("Invalid object: verify object path");
+    *err_str = RPT_("Invalid object: verify object path");
     return nullptr;
   }
 

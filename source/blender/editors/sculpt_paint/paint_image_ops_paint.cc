@@ -15,10 +15,10 @@
 #include "BLI_math_color.h"
 
 #include "BKE_brush.hh"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_paint.hh"
-#include "BKE_undo_system.h"
+#include "BKE_undo_system.hh"
 
 #include "ED_paint.hh"
 #include "ED_view3d.hh"

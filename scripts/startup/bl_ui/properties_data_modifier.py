@@ -73,12 +73,14 @@ class OBJECT_MT_modifier_add(ModifierAddMenu, Menu):
             layout.separator()
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE'}:
             layout.menu("OBJECT_MT_modifier_add_edit")
-        if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'VOLUME'}:
+        if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'VOLUME', 'GREASEPENCIL'}:
             layout.menu("OBJECT_MT_modifier_add_generate")
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE', 'VOLUME'}:
             layout.menu("OBJECT_MT_modifier_add_deform")
         if ob_type in {'MESH', 'CURVE', 'FONT', 'SURFACE', 'LATTICE'}:
             layout.menu("OBJECT_MT_modifier_add_physics")
+        if ob_type in {'GREASEPENCIL'}:
+            layout.menu("OBJECT_MT_modifier_add_color")
 
         if geometry_nodes_supported:
             layout.menu_contents("OBJECT_MT_modifier_add_root_catalogs")
@@ -147,6 +149,8 @@ class OBJECT_MT_modifier_add_generate(ModifierAddMenu, Menu):
             self.operator_modifier_add(layout, 'WELD')
         if ob_type == 'MESH':
             self.operator_modifier_add(layout, 'WIREFRAME')
+        if ob_type == 'GREASEPENCIL':
+            self.operator_modifier_add(layout, 'GREASEPENCIL_SUBDIV')
         layout.template_modifier_asset_menu_items(catalog_path=self.bl_label)
 
 
@@ -207,6 +211,20 @@ class OBJECT_MT_modifier_add_physics(ModifierAddMenu, Menu):
         layout.template_modifier_asset_menu_items(catalog_path=self.bl_label)
 
 
+class OBJECT_MT_modifier_add_color(ModifierAddMenu, Menu):
+    bl_label = "Color"
+    bl_options = {'SEARCH_ON_KEY_PRESS'}
+
+    def draw(self, context):
+        layout = self.layout
+        ob_type = context.object.type
+        if ob_type == 'GREASEPENCIL':
+            self.operator_modifier_add(layout, 'GREASE_PENCIL_COLOR')
+            self.operator_modifier_add(layout, 'GREASE_PENCIL_TINT')
+            self.operator_modifier_add(layout, 'GREASE_PENCIL_OPACITY')
+        layout.template_modifier_asset_menu_items(catalog_path=self.bl_label)
+
+
 class DATA_PT_gpencil_modifiers(ModifierButtonsPanel, Panel):
     bl_label = "Modifiers"
 
@@ -228,7 +246,10 @@ class AddModifierMenu(Operator):
     @classmethod
     def poll(cls, context):
         # NOTE: This operator only exists to add a poll to the add modifier shortcut in the property editor.
+        object = context.object
         space = context.space_data
+        if object and object.type == 'GPENCIL':
+            return False
         return space and space.type == 'PROPERTIES' and space.context == 'MODIFIER'
 
     def invoke(self, context, event):
@@ -242,6 +263,7 @@ classes = (
     OBJECT_MT_modifier_add_generate,
     OBJECT_MT_modifier_add_deform,
     OBJECT_MT_modifier_add_physics,
+    OBJECT_MT_modifier_add_color,
     DATA_PT_gpencil_modifiers,
     AddModifierMenu,
 )

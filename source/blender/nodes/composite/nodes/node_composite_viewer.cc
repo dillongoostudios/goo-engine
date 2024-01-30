@@ -104,14 +104,15 @@ class ViewerOperation : public NodeOperation {
       color.w = alpha.get_float_value();
     }
 
-    const int2 viewer_size = compute_domain().size;
-    GPU_texture_clear(context().get_viewer_output_texture(viewer_size), GPU_DATA_FLOAT, color);
+    const Domain domain = compute_domain();
+    GPU_texture_clear(context().get_viewer_output_texture(domain), GPU_DATA_FLOAT, color);
   }
 
   /* Executes when the alpha channel of the image is ignored. */
   void execute_ignore_alpha()
   {
-    GPUShader *shader = shader_manager().get("compositor_write_output_opaque");
+    GPUShader *shader = context().get_shader("compositor_write_output_opaque",
+                                             ResultPrecision::Half);
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a smaller region of the output texture, so only
@@ -123,12 +124,12 @@ class ViewerOperation : public NodeOperation {
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");
 
-    const int2 viewer_size = compute_domain().size;
-    GPUTexture *output_texture = context().get_viewer_output_texture(viewer_size);
+    const Domain domain = compute_domain();
+    GPUTexture *output_texture = context().get_viewer_output_texture(domain);
     const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
     GPU_texture_image_bind(output_texture, image_unit);
 
-    compute_dispatch_threads_at_least(shader, viewer_size);
+    compute_dispatch_threads_at_least(shader, domain.size);
 
     image.unbind_as_texture();
     GPU_texture_image_unbind(output_texture);
@@ -139,7 +140,7 @@ class ViewerOperation : public NodeOperation {
    * to the output texture. */
   void execute_copy()
   {
-    GPUShader *shader = shader_manager().get("compositor_write_output");
+    GPUShader *shader = context().get_shader("compositor_write_output", ResultPrecision::Half);
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a smaller region of the output texture, so only
@@ -151,12 +152,12 @@ class ViewerOperation : public NodeOperation {
     const Result &image = get_input("Image");
     image.bind_as_texture(shader, "input_tx");
 
-    const int2 viewer_size = compute_domain().size;
-    GPUTexture *output_texture = context().get_viewer_output_texture(viewer_size);
+    const Domain domain = compute_domain();
+    GPUTexture *output_texture = context().get_viewer_output_texture(domain);
     const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
     GPU_texture_image_bind(output_texture, image_unit);
 
-    compute_dispatch_threads_at_least(shader, viewer_size);
+    compute_dispatch_threads_at_least(shader, domain.size);
 
     image.unbind_as_texture();
     GPU_texture_image_unbind(output_texture);
@@ -166,7 +167,8 @@ class ViewerOperation : public NodeOperation {
   /* Executes when the alpha channel of the image is set as the value of the input alpha. */
   void execute_set_alpha()
   {
-    GPUShader *shader = shader_manager().get("compositor_write_output_alpha");
+    GPUShader *shader = context().get_shader("compositor_write_output_alpha",
+                                             ResultPrecision::Half);
     GPU_shader_bind(shader);
 
     /* The compositing space might be limited to a smaller region of the output texture, so only
@@ -181,12 +183,12 @@ class ViewerOperation : public NodeOperation {
     const Result &alpha = get_input("Alpha");
     alpha.bind_as_texture(shader, "alpha_tx");
 
-    const int2 viewer_size = compute_domain().size;
-    GPUTexture *output_texture = context().get_viewer_output_texture(viewer_size);
+    const Domain domain = compute_domain();
+    GPUTexture *output_texture = context().get_viewer_output_texture(domain);
     const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
     GPU_texture_image_bind(output_texture, image_unit);
 
-    compute_dispatch_threads_at_least(shader, viewer_size);
+    compute_dispatch_threads_at_least(shader, domain.size);
 
     image.unbind_as_texture();
     alpha.unbind_as_texture();
@@ -208,7 +210,9 @@ class ViewerOperation : public NodeOperation {
      * size, so use the input directly. Otherwise, no dedicated viewer exist so the input should be
      * in the domain of the compositing region. */
     if (context().use_composite_output()) {
-      return NodeOperation::compute_domain();
+      const Domain domain = NodeOperation::compute_domain();
+      /* Fallback to the compositing region size in case of a single value domain. */
+      return domain.size == int2(1) ? Domain(context().get_compositing_region_size()) : domain;
     }
     else {
       return Domain(context().get_compositing_region_size());

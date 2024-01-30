@@ -22,11 +22,12 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_rect.h"
+#include "BLI_time.h" /* Smooth-view. */
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_context.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_report.h"
 
 #include "BLT_translation.h"
@@ -37,8 +38,6 @@
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
 #include "ED_transform_snap_object_context.hh"
-
-#include "PIL_time.h" /* Smooth-view. */
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
@@ -53,9 +52,9 @@
 #include "BLI_strict_flags.h"
 
 #ifdef WITH_INPUT_NDOF
-//#  define NDOF_WALK_DEBUG
+// #  define NDOF_WALK_DEBUG
 /* NOTE(@ideasman42): Is this needed for NDOF? commented so redraw doesn't thrash. */
-//#  define NDOF_WALK_DRAW_TOOMUCH
+// #  define NDOF_WALK_DRAW_TOOMUCH
 #endif
 
 #define USE_TABLET_SUPPORT
@@ -110,7 +109,7 @@ enum eWalkDirectionFlag {
   WALK_BIT_GLOBAL_UP = 1 << 6,
   WALK_BIT_GLOBAL_DOWN = 1 << 7,
 };
-ENUM_OPERATORS(eWalkDirectionFlag, WALK_BIT_LOCAL_DOWN)
+ENUM_OPERATORS(eWalkDirectionFlag, WALK_BIT_GLOBAL_DOWN)
 
 enum eWalkTeleportState {
   WALK_TELEPORT_STATE_OFF = 0,
@@ -159,9 +158,9 @@ void walk_modal_keymap(wmKeyConfig *keyconf)
       {WALK_MODAL_DIR_FORWARD_STOP, "FORWARD_STOP", 0, "Stop Move Forward", ""},
       {WALK_MODAL_DIR_BACKWARD_STOP, "BACKWARD_STOP", 0, "Stop Move Backward", ""},
       {WALK_MODAL_DIR_LEFT_STOP, "LEFT_STOP", 0, "Stop Move Left", ""},
-      {WALK_MODAL_DIR_RIGHT_STOP, "RIGHT_STOP", 0, "Stop Mode Right", ""},
+      {WALK_MODAL_DIR_RIGHT_STOP, "RIGHT_STOP", 0, "Stop Move Right", ""},
       {WALK_MODAL_DIR_UP_STOP, "UP_STOP", 0, "Stop Move Global Up", ""},
-      {WALK_MODAL_DIR_DOWN_STOP, "DOWN_STOP", 0, "Stop Mode Global Down", ""},
+      {WALK_MODAL_DIR_DOWN_STOP, "DOWN_STOP", 0, "Stop Move Global Down", ""},
       {WALK_MODAL_DIR_LOCAL_UP_STOP, "LOCAL_UP_STOP", 0, "Stop Move Local Up", ""},
       {WALK_MODAL_DIR_LOCAL_DOWN_STOP, "LOCAL_DOWN_STOP", 0, "Stop Move Local Down", ""},
 
@@ -624,7 +623,7 @@ static bool initWalkInfo(bContext *C, WalkInfo *walk, wmOperator *op, const int 
   walk->need_rotation_keyframe = false;
   walk->need_translation_keyframe = false;
 
-  walk->time_lastdraw = PIL_check_seconds_timer();
+  walk->time_lastdraw = BLI_check_seconds_timer();
 
   walk->draw_handle_pixel = ED_region_draw_cb_activate(
       walk->region->type, drawWalkPixel, walk, REGION_DRAW_POST_PIXEL);
@@ -765,7 +764,7 @@ static void walkEvent(WalkInfo *walk, const wmEvent *event)
         }
 
         /* Update the time else the view will jump when 2D mouse/timer resume. */
-        walk->time_lastdraw = PIL_check_seconds_timer();
+        walk->time_lastdraw = BLI_check_seconds_timer();
 
         break;
       }
@@ -886,7 +885,7 @@ static void walkEvent(WalkInfo *walk, const wmEvent *event)
           float t;
 
           /* Delta time. */
-          t = float(PIL_check_seconds_timer() - walk->teleport.initial_time);
+          t = float(BLI_check_seconds_timer() - walk->teleport.initial_time);
 
           /* Reduce the velocity, if JUMP wasn't hold for long enough. */
           t = min_ff(t, JUMP_TIME_MAX);
@@ -911,7 +910,7 @@ static void walkEvent(WalkInfo *walk, const wmEvent *event)
           walk->gravity_state = WALK_GRAVITY_STATE_JUMP;
           walk->speed_jump = JUMP_SPEED_MAX;
 
-          walk->teleport.initial_time = PIL_check_seconds_timer();
+          walk->teleport.initial_time = BLI_check_seconds_timer();
           copy_v3_v3(walk->teleport.origin, walk->rv3d->viewinv[3]);
 
           /* Using previous vector because WASD keys are not called when SPACE is. */
@@ -939,7 +938,7 @@ static void walkEvent(WalkInfo *walk, const wmEvent *event)
             teleport->navigation_mode = walk->navigation_mode;
           }
           teleport->state = WALK_TELEPORT_STATE_ON;
-          teleport->initial_time = PIL_check_seconds_timer();
+          teleport->initial_time = BLI_check_seconds_timer();
           teleport->duration = U.walk_navigation.teleport_time;
 
           walk_navigation_mode_set(walk, WALK_MODE_FREE);
@@ -1088,7 +1087,7 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
 #ifdef NDOF_WALK_DRAW_TOOMUCH
       walk->redraw = true;
 #endif
-      time_current = PIL_check_seconds_timer();
+      time_current = BLI_check_seconds_timer();
       time_redraw = float(time_current - walk->time_lastdraw);
 
       /* Clamp redraw time to avoid jitter in roll correction. */
@@ -1331,7 +1330,7 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
         }
         else {
           /* Hijack the teleport variables. */
-          walk->teleport.initial_time = PIL_check_seconds_timer();
+          walk->teleport.initial_time = BLI_check_seconds_timer();
           walk->gravity_state = WALK_GRAVITY_STATE_ON;
           walk->teleport.duration = 0.0f;
 
@@ -1344,7 +1343,7 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
       if (ELEM(walk->gravity_state, WALK_GRAVITY_STATE_ON, WALK_GRAVITY_STATE_JUMP)) {
         float ray_distance, difference = -100.0f;
         /* Delta time. */
-        const float t = float(PIL_check_seconds_timer() - walk->teleport.initial_time);
+        const float t = float(BLI_check_seconds_timer() - walk->teleport.initial_time);
 
         /* Keep moving if we were moving. */
         copy_v2_v2(dvec, walk->teleport.direction);
@@ -1387,7 +1386,7 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
         float cur_loc[3];
 
         /* Linear interpolation. */
-        t = float(PIL_check_seconds_timer() - walk->teleport.initial_time);
+        t = float(BLI_check_seconds_timer() - walk->teleport.initial_time);
         t /= walk->teleport.duration;
 
         /* Clamp so we don't go past our limit. */
@@ -1418,7 +1417,7 @@ static int walkApply(bContext *C, WalkInfo *walk, bool is_confirm)
     }
     else {
       /* We're not redrawing but we need to update the time else the view will jump. */
-      walk->time_lastdraw = PIL_check_seconds_timer();
+      walk->time_lastdraw = BLI_check_seconds_timer();
     }
     /* End drawing. */
     copy_v3_v3(walk->dvec_prev, dvec);
@@ -1518,10 +1517,9 @@ static int walk_modal(bContext *C, wmOperator *op, const wmEvent *event)
   }
   else
 #endif /* WITH_INPUT_NDOF */
-      if (event->type == TIMER && event->customdata == walk->timer)
-  {
-    walkApply(C, walk, false);
-  }
+    if (event->type == TIMER && event->customdata == walk->timer) {
+      walkApply(C, walk, false);
+    }
 
   do_draw |= walk->redraw;
 

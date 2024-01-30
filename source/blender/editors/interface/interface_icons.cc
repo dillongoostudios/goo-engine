@@ -40,7 +40,7 @@
 #include "RNA_prototypes.h"
 
 #include "BKE_appdir.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_paint.hh"
@@ -2144,7 +2144,8 @@ static int ui_id_brush_get_icon(const bContext *C, ID *id)
 
     /* reset the icon */
     if ((ob != nullptr) && (ob->mode & OB_MODE_ALL_PAINT_GPENCIL) &&
-        (br->gpencil_settings != nullptr)) {
+        (br->gpencil_settings != nullptr))
+    {
       switch (br->gpencil_settings->icon_id) {
         case GP_BRUSH_ICON_PENCIL:
           br->id.icon_id = ICON_GPBRUSH_PENCIL;

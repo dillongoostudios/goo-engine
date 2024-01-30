@@ -19,10 +19,10 @@
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_deform.h"
-#include "BKE_editmesh.h"
-#include "BKE_lib_id.h"
+#include "BKE_editmesh.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_particle.h"
@@ -178,11 +178,11 @@ static void smoothModifier_do(
 static void deform_verts(ModifierData *md,
                          const ModifierEvalContext *ctx,
                          Mesh *mesh,
-                         float (*vertexCos)[3],
-                         int verts_num)
+                         blender::MutableSpan<blender::float3> positions)
 {
   SmoothModifierData *smd = (SmoothModifierData *)md;
-  smoothModifier_do(smd, ctx->object, mesh, vertexCos, verts_num);
+  smoothModifier_do(
+      smd, ctx->object, mesh, reinterpret_cast<float(*)[3]>(positions.data()), positions.size());
 }
 
 static void panel_draw(const bContext * /*C*/, Panel *panel)
@@ -221,7 +221,7 @@ ModifierTypeInfo modifierType_Smooth = {
     /*struct_name*/ "SmoothModifierData",
     /*struct_size*/ sizeof(SmoothModifierData),
     /*srna*/ &RNA_SmoothModifier,
-    /*type*/ eModifierTypeType_OnlyDeform,
+    /*type*/ ModifierTypeType::OnlyDeform,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_AcceptsCVs |
         eModifierTypeFlag_SupportsEditmode,
     /*icon*/ ICON_MOD_SMOOTH,
@@ -248,4 +248,5 @@ ModifierTypeInfo modifierType_Smooth = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

@@ -209,7 +209,10 @@ typedef struct Material {
   short paint_active_slot;
   short paint_clone_slot;
   short tot_slots;
-  char _pad2[2];
+
+  /* Displacement. */
+  char displacement_method;
+  char _pad2[1];
 
   /* Transparency. */
   float alpha_threshold;
@@ -226,11 +229,11 @@ typedef struct Material {
   /* Volume. */
   char volume_intersection_method;
   char _pad3[3];
-  /* Displacement*/
+  /* Displacement. */
   float inflate_bounds;
   /**
-   * Cached slots for texture painting, must be refreshed in
-   * refresh_texpaint_image_cache before using.
+   * Cached slots for texture painting, must be refreshed via
+   * BKE_texpaint_slot_refresh_cache before using.
    */
   struct TexPaintSlot *texpaintslot;
 
@@ -378,6 +381,13 @@ enum {
   MA_BS_SOLID = 1,
   MA_BS_CLIP = 2,
   MA_BS_HASHED = 3,
+};
+
+/** #Material::displacement_method */
+enum {
+  MA_DISPLACEMENT_BUMP = 0,
+  MA_DISPLACEMENT_DISPLACE = 1,
+  MA_DISPLACEMENT_BOTH = 2,
 };
 
 #define MA_SHADOW_ID (1 << 0)

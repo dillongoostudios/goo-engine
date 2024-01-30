@@ -37,6 +37,7 @@
 #include "DNA_pointcloud_types.h"
 #include "DNA_rigidbody_types.h"
 #include "DNA_screen_types.h"
+#include "DNA_sequence_types.h"
 #include "DNA_shader_fx_types.h"
 #include "DNA_space_types.h"
 #include "DNA_text_types.h"
@@ -46,16 +47,17 @@
 #undef DNA_GENFILE_VERSIONING_MACROS
 
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
-#include "BKE_attribute.h"
+#include "BKE_armature.hh"
+#include "BKE_attribute.hh"
 #include "BKE_collection.h"
-#include "BKE_colortools.h"
+#include "BKE_colortools.hh"
 #include "BKE_cryptomatte.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
+#include "BKE_customdata.hh"
 #include "BKE_fcurve.h"
 #include "BKE_gpencil_legacy.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_legacy_convert.hh"
 #include "BKE_multires.hh"
@@ -678,18 +680,11 @@ void do_versions_after_linking_290(FileData * /*fd*/, Main *bmain)
   }
 
   /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - #blo_do_versions_290 in this file.
-   * - `versioning_userdef.cc`, #blo_do_versions_userdef
-   * - `versioning_userdef.cc`, #do_versions_theme
+   * Always bump subversion in BKE_blender_version.h when adding versioning
+   * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
    *
    * \note Keep this message at the bottom of the function.
    */
-  {
-    /* Keep this block, even when empty. */
-  }
 }
 
 static void panels_remove_x_closed_flag_recursive(Panel *panel)
@@ -835,18 +830,18 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
           BKE_mesh_validate_arrays(
               me,
               reinterpret_cast<float(*)[3]>(me->vert_positions_for_write().data()),
-              me->totvert,
+              me->verts_num,
               me->edges_for_write().data(),
-              me->totedge,
+              me->edges_num,
               (MFace *)CustomData_get_layer_for_write(
                   &me->fdata_legacy, CD_MFACE, me->totface_legacy),
               me->totface_legacy,
               me->corner_verts_for_write().data(),
               me->corner_edges_for_write().data(),
-              me->totloop,
+              me->corners_num,
               me->face_offsets_for_write().data(),
               me->faces_num,
-              BKE_mesh_deform_verts_for_write(me),
+              me->deform_verts_for_write().data(),
               false,
               true,
               &changed);
@@ -1117,7 +1112,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
 
     /* Initialize additional velocity parameter for #CacheFile's. */
     if (!DNA_struct_member_exists(
-            fd->filesdna, "MeshSeqCacheModifierData", "float", "velocity_scale")) {
+            fd->filesdna, "MeshSeqCacheModifierData", "float", "velocity_scale"))
+    {
       LISTBASE_FOREACH (Object *, object, &bmain->objects) {
         LISTBASE_FOREACH (ModifierData *, md, &object->modifiers) {
           if (md->type == eModifierType_MeshSequenceCache) {
@@ -1218,9 +1214,9 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
                                                                 mesh->edge_data.layers) /
                                                             sizeof(CustomDataLayer);
       /* We can be sure that mesh->fdata is empty for files written by 2.90. */
-      mesh->loop_data.totlayer = mesh->loop_data.maxlayer = MEM_allocN_len(
-                                                                mesh->loop_data.layers) /
-                                                            sizeof(CustomDataLayer);
+      mesh->corner_data.totlayer = mesh->corner_data.maxlayer = MEM_allocN_len(
+                                                                    mesh->corner_data.layers) /
+                                                                sizeof(CustomDataLayer);
       mesh->face_data.totlayer = mesh->face_data.maxlayer = MEM_allocN_len(
                                                                 mesh->face_data.layers) /
                                                             sizeof(CustomDataLayer);
@@ -1330,7 +1326,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     if (!DNA_struct_member_exists(fd->filesdna, "WorkSpaceDataRelation", "int", "parentid")) {
       LISTBASE_FOREACH (WorkSpace *, workspace, &bmain->workspaces) {
         LISTBASE_FOREACH_MUTABLE (
-            WorkSpaceDataRelation *, relation, &workspace->hook_layout_relations) {
+            WorkSpaceDataRelation *, relation, &workspace->hook_layout_relations)
+        {
           relation->parent = blo_read_get_new_globaldata_address(fd, relation->parent);
           BLI_assert(relation->parentid == 0);
           if (relation->parent != nullptr) {
@@ -1394,7 +1391,8 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
     }
 
     if (!DNA_struct_member_exists(
-            fd->filesdna, "FluidModifierData", "float", "fractions_distance")) {
+            fd->filesdna, "FluidModifierData", "float", "fractions_distance"))
+    {
       LISTBASE_FOREACH (Object *, ob, &bmain->objects) {
         LISTBASE_FOREACH (ModifierData *, md, &ob->modifiers) {
           if (md->type == eModifierType_Fluid) {
@@ -1974,15 +1972,9 @@ void blo_do_versions_290(FileData *fd, Library * /*lib*/, Main *bmain)
   }
 
   /**
-   * Versioning code until next subversion bump goes here.
-   *
-   * \note Be sure to check when bumping the version:
-   * - `versioning_userdef.cc`, #blo_do_versions_userdef
-   * - `versioning_userdef.cc`, #do_versions_theme
+   * Always bump subversion in BKE_blender_version.h when adding versioning
+   * code here, and wrap it inside a MAIN_VERSION_FILE_ATLEAST check.
    *
    * \note Keep this message at the bottom of the function.
    */
-  {
-    /* Keep this block, even when empty. */
-  }
 }

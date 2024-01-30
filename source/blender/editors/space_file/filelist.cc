@@ -41,6 +41,7 @@
 #include "BLI_string_utils.hh"
 #include "BLI_task.h"
 #include "BLI_threads.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
 #include "BLI_uuid.h"
 
@@ -48,15 +49,15 @@
 #  include "BLI_winstuff.h"
 #endif
 
-#include "BKE_asset.h"
-#include "BKE_blendfile.h"
-#include "BKE_context.h"
+#include "BKE_asset.hh"
+#include "BKE_blendfile.hh"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_idtype.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_main_idmap.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_main_idmap.hh"
 #include "BKE_preferences.h"
 #include "BKE_preview_image.hh"
 
@@ -70,8 +71,6 @@
 #include "IMB_imbuf.h"
 #include "IMB_imbuf_types.h"
 #include "IMB_thumbs.h"
-
-#include "PIL_time.h"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -1640,7 +1639,8 @@ static void filelist_cache_previews_push(FileList *filelist, FileDirEntry *entry
    * some time in heavy files, because otherwise for each missing preview and for each preview
    * reload, we'd reopen the .blend to look for the preview. */
   if ((entry->typeflag & FILE_TYPE_BLENDERLIB) &&
-      (entry->flags & FILE_ENTRY_BLENDERLIB_NO_PREVIEW)) {
+      (entry->flags & FILE_ENTRY_BLENDERLIB_NO_PREVIEW))
+  {
     return;
   }
 
@@ -3747,7 +3747,8 @@ static void filelist_readjob_recursive_dir_add_items(const bool do_lib,
       entry->free_name = true;
 
       if (filelist_readjob_should_recurse_into_entry(
-              max_recursion, is_lib, recursion_level, entry)) {
+              max_recursion, is_lib, recursion_level, entry))
+      {
         /* We have a directory we want to list, add it to todo list!
          * Using #BLI_path_join works but isn't needed as `root` has a trailing slash. */
         BLI_string_join(dir, sizeof(dir), root, entry->relpath);

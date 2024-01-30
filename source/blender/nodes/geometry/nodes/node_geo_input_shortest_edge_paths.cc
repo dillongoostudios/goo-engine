@@ -4,12 +4,14 @@
 
 #include <queue>
 
+#include "BLI_array_utils.hh"
 #include "BLI_map.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_set.hh"
 #include "BLI_task.hh"
 
 #include "BKE_mesh.hh"
+#include "BKE_mesh_mapping.hh"
 
 #include "node_geometry_util.hh"
 
@@ -19,42 +21,39 @@ static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Bool>("End Vertex").default_value(false).hide_value().supports_field();
   b.add_input<decl::Float>("Edge Cost").default_value(1.0f).hide_value().supports_field();
-  b.add_output<decl::Int>("Next Vertex Index").reference_pass_all();
-  b.add_output<decl::Float>("Total Cost").reference_pass_all();
+  b.add_output<decl::Int>("Next Vertex Index").field_source().reference_pass_all();
+  b.add_output<decl::Float>("Total Cost").field_source().reference_pass_all();
 }
 
 using VertPriority = std::pair<float, int>;
 
-struct EdgeVertMap {
-  Array<Vector<int>> edges_by_vertex_map;
-
-  EdgeVertMap(const Mesh &mesh)
-  {
-    const Span<int2> edges = mesh.edges();
-    edges_by_vertex_map.reinitialize(mesh.totvert);
-    for (const int edge_i : edges.index_range()) {
-      const int2 &edge = edges[edge_i];
-      edges_by_vertex_map[edge[0]].append(edge_i);
-      edges_by_vertex_map[edge[1]].append(edge_i);
-    }
-  }
-};
-
 static void shortest_paths(const Mesh &mesh,
-                           EdgeVertMap &maps,
+                           const GroupedSpan<int> vert_to_edge,
                            const IndexMask end_selection,
                            const VArray<float> &input_cost,
                            MutableSpan<int> r_next_index,
                            MutableSpan<float> r_cost)
 {
   const Span<int2> edges = mesh.edges();
-  Array<bool> visited(mesh.totvert, false);
+  Array<bool> visited(mesh.verts_num, false);
 
   std::priority_queue<VertPriority, std::vector<VertPriority>, std::greater<VertPriority>> queue;
 
   end_selection.foreach_index([&](const int start_vert_i) {
     r_cost[start_vert_i] = 0.0f;
     queue.emplace(0.0f, start_vert_i);
+  });
+
+  /* Though it uses more memory, calculating the adjacent vertex
+   * across each edge beforehand is noticeably faster. */
+  Array<int> other_vertex(vert_to_edge.data.size());
+  threading::parallel_for(vert_to_edge.index_range(), 2048, [&](const IndexRange range) {
+    for (const int vert_i : range) {
+      for (const int edge_i : vert_to_edge.offsets[vert_i]) {
+        other_vertex[edge_i] = bke::mesh::edge_other_vert(edges[vert_to_edge.data[edge_i]],
+                                                          vert_i);
+      }
+    }
   });
 
   while (!queue.empty()) {
@@ -65,19 +64,18 @@ static void shortest_paths(const Mesh &mesh,
       continue;
     }
     visited[vert_i] = true;
-    const Span<int> incident_edge_indices = maps.edges_by_vertex_map[vert_i];
-    for (const int edge_i : incident_edge_indices) {
-      const int2 &edge = edges[edge_i];
-      const int neighbor_vert_i = edge[0] + edge[1] - vert_i;
+    for (const int index : vert_to_edge.offsets[vert_i]) {
+      const int edge_i = vert_to_edge.data[index];
+      const int neighbor_vert_i = other_vertex[index];
       if (visited[neighbor_vert_i]) {
         continue;
       }
       const float edge_cost = std::max(0.0f, input_cost[edge_i]);
-      const float new_neighbour_cost = cost_i + edge_cost;
-      if (new_neighbour_cost < r_cost[neighbor_vert_i]) {
-        r_cost[neighbor_vert_i] = new_neighbour_cost;
+      const float new_neighbor_cost = cost_i + edge_cost;
+      if (new_neighbor_cost < r_cost[neighbor_vert_i]) {
+        r_cost[neighbor_vert_i] = new_neighbor_cost;
         r_next_index[neighbor_vert_i] = vert_i;
-        queue.emplace(new_neighbour_cost, neighbor_vert_i);
+        queue.emplace(new_neighbor_cost, neighbor_vert_i);
       }
     }
   }
@@ -98,28 +96,37 @@ class ShortestEdgePathsNextVertFieldInput final : public bke::MeshFieldInput {
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
-    const bke::MeshFieldContext edge_context{mesh, ATTR_DOMAIN_EDGE};
-    fn::FieldEvaluator edge_evaluator{edge_context, mesh.totedge};
+    const bke::MeshFieldContext edge_context{mesh, AttrDomain::Edge};
+    fn::FieldEvaluator edge_evaluator{edge_context, mesh.edges_num};
     edge_evaluator.add(cost_);
     edge_evaluator.evaluate();
     const VArray<float> input_cost = edge_evaluator.get_evaluated<float>(0);
 
-    const bke::MeshFieldContext point_context{mesh, ATTR_DOMAIN_POINT};
-    fn::FieldEvaluator point_evaluator{point_context, mesh.totvert};
+    const bke::MeshFieldContext point_context{mesh, AttrDomain::Point};
+    fn::FieldEvaluator point_evaluator{point_context, mesh.verts_num};
     point_evaluator.add(end_selection_);
     point_evaluator.evaluate();
     const IndexMask end_selection = point_evaluator.get_evaluated_as_mask(0);
 
-    Array<int> next_index(mesh.totvert, -1);
-    Array<float> cost(mesh.totvert, FLT_MAX);
+    Array<int> next_index(mesh.verts_num, -1);
+    Array<float> cost(mesh.verts_num, FLT_MAX);
 
-    if (!end_selection.is_empty()) {
-      EdgeVertMap maps(mesh);
-      shortest_paths(mesh, maps, end_selection, input_cost, next_index, cost);
+    if (end_selection.is_empty()) {
+      array_utils::fill_index_range<int>(next_index);
+      return mesh.attributes().adapt_domain<int>(
+          VArray<int>::ForContainer(std::move(next_index)), AttrDomain::Point, domain);
     }
+
+    const Span<int2> edges = mesh.edges();
+    Array<int> vert_to_edge_offset_data;
+    Array<int> vert_to_edge_indices;
+    const GroupedSpan<int> vert_to_edge = bke::mesh::build_vert_to_edge_map(
+        edges, mesh.verts_num, vert_to_edge_offset_data, vert_to_edge_indices);
+    shortest_paths(mesh, vert_to_edge, end_selection, input_cost, next_index, cost);
+
     threading::parallel_for(next_index.index_range(), 1024, [&](const IndexRange range) {
       for (const int i : range) {
         if (next_index[i] == -1) {
@@ -128,7 +135,7 @@ class ShortestEdgePathsNextVertFieldInput final : public bke::MeshFieldInput {
       }
     });
     return mesh.attributes().adapt_domain<int>(
-        VArray<int>::ForContainer(std::move(next_index)), ATTR_DOMAIN_POINT, domain);
+        VArray<int>::ForContainer(std::move(next_index)), AttrDomain::Point, domain);
   }
 
   void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
@@ -153,9 +160,9 @@ class ShortestEdgePathsNextVertFieldInput final : public bke::MeshFieldInput {
     return false;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
   {
-    return ATTR_DOMAIN_POINT;
+    return AttrDomain::Point;
   }
 };
 
@@ -174,28 +181,36 @@ class ShortestEdgePathsCostFieldInput final : public bke::MeshFieldInput {
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
-    const bke::MeshFieldContext edge_context{mesh, ATTR_DOMAIN_EDGE};
-    fn::FieldEvaluator edge_evaluator{edge_context, mesh.totedge};
+    const bke::MeshFieldContext edge_context{mesh, AttrDomain::Edge};
+    fn::FieldEvaluator edge_evaluator{edge_context, mesh.edges_num};
     edge_evaluator.add(cost_);
     edge_evaluator.evaluate();
     const VArray<float> input_cost = edge_evaluator.get_evaluated<float>(0);
 
-    const bke::MeshFieldContext point_context{mesh, ATTR_DOMAIN_POINT};
-    fn::FieldEvaluator point_evaluator{point_context, mesh.totvert};
+    const bke::MeshFieldContext point_context{mesh, AttrDomain::Point};
+    fn::FieldEvaluator point_evaluator{point_context, mesh.verts_num};
     point_evaluator.add(end_selection_);
     point_evaluator.evaluate();
     const IndexMask end_selection = point_evaluator.get_evaluated_as_mask(0);
 
-    Array<int> next_index(mesh.totvert, -1);
-    Array<float> cost(mesh.totvert, FLT_MAX);
-
-    if (!end_selection.is_empty()) {
-      EdgeVertMap maps(mesh);
-      shortest_paths(mesh, maps, end_selection, input_cost, next_index, cost);
+    if (end_selection.is_empty()) {
+      return mesh.attributes().adapt_domain<float>(
+          VArray<float>::ForSingle(0.0f, mesh.verts_num), AttrDomain::Point, domain);
     }
+
+    Array<int> next_index(mesh.verts_num, -1);
+    Array<float> cost(mesh.verts_num, FLT_MAX);
+
+    const Span<int2> edges = mesh.edges();
+    Array<int> vert_to_edge_offset_data;
+    Array<int> vert_to_edge_indices;
+    const GroupedSpan<int> vert_to_edge = bke::mesh::build_vert_to_edge_map(
+        edges, mesh.verts_num, vert_to_edge_offset_data, vert_to_edge_indices);
+    shortest_paths(mesh, vert_to_edge, end_selection, input_cost, next_index, cost);
+
     threading::parallel_for(cost.index_range(), 1024, [&](const IndexRange range) {
       for (const int i : range) {
         if (cost[i] == FLT_MAX) {
@@ -204,7 +219,7 @@ class ShortestEdgePathsCostFieldInput final : public bke::MeshFieldInput {
       }
     });
     return mesh.attributes().adapt_domain<float>(
-        VArray<float>::ForContainer(std::move(cost)), ATTR_DOMAIN_POINT, domain);
+        VArray<float>::ForContainer(std::move(cost)), AttrDomain::Point, domain);
   }
 
   void for_each_field_input_recursive(FunctionRef<void(const FieldInput &)> fn) const override
@@ -228,9 +243,9 @@ class ShortestEdgePathsCostFieldInput final : public bke::MeshFieldInput {
     return false;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
+  std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const override
   {
-    return ATTR_DOMAIN_POINT;
+    return AttrDomain::Point;
   }
 };
 

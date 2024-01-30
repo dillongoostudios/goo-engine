@@ -29,9 +29,10 @@
 #include "DNA_modifier_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
 #include "BKE_deform.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_screen.hh"
 
 #include "UI_interface.hh"
@@ -63,7 +64,7 @@ static Span<MDeformVert> get_vertex_group(const Mesh &mesh, const int defgrp_ind
   if (!vertex_group) {
     return {};
   }
-  return {vertex_group, mesh.totvert};
+  return {vertex_group, mesh.verts_num};
 }
 
 static IndexMask selected_indices_from_vertex_group(Span<MDeformVert> vertex_group,
@@ -104,7 +105,7 @@ static std::optional<Mesh *> calculate_weld(const Mesh &mesh, const WeldModifier
           mesh, IndexMask(selected_indices), wmd.merge_dist);
     }
     return blender::geometry::mesh_merge_by_distance_all(
-        mesh, IndexMask(mesh.totvert), wmd.merge_dist);
+        mesh, IndexMask(mesh.verts_num), wmd.merge_dist);
   }
   if (wmd.mode == MOD_WELD_MODE_CONNECTED) {
     const bool only_loose_edges = (wmd.flag & MOD_WELD_LOOSE_EDGES) != 0;
@@ -114,7 +115,7 @@ static std::optional<Mesh *> calculate_weld(const Mesh &mesh, const WeldModifier
       return blender::geometry::mesh_merge_by_distance_connected(
           mesh, selection, wmd.merge_dist, only_loose_edges);
     }
-    Array<bool> selection(mesh.totvert, true);
+    Array<bool> selection(mesh.verts_num, true);
     return blender::geometry::mesh_merge_by_distance_connected(
         mesh, selection, wmd.merge_dist, only_loose_edges);
   }
@@ -184,7 +185,7 @@ ModifierTypeInfo modifierType_Weld = {
     /*struct_name*/ "WeldModifierData",
     /*struct_size*/ sizeof(WeldModifierData),
     /*srna*/ &RNA_WeldModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/
     (ModifierTypeFlag)(eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
                        eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode |
@@ -213,4 +214,5 @@ ModifierTypeInfo modifierType_Weld = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

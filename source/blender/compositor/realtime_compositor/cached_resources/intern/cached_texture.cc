@@ -24,6 +24,7 @@
 
 #include "COM_cached_texture.hh"
 #include "COM_context.hh"
+#include "COM_result.hh"
 
 namespace blender::realtime_compositor {
 
@@ -31,7 +32,7 @@ namespace blender::realtime_compositor {
  * Cached Texture Key.
  */
 
-CachedTextureKey::CachedTextureKey(int2 size, float2 offset, float2 scale)
+CachedTextureKey::CachedTextureKey(int2 size, float3 offset, float3 scale)
     : size(size), offset(offset), scale(scale)
 {
 }
@@ -50,8 +51,12 @@ bool operator==(const CachedTextureKey &a, const CachedTextureKey &b)
  * Cached Texture.
  */
 
-CachedTexture::CachedTexture(
-    Tex *texture, bool use_color_management, int2 size, float2 offset, float2 scale)
+CachedTexture::CachedTexture(Context &context,
+                             Tex *texture,
+                             bool use_color_management,
+                             int2 size,
+                             float3 offset,
+                             float3 scale)
 {
   ImagePool *image_pool = BKE_image_pool_new();
   BKE_texture_fetch_images_for_pool(texture, image_pool);
@@ -63,36 +68,47 @@ CachedTexture::CachedTexture(
       for (const int64_t x : IndexRange(size.x)) {
         /* Compute the coordinates in the [-1, 1] range and add 0.5 to evaluate the texture at the
          * center of pixels in case it was interpolated. */
-        float2 coordinates = ((float2(x, y) + 0.5f) / float2(size)) * 2.0f - 1.0f;
+        const float2 pixel_coordinates = ((float2(x, y) + 0.5f) / float2(size)) * 2.0f - 1.0f;
         /* Note that it is expected that the offset is scaled by the scale. */
-        coordinates = (coordinates + offset) * scale;
+        const float3 coordinates = (float3(pixel_coordinates, 0.0f) + offset) * scale;
         TexResult texture_result;
         BKE_texture_get_value_ex(
             texture, coordinates, &texture_result, image_pool, use_color_management);
-        color_pixels[y * size.x + x] = float4(texture_result.trgba);
-        value_pixels[y * size.x + x] = texture_result.talpha ? texture_result.trgba[3] :
-                                                               texture_result.tin;
+
+        float4 color = float4(texture_result.trgba);
+        float value = texture_result.tin;
+        if (texture_result.talpha) {
+          value = texture_result.trgba[3];
+        }
+        else {
+          color.w = 1.0f;
+        }
+
+        color_pixels[y * size.x + x] = color;
+        value_pixels[y * size.x + x] = value;
       }
     }
   });
 
   BKE_image_pool_free(image_pool);
 
-  color_texture_ = GPU_texture_create_2d("Cached Color Texture",
-                                         size.x,
-                                         size.y,
-                                         1,
-                                         GPU_RGBA16F,
-                                         GPU_TEXTURE_USAGE_SHADER_READ,
-                                         *color_pixels.data());
+  color_texture_ = GPU_texture_create_2d(
+      "Cached Color Texture",
+      size.x,
+      size.y,
+      1,
+      Result::texture_format(ResultType::Color, context.get_precision()),
+      GPU_TEXTURE_USAGE_SHADER_READ,
+      *color_pixels.data());
 
-  value_texture_ = GPU_texture_create_2d("Cached Value Texture",
-                                         size.x,
-                                         size.y,
-                                         1,
-                                         GPU_R16F,
-                                         GPU_TEXTURE_USAGE_SHADER_READ,
-                                         value_pixels.data());
+  value_texture_ = GPU_texture_create_2d(
+      "Cached Value Texture",
+      size.x,
+      size.y,
+      1,
+      Result::texture_format(ResultType::Float, context.get_precision()),
+      GPU_TEXTURE_USAGE_SHADER_READ,
+      value_pixels.data());
 }
 
 CachedTexture::~CachedTexture()
@@ -136,8 +152,8 @@ CachedTexture &CachedTextureContainer::get(Context &context,
                                            Tex *texture,
                                            bool use_color_management,
                                            int2 size,
-                                           float2 offset,
-                                           float2 scale)
+                                           float3 offset,
+                                           float3 scale)
 {
   const CachedTextureKey key(size, offset, scale);
 
@@ -149,7 +165,8 @@ CachedTexture &CachedTextureContainer::get(Context &context,
   }
 
   auto &cached_texture = *cached_textures_for_id.lookup_or_add_cb(key, [&]() {
-    return std::make_unique<CachedTexture>(texture, use_color_management, size, offset, scale);
+    return std::make_unique<CachedTexture>(
+        context, texture, use_color_management, size, offset, scale);
   });
 
   cached_texture.needed = true;

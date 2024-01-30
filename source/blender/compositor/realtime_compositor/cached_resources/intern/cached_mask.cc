@@ -14,7 +14,7 @@
 
 #include "GPU_texture.h"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mask.h"
 
 #include "DNA_ID.h"
@@ -22,6 +22,7 @@
 
 #include "COM_cached_mask.hh"
 #include "COM_context.hh"
+#include "COM_result.hh"
 
 namespace blender::realtime_compositor {
 
@@ -30,10 +31,12 @@ namespace blender::realtime_compositor {
  */
 
 CachedMaskKey::CachedMaskKey(int2 size,
+                             float aspect_ratio,
                              bool use_feather,
                              int motion_blur_samples,
                              float motion_blur_shutter)
     : size(size),
+      aspect_ratio(aspect_ratio),
       use_feather(use_feather),
       motion_blur_samples(motion_blur_samples),
       motion_blur_shutter(motion_blur_shutter)
@@ -42,12 +45,13 @@ CachedMaskKey::CachedMaskKey(int2 size,
 
 uint64_t CachedMaskKey::hash() const
 {
-  return get_default_hash_4(size, use_feather, motion_blur_samples, motion_blur_shutter);
+  return get_default_hash_4(
+      size, use_feather, motion_blur_samples, float2(motion_blur_shutter, aspect_ratio));
 }
 
 bool operator==(const CachedMaskKey &a, const CachedMaskKey &b)
 {
-  return a.size == b.size && a.use_feather == b.use_feather &&
+  return a.size == b.size && a.aspect_ratio == b.aspect_ratio && a.use_feather == b.use_feather &&
          a.motion_blur_samples == b.motion_blur_samples &&
          a.motion_blur_shutter == b.motion_blur_shutter;
 }
@@ -99,9 +103,11 @@ static Vector<MaskRasterHandle *> get_mask_raster_handles(Mask *mask,
   return handles;
 }
 
-CachedMask::CachedMask(Mask *mask,
+CachedMask::CachedMask(Context &context,
+                       Mask *mask,
                        int2 size,
                        int frame,
+                       float aspect_ratio,
                        bool use_feather,
                        int motion_blur_samples,
                        float motion_blur_shutter)
@@ -115,7 +121,10 @@ CachedMask::CachedMask(Mask *mask,
       for (const int64_t x : IndexRange(size.x)) {
         /* Compute the coordinates in the [0, 1] range and add 0.5 to evaluate the mask at the
          * center of pixels. */
-        const float2 coordinates = (float2(x, y) + 0.5f) / float2(size);
+        float2 coordinates = (float2(x, y) + 0.5f) / float2(size);
+        /* Do aspect ratio correction around the center 0.5 point. */
+        coordinates = (coordinates - float2(0.5)) * float2(1.0, aspect_ratio) + float2(0.5);
+
         float mask_value = 0.0f;
         for (MaskRasterHandle *handle : handles) {
           mask_value += BKE_maskrasterize_handle_sample(handle, coordinates);
@@ -129,13 +138,14 @@ CachedMask::CachedMask(Mask *mask,
     BKE_maskrasterize_handle_free(handle);
   }
 
-  texture_ = GPU_texture_create_2d("Cached Mask",
-                                   size.x,
-                                   size.y,
-                                   1,
-                                   GPU_R16F,
-                                   GPU_TEXTURE_USAGE_SHADER_READ,
-                                   evaluated_mask.data());
+  texture_ = GPU_texture_create_2d(
+      "Cached Mask",
+      size.x,
+      size.y,
+      1,
+      Result::texture_format(ResultType::Float, context.get_precision()),
+      GPU_TEXTURE_USAGE_SHADER_READ,
+      evaluated_mask.data());
 }
 
 CachedMask::~CachedMask()
@@ -172,11 +182,13 @@ void CachedMaskContainer::reset()
 CachedMask &CachedMaskContainer::get(Context &context,
                                      Mask *mask,
                                      int2 size,
+                                     float aspect_ratio,
                                      bool use_feather,
                                      int motion_blur_samples,
                                      float motion_blur_shutter)
 {
-  const CachedMaskKey key(size, use_feather, motion_blur_samples, motion_blur_shutter);
+  const CachedMaskKey key(
+      size, aspect_ratio, use_feather, motion_blur_samples, motion_blur_shutter);
 
   auto &cached_masks_for_id = map_.lookup_or_add_default(mask->id.name);
 
@@ -186,9 +198,11 @@ CachedMask &CachedMaskContainer::get(Context &context,
   }
 
   auto &cached_mask = *cached_masks_for_id.lookup_or_add_cb(key, [&]() {
-    return std::make_unique<CachedMask>(mask,
+    return std::make_unique<CachedMask>(context,
+                                        mask,
                                         size,
                                         context.get_frame_number(),
+                                        aspect_ratio,
                                         use_feather,
                                         motion_blur_samples,
                                         motion_blur_shutter);

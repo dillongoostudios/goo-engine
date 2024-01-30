@@ -9,6 +9,7 @@
 #pragma once
 
 #include "vk_command_buffer.hh"
+#include "vk_timeline_semaphore.hh"
 
 namespace blender::gpu {
 class VKFrameBuffer;
@@ -23,24 +24,20 @@ class VKPipeline;
 class VKDescriptorSet;
 
 class VKCommandBuffers : public NonCopyable, NonMovable {
+  VkCommandPool vk_command_pool_ = VK_NULL_HANDLE;
   enum class Type {
-    DataTransfer = 0,
-    Compute = 1,
-    Graphics = 2,
-    Max = 3,
+    DataTransferCompute = 0,
+    Graphics = 1,
+    Max = 2,
   };
 
   bool initialized_ = false;
-  /**
-   * Timeout to use when waiting for fences in nanoseconds.
-   *
-   * Currently added as the fence will halt when there are no commands in the command buffer for
-   * the second time. This should be solved and this timeout should be removed.
-   */
-  static constexpr uint64_t FenceTimeout = UINT64_MAX;
 
-  /* Fence for CPU GPU synchronization when submitting the command buffers. */
-  VkFence vk_fence_ = VK_NULL_HANDLE;
+  /**
+   * Last submitted timeline value, what can be used to validate that all commands related
+   * submitted by this command buffers have been finished.
+   */
+  VKTimelineSemaphore::Value last_signal_value_;
 
   /**
    * Active framebuffer for graphics command buffer.
@@ -48,7 +45,8 @@ class VKCommandBuffers : public NonCopyable, NonMovable {
   VKFrameBuffer *framebuffer_ = nullptr;
   bool framebuffer_bound_ = false;
 
-  /* TODO: General command buffer should not be used, but is added to help during the transition.*/
+  /* TODO: General command buffer should not be used, but is added to help during the transition.
+   */
   VKCommandBuffer buffers_[(int)Type::Max];
   VKSubmissionID submission_id_;
 
@@ -76,7 +74,7 @@ class VKCommandBuffers : public NonCopyable, NonMovable {
   void bind(const uint32_t binding, const VKBufferWithOffset &vertex_buffer);
   void bind(const uint32_t binding, const VkBuffer &vk_vertex_buffer, const VkDeviceSize offset);
   /* Bind the given buffer as an index buffer. */
-  void bind(const VKBufferWithOffset &index_buffer, VkIndexType index_type);
+  void bind(const VKBuffer &index_buffer, VkIndexType index_type);
 
   void begin_render_pass(VKFrameBuffer &framebuffer);
   void end_render_pass(const VKFrameBuffer &framebuffer);
@@ -95,7 +93,7 @@ class VKCommandBuffers : public NonCopyable, NonMovable {
   void copy(VKBuffer &dst_buffer, VKTexture &src_texture, Span<VkBufferImageCopy> regions);
   void copy(VKTexture &dst_texture, VKBuffer &src_buffer, Span<VkBufferImageCopy> regions);
   void copy(VKTexture &dst_texture, VKTexture &src_texture, Span<VkImageCopy> regions);
-  void copy(VKBuffer &dst_buffer, VkBuffer src_buffer, Span<VkBufferCopy> regions);
+  void copy(const VKBuffer &dst_buffer, VkBuffer src_buffer, Span<VkBufferCopy> regions);
   void blit(VKTexture &dst_texture, VKTexture &src_texture, Span<VkImageBlit> regions);
   void blit(VKTexture &dst_texture,
             VkImageLayout dst_layout,
@@ -142,6 +140,7 @@ class VKCommandBuffers : public NonCopyable, NonMovable {
                              uint32_t stride);
 
   void submit();
+  void finish();
 
   const VKSubmissionID &submission_id_get() const
   {
@@ -149,21 +148,15 @@ class VKCommandBuffers : public NonCopyable, NonMovable {
   }
 
  private:
-  void init_fence(const VKDevice &device);
+  void init_command_pool(const VKDevice &device);
   void init_command_buffers(const VKDevice &device);
+
+  void submit_command_buffers(VKDevice &device, MutableSpan<VKCommandBuffer *> command_buffers);
 
   VKCommandBuffer &command_buffer_get(Type type)
   {
     return buffers_[(int)type];
   }
-
-  /**
-   * Ensure that no compute commands are scheduled.
-   *
-   * To ensure correct operation all compute commands should be flushed when adding a new draw
-   * command.
-   */
-  void ensure_no_compute_commands();
 
   /**
    * Ensure that no draw_commands are scheduled.

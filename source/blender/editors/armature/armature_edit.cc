@@ -23,12 +23,12 @@
 #include "BLI_math_vector.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 
@@ -43,7 +43,7 @@
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -181,7 +181,8 @@ float ED_armature_ebone_roll_to_vector(const EditBone *bone,
 
   /* If tail == head or the bone is aligned with the axis... */
   if (normalize_v3(nor) <= FLT_EPSILON ||
-      (fabsf(dot_v3v3(align_axis, nor)) >= (1.0f - FLT_EPSILON))) {
+      (fabsf(dot_v3v3(align_axis, nor)) >= (1.0f - FLT_EPSILON)))
+  {
     return roll;
   }
 

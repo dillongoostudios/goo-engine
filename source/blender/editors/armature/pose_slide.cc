@@ -45,13 +45,13 @@
 #include "BKE_fcurve.h"
 #include "BKE_nla.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -275,8 +275,7 @@ static int pose_slide_init(bContext *C, wmOperator *op, ePoseSlide_Modes mode)
 
   /* Initialize numeric input. */
   initNumInput(&pso->num);
-  pso->num.idx_max = 0; /* One axis. */
-  pso->num.val_flag[0] |= NUM_NO_NEGATIVE;
+  pso->num.idx_max = 0;                /* One axis. */
   pso->num.unit_type[0] = B_UNIT_NONE; /* Percentages don't have any units. */
 
   /* Return status is whether we've got all the data we were requested to get. */
@@ -923,38 +922,38 @@ static void pose_slide_draw_status(bContext *C, tPoseSlideOp *pso)
 
   switch (pso->mode) {
     case POSESLIDE_PUSH:
-      STRNCPY(mode_str, TIP_("Push Pose"));
+      STRNCPY(mode_str, RPT_("Push Pose"));
       break;
     case POSESLIDE_RELAX:
-      STRNCPY(mode_str, TIP_("Relax Pose"));
+      STRNCPY(mode_str, RPT_("Relax Pose"));
       break;
     case POSESLIDE_BREAKDOWN:
-      STRNCPY(mode_str, TIP_("Breakdown"));
+      STRNCPY(mode_str, RPT_("Breakdown"));
       break;
     case POSESLIDE_BLEND:
-      STRNCPY(mode_str, TIP_("Blend to Neighbor"));
+      STRNCPY(mode_str, RPT_("Blend to Neighbor"));
       break;
 
     default:
       /* Unknown. */
-      STRNCPY(mode_str, TIP_("Sliding-Tool"));
+      STRNCPY(mode_str, RPT_("Sliding-Tool"));
       break;
   }
 
   switch (pso->axislock) {
     case PS_LOCK_X:
-      STRNCPY(axis_str, TIP_("[X]/Y/Z axis only (X to clear)"));
+      STRNCPY(axis_str, RPT_("[X]/Y/Z axis only (X to clear)"));
       break;
     case PS_LOCK_Y:
-      STRNCPY(axis_str, TIP_("X/[Y]/Z axis only (Y to clear)"));
+      STRNCPY(axis_str, RPT_("X/[Y]/Z axis only (Y to clear)"));
       break;
     case PS_LOCK_Z:
-      STRNCPY(axis_str, TIP_("X/Y/[Z] axis only (Z to clear)"));
+      STRNCPY(axis_str, RPT_("X/Y/[Z] axis only (Z to clear)"));
       break;
 
     default:
       if (ELEM(pso->channels, PS_TFM_LOC, PS_TFM_ROT, PS_TFM_SIZE)) {
-        STRNCPY(axis_str, TIP_("X/Y/Z = Axis Constraint"));
+        STRNCPY(axis_str, RPT_("X/Y/Z = Axis Constraint"));
       }
       else {
         axis_str[0] = '\0';
@@ -964,26 +963,26 @@ static void pose_slide_draw_status(bContext *C, tPoseSlideOp *pso)
 
   switch (pso->channels) {
     case PS_TFM_LOC:
-      SNPRINTF(limits_str, TIP_("[G]/R/S/B/C - Location only (G to clear) | %s"), axis_str);
+      SNPRINTF(limits_str, RPT_("[G]/R/S/B/C - Location only (G to clear) | %s"), axis_str);
       break;
     case PS_TFM_ROT:
-      SNPRINTF(limits_str, TIP_("G/[R]/S/B/C - Rotation only (R to clear) | %s"), axis_str);
+      SNPRINTF(limits_str, RPT_("G/[R]/S/B/C - Rotation only (R to clear) | %s"), axis_str);
       break;
     case PS_TFM_SIZE:
-      SNPRINTF(limits_str, TIP_("G/R/[S]/B/C - Scale only (S to clear) | %s"), axis_str);
+      SNPRINTF(limits_str, RPT_("G/R/[S]/B/C - Scale only (S to clear) | %s"), axis_str);
       break;
     case PS_TFM_BBONE_SHAPE:
-      STRNCPY(limits_str, TIP_("G/R/S/[B]/C - Bendy Bone properties only (B to clear) | %s"));
+      STRNCPY(limits_str, RPT_("G/R/S/[B]/C - Bendy Bone properties only (B to clear) | %s"));
       break;
     case PS_TFM_PROPS:
-      STRNCPY(limits_str, TIP_("G/R/S/B/[C] - Custom Properties only (C to clear) | %s"));
+      STRNCPY(limits_str, RPT_("G/R/S/B/[C] - Custom Properties only (C to clear) | %s"));
       break;
     default:
-      STRNCPY(limits_str, TIP_("G/R/S/B/C - Limit to Transform/Property Set"));
+      STRNCPY(limits_str, RPT_("G/R/S/B/C - Limit to Transform/Property Set"));
       break;
   }
 
-  STRNCPY(bone_vis_str, TIP_("[H] - Toggle bone visibility"));
+  STRNCPY(bone_vis_str, RPT_("[H] - Toggle bone visibility"));
 
   ED_slider_status_string_get(pso->slider, slider_str, sizeof(slider_str));
 
@@ -1019,7 +1018,7 @@ static int pose_slide_invoke_common(bContext *C, wmOperator *op, const wmEvent *
     /* Do this for each F-Curve. */
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
       FCurve *fcu = (FCurve *)ld->data;
-      fcurve_to_keylist(pfl->ob->adt, fcu, pso->keylist, 0);
+      fcurve_to_keylist(pfl->ob->adt, fcu, pso->keylist, 0, {-FLT_MAX, FLT_MAX});
     }
   }
 
@@ -1230,7 +1229,6 @@ static int pose_slide_modal(bContext *C, wmOperator *op, const wmEvent *event)
         applyNumInput(&pso->num, &value);
 
         float factor = value / 100;
-        CLAMP(factor, 0.0f, 1.0f);
         ED_slider_factor_set(pso->slider, factor);
         RNA_float_set(op->ptr, "factor", ED_slider_factor_get(pso->slider));
 
@@ -1736,13 +1734,15 @@ static void propagate_curve_values(ListBase /*tPChanFCurveLink*/ *pflinks,
                                    const float source_frame,
                                    ListBase /*FrameLink*/ *target_frames)
 {
+  using namespace blender::animrig;
+  const KeyframeSettings settings = get_keyframe_settings(true);
   LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pflinks) {
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
       FCurve *fcu = (FCurve *)ld->data;
       const float current_fcu_value = evaluate_fcurve(fcu, source_frame);
       LISTBASE_FOREACH (FrameLink *, target_frame, target_frames) {
-        blender::animrig::insert_vert_fcurve(
-            fcu, target_frame->frame, current_fcu_value, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_NEEDED);
+        insert_vert_fcurve(
+            fcu, {target_frame->frame, current_fcu_value}, settings, INSERTKEY_NEEDED);
       }
     }
   }
@@ -1804,7 +1804,7 @@ static void get_keyed_frames_in_range(ListBase *pflinks,
   LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pflinks) {
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
       FCurve *fcu = (FCurve *)ld->data;
-      fcurve_to_keylist(nullptr, fcu, keylist, 0);
+      fcurve_to_keylist(nullptr, fcu, keylist, 0, {start_frame, end_frame});
     }
   }
   LISTBASE_FOREACH (ActKeyColumn *, column, ED_keylist_listbase(keylist)) {
@@ -1827,7 +1827,7 @@ static void get_selected_frames(ListBase *pflinks, ListBase /*FrameLink*/ *targe
   LISTBASE_FOREACH (tPChanFCurveLink *, pfl, pflinks) {
     LISTBASE_FOREACH (LinkData *, ld, &pfl->fcurves) {
       FCurve *fcu = (FCurve *)ld->data;
-      fcurve_to_keylist(nullptr, fcu, keylist, 0);
+      fcurve_to_keylist(nullptr, fcu, keylist, 0, {-FLT_MAX, FLT_MAX});
     }
   }
   LISTBASE_FOREACH (ActKeyColumn *, column, ED_keylist_listbase(keylist)) {

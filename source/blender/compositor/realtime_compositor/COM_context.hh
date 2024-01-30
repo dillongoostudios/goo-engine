@@ -11,10 +11,13 @@
 #include "DNA_scene_types.h"
 #include "DNA_vec_types.h"
 
+#include "GPU_shader.h"
 #include "GPU_texture.h"
 
+#include "COM_domain.hh"
+#include "COM_render_context.hh"
+#include "COM_result.hh"
 #include "COM_static_cache_manager.hh"
-#include "COM_static_shader_manager.hh"
 #include "COM_texture_pool.hh"
 
 namespace blender::realtime_compositor {
@@ -27,14 +30,12 @@ namespace blender::realtime_compositor {
  * providing input data like render passes and the active scene, as well as references to the data
  * where the output of the evaluator will be written. The class also provides a reference to the
  * texture pool which should be implemented by the caller and provided during construction.
- * Finally, the class have an instance of a static shader manager and a static resource manager
- * for acquiring cached shaders and resources efficiently. */
+ * Finally, the class have an instance of a static resource manager for acquiring cached resources
+ * efficiently. */
 class Context {
  private:
   /* A texture pool that can be used to allocate textures for the compositor efficiently. */
   TexturePool &texture_pool_;
-  /* A static shader manager that can be used to acquire shaders for the compositor efficiently. */
-  StaticShaderManager shader_manager_;
   /* A static cache manager that can be used to acquire cached resources for the compositor
    * efficiently. */
   StaticCacheManager cache_manager_;
@@ -75,10 +76,10 @@ class Context {
    * the composite output node to get its target texture. */
   virtual GPUTexture *get_output_texture() = 0;
 
-  /* Get the texture where the result of the compositor viewer should be written, given the size of
-   * the result to be viewed. This should be called by viewer output nodes to get their target
+  /* Get the texture where the result of the compositor viewer should be written, given the domain
+   * of the result to be viewed. This should be called by viewer output nodes to get their target
    * texture. */
-  virtual GPUTexture *get_viewer_output_texture(int2 size) = 0;
+  virtual GPUTexture *get_viewer_output_texture(Domain domain) = 0;
 
   /* Get the texture where the given render pass is stored. This should be called by the Render
    * Layer node to populate its outputs. */
@@ -88,6 +89,9 @@ class Context {
 
   /* Get the name of the view currently being rendered. */
   virtual StringRef get_view_name() = 0;
+
+  /* Get the precision of the intermediate results of the compositor. */
+  virtual ResultPrecision get_precision() const = 0;
 
   /* Set an info message. This is called by the compositor evaluator to inform or warn the user
    * about something, typically an error. The implementation should display the message in an
@@ -102,6 +106,11 @@ class Context {
    * that is, to ready it to track the next change. */
   virtual IDRecalcFlag query_id_recalc_flag(ID *id) const = 0;
 
+  /* Get a pointer to the render context of this context. A render context stores information about
+   * the current render. It might be null if the compositor is not being evaluated as part of a
+   * render pipeline. */
+  virtual RenderContext *render_context() const;
+
   /* Get the size of the compositing region. See get_compositing_region(). */
   int2 get_compositing_region_size() const;
 
@@ -114,11 +123,28 @@ class Context {
   /* Get the current time in seconds of the active scene. */
   float get_time() const;
 
+  /* Get a GPU shader with the given info name and precision. */
+  GPUShader *get_shader(const char *info_name, ResultPrecision precision);
+
+  /* Get a GPU shader with the given info name and context's precision. */
+  GPUShader *get_shader(const char *info_name);
+
+  /* Create a result of the given type and precision using the context's texture pool. */
+  Result create_result(ResultType type, ResultPrecision precision);
+
+  /* Create a result of the given type using the context's texture pool and precision. */
+  Result create_result(ResultType type);
+
+  /* Create a temporary result of the given type and precision using the context's texture pool.
+   * See Result::Temporary for more information. */
+  Result create_temporary_result(ResultType type, ResultPrecision precision);
+
+  /* Create a temporary result of the given type using the context's texture pool and precision.
+   * See Result::Temporary for more information. */
+  Result create_temporary_result(ResultType type);
+
   /* Get a reference to the texture pool of this context. */
   TexturePool &texture_pool();
-
-  /* Get a reference to the static shader manager of this context. */
-  StaticShaderManager &shader_manager();
 
   /* Get a reference to the static cache manager of this context. */
   StaticCacheManager &cache_manager();

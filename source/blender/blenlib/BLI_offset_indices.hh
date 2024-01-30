@@ -6,7 +6,13 @@
 
 #include <algorithm>
 
-#include "BLI_index_mask.hh"
+namespace blender {
+namespace index_mask {
+class IndexMask;
+}
+using index_mask::IndexMask;
+}  // namespace blender
+
 #include "BLI_index_range.hh"
 #include "BLI_span.hh"
 
@@ -85,8 +91,8 @@ template<typename T> class OffsetIndices {
    */
   OffsetIndices slice(const IndexRange range) const
   {
-    BLI_assert(offsets_.index_range().drop_back(1).contains(range.last()));
-    return OffsetIndices(offsets_.slice(range.start(), range.one_after_last()));
+    BLI_assert(range.is_empty() || offsets_.index_range().drop_back(1).contains(range.last()));
+    return OffsetIndices(offsets_.slice(range.start(), range.size() + 1));
   }
 
   Span<T> data() const
@@ -149,10 +155,19 @@ void copy_group_sizes(OffsetIndices<int> offsets, const IndexMask &mask, Mutable
 /** Gather the number of indices in each indexed group to sizes. */
 void gather_group_sizes(OffsetIndices<int> offsets, const IndexMask &mask, MutableSpan<int> sizes);
 
+void gather_group_sizes(OffsetIndices<int> offsets, Span<int> indices, MutableSpan<int> sizes);
+
 /** Build new offsets that contains only the groups chosen by \a selection. */
 OffsetIndices<int> gather_selected_offsets(OffsetIndices<int> src_offsets,
                                            const IndexMask &selection,
+                                           int start_offset,
                                            MutableSpan<int> dst_offsets);
+inline OffsetIndices<int> gather_selected_offsets(OffsetIndices<int> src_offsets,
+                                                  const IndexMask &selection,
+                                                  MutableSpan<int> dst_offsets)
+{
+  return gather_selected_offsets(src_offsets, selection, 0, dst_offsets);
+}
 /**
  * Create a map from indexed elements to the source indices, in other words from the larger array
  * to the smaller array.
@@ -162,7 +177,7 @@ void build_reverse_map(OffsetIndices<int> offsets, MutableSpan<int> r_map);
 /**
  * Build offsets to group the elements of \a indices pointing to the same index.
  */
-void build_reverse_offsets(Span<int> indices, MutableSpan<int> r_map);
+void build_reverse_offsets(Span<int> indices, MutableSpan<int> offsets);
 
 }  // namespace blender::offset_indices
 

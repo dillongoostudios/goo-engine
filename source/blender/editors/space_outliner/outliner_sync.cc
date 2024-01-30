@@ -19,10 +19,10 @@
 #include "BLI_ghash.h"
 #include "BLI_listbase.h"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -35,7 +35,7 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 #include "tree/tree_element_seq.hh"
 

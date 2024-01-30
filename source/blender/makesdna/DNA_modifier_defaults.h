@@ -195,7 +195,7 @@
     .current_xnew = NULL, \
     .current_x = NULL, \
     .current_v = NULL, \
-    .tri = NULL, \
+    .vert_tris = NULL, \
     .mvert_num = 0, \
     .tri_num = 0, \
     .time_x = -1000.0f, \
@@ -799,6 +799,34 @@
     .crease_weight = 1.0f, \
     .flag = MOD_WIREFRAME_REPLACE | MOD_WIREFRAME_OFS_EVEN, \
     .mat_ofs = 0, \
+  }
+
+#define _DNA_DEFAULT_GreasePencilOpacityModifierData \
+  { \
+    .color_mode = MOD_GREASE_PENCIL_COLOR_BOTH, \
+    .color_factor = 1.0f, \
+    .hardness_factor = 1.0f, \
+  }
+
+#define _DNA_DEFAULT_GreasePencilSubdivModifierData \
+  { \
+    .level = 1, \
+  }
+
+#define _DNA_DEFAULT_GreasePencilColorModifierData \
+  { \
+    .color_mode = MOD_GREASE_PENCIL_COLOR_BOTH, \
+    .hsv = {0.5f, 1.0f, 1.0f}, \
+  }
+
+
+#define _DNA_DEFAULT_GreasePencilTintModifierData \
+  { \
+    .color_mode = MOD_GREASE_PENCIL_COLOR_BOTH, \
+    .tint_mode = MOD_GREASE_PENCIL_TINT_UNIFORM, \
+    .factor = 0.5f, \
+    .radius = 1.0f, \
+    .color = {1.0f, 1.0f, 1.0f}, \
   }
 
 /* clang-format off */

@@ -8,11 +8,11 @@
 
 #include "BLI_task.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_curves.hh"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
-#include "BKE_undo_system.h"
+#include "BKE_undo_system.hh"
 
 #include "CLG_log.h"
 

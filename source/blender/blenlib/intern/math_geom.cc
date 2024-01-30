@@ -11,6 +11,7 @@
 #include "BLI_math_base.hh"
 #include "BLI_math_geom.h"
 
+#include "BLI_math_base_safe.h"
 #include "BLI_math_bits.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
@@ -654,18 +655,19 @@ void aabb_get_near_far_from_plane(const float plane_no[3],
 /** \name dist_squared_to_ray_to_aabb and helpers
  * \{ */
 
-void dist_squared_ray_to_aabb_v3_precalc(DistRayAABB_Precalc *neasrest_precalc,
-                                         const float ray_origin[3],
-                                         const float ray_direction[3])
+DistRayAABB_Precalc dist_squared_ray_to_aabb_v3_precalc(const float ray_origin[3],
+                                                        const float ray_direction[3])
 {
-  copy_v3_v3(neasrest_precalc->ray_origin, ray_origin);
-  copy_v3_v3(neasrest_precalc->ray_direction, ray_direction);
+  DistRayAABB_Precalc nearest_precalc{};
+  copy_v3_v3(nearest_precalc.ray_origin, ray_origin);
+  copy_v3_v3(nearest_precalc.ray_direction, ray_direction);
 
   for (int i = 0; i < 3; i++) {
-    neasrest_precalc->ray_inv_dir[i] = (neasrest_precalc->ray_direction[i] != 0.0f) ?
-                                           (1.0f / neasrest_precalc->ray_direction[i]) :
-                                           FLT_MAX;
+    nearest_precalc.ray_inv_dir[i] = (nearest_precalc.ray_direction[i] != 0.0f) ?
+                                         (1.0f / nearest_precalc.ray_direction[i]) :
+                                         FLT_MAX;
   }
+  return nearest_precalc;
 }
 
 float dist_squared_ray_to_aabb_v3(const DistRayAABB_Precalc *data,
@@ -764,8 +766,7 @@ float dist_squared_ray_to_aabb_v3_simple(const float ray_origin[3],
                                          float r_point[3],
                                          float *r_depth)
 {
-  DistRayAABB_Precalc data;
-  dist_squared_ray_to_aabb_v3_precalc(&data, ray_origin, ray_direction);
+  const DistRayAABB_Precalc data = dist_squared_ray_to_aabb_v3_precalc(ray_origin, ray_direction);
   return dist_squared_ray_to_aabb_v3(&data, bb_min, bb_max, r_point, r_depth);
 }
 
@@ -2053,7 +2054,7 @@ bool isect_ray_line_v3(const float ray_origin[3],
   return true;
 }
 
-bool isect_point_planes_v3(float (*planes)[4], int totplane, const float p[3])
+bool isect_point_planes_v3(const float (*planes)[4], int totplane, const float p[3])
 {
   int i;
 
@@ -2408,56 +2409,56 @@ static bool isect_tri_tri_v2_impl_vert(const float t_a0[2],
     if (line_point_side_v2(t_b2, t_b1, t_a1) <= 0.0f) {
       if (line_point_side_v2(t_a0, t_b0, t_a1) > 0.0f) {
         if (line_point_side_v2(t_a0, t_b1, t_a1) <= 0.0f) {
-          return 1;
+          return true;
         }
 
-        return 0;
+        return false;
       }
 
       if (line_point_side_v2(t_a0, t_b0, t_a2) >= 0.0f) {
         if (line_point_side_v2(t_a1, t_a2, t_b0) >= 0.0f) {
-          return 1;
+          return true;
         }
 
-        return 0;
+        return false;
       }
 
-      return 0;
+      return false;
     }
     if (line_point_side_v2(t_a0, t_b1, t_a1) <= 0.0f) {
       if (line_point_side_v2(t_b2, t_b1, t_a2) <= 0.0f) {
         if (line_point_side_v2(t_a1, t_a2, t_b1) >= 0.0f) {
-          return 1;
+          return true;
         }
 
-        return 0;
+        return false;
       }
 
-      return 0;
+      return false;
     }
 
-    return 0;
+    return false;
   }
   if (line_point_side_v2(t_b2, t_b0, t_a2) >= 0.0f) {
     if (line_point_side_v2(t_a1, t_a2, t_b2) >= 0.0f) {
       if (line_point_side_v2(t_a0, t_b0, t_a2) >= 0.0f) {
-        return 1;
+        return true;
       }
 
-      return 0;
+      return false;
     }
     if (line_point_side_v2(t_a1, t_a2, t_b1) >= 0.0f) {
       if (line_point_side_v2(t_b2, t_a2, t_b1) >= 0.0f) {
-        return 1;
+        return true;
       }
 
-      return 0;
+      return false;
     }
 
-    return 0;
+    return false;
   }
 
-  return 0;
+  return false;
 }
 
 static bool isect_tri_tri_v2_impl_edge(const float t_a0[2],
@@ -2472,40 +2473,40 @@ static bool isect_tri_tri_v2_impl_edge(const float t_a0[2],
   if (line_point_side_v2(t_b2, t_b0, t_a1) >= 0.0f) {
     if (line_point_side_v2(t_a0, t_b0, t_a1) >= 0.0f) {
       if (line_point_side_v2(t_a0, t_a1, t_b2) >= 0.0f) {
-        return 1;
+        return true;
       }
 
-      return 0;
+      return false;
     }
 
     if (line_point_side_v2(t_a1, t_a2, t_b0) >= 0.0f) {
       if (line_point_side_v2(t_a2, t_a0, t_b0) >= 0.0f) {
-        return 1;
+        return true;
       }
 
-      return 0;
+      return false;
     }
 
-    return 0;
+    return false;
   }
 
   if (line_point_side_v2(t_b2, t_b0, t_a2) >= 0.0f) {
     if (line_point_side_v2(t_a0, t_b0, t_a2) >= 0.0f) {
       if (line_point_side_v2(t_a0, t_a2, t_b2) >= 0.0f) {
-        return 1;
+        return true;
       }
 
       if (line_point_side_v2(t_a1, t_a2, t_b2) >= 0.0f) {
-        return 1;
+        return true;
       }
 
-      return 0;
+      return false;
     }
 
-    return 0;
+    return false;
   }
 
-  return 0;
+  return false;
 }
 
 static int isect_tri_tri_impl_ccw_v2(const float t_a0[2],
@@ -2700,7 +2701,7 @@ bool isect_sweeping_sphere_tri_v3(const float p1[3],
     z = x + y - (a * c - b * b);
 
     if (z <= 0.0f && (x >= 0.0f && y >= 0.0f)) {
-      //(((uint)z)& ~(((uint)x)|((uint)y))) & 0x80000000) {
+      // ((uint32_t(z) & ~(uint32_t(x) | uint32_t(y))) & 0x80000000)
       *r_lambda = t0;
       copy_v3_v3(ipoint, point);
       return true;
@@ -3335,18 +3336,16 @@ static bool point_in_slice(const float p[3],
                            const float l1[3],
                            const float l2[3])
 {
-  /*
-   * what is a slice ?
-   * some maths:
+  /* What is a slice?
+   * Some math:
    * a line including (l1, l2) and a point not on the line
    * define a subset of R3 delimited by planes parallel to the line and orthogonal
    * to the (point --> line) distance vector, one plane on the line one on the point,
    * the room inside usually is rather small compared to R3 though still infinite
    * useful for restricting (speeding up) searches
-   * e.g. all points of triangular prism are within the intersection of 3 'slices'
-   * another trivial case : cube
-   * but see a 'spat' which is a deformed cube with paired parallel planes needs only 3 slices too
-   */
+   * e.g. all points of triangular prism are within the intersection of 3 "slices"
+   * Another trivial case is a cube, but see a "spat" which is a deformed cube
+   * with paired parallel planes needs only 3 slices too. */
   float h, rp[3], cp[3], q[3];
 
   closest_to_line_v3(cp, v1, l1, l2);
@@ -3590,7 +3589,7 @@ static bool barycentric_weights(const float v1[3],
 
   wtot = w[0] + w[1] + w[2];
 
-#ifdef DEBUG /* Avoid floating point exception when debugging. */
+#ifndef NDEBUG /* Avoid floating point exception when debugging. */
   if (wtot != 0.0f)
 #endif
   {
@@ -3687,7 +3686,7 @@ bool barycentric_coords_v2(
   const float x3 = v3[0], y3 = v3[1];
   const float det = (y2 - y3) * (x1 - x3) + (x3 - x2) * (y1 - y3);
 
-#ifdef DEBUG /* Avoid floating point exception when debugging. */
+#ifndef NDEBUG /* Avoid floating point exception when debugging. */
   if (det != 0.0f)
 #endif
   {
@@ -3712,7 +3711,7 @@ void barycentric_weights_v2(
   w[2] = cross_tri_v2(v1, v2, co);
   wtot = w[0] + w[1] + w[2];
 
-#ifdef DEBUG /* Avoid floating point exception when debugging. */
+#ifndef NDEBUG /* Avoid floating point exception when debugging. */
   if (wtot != 0.0f)
 #endif
   {
@@ -3735,7 +3734,7 @@ void barycentric_weights_v2_clamped(
   w[2] = max_ff(cross_tri_v2(v1, v2, co), 0.0f);
   wtot = w[0] + w[1] + w[2];
 
-#ifdef DEBUG /* Avoid floating point exception when debugging. */
+#ifndef NDEBUG /* Avoid floating point exception when debugging. */
   if (wtot != 0.0f)
 #endif
   {
@@ -3758,7 +3757,7 @@ void barycentric_weights_v2_persp(
   w[2] = cross_tri_v2(v1, v2, co) / v3[3];
   wtot = w[0] + w[1] + w[2];
 
-#ifdef DEBUG /* Avoid floating point exception when debugging. */
+#ifndef NDEBUG /* Avoid floating point exception when debugging. */
   if (wtot != 0.0f)
 #endif
   {
@@ -3850,7 +3849,7 @@ void barycentric_weights_v2_quad(const float v1[2],
 
     wtot = w[0] + w[1] + w[2] + w[3];
 
-#ifdef DEBUG /* Avoid floating point exception when debugging. */
+#ifndef NDEBUG /* Avoid floating point exception when debugging. */
     if (wtot != 0.0f)
 #endif
     {
@@ -5299,450 +5298,6 @@ void vcloud_estimate_transform_v3(const int list_size,
       }
     }
   }
-}
-
-/******************************* Form Factor *********************************/
-
-static void vec_add_dir(float r[3], const float v1[3], const float v2[3], const float fac)
-{
-  r[0] = v1[0] + fac * (v2[0] - v1[0]);
-  r[1] = v1[1] + fac * (v2[1] - v1[1]);
-  r[2] = v1[2] + fac * (v2[2] - v1[2]);
-}
-
-bool form_factor_visible_quad(const float p[3],
-                              const float n[3],
-                              const float v0[3],
-                              const float v1[3],
-                              const float v2[3],
-                              float q0[3],
-                              float q1[3],
-                              float q2[3],
-                              float q3[3])
-{
-  static const float epsilon = 1e-6f;
-  float sd[3];
-  const float c = dot_v3v3(n, p);
-
-  /* signed distances from the vertices to the plane. */
-  sd[0] = dot_v3v3(n, v0) - c;
-  sd[1] = dot_v3v3(n, v1) - c;
-  sd[2] = dot_v3v3(n, v2) - c;
-
-  if (fabsf(sd[0]) < epsilon) {
-    sd[0] = 0.0f;
-  }
-  if (fabsf(sd[1]) < epsilon) {
-    sd[1] = 0.0f;
-  }
-  if (fabsf(sd[2]) < epsilon) {
-    sd[2] = 0.0f;
-  }
-
-  if (sd[0] > 0.0f) {
-    if (sd[1] > 0.0f) {
-      if (sd[2] > 0.0f) {
-        /* +++ */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* ++- */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        vec_add_dir(q2, v1, v2, (sd[1] / (sd[1] - sd[2])));
-        vec_add_dir(q3, v0, v2, (sd[0] / (sd[0] - sd[2])));
-      }
-      else {
-        /* ++0 */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-    }
-    else if (sd[1] < 0.0f) {
-      if (sd[2] > 0.0f) {
-        /* +-+ */
-        copy_v3_v3(q0, v0);
-        vec_add_dir(q1, v0, v1, (sd[0] / (sd[0] - sd[1])));
-        vec_add_dir(q2, v1, v2, (sd[1] / (sd[1] - sd[2])));
-        copy_v3_v3(q3, v2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* +-- */
-        copy_v3_v3(q0, v0);
-        vec_add_dir(q1, v0, v1, (sd[0] / (sd[0] - sd[1])));
-        vec_add_dir(q2, v0, v2, (sd[0] / (sd[0] - sd[2])));
-        copy_v3_v3(q3, q2);
-      }
-      else {
-        /* +-0 */
-        copy_v3_v3(q0, v0);
-        vec_add_dir(q1, v0, v1, (sd[0] / (sd[0] - sd[1])));
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-    }
-    else {
-      if (sd[2] > 0.0f) {
-        /* +0+ */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* +0- */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        vec_add_dir(q2, v0, v2, (sd[0] / (sd[0] - sd[2])));
-        copy_v3_v3(q3, q2);
-      }
-      else {
-        /* +00 */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-    }
-  }
-  else if (sd[0] < 0.0f) {
-    if (sd[1] > 0.0f) {
-      if (sd[2] > 0.0f) {
-        /* -++ */
-        vec_add_dir(q0, v0, v1, (sd[0] / (sd[0] - sd[1])));
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        vec_add_dir(q3, v0, v2, (sd[0] / (sd[0] - sd[2])));
-      }
-      else if (sd[2] < 0.0f) {
-        /* -+- */
-        vec_add_dir(q0, v0, v1, (sd[0] / (sd[0] - sd[1])));
-        copy_v3_v3(q1, v1);
-        vec_add_dir(q2, v1, v2, (sd[1] / (sd[1] - sd[2])));
-        copy_v3_v3(q3, q2);
-      }
-      else {
-        /* -+0 */
-        vec_add_dir(q0, v0, v1, (sd[0] / (sd[0] - sd[1])));
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-    }
-    else if (sd[1] < 0.0f) {
-      if (sd[2] > 0.0f) {
-        /* --+ */
-        vec_add_dir(q0, v0, v2, (sd[0] / (sd[0] - sd[2])));
-        vec_add_dir(q1, v1, v2, (sd[1] / (sd[1] - sd[2])));
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* --- */
-        return false;
-      }
-      else {
-        /* --0 */
-        return false;
-      }
-    }
-    else {
-      if (sd[2] > 0.0f) {
-        /* -0+ */
-        vec_add_dir(q0, v0, v2, (sd[0] / (sd[0] - sd[2])));
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* -0- */
-        return false;
-      }
-      else {
-        /* -00 */
-        return false;
-      }
-    }
-  }
-  else {
-    if (sd[1] > 0.0f) {
-      if (sd[2] > 0.0f) {
-        /* 0++ */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* 0+- */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        vec_add_dir(q2, v1, v2, (sd[1] / (sd[1] - sd[2])));
-        copy_v3_v3(q3, q2);
-      }
-      else {
-        /* 0+0 */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-    }
-    else if (sd[1] < 0.0f) {
-      if (sd[2] > 0.0f) {
-        /* 0-+ */
-        copy_v3_v3(q0, v0);
-        vec_add_dir(q1, v1, v2, (sd[1] / (sd[1] - sd[2])));
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* 0-- */
-        return false;
-      }
-      else {
-        /* 0-0 */
-        return false;
-      }
-    }
-    else {
-      if (sd[2] > 0.0f) {
-        /* 00+ */
-        copy_v3_v3(q0, v0);
-        copy_v3_v3(q1, v1);
-        copy_v3_v3(q2, v2);
-        copy_v3_v3(q3, q2);
-      }
-      else if (sd[2] < 0.0f) {
-        /* 00- */
-        return false;
-      }
-      else {
-        /* 000 */
-        return false;
-      }
-    }
-  }
-
-  return true;
-}
-
-/* `AltiVec` optimization, this works, but is unused. */
-
-#if 0
-#  include <Accelerate/Accelerate.h>
-
-typedef union {
-  vFloat v;
-  float f[4];
-} vFloatResult;
-
-static vFloat vec_splat_float(float val)
-{
-  return (vFloat){val, val, val, val};
-}
-
-static float ff_quad_form_factor(float *p, float *n, float *q0, float *q1, float *q2, float *q3)
-{
-  vFloat vcos, rlen, vrx, vry, vrz, vsrx, vsry, vsrz, gx, gy, gz, vangle;
-  vUInt8 rotate = (vUInt8){4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3};
-  vFloatResult vresult;
-  float result;
-
-  /* compute r* */
-  vrx = (vFloat){q0[0], q1[0], q2[0], q3[0]} - vec_splat_float(p[0]);
-  vry = (vFloat){q0[1], q1[1], q2[1], q3[1]} - vec_splat_float(p[1]);
-  vrz = (vFloat){q0[2], q1[2], q2[2], q3[2]} - vec_splat_float(p[2]);
-
-  /* normalize r* */
-  rlen = vec_rsqrte(vrx * vrx + vry * vry + vrz * vrz + vec_splat_float(1e-16f));
-  vrx = vrx * rlen;
-  vry = vry * rlen;
-  vrz = vrz * rlen;
-
-  /* rotate r* for cross and dot */
-  vsrx = vec_perm(vrx, vrx, rotate);
-  vsry = vec_perm(vry, vry, rotate);
-  vsrz = vec_perm(vrz, vrz, rotate);
-
-  /* cross product */
-  gx = vsry * vrz - vsrz * vry;
-  gy = vsrz * vrx - vsrx * vrz;
-  gz = vsrx * vry - vsry * vrx;
-
-  /* normalize */
-  rlen = vec_rsqrte(gx * gx + gy * gy + gz * gz + vec_splat_float(1e-16f));
-  gx = gx * rlen;
-  gy = gy * rlen;
-  gz = gz * rlen;
-
-  /* angle */
-  vcos = vrx * vsrx + vry * vsry + vrz * vsrz;
-  vcos = vec_max(vec_min(vcos, vec_splat_float(1.0f)), vec_splat_float(-1.0f));
-  vangle = vacosf(vcos);
-
-  /* dot */
-  vresult.v = (vec_splat_float(n[0]) * gx + vec_splat_float(n[1]) * gy +
-               vec_splat_float(n[2]) * gz) *
-              vangle;
-
-  result = (vresult.f[0] + vresult.f[1] + vresult.f[2] + vresult.f[3]) * (0.5f / (float)M_PI);
-  result = MAX2(result, 0.0f);
-
-  return result;
-}
-
-#endif
-
-/* SSE optimization, acos code doesn't work */
-
-#if 0
-
-#  include "BLI_simd.h"
-
-static __m128 sse_approx_acos(__m128 x)
-{
-  /* needs a better approximation than Taylor expansion of acos, since that
-   * gives big errors for near 1.0 values, sqrt(2 * x) * acos(1 - x) should work
-   * better, see http://www.tom.womack.net/projects/sse-fast-arctrig.html */
-
-  return _mm_set_ps1(1.0f);
-}
-
-static float ff_quad_form_factor(float *p, float *n, float *q0, float *q1, float *q2, float *q3)
-{
-  float r0[3], r1[3], r2[3], r3[3], g0[3], g1[3], g2[3], g3[3];
-  float a1, a2, a3, a4, dot1, dot2, dot3, dot4, result;
-  float fresult[4] __attribute__((aligned(16)));
-  __m128 qx, qy, qz, rx, ry, rz, rlen, srx, sry, srz, gx, gy, gz, glen, rcos, angle, aresult;
-
-  /* compute r */
-  qx = _mm_set_ps(q3[0], q2[0], q1[0], q0[0]);
-  qy = _mm_set_ps(q3[1], q2[1], q1[1], q0[1]);
-  qz = _mm_set_ps(q3[2], q2[2], q1[2], q0[2]);
-
-  rx = qx - _mm_set_ps1(p[0]);
-  ry = qy - _mm_set_ps1(p[1]);
-  rz = qz - _mm_set_ps1(p[2]);
-
-  /* normalize r */
-  rlen = _mm_rsqrt_ps(rx * rx + ry * ry + rz * rz + _mm_set_ps1(1e-16f));
-  rx = rx * rlen;
-  ry = ry * rlen;
-  rz = rz * rlen;
-
-  /* cross product */
-  srx = _mm_shuffle_ps(rx, rx, _MM_SHUFFLE(0, 3, 2, 1));
-  sry = _mm_shuffle_ps(ry, ry, _MM_SHUFFLE(0, 3, 2, 1));
-  srz = _mm_shuffle_ps(rz, rz, _MM_SHUFFLE(0, 3, 2, 1));
-
-  gx = sry * rz - srz * ry;
-  gy = srz * rx - srx * rz;
-  gz = srx * ry - sry * rx;
-
-  /* normalize g */
-  glen = _mm_rsqrt_ps(gx * gx + gy * gy + gz * gz + _mm_set_ps1(1e-16f));
-  gx = gx * glen;
-  gy = gy * glen;
-  gz = gz * glen;
-
-  /* compute angle */
-  rcos = rx * srx + ry * sry + rz * srz;
-  rcos = _mm_max_ps(_mm_min_ps(rcos, _mm_set_ps1(1.0f)), _mm_set_ps1(-1.0f));
-
-  angle = sse_approx_cos(rcos);
-  aresult = (_mm_set_ps1(n[0]) * gx + _mm_set_ps1(n[1]) * gy + _mm_set_ps1(n[2]) * gz) * angle;
-
-  /* sum together */
-  result = (fresult[0] + fresult[1] + fresult[2] + fresult[3]) * (0.5f / (float)M_PI);
-  result = MAX2(result, 0.0f);
-
-  return result;
-}
-
-#endif
-
-static void ff_normalize(float n[3])
-{
-  float d;
-
-  d = dot_v3v3(n, n);
-
-  if (d > 1.0e-35f) {
-    d = 1.0f / sqrtf(d);
-
-    n[0] *= d;
-    n[1] *= d;
-    n[2] *= d;
-  }
-}
-
-float form_factor_quad(const float p[3],
-                       const float n[3],
-                       const float q0[3],
-                       const float q1[3],
-                       const float q2[3],
-                       const float q3[3])
-{
-  float r0[3], r1[3], r2[3], r3[3], g0[3], g1[3], g2[3], g3[3];
-  float a1, a2, a3, a4, dot1, dot2, dot3, dot4, result;
-
-  sub_v3_v3v3(r0, q0, p);
-  sub_v3_v3v3(r1, q1, p);
-  sub_v3_v3v3(r2, q2, p);
-  sub_v3_v3v3(r3, q3, p);
-
-  ff_normalize(r0);
-  ff_normalize(r1);
-  ff_normalize(r2);
-  ff_normalize(r3);
-
-  cross_v3_v3v3(g0, r1, r0);
-  ff_normalize(g0);
-  cross_v3_v3v3(g1, r2, r1);
-  ff_normalize(g1);
-  cross_v3_v3v3(g2, r3, r2);
-  ff_normalize(g2);
-  cross_v3_v3v3(g3, r0, r3);
-  ff_normalize(g3);
-
-  a1 = saacosf(dot_v3v3(r0, r1));
-  a2 = saacosf(dot_v3v3(r1, r2));
-  a3 = saacosf(dot_v3v3(r2, r3));
-  a4 = saacosf(dot_v3v3(r3, r0));
-
-  dot1 = dot_v3v3(n, g0);
-  dot2 = dot_v3v3(n, g1);
-  dot3 = dot_v3v3(n, g2);
-  dot4 = dot_v3v3(n, g3);
-
-  result = (a1 * dot1 + a2 * dot2 + a3 * dot3 + a4 * dot4) * 0.5f / float(M_PI);
-  result = std::max(result, 0.0f);
-
-  return result;
-}
-
-float form_factor_hemi_poly(
-    float p[3], float n[3], float v1[3], float v2[3], float v3[3], float v4[3])
-{
-  /* computes how much hemisphere defined by point and normal is
-   * covered by a quad or triangle, cosine weighted */
-  float q0[3], q1[3], q2[3], q3[3], contrib = 0.0f;
-
-  if (form_factor_visible_quad(p, n, v1, v2, v3, q0, q1, q2, q3)) {
-    contrib += form_factor_quad(p, n, q0, q1, q2, q3);
-  }
-
-  if (v4 && form_factor_visible_quad(p, n, v1, v3, v4, q0, q1, q2, q3)) {
-    contrib += form_factor_quad(p, n, q0, q1, q2, q3);
-  }
-
-  return contrib;
 }
 
 bool is_edge_convex_v3(const float v1[3],

@@ -26,11 +26,11 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_scene.h"
 
 #include "DEG_depsgraph.hh"
@@ -185,12 +185,12 @@ static AnimationEvalContext seq_prefetch_anim_eval_context(PrefetchJob *pfjob)
   return BKE_animsys_eval_context_construct(pfjob->depsgraph, seq_prefetch_cfra(pfjob));
 }
 
-void seq_prefetch_get_time_range(Scene *scene, int *start, int *end)
+void seq_prefetch_get_time_range(Scene *scene, int *r_start, int *r_end)
 {
   PrefetchJob *pfjob = seq_prefetch_job_get(scene);
 
-  *start = pfjob->cfra;
-  *end = seq_prefetch_cfra(pfjob);
+  *r_start = pfjob->cfra;
+  *r_end = seq_prefetch_cfra(pfjob);
 }
 
 static void seq_prefetch_free_depsgraph(PrefetchJob *pfjob)
@@ -497,6 +497,10 @@ static void *seq_prefetch_frames(void *job)
     ListBase *channels = SEQ_channels_displayed_get(SEQ_editing_get(pfjob->scene_eval));
     if (seq_prefetch_must_skip_frame(pfjob, channels, seqbase)) {
       pfjob->num_frames_prefetched++;
+      /* Break instead of keep looping if the job should be terminated. */
+      if (!(pfjob->scene->ed->cache_flag & SEQ_CACHE_PREFETCH_ENABLE) || pfjob->stop) {
+        break;
+      }
       continue;
     }
 

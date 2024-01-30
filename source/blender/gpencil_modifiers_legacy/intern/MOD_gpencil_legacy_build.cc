@@ -30,13 +30,13 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_deform.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_lib_query.h"
-#include "BKE_modifier.h"
+#include "BKE_lib_query.hh"
+#include "BKE_modifier.hh"
 #include "BKE_screen.hh"
 
 #include "UI_interface.hh"
@@ -538,7 +538,8 @@ static void build_sequential(Object *ob,
     }
     else {
       if (fade_start != fade_end && int(cell->start_idx) < fade_end &&
-          int(cell->end_idx) > fade_start) {
+          int(cell->end_idx) > fade_start)
+      {
         int start_index = fade_start - cell->start_idx;
         int end_index = cell->totpoints + fade_end - cell->end_idx - 1;
         CLAMP(start_index, 0, cell->totpoints - 1);

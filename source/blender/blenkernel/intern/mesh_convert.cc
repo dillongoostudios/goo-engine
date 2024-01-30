@@ -13,8 +13,6 @@
 #include "DNA_curve_types.h"
 #include "DNA_key_types.h"
 #include "DNA_material_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_meta_types.h"
 #include "DNA_object_types.h"
 #include "DNA_pointcloud_types.h"
@@ -28,29 +26,30 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_DerivedMesh.h"
+#include "BKE_DerivedMesh.hh"
 #include "BKE_curves.hh"
 #include "BKE_deform.h"
 #include "BKE_displist.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_geometry_set_instances.hh"
 #include "BKE_key.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_runtime.hh"
 #include "BKE_mesh_wrapper.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
+#include "BKE_object_types.hh"
 /* these 2 are only used by conversion functions */
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 /* -- */
 #include "BKE_object.hh"
 /* -- */
-#include "BKE_pointcloud.h"
+#include "BKE_pointcloud.hh"
 
 #include "BKE_curve_to_mesh.hh"
 
@@ -123,11 +122,11 @@ static Mesh *mesh_nurbs_displist_to_mesh(const Curve *cu, const ListBase *dispba
 
   MutableAttributeAccessor attributes = mesh->attributes_for_write();
   SpanAttributeWriter<int> material_indices = attributes.lookup_or_add_for_write_only_span<int>(
-      "material_index", ATTR_DOMAIN_FACE);
+      "material_index", AttrDomain::Face);
   SpanAttributeWriter<bool> sharp_faces = attributes.lookup_or_add_for_write_span<bool>(
-      "sharp_face", ATTR_DOMAIN_FACE);
+      "sharp_face", AttrDomain::Face);
   SpanAttributeWriter<float2> uv_attribute = attributes.lookup_or_add_for_write_span<float2>(
-      DATA_("UVMap"), ATTR_DOMAIN_CORNER);
+      DATA_("UVMap"), AttrDomain::Corner);
   MutableSpan<float2> uv_map = uv_attribute.span;
 
   int dst_vert = 0;
@@ -301,7 +300,7 @@ static Mesh *mesh_nurbs_displist_to_mesh(const Curve *cu, const ListBase *dispba
   }
 
   if (faces_num) {
-    BKE_mesh_calc_edges(mesh, true, false);
+    mesh_calc_edges(*mesh, true, false);
   }
 
   material_indices.finish();
@@ -318,12 +317,12 @@ static Mesh *mesh_nurbs_displist_to_mesh(const Curve *cu, const ListBase *dispba
  * differently for curve and mesh, since curves use control points and handles to calculate the
  * bounding box, and mesh uses the tessellated curve.
  */
-static void mesh_copy_texture_space_from_curve_type(const Curve *cu, Mesh *me)
+static void mesh_copy_texture_space_from_curve_type(const Curve *cu, Mesh *mesh)
 {
-  me->texspace_flag = cu->texspace_flag & ~CU_TEXSPACE_FLAG_AUTO;
-  copy_v3_v3(me->texspace_location, cu->texspace_location);
-  copy_v3_v3(me->texspace_size, cu->texspace_size);
-  BKE_mesh_texspace_calc(me);
+  mesh->texspace_flag = cu->texspace_flag & ~CU_TEXSPACE_FLAG_AUTO;
+  copy_v3_v3(mesh->texspace_location, cu->texspace_location);
+  copy_v3_v3(mesh->texspace_size, cu->texspace_size);
+  BKE_mesh_texspace_calc(mesh);
 }
 
 Mesh *BKE_mesh_new_nomain_from_curve_displist(const Object *ob, const ListBase *dispbase)
@@ -342,8 +341,8 @@ Mesh *BKE_mesh_new_nomain_from_curve(const Object *ob)
 {
   ListBase disp = {nullptr, nullptr};
 
-  if (ob->runtime.curve_cache) {
-    disp = ob->runtime.curve_cache->disp;
+  if (ob->runtime->curve_cache) {
+    disp = ob->runtime->curve_cache->disp;
   }
 
   return BKE_mesh_new_nomain_from_curve_displist(ob, &disp);
@@ -373,12 +372,12 @@ static void appendPolyLineVert(ListBase *lb, uint index)
   BLI_addtail(lb, vl);
 }
 
-void BKE_mesh_to_curve_nurblist(const Mesh *me, ListBase *nurblist, const int edge_users_test)
+void BKE_mesh_to_curve_nurblist(const Mesh *mesh, ListBase *nurblist, const int edge_users_test)
 {
-  const Span<float3> positions = me->vert_positions();
-  const Span<blender::int2> mesh_edges = me->edges();
-  const blender::OffsetIndices polys = me->faces();
-  const Span<int> corner_edges = me->corner_edges();
+  const Span<float3> positions = mesh->vert_positions();
+  const Span<blender::int2> mesh_edges = mesh->edges();
+  const blender::OffsetIndices polys = mesh->faces();
+  const Span<int> corner_edges = mesh->corner_edges();
 
   /* only to detect edge polylines */
   int *edge_users;
@@ -550,9 +549,9 @@ void BKE_mesh_to_pointcloud(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/
   PointCloud *pointcloud = (PointCloud *)BKE_pointcloud_add(bmain, ob->id.name + 2);
 
   CustomData_free(&pointcloud->pdata, pointcloud->totpoint);
-  pointcloud->totpoint = mesh_eval->totvert;
+  pointcloud->totpoint = mesh_eval->verts_num;
   CustomData_merge(
-      &mesh_eval->vert_data, &pointcloud->pdata, CD_MASK_PROP_ALL, mesh_eval->totvert);
+      &mesh_eval->vert_data, &pointcloud->pdata, CD_MASK_PROP_ALL, mesh_eval->verts_num);
 
   BKE_id_materials_copy(bmain, (ID *)ob->data, (ID *)pointcloud);
 
@@ -574,7 +573,7 @@ void BKE_pointcloud_to_mesh(Main *bmain, Depsgraph *depsgraph, Scene * /*scene*/
   Mesh *mesh = BKE_mesh_add(bmain, ob->id.name + 2);
 
   if (const PointCloud *points = geometry.get_pointcloud()) {
-    mesh->totvert = points->totpoint;
+    mesh->verts_num = points->totpoint;
     CustomData_merge(&points->pdata, &mesh->vert_data, CD_MASK_PROP_ALL, points->totpoint);
   }
 
@@ -633,7 +632,8 @@ static void object_for_curve_to_mesh_free(Object *temp_object)
   /* Only free the final object data if it is *not* stored in the #data_eval field. This is still
    * necessary because #temp_object's data could be replaced by a #Curve data-block that isn't also
    * assigned to #data_eval. */
-  const bool object_data_stored_in_data_eval = final_object_data == temp_object->runtime.data_eval;
+  const bool object_data_stored_in_data_eval = final_object_data ==
+                                               temp_object->runtime->data_eval;
 
   BKE_id_free(nullptr, temp_object);
   if (!object_data_stored_in_data_eval) {
@@ -642,7 +642,7 @@ static void object_for_curve_to_mesh_free(Object *temp_object)
 }
 
 /**
- * Populate `object->runtime.curve_cache` which is then used to create the mesh.
+ * Populate `object->runtime->curve_cache` which is then used to create the mesh.
  */
 static void curve_to_mesh_eval_ensure(Object &object)
 {
@@ -656,8 +656,12 @@ static void curve_to_mesh_eval_ensure(Object &object)
    * So we create temporary copy of the object which will use same data as the original bevel, but
    * will have no modifiers. */
   Object bevel_object = blender::dna::shallow_zero_initialize();
+  blender::bke::ObjectRuntime bevel_runtime;
   if (curve.bevobj != nullptr) {
     bevel_object = blender::dna::shallow_copy(*curve.bevobj);
+    bevel_runtime = *curve.bevobj->runtime;
+    bevel_object.runtime = &bevel_runtime;
+
     BLI_listbase_clear(&bevel_object.modifiers);
     BKE_object_runtime_reset(&bevel_object);
     curve.bevobj = &bevel_object;
@@ -665,8 +669,12 @@ static void curve_to_mesh_eval_ensure(Object &object)
 
   /* Same thing for taper. */
   Object taper_object = blender::dna::shallow_zero_initialize();
+  blender::bke::ObjectRuntime taper_runtime;
   if (curve.taperobj != nullptr) {
     taper_object = blender::dna::shallow_copy(*curve.taperobj);
+    taper_runtime = *curve.taperobj->runtime;
+    taper_object.runtime = &taper_runtime;
+
     BLI_listbase_clear(&taper_object.modifiers);
     BKE_object_runtime_reset(&taper_object);
     curve.taperobj = &taper_object;
@@ -680,13 +688,17 @@ static void curve_to_mesh_eval_ensure(Object &object)
    * Brecht says hold off with that. */
   BKE_displist_make_curveTypes(nullptr, nullptr, &object, true);
 
-  BKE_object_runtime_free_data(&bevel_object);
-  BKE_object_runtime_free_data(&taper_object);
+  if (bevel_object.runtime) {
+    BKE_object_runtime_free_data(&bevel_object);
+  }
+  if (taper_object.runtime) {
+    BKE_object_runtime_free_data(&taper_object);
+  }
 }
 
 static const Curves *get_evaluated_curves_from_object(const Object *object)
 {
-  if (blender::bke::GeometrySet *geometry_set_eval = object->runtime.geometry_set_eval) {
+  if (blender::bke::GeometrySet *geometry_set_eval = object->runtime->geometry_set_eval) {
     return geometry_set_eval->get_curves();
   }
   return nullptr;
@@ -789,8 +801,11 @@ static Mesh *mesh_new_from_mesh_object_with_layers(Depsgraph *depsgraph,
   }
 
   Object object_for_eval = blender::dna::shallow_copy(*object);
-  if (object_for_eval.runtime.data_orig != nullptr) {
-    object_for_eval.data = object_for_eval.runtime.data_orig;
+  blender::bke::ObjectRuntime runtime = *object->runtime;
+  object_for_eval.runtime = &runtime;
+
+  if (object_for_eval.runtime->data_orig != nullptr) {
+    object_for_eval.data = object_for_eval.runtime->data_orig;
   }
 
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
@@ -958,6 +973,29 @@ Mesh *BKE_mesh_new_from_object_to_bmain(Main *bmain,
   return mesh_in_bmain;
 }
 
+static void copy_loose_vert_hint(const Mesh &src, Mesh &dst)
+{
+  const auto &src_cache = src.runtime->loose_verts_cache;
+  if (src_cache.is_cached() && src_cache.data().count == 0) {
+    dst.tag_loose_verts_none();
+  }
+}
+
+static void copy_loose_edge_hint(const Mesh &src, Mesh &dst)
+{
+  const auto &src_cache = src.runtime->loose_edges_cache;
+  if (src_cache.is_cached() && src_cache.data().count == 0) {
+    dst.tag_loose_edges_none();
+  }
+}
+
+static void copy_overlapping_hint(const Mesh &src, Mesh &dst)
+{
+  if (src.no_overlapping_topology()) {
+    dst.tag_overlapping_none();
+  }
+}
+
 static KeyBlock *keyblock_ensure_from_uid(Key &key, const int uid, const StringRefNull name)
 {
   if (KeyBlock *kb = BKE_keyblock_find_uid(&key, uid)) {
@@ -992,21 +1030,21 @@ static void move_shapekey_layers_to_keyblocks(const Mesh &mesh,
     KeyBlock *kb = keyblock_ensure_from_uid(key_dst, layer.uid, layer.name);
     MEM_SAFE_FREE(kb->data);
 
-    kb->totelem = mesh.totvert;
+    kb->totelem = mesh.verts_num;
     kb->data = MEM_malloc_arrayN(kb->totelem, sizeof(float3), __func__);
     MutableSpan<float3> kb_coords(static_cast<float3 *>(kb->data), kb->totelem);
     if (kb->uid == actshape_uid) {
       mesh.attributes().lookup<float3>("position").varray.materialize(kb_coords);
     }
     else {
-      kb_coords.copy_from({static_cast<const float3 *>(layer.data), mesh.totvert});
+      kb_coords.copy_from({static_cast<const float3 *>(layer.data), mesh.verts_num});
     }
   }
 
   LISTBASE_FOREACH (KeyBlock *, kb, &key_dst.block) {
-    if (kb->totelem != mesh.totvert) {
+    if (kb->totelem != mesh.verts_num) {
       MEM_SAFE_FREE(kb->data);
-      kb->totelem = mesh.totvert;
+      kb->totelem = mesh.verts_num;
       kb->data = MEM_cnew_array<float3>(kb->totelem, __func__);
       CLOG_ERROR(&LOG, "Data for shape key '%s' on mesh missing from evaluated mesh ", kb->name);
     }
@@ -1023,18 +1061,19 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src, Mesh *mesh_dst, Object *ob)
 
   BKE_mesh_clear_geometry_and_metadata(mesh_dst);
 
-  const bool verts_num_changed = mesh_dst->totvert != mesh_src->totvert;
-  mesh_dst->totvert = mesh_src->totvert;
-  mesh_dst->totedge = mesh_src->totedge;
+  const bool verts_num_changed = mesh_dst->verts_num != mesh_src->verts_num;
+  mesh_dst->verts_num = mesh_src->verts_num;
+  mesh_dst->edges_num = mesh_src->edges_num;
   mesh_dst->faces_num = mesh_src->faces_num;
-  mesh_dst->totloop = mesh_src->totloop;
+  mesh_dst->corners_num = mesh_src->corners_num;
 
   /* Using #CD_MASK_MESH ensures that only data that should exist in Main meshes is moved. */
   const CustomData_MeshMasks mask = CD_MASK_MESH;
-  CustomData_copy(&mesh_src->vert_data, &mesh_dst->vert_data, mask.vmask, mesh_src->totvert);
-  CustomData_copy(&mesh_src->edge_data, &mesh_dst->edge_data, mask.emask, mesh_src->totedge);
+  CustomData_copy(&mesh_src->vert_data, &mesh_dst->vert_data, mask.vmask, mesh_src->verts_num);
+  CustomData_copy(&mesh_src->edge_data, &mesh_dst->edge_data, mask.emask, mesh_src->edges_num);
   CustomData_copy(&mesh_src->face_data, &mesh_dst->face_data, mask.pmask, mesh_src->faces_num);
-  CustomData_copy(&mesh_src->loop_data, &mesh_dst->loop_data, mask.lmask, mesh_src->totloop);
+  CustomData_copy(
+      &mesh_src->corner_data, &mesh_dst->corner_data, mask.lmask, mesh_src->corners_num);
   std::swap(mesh_dst->face_offset_indices, mesh_src->face_offset_indices);
   std::swap(mesh_dst->runtime->face_offsets_sharing_info,
             mesh_src->runtime->face_offsets_sharing_info);
@@ -1061,6 +1100,13 @@ void BKE_mesh_nomain_to_mesh(Mesh *mesh_src, Mesh *mesh_dst, Object *ob)
     }
   }
 
+  /* Caches can have a large memory impact and aren't necessarily used, so don't indiscriminately
+   * store all of them in the #Main data-base mesh. However, some caches are quite small and
+   * copying them is "free" relative to how much work would be required if the data was needed. */
+  copy_loose_vert_hint(*mesh_src, *mesh_dst);
+  copy_loose_edge_hint(*mesh_src, *mesh_dst);
+  copy_overlapping_hint(*mesh_src, *mesh_dst);
+
   BKE_id_free(nullptr, mesh_src);
 }
 
@@ -1068,16 +1114,16 @@ void BKE_mesh_nomain_to_meshkey(Mesh *mesh_src, Mesh *mesh_dst, KeyBlock *kb)
 {
   BLI_assert(mesh_src->id.tag & LIB_TAG_NO_MAIN);
 
-  const int totvert = mesh_src->totvert;
+  const int totvert = mesh_src->verts_num;
 
-  if (totvert == 0 || mesh_dst->totvert == 0 || mesh_dst->totvert != totvert) {
+  if (totvert == 0 || mesh_dst->verts_num == 0 || mesh_dst->verts_num != totvert) {
     return;
   }
 
   if (kb->data) {
     MEM_freeN(kb->data);
   }
-  kb->data = MEM_malloc_arrayN(mesh_dst->key->elemsize, mesh_dst->totvert, "kb->data");
+  kb->data = MEM_malloc_arrayN(mesh_dst->key->elemsize, mesh_dst->verts_num, "kb->data");
   kb->totelem = totvert;
   MutableSpan(static_cast<float3 *>(kb->data), kb->totelem).copy_from(mesh_src->vert_positions());
 }

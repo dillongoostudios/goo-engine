@@ -9,6 +9,8 @@
 #include <climits>
 #include <cstdlib>
 
+#include "BLI_math_base.h"
+
 #include "DNA_cloth_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -18,7 +20,7 @@
 #include "rna_internal.h"
 
 #include "BKE_cloth.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
 #include "SIM_mass_spring.h"
 
@@ -27,7 +29,7 @@
 
 #ifdef RNA_RUNTIME
 
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "DEG_depsgraph.hh"
 #  include "DEG_depsgraph_build.hh"
 

@@ -27,7 +27,6 @@ struct ImagePool;
 struct MTex;
 struct Object;
 struct Paint;
-struct PaintStroke;
 struct PointerRNA;
 struct RegionView3D;
 struct Scene;
@@ -35,12 +34,16 @@ struct SpaceImage;
 struct VPaint;
 struct ViewContext;
 struct bContext;
+struct ReportList;
 struct wmEvent;
 struct wmKeyConfig;
 struct wmKeyMap;
 struct wmOperator;
 struct wmOperatorType;
 struct VertProjHandle;
+namespace blender::ed::sculpt_paint {
+struct PaintStroke;
+}
 
 struct CoNo {
   float co[3];
@@ -48,6 +51,8 @@ struct CoNo {
 };
 
 /* paint_stroke.cc */
+
+namespace blender::ed::sculpt_paint {
 
 using StrokeGetLocation = bool (*)(bContext *C,
                                    float location[3],
@@ -85,7 +90,6 @@ bool paint_supports_dynamic_size(Brush *br, enum ePaintMode mode);
 bool paint_supports_dynamic_tex_coords(Brush *br, enum ePaintMode mode);
 bool paint_supports_smooth_stroke(Brush *br, enum ePaintMode mode);
 bool paint_supports_texture(enum ePaintMode mode);
-bool paint_supports_jitter(enum ePaintMode mode);
 
 /**
  * Called in paint_ops.cc, on each regeneration of key-maps.
@@ -102,7 +106,10 @@ float paint_stroke_distance_get(PaintStroke *stroke);
 void paint_stroke_set_mode_data(PaintStroke *stroke, void *mode_data);
 bool paint_stroke_started(PaintStroke *stroke);
 
-bool PAINT_brush_tool_poll(bContext *C);
+bool paint_brush_tool_poll(bContext *C);
+
+}  // namespace blender::ed::sculpt_paint
+
 /**
  * Delete overlay cursor textures to preserve memory and invalidate all overlay flags.
  */
@@ -121,9 +128,9 @@ bool vertex_paint_poll_ignore_tool(bContext *C);
  */
 bool vertex_paint_mode_poll(bContext *C);
 
-typedef void (*VPaintTransform_Callback)(const float col[3],
-                                         const void *user_data,
-                                         float r_col[3]);
+using VPaintTransform_Callback = void (*)(const float col[3],
+                                          const void *user_data,
+                                          float r_col[3]);
 
 void PAINT_OT_weight_paint_toggle(wmOperatorType *ot);
 void PAINT_OT_weight_paint(wmOperatorType *ot);
@@ -454,39 +461,27 @@ enum BrushStrokeMode {
 
 /* paint_hide.cc */
 
-enum PartialVisAction {
-  PARTIALVIS_HIDE,
-  PARTIALVIS_SHOW,
-};
-
-enum PartialVisArea {
-  PARTIALVIS_INSIDE,
-  PARTIALVIS_OUTSIDE,
-  PARTIALVIS_ALL,
-  PARTIALVIS_MASKED,
-};
+namespace blender::ed::sculpt_paint::hide {
+void sync_all_from_faces(Object &object);
+void mesh_show_all(Object &object, Span<PBVHNode *> nodes);
+void grids_show_all(Depsgraph &depsgraph, Object &object, Span<PBVHNode *> nodes);
+void tag_update_visibility(const bContext &C);
 
 void PAINT_OT_hide_show(wmOperatorType *ot);
+void PAINT_OT_visibility_invert(wmOperatorType *ot);
+}  // namespace blender::ed::sculpt_paint::hide
 
 /* `paint_mask.cc` */
 
-/* The gesture API doesn't write to this enum type,
- * it writes to eSelectOp from ED_select_utils.hh.
- * We must thus map the modes here to the desired
- * eSelectOp modes.
- *
- * Fixes #102349.
- */
-enum PaintMaskFloodMode {
-  PAINT_MASK_FLOOD_VALUE = SEL_OP_SUB,
-  PAINT_MASK_FLOOD_VALUE_INVERSE = SEL_OP_ADD,
-  PAINT_MASK_INVERT = SEL_OP_XOR,
-};
+namespace blender::ed::sculpt_paint::mask {
+
+Array<float> duplicate_mask(const Object &object);
 
 void PAINT_OT_mask_flood_fill(wmOperatorType *ot);
 void PAINT_OT_mask_lasso_gesture(wmOperatorType *ot);
 void PAINT_OT_mask_box_gesture(wmOperatorType *ot);
 void PAINT_OT_mask_line_gesture(wmOperatorType *ot);
+}  // namespace blender::ed::sculpt_paint::mask
 
 /* `paint_curve.cc` */
 
@@ -555,7 +550,7 @@ void init_stroke(Depsgraph *depsgraph, Object *ob);
 void init_session_data(const ToolSettings *ts, Object *ob);
 void init_session(Depsgraph *depsgraph, Scene *scene, Object *ob, eObjectMode object_mode);
 
-Vector<PBVHNode *> pbvh_gather_generic(Object *ob, VPaint *wp, Sculpt *sd, Brush *brush);
+Vector<PBVHNode *> pbvh_gather_generic(Object *ob, VPaint *wp, Brush *brush);
 
 void mode_enter_generic(
     Main *bmain, Depsgraph *depsgraph, Scene *scene, Object *ob, const eObjectMode mode_flag);

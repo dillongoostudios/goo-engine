@@ -12,9 +12,9 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_camera.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_object_types.h"

@@ -23,11 +23,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fluid.h"
 #include "BKE_layer.h"
-#include "BKE_lib_query.h"
-#include "BKE_modifier.h"
+#include "BKE_lib_query.hh"
+#include "BKE_modifier.hh"
 #include "BKE_screen.hh"
 
 #include "UI_interface.hh"
@@ -114,16 +114,16 @@ static void fluid_modifier_do_isolated(void *userdata)
 }
 #endif /* WITH_FLUID */
 
-static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *me)
+static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh *mesh)
 {
 #ifndef WITH_FLUID
   UNUSED_VARS(md, ctx);
-  return me;
+  return mesh;
 #else
   FluidModifierData *fmd = (FluidModifierData *)md;
 
   if (ctx->flag & MOD_APPLY_ORCO) {
-    return me;
+    return mesh;
   }
 
   /* Isolate execution of Mantaflow when running from dependency graph. The reason for this is
@@ -134,7 +134,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   FluidIsolationData isolation_data;
   isolation_data.depsgraph = ctx->depsgraph;
   isolation_data.object = ctx->object;
-  isolation_data.mesh = me;
+  isolation_data.mesh = mesh;
   isolation_data.fmd = fmd;
   BLI_task_isolate(fluid_modifier_do_isolated, &isolation_data);
 
@@ -221,7 +221,7 @@ static void panel_draw(const bContext * /*C*/, Panel *panel)
 
   PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
 
-  uiItemL(layout, TIP_("Settings are inside the Physics tab"), ICON_NONE);
+  uiItemL(layout, RPT_("Settings are inside the Physics tab"), ICON_NONE);
 
   modifier_panel_end(layout, ptr);
 }
@@ -237,7 +237,7 @@ ModifierTypeInfo modifierType_Fluid = {
     /*struct_name*/ "FluidModifierData",
     /*struct_size*/ sizeof(FluidModifierData),
     /*srna*/ &RNA_FluidModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_Single,
     /*icon*/ ICON_MOD_FLUIDSIM,
 
@@ -263,4 +263,5 @@ ModifierTypeInfo modifierType_Fluid = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

@@ -29,12 +29,12 @@
 
 #include "BIK_api.h"
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_tracking.h"
@@ -61,12 +61,13 @@
 #include "ED_screen.hh"
 
 #include "ANIM_action.hh"
+#include "ANIM_animdata.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
 #include "object_intern.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 
 /* ------------------------------------------------------------------- */
 /** \name Constraint Data Accessors
@@ -238,9 +239,9 @@ static void update_pyconstraint_cb(void *arg1, void *arg2)
   if (owner && con) {
     BPY_pyconstraint_update(owner, con);
   }
-#  endif
+#  endif /* WITH_PYTHON */
 }
-#endif /* UNUSED */
+#endif   /* UNUSED */
 
 /** \} */
 
@@ -500,7 +501,8 @@ static void test_constraint(
       if (ELEM(con->type,
                CONSTRAINT_TYPE_FOLLOWPATH,
                CONSTRAINT_TYPE_CLAMPTO,
-               CONSTRAINT_TYPE_SPLINEIK)) {
+               CONSTRAINT_TYPE_SPLINEIK))
+      {
         if (ct->tar) {
           /* The object type check is only needed here in case we have a placeholder
            * object assigned (because the library containing the curve is missing).
@@ -1073,7 +1075,7 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
         (BKE_fcurve_find(&cu->adt->action->curves, "eval_time", 0) == nullptr))
     {
       /* create F-Curve for path animation */
-      act = ED_id_action_ensure(bmain, &cu->id);
+      act = blender::animrig::id_action_ensure(bmain, &cu->id);
       fcu = blender::animrig::action_fcurve_ensure(bmain, act, nullptr, nullptr, "eval_time", 0);
 
       /* standard vertical range - 1:1 = 100 frames */
@@ -1097,7 +1099,7 @@ static int followpath_path_animate_exec(bContext *C, wmOperator *op)
     path = RNA_path_from_ID_to_property(&ptr, prop);
 
     /* create F-Curve for constraint */
-    act = ED_id_action_ensure(bmain, &ob->id);
+    act = blender::animrig::id_action_ensure(bmain, &ob->id);
     fcu = blender::animrig::action_fcurve_ensure(bmain, act, nullptr, nullptr, path, 0);
 
     /* standard vertical range - 0.0 to 1.0 */
@@ -1451,7 +1453,7 @@ static int constraint_delete_exec(bContext *C, wmOperator *op)
   STRNCPY(name, con->name);
 
   /* free the constraint */
-  if (BKE_constraint_remove_ex(lb, ob, con, true)) {
+  if (BKE_constraint_remove_ex(lb, ob, con)) {
     /* Needed to set the flags on pose-bones correctly. */
     ED_object_constraint_update(bmain, ob);
 
@@ -2483,7 +2485,8 @@ static bool get_new_constraint_target(
           break;
         }
         if (((!only_curve) || (ob->type == OB_CURVES_LEGACY)) &&
-            ((!only_mesh) || (ob->type == OB_MESH))) {
+            ((!only_mesh) || (ob->type == OB_MESH)))
+        {
           /* set target */
           *tar_ob = ob;
           found = true;

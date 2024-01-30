@@ -21,14 +21,14 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_modifier.hh"
 #include "BKE_nla.h"
 #include "BKE_scene.h"
 
@@ -575,7 +575,8 @@ bool constraints_list_needinv(TransInfo *t, ListBase *list)
           bChildOfConstraint *data = (bChildOfConstraint *)con->data;
 
           if ((data->flag & CHILDOF_LOCX) && (data->flag & CHILDOF_LOCY) &&
-              (data->flag & CHILDOF_LOCZ)) {
+              (data->flag & CHILDOF_LOCZ))
+          {
             return true;
           }
         }
@@ -584,7 +585,8 @@ bool constraints_list_needinv(TransInfo *t, ListBase *list)
           bRotateLikeConstraint *data = (bRotateLikeConstraint *)con->data;
 
           if (ELEM(data->mix_mode, ROTLIKE_MIX_OFFSET, ROTLIKE_MIX_BEFORE) &&
-              ELEM(t->mode, TFM_ROTATION)) {
+              ELEM(t->mode, TFM_ROTATION))
+          {
             return true;
           }
         }
@@ -1201,8 +1203,8 @@ void animrecord_check_state(TransInfo *t, ID *id)
    * - we're not only keying for available channels
    * - the option to add new actions for each round is not enabled
    */
-  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAIL) == 0 &&
-      (scene->toolsettings->autokey_flag & ANIMRECORD_FLAG_WITHNLA))
+  if (blender::animrig::is_keying_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE) == 0 &&
+      (scene->toolsettings->keying_flag & AUTOKEY_FLAG_LAYERED_RECORD))
   {
     /* if playback has just looped around,
      * we need to add a new NLA track+strip to allow a clean pass to occur */

@@ -16,6 +16,7 @@
 #include "BLI_alloca.h"
 #include "BLI_expr_pylike_eval.h"
 #include "BLI_listbase.h"
+#include "BLI_math_base_safe.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
@@ -28,7 +29,7 @@
 
 #include "BKE_action.h"
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_fcurve_driver.h"
 #include "BKE_global.h"
@@ -146,6 +147,21 @@ bool driver_get_target_property(const DriverTargetContext *driver_target_context
 }
 
 /**
+ * Checks if the fallback value can be used, and if so, sets dtar flags to signal its usage.
+ * The caller is expected to immediately return the fallback value if this returns true.
+ */
+static bool dtar_try_use_fallback(DriverTarget *dtar)
+{
+  if ((dtar->options & DTAR_OPTION_USE_FALLBACK) == 0) {
+    return false;
+  }
+
+  dtar->flag &= ~DTAR_FLAG_INVALID;
+  dtar->flag |= DTAR_FLAG_FALLBACK_USED;
+  return true;
+}
+
+/**
  * Helper function to obtain a value using RNA from the specified source
  * (for evaluating drivers).
  */
@@ -158,6 +174,8 @@ static float dtar_get_prop_val(const AnimationEvalContext *anim_eval_context,
   if (driver == nullptr) {
     return 0.0f;
   }
+
+  dtar->flag &= ~DTAR_FLAG_FALLBACK_USED;
 
   /* Get property to resolve the target from.
    * Naming is a bit confusing, but this is what is exposed as "Prop" or "Context Property" in
@@ -183,6 +201,10 @@ static float dtar_get_prop_val(const AnimationEvalContext *anim_eval_context,
   if (!RNA_path_resolve_property_full(
           &property_ptr, dtar->rna_path, &value_ptr, &value_prop, &index))
   {
+    if (dtar_try_use_fallback(dtar)) {
+      return dtar->fallback_value;
+    }
+
     /* Path couldn't be resolved. */
     if (G.debug & G_DEBUG) {
       CLOG_ERROR(&LOG,
@@ -199,6 +221,10 @@ static float dtar_get_prop_val(const AnimationEvalContext *anim_eval_context,
   if (RNA_property_array_check(value_prop)) {
     /* Array. */
     if (index < 0 || index >= RNA_property_array_length(&value_ptr, value_prop)) {
+      if (dtar_try_use_fallback(dtar)) {
+        return dtar->fallback_value;
+      }
+
       /* Out of bounds. */
       if (G.debug & G_DEBUG) {
         CLOG_ERROR(&LOG,
@@ -252,13 +278,15 @@ static float dtar_get_prop_val(const AnimationEvalContext *anim_eval_context,
   return value;
 }
 
-bool driver_get_variable_property(const AnimationEvalContext *anim_eval_context,
-                                  ChannelDriver *driver,
-                                  DriverVar *dvar,
-                                  DriverTarget *dtar,
-                                  PointerRNA *r_ptr,
-                                  PropertyRNA **r_prop,
-                                  int *r_index)
+eDriverVariablePropertyResult driver_get_variable_property(
+    const AnimationEvalContext *anim_eval_context,
+    ChannelDriver *driver,
+    DriverVar *dvar,
+    DriverTarget *dtar,
+    const bool allow_no_index,
+    PointerRNA *r_ptr,
+    PropertyRNA **r_prop,
+    int *r_index)
 {
   PointerRNA ptr;
   PropertyRNA *prop;
@@ -266,8 +294,10 @@ bool driver_get_variable_property(const AnimationEvalContext *anim_eval_context,
 
   /* Sanity check. */
   if (ELEM(nullptr, driver, dtar)) {
-    return false;
+    return DRIVER_VAR_PROPERTY_INVALID;
   }
+
+  dtar->flag &= ~DTAR_FLAG_FALLBACK_USED;
 
   /* Get RNA-pointer for the data-block given in target. */
   const DriverTargetContext driver_target_context = driver_target_context_from_animation_context(
@@ -280,7 +310,7 @@ bool driver_get_variable_property(const AnimationEvalContext *anim_eval_context,
 
     driver->flag |= DRIVER_FLAG_INVALID;
     dtar->flag |= DTAR_FLAG_INVALID;
-    return false;
+    return DRIVER_VAR_PROPERTY_INVALID;
   }
 
   /* Get property to read from, and get value as appropriate. */
@@ -292,6 +322,13 @@ bool driver_get_variable_property(const AnimationEvalContext *anim_eval_context,
     /* OK. */
   }
   else {
+    if (dtar_try_use_fallback(dtar)) {
+      ptr = PointerRNA_NULL;
+      *r_prop = nullptr;
+      *r_index = -1;
+      return DRIVER_VAR_PROPERTY_FALLBACK;
+    }
+
     /* Path couldn't be resolved. */
     if (G.debug & G_DEBUG) {
       CLOG_ERROR(&LOG,
@@ -306,16 +343,38 @@ bool driver_get_variable_property(const AnimationEvalContext *anim_eval_context,
 
     driver->flag |= DRIVER_FLAG_INVALID;
     dtar->flag |= DTAR_FLAG_INVALID;
-    return false;
+    return DRIVER_VAR_PROPERTY_INVALID;
   }
 
   *r_ptr = ptr;
   *r_prop = prop;
   *r_index = index;
 
+  /* Verify the array index and apply fallback if appropriate. */
+  if (prop && RNA_property_array_check(prop)) {
+    if ((index < 0 && !allow_no_index) || index >= RNA_property_array_length(&ptr, prop)) {
+      if (dtar_try_use_fallback(dtar)) {
+        return DRIVER_VAR_PROPERTY_FALLBACK;
+      }
+
+      /* Out of bounds. */
+      if (G.debug & G_DEBUG) {
+        CLOG_ERROR(&LOG,
+                   "Driver Evaluation Error: array index is out of bounds for %s -> %s (%d)",
+                   ptr.owner_id->name,
+                   dtar->rna_path,
+                   index);
+      }
+
+      driver->flag |= DRIVER_FLAG_INVALID;
+      dtar->flag |= DTAR_FLAG_INVALID;
+      return DRIVER_VAR_PROPERTY_INVALID_INDEX;
+    }
+  }
+
   /* If we're still here, we should be ok. */
   dtar->flag &= ~DTAR_FLAG_INVALID;
-  return true;
+  return DRIVER_VAR_PROPERTY_SUCCESS;
 }
 
 static short driver_check_valid_targets(ChannelDriver *driver, DriverVar *dvar)
@@ -410,7 +469,7 @@ static float dvar_eval_rotDiff(const AnimationEvalContext * /*anim_eval_context*
 
   invert_qt_normalized(q1);
   mul_qt_qtqt(quat, q1, q2);
-  angle = 2.0f * saacos(quat[0]);
+  angle = 2.0f * safe_acosf(quat[0]);
   angle = fabsf(angle);
 
   return (angle > float(M_PI)) ? float((2.0f * float(M_PI)) - angle) : float(angle);
@@ -672,17 +731,17 @@ static float dvar_eval_contextProp(const AnimationEvalContext *anim_eval_context
 static void quaternion_to_angles(float quat[4], int channel)
 {
   if (channel < 0) {
-    quat[0] = 2.0f * saacosf(quat[0]);
+    quat[0] = 2.0f * safe_acosf(quat[0]);
 
     for (int i = 1; i < 4; i++) {
-      quat[i] = 2.0f * saasinf(quat[i]);
+      quat[i] = 2.0f * safe_asinf(quat[i]);
     }
   }
   else if (channel == 0) {
-    quat[0] = 2.0f * saacosf(quat[0]);
+    quat[0] = 2.0f * safe_acosf(quat[0]);
   }
   else {
-    quat[channel] = 2.0f * saasinf(quat[channel]);
+    quat[channel] = 2.0f * safe_asinf(quat[channel]);
   }
 }
 

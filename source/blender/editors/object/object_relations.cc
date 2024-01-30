@@ -10,6 +10,8 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <fmt/format.h>
+
 #include "MEM_guardedalloc.h"
 
 #include "DNA_anim_types.h"
@@ -37,48 +39,50 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
+#include "BLI_vector_set.hh"
 
 #include "BLT_translation.h"
 
-#include "BKE_DerivedMesh.h"
+#include "BKE_DerivedMesh.hh"
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_camera.h"
 #include "BKE_collection.h"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_curves.h"
 #include "BKE_displist.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_fcurve.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idprop.h"
 #include "BKE_idtype.h"
-#include "BKE_lattice.h"
+#include "BKE_lattice.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_lib_query.h"
-#include "BKE_lib_remap.h"
+#include "BKE_lib_query.hh"
+#include "BKE_lib_remap.hh"
 #include "BKE_light.h"
 #include "BKE_lightprobe.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_mball.h"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_node.h"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_interface.hh"
 #include "BKE_object.hh"
-#include "BKE_pointcloud.h"
+#include "BKE_object_types.hh"
+#include "BKE_pointcloud.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_speaker.h"
 #include "BKE_texture.h"
-#include "BKE_volume.h"
+#include "BKE_volume.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -104,6 +108,7 @@
 #include "ED_view3d.hh"
 
 #include "ANIM_action.hh"
+#include "ANIM_animdata.hh"
 
 #include "MOD_nodes.hh"
 
@@ -135,7 +140,7 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
   /* we need 1 to 3 selected vertices */
 
   if (obedit->type == OB_MESH) {
-    Mesh *me = static_cast<Mesh *>(obedit->data);
+    Mesh *mesh = static_cast<Mesh *>(obedit->data);
     BMEditMesh *em;
 
     EDBM_mesh_load(bmain, obedit);
@@ -143,9 +148,9 @@ static int vertex_parent_set_exec(bContext *C, wmOperator *op)
 
     DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
 
-    em = me->edit_mesh;
+    em = mesh->edit_mesh;
 
-    BKE_editmesh_looptri_and_normals_calc(em);
+    BKE_editmesh_looptris_and_normals_calc(em);
 
     /* Make sure the evaluated mesh is updated.
      *
@@ -561,7 +566,7 @@ bool ED_object_parent_set(ReportList *reports,
       /* if follow, add F-Curve for ctime (i.e. "eval_time") so that path-follow works */
       if (partype == PAR_FOLLOW) {
         /* get or create F-Curve */
-        bAction *act = ED_id_action_ensure(bmain, &cu->id);
+        bAction *act = blender::animrig::id_action_ensure(bmain, &cu->id);
         FCurve *fcu = blender::animrig::action_fcurve_ensure(
             bmain, act, nullptr, nullptr, "eval_time", 0);
 
@@ -650,8 +655,9 @@ bool ED_object_parent_set(ReportList *reports,
               if (md) {
                 ((CurveModifierData *)md)->object = par;
               }
-              if (par->runtime.curve_cache &&
-                  par->runtime.curve_cache->anim_path_accum_length == nullptr) {
+              if (par->runtime->curve_cache &&
+                  par->runtime->curve_cache->anim_path_accum_length == nullptr)
+              {
                 DEG_id_tag_update(&par->id, ID_RECALC_GEOMETRY);
               }
             }
@@ -1197,7 +1203,8 @@ static int object_track_clear_exec(bContext *C, wmOperator *op)
       if (ELEM(con->type,
                CONSTRAINT_TYPE_TRACKTO,
                CONSTRAINT_TYPE_LOCKTRACK,
-               CONSTRAINT_TYPE_DAMPTRACK)) {
+               CONSTRAINT_TYPE_DAMPTRACK))
+      {
         BKE_constraint_remove(&ob->constraints, con);
       }
     }
@@ -1554,7 +1561,8 @@ static int make_links_data_exec(bContext *C, wmOperator *op)
 
             /* now add in the collections from the link nodes */
             for (collection_node = ob_collections; collection_node;
-                 collection_node = collection_node->next) {
+                 collection_node = collection_node->next)
+            {
               if (ob_dst->instance_collection != collection_node->link) {
                 BKE_collection_object_add(
                     bmain, static_cast<Collection *>(collection_node->link), ob_dst);
@@ -1791,7 +1799,7 @@ static Collection *single_object_users_collection(Main *bmain,
        * state currently. With current code, that would lead to a memory leak - because of
        * reasons. It would be a useless loss of computing anyway, since caller has to fully
        * refresh view-layers/collections caching at the end. */
-      BKE_collection_child_add_no_sync(collection, collection_child_new);
+      BKE_collection_child_add_no_sync(bmain, collection, collection_child_new);
       BLI_remlink(&collection->children, child);
       MEM_freeN(child);
       if (child == orig_child_last) {
@@ -1847,7 +1855,7 @@ static void single_obdata_users(
   Light *la;
   Curve *cu;
   Camera *cam;
-  Mesh *me;
+  Mesh *mesh;
   Lattice *lat;
   ID *id;
 
@@ -1884,7 +1892,7 @@ static void single_obdata_users(
             break;
           case OB_MESH:
             /* Needed to remap texcomesh below. */
-            ob->data = me = static_cast<Mesh *>(
+            ob->data = mesh = static_cast<Mesh *>(
                 ID_NEW_SET(ob->data,
                            BKE_id_copy_ex(bmain,
                                           static_cast<const ID *>(ob->data),
@@ -1991,10 +1999,10 @@ static void single_obdata_users(
   }
   FOREACH_OBJECT_FLAG_END;
 
-  me = static_cast<Mesh *>(bmain->meshes.first);
-  while (me) {
-    ID_NEW_REMAP(me->texcomesh);
-    me = static_cast<Mesh *>(me->id.next);
+  mesh = static_cast<Mesh *>(bmain->meshes.first);
+  while (mesh) {
+    ID_NEW_REMAP(mesh->texcomesh);
+    mesh = static_cast<Mesh *>(mesh->id.next);
   }
 }
 
@@ -2155,7 +2163,8 @@ static bool make_local_all__instance_indirect_unused(Main *bmain,
   bool changed = false;
 
   for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next)) {
+       ob = static_cast<Object *>(ob->id.next))
+  {
     if (ID_IS_LINKED(ob) && (ob->id.us == 0)) {
       Base *base;
 
@@ -2277,7 +2286,8 @@ static int make_local_exec(bContext *C, wmOperator *op)
       }
 
       if (ELEM(mode, MAKE_LOCAL_SELECT_OBDATA, MAKE_LOCAL_SELECT_OBDATA_MATERIAL) &&
-          ob->data != nullptr) {
+          ob->data != nullptr)
+      {
         ID *ob_data = static_cast<ID *>(ob->data);
         ob_data->tag &= ~LIB_TAG_PRE_EXISTING;
         make_local_animdata_tag(BKE_animdata_from_id(ob_data));
@@ -2417,7 +2427,8 @@ static int make_override_library_exec(bContext *C, wmOperator *op)
     return OPERATOR_FINISHED;
   }
 
-  const bool do_fully_editable = !user_overrides_from_selected_objects;
+  /** Currently there is no 'all editable' option from the 3DView. */
+  const bool do_fully_editable = false;
 
   GSet *user_overrides_objects_uids = do_fully_editable ? nullptr :
                                                           BLI_gset_new(BLI_ghashutil_inthash_p,
@@ -2510,7 +2521,8 @@ static int make_override_library_exec(bContext *C, wmOperator *op)
         case ID_GR: {
           Collection *collection_root = (Collection *)id_root;
           LISTBASE_FOREACH_MUTABLE (
-              CollectionParent *, collection_parent, &collection_root->runtime.parents) {
+              CollectionParent *, collection_parent, &collection_root->runtime.parents)
+          {
             if (ID_IS_LINKED(collection_parent->collection) ||
                 !BKE_view_layer_has_collection(view_layer, collection_parent->collection))
             {
@@ -2567,25 +2579,60 @@ static int make_override_library_invoke(bContext *C, wmOperator *op, const wmEve
     return OPERATOR_CANCELLED;
   }
 
-  int potential_root_collections_num = 0;
-  uint collection_session_uuid = MAIN_ID_SESSION_UUID_UNSET;
+  blender::VectorSet<Collection *> potential_root_collections;
   LISTBASE_FOREACH (Collection *, collection, &bmain->collections) {
-    /* Only check for directly linked collections. */
-    if (!ID_IS_LINKED(&collection->id) || (collection->id.tag & LIB_TAG_INDIRECT) != 0 ||
+    /* Only check for linked collections from the same library, in the current view-layer. */
+    if (!ID_IS_LINKED(&collection->id) || collection->id.lib != obact->id.lib ||
         !BKE_view_layer_has_collection(view_layer, collection))
     {
       continue;
     }
-    if (BKE_collection_has_object_recursive(collection, obact)) {
-      if (potential_root_collections_num == 0) {
-        collection_session_uuid = collection->id.session_uuid;
+    if (!BKE_collection_has_object_recursive(collection, obact)) {
+      continue;
+    }
+    if (potential_root_collections.is_empty()) {
+      potential_root_collections.add_new(collection);
+    }
+    else {
+      bool has_parents_in_potential_roots = false;
+      bool is_potential_root = false;
+      for (auto collection_root_iter : potential_root_collections) {
+        if (BKE_collection_has_collection(collection_root_iter, collection)) {
+          BLI_assert_msg(!BKE_collection_has_collection(collection, collection_root_iter),
+                         "Invalid loop in collection hierarchy");
+          /* Current potential root is already 'better' (higher up in the collection hierarchy)
+           * than current collection, nothing else to do. */
+          has_parents_in_potential_roots = true;
+        }
+        else if (BKE_collection_has_collection(collection, collection_root_iter)) {
+          BLI_assert_msg(!BKE_collection_has_collection(collection_root_iter, collection),
+                         "Invalid loop in collection hierarchy");
+          /* Current potential root is in the current collection's hierarchy, so the later is a
+           * better candidate as root collection. */
+          is_potential_root = true;
+          potential_root_collections.remove(collection_root_iter);
+        }
+        else {
+          /* Current potential root is not found in current collection's hierarchy, so the later is
+           * a potential candidate as root collection. */
+          is_potential_root = true;
+        }
       }
-      potential_root_collections_num++;
+      /* Only add the current collection as potential root if it is not a descendant of any already
+       * known potential root collections. */
+      if (is_potential_root && !has_parents_in_potential_roots) {
+        potential_root_collections.add_new(collection);
+      }
     }
   }
 
-  if (potential_root_collections_num <= 1) {
-    RNA_property_int_set(op->ptr, op->type->prop, *((int *)&collection_session_uuid));
+  if (potential_root_collections.is_empty()) {
+    RNA_property_int_set(op->ptr, op->type->prop, MAIN_ID_SESSION_UUID_UNSET);
+    return make_override_library_exec(C, op);
+  }
+  if (potential_root_collections.size() == 1) {
+    Collection *collection_root = potential_root_collections.pop();
+    RNA_property_int_set(op->ptr, op->type->prop, *((int *)&collection_root->id.session_uuid));
     return make_override_library_exec(C, op);
   }
 
@@ -2593,7 +2640,7 @@ static int make_override_library_invoke(bContext *C, wmOperator *op, const wmEve
               RPT_ERROR,
               "Too many potential root collections (%d) for the override hierarchy, "
               "please use the Outliner instead",
-              potential_root_collections_num);
+              int(potential_root_collections.size()));
   return OPERATOR_CANCELLED;
 }
 
@@ -2804,7 +2851,7 @@ static int make_single_user_exec(bContext *C, wmOperator *op)
   if (RNA_boolean_get(op->ptr, "obdata")) {
     single_obdata_users(bmain, scene, view_layer, v3d, flag);
 
-    /* Needed since some IDs were remapped? (incl. me->texcomesh, see #73797). */
+    /* Needed since some IDs were remapped? (incl. mesh->texcomesh, see #73797). */
     update_deps = true;
   }
 
@@ -2880,27 +2927,27 @@ void OBJECT_OT_make_single_user(wmOperatorType *ot)
 /** \name Drop Named Material on Object Operator
  * \{ */
 
-char *ED_object_ot_drop_named_material_tooltip(bContext *C, const char *name, const int mval[2])
+std::string ED_object_ot_drop_named_material_tooltip(bContext *C,
+                                                     const char *name,
+                                                     const int mval[2])
 {
   int mat_slot = 0;
   Object *ob = ED_view3d_give_material_slot_under_cursor(C, mval, &mat_slot);
   if (ob == nullptr) {
-    return BLI_strdup("");
+    return {};
   }
   mat_slot = max_ii(mat_slot, 1);
 
   Material *prev_mat = BKE_object_material_get(ob, mat_slot);
 
-  char *result;
   if (prev_mat) {
-    const char *tooltip = TIP_("Drop %s on %s (slot %d, replacing %s)");
-    result = BLI_sprintfN(tooltip, name, ob->id.name + 2, mat_slot, prev_mat->id.name + 2);
+    return fmt::format(TIP_("Drop {} on {} (slot {}, replacing {})"),
+                       name,
+                       ob->id.name + 2,
+                       mat_slot,
+                       prev_mat->id.name + 2);
   }
-  else {
-    const char *tooltip = TIP_("Drop %s on %s (slot %d)");
-    result = BLI_sprintfN(tooltip, name, ob->id.name + 2, mat_slot);
-  }
-  return result;
+  return fmt::format(TIP_("Drop {} on {} (slot {})"), name, ob->id.name + 2, mat_slot);
 }
 
 static int drop_named_material_invoke(bContext *C, wmOperator *op, const wmEvent *event)
@@ -2951,41 +2998,28 @@ void OBJECT_OT_drop_named_material(wmOperatorType *ot)
 /** \name Drop Geometry Nodes on Object Operator
  * \{ */
 
-char *ED_object_ot_drop_geometry_nodes_tooltip(bContext *C,
-                                               PointerRNA *properties,
-                                               const int mval[2])
+std::string ED_object_ot_drop_geometry_nodes_tooltip(bContext *C,
+                                                     PointerRNA *properties,
+                                                     const int mval[2])
 {
   const Object *ob = ED_view3d_give_object_under_cursor(C, mval);
   if (ob == nullptr) {
-    return BLI_strdup("");
+    return {};
   }
 
   const uint32_t session_uuid = RNA_int_get(properties, "session_uuid");
   const ID *id = BKE_libblock_find_session_uuid(CTX_data_main(C), ID_NT, session_uuid);
   if (!id) {
-    return BLI_strdup("");
+    return {};
   }
 
-  const char *tooltip = TIP_("Add modifier with node group \"%s\" on object \"%s\"");
-  return BLI_sprintfN(tooltip, id->name, ob->id.name);
+  return fmt::format(
+      TIP_("Add modifier with node group \"{}\" on object \"{}\""), id->name, ob->id.name);
 }
 
 static bool check_geometry_node_group_sockets(wmOperator *op, const bNodeTree *tree)
 {
   tree->ensure_interface_cache();
-  if (!tree->interface_inputs().is_empty()) {
-    const bNodeTreeInterfaceSocket *first_input = tree->interface_inputs()[0];
-    if (!first_input) {
-      BKE_report(op->reports, RPT_ERROR, "The node group must have a geometry input socket");
-      return false;
-    }
-    const bNodeSocketType *typeinfo = first_input->socket_typeinfo();
-    const eNodeSocketDatatype type = typeinfo ? eNodeSocketDatatype(typeinfo->type) : SOCK_CUSTOM;
-    if (type != SOCK_GEOMETRY) {
-      BKE_report(op->reports, RPT_ERROR, "The first input must be a geometry socket");
-      return false;
-    }
-  }
   if (!tree->interface_outputs().is_empty()) {
     const bNodeTreeInterfaceSocket *first_output = tree->interface_outputs()[0];
     if (!first_output) {

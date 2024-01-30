@@ -12,9 +12,9 @@
 #include "BLI_string.h"
 #include "BLI_task.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_report.h"
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
@@ -105,7 +105,7 @@ static void applyShrinkFatten(TransInfo *t)
   t->values_final[0] = distance;
 
   /* header print for NumInput */
-  ofs += BLI_strncpy_rlen(str + ofs, TIP_("Shrink/Fatten: "), sizeof(str) - ofs);
+  ofs += BLI_strncpy_rlen(str + ofs, RPT_("Shrink/Fatten: "), sizeof(str) - ofs);
   if (hasNumInput(&t->num)) {
     char c[NUM_STR_REP_LEN];
     outputNumInput(&(t->num), c, unit);
@@ -139,7 +139,7 @@ static void applyShrinkFatten(TransInfo *t)
 
   BLI_snprintf(str + ofs,
                sizeof(str) - ofs,
-               TIP_(" or Alt) Even Thickness %s"),
+               RPT_(" or Alt) Even Thickness %s"),
                WM_bool_as_string((t->flag & T_ALT_TRANSFORM) != 0));
   /* done with header string */
 

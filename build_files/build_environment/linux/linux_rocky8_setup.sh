@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 # This script is part of the official build environment, see wiki page for details.
-# https://wiki.blender.org/wiki/Building_Blender/Other/Rocky8ReleaseEnvironment
+# https://developer.blender.org/docs/handbook/release_process/build/rocky_8/
 
 set -e
 
@@ -96,6 +96,10 @@ PACKAGES_FOR_LIBS=(
     # Required by: `external_mesa`.
     expat-devel
 
+    # Required by: `external_mesa`.
+    libxshmfence
+    libxshmfence-devel
+
     # Required by: `external_igc` & `external_osl` as a build-time dependency.
     bison
     # Required by: `external_osl` as a build-time dependency.
@@ -118,7 +122,7 @@ PACKAGES_FOR_LIBS=(
     libinput-devel
     libevdev-devel
     mesa-libEGL-devel
-    systemd-dev # for `libudev` (not so obvious!).
+    systemd-devel # for `libudev` (not so obvious!).
     # Required by: `weston --headless` (run-time requirement for off screen rendering).
     mesa-dri-drivers
     mesa-libEGL
@@ -148,3 +152,6 @@ yum -y install python3 python3-pip python3-devel
 # Dependencies for asound.
 yum -y install -y  \
     alsa-lib-devel pulseaudio-libs-devel
+
+# Required by Blender build option: `WITH_JACK`.
+yum -y install jack-audio-connection-kit-devel

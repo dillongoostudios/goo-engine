@@ -46,7 +46,8 @@ def setup():
     for ob in scene.objects:
         if ob.name != 'Plane' and ob.type != 'LIGHT':
             ob.hide_probe_volume = True
-            ob.hide_probe_cubemap = True
+            ob.hide_probe_sphere = True
+            ob.hide_probe_plane = True
 
     bpy.ops.scene.light_cache_bake()
 
@@ -110,6 +111,7 @@ def create_argparse():
     parser.add_argument("-testdir", nargs=1)
     parser.add_argument("-outdir", nargs=1)
     parser.add_argument("-idiff", nargs=1)
+    parser.add_argument('--batch', default=False, action='store_true')
     return parser
 
 
@@ -138,7 +140,7 @@ def main():
     if test_dir_name.startswith('image'):
         report.set_fail_threshold(0.051)
 
-    ok = report.run(test_dir, blender, get_arguments, batch=True)
+    ok = report.run(test_dir, blender, get_arguments, batch=args.batch)
 
     sys.exit(not ok)
 

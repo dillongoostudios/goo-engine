@@ -13,15 +13,16 @@
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_context.h"
-#include "BKE_curve.h"
-#include "BKE_customdata.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_runtime.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_report.h"
 
 #include "DEG_depsgraph.hh"
@@ -47,7 +48,7 @@ static LinkNode *knifeproject_poly_from_object(const bContext *C, Object *ob, Li
   const Mesh *me_eval;
   bool me_eval_needs_free;
 
-  if (ob->type == OB_MESH || ob->runtime.data_eval) {
+  if (ob->type == OB_MESH || ob->runtime->data_eval) {
     const Object *ob_eval = DEG_get_evaluated_object(depsgraph, ob);
     me_eval = BKE_object_get_evaluated_mesh(ob_eval);
     me_eval_needs_free = false;
@@ -63,12 +64,12 @@ static LinkNode *knifeproject_poly_from_object(const bContext *C, Object *ob, Li
 
   if (me_eval) {
     ListBase nurbslist = {nullptr, nullptr};
-    float projmat[4][4];
 
     BKE_mesh_to_curve_nurblist(me_eval, &nurbslist, 0); /* wire */
     BKE_mesh_to_curve_nurblist(me_eval, &nurbslist, 1); /* boundary */
 
-    ED_view3d_ob_project_mat_get(static_cast<RegionView3D *>(region->regiondata), ob, projmat);
+    const blender::float4x4 projmat = ED_view3d_ob_project_mat_get(
+        static_cast<RegionView3D *>(region->regiondata), ob);
 
     if (nurbslist.first) {
       LISTBASE_FOREACH (Nurb *, nu, &nurbslist) {
@@ -80,7 +81,7 @@ static LinkNode *knifeproject_poly_from_object(const bContext *C, Object *ob, Li
               MEM_mallocN(sizeof(*mval) * (nu->pntsu + is_cyclic), __func__));
 
           for (bp = nu->bp, a = 0; a < nu->pntsu; a++, bp++) {
-            ED_view3d_project_float_v2_m4(region, bp->vec, mval[a], projmat);
+            copy_v2_v2(mval[a], ED_view3d_project_float_v2_m4(region, bp->vec, projmat));
           }
           if (is_cyclic) {
             copy_v2_v2(mval[a], mval[0]);

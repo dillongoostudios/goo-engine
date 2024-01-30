@@ -32,10 +32,10 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
-#include "BKE_editmesh.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_layer.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -44,7 +44,7 @@
 
 #include "ED_armature.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 #include "SEQ_select.hh"
 
@@ -555,7 +555,7 @@ static int armature_bone_transflags_update_recursive(bArmature *arm,
     bone->flag &= ~BONE_TRANSFORM;
     do_next = do_it;
     if (do_it) {
-      if (ANIM_bonecoll_is_visible(arm, bone)) {
+      if (ANIM_bone_in_visible_collection(arm, bone)) {
         if (bone->flag & BONE_SELECTED) {
           bone->flag |= BONE_TRANSFORM;
           total++;
@@ -653,10 +653,8 @@ short ED_transform_calc_orientation_from_type_ex(const Scene *scene,
           handle_armature_parent_orientation(ob, r_mat);
           break;
         }
-        else {
-          handle_object_parent_orientation(ob, r_mat);
-          break;
-        }
+        handle_object_parent_orientation(ob, r_mat);
+        break;
       }
       /* No break; we define 'parent' as 'normal' otherwise. */
       ATTR_FALLTHROUGH;
@@ -782,21 +780,21 @@ const char *transform_orientations_spacename_get(TransInfo *t, const short orien
 {
   switch (orient_type) {
     case V3D_ORIENT_GLOBAL:
-      return TIP_("global");
+      return RPT_("global");
     case V3D_ORIENT_GIMBAL:
-      return TIP_("gimbal");
+      return RPT_("gimbal");
     case V3D_ORIENT_NORMAL:
-      return TIP_("normal");
+      return RPT_("normal");
     case V3D_ORIENT_LOCAL:
-      return TIP_("local");
+      return RPT_("local");
     case V3D_ORIENT_VIEW:
-      return TIP_("view");
+      return RPT_("view");
     case V3D_ORIENT_CURSOR:
-      return TIP_("cursor");
+      return RPT_("cursor");
     case V3D_ORIENT_PARENT:
-      return TIP_("parent");
+      return RPT_("parent");
     case V3D_ORIENT_CUSTOM_MATRIX:
-      return TIP_("custom");
+      return RPT_("custom");
     case V3D_ORIENT_CUSTOM:
     default:
       BLI_assert(orient_type >= V3D_ORIENT_CUSTOM);
@@ -1094,7 +1092,8 @@ int getTransformOrientation_ex(const Scene *scene,
               }
               else {
                 if (BM_edge_calc_length_squared(e_pair[0]) <
-                    BM_edge_calc_length_squared(e_pair[1])) {
+                    BM_edge_calc_length_squared(e_pair[1]))
+                {
                   v_pair_swap = true;
                 }
               }

@@ -23,8 +23,11 @@
 #include "DNA_object_types.h"
 
 #include "BLI_math_geom.h"
+#include "BLI_time.h"
 
-#include "PIL_time.h"
+using Alembic::Abc::IV3fArrayProperty;
+using Alembic::Abc::PropertyHeader;
+using Alembic::Abc::V3fArraySamplePtr;
 
 namespace blender::io::alembic {
 
@@ -114,6 +117,41 @@ bool has_property(const Alembic::Abc::ICompoundProperty &prop, const std::string
   return prop.getPropertyHeader(name) != nullptr;
 }
 
+V3fArraySamplePtr get_velocity_prop(const Alembic::Abc::ICompoundProperty &schema,
+                                    const Alembic::AbcGeom::ISampleSelector &selector,
+                                    const std::string &name)
+{
+  for (size_t i = 0; i < schema.getNumProperties(); i++) {
+    const PropertyHeader &header = schema.getPropertyHeader(i);
+
+    if (header.isCompound()) {
+      const ICompoundProperty &prop = ICompoundProperty(schema, header.getName());
+
+      if (has_property(prop, name)) {
+        /* Header cannot be null here, as its presence is checked via has_property, so it is safe
+         * to dereference. */
+        const PropertyHeader *header = prop.getPropertyHeader(name);
+        if (!IV3fArrayProperty::matches(*header)) {
+          continue;
+        }
+
+        const IV3fArrayProperty &velocity_prop = IV3fArrayProperty(prop, name, 0);
+        if (velocity_prop) {
+          return velocity_prop.getValue(selector);
+        }
+      }
+    }
+    else if (header.isArray()) {
+      if (header.getName() == name && IV3fArrayProperty::matches(header)) {
+        const IV3fArrayProperty &velocity_prop = IV3fArrayProperty(schema, name, 0);
+        return velocity_prop.getValue(selector);
+      }
+    }
+  }
+
+  return V3fArraySamplePtr();
+}
+
 using index_time_pair_t = std::pair<Alembic::AbcCoreAbstract::index_t, Alembic::AbcGeom::chrono_t>;
 
 std::optional<SampleInterpolationSettings> get_sample_interpolation_settings(
@@ -147,7 +185,7 @@ std::optional<SampleInterpolationSettings> get_sample_interpolation_settings(
   return SampleInterpolationSettings{i0, i1, bias};
 }
 
-//#define USE_NURBS
+// #define USE_NURBS
 
 AbcObjectReader *create_reader(const Alembic::AbcGeom::IObject &object, ImportSettings &settings)
 {
@@ -204,13 +242,13 @@ AbcObjectReader *create_reader(const Alembic::AbcGeom::IObject &object, ImportSe
 /* ********************** */
 
 ScopeTimer::ScopeTimer(const char *message)
-    : m_message(message), m_start(PIL_check_seconds_timer())
+    : m_message(message), m_start(BLI_check_seconds_timer())
 {
 }
 
 ScopeTimer::~ScopeTimer()
 {
-  fprintf(stderr, "%s: %fs\n", m_message, PIL_check_seconds_timer() - m_start);
+  fprintf(stderr, "%s: %fs\n", m_message, BLI_check_seconds_timer() - m_start);
 }
 
 /* ********************** */

@@ -19,9 +19,9 @@
 #include "BLI_listbase.h"
 
 #include "BKE_blender_undo.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_gpencil_legacy.h"
-#include "BKE_undo_system.h"
+#include "BKE_undo_system.hh"
 
 #include "ED_gpencil_legacy.hh"
 

@@ -16,7 +16,7 @@
 
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_screen.hh"
 
 #include "BLT_translation.h"
@@ -59,7 +59,7 @@ class AssetCatalogSelectorTree : public ui::AbstractTreeView {
   void build_tree() override
   {
     if (catalog_tree_.is_empty()) {
-      auto &item = add_tree_item<ui::BasicTreeViewItem>(TIP_("No applicable assets found"),
+      auto &item = add_tree_item<ui::BasicTreeViewItem>(RPT_("No applicable assets found"),
                                                         ICON_INFO);
       item.disable_interaction();
       return;

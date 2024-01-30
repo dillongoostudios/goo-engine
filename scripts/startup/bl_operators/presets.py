@@ -13,7 +13,7 @@ from bpy.props import (
     StringProperty,
 )
 from bpy.app.translations import (
-    pgettext_tip as tip_,
+    pgettext_rpt as rpt_,
     pgettext_data as data_,
 )
 
@@ -191,7 +191,7 @@ class AddPresetBase:
                 else:
                     os.remove(filepath)
             except BaseException as ex:
-                self.report({'ERROR'}, tip_("Unable to remove preset: %r") % ex)
+                self.report({'ERROR'}, rpt_("Unable to remove preset: %r") % ex)
                 import traceback
                 traceback.print_exc()
                 return {'CANCELLED'}
@@ -241,7 +241,7 @@ class ExecutePreset(Operator):
         ext = splitext(filepath)[1].lower()
 
         if ext not in {".py", ".xml"}:
-            self.report({'ERROR'}, tip_("Unknown file type: %r") % ext)
+            self.report({'ERROR'}, rpt_("Unknown file type: %r") % ext)
             return {'CANCELLED'}
 
         if hasattr(preset_class, "reset_cb"):
@@ -515,6 +515,33 @@ class AddPresetTrackingSettings(AddPresetBase, Operator):
     preset_subdir = "tracking_settings"
 
 
+class AddPresetEEVEERaytracing(AddPresetBase, Operator):
+    """Add or remove an EEVEE ray-tracing preset"""
+    bl_idname = "render.eevee_raytracing_preset_add"
+    bl_label = "Add Raytracing Preset"
+    preset_menu = "RENDER_PT_eevee_next_raytracing_presets"
+
+    preset_defines = [
+        "eevee = bpy.context.scene.eevee",
+        "options = eevee.ray_tracing_options"
+    ]
+
+    preset_values = [
+        "eevee.ray_tracing_method",
+        "options.resolution_scale",
+        "options.sample_clamp",
+        "options.screen_trace_max_roughness",
+        "options.screen_trace_quality",
+        "options.screen_trace_thickness",
+        "options.use_denoise",
+        "options.denoise_spatial",
+        "options.denoise_temporal",
+        "options.denoise_bilateral",
+    ]
+
+    preset_subdir = "eevee/raytracing"
+
+
 class AddPresetNodeColor(AddPresetBase, Operator):
     """Add or remove a Node Color Preset"""
     bl_idname = "node.node_color_preset_add"
@@ -718,6 +745,7 @@ classes = (
     AddPresetTrackingTrackColor,
     AddPresetGpencilBrush,
     AddPresetGpencilMaterial,
+    AddPresetEEVEERaytracing,
     ExecutePreset,
     WM_MT_operator_presets,
 )

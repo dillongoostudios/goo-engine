@@ -15,7 +15,7 @@
 
 #  include "BLI_array.hh"
 #  include "BLI_assert.h"
-#  include "BLI_delaunay_2d.h"
+#  include "BLI_delaunay_2d.hh"
 #  include "BLI_hash.hh"
 #  include "BLI_kdopbvh.h"
 #  include "BLI_map.hh"
@@ -29,10 +29,9 @@
 #  include "BLI_span.hh"
 #  include "BLI_stack.hh"
 #  include "BLI_task.hh"
+#  include "BLI_time.h"
 #  include "BLI_vector.hh"
 #  include "BLI_vector_set.hh"
-
-#  include "PIL_time.h"
 
 #  include "BLI_mesh_boolean.hh"
 
@@ -51,7 +50,7 @@ namespace blender::meshintersect {
  * that yield predictable results from run-to-run and machine-to-machine.
  */
 class Edge {
-  const Vert *v_[2]{nullptr, nullptr};
+  const Vert *v_[2] = {nullptr, nullptr};
 
  public:
   Edge() = default;
@@ -981,7 +980,7 @@ static Array<int> sort_tris_around_edge(
    * be only 3 or 4 - so OK to make copies of arrays instead of swapping
    * around in a single array. */
   const int dbg_level = 0;
-  if (tris.size() == 0) {
+  if (tris.is_empty()) {
     return Array<int>();
   }
   if (dbg_level > 0) {
@@ -1306,7 +1305,7 @@ static bool patch_cell_graph_ok(const CellsInfo &cinfo, const PatchesInfo &pinfo
     if (cell.merged_to() != NO_INDEX) {
       continue;
     }
-    if (cell.patches().size() == 0) {
+    if (cell.patches().is_empty()) {
       std::cout << "Patch/Cell graph disconnected at Cell " << c << " with no patches\n";
       return false;
     }
@@ -2132,7 +2131,7 @@ static void finish_patch_cell_graph(const IMesh &tm,
   /* For nested components, merge their ambient cell with the nearest containing cell. */
   Vector<int> outer_components;
   for (int comp : comp_cont.index_range()) {
-    if (comp_cont[comp].size() == 0) {
+    if (comp_cont[comp].is_empty()) {
       outer_components.append(comp);
     }
     else {
@@ -2198,7 +2197,7 @@ static void propagate_windings_and_in_output_volume(PatchesInfo &pinfo,
                                                     int c_ambient,
                                                     BoolOpType op,
                                                     int nshapes,
-                                                    std::function<int(int)> shape_fn)
+                                                    FunctionRef<int(int)> shape_fn)
 {
   int dbg_level = 0;
   if (dbg_level > 0) {
@@ -2253,7 +2252,7 @@ static void propagate_windings_and_in_output_volume(PatchesInfo &pinfo,
 }
 
 /**
- * Given an array of winding numbers, where the ith entry is a cell's winding
+ * Given an array of winding numbers, where the `i-th` entry is a cell's winding
  * number with respect to input shape (mesh part) i, return true if the
  * cell should be included in the output of the boolean operation.
  *   Intersection: all the winding numbers must be nonzero.
@@ -2459,7 +2458,8 @@ static IMesh extract_from_in_output_volume_diffs(const IMesh &tm_subdivided,
     bool adjacent_zero_volume_cell = cell_above.zero_volume() || cell_below.zero_volume();
     any_zero_volume_cell |= adjacent_zero_volume_cell;
     if (cell_above.in_output_volume() ^ cell_below.in_output_volume() &&
-        !adjacent_zero_volume_cell) {
+        !adjacent_zero_volume_cell)
+    {
       bool flip = cell_above.in_output_volume();
       if (dbg_level > 0) {
         std::cout << "need tri " << t << " flip=" << flip << "\n";
@@ -2514,12 +2514,12 @@ static double3 calc_point_inside_tri_db(const Face &tri)
 class InsideShapeTestData {
  public:
   const IMesh &tm;
-  std::function<int(int)> shape_fn;
+  FunctionRef<int(int)> shape_fn;
   int nshapes;
   /* A per-shape vector of parity of hits of that shape. */
   Array<int> hit_parity;
 
-  InsideShapeTestData(const IMesh &tm, std::function<int(int)> shape_fn, int nshapes)
+  InsideShapeTestData(const IMesh &tm, FunctionRef<int(int)> shape_fn, int nshapes)
       : tm(tm), shape_fn(shape_fn), nshapes(nshapes)
   {
   }
@@ -2557,7 +2557,7 @@ static void inside_shape_callback(void *userdata,
   if (isect_ray_tri_epsilon_v3(
           ray->origin, ray->direction, fv0, fv1, fv2, &dist, nullptr, FLT_EPSILON))
   {
-    /* Count parity as +1 if ray is in the same direction as tri's normal,
+    /* Count parity as +1 if ray is in the same direction as triangle's normal,
      * and -1 if the directions are opposite. */
     double3 o_db{double(ray->origin[0]), double(ray->origin[1]), double(ray->origin[2])};
     int parity = orient3d(tri.vert[0]->co, tri.vert[1]->co, tri.vert[2]->co, o_db);
@@ -2578,7 +2578,7 @@ static void inside_shape_callback(void *userdata,
  * \param tree: Contains all the triangles of \a tm and can be used for fast ray-casting.
  */
 static void test_tri_inside_shapes(const IMesh &tm,
-                                   std::function<int(int)> shape_fn,
+                                   FunctionRef<int(int)> shape_fn,
                                    int nshapes,
                                    int test_t_index,
                                    BVHTree *tree,
@@ -2726,11 +2726,8 @@ static void raycast_add_flipped(Vector<Face *> &out_faces, Face &tri, IMeshArena
  * when the input is not PWN, some patches can be both inside and outside
  * some shapes (e.g., a plane cutting through Suzanne's open eyes).
  */
-static IMesh raycast_tris_boolean(const IMesh &tm,
-                                  BoolOpType op,
-                                  int nshapes,
-                                  std::function<int(int)> shape_fn,
-                                  IMeshArena *arena)
+static IMesh raycast_tris_boolean(
+    const IMesh &tm, BoolOpType op, int nshapes, FunctionRef<int(int)> shape_fn, IMeshArena *arena)
 {
   constexpr int dbg_level = 0;
   if (dbg_level > 0) {
@@ -2804,7 +2801,7 @@ static IMesh raycast_tris_boolean(const IMesh &tm,
 static IMesh raycast_patches_boolean(const IMesh &tm,
                                      BoolOpType op,
                                      int nshapes,
-                                     std::function<int(int)> shape_fn,
+                                     FunctionRef<int(int)> shape_fn,
                                      const PatchesInfo &pinfo,
                                      IMeshArena *arena)
 {
@@ -3217,7 +3214,7 @@ static void do_dissolve(FaceMergeState *fms)
       dissolve_edges.append(e);
     }
   }
-  if (dissolve_edges.size() == 0) {
+  if (dissolve_edges.is_empty()) {
     return;
   }
   /* Things look nicer if we dissolve the longer edges first. */
@@ -3543,7 +3540,7 @@ static IMesh polymesh_from_trimesh_with_dissolve(const IMesh &tm_out,
 IMesh boolean_trimesh(IMesh &tm_in,
                       BoolOpType op,
                       int nshapes,
-                      std::function<int(int)> shape_fn,
+                      FunctionRef<int(int)> shape_fn,
                       bool use_self,
                       bool hole_tolerant,
                       IMeshArena *arena)
@@ -3562,7 +3559,7 @@ IMesh boolean_trimesh(IMesh &tm_in,
     return IMesh(tm_in);
   }
 #  ifdef PERFDEBUG
-  double start_time = PIL_check_seconds_timer();
+  double start_time = BLI_check_seconds_timer();
   std::cout << "  boolean_trimesh, timing begins\n";
 #  endif
 
@@ -3572,7 +3569,7 @@ IMesh boolean_trimesh(IMesh &tm_in,
     std::cout << "\nboolean_tm_input after intersection:\n" << tm_si;
   }
 #  ifdef PERFDEBUG
-  double intersect_time = PIL_check_seconds_timer();
+  double intersect_time = BLI_check_seconds_timer();
   std::cout << "  intersected, time = " << intersect_time - start_time << "\n";
 #  endif
 
@@ -3583,12 +3580,12 @@ IMesh boolean_trimesh(IMesh &tm_in,
   auto si_shape_fn = [shape_fn, tm_si](int t) { return shape_fn(tm_si.face(t)->orig); };
   TriMeshTopology tm_si_topo(tm_si);
 #  ifdef PERFDEBUG
-  double topo_time = PIL_check_seconds_timer();
+  double topo_time = BLI_check_seconds_timer();
   std::cout << "  topology built, time = " << topo_time - intersect_time << "\n";
 #  endif
   bool pwn = is_pwn(tm_si, tm_si_topo);
 #  ifdef PERFDEBUG
-  double pwn_time = PIL_check_seconds_timer();
+  double pwn_time = BLI_check_seconds_timer();
   std::cout << "  pwn checked, time = " << pwn_time - topo_time << "\n";
 #  endif
   IMesh tm_out;
@@ -3604,14 +3601,14 @@ IMesh boolean_trimesh(IMesh &tm_in,
       tm_out = raycast_patches_boolean(tm_si, op, nshapes, shape_fn, pinfo, arena);
     }
 #  ifdef PERFDEBUG
-    double raycast_time = PIL_check_seconds_timer();
+    double raycast_time = BLI_check_seconds_timer();
     std::cout << "  raycast_boolean done, time = " << raycast_time - pwn_time << "\n";
 #  endif
   }
   else {
     PatchesInfo pinfo = find_patches(tm_si, tm_si_topo);
 #  ifdef PERFDEBUG
-    double patch_time = PIL_check_seconds_timer();
+    double patch_time = BLI_check_seconds_timer();
     std::cout << "  patches found, time = " << patch_time - pwn_time << "\n";
 #  endif
     CellsInfo cinfo = find_cells(tm_si, tm_si_topo, pinfo);
@@ -3619,12 +3616,12 @@ IMesh boolean_trimesh(IMesh &tm_in,
       std::cout << "Input is PWN\n";
     }
 #  ifdef PERFDEBUG
-    double cell_time = PIL_check_seconds_timer();
+    double cell_time = BLI_check_seconds_timer();
     std::cout << "  cells found, time = " << cell_time - pwn_time << "\n";
 #  endif
     finish_patch_cell_graph(tm_si, cinfo, pinfo, tm_si_topo, arena);
 #  ifdef PERFDEBUG
-    double finish_pc_time = PIL_check_seconds_timer();
+    double finish_pc_time = BLI_check_seconds_timer();
     std::cout << "  finished patch-cell graph, time = " << finish_pc_time - cell_time << "\n";
 #  endif
     bool pc_ok = patch_cell_graph_ok(cinfo, pinfo);
@@ -3636,7 +3633,7 @@ IMesh boolean_trimesh(IMesh &tm_in,
     cinfo.init_windings(nshapes);
     int c_ambient = find_ambient_cell(tm_si, nullptr, tm_si_topo, pinfo, arena);
 #  ifdef PERFDEBUG
-    double amb_time = PIL_check_seconds_timer();
+    double amb_time = BLI_check_seconds_timer();
     std::cout << "  ambient cell found, time = " << amb_time - finish_pc_time << "\n";
 #  endif
     if (c_ambient == NO_INDEX) {
@@ -3646,12 +3643,12 @@ IMesh boolean_trimesh(IMesh &tm_in,
     }
     propagate_windings_and_in_output_volume(pinfo, cinfo, c_ambient, op, nshapes, si_shape_fn);
 #  ifdef PERFDEBUG
-    double propagate_time = PIL_check_seconds_timer();
+    double propagate_time = BLI_check_seconds_timer();
     std::cout << "  windings propagated, time = " << propagate_time - amb_time << "\n";
 #  endif
     tm_out = extract_from_in_output_volume_diffs(tm_si, pinfo, cinfo, arena);
 #  ifdef PERFDEBUG
-    double extract_time = PIL_check_seconds_timer();
+    double extract_time = BLI_check_seconds_timer();
     std::cout << "  extracted, time = " << extract_time - propagate_time << "\n";
 #  endif
     if (dbg_level > 0) {
@@ -3667,7 +3664,7 @@ IMesh boolean_trimesh(IMesh &tm_in,
     std::cout << "boolean tm output:\n" << tm_out;
   }
 #  ifdef PERFDEBUG
-  double end_time = PIL_check_seconds_timer();
+  double end_time = BLI_check_seconds_timer();
   std::cout << "  boolean_trimesh done, total time = " << end_time - start_time << "\n";
 #  endif
   return tm_out;
@@ -3691,7 +3688,7 @@ static void dump_test_spec(IMesh &imesh)
 IMesh boolean_mesh(IMesh &imesh,
                    BoolOpType op,
                    int nshapes,
-                   std::function<int(int)> shape_fn,
+                   FunctionRef<int(int)> shape_fn,
                    bool use_self,
                    bool hole_tolerant,
                    IMesh *imesh_triangulated,
@@ -3713,7 +3710,7 @@ IMesh boolean_mesh(IMesh &imesh,
   IMesh *tm_in = imesh_triangulated;
   IMesh our_triangulation;
 #  ifdef PERFDEBUG
-  double start_time = PIL_check_seconds_timer();
+  double start_time = BLI_check_seconds_timer();
   std::cout << "boolean_mesh, timing begins\n";
 #  endif
   if (tm_in == nullptr) {
@@ -3721,7 +3718,7 @@ IMesh boolean_mesh(IMesh &imesh,
     tm_in = &our_triangulation;
   }
 #  ifdef PERFDEBUG
-  double tri_time = PIL_check_seconds_timer();
+  double tri_time = BLI_check_seconds_timer();
   std::cout << "triangulated, time = " << tri_time - start_time << "\n";
 #  endif
   if (dbg_level > 1) {
@@ -3729,7 +3726,7 @@ IMesh boolean_mesh(IMesh &imesh,
   }
   IMesh tm_out = boolean_trimesh(*tm_in, op, nshapes, shape_fn, use_self, hole_tolerant, arena);
 #  ifdef PERFDEBUG
-  double bool_tri_time = PIL_check_seconds_timer();
+  double bool_tri_time = BLI_check_seconds_timer();
   std::cout << "boolean_trimesh done, time = " << bool_tri_time - tri_time << "\n";
 #  endif
   if (dbg_level > 1) {
@@ -3738,7 +3735,7 @@ IMesh boolean_mesh(IMesh &imesh,
   }
   IMesh ans = polymesh_from_trimesh_with_dissolve(tm_out, imesh, arena);
 #  ifdef PERFDEBUG
-  double dissolve_time = PIL_check_seconds_timer();
+  double dissolve_time = BLI_check_seconds_timer();
   std::cout << "polymesh from dissolving, time = " << dissolve_time - bool_tri_time << "\n";
 #  endif
   if (dbg_level > 0) {
@@ -3749,7 +3746,7 @@ IMesh boolean_mesh(IMesh &imesh,
     }
   }
 #  ifdef PERFDEBUG
-  double end_time = PIL_check_seconds_timer();
+  double end_time = BLI_check_seconds_timer();
   std::cout << "boolean_mesh done, total time = " << end_time - start_time << "\n";
 #  endif
   return ans;

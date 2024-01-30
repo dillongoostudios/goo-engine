@@ -3,24 +3,23 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "final_engine.h"
+#include "camera.h"
 
 #include <pxr/imaging/hd/light.h>
 #include <pxr/imaging/hd/renderBuffer.h>
 
 #include "DNA_scene_types.h"
 
+#include "BLI_time.h"
 #include "BLI_timecode.h"
-#include "PIL_time.h"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "IMB_imbuf_types.h"
 
 #include "RE_engine.h"
-
-#include "hydra/camera.h"
 
 namespace blender::render::hydra {
 
@@ -42,8 +41,8 @@ void FinalEngine::render()
   pxr::GfVec2i image_res(r.xsch * r.size / 100, r.ysch * r.size / 100);
   int width = image_res[0] * border[2];
   int height = image_res[1] * border[3];
-  pxr::GfCamera camera =
-      io::hydra::CameraData(scene_->camera, image_res, pxr::GfVec4f(0, 0, 1, 1)).gf_camera(border);
+
+  pxr::GfCamera camera = gf_camera(scene_->camera, image_res, border);
 
   free_camera_delegate_->SetCamera(camera);
   render_task_delegate_->set_viewport(pxr::GfVec4d(0, 0, width, height));
@@ -73,7 +72,7 @@ void FinalEngine::render()
   engine_->Execute(render_index_.get(), &t);
 
   char elapsed_time[32];
-  double time_begin = PIL_check_seconds_timer();
+  double time_begin = BLI_check_seconds_timer();
   float percent_done = 0.0;
 
   while (true) {
@@ -83,7 +82,7 @@ void FinalEngine::render()
 
     percent_done = renderer_percent_done();
     BLI_timecode_string_from_time_simple(
-        elapsed_time, sizeof(elapsed_time), PIL_check_seconds_timer() - time_begin);
+        elapsed_time, sizeof(elapsed_time), BLI_check_seconds_timer() - time_begin);
     notify_status(percent_done / 100.0,
                   std::string(scene_name) + ": " + view_layer->name,
                   std::string("Render Time: ") + elapsed_time +

@@ -13,8 +13,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
-#include "BKE_unit.h"
+#include "BKE_context.hh"
+#include "BKE_unit.hh"
 
 #include "ED_screen.hh"
 
@@ -68,11 +68,11 @@ static void headerTimeTranslate(TransInfo *t, char str[UI_MAX_DRAW_STR])
     }
   }
 
-  ofs += BLI_snprintf_rlen(str, UI_MAX_DRAW_STR, TIP_("DeltaX: %s"), &tvec[0]);
+  ofs += BLI_snprintf_rlen(str, UI_MAX_DRAW_STR, RPT_("DeltaX: %s"), &tvec[0]);
 
   if (t->flag & T_PROP_EDIT_ALL) {
     ofs += BLI_snprintf_rlen(
-        str + ofs, UI_MAX_DRAW_STR - ofs, TIP_(" Proportional size: %.2f"), t->prop_size);
+        str + ofs, UI_MAX_DRAW_STR - ofs, RPT_(" Proportional size: %.2f"), t->prop_size);
   }
 }
 
@@ -82,7 +82,17 @@ static void applyTimeTranslateValue(TransInfo *t, const float deltax)
     /* It doesn't matter whether we apply to t->data. */
     TransData *td = tc->data;
     for (int i = 0; i < tc->data_len; i++, td++) {
-      *(td->val) = td->loc[0] = td->ival + deltax * td->factor;
+      float *dst, ival;
+      if (td->val) {
+        dst = td->val;
+        ival = td->ival;
+      }
+      else {
+        dst = &td->loc[0];
+        ival = td->iloc[0];
+      }
+
+      *dst = ival + deltax * td->factor;
     }
   }
 }

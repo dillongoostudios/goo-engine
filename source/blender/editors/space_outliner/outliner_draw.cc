@@ -26,26 +26,26 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_deform.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
 #include "BKE_idtype.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_library.h"
-#include "BKE_main.h"
-#include "BKE_main_namemap.h"
-#include "BKE_modifier.h"
+#include "BKE_library.hh"
+#include "BKE_main.hh"
+#include "BKE_main_namemap.hh"
+#include "BKE_modifier.hh"
 #include "BKE_node.hh"
 #include "BKE_object.hh"
 #include "BKE_particle.h"
 #include "BKE_report.h"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -717,7 +717,7 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
 
     if (tselem->type == TSE_SOME_ID) {
       BKE_main_namemap_remove_name(bmain, tselem->id, oldname);
-      BLI_libblock_ensure_unique_name(bmain, tselem->id->name);
+      BKE_libblock_ensure_unique_name(bmain, tselem->id);
 
       WM_msg_publish_rna_prop(mbus, tselem->id, tselem->id, ID, name);
 
@@ -785,7 +785,7 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
         case TSE_NLA_ACTION: {
           bAction *act = (bAction *)tselem->id;
           BKE_main_namemap_remove_name(bmain, &act->id, oldname);
-          BLI_libblock_ensure_unique_name(bmain, act->id.name);
+          BKE_libblock_ensure_unique_name(bmain, &act->id);
           WM_msg_publish_rna_prop(mbus, &act->id, &act->id, ID, name);
           DEG_id_tag_update(tselem->id, ID_RECALC_COPY_ON_WRITE);
           break;
@@ -907,7 +907,7 @@ static void namebutton_fn(bContext *C, void *tsep, char *oldname)
           /* The ID is a #Collection, not a #LayerCollection */
           Collection *collection = (Collection *)tselem->id;
           BKE_main_namemap_remove_name(bmain, &collection->id, oldname);
-          BLI_libblock_ensure_unique_name(bmain, collection->id.name);
+          BKE_libblock_ensure_unique_name(bmain, &collection->id);
           WM_msg_publish_rna_prop(mbus, &collection->id, &collection->id, ID, name);
           WM_event_add_notifier(C, NC_ID | NA_RENAME, nullptr);
           DEG_id_tag_update(tselem->id, ID_RECALC_COPY_ON_WRITE);
@@ -1166,7 +1166,8 @@ static void outliner_draw_restrictbuts(uiBlock *block,
 
     if (te->ys + 2 * UI_UNIT_Y >= region->v2d.cur.ymin && te->ys <= region->v2d.cur.ymax) {
       if (tselem->type == TSE_R_LAYER &&
-          ELEM(space_outliner->outlinevis, SO_SCENES, SO_VIEW_LAYER)) {
+          ELEM(space_outliner->outlinevis, SO_SCENES, SO_VIEW_LAYER))
+      {
         if (space_outliner->show_restrict_flags & SO_RESTRICT_RENDER) {
           /* View layer render toggle. */
           ViewLayer *layer = static_cast<ViewLayer *>(te->directdata);
@@ -1694,7 +1695,8 @@ static void outliner_draw_restrictbuts(uiBlock *block,
                               (char *)"indirect_only");
               UI_but_flag_enable(bt, UI_BUT_DRAG_LOCK);
               if (props_active.layer_collection_holdout ||
-                  !props_active.layer_collection_indirect_only) {
+                  !props_active.layer_collection_indirect_only)
+              {
                 UI_but_flag_enable(bt, UI_BUT_INACTIVE);
               }
             }
@@ -2304,7 +2306,7 @@ static void outliner_draw_mode_column_toggle(uiBlock *block,
       (ID_IS_OVERRIDE_LIBRARY_REAL(ob) &&
        (ob->id.override_library->flag & LIBOVERRIDE_FLAG_SYSTEM_DEFINED) != 0))
   {
-    UI_but_disable(but, TIP_("Can't edit library or non-editable override data"));
+    UI_but_disable(but, "Can't edit library or non-editable override data");
   }
 }
 

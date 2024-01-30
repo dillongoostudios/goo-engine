@@ -28,10 +28,10 @@
 
 #include "UI_interface.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_screen.hh"
 #include "BKE_workspace.h"
 
@@ -42,7 +42,7 @@
 
 #include "WM_api.hh"
 #include "WM_types.hh"
-#include "wm_event_system.h"
+#include "wm_event_system.hh"
 #include "wm_event_types.hh"
 
 #include "ED_screen.hh"
@@ -90,6 +90,10 @@ static void wm_keymap_item_free_data(wmKeyMapItem *kmi)
     WM_operator_properties_free(kmi->ptr);
     MEM_freeN(kmi->ptr);
     kmi->ptr = nullptr;
+    kmi->properties = nullptr;
+  }
+  else if (kmi->properties) {
+    IDP_FreeProperty(kmi->properties);
     kmi->properties = nullptr;
   }
 }
@@ -203,6 +207,9 @@ void WM_keymap_item_properties_reset(wmKeyMapItem *kmi, IDProperty *properties)
     MEM_freeN(kmi->ptr);
 
     kmi->ptr = nullptr;
+  }
+  else if (kmi->properties) {
+    IDP_FreeProperty(kmi->properties);
   }
 
   kmi->properties = properties;
@@ -574,6 +581,9 @@ void WM_keymap_remove_item(wmKeyMap *keymap, wmKeyMapItem *kmi)
   if (kmi->ptr) {
     WM_operator_properties_free(kmi->ptr);
     MEM_freeN(kmi->ptr);
+  }
+  else if (kmi->properties) {
+    IDP_FreeProperty(kmi->properties);
   }
   BLI_freelinkN(&keymap->items, kmi);
 
@@ -1908,11 +1918,16 @@ void WM_keyconfig_update(wmWindowManager *wm)
 
 void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
 {
-  bool compat_update = false;
-
   if (wm_keymap_update_flag == 0) {
     return;
   }
+
+  bool compat_update = false;
+
+  /* Update drop-boxes when the operators have been added or removed. While this isn't an ideal
+   * place to update drop-boxes, they share characteristics with key-map items.
+   * We could consider renaming this to API function so it's not only relating to keymaps. */
+  bool dropbox_update = false;
 
   /* Postpone update until after the key-map has been initialized
    * to ensure add-ons have been loaded, see: #113603. */
@@ -1927,6 +1942,10 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
     LISTBASE_FOREACH (wmKeyConfig *, kc, &wm->keyconfigs) {
       wm_keymap_item_properties_update_ot_from_list(&kc->keymaps, keep_properties);
     }
+
+    /* An operator has been removed, refresh. */
+    dropbox_update = true;
+
     wm_keymap_update_flag &= ~WM_KEYMAP_UPDATE_OPERATORTYPE;
   }
 
@@ -1992,6 +2011,9 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
       compat_update = compat_update || (usermap && !(usermap->flag & KEYMAP_DIFF));
     }
 
+    /* An operator may have been added, refresh. */
+    dropbox_update = true;
+
     wm_keymap_update_flag &= ~WM_KEYMAP_UPDATE_RECONFIGURE;
   }
 
@@ -2000,6 +2022,10 @@ void WM_keyconfig_update_ex(wmWindowManager *wm, bool keep_properties)
   if (compat_update) {
     WM_keyconfig_update_tag(nullptr, nullptr);
     WM_keyconfig_update(wm);
+  }
+
+  if (dropbox_update) {
+    WM_dropbox_update_ot();
   }
 
   /* NOTE(@ideasman42): open preferences will contain "stale" #wmKeyMapItem data.
@@ -2094,7 +2120,9 @@ void WM_keymap_item_restore_to_default(wmWindowManager *wm, wmKeyMap *keymap, wm
       }
 
       kmi->properties = IDP_CopyProperty(orig->properties);
-      kmi->ptr->data = kmi->properties;
+      if (kmi->ptr) {
+        kmi->ptr->data = kmi->properties;
+      }
     }
 
     kmi->propvalue = orig->propvalue;

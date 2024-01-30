@@ -88,9 +88,9 @@ struct KeyBlock *BKE_keyblock_add(struct Key *key, const char *name);
  */
 struct KeyBlock *BKE_keyblock_add_ctime(struct Key *key, const char *name, bool do_force);
 /**
- * Get the appropriate #KeyBlock given an index.
+ * Get the appropriate #KeyBlock given an index (0 refers to the basis key). Key may be null.
  */
-struct KeyBlock *BKE_keyblock_from_key(struct Key *key, int index);
+struct KeyBlock *BKE_keyblock_find_by_index(struct Key *key, int index);
 /**
  * Get the appropriate #KeyBlock given a name to search for.
  */
@@ -128,8 +128,8 @@ void BKE_keyblock_convert_from_curve(const struct Curve *cu,
                                      const struct ListBase *nurb);
 void BKE_keyblock_convert_to_curve(struct KeyBlock *kb, struct Curve *cu, struct ListBase *nurb);
 
-void BKE_keyblock_update_from_mesh(const struct Mesh *me, struct KeyBlock *kb);
-void BKE_keyblock_convert_from_mesh(const struct Mesh *me,
+void BKE_keyblock_update_from_mesh(const struct Mesh *mesh, struct KeyBlock *kb);
+void BKE_keyblock_convert_from_mesh(const struct Mesh *mesh,
                                     const struct Key *key,
                                     struct KeyBlock *kb);
 void BKE_keyblock_convert_to_mesh(const struct KeyBlock *kb,

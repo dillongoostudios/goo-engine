@@ -64,9 +64,11 @@ Shader::~Shader()
 
 static void standard_defines(Vector<const char *> &sources)
 {
-  BLI_assert(sources.size() == 0);
-  /* Version needs to be first. Exact values will be added by implementation. */
+  BLI_assert(sources.is_empty());
+  /* Version and specialization constants needs to be first.
+   * Exact values will be added by implementation. */
   sources.append("version");
+  sources.append("/* specialization_constants */");
   /* Define to identify code usage in shading language. */
   sources.append("#define GPU_SHADER\n");
   /* some useful defines to detect GPU type */
@@ -297,6 +299,8 @@ GPUShader *GPU_shader_create_from_info(const GPUShaderCreateInfo *_info)
   }
 
   Shader *shader = GPUBackend::get()->shader_alloc(info.name_.c_str());
+  shader->init(info);
+  shader->specialization_constants_init(info);
 
   std::string defines = shader->defines_declare(info);
   std::string resources = shader->resources_declare(info);
@@ -460,8 +464,13 @@ void GPU_shader_bind(GPUShader *gpu_shader)
     shader->bind();
     GPU_matrix_bind(gpu_shader);
     Shader::set_srgb_uniform(gpu_shader);
+    shader->constants.is_dirty = false;
   }
   else {
+    if (shader->constants.is_dirty) {
+      shader->bind();
+      shader->constants.is_dirty = false;
+    }
     if (Shader::srgb_uniform_dirty_get()) {
       Shader::set_srgb_uniform(gpu_shader);
     }
@@ -545,6 +554,68 @@ void GPU_shader_transform_feedback_disable(GPUShader *shader)
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Assign specialization constants.
+ * \{ */
+
+void Shader::specialization_constants_init(const shader::ShaderCreateInfo &info)
+{
+  using namespace shader;
+  for (const ShaderCreateInfo::SpecializationConstant &sc : info.specialization_constants_) {
+    constants.types.append(sc.type);
+    constants.values.append(sc.default_value);
+  }
+  constants.is_dirty = true;
+}
+
+void GPU_shader_constant_int_ex(GPUShader *sh, int location, int value)
+{
+  Shader &shader = *unwrap(sh);
+  BLI_assert(shader.constants.types[location] == gpu::shader::Type::INT);
+  shader.constants.values[location].i = value;
+  shader.constants.is_dirty = true;
+}
+void GPU_shader_constant_uint_ex(GPUShader *sh, int location, uint value)
+{
+  Shader &shader = *unwrap(sh);
+  BLI_assert(shader.constants.types[location] == gpu::shader::Type::UINT);
+  shader.constants.values[location].u = value;
+  shader.constants.is_dirty = true;
+}
+void GPU_shader_constant_float_ex(GPUShader *sh, int location, float value)
+{
+  Shader &shader = *unwrap(sh);
+  BLI_assert(shader.constants.types[location] == gpu::shader::Type::FLOAT);
+  shader.constants.values[location].f = value;
+  shader.constants.is_dirty = true;
+}
+void GPU_shader_constant_bool_ex(GPUShader *sh, int location, bool value)
+{
+  Shader &shader = *unwrap(sh);
+  BLI_assert(shader.constants.types[location] == gpu::shader::Type::BOOL);
+  shader.constants.values[location].u = value;
+  shader.constants.is_dirty = true;
+}
+
+void GPU_shader_constant_int(GPUShader *sh, const char *name, int value)
+{
+  GPU_shader_constant_int_ex(sh, unwrap(sh)->interface->constant_get(name)->location, value);
+}
+void GPU_shader_constant_uint(GPUShader *sh, const char *name, uint value)
+{
+  GPU_shader_constant_uint_ex(sh, unwrap(sh)->interface->constant_get(name)->location, value);
+}
+void GPU_shader_constant_float(GPUShader *sh, const char *name, float value)
+{
+  GPU_shader_constant_float_ex(sh, unwrap(sh)->interface->constant_get(name)->location, value);
+}
+void GPU_shader_constant_bool(GPUShader *sh, const char *name, bool value)
+{
+  GPU_shader_constant_bool_ex(sh, unwrap(sh)->interface->constant_get(name)->location, value);
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Uniforms / Resource location
  * \{ */
 
@@ -553,6 +624,13 @@ int GPU_shader_get_uniform(GPUShader *shader, const char *name)
   const ShaderInterface *interface = unwrap(shader)->interface;
   const ShaderInput *uniform = interface->uniform_get(name);
   return uniform ? uniform->location : -1;
+}
+
+int GPU_shader_get_constant(GPUShader *shader, const char *name)
+{
+  const ShaderInterface *interface = unwrap(shader)->interface;
+  const ShaderInput *constant = interface->constant_get(name);
+  return constant ? constant->location : -1;
 }
 
 int GPU_shader_get_builtin_uniform(GPUShader *shader, int builtin)
@@ -734,6 +812,12 @@ void GPU_shader_uniform_mat3_as_mat4(GPUShader *sh, const char *name, const floa
   float matrix[4][4];
   copy_m4_m3(matrix, data);
   GPU_shader_uniform_mat4(sh, name, matrix);
+}
+
+void GPU_shader_uniform_1f_array(GPUShader *sh, const char *name, int len, const float *val)
+{
+  const int loc = GPU_shader_get_uniform(sh, name);
+  GPU_shader_uniform_float_ex(sh, loc, 1, len, val);
 }
 
 void GPU_shader_uniform_2fv_array(GPUShader *sh, const char *name, int len, const float (*val)[2])

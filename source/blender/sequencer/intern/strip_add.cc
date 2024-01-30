@@ -23,10 +23,10 @@
 #include "BLI_string.h"
 #include "BLI_string_utf8.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_image.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_mask.h"
 #include "BKE_movieclip.h"
 #include "BKE_scene.h"
@@ -78,6 +78,7 @@ static void seq_add_generic_update(Scene *scene, Sequence *seq)
   SEQ_sequence_base_unique_name_recursive(scene, &scene->ed->seqbase, seq);
   SEQ_relations_invalidate_cache_composite(scene, seq);
   SEQ_sequence_lookup_tag(scene, SEQ_LOOKUP_TAG_INVALID);
+  seq_time_effect_range_set(scene, seq);
   SEQ_time_update_meta_strip_range(scene, seq_sequence_lookup_meta_by_seq(scene, seq));
 }
 
@@ -183,7 +184,6 @@ Sequence *SEQ_add_effect_strip(Scene *scene, ListBase *seqbase, SeqLoadData *loa
 
   seq_add_set_name(scene, seq, load_data);
   seq_add_generic_update(scene, seq);
-  seq_time_effect_range_set(scene, seq);
 
   return seq;
 }
@@ -435,7 +435,7 @@ Sequence *SEQ_add_movie_strip(Main *bmain, Scene *scene, ListBase *seqbase, SeqL
     short fps_denom;
     float fps_num;
 
-    IMB_anim_get_fps(anim_arr[0], &fps_denom, &fps_num, true);
+    IMB_anim_get_fps(anim_arr[0], true, &fps_denom, &fps_num);
 
     video_fps = fps_denom / fps_num;
 
@@ -485,7 +485,7 @@ Sequence *SEQ_add_movie_strip(Main *bmain, Scene *scene, ListBase *seqbase, SeqL
 
     short frs_sec;
     float frs_sec_base;
-    if (IMB_anim_get_fps(anim_arr[0], &frs_sec, &frs_sec_base, true)) {
+    if (IMB_anim_get_fps(anim_arr[0], true, &frs_sec, &frs_sec_base)) {
       seq->media_playback_rate = float(frs_sec) / frs_sec_base;
     }
   }

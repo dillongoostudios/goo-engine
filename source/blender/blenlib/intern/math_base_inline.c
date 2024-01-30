@@ -79,78 +79,6 @@ MINLINE float sqrtf_signed(float f)
   return (f >= 0.0f) ? sqrtf(f) : -sqrtf(-f);
 }
 
-MINLINE float saacos(float fac)
-{
-  if (UNLIKELY(fac <= -1.0f)) {
-    return (float)M_PI;
-  }
-  else if (UNLIKELY(fac >= 1.0f)) {
-    return 0.0f;
-  }
-  else {
-    return acosf(fac);
-  }
-}
-
-MINLINE float saasin(float fac)
-{
-  if (UNLIKELY(fac <= -1.0f)) {
-    return (float)-M_PI_2;
-  }
-  else if (UNLIKELY(fac >= 1.0f)) {
-    return (float)M_PI_2;
-  }
-  else {
-    return asinf(fac);
-  }
-}
-
-MINLINE float sasqrt(float fac)
-{
-  if (UNLIKELY(fac <= 0.0f)) {
-    return 0.0f;
-  }
-  else {
-    return sqrtf(fac);
-  }
-}
-
-MINLINE float saacosf(float fac)
-{
-  if (UNLIKELY(fac <= -1.0f)) {
-    return (float)M_PI;
-  }
-  else if (UNLIKELY(fac >= 1.0f)) {
-    return 0.0f;
-  }
-  else {
-    return acosf(fac);
-  }
-}
-
-MINLINE float saasinf(float fac)
-{
-  if (UNLIKELY(fac <= -1.0f)) {
-    return (float)-M_PI_2;
-  }
-  else if (UNLIKELY(fac >= 1.0f)) {
-    return (float)M_PI_2;
-  }
-  else {
-    return asinf(fac);
-  }
-}
-
-MINLINE float sasqrtf(float fac)
-{
-  if (UNLIKELY(fac <= 0.0f)) {
-    return 0.0f;
-  }
-  else {
-    return sqrtf(fac);
-  }
-}
-
 MINLINE float interpf(float target, float origin, float fac)
 {
   return (fac * target) + (1.0f - fac) * origin;
@@ -304,10 +232,7 @@ MINLINE signed char round_db_to_char(double a){_round_db_impl(a, signed char)} M
     short round_db_to_short(double a){_round_db_impl(a, short)} MINLINE
     unsigned short round_db_to_ushort(double a){_round_db_impl(a, unsigned short)} MINLINE
     int round_db_to_int(double a){_round_db_impl(a, int)} MINLINE
-    unsigned int round_db_to_uint(double a)
-{
-  _round_db_impl(a, unsigned int)
-}
+    unsigned int round_db_to_uint(double a){_round_db_impl(a, unsigned int)}
 
 #undef _round_fl_impl
 #undef _round_db_impl
@@ -333,10 +258,8 @@ MINLINE signed char round_db_to_char_clamp(double a){
     unsigned short round_db_to_ushort_clamp(double a){
         _round_clamp_db_impl(a, unsigned short, 0, USHRT_MAX)} MINLINE
     int round_db_to_int_clamp(double a){_round_clamp_db_impl(a, int, INT_MIN, INT_MAX)} MINLINE
-    unsigned int round_db_to_uint_clamp(double a)
-{
-  _round_clamp_db_impl(a, unsigned int, 0, UINT_MAX)
-}
+    unsigned int round_db_to_uint_clamp(double a){
+        _round_clamp_db_impl(a, unsigned int, 0, UINT_MAX)}
 
 #undef _round_clamp_fl_impl
 #undef _round_clamp_db_impl

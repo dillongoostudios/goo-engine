@@ -9,7 +9,7 @@
 
 #include "AS_asset_representation.hh"
 
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 
 #include "DNA_asset_types.h"
 
@@ -19,8 +19,10 @@
 
 namespace blender::asset_system::tests {
 
-/** Sets up asset library loading so we have a library to load asset representations into (required
- * for some functionality to perform work). */
+/**
+ * Sets up asset library loading so we have a library to load asset representations into (required
+ * for some functionality to perform work).
+ */
 class AssetRepresentationTest : public AssetLibraryTestBase {
  public:
   AssetLibrary *get_builtin_library_from_type(eAssetLibraryType type)

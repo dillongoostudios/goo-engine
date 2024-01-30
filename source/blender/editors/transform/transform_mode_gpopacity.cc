@@ -11,8 +11,8 @@
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
 
-#include "BKE_context.h"
-#include "BKE_unit.h"
+#include "BKE_context.hh"
+#include "BKE_unit.hh"
 
 #include "DNA_gpencil_legacy_types.h"
 
@@ -51,10 +51,10 @@ static void applyGPOpacity(TransInfo *t)
     char c[NUM_STR_REP_LEN];
 
     outputNumInput(&(t->num), c, &t->scene->unit);
-    SNPRINTF(str, TIP_("Opacity: %s"), c);
+    SNPRINTF(str, RPT_("Opacity: %s"), c);
   }
   else {
-    SNPRINTF(str, TIP_("Opacity: %3f"), ratio);
+    SNPRINTF(str, RPT_("Opacity: %3f"), ratio);
   }
 
   bool recalc = false;

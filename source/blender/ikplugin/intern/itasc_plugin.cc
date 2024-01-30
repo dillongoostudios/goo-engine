@@ -33,7 +33,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_global.h"
 #include "DNA_action_types.h"
@@ -314,7 +314,8 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
         break;
       }
       for (; a < size && t < tree->totchannel && tree->pchan[t] == chanlist[segcount - a - 1];
-           a++, t++) {
+           a++, t++)
+      {
         /* pass */
       }
     }

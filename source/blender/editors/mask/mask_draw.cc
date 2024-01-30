@@ -13,7 +13,7 @@
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_mask.h"
 
 #include "DNA_mask_types.h"
@@ -125,14 +125,14 @@ static void draw_single_handle(const MaskLayer *mask_layer,
 
   switch (handle_type) {
     case HD_FREE:
-      immUniformThemeColor(TH_HANDLE_FREE);
+      immUniformThemeColor3(TH_HANDLE_FREE);
       break;
     case HD_AUTO:
-      immUniformThemeColor(TH_HANDLE_AUTO);
+      immUniformThemeColor3(TH_HANDLE_AUTO);
       break;
     case HD_ALIGN:
     case HD_ALIGN_DOUBLESIDE:
-      immUniformThemeColor(TH_HANDLE_ALIGN);
+      immUniformThemeColor3(TH_HANDLE_ALIGN);
       break;
   }
 

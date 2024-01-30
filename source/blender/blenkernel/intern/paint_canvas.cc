@@ -9,7 +9,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_scene_types.h"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_image.h"
 #include "BKE_material.h"
 #include "BKE_paint.hh"
@@ -83,7 +83,7 @@ int BKE_paint_canvas_uvmap_layer_index_get(const PaintModeSettings *settings, Ob
       }
 
       const Mesh *mesh = static_cast<Mesh *>(ob->data);
-      return CustomData_get_active_layer_index(&mesh->loop_data, CD_PROP_FLOAT2);
+      return CustomData_get_active_layer_index(&mesh->corner_data, CD_PROP_FLOAT2);
     }
     case PAINT_CANVAS_SOURCE_MATERIAL: {
       /* Use uv map of the canvas. */
@@ -101,7 +101,7 @@ int BKE_paint_canvas_uvmap_layer_index_get(const PaintModeSettings *settings, Ob
       }
 
       const Mesh *mesh = static_cast<Mesh *>(ob->data);
-      return CustomData_get_named_layer_index(&mesh->loop_data, CD_PROP_FLOAT2, slot->uvname);
+      return CustomData_get_named_layer_index(&mesh->corner_data, CD_PROP_FLOAT2, slot->uvname);
     }
   }
   return -1;

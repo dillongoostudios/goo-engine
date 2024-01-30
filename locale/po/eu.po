@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 4.0.0 Beta (b'551927bbe355')\n"
+"Project-Id-Version: Blender 4.1.0 Alpha (b'acbb91b192da')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2023-11-06 12:01:38\n"
+"POT-Creation-Date: 2024-01-15 10:52:30\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: Ainhize & Miriam <agoenaga006@ikasle.ehu.eus>\n"
 "Language-Team: Euskara <agoenaga006@ikasle.ehu.eus>\n"
@@ -241,6 +241,10 @@ msgid "Point"
 msgstr "Puntu"
 
 
+msgid "Layer"
+msgstr "Geruza"
+
+
 msgid "+X"
 msgstr "+X"
 
@@ -417,10 +421,6 @@ msgid "Onion Skinning"
 msgstr "Tipula-azapa"
 
 
-msgid "Layer"
-msgstr "Geruza"
-
-
 msgid "Grid"
 msgstr "Sarea"
 
@@ -445,6 +445,22 @@ msgstr "Kurba"
 msgctxt "Curve"
 msgid "Sphere"
 msgstr "Esfera"
+
+
+msgid "Sound"
+msgstr "Soinua"
+
+
+msgid "Speaker"
+msgstr "Bozgorailua"
+
+
+msgid "Text"
+msgstr "Testua"
+
+
+msgid "World"
+msgstr "Mundua"
 
 
 msgid "Groups"
@@ -489,10 +505,6 @@ msgstr "Zirkulua"
 
 msgid "Angular Velocity"
 msgstr "Abiadura-angeluarra"
-
-
-msgid "Sound"
-msgstr "Soinua"
 
 
 msgid "Image Texture"
@@ -572,10 +584,6 @@ msgid "Show/Hide Faces"
 msgstr "Aurpegiak erakutsi/ezkutatu"
 
 
-msgid "Text"
-msgstr "Testua"
-
-
 msgid "Physics"
 msgstr "Fisikak"
 
@@ -606,10 +614,6 @@ msgstr "Loturak"
 
 msgid "New"
 msgstr "Berria"
-
-
-msgid "World"
-msgstr "Mundua"
 
 
 msgctxt "Curve"
@@ -1687,10 +1691,6 @@ msgid "Prev"
 msgstr "Aurrekoa"
 
 
-msgid "Speaker"
-msgstr "Bozgorailua"
-
-
 msgctxt "Operator"
 msgid "Load Factory Settings"
 msgstr "Lehenetsitako ezarpenak kargatu"
@@ -1704,10 +1704,6 @@ msgstr "Azken Saioa Berreskuratu"
 msgctxt "Operator"
 msgid "Save System Info"
 msgstr "Sistemaren Informazioa Gorde"
-
-
-msgid "Refraction"
-msgstr "Errefrakzioa"
 
 
 msgctxt "Operator"
@@ -1906,6 +1902,10 @@ msgstr "Baxua"
 
 msgid "Upper"
 msgstr "Altua"
+
+
+msgid "Refraction"
+msgstr "Errefrakzioa"
 
 
 msgctxt "Image"
@@ -2139,6 +2139,10 @@ msgid "New"
 msgstr "Berria"
 
 
+msgid "Rigging"
+msgstr "Rigging"
+
+
 msgctxt "Mesh"
 msgid "Plane"
 msgstr "Planoa"
@@ -2368,10 +2372,6 @@ msgstr "Kurba Gehitu"
 
 msgid "Import-Export"
 msgstr "Inportatu-Esportatu"
-
-
-msgid "Rigging"
-msgstr "Rigging"
 
 
 msgid "English (English)"

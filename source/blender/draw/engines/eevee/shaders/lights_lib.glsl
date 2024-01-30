@@ -369,7 +369,7 @@ float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_
   }
   return 1.0;
 }
-#endif /* VOLUMETRICS */
+#endif /* !VOLUMETRICS */
 
 float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups, ivec4 light_group_shadows)
 {

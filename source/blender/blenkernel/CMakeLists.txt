@@ -5,11 +5,9 @@
 set(INC
   .
   ../asset_system
-  ../blenfont
   ../blenloader
   ../blentranslation
   ../bmesh
-  ../depsgraph
   ../draw
   ../functions
   ../gpencil_modifiers_legacy
@@ -26,7 +24,6 @@ set(INC
   ../../../intern/eigen
   ../../../intern/ghost
   ../../../intern/iksolver/extern
-  ../../../intern/clog
   ../../../intern/libmv
   ../../../intern/mantaflow/extern
   ../../../intern/memutil
@@ -132,6 +129,7 @@ set(SRC
   intern/fcurve.cc
   intern/fcurve_cache.cc
   intern/fcurve_driver.cc
+  intern/file_handler.cc
   intern/fluid.cc
   intern/fmodifier.cc
   intern/freestyle.cc
@@ -199,6 +197,7 @@ set(SRC
   intern/mesh.cc
   intern/mesh_boolean_convert.cc
   intern/mesh_calc_edges.cc
+  intern/mesh_compare.cc
   intern/mesh_convert.cc
   intern/mesh_debug.cc
   intern/mesh_evaluate.cc
@@ -234,6 +233,7 @@ set(SRC
   intern/nla.cc
   intern/node.cc
   intern/node_runtime.cc
+  intern/node_socket_value.cc
   intern/node_tree_anonymous_attributes.cc
   intern/node_tree_dot_export.cc
   intern/node_tree_field_inferencing.cc
@@ -279,7 +279,6 @@ set(SRC
   intern/subdiv.cc
   intern/subdiv_ccg.cc
   intern/subdiv_ccg_mask.cc
-  intern/subdiv_ccg_material.cc
   intern/subdiv_converter.cc
   intern/subdiv_converter_mesh.cc
   intern/subdiv_deform.cc
@@ -310,13 +309,15 @@ set(SRC
   intern/vfontdata_freetype.cc
   intern/viewer_path.cc
   intern/volume.cc
+  intern/volume_grid.cc
+  intern/volume_grid_file_cache.cc
   intern/volume_render.cc
   intern/volume_to_mesh.cc
   intern/workspace.cc
   intern/world.cc
   intern/writeavi.cc
 
-  BKE_DerivedMesh.h
+  BKE_DerivedMesh.hh
   BKE_action.h
   BKE_action.hh
   BKE_addon.h
@@ -326,9 +327,8 @@ set(SRC
   BKE_animsys.h
   BKE_anonymous_attribute_id.hh
   BKE_appdir.h
-  BKE_armature.h
   BKE_armature.hh
-  BKE_asset.h
+  BKE_asset.hh
   BKE_attribute.h
   BKE_attribute.hh
   BKE_attribute_math.hh
@@ -343,12 +343,12 @@ set(SRC
   BKE_blender_undo.h
   BKE_blender_user_menu.h
   BKE_blender_version.h
-  BKE_blendfile.h
-  BKE_blendfile_link_append.h
+  BKE_blendfile.hh
+  BKE_blendfile_link_append.hh
   BKE_boids.h
   BKE_bpath.h
   BKE_brush.hh
-  BKE_bvhutils.h
+  BKE_bvhutils.hh
   BKE_cachefile.h
   BKE_callbacks.h
   BKE_camera.h
@@ -357,24 +357,23 @@ set(SRC
   BKE_cloth.hh
   BKE_collection.h
   BKE_collision.h
-  BKE_colorband.h
-  BKE_colortools.h
+  BKE_colorband.hh
+  BKE_colortools.hh
   BKE_compute_contexts.hh
   BKE_constraint.h
-  BKE_context.h
-  BKE_cpp_types.h
-  BKE_crazyspace.h
+  BKE_context.hh
+  BKE_cpp_types.hh
   BKE_crazyspace.hh
   BKE_cryptomatte.h
   BKE_cryptomatte.hh
-  BKE_curve.h
+  BKE_curve.hh
   BKE_curve_legacy_convert.hh
   BKE_curve_to_mesh.hh
   BKE_curveprofile.h
   BKE_curves.h
   BKE_curves.hh
   BKE_curves_utils.hh
-  BKE_customdata.h
+  BKE_customdata.hh
   BKE_customdata_file.h
   BKE_data_transfer.h
   BKE_deform.h
@@ -382,13 +381,14 @@ set(SRC
   BKE_duplilist.h
   BKE_dynamicpaint.h
   BKE_editlattice.h
-  BKE_editmesh.h
+  BKE_editmesh.hh
   BKE_editmesh_bvh.h
   BKE_editmesh_cache.hh
-  BKE_editmesh_tangent.h
+  BKE_editmesh_tangent.hh
   BKE_effect.h
   BKE_fcurve.h
   BKE_fcurve_driver.h
+  BKE_file_handler.hh
   BKE_fluid.h
   BKE_freestyle.h
   BKE_geometry_fields.hh
@@ -416,20 +416,20 @@ set(SRC
   BKE_kelvinlet.h
   BKE_key.h
   BKE_keyconfig.h
-  BKE_lattice.h
+  BKE_lattice.hh
   BKE_layer.h
-  BKE_lib_id.h
+  BKE_lib_id.hh
   BKE_lib_override.hh
-  BKE_lib_query.h
-  BKE_lib_remap.h
-  BKE_library.h
+  BKE_lib_query.hh
+  BKE_lib_remap.hh
+  BKE_library.hh
   BKE_light.h
   BKE_light_linking.h
   BKE_lightprobe.h
   BKE_linestyle.h
-  BKE_main.h
-  BKE_main_idmap.h
-  BKE_main_namemap.h
+  BKE_main.hh
+  BKE_main_idmap.hh
+  BKE_main_namemap.hh
   BKE_mask.h
   BKE_material.h
   BKE_mball.h
@@ -437,6 +437,7 @@ set(SRC
   BKE_mesh.h
   BKE_mesh.hh
   BKE_mesh_boolean_convert.hh
+  BKE_mesh_compare.hh
   BKE_mesh_fair.hh
   BKE_mesh_iterators.hh
   BKE_mesh_legacy_convert.hh
@@ -449,30 +450,32 @@ set(SRC
   BKE_mesh_tangent.hh
   BKE_mesh_types.hh
   BKE_mesh_wrapper.hh
-  BKE_modifier.h
+  BKE_modifier.hh
   BKE_movieclip.h
   BKE_multires.hh
   BKE_nla.h
   BKE_node.h
   BKE_node.hh
   BKE_node_runtime.hh
+  BKE_node_socket_value.hh
   BKE_node_tree_anonymous_attributes.hh
   BKE_node_tree_dot_export.hh
   BKE_node_tree_interface.hh
-  BKE_node_tree_update.h
+  BKE_node_tree_update.hh
   BKE_node_tree_zones.hh
   BKE_object.hh
   BKE_object_deform.h
+  BKE_object_types.hh
   BKE_ocean.h
   BKE_outliner_treehash.hh
   BKE_packedFile.h
   BKE_paint.hh
   BKE_particle.h
-  BKE_pbvh.h
+  BKE_pbvh.hh
   BKE_pbvh_api.hh
   BKE_pbvh_pixels.hh
   BKE_pointcache.h
-  BKE_pointcloud.h
+  BKE_pointcloud.hh
   BKE_pose_backup.h
   BKE_preferences.h
   BKE_preview_image.hh
@@ -482,7 +485,7 @@ set(SRC
   BKE_screen.hh
   BKE_sequencer_offscreen.h
   BKE_shader_fx.h
-  BKE_shrinkwrap.h
+  BKE_shrinkwrap.hh
   BKE_softbody.h
   BKE_sound.h
   BKE_speaker.h
@@ -501,14 +504,17 @@ set(SRC
   BKE_texture.h
   BKE_tracking.h
   BKE_type_conversions.hh
-  BKE_undo_system.h
-  BKE_unit.h
-  BKE_vfont.h
-  BKE_vfontdata.h
-  BKE_viewer_path.h
-  BKE_volume.h
+  BKE_undo_system.hh
+  BKE_unit.hh
+  BKE_vfont.hh
+  BKE_vfontdata.hh
+  BKE_viewer_path.hh
+  BKE_volume.hh
+  BKE_volume_enums.hh
+  BKE_volume_grid.hh
+  BKE_volume_grid_file_cache.hh
   BKE_volume_openvdb.hh
-  BKE_volume_render.h
+  BKE_volume_render.hh
   BKE_volume_to_mesh.hh
   BKE_workspace.h
   BKE_world.h
@@ -523,7 +529,7 @@ set(SRC
   intern/CCGSubSurf_intern.h
   intern/attribute_access_intern.hh
   intern/data_transfer_intern.h
-  intern/lib_intern.h
+  intern/lib_intern.hh
   intern/multires_inline.hh
   intern/multires_reshape.hh
   intern/multires_unsubdivide.hh
@@ -538,12 +544,12 @@ set(SRC
 set(LIB
   PRIVATE bf::animrig
   bf_asset_system
-  bf_blenfont
+  PRIVATE bf::blenfont
   PRIVATE bf::blenlib
   bf_blenloader
   bf_blentranslation
   bf_bmesh
-  bf_depsgraph
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_draw
   PRIVATE bf::extern::curve_fit_nd
@@ -552,7 +558,7 @@ set(LIB
   bf_gpu
   bf_ikplugin
   bf_imbuf
-  bf_intern_clog
+  PRIVATE bf::intern::clog
   bf_intern_ghost
   PRIVATE bf::intern::guardedalloc
   bf_intern_libmv  # Uses stub when disabled.
@@ -639,8 +645,8 @@ endif()
 
 if(WITH_CODEC_FFMPEG)
   list(APPEND SRC
-    intern/writeffmpeg.c
-    BKE_writeffmpeg.h
+    intern/writeffmpeg.cc
+    BKE_writeffmpeg.hh
   )
   list(APPEND INC
     ../../../intern/ffmpeg
@@ -839,6 +845,7 @@ if(WITH_GTESTS)
     intern/cryptomatte_test.cc
     intern/curves_geometry_test.cc
     intern/fcurve_test.cc
+    intern/file_handler_test.cc
     intern/grease_pencil_test.cc
     intern/idprop_serialize_test.cc
     intern/image_partial_update_test.cc
@@ -848,15 +855,17 @@ if(WITH_GTESTS)
     intern/lib_id_remapper_test.cc
     intern/lib_id_test.cc
     intern/lib_remap_test.cc
+    intern/main_test.cc
     intern/nla_test.cc
     intern/tracking_test.cc
+    intern/volume_test.cc
   )
   set(TEST_INC
     ../editors/include
   )
-  include(GTestTesting)
-  blender_add_test_lib(bf_blenkernel_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB}")
-
-  # RNA_prototypes.h
-  add_dependencies(bf_blenkernel_tests bf_rna)
+  set(TEST_LIB
+    ${LIB}
+    bf_rna  # RNA_prototypes.h
+  )
+  blender_add_test_suite_lib(blenkernel "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${TEST_LIB}")
 endif()

@@ -21,10 +21,10 @@
 #include "BLT_translation.h"
 
 #include "BKE_collection.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_object.hh"
 #include "BKE_report.h"
@@ -892,34 +892,28 @@ static bool datastack_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event)
   return true;
 }
 
-static char *datastack_drop_tooltip(bContext * /*C*/,
-                                    wmDrag *drag,
-                                    const int /*xy*/[2],
-                                    wmDropBox * /*drop*/)
+static std::string datastack_drop_tooltip(bContext * /*C*/,
+                                          wmDrag *drag,
+                                          const int /*xy*/[2],
+                                          wmDropBox * /*drop*/)
 {
   StackDropData *drop_data = static_cast<StackDropData *>(drag->poin);
   switch (drop_data->drop_action) {
     case DATA_STACK_DROP_REORDER:
-      return BLI_strdup(TIP_("Reorder"));
-      break;
+      return TIP_("Reorder");
     case DATA_STACK_DROP_COPY:
       if (drop_data->pchan_parent) {
-        return BLI_strdup(TIP_("Copy to bone"));
+        return TIP_("Copy to bone");
       }
-      else {
-        return BLI_strdup(TIP_("Copy to object"));
-      }
-      break;
+      return TIP_("Copy to object");
+
     case DATA_STACK_DROP_LINK:
       if (drop_data->pchan_parent) {
-        return BLI_strdup(TIP_("Link all to bone"));
+        return TIP_("Link all to bone");
       }
-      else {
-        return BLI_strdup(TIP_("Link all to object"));
-      }
-      break;
+      return TIP_("Link all to object");
   }
-  return nullptr;
+  return {};
 }
 
 static void datastack_drop_link(bContext *C, StackDropData *drop_data)
@@ -978,7 +972,8 @@ static void datastack_drop_copy(bContext *C, StackDropData *drop_data)
             ob_dst, static_cast<GpencilModifierData *>(drop_data->drag_directdata));
       }
       else if (drop_data->ob_parent->type != OB_GPENCIL_LEGACY &&
-               ob_dst->type != OB_GPENCIL_LEGACY) {
+               ob_dst->type != OB_GPENCIL_LEGACY)
+      {
         ED_object_modifier_copy_to_object(C,
                                           ob_dst,
                                           drop_data->ob_parent,
@@ -1184,7 +1179,8 @@ static bool collection_drop_init(bContext *C, wmDrag *drag, const int xy[2], Col
 
   /* Currently this should not be allowed, cannot edit items in an override of a Collection. */
   if (ID_IS_OVERRIDE_LIBRARY(to_collection) &&
-      !ELEM(insert_type, TE_INSERT_AFTER, TE_INSERT_BEFORE)) {
+      !ELEM(insert_type, TE_INSERT_AFTER, TE_INSERT_BEFORE))
+  {
     return false;
   }
 
@@ -1232,10 +1228,10 @@ static bool collection_drop_poll(bContext *C, wmDrag *drag, const wmEvent *event
   return false;
 }
 
-static char *collection_drop_tooltip(bContext *C,
-                                     wmDrag *drag,
-                                     const int xy[2],
-                                     wmDropBox * /*drop*/)
+static std::string collection_drop_tooltip(bContext *C,
+                                           wmDrag *drag,
+                                           const int xy[2],
+                                           wmDropBox * /*drop*/)
 {
   wmWindow *win = CTX_wm_window(C);
   const wmEvent *event = win ? win->eventstate : nullptr;
@@ -1266,23 +1262,17 @@ static char *collection_drop_tooltip(bContext *C,
     switch (data.insert_type) {
       case TE_INSERT_BEFORE:
         if (te->prev && outliner_is_collection_tree_element(te->prev)) {
-          return BLI_strdup(tooltip_between);
+          return tooltip_between;
         }
-        else {
-          return BLI_strdup(tooltip_before);
-        }
-        break;
+        return tooltip_before;
       case TE_INSERT_AFTER:
         if (te->next && outliner_is_collection_tree_element(te->next)) {
-          return BLI_strdup(tooltip_between);
+          return tooltip_between;
         }
-        else {
-          return BLI_strdup(tooltip_after);
-        }
-        break;
+        return tooltip_after;
       case TE_INSERT_INTO: {
         if (is_link) {
-          return BLI_strdup(TIP_("Link inside collection"));
+          return TIP_("Link inside collection");
         }
 
         /* Check the type of the drag IDs to avoid the incorrect "Shift to parent"
@@ -1291,10 +1281,9 @@ static char *collection_drop_tooltip(bContext *C,
         wmDragID *drag_id = (wmDragID *)drag->ids.first;
         const bool is_object = (GS(drag_id->id->name) == ID_OB);
         if (is_object) {
-          return BLI_strdup(TIP_("Move inside collection (Ctrl to link, Shift to parent)"));
+          return TIP_("Move inside collection (Ctrl to link, Shift to parent)");
         }
-        return BLI_strdup(TIP_("Move inside collection (Ctrl to link)"));
-        break;
+        return TIP_("Move inside collection (Ctrl to link)");
       }
     }
   }
@@ -1511,7 +1500,8 @@ static int outliner_item_drag_drop_invoke(bContext *C, wmOperator * /*op*/, cons
         /* Keep collection hierarchies intact when dragging. */
         bool parent_selected = false;
         for (TreeElement *te_parent = te_selected->parent; te_parent;
-             te_parent = te_parent->parent) {
+             te_parent = te_parent->parent)
+        {
           if (outliner_is_collection_tree_element(te_parent)) {
             if (TREESTORE(te_parent)->flag & TSE_SELECTED) {
               parent_selected = true;
@@ -1532,7 +1522,8 @@ static int outliner_item_drag_drop_invoke(bContext *C, wmOperator * /*op*/, cons
 
       if (te_selected->parent) {
         for (TreeElement *te_parent = te_selected->parent; te_parent;
-             te_parent = te_parent->parent) {
+             te_parent = te_parent->parent)
+        {
           if (outliner_is_collection_tree_element(te_parent)) {
             parent = outliner_collection_from_tree_element(te_parent);
             break;

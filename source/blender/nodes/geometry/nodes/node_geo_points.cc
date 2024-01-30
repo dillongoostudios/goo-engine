@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_pointcloud.h"
+#include "BKE_pointcloud.hh"
 #include "DNA_pointcloud_types.h"
 
 #include "BLI_task.hh"
@@ -25,7 +25,7 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_DISTANCE)
       .supports_field()
       .description("The radii of the new points");
-  b.add_output<decl::Geometry>("Geometry");
+  b.add_output<decl::Geometry>("Points", "Geometry");
 }
 
 class PointsFieldContext : public FieldContext {
@@ -72,7 +72,7 @@ static void node_geo_exec(GeoNodeExecParams params)
   PointCloud *points = BKE_pointcloud_new_nomain(count);
   MutableAttributeAccessor attributes = points->attributes_for_write();
   AttributeWriter<float> output_radii = attributes.lookup_or_add_for_write<float>(
-      "radius", ATTR_DOMAIN_POINT);
+      "radius", AttrDomain::Point);
 
   PointsFieldContext context{count};
   fn::FieldEvaluator evaluator{context, count};

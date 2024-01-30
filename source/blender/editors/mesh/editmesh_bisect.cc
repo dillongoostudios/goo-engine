@@ -12,8 +12,8 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_global.h"
 #include "BKE_layer.h"
 #include "BKE_report.h"
@@ -58,7 +58,7 @@ struct BisectData {
     BMBackup mesh_backup;
     bool is_valid;
     bool is_dirty;
-  } * backup;
+  } *backup;
   int backup_len;
 };
 
@@ -173,7 +173,7 @@ static int mesh_bisect_invoke(bContext *C, wmOperator *op, const wmEvent *event)
     G.moving = G_TRANSFORM_EDIT;
 
     /* Initialize modal callout. */
-    ED_workspace_status_text(C, TIP_("LMB: Click and drag to draw cut line"));
+    ED_workspace_status_text(C, RPT_("LMB: Click and drag to draw cut line"));
   }
   MEM_freeN(objects);
   return ret;
@@ -203,7 +203,7 @@ static int mesh_bisect_modal(bContext *C, wmOperator *op, const wmEvent *event)
   /* update or clear modal callout */
   if (event->type == EVT_MODAL_MAP) {
     if (event->val == GESTURE_MODAL_BEGIN) {
-      ED_workspace_status_text(C, TIP_("LMB: Release to confirm cut line"));
+      ED_workspace_status_text(C, RPT_("LMB: Release to confirm cut line"));
     }
     else {
       ED_workspace_status_text(C, nullptr);
@@ -386,7 +386,7 @@ static int mesh_bisect_exec(bContext *C, wmOperator *op)
 
     if (EDBM_op_finish(em, &bmop, op, true)) {
       EDBMUpdate_Params params{};
-      params.calc_looptri = true;
+      params.calc_looptris = true;
       params.calc_normals = false;
       params.is_destructive = true;
       EDBM_update(static_cast<Mesh *>(obedit->data), &params);

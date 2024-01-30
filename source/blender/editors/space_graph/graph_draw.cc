@@ -24,8 +24,8 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_fcurve.h"
 #include "BKE_nla.h"
 
@@ -309,7 +309,8 @@ static void draw_fcurve_selected_handle_vertices(
      */
     if (!sel_handle_only || BEZT_ISSEL_ANY(bezt)) {
       if ((!prevbezt && (bezt->ipo == BEZT_IPO_BEZ)) ||
-          (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ))) {
+          (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ)))
+      {
         if ((bezt->f1 & SELECT) == sel
             /* && v2d->cur.xmin < bezt->vec[0][0] < v2d->cur.xmax) */)
         {
@@ -482,7 +483,8 @@ static void draw_fcurve_handles(SpaceGraph *sipo, ARegion *region, FCurve *fcu)
       if ((bezt->f2 & SELECT) == sel) {
         /* only draw first handle if previous segment had handles */
         if ((!prevbezt && (bezt->ipo == BEZT_IPO_BEZ)) ||
-            (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ))) {
+            (prevbezt && (prevbezt->ipo == BEZT_IPO_BEZ)))
+        {
           UI_GetThemeColor3ubv(basecol + bezt->h1, col);
           col[3] = fcurve_display_alpha(fcu) * 255;
           immAttr4ubv(color, col);
@@ -592,7 +594,7 @@ static void draw_fcurve_curve(bAnimContext *ac,
                               const bool use_nla_remap,
                               const bool draw_extrapolation)
 {
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
 
   /* when opening a blend file on a different sized screen or while dragging the toolbar this can
    * happen best just bail out in this case. */
@@ -739,7 +741,7 @@ static void draw_fcurve_curve_samples(bAnimContext *ac,
   float fac, v[2];
   int b = fcu->totvert;
   float unit_scale, offset;
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
   int count = fcu->totvert;
 
   const bool extrap_left = draw_extrapolation && prevfpt->vec[0] > v2d->cur.xmin;
@@ -1023,7 +1025,7 @@ static void draw_fcurve_curve_keys(
   /* Apply unit mapping. */
   GPU_matrix_push();
   float offset;
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
   const float unit_scale = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
   GPU_matrix_scale_2f(1.0f, unit_scale);
   GPU_matrix_translate_2f(0.0f, offset);
@@ -1252,7 +1254,8 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
    *   we must obey this.
    */
   if (!(U.animation_flag & USER_ANIM_ONLY_SHOW_SELECTED_CURVE_KEYS) ||
-      (fcu->flag & FCURVE_SELECTED)) {
+      (fcu->flag & FCURVE_SELECTED))
+  {
     if (!BKE_fcurve_are_keyframes_usable(fcu) && !(fcu->fpt && fcu->totvert)) {
       /* only draw controls if this is the active modifier */
       if ((fcu->flag & FCURVE_ACTIVE) && (fcm)) {
@@ -1264,7 +1267,7 @@ static void draw_fcurve(bAnimContext *ac, SpaceGraph *sipo, ARegion *region, bAn
       }
     }
     else if (((fcu->bezt) || (fcu->fpt)) && (fcu->totvert)) {
-      short mapping_flag = ANIM_get_normalization_flags(ac);
+      short mapping_flag = ANIM_get_normalization_flags(ac->sl);
       float offset;
       const float unit_scale = ANIM_unit_mapping_get_factor(
           ac->scene, ale->id, fcu, mapping_flag, &offset);
@@ -1319,7 +1322,7 @@ static void graph_draw_driver_debug(bAnimContext *ac, ID *id, FCurve *fcu)
 {
   ChannelDriver *driver = fcu->driver;
   View2D *v2d = &ac->region->v2d;
-  short mapping_flag = ANIM_get_normalization_flags(ac);
+  short mapping_flag = ANIM_get_normalization_flags(ac->sl);
   float offset;
   float unitfac = ANIM_unit_mapping_get_factor(ac->scene, id, fcu, mapping_flag, &offset);
 
@@ -1553,7 +1556,8 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *region)
 
       /* check if visible */
       if (IN_RANGE(ymin, v2d->cur.ymin, v2d->cur.ymax) ||
-          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax)) {
+          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax))
+      {
         /* draw all channels using standard channel-drawing API */
         ANIM_channel_draw(ac, ale, ymin, ymax, channel_index);
       }
@@ -1574,7 +1578,8 @@ void graph_draw_channel_names(bContext *C, bAnimContext *ac, ARegion *region)
 
       /* check if visible */
       if (IN_RANGE(ymin, v2d->cur.ymin, v2d->cur.ymax) ||
-          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax)) {
+          IN_RANGE(ymax, v2d->cur.ymin, v2d->cur.ymax))
+      {
         /* draw all channels using standard channel-drawing API */
         rctf channel_rect;
         BLI_rctf_init(&channel_rect, 0, v2d->cur.xmax - V2D_SCROLL_WIDTH, ymin, ymax);

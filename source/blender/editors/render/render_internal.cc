@@ -17,10 +17,9 @@
 #include "BLI_string.h"
 #include "BLI_string_utils.hh"
 #include "BLI_threads.h"
+#include "BLI_time.h"
 #include "BLI_timecode.h"
 #include "BLI_utildefines.h"
-
-#include "PIL_time.h"
 
 #include "BLT_translation.h"
 
@@ -29,16 +28,16 @@
 #include "DNA_userdef_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_image_format.h"
 #include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_node.hh"
-#include "BKE_node_tree_update.h"
+#include "BKE_node_tree_update.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -432,17 +431,17 @@ static void make_renderinfo_string(const RenderStats *rs,
 
   /* local view */
   if (rs->localview) {
-    ret_array[i++] = TIP_("3D Local View ");
+    ret_array[i++] = RPT_("3D Local View ");
     ret_array[i++] = info_sep;
   }
   else if (v3d_override) {
-    ret_array[i++] = TIP_("3D View ");
+    ret_array[i++] = RPT_("3D View ");
     ret_array[i++] = info_sep;
   }
 
   /* frame number */
   SNPRINTF(info_buffers.frame, "%d ", scene->r.cfra);
-  ret_array[i++] = TIP_("Frame:");
+  ret_array[i++] = RPT_("Frame:");
   ret_array[i++] = info_buffers.frame;
 
   /* Previous and elapsed time. */
@@ -461,10 +460,10 @@ static void make_renderinfo_string(const RenderStats *rs,
     info_time = info_buffers.time_elapsed;
     BLI_timecode_string_from_time_simple(info_buffers.time_elapsed,
                                          sizeof(info_buffers.time_elapsed),
-                                         PIL_check_seconds_timer() - rs->starttime);
+                                         BLI_check_seconds_timer() - rs->starttime);
   }
 
-  ret_array[i++] = TIP_("Time:");
+  ret_array[i++] = RPT_("Time:");
   ret_array[i++] = info_time;
   ret_array[i++] = info_space;
 
@@ -479,13 +478,13 @@ static void make_renderinfo_string(const RenderStats *rs,
     else {
       if (rs->mem_peak == 0.0f) {
         SNPRINTF(info_buffers.statistics,
-                 TIP_("Mem:%.2fM (Peak %.2fM)"),
+                 RPT_("Mem:%.2fM (Peak %.2fM)"),
                  megs_used_memory,
                  megs_peak_memory);
       }
       else {
         SNPRINTF(
-            info_buffers.statistics, TIP_("Mem:%.2fM, Peak: %.2fM"), rs->mem_used, rs->mem_peak);
+            info_buffers.statistics, RPT_("Mem:%.2fM, Peak: %.2fM"), rs->mem_used, rs->mem_peak);
       }
       info_statistics = info_buffers.statistics;
     }

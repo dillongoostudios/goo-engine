@@ -28,11 +28,16 @@ class Context;
 class CachedMaskKey {
  public:
   int2 size;
+  float aspect_ratio;
   bool use_feather;
   int motion_blur_samples;
   float motion_blur_shutter;
 
-  CachedMaskKey(int2 size, bool use_feather, int motion_blur_samples, float motion_blur_shutter);
+  CachedMaskKey(int2 size,
+                float aspect_ratio,
+                bool use_feather,
+                int motion_blur_samples,
+                float motion_blur_shutter);
 
   uint64_t hash() const;
 };
@@ -49,9 +54,11 @@ class CachedMask : public CachedResource {
   GPUTexture *texture_ = nullptr;
 
  public:
-  CachedMask(Mask *mask,
+  CachedMask(Context &context,
+             Mask *mask,
              int2 size,
              int frame,
+             float aspect_ratio,
              bool use_feather,
              int motion_blur_samples,
              float motion_blur_shutter);
@@ -80,6 +87,7 @@ class CachedMaskContainer : CachedResourceContainer {
   CachedMask &get(Context &context,
                   Mask *mask,
                   int2 size,
+                  float aspect_ratio,
                   bool use_feather,
                   int motion_blur_samples,
                   float motion_blur_shutter);
