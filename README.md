@@ -10,7 +10,7 @@ Goo Engine
 Goo Engine is a version of Blender by [DillonGoo Studios](https://www.youtube.com/dillongoo) with some key modifications
 to the source code that allow us to focus on NPR and Anime style rendering. Key features include the four custom Shader 
 nodes we added to Eevee and Light Groups. You can learn about them on the 
-[Professor Goo YouTube channel](https://www.youtube.com/@professorGoo>).
+[Professor Goo YouTube channel](https://www.youtube.com/@professorGoo).
 
 Some have asked why we haven't pushed these changes to Blender's master branch: 
 this is because many of these features would not be accepted as they are and may destablize other features like Cycles.
