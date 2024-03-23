@@ -673,10 +673,6 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
                        "all",
                        1);
       }
-      uiItemO(layout,
-                     CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Show FCurve in Editor"),
-                     ICON_FCURVE,
-                     "UI_OT_show_fcurve_in_editor");
     }
 
     if (but->flag & UI_BUT_ANIMATED) {
