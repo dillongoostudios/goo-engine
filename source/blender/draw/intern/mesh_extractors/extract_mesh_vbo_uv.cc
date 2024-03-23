@@ -10,7 +10,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_string.h"
 
-#include "draw_subdivision.h"
+#include "draw_subdivision.hh"
 #include "extract_mesh.hh"
 
 namespace blender::draw {
@@ -38,30 +38,37 @@ static bool mesh_extract_uv_format_init(GPUVertFormat *format,
     }
   }
 
-  r_uv_layers = uv_layers;
+  r_uv_layers = 0;
 
   for (int i = 0; i < MAX_MTFACE; i++) {
     if (uv_layers & (1 << i)) {
       char attr_name[32], attr_safe_name[GPU_MAX_SAFE_ATTR_NAME];
       const char *layer_name = CustomData_get_layer_name(cd_ldata, CD_PROP_FLOAT2, i);
 
-      GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
-      /* UV layer name. */
-      SNPRINTF(attr_name, "a%s", attr_safe_name);
-      GPU_vertformat_attr_add(format, attr_name, GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
-      /* Active render layer name. */
-      if (i == CustomData_get_render_layer(cd_ldata, CD_PROP_FLOAT2)) {
-        GPU_vertformat_alias_add(format, "a");
-      }
-      /* Active display layer name. */
-      if (i == CustomData_get_active_layer(cd_ldata, CD_PROP_FLOAT2)) {
-        GPU_vertformat_alias_add(format, "au");
-        /* Alias to `pos` for edit uvs. */
-        GPU_vertformat_alias_add(format, "pos");
-      }
-      /* Stencil mask uv layer name. */
-      if (i == CustomData_get_stencil_layer(cd_ldata, CD_PROP_FLOAT2)) {
-        GPU_vertformat_alias_add(format, "mu");
+      /* not all UV layers are guaranteed to exist, since the list of available UV
+       * layers is generated for the evaluated mesh, which is needed to show modifier
+       * results in editmode, but the actual mesh might be the base mesh.
+       */
+      if (layer_name) {
+        r_uv_layers |= (1 << i);
+        GPU_vertformat_safe_attr_name(layer_name, attr_safe_name, GPU_MAX_SAFE_ATTR_NAME);
+        /* UV layer name. */
+        SNPRINTF(attr_name, "a%s", attr_safe_name);
+        GPU_vertformat_attr_add(format, attr_name, GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+        /* Active render layer name. */
+        if (i == CustomData_get_render_layer(cd_ldata, CD_PROP_FLOAT2)) {
+          GPU_vertformat_alias_add(format, "a");
+        }
+        /* Active display layer name. */
+        if (i == CustomData_get_active_layer(cd_ldata, CD_PROP_FLOAT2)) {
+          GPU_vertformat_alias_add(format, "au");
+          /* Alias to `pos` for edit uvs. */
+          GPU_vertformat_alias_add(format, "pos");
+        }
+        /* Stencil mask uv layer name. */
+        if (i == CustomData_get_stencil_layer(cd_ldata, CD_PROP_FLOAT2)) {
+          GPU_vertformat_alias_add(format, "mu");
+        }
       }
     }
   }
@@ -82,7 +89,8 @@ static void extract_uv_init(const MeshRenderData &mr,
   GPUVertBuf *vbo = static_cast<GPUVertBuf *>(buf);
   GPUVertFormat format = {0};
 
-  CustomData *cd_ldata = (mr.extract_type == MR_EXTRACT_BMESH) ? &mr.bm->ldata : &mr.me->loop_data;
+  CustomData *cd_ldata = (mr.extract_type == MR_EXTRACT_BMESH) ? &mr.bm->ldata :
+                                                                 &mr.mesh->corner_data;
   int v_len = mr.loop_len;
   uint32_t uv_layers = cache.cd_used.uv;
   if (!mesh_extract_uv_format_init(&format, cache, cd_ldata, mr.extract_type, uv_layers)) {
@@ -135,7 +143,7 @@ static void extract_uv_init_subdiv(const DRWSubdivCache &subdiv_cache,
   uint v_len = subdiv_cache.num_subdiv_loops;
   uint uv_layers;
   if (!mesh_extract_uv_format_init(
-          &format, cache, &coarse_mesh->loop_data, MR_EXTRACT_MESH, uv_layers))
+          &format, cache, &coarse_mesh->corner_data, MR_EXTRACT_MESH, uv_layers))
   {
     /* TODO(kevindietrich): handle this more gracefully. */
     v_len = 1;
@@ -171,6 +179,6 @@ constexpr MeshExtract create_extractor_uv()
 
 /** \} */
 
-}  // namespace blender::draw
+const MeshExtract extract_uv = create_extractor_uv();
 
-const MeshExtract extract_uv = blender::draw::create_extractor_uv();
+}  // namespace blender::draw

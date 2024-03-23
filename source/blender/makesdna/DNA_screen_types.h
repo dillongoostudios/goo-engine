@@ -28,10 +28,19 @@ struct SpaceType;
 struct uiBlock;
 struct uiLayout;
 struct uiList;
+struct uiListType;
 struct wmDrawBuffer;
 struct wmTimer;
 struct wmTooltipState;
 struct Panel_Runtime;
+#ifdef __cplusplus
+namespace blender::bke {
+struct FileHandlerType;
+}
+using FileHandlerTypeHandle = blender::bke::FileHandlerType;
+#else
+typedef struct FileHandlerTypeHandle FileHandlerTypeHandle;
+#endif
 
 /* TODO: Doing this is quite ugly :)
  * Once the top-bar is merged bScreen should be refactored to use ScrAreaMap. */
@@ -121,6 +130,19 @@ typedef struct ScrAreaMap {
   ListBase areabase;
 } ScrAreaMap;
 
+typedef struct LayoutPanelState {
+  struct LayoutPanelState *next, *prev;
+  /** Identifier of the panel. */
+  char *idname;
+  uint8_t flag;
+  char _pad[7];
+} LayoutPanelState;
+
+enum LayoutPanelStateFlag {
+  /** If set, the panel is currently open. Otherwise it is collapsed. */
+  LAYOUT_PANEL_STATE_FLAG_OPEN = (1 << 0),
+};
+
 /** The part from uiBlock that needs saved in file. */
 typedef struct Panel {
   struct Panel *next, *prev;
@@ -149,6 +171,12 @@ typedef struct Panel {
   void *activedata;
   /** Sub panels. */
   ListBase children;
+
+  /**
+   * List of #LayoutPanelState. This stores the open-close-state of layout-panels created with
+   * `layout.panel(...)` in Python. For more information on layout-panels, see `uiLayoutPanelProp`.
+   */
+  ListBase layout_panel_states;
 
   struct Panel_Runtime *runtime;
 } Panel;
@@ -247,7 +275,9 @@ typedef struct uiListDyn {
   void *customdata;
 
   /* Filtering data. */
-  /** Items_len length. */
+  /** This bitfield is effectively exposed in Python, and scripts are explicitly allowed to assign
+   * any own meaning to the lower 16 ones.
+   * #items_len length. */
   int *items_filter_flags;
   /** Org_idx -> new_idx, items_len length. */
   int *items_filter_neworder;
@@ -598,10 +628,18 @@ enum {
 /** Value (in number of items) we have to go below minimum shown items to enable auto size. */
 #define UI_LIST_AUTO_SIZE_THRESHOLD 1
 
-/* uiList filter flags (dyn_data) */
-/* WARNING! Those values are used by integer RNA too, which does not handle well values > INT_MAX.
- *          So please do not use 32nd bit here. */
+/** uiList filter flags (dyn_data)
+ *
+ * \warning Lower 16 bits are meant for custom use in Python, don't use them here! Only use the
+ *          higher 16 bits.
+ * \warning Those values are used by integer RNA too, which does not handle well values > INT_MAX.
+ *          So please do not use 32nd bit here.
+ */
 enum {
+  /* Don't use (1 << 0) to (1 << 15) here! See warning above. */
+
+  /* Filtering returned #UI_LIST_ITEM_NEVER_SHOW. */
+  UILST_FLT_ITEM_NEVER_SHOW = (1 << 16),
   UILST_FLT_ITEM = 1 << 30, /* This item has passed the filter process successfully. */
 };
 
@@ -822,3 +860,9 @@ typedef enum AssetShelfSettings_DisplayFlag {
   ASSETSHELF_SHOW_NAMES = (1 << 0),
 } AssetShelfSettings_DisplayFlag;
 ENUM_OPERATORS(AssetShelfSettings_DisplayFlag, ASSETSHELF_SHOW_NAMES);
+
+typedef struct FileHandler {
+  DNA_DEFINE_CXX_METHODS(FileHandler)
+  /** Runtime. */
+  FileHandlerTypeHandle *type;
+} FileHandler;

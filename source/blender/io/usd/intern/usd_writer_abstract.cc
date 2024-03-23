@@ -1,21 +1,22 @@
 /* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
-#include "usd_writer_abstract.h"
-#include "usd_hierarchy_iterator.h"
-#include "usd_writer_material.h"
+#include "usd_writer_abstract.hh"
+#include "usd_writer_material.hh"
 
 #include <pxr/base/tf/stringUtils.h>
 #include <pxr/usd/usdGeom/bboxCache.h>
+#include <pxr/usd/usdGeom/scope.h>
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_report.h"
 
 #include "BLI_assert.h"
 
 #include "DNA_mesh_types.h"
 
-#include "WM_api.hh"
+#include "CLG_log.h"
+static CLG_LogRef LOG = {"io.usd"};
 
 /* TfToken objects are not cheap to construct, so we do it once. */
 namespace usdtokens {
@@ -34,9 +35,9 @@ static std::string get_mesh_active_uvlayer_name(const Object *ob)
     return "";
   }
 
-  const Mesh *me = static_cast<Mesh *>(ob->data);
+  const Mesh *mesh = static_cast<Mesh *>(ob->data);
 
-  const char *name = CustomData_get_active_layer_name(&me->loop_data, CD_PROP_FLOAT2);
+  const char *name = CustomData_get_active_layer_name(&mesh->corner_data, CD_PROP_FLOAT2);
 
   return name ? name : "";
 }
@@ -111,14 +112,16 @@ pxr::UsdShadeMaterial USDAbstractWriter::ensure_usd_material(const HierarchyCont
 
   /* Construct the material. */
   pxr::TfToken material_name(pxr::TfMakeValidIdentifier(material->id.name + 2));
-  pxr::SdfPath usd_path = get_material_library_path().AppendChild(material_name);
+  pxr::SdfPath usd_path = pxr::UsdGeomScope::Define(stage, get_material_library_path())
+                              .GetPath()
+                              .AppendChild(material_name);
   pxr::UsdShadeMaterial usd_material = pxr::UsdShadeMaterial::Get(stage, usd_path);
   if (usd_material) {
     return usd_material;
   }
 
   std::string active_uv = get_mesh_active_uvlayer_name(context.object);
-  return create_usd_material(usd_export_context_, usd_path, material, active_uv);
+  return create_usd_material(usd_export_context_, usd_path, material, active_uv, reports());
 }
 
 void USDAbstractWriter::write_visibility(const HierarchyContext &context,
@@ -140,7 +143,9 @@ bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const 
   BLI_assert(context.is_instance());
 
   if (context.export_path == context.original_export_path) {
-    printf("USD ref error: export path is reference path: %s\n", context.export_path.c_str());
+    CLOG_ERROR(&LOG,
+               "Reference error: export path matches reference path: %s",
+               context.export_path.c_str());
     BLI_assert_msg(0, "USD reference error");
     return false;
   }
@@ -150,9 +155,10 @@ bool USDAbstractWriter::mark_as_instance(const HierarchyContext &context, const 
     /* See this URL for a description for why referencing may fail"
      * https://graphics.pixar.com/usd/docs/api/class_usd_references.html#Usd_Failing_References
      */
-    printf("USD Export warning: unable to add reference from %s to %s, not instancing object\n",
-           context.export_path.c_str(),
-           context.original_export_path.c_str());
+    CLOG_WARN(&LOG,
+              "Unable to add reference from %s to %s, not instancing object for export",
+              context.export_path.c_str(),
+              context.original_export_path.c_str());
     return false;
   }
 

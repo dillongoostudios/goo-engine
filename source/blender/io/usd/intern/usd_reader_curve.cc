@@ -4,9 +4,9 @@
  * Adapted from the Blender Alembic importer implementation. Copyright 2016 Kévin Dietrich.
  * Modifications Copyright 2021 Tangent Animation. All rights reserved. */
 
-#include "usd_reader_curve.h"
+#include "usd_reader_curve.hh"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 

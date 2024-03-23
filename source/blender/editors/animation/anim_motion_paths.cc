@@ -13,6 +13,7 @@
 #include "BLI_dlrbTree.h"
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
+#include "BLI_math_matrix.hh"
 
 #include "DNA_anim_types.h"
 #include "DNA_armature_types.h"
@@ -20,7 +21,7 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_scene.h"
 
 #include "DEG_depsgraph.hh"
@@ -33,7 +34,7 @@
 #include "ED_anim_api.hh"
 #include "ED_keyframes_keylist.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 #include "CLG_log.h"
 
@@ -127,8 +128,12 @@ void animviz_get_object_motionpaths(Object *ob, ListBase *targets)
 /* ........ */
 
 /* perform baking for the targets on the current frame */
-static void motionpaths_calc_bake_targets(ListBase *targets, int cframe)
+static void motionpaths_calc_bake_targets(ListBase *targets,
+                                          int cframe,
+                                          Depsgraph *depsgraph,
+                                          Object *camera)
 {
+  using namespace blender;
   /* for each target, check if it can be baked on the current frame */
   LISTBASE_FOREACH (MPathTarget *, mpt, targets) {
     bMotionPath *mpath = mpt->mpath;
@@ -168,6 +173,14 @@ static void motionpaths_calc_bake_targets(ListBase *targets, int cframe)
     else {
       /* World-space object location. */
       copy_v3_v3(mpv->co, ob_eval->object_to_world[3]);
+    }
+
+    if (mpath->flag & MOTIONPATH_FLAG_BAKE_CAMERA && camera) {
+      Object *cam_eval = DEG_get_evaluated_object(depsgraph, camera);
+      /* Convert point to camera space. */
+      float3 co_camera_space = math::transform_point(float4x4(cam_eval->world_to_object),
+                                                     float3(mpv->co));
+      copy_v3_v3(mpv->co, co_camera_space);
     }
 
     float mframe = float(cframe);
@@ -310,7 +323,7 @@ static void motionpath_calculate_update_range(MPathTarget *mpt,
    * we ignore all others (which can potentially make an update range unnecessary wide). */
   for (FCurve *fcu = static_cast<FCurve *>(fcurve_list->first); fcu != nullptr; fcu = fcu->next) {
     AnimKeylist *keylist = ED_keylist_create();
-    fcurve_to_keylist(adt, fcu, keylist, 0);
+    fcurve_to_keylist(adt, fcu, keylist, 0, {-FLT_MAX, FLT_MAX});
     ED_keylist_prepare_for_direct_access(keylist);
 
     int fcu_sfra = motionpath_get_prev_prev_keyframe(mpt, keylist, current_frame);
@@ -360,7 +373,7 @@ void animviz_motionpath_compute_range(Object *ob, Scene *scene)
 
   AnimKeylist *keylist = ED_keylist_create();
   LISTBASE_FOREACH (FCurve *, fcu, &ob->adt->action->curves) {
-    fcurve_to_keylist(ob->adt, fcu, keylist, 0);
+    fcurve_to_keylist(ob->adt, fcu, keylist, 0, {-FLT_MAX, FLT_MAX});
   }
 
   Range2f frame_range;
@@ -460,12 +473,12 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
 
         if (agrp) {
           fcurve_list = &agrp->channels;
-          action_group_to_keylist(adt, agrp, mpt->keylist, 0);
+          action_group_to_keylist(adt, agrp, mpt->keylist, 0, {-FLT_MAX, FLT_MAX});
         }
       }
       else {
         fcurve_list = &adt->action->curves;
-        action_to_keylist(adt, adt->action, mpt->keylist, 0);
+        action_to_keylist(adt, adt->action, mpt->keylist, 0, {-FLT_MAX, FLT_MAX});
       }
     }
     ED_keylist_prepare_for_direct_access(mpt->keylist);
@@ -503,7 +516,7 @@ void animviz_calc_motionpaths(Depsgraph *depsgraph,
     }
 
     /* perform baking for targets */
-    motionpaths_calc_bake_targets(targets, scene->r.cfra);
+    motionpaths_calc_bake_targets(targets, scene->r.cfra, depsgraph, scene->camera);
   }
 
   /* reset original environment */

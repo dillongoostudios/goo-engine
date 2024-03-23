@@ -27,7 +27,10 @@ extern "C" {
 /**
  * Left hand part.
  */
-void graph_draw_channel_names(struct bContext *C, struct bAnimContext *ac, struct ARegion *region);
+void graph_draw_channel_names(struct bContext *C,
+                              struct bAnimContext *ac,
+                              struct ARegion *region,
+                              const ListBase /* bAnimListElem */ &anim_data);
 
 /**
  * This is called twice from `space_graph.cc`, #graph_main_region_draw()
@@ -135,6 +138,7 @@ void GRAPH_OT_shear(struct wmOperatorType *ot);
 void GRAPH_OT_scale_average(struct wmOperatorType *ot);
 void GRAPH_OT_push_pull(struct wmOperatorType *ot);
 void GRAPH_OT_time_offset(struct wmOperatorType *ot);
+void GRAPH_OT_scale_from_neighbor(struct wmOperatorType *ot);
 void GRAPH_OT_decimate(struct wmOperatorType *ot);
 void GRAPH_OT_blend_to_default(struct wmOperatorType *ot);
 void GRAPH_OT_butterworth_smooth(struct wmOperatorType *ot);

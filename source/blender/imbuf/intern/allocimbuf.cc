@@ -11,15 +11,15 @@
 
 #include <cstddef>
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
-#include "IMB_allocimbuf.h"
-#include "IMB_colormanagement_intern.h"
-#include "IMB_filetype.h"
-#include "IMB_metadata.h"
+#include "IMB_allocimbuf.hh"
+#include "IMB_colormanagement_intern.hh"
+#include "IMB_filetype.hh"
+#include "IMB_metadata.hh"
 
-#include "imbuf.h"
+#include "imbuf.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -634,6 +634,10 @@ ImBuf *IMB_dupImBuf(const ImBuf *ibuf1)
 
   tbuf.display_buffer_flags = nullptr;
   tbuf.colormanage_cache = nullptr;
+
+  /* GPU textures can not be easily copied, as it is not guaranteed that this function is called
+   * from within an active GPU context. */
+  tbuf.gpu.texture = nullptr;
 
   *ibuf2 = tbuf;
 

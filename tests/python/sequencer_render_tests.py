@@ -33,7 +33,8 @@ def create_argparse():
     parser.add_argument("-blender", nargs="+")
     parser.add_argument("-testdir", nargs=1)
     parser.add_argument("-outdir", nargs=1)
-    parser.add_argument("-idiff", nargs=1)
+    parser.add_argument("-oiiotool", nargs=1)
+    parser.add_argument('--batch', default=False, action='store_true')
     return parser
 
 
@@ -43,16 +44,19 @@ def main():
 
     blender = args.blender[0]
     test_dir = args.testdir[0]
-    idiff = args.idiff[0]
+    oiiotool = args.oiiotool[0]
     output_dir = args.outdir[0]
 
     from modules import render_report
-    report = render_report.Report("Sequencer", output_dir, idiff)
+    report = render_report.Report("Sequencer", output_dir, oiiotool)
     report.set_pixelated(True)
+    # default error tolerances are quite large, lower them
+    report.set_fail_threshold(1.0 / 255.0)
+    report.set_fail_percent(0.01)
     report.set_reference_dir("reference")
 
     test_dir_name = Path(test_dir).name
-    ok = report.run(test_dir, blender, get_arguments, batch=True)
+    ok = report.run(test_dir, blender, get_arguments, batch=args.batch)
 
     sys.exit(not ok)
 

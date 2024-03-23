@@ -24,12 +24,12 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
@@ -37,7 +37,7 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
@@ -307,7 +307,7 @@ static void panel_draw(const bContext *C, Panel *panel)
 
   Scene *scene = CTX_data_scene(C);
   if (scene->camera == nullptr) {
-    uiItemL(layout, IFACE_("Outline requires an active camera"), ICON_ERROR);
+    uiItemL(layout, RPT_("Outline requires an active camera"), ICON_ERROR);
   }
 
   gpencil_modifier_panel_end(layout, ptr);

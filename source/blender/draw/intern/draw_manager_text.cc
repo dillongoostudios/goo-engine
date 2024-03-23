@@ -16,13 +16,13 @@
 #include "BLI_rect.h"
 #include "BLI_string.h"
 
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_editmesh_cache.hh"
 #include "BKE_global.h"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
 #include "BKE_object.hh"
-#include "BKE_unit.h"
+#include "BKE_unit.hh"
 
 #include "DNA_mesh_types.h"
 #include "DNA_object_types.h"
@@ -39,11 +39,11 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 #include "WM_api.hh"
 
-#include "draw_manager_text.h"
-#include "intern/bmesh_polygon.h"
+#include "draw_manager_text.hh"
+#include "intern/bmesh_polygon.hh"
 
 struct ViewCachedString {
   float vec[3];
@@ -55,6 +55,8 @@ struct ViewCachedString {
   short xoffs, yoffs;
   short flag;
   int str_len;
+  bool shadow;
+  bool align_center;
 
   /* str is allocated past the end */
   char str[0];
@@ -84,7 +86,9 @@ void DRW_text_cache_add(DRWTextStore *dt,
                         short xoffs,
                         short yoffs,
                         short flag,
-                        const uchar col[4])
+                        const uchar col[4],
+                        const bool shadow,
+                        const bool align_center)
 {
   int alloc_len;
   ViewCachedString *vos;
@@ -106,6 +110,8 @@ void DRW_text_cache_add(DRWTextStore *dt,
   vos->yoffs = yoffs;
   vos->flag = flag;
   vos->str_len = str_len;
+  vos->shadow = shadow;
+  vos->align_center = align_center;
 
   /* allocate past the end */
   if (flag & DRW_TEXT_CACHE_STRING_PTR) {
@@ -129,11 +135,8 @@ static void drw_text_cache_draw_ex(DRWTextStore *dt, ARegion *region)
   GPU_matrix_push();
   GPU_matrix_identity_set();
 
-  const int font_id = BLF_default();
-
-  const uiStyle *style = UI_style_get();
-
-  BLF_size(font_id, style->widget.points * UI_SCALE_FAC);
+  BLF_default_size(UI_style_get()->widgetlabel.points);
+  const int font_id = BLF_set_default();
 
   BLI_memiter_iter_init(dt->cache_strings, &it);
   while ((vos = static_cast<ViewCachedString *>(BLI_memiter_iter_step(&it)))) {
@@ -143,11 +146,35 @@ static void drw_text_cache_draw_ex(DRWTextStore *dt, ARegion *region)
         col_pack_prev = vos->col.pack;
       }
 
-      BLF_position(
-          font_id, float(vos->sco[0] + vos->xoffs), float(vos->sco[1] + vos->yoffs), 2.0f);
-      BLF_draw(font_id,
-               (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) : vos->str,
-               vos->str_len);
+      if (vos->align_center) {
+        /* Measure the size of the string, then offset to align to the vertex. */
+        float width, height;
+        BLF_width_and_height(font_id,
+                             (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) :
+                                                                       vos->str,
+                             vos->str_len,
+                             &width,
+                             &height);
+        vos->xoffs -= short(width / 2.0f);
+        vos->yoffs -= short(height / 2.0f);
+      }
+
+      if (vos->shadow) {
+        BLF_draw_default_shadowed(
+            float(vos->sco[0] + vos->xoffs),
+            float(vos->sco[1] + vos->yoffs),
+            2.0f,
+            (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) : vos->str,
+            vos->str_len);
+      }
+      else {
+        BLF_draw_default(float(vos->sco[0] + vos->xoffs),
+                         float(vos->sco[1] + vos->yoffs),
+                         2.0f,
+                         (vos->flag & DRW_TEXT_CACHE_STRING_PTR) ? *((const char **)vos->str) :
+                                                                   vos->str,
+                         vos->str_len);
+      }
     }
   }
 
@@ -227,8 +254,8 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
    */
   DRWTextStore *dt = DRW_text_cache_ensure();
   const short txt_flag = DRW_TEXT_CACHE_GLOBALSPACE;
-  Mesh *me = BKE_object_get_editmesh_eval_cage(ob);
-  BMEditMesh *em = me->edit_mesh;
+  Mesh *mesh = BKE_object_get_editmesh_eval_cage(ob);
+  BMEditMesh *em = mesh->edit_mesh;
   float v1[3], v2[3], v3[3], vmid[3], fvec[3];
   char numstr[32]; /* Stores the measurement display text here */
   size_t numstr_len;
@@ -241,7 +268,7 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
   float clip_planes[4][4];
   /* allow for displaying shape keys and deform mods */
   BMIter iter;
-  const float(*vert_coords)[3] = BKE_mesh_wrapper_vert_coords(me);
+  const float(*vert_coords)[3] = BKE_mesh_wrapper_vert_coords(mesh);
   const bool use_coords = (vert_coords != nullptr);
 
   /* when 2 or more edge-info options are enabled, space apart */
@@ -348,7 +375,7 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
     const float(*face_normals)[3] = nullptr;
     if (use_coords) {
       BM_mesh_elem_index_ensure(em->bm, BM_VERT | BM_FACE);
-      face_normals = BKE_mesh_wrapper_face_normals(me);
+      face_normals = BKE_mesh_wrapper_face_normals(mesh);
     }
 
     BM_ITER_MESH (eed, &iter, em->bm, BM_EDGES_OF_MESH) {
@@ -423,15 +450,15 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
     BMFace *f = nullptr;
     /* Alternative to using `poly_to_tri_count(i, BM_elem_index_get(f->l_first))`
      * without having to add an extra loop. */
-    int looptri_index = 0;
+    int tri_index = 0;
     BM_ITER_MESH_INDEX (f, &iter, em->bm, BM_FACES_OF_MESH, i) {
-      const int f_looptri_len = f->len - 2;
+      const int f_corner_tris_len = f->len - 2;
       if (BM_elem_flag_test(f, BM_ELEM_SELECT)) {
         n = 0;
         area = 0;
         zero_v3(vmid);
-        BMLoop *(*l)[3] = &em->looptris[looptri_index];
-        for (int j = 0; j < f_looptri_len; j++) {
+        BMLoop *(*l)[3] = &em->looptris[tri_index];
+        for (int j = 0; j < f_corner_tris_len; j++) {
 
           if (use_coords) {
             copy_v3_v3(v1, vert_coords[BM_elem_index_get(l[j][0]->v)]);
@@ -477,7 +504,7 @@ void DRW_text_edit_mesh_measure_stats(ARegion *region,
 
         DRW_text_cache_add(dt, vmid, numstr, numstr_len, 0, 0, txt_flag, col);
       }
-      looptri_index += f_looptri_len;
+      tri_index += f_corner_tris_len;
     }
   }
 

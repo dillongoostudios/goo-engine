@@ -8,7 +8,7 @@
  * Volumetric effects rendering using frostbite approach.
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_rand.h"
@@ -22,9 +22,9 @@
 #include "BKE_fluid.h"
 #include "BKE_global.h"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
-#include "BKE_volume.h"
-#include "BKE_volume_render.h"
+#include "BKE_modifier.hh"
+#include "BKE_volume.hh"
+#include "BKE_volume_render.hh"
 
 #include "ED_screen.hh"
 
@@ -32,7 +32,7 @@
 
 #include "GPU_capabilities.h"
 #include "GPU_context.h"
-#include "GPU_material.h"
+#include "GPU_material.hh"
 #include "GPU_texture.h"
 #include "eevee_private.h"
 
@@ -562,9 +562,9 @@ void EEVEE_volumes_compute(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
     DRW_draw_pass(psl->volumetric_integration_ps);
 
-    SWAP(GPUFrameBuffer *, fbl->volumetric_scat_fb, fbl->volumetric_integ_fb);
-    SWAP(GPUTexture *, txl->volume_scatter, txl->volume_scatter_history);
-    SWAP(GPUTexture *, txl->volume_transmit, txl->volume_transmit_history);
+    std::swap(fbl->volumetric_scat_fb, fbl->volumetric_integ_fb);
+    std::swap(txl->volume_scatter, txl->volume_scatter_history);
+    std::swap(txl->volume_transmit, txl->volume_transmit_history);
 
     effects->volume_scatter = txl->volume_scatter;
     effects->volume_transmit = txl->volume_transmit;

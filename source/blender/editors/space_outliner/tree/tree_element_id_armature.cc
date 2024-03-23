@@ -14,7 +14,7 @@
 
 #include "BLI_listbase.h"
 
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 
 #include "../outliner_intern.hh"
 #include "tree_display.hh"
@@ -48,7 +48,7 @@ void TreeElementIDArmature::expand(SpaceOutliner &space_outliner) const
     }
   }
 
-  if (!BLI_listbase_is_empty(&arm_.collections)) {
+  if (arm_.collection_array_num > 0) {
     add_element(&legacy_te_.subtree, &arm_.id, nullptr, &legacy_te_, TSE_BONE_COLLECTION_BASE, 0);
   }
 }

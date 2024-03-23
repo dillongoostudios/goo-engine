@@ -16,7 +16,7 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
 #include "bmesh_py_ops.h" /* own include */
 #include "bmesh_py_ops_call.h"
@@ -242,7 +242,10 @@ static PyMethodDef BPy_BM_ops_methods[] = {
 #  pragma GCC diagnostic pop
 #endif
 
-PyDoc_STRVAR(BPy_BM_ops_doc, "Access to BMesh operators");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_BM_ops_doc,
+    "Access to BMesh operators");
 static PyModuleDef BPy_BM_ops_module_def = {
     /*m_base*/ PyModuleDef_HEAD_INIT,
     /*m_name*/ "bmesh.ops",

@@ -17,7 +17,7 @@
 #include "BLI_math_vector.h"
 #include "BLI_math_vector_types.hh"
 
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_scene.h"
 #include "BKE_sound.h"
 
@@ -139,9 +139,9 @@ void SEQ_transform_translate_sequence(Scene *evil_scene, Sequence *seq, int delt
   }
 
   SEQ_offset_animdata(evil_scene, seq, delta);
-  SEQ_time_update_meta_strip_range(evil_scene, seq_sequence_lookup_meta_by_seq(evil_scene, seq));
   blender::Span effects = seq_sequence_lookup_effects_by_seq(evil_scene, seq);
   seq_time_update_effects_strip_range(evil_scene, effects);
+  SEQ_time_update_meta_strip_range(evil_scene, seq_sequence_lookup_meta_by_seq(evil_scene, seq));
 }
 
 bool SEQ_transform_seqbase_shuffle_ex(ListBase *seqbasep,
@@ -662,7 +662,7 @@ static void seq_image_transform_quad_get_ex(const Scene *scene,
   StripTransform *transform = seq->strip->transform;
   const StripCrop *crop = seq->strip->crop;
 
-  int image_size[2] = {scene->r.xsch, scene->r.ysch};
+  float image_size[2] = {float(scene->r.xsch), float(scene->r.ysch)};
   if (ELEM(seq->type, SEQ_TYPE_MOVIE, SEQ_TYPE_IMAGE)) {
     image_size[0] = seq->strip->stripdata->orig_width;
     image_size[1] = seq->strip->stripdata->orig_height;

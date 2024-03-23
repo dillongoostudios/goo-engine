@@ -7,18 +7,17 @@
  */
 
 #include "BKE_geometry_set.hh"
-#include "BKE_lib_query.h"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh_runtime.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_texture.h"
-#include "BKE_volume.h"
+#include "BKE_volume.hh"
+#include "BKE_volume_grid.hh"
 #include "BKE_volume_openvdb.hh"
 
 #include "BLT_translation.h"
 
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_texture_types.h"
@@ -193,7 +192,8 @@ struct DisplaceGridOp {
   template<typename GridType> void operator()()
   {
     if constexpr (blender::
-                      is_same_any_v<GridType, openvdb::points::PointDataGrid, openvdb::MaskGrid>) {
+                      is_same_any_v<GridType, openvdb::points::PointDataGrid, openvdb::MaskGrid>)
+    {
       /* We don't support displacing these grid types yet. */
       return;
     }
@@ -286,13 +286,14 @@ static void displace_volume(ModifierData *md, const ModifierEvalContext *ctx, Vo
   BKE_volume_load(volume, DEG_get_bmain(ctx->depsgraph));
   const int grid_amount = BKE_volume_num_grids(volume);
   for (int grid_index = 0; grid_index < grid_amount; grid_index++) {
-    VolumeGrid *volume_grid = BKE_volume_grid_get_for_write(volume, grid_index);
-    BLI_assert(volume_grid != nullptr);
+    blender::bke::VolumeGridData *volume_grid = BKE_volume_grid_get_for_write(volume, grid_index);
+    BLI_assert(volume_grid);
 
-    openvdb::GridBase::Ptr grid = BKE_volume_grid_openvdb_for_write(volume, volume_grid, false);
-    VolumeGridType grid_type = BKE_volume_grid_type(volume_grid);
+    blender::bke::VolumeTreeAccessToken tree_token;
+    openvdb::GridBase &grid = volume_grid->grid_for_write(tree_token);
+    VolumeGridType grid_type = volume_grid->grid_type();
 
-    DisplaceGridOp displace_grid_op{*grid, *vdmd, *ctx};
+    DisplaceGridOp displace_grid_op{grid, *vdmd, *ctx};
     BKE_volume_grid_type_operation(grid_type, displace_grid_op);
   }
 
@@ -318,7 +319,7 @@ ModifierTypeInfo modifierType_VolumeDisplace = {
     /*struct_name*/ "VolumeDisplaceModifierData",
     /*struct_size*/ sizeof(VolumeDisplaceModifierData),
     /*srna*/ &RNA_VolumeDisplaceModifier,
-    /*type*/ eModifierTypeType_NonGeometrical,
+    /*type*/ ModifierTypeType::NonGeometrical,
     /*flags*/ static_cast<ModifierTypeFlag>(0),
     /*icon*/ ICON_VOLUME_DATA, /* TODO: Use correct icon. */
 
@@ -344,4 +345,5 @@ ModifierTypeInfo modifierType_VolumeDisplace = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

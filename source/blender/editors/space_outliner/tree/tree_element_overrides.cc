@@ -77,11 +77,11 @@ TreeElementOverridesBase::TreeElementOverridesBase(TreeElement &legacy_te, ID &i
 StringRefNull TreeElementOverridesBase::get_warning() const
 {
   if (id.flag & LIB_LIB_OVERRIDE_RESYNC_LEFTOVER) {
-    return TIP_("This override data-block is not needed anymore, but was detected as user-edited");
+    return RPT_("This override data-block is not needed anymore, but was detected as user-edited");
   }
 
   if (ID_IS_OVERRIDE_LIBRARY_REAL(&id) && ID_REAL_USERS(&id) == 0) {
-    return TIP_("This override data-block is unused");
+    return RPT_("This override data-block is unused");
   }
 
   return {};
@@ -185,7 +185,7 @@ TreeElementOverridesProperty::TreeElementOverridesProperty(TreeElement &legacy_t
 StringRefNull TreeElementOverridesProperty::get_warning() const
 {
   if (!is_rna_path_valid) {
-    return TIP_(
+    return RPT_(
         "This override property does not exist in current data, it will be removed on "
         "next .blend file save");
   }
@@ -235,20 +235,20 @@ StringRefNull TreeElementOverridesPropertyOperation::get_override_operation_labe
   switch (operation_->operation) {
     case LIBOVERRIDE_OP_INSERT_AFTER:
     case LIBOVERRIDE_OP_INSERT_BEFORE:
-      return TIP_("Added through override");
+      return RPT_("Added through override");
     case LIBOVERRIDE_OP_REPLACE:
       /* Returning nothing so that drawing code shows actual RNA button instead. */
       return {};
     /* Following cases are not expected in regular situation, but could be found in experimental
      * files. */
     case LIBOVERRIDE_OP_NOOP:
-      return TIP_("Protected from override");
+      return RPT_("Protected from override");
     case LIBOVERRIDE_OP_ADD:
-      return TIP_("Additive override");
+      return RPT_("Additive override");
     case LIBOVERRIDE_OP_SUBTRACT:
-      return TIP_("Subtractive override");
+      return RPT_("Subtractive override");
     case LIBOVERRIDE_OP_MULTIPLY:
-      return TIP_("Multiplicative override");
+      return RPT_("Multiplicative override");
     default:
       BLI_assert_unreachable();
       return {};
@@ -321,6 +321,7 @@ void OverrideRNAPathTreeBuilder::build_path(TreeElement &parent,
 
   const char *elem_path = nullptr;
   TreeElement *te_to_expand = &parent;
+  char name_buf[128], *name;
 
   LISTBASE_FOREACH (PropertyElemRNA *, elem, &path_elems) {
     if (!elem->next) {
@@ -339,8 +340,9 @@ void OverrideRNAPathTreeBuilder::build_path(TreeElement &parent,
     if (RNA_property_type(elem->prop) == PROP_COLLECTION) {
       const int coll_item_idx = RNA_property_collection_lookup_index(
           &elem->ptr, elem->prop, &elem->next->ptr);
+      name = RNA_struct_name_get_alloc(&elem->next->ptr, name_buf, sizeof(name_buf), nullptr);
       const char *coll_item_path = RNA_path_append(
-          previous_path, &elem->ptr, elem->prop, coll_item_idx, nullptr);
+          previous_path, &elem->ptr, elem->prop, coll_item_idx, name);
 
       te_to_expand = &ensure_label_element_for_ptr(
           *te_to_expand, coll_item_path, elem->next->ptr, index);
@@ -398,12 +400,14 @@ void OverrideRNAPathTreeBuilder::ensure_entire_collection(
 
   TreeElement *previous_te = nullptr;
   int item_idx = 0;
+  char name_buf[128], *name;
   RNA_PROP_BEGIN (&override_data.override_rna_ptr, itemptr, &override_data.override_rna_prop) {
+    name = RNA_struct_name_get_alloc(&itemptr, name_buf, sizeof(name_buf), nullptr);
     const char *coll_item_path = RNA_path_append(coll_prop_path,
                                                  &override_data.override_rna_ptr,
                                                  &override_data.override_rna_prop,
                                                  item_idx,
-                                                 nullptr);
+                                                 name);
     IDOverrideLibraryPropertyOperation *item_operation =
         BKE_lib_override_library_property_operation_find(&override_data.override_property,
                                                          nullptr,

@@ -26,7 +26,7 @@
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_node_tree_interface.hh"
-#include "BKE_node_tree_update.h"
+#include "BKE_node_tree_update.hh"
 
 #include "RNA_types.hh"
 
@@ -110,13 +110,13 @@ bool nodeGroupPoll(const bNodeTree *nodetree,
 
   if (nodetree == grouptree) {
     if (r_disabled_hint) {
-      *r_disabled_hint = TIP_("Nesting a node group inside of itself is not allowed");
+      *r_disabled_hint = RPT_("Nesting a node group inside of itself is not allowed");
     }
     return false;
   }
   if (nodetree->type != grouptree->type) {
     if (r_disabled_hint) {
-      *r_disabled_hint = TIP_("Node group has different type");
+      *r_disabled_hint = RPT_("Node group has different type");
     }
     return false;
   }
@@ -262,6 +262,13 @@ static SocketDeclarationPtr declaration_for_interface_socket(
     case SOCK_STRING: {
       const auto &value = node_interface::get_socket_data_as<bNodeSocketValueString>(io_socket);
       std::unique_ptr<decl::String> decl = std::make_unique<decl::String>();
+      decl->default_value = value.value;
+      dst = std::move(decl);
+      break;
+    }
+    case SOCK_MENU: {
+      const auto &value = node_interface::get_socket_data_as<bNodeSocketValueMenu>(io_socket);
+      std::unique_ptr<decl::Menu> decl = std::make_unique<decl::Menu>();
       decl->default_value = value.value;
       dst = std::move(decl);
       break;
@@ -624,7 +631,8 @@ bool blender::bke::node_is_connected_to_output(const bNodeTree *ntree, const bNo
     for (const bNodeSocket *socket : next_node->output_sockets()) {
       for (const bNodeLink *link : socket->directly_linked_links()) {
         if (link->tonode->typeinfo->nclass == NODE_CLASS_OUTPUT &&
-            link->tonode->flag & NODE_DO_OUTPUT) {
+            link->tonode->flag & NODE_DO_OUTPUT)
+        {
           return true;
         }
         nodes_to_check.push(link->tonode);

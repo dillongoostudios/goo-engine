@@ -23,7 +23,7 @@
 #include "BLT_translation.h"
 
 #include "BKE_addon.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_idprop.h"
 #include "BKE_screen.hh"
 
@@ -61,18 +61,16 @@ static IDProperty *shortcut_property_from_rna(bContext *C, uiBut *but)
 
   /* If this returns null, we won't be able to bind shortcuts to these RNA properties.
    * Support can be added at #wm_context_member_from_ptr. */
-  char *final_data_path = WM_context_path_resolve_property_full(
+  std::optional<std::string> final_data_path = WM_context_path_resolve_property_full(
       C, &but->rnapoin, but->rnaprop, but->rnaindex);
-  if (final_data_path == nullptr) {
+  if (!final_data_path.has_value()) {
     return nullptr;
   }
 
   /* Create ID property of data path, to pass to the operator. */
   const IDPropertyTemplate val = {0};
   IDProperty *prop = IDP_New(IDP_GROUP, &val, __func__);
-  IDP_AddToGroup(prop, IDP_NewString(final_data_path, "data_path"));
-
-  MEM_freeN((void *)final_data_path);
+  IDP_AddToGroup(prop, IDP_NewString(final_data_path.value().c_str(), "data_path"));
 
   return prop;
 }
@@ -106,6 +104,22 @@ static const char *shortcut_get_operator_property(bContext *C, uiBut *but, IDPro
       }
       return "WM_OT_context_menu_enum";
     }
+  }
+
+  if (MenuType *mt = UI_but_menutype_get(but)) {
+    const IDPropertyTemplate val = {0};
+    IDProperty *prop = IDP_New(IDP_GROUP, &val, __func__);
+    IDP_AddToGroup(prop, IDP_NewString(mt->idname, "name"));
+    *r_prop = prop;
+    return "WM_OT_call_menu";
+  }
+
+  if (PanelType *pt = UI_but_paneltype_get(but)) {
+    const IDPropertyTemplate val = {0};
+    IDProperty *prop = IDP_New(IDP_GROUP, &val, __func__);
+    IDP_AddToGroup(prop, IDP_NewString(pt->idname, "name"));
+    *r_prop = prop;
+    return "WM_OT_call_panel";
   }
 
   *r_prop = nullptr;
@@ -305,9 +319,8 @@ static bool ui_but_is_user_menu_compatible(bContext *C, uiBut *but)
   }
   else if (but->rnaprop) {
     if (RNA_property_type(but->rnaprop) == PROP_BOOLEAN) {
-      char *data_path = WM_context_path_resolve_full(C, &but->rnapoin);
-      if (data_path != nullptr) {
-        MEM_freeN(data_path);
+      std::optional<std::string> data_path = WM_context_path_resolve_full(C, &but->rnapoin);
+      if (data_path.has_value()) {
         result = true;
       }
     }
@@ -330,14 +343,22 @@ static bUserMenuItem *ui_but_user_menu_find(bContext *C, uiBut *but, bUserMenu *
         &um->items, but->optype, prop, "", but->opcontext);
   }
   if (but->rnaprop) {
-    char *member_id_data_path = WM_context_path_resolve_full(C, &but->rnapoin);
+    std::optional<std::string> member_id_data_path = WM_context_path_resolve_full(C,
+                                                                                  &but->rnapoin);
+    /* NOTE(@ideasman42): It's highly unlikely a this ever occurs since the path must be resolved
+     * for this to be added in the first place, there might be some cases where manually
+     * constructed RNA paths don't resolve and in this case a crash should be avoided. */
+    if (UNLIKELY(!member_id_data_path.has_value())) {
+      /* Assert because this should never happen for typical usage. */
+      BLI_assert_unreachable();
+      return nullptr;
+    }
     /* Ignore the actual array index [pass -1] since the index is handled separately. */
-    const char *prop_id = RNA_property_is_idprop(but->rnaprop) ?
-                              RNA_path_property_py(&but->rnapoin, but->rnaprop, -1) :
-                              RNA_property_identifier(but->rnaprop);
+    const std::string prop_id = RNA_property_is_idprop(but->rnaprop) ?
+                                    RNA_path_property_py(&but->rnapoin, but->rnaprop, -1) :
+                                    RNA_property_identifier(but->rnaprop);
     bUserMenuItem *umi = (bUserMenuItem *)ED_screen_user_menu_item_find_prop(
-        &um->items, member_id_data_path, prop_id, but->rnaindex);
-    MEM_freeN(member_id_data_path);
+        &um->items, member_id_data_path->c_str(), prop_id.c_str(), but->rnaindex);
     return umi;
   }
 
@@ -359,8 +380,7 @@ static void ui_but_user_menu_add(bContext *C, uiBut *but, bUserMenu *um)
 {
   BLI_assert(ui_but_is_user_menu_compatible(C, but));
 
-  char drawstr[sizeof(but->drawstr)];
-  ui_but_drawstr_without_sep_char(but, drawstr, sizeof(drawstr));
+  std::string drawstr = ui_but_drawstr_without_sep_char(but);
 
   /* Used for USER_MENU_TYPE_MENU. */
   MenuType *mt = nullptr;
@@ -385,12 +405,12 @@ static void ui_but_user_menu_add(bContext *C, uiBut *but, bUserMenu *um)
                    idname);
           char *expr_result = nullptr;
           if (BPY_run_string_as_string(C, expr_imports, expr, nullptr, &expr_result)) {
-            STRNCPY(drawstr, expr_result);
+            drawstr = expr_result;
             MEM_freeN(expr_result);
           }
           else {
             BLI_assert(0);
-            STRNCPY(drawstr, idname);
+            drawstr = idname;
           }
         }
 #else
@@ -400,7 +420,7 @@ static void ui_but_user_menu_add(bContext *C, uiBut *but, bUserMenu *um)
     }
     ED_screen_user_menu_item_add_operator(
         &um->items,
-        drawstr,
+        drawstr.c_str(),
         but->optype,
         but->opptr ? static_cast<const IDProperty *>(but->opptr->data) : nullptr,
         "",
@@ -408,17 +428,24 @@ static void ui_but_user_menu_add(bContext *C, uiBut *but, bUserMenu *um)
   }
   else if (but->rnaprop) {
     /* NOTE: 'member_id' may be a path. */
-    char *member_id_data_path = WM_context_path_resolve_full(C, &but->rnapoin);
-    /* Ignore the actual array index [pass -1] since the index is handled separately. */
-    const char *prop_id = RNA_property_is_idprop(but->rnaprop) ?
-                              RNA_path_property_py(&but->rnapoin, but->rnaprop, -1) :
-                              RNA_property_identifier(but->rnaprop);
-    /* NOTE: ignore 'drawstr', use property idname always. */
-    ED_screen_user_menu_item_add_prop(&um->items, "", member_id_data_path, prop_id, but->rnaindex);
-    MEM_freeN(member_id_data_path);
+    std::optional<std::string> member_id_data_path = WM_context_path_resolve_full(C,
+                                                                                  &but->rnapoin);
+    if (!member_id_data_path.has_value()) {
+      /* See #ui_but_user_menu_find code-comment. */
+      BLI_assert_unreachable();
+    }
+    else {
+      /* Ignore the actual array index [pass -1] since the index is handled separately. */
+      const std::string prop_id = RNA_property_is_idprop(but->rnaprop) ?
+                                      RNA_path_property_py(&but->rnapoin, but->rnaprop, -1) :
+                                      RNA_property_identifier(but->rnaprop);
+      /* NOTE: ignore 'drawstr', use property idname always. */
+      ED_screen_user_menu_item_add_prop(
+          &um->items, "", member_id_data_path->c_str(), prop_id.c_str(), but->rnaindex);
+    }
   }
   else if ((mt = UI_but_menutype_get(but))) {
-    ED_screen_user_menu_item_add_menu(&um->items, drawstr, mt);
+    ED_screen_user_menu_item_add_menu(&um->items, drawstr.c_str(), mt);
   }
   else if ((ot = UI_but_operatortype_get_from_enum_menu(but, &prop))) {
     ED_screen_user_menu_item_add_operator(&um->items,
@@ -491,6 +518,7 @@ static void set_layout_context_from_button(bContext *C, uiLayout *layout, uiBut 
 
 bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *event)
 {
+  using namespace blender::ed;
   /* ui_but_is_interactive() may let some buttons through that should not get a context menu - it
    * doesn't make sense for them. */
   if (ELEM(but->type, UI_BTYPE_LABEL, UI_BTYPE_IMAGE)) {
@@ -501,16 +529,8 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
   uiLayout *layout;
   const bContextStore *previous_ctx = CTX_store_get(C);
   {
-    uiStringInfo label = {BUT_GET_LABEL, nullptr};
-
-    /* highly unlikely getting the label ever fails */
-    UI_but_string_info_get(C, but, &label, nullptr);
-
-    pup = UI_popup_menu_begin(C, label.strinfo ? label.strinfo : "", ICON_NONE);
+    pup = UI_popup_menu_begin(C, UI_but_string_get_label(*but).c_str(), ICON_NONE);
     layout = UI_popup_menu_layout(pup);
-    if (label.strinfo) {
-      MEM_freeN(label.strinfo);
-    }
 
     set_layout_context_from_button(C, layout, but);
     uiLayoutSetOperatorContext(layout, WM_OP_INVOKE_DEFAULT);
@@ -533,7 +553,7 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
     PropertyRNA *prop = but->rnaprop;
     const PropertyType type = RNA_property_type(prop);
     const PropertySubType subtype = RNA_property_subtype(prop);
-    bool is_anim = RNA_property_animateable(ptr, prop);
+    bool is_anim = RNA_property_anim_editable(ptr, prop);
     const bool is_idprop = RNA_property_is_idprop(prop);
 
     /* second slower test,
@@ -657,6 +677,50 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
                      CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Show FCurve in Editor"),
                      ICON_FCURVE,
                      "UI_OT_show_fcurve_in_editor");
+    }
+
+    if (but->flag & UI_BUT_ANIMATED) {
+      uiItemS(layout);
+      if (is_array_component) {
+        PointerRNA op_ptr;
+        wmOperatorType *ot;
+        ot = WM_operatortype_find("ANIM_OT_view_curve_in_graph_editor", false);
+        uiItemFullO_ptr(layout,
+                        ot,
+                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "View All in Graph Editor"),
+                        ICON_NONE,
+                        nullptr,
+                        WM_OP_INVOKE_DEFAULT,
+                        UI_ITEM_NONE,
+                        &op_ptr);
+        RNA_boolean_set(&op_ptr, "all", true);
+
+        uiItemFullO_ptr(
+            layout,
+            ot,
+            CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "View Single in Graph Editor"),
+            ICON_NONE,
+            nullptr,
+            WM_OP_INVOKE_DEFAULT,
+            UI_ITEM_NONE,
+            &op_ptr);
+        RNA_boolean_set(&op_ptr, "all", false);
+      }
+      else {
+        PointerRNA op_ptr;
+        wmOperatorType *ot;
+        ot = WM_operatortype_find("ANIM_OT_view_curve_in_graph_editor", false);
+
+        uiItemFullO_ptr(layout,
+                        ot,
+                        CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "View in Graph Editor"),
+                        ICON_NONE,
+                        nullptr,
+                        WM_OP_INVOKE_DEFAULT,
+                        UI_ITEM_NONE,
+                        &op_ptr);
+        RNA_boolean_set(&op_ptr, "all", false);
+      }
     }
 
     /* Drivers */
@@ -938,7 +1002,8 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
                    true);
 
     if (ptr->owner_id && !is_whole_array &&
-        ELEM(type, PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM)) {
+        ELEM(type, PROP_BOOLEAN, PROP_INT, PROP_FLOAT, PROP_ENUM))
+    {
       uiItemO(layout,
               CTX_IFACE_(BLT_I18NCONTEXT_OPERATOR_DEFAULT, "Copy as New Driver"),
               ICON_NONE,
@@ -975,7 +1040,7 @@ bool ui_popup_context_menu_for_button(bContext *C, uiBut *but, const wmEvent *ev
   }
 
   /* If the button represents an id, it can set the "id" context pointer. */
-  if (ED_asset_can_mark_single_from_context(C)) {
+  if (asset::can_mark_single_from_context(C)) {
     const ID *id = static_cast<const ID *>(CTX_data_pointer_get_type(C, "id", &RNA_ID).data);
 
     /* Gray out items depending on if data-block is an asset. Preferably this could be done via

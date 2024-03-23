@@ -7,14 +7,12 @@ set(INC
   ../../blenkernel
   ../../blenloader
   ../../blentranslation
-  ../../depsgraph
   ../../editors/include
   ../../gpu
   ../../imbuf
   ../../imbuf/intern/oiio
   ../../makesrna
   ../../windowmanager
-  ../../../../intern/clog
   ../../../../intern/mantaflow/extern
   ../../../../intern/opencolorio
   # RNA_prototypes.h
@@ -121,10 +119,12 @@ set(SRC
 
 set(LIB
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_editor_animation
   bf_editor_interface
   bf_editor_space_api
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   PRIVATE bf::animrig
   bf_python_gpu
@@ -148,7 +148,7 @@ endif()
 # For example `urllib.request.urlopen("https://projects.blender.org")` fails
 # (or any other HTTPS site). see: #102300 for details.
 # NOTE: that this isn't necessary on WIN32.
-if(WITH_PYTHON AND WITH_PYTHON_INSTALL AND WITH_INSTALL_PORTABLE AND (NOT WIN32))
+if(WITH_PYTHON AND WITH_PYTHON_INSTALL AND (APPLE OR WITH_INSTALL_PORTABLE) AND (NOT WIN32))
   # - `PYTHON_SSL_CERT_FILE` absolute path to the PEM file.
   find_python_module_file("certifi/cacert.pem" PYTHON_SSL_CERT_FILE _python_ssl_cert_file_relative)
   mark_as_advanced(PYTHON_SSL_CERT_FILE)

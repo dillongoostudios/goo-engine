@@ -16,6 +16,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_kdtree.h"
+#include "BLI_math_base_safe.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_rand.h"
@@ -29,7 +30,7 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 
 #include "RNA_enum_types.hh"
 
@@ -1169,17 +1170,18 @@ void boid_brain(BoidBrainData *bbd, int p, ParticleData *pa)
         if (dot_v2v2(cvel, dir) > 0.95f / mul || len <= state->rule_fuzziness) {
           /* try to reach goal at highest point of the parabolic path */
           cur_v = len_v2(pa->prev_state.vel);
-          z_v = sasqrt(-2.0f * bbd->sim->scene->physics_settings.gravity[2] * bbd->wanted_co[2]);
+          z_v = safe_sqrtf(-2.0f * bbd->sim->scene->physics_settings.gravity[2] *
+                           bbd->wanted_co[2]);
           ground_v = len_v2(bbd->wanted_co) *
-                     sasqrt(-0.5f * bbd->sim->scene->physics_settings.gravity[2] /
-                            bbd->wanted_co[2]);
+                     safe_sqrtf(-0.5f * bbd->sim->scene->physics_settings.gravity[2] /
+                                bbd->wanted_co[2]);
 
-          len = sasqrt((ground_v - cur_v) * (ground_v - cur_v) + z_v * z_v);
+          len = safe_sqrtf((ground_v - cur_v) * (ground_v - cur_v) + z_v * z_v);
 
           if (len < val.jump_speed * mul || bbd->part->boids->options & BOID_ALLOW_FLIGHT) {
             jump = 1;
 
-            len = MIN2(len, val.jump_speed);
+            len = std::min(len, val.jump_speed);
 
             copy_v3_v3(jump_v, dir);
             jump_v[2] = z_v;
@@ -1298,7 +1300,7 @@ void boid_body(BoidBrainData *bbd, ParticleData *pa)
       }
 
       /* constrain direction with maximum angular velocity */
-      angle = saacos(dot_v3v3(old_dir, wanted_dir));
+      angle = safe_acosf(dot_v3v3(old_dir, wanted_dir));
       angle = min_ff(angle, val.max_ave);
 
       cross_v3_v3v3(nor, old_dir, wanted_dir);
@@ -1318,7 +1320,7 @@ void boid_body(BoidBrainData *bbd, ParticleData *pa)
     old_speed = len_v3(pa->prev_state.vel);
 
     if (bbd->wanted_speed < old_speed) {
-      new_speed = MAX2(bbd->wanted_speed, old_speed - val.max_acc);
+      new_speed = std::max(bbd->wanted_speed, old_speed - val.max_acc);
     }
     else {
       new_speed = std::min(bbd->wanted_speed, old_speed + val.max_acc);
@@ -1334,17 +1336,17 @@ void boid_body(BoidBrainData *bbd, ParticleData *pa)
       float root;
 
       len2 = std::max(len2, val.min_speed * val.min_speed);
-      root = sasqrt(new_speed * new_speed - len2);
+      root = safe_sqrtf(new_speed * new_speed - len2);
 
       new_vel[2] = new_vel[2] < 0.0f ? -root : root;
 
       normalize_v2(new_vel);
-      mul_v2_fl(new_vel, sasqrt(len2));
+      mul_v2_fl(new_vel, safe_sqrtf(len2));
     }
 
     /* finally constrain speed to max speed */
     new_speed = normalize_v3(new_vel);
-    mul_v3_fl(new_vel, MIN2(new_speed, val.max_speed));
+    mul_v3_fl(new_vel, std::min(new_speed, val.max_speed));
 
     /* get acceleration from difference of velocities */
     sub_v3_v3v3(acc, new_vel, pa->prev_state.vel);

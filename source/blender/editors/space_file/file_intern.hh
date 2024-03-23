@@ -15,7 +15,6 @@
 
 struct ARegion;
 struct ARegionType;
-struct AssetLibrary;
 struct bContextDataResult;
 struct FileAssetSelectParams;
 struct FileSelectParams;
@@ -35,6 +34,13 @@ int /*eContextResult*/ file_context(const bContext *C,
 /* `file_draw.cc` */
 
 #define ATTRIBUTE_COLUMN_PADDING (0.5f * UI_UNIT_X)
+
+#define FILE_LAYOUT_COMPACT(_layout) \
+  (_layout->flag & FILE_LAYOUT_VER && (_layout->width / UI_SCALE_FAC) < 500)
+#define FILE_LAYOUT_HIDE_DATE(_layout) \
+  (_layout->flag & FILE_LAYOUT_VER && (_layout->width / UI_SCALE_FAC) < 250)
+#define FILE_LAYOUT_HIDE_SIZE(_layout) \
+  (_layout->flag & FILE_LAYOUT_VER && (_layout->width / UI_SCALE_FAC) < 350)
 
 void file_calc_previews(const bContext *C, ARegion *region);
 void file_draw_list(const bContext *C, ARegion *region);
@@ -122,7 +128,8 @@ void fileselect_refresh_params(SpaceFile *sfile);
  */
 void fileselect_file_set(bContext *C, SpaceFile *sfile, int index);
 bool file_attribute_column_type_enabled(const FileSelectParams *params,
-                                        FileAttributeColumnType column);
+                                        FileAttributeColumnType column,
+                                        const FileLayout *layout);
 /**
  * Check if the region coordinate defined by \a x and \a y are inside the column header.
  */
@@ -221,12 +228,13 @@ void file_path_to_ui_path(const char *path, char *r_pathi, int max_size);
 /* asset_catalog_tree_view.cc */
 
 /* C-handle for #ed::asset_browser::AssetCatalogFilterSettings. */
-typedef struct FileAssetCatalogFilterSettingsHandle FileAssetCatalogFilterSettingsHandle;
+struct FileAssetCatalogFilterSettingsHandle;
 
-void file_create_asset_catalog_tree_view_in_layout(::AssetLibrary *asset_library,
-                                                   uiLayout *layout,
-                                                   SpaceFile *space_file,
-                                                   FileAssetSelectParams *params);
+void file_create_asset_catalog_tree_view_in_layout(
+    blender::asset_system::AssetLibrary *asset_library,
+    uiLayout *layout,
+    SpaceFile *space_file,
+    FileAssetSelectParams *params);
 
 namespace blender::asset_system {
 class AssetLibrary;

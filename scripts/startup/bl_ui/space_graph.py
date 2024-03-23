@@ -93,12 +93,19 @@ class GRAPH_PT_filters(DopesheetFilterPopoverBase, Panel):
 
     def draw(self, context):
         layout = self.layout
+        st = context.space_data
 
         DopesheetFilterPopoverBase.draw_generic_filters(context, layout)
         layout.separator()
         DopesheetFilterPopoverBase.draw_search_filters(context, layout)
         layout.separator()
         DopesheetFilterPopoverBase.draw_standard_filters(context, layout)
+
+        if st.mode == 'DRIVERS':
+            layout.separator()
+            col = layout.column(align=True)
+            col.label(text="Drivers:")
+            col.prop(st.dopesheet, "show_driver_fallback_as_error")
 
 
 class GRAPH_PT_snapping(Panel):
@@ -141,42 +148,43 @@ class GRAPH_MT_view(Menu):
 
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_hud")
+        layout.prop(st, "show_region_channels")
+        layout.separator()
+
+        layout.operator("graph.view_selected")
+        layout.operator("graph.view_all")
+        layout.operator("graph.view_frame")
         layout.separator()
 
         layout.prop(st, "use_realtime_update")
-        layout.prop(st, "show_cursor")
         layout.prop(st, "show_sliders")
         layout.prop(st, "use_auto_merge_keyframes")
+        layout.prop(st, "autolock_translation_axis")
+        layout.separator()
 
         if st.mode != 'DRIVERS':
-            layout.separator()
             layout.prop(st, "show_markers")
-
-        layout.prop(st, "show_extrapolation")
-
-        layout.prop(st, "show_handles")
-        layout.prop(st, "use_only_selected_keyframe_handles")
-
+        layout.prop(st, "show_cursor")
         layout.prop(st, "show_seconds")
         layout.prop(st, "show_locked_time")
-
         layout.separator()
+
+        layout.prop(st, "show_extrapolation")
+        layout.prop(st, "show_handles")
+        layout.prop(st, "use_only_selected_keyframe_handles")
+        layout.separator()
+
         layout.operator("anim.previewrange_set")
         layout.operator("anim.previewrange_clear")
         layout.operator("graph.previewrange_set")
-
         layout.separator()
-        layout.operator("graph.view_all")
-        layout.operator("graph.view_selected")
-        layout.operator("graph.view_frame")
 
         # Add this to show key-binding (reverse action in dope-sheet).
-        layout.separator()
         props = layout.operator("wm.context_set_enum", text="Toggle Dope Sheet")
         props.data_path = "area.type"
         props.value = 'DOPESHEET_EDITOR'
-
         layout.separator()
+
         layout.menu("INFO_MT_area")
 
 
@@ -295,6 +303,7 @@ class GRAPH_MT_channel(Menu):
         layout.operator("graph.keys_to_samples")
         layout.operator("graph.samples_to_keys")
         layout.operator("graph.sound_to_samples")
+        layout.operator("anim.channels_bake")
 
         layout.separator()
         layout.operator("graph.euler_filter", text="Discontinuity (Euler) Filter")
@@ -336,6 +345,7 @@ class GRAPH_MT_key_blending(Menu):
         layout.operator("graph.push_pull", text="Push Pull")
         layout.operator("graph.shear", text="Shear Keys")
         layout.operator("graph.scale_average", text="Scale Average")
+        layout.operator("graph.scale_from_neighbor", text="Scale from Neighbor")
         layout.operator("graph.time_offset", text="Time Offset")
 
 

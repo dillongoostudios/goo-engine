@@ -9,6 +9,7 @@
 #ifdef WITH_ONEAPI
 #  include "device/device.h"
 #  include "device/oneapi/device_impl.h"
+#  include "integrator/denoiser_oidn_gpu.h"
 
 #  include "util/path.h"
 #  include "util/string.h"
@@ -107,7 +108,11 @@ static void device_iterator_cb(
   info.id = id;
 
   info.has_nanovdb = true;
-  info.denoisers = 0;
+#  if defined(WITH_OPENIMAGEDENOISE)
+  if (OIDNDenoiserGPU::is_device_supported(info)) {
+    info.denoisers |= DENOISER_OPENIMAGEDENOISE;
+  }
+#  endif
 
   info.has_gpu_queue = true;
 
@@ -126,7 +131,11 @@ static void device_iterator_cb(
 #  endif
 
   devices->push_back(info);
-  VLOG_INFO << "Added device \"" << name << "\" with id \"" << info.id << "\".";
+  VLOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
+
+  if (info.denoisers & DENOISER_OPENIMAGEDENOISE)
+    VLOG_INFO << "Device with id \"" << info.id << "\" supports "
+              << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
 }
 #endif
 

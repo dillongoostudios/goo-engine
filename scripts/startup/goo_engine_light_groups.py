@@ -5,7 +5,8 @@ Light group key management for Goo Engine (EEVEE)
 """
 
 import bpy
-from bpy.types import Panel,  Material, Light, PropertyGroup, UIList, UI_UL_list, Operator, ShaderNodeShaderInfo, ShaderNodeTree
+from bpy.types import Panel,  Material, Light, PropertyGroup, UIList, Operator, ShaderNodeShaderInfo, ShaderNodeTree
+from bl_ui import UI_UL_list
 from bpy.props import StringProperty, CollectionProperty, IntProperty, PointerProperty, EnumProperty, BoolProperty
 from bpy.utils import register_classes_factory
 from bpy.app.handlers import persistent

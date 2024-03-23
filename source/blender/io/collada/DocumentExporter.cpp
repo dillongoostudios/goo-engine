@@ -19,6 +19,7 @@
 #include "COLLADASWColorOrTexture.h"
 #include "COLLADASWConstants.h"
 #include "COLLADASWEffectProfile.h"
+#include "COLLADASWException.h"
 #include "COLLADASWImage.h"
 #include "COLLADASWInputList.h"
 #include "COLLADASWInstanceCamera.h"
@@ -54,7 +55,6 @@
 #include "DNA_image_types.h"
 #include "DNA_material_types.h"
 #include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -68,14 +68,14 @@
 
 #include "BKE_action.h" /* pose functions */
 #include "BKE_animsys.h"
-#include "BKE_appdir.h"
-#include "BKE_armature.h"
+#include "BKE_appdir.hh"
+#include "BKE_armature.hh"
 #include "BKE_blender_version.h"
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_object.hh"
 #include "BKE_scene.h"
@@ -172,7 +172,15 @@ int DocumentExporter::exportCurrentScene()
   clear_global_id_map();
 
   COLLADABU::NativeString native_filename = make_temp_filepath(nullptr, ".dae");
-  COLLADASW::StreamWriter *writer = new COLLADASW::StreamWriter(native_filename);
+  COLLADASW::StreamWriter *writer;
+  try {
+    writer = new COLLADASW::StreamWriter(native_filename);
+  }
+  catch (COLLADASW::StreamWriterException &e) {
+    e.printMessage();
+    fprintf(stderr, "Collada: No Objects will be exported.\n");
+    return 1;
+  }
 
   /* open <collada> */
   writer->startDocument();

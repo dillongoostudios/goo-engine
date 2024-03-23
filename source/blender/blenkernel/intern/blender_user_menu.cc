@@ -17,7 +17,7 @@
 
 #include "DNA_userdef_types.h"
 
-#include "BKE_blender_user_menu.h"
+#include "BKE_blender_user_menu.hh"
 #include "BKE_idprop.h"
 
 /* -------------------------------------------------------------------- */
@@ -93,7 +93,8 @@ void BKE_blender_user_menu_item_free(bUserMenuItem *umi)
 void BKE_blender_user_menu_item_free_list(ListBase *lb)
 {
   for (bUserMenuItem *umi = static_cast<bUserMenuItem *>(lb->first), *umi_next; umi;
-       umi = umi_next) {
+       umi = umi_next)
+  {
     umi_next = umi->next;
     BKE_blender_user_menu_item_free(umi);
   }

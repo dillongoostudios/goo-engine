@@ -25,14 +25,13 @@ static OneAPIErrorCallback s_error_cb = nullptr;
 static void *s_error_user_ptr = nullptr;
 
 #  ifdef WITH_EMBREE_GPU
-static const RTCFeatureFlags CYCLES_ONEAPI_EMBREE_BASIC_FEATURES =
-    (const RTCFeatureFlags)(RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
-                            RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS |
-                            RTC_FEATURE_FLAG_POINT | RTC_FEATURE_FLAG_MOTION_BLUR);
-static const RTCFeatureFlags CYCLES_ONEAPI_EMBREE_ALL_FEATURES =
-    (const RTCFeatureFlags)(CYCLES_ONEAPI_EMBREE_BASIC_FEATURES |
-                            RTC_FEATURE_FLAG_ROUND_CATMULL_ROM_CURVE |
-                            RTC_FEATURE_FLAG_FLAT_CATMULL_ROM_CURVE);
+static const RTCFeatureFlags CYCLES_ONEAPI_EMBREE_BASIC_FEATURES = (const RTCFeatureFlags)(
+    RTC_FEATURE_FLAG_TRIANGLE | RTC_FEATURE_FLAG_INSTANCE |
+    RTC_FEATURE_FLAG_FILTER_FUNCTION_IN_ARGUMENTS | RTC_FEATURE_FLAG_POINT |
+    RTC_FEATURE_FLAG_MOTION_BLUR);
+static const RTCFeatureFlags CYCLES_ONEAPI_EMBREE_ALL_FEATURES = (const RTCFeatureFlags)(
+    CYCLES_ONEAPI_EMBREE_BASIC_FEATURES | RTC_FEATURE_FLAG_ROUND_CATMULL_ROM_CURVE |
+    RTC_FEATURE_FLAG_FLAT_CATMULL_ROM_CURVE);
 #  endif
 
 void oneapi_set_error_cb(OneAPIErrorCallback cb, void *user_ptr)
@@ -137,6 +136,9 @@ bool oneapi_run_test_kernel(SyclQueue *queue_)
 bool oneapi_kernel_is_required_for_features(const std::string &kernel_name,
                                             const uint kernel_features)
 {
+  /* Skip all non-Cycles kernels */
+  if (kernel_name.find("oneapi_kernel_") == std::string::npos)
+    return false;
   if ((kernel_features & KERNEL_FEATURE_NODE_RAYTRACE) == 0 &&
       kernel_name.find(device_kernel_as_string(DEVICE_KERNEL_INTEGRATOR_SHADE_SURFACE_RAYTRACE)) !=
           std::string::npos)

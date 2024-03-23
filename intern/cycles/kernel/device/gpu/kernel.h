@@ -668,7 +668,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
                              int sw,
                              int sh,
                              float threshold,
-                             bool reset,
+                             int reset,
                              int offset,
                              int stride,
                              ccl_global uint *num_active_pixels)
@@ -809,6 +809,7 @@ ccl_device_inline void kernel_gpu_film_convert_half_write(ccl_global uchar4 *rgb
                                int width, \
                                int offset, \
                                int stride, \
+                               int channel_offset, \
                                int rgba_offset, \
                                int rgba_stride) \
   { \
@@ -824,7 +825,7 @@ ccl_device_inline void kernel_gpu_film_convert_half_write(ccl_global uchar4 *rgb
     ccl_global const float *buffer = render_buffer + offset + \
                                      buffer_pixel_index * kfilm_convert.pass_stride; \
 \
-    ccl_global float *pixel = pixels + \
+    ccl_global float *pixel = pixels + channel_offset + \
                               (render_pixel_index + rgba_offset) * kfilm_convert.pixel_stride; \
 \
     FILM_GET_PASS_PIXEL_F32(variant, input_channel_count); \
@@ -1104,7 +1105,7 @@ ccl_gpu_kernel(GPU_KERNEL_BLOCK_NUM_THREADS, GPU_KERNEL_MAX_REGISTERS)
                              int pass_denoised,
                              int pass_sample_count,
                              int num_components,
-                             bool use_compositing)
+                             int use_compositing)
 {
   const int work_index = ccl_gpu_global_id_x();
   const int y = work_index / width;

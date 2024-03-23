@@ -11,7 +11,7 @@
 #include "DNA_object_enums.h"
 #include "DNA_view3d_types.h"
 
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf_types.hh"
 
 /* ********* exports for space_view3d/ module for offscreen rendering ********** */
 struct ARegion;
@@ -68,6 +68,9 @@ void ED_view3d_draw_offscreen_simple(Depsgraph *depsgraph,
  *
  * \param ofs: Optional off-screen buffer, can be NULL.
  * (avoids re-creating when doing multiple GL renders).
+ * \param viewport: Optional viewport data, can be NULL.
+ * (avoids re-creating when doing multiple GL renders,
+ * allows keeping track of state across frames).
  */
 ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
                                       Scene *scene,
@@ -81,12 +84,16 @@ ImBuf *ED_view3d_draw_offscreen_imbuf(Depsgraph *depsgraph,
                                       const char *viewname,
                                       bool restore_rv3d_mats,
                                       GPUOffScreen *ofs,
+                                      GPUViewport *viewport,
                                       char err_out[256]);
 /**
  * Creates own fake 3d views (wrapping #ED_view3d_draw_offscreen_imbuf)
  *
  * \param ofs: Optional off-screen buffer can be NULL.
  * (avoids re-creating when doing multiple GL renders).
+ * \param viewport: Optional viewport data, can be NULL.
+ * (avoids re-creating when doing multiple GL renders,
+ * allows keeping track of state across frames).
  *
  * \note used by the sequencer
  */
@@ -102,4 +109,12 @@ ImBuf *ED_view3d_draw_offscreen_imbuf_simple(Depsgraph *depsgraph,
                                              int alpha_mode,
                                              const char *viewname,
                                              GPUOffScreen *ofs,
+                                             GPUViewport *viewport,
                                              char err_out[256]);
+
+/**
+ * Drawing off-screen is not supported while drawing,
+ * this is a simple check to use when the code path may occur within a draw call
+ * (Python scripting for example).
+ */
+bool ED_view3d_draw_offscreen_check_nested();

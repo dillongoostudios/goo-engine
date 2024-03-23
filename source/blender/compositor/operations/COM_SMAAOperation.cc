@@ -1,4 +1,4 @@
-/* SPDX-FileCopyrightText: 2017 Blender Authors
+/* SPDX-FileCopyrightText: 2024 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
@@ -6,9 +6,7 @@
 #include "BKE_node.hh"
 #include "COM_SMAAAreaTexture.h"
 
-extern "C" {
-#include "IMB_colormanagement.h"
-}
+#include "IMB_colormanagement.hh"
 
 namespace blender::compositor {
 
@@ -102,8 +100,8 @@ static void sample_bilinear_horizontal(T *reader, int x, int y, float xoffset, f
 
 static inline const float *areatex_sample_internal(const float *areatex, int x, int y)
 {
-  return &areatex[(CLAMPIS(x, 0, SMAA_AREATEX_SIZE - 1) +
-                   CLAMPIS(y, 0, SMAA_AREATEX_SIZE - 1) * SMAA_AREATEX_SIZE) *
+  return &areatex[(std::clamp(x, 0, SMAA_AREATEX_SIZE - 1) +
+                   std::clamp(y, 0, SMAA_AREATEX_SIZE - 1) * SMAA_AREATEX_SIZE) *
                   2];
 }
 
@@ -155,6 +153,7 @@ SMAAEdgeDetectionOperation::SMAAEdgeDetectionOperation()
   this->add_input_socket(DataType::Value); /* Depth, material ID, etc. TODO: currently unused. */
   this->add_output_socket(DataType::Color);
   flags_.complex = true;
+  flags_.can_be_constant = true;
   image_reader_ = nullptr;
   value_reader_ = nullptr;
   this->set_threshold(CMP_DEFAULT_SMAA_THRESHOLD);
@@ -385,6 +384,7 @@ SMAABlendingWeightCalculationOperation::SMAABlendingWeightCalculationOperation()
   this->add_input_socket(DataType::Color); /* edges */
   this->add_output_socket(DataType::Color);
   flags_.complex = true;
+  flags_.can_be_constant = true;
   image_reader_ = nullptr;
   this->set_corner_rounding(CMP_DEFAULT_SMAA_CORNER_ROUNDING);
 }
@@ -648,22 +648,22 @@ void SMAABlendingWeightCalculationOperation::get_area_of_interest(const int /*in
 /*-----------------------------------------------------------------------------*/
 /* Diagonal Search Functions */
 
-int SMAABlendingWeightCalculationOperation::search_diag1(int x, int y, int dir, bool *found)
+int SMAABlendingWeightCalculationOperation::search_diag1(int x, int y, int dir, bool *r_found)
 {
   float e[4];
   int end = x + SMAA_MAX_SEARCH_STEPS_DIAG * dir;
-  *found = false;
+  *r_found = false;
 
   while (x != end) {
     x += dir;
     y -= dir;
     sample_image_fn_(x, y, e);
     if (e[1] == 0.0f) {
-      *found = true;
+      *r_found = true;
       break;
     }
     if (e[0] == 0.0f) {
-      *found = true;
+      *r_found = true;
       return (dir < 0) ? x : x - dir;
     }
   }
@@ -671,23 +671,23 @@ int SMAABlendingWeightCalculationOperation::search_diag1(int x, int y, int dir, 
   return x - dir;
 }
 
-int SMAABlendingWeightCalculationOperation::search_diag2(int x, int y, int dir, bool *found)
+int SMAABlendingWeightCalculationOperation::search_diag2(int x, int y, int dir, bool *r_found)
 {
   float e[4];
   int end = x + SMAA_MAX_SEARCH_STEPS_DIAG * dir;
-  *found = false;
+  *r_found = false;
 
   while (x != end) {
     x += dir;
     y += dir;
     sample_image_fn_(x, y, e);
     if (e[1] == 0.0f) {
-      *found = true;
+      *r_found = true;
       break;
     }
     sample_image_fn_(x + 1, y, e);
     if (e[0] == 0.0f) {
-      *found = true;
+      *r_found = true;
       return (dir > 0) ? x : x - dir;
     }
   }
@@ -948,8 +948,8 @@ void SMAABlendingWeightCalculationOperation::detect_horizontal_corner_pattern(
     factor[1] -= rounding * e[0];
   }
 
-  weights[0] *= CLAMPIS(factor[0], 0.0f, 1.0f);
-  weights[1] *= CLAMPIS(factor[1], 0.0f, 1.0f);
+  weights[0] *= std::clamp(factor[0], 0.0f, 1.0f);
+  weights[1] *= std::clamp(factor[1], 0.0f, 1.0f);
 }
 
 void SMAABlendingWeightCalculationOperation::detect_vertical_corner_pattern(
@@ -977,8 +977,8 @@ void SMAABlendingWeightCalculationOperation::detect_vertical_corner_pattern(
     factor[1] -= rounding * e[1];
   }
 
-  weights[0] *= CLAMPIS(factor[0], 0.0f, 1.0f);
-  weights[1] *= CLAMPIS(factor[1], 0.0f, 1.0f);
+  weights[0] *= std::clamp(factor[0], 0.0f, 1.0f);
+  weights[1] *= std::clamp(factor[1], 0.0f, 1.0f);
 }
 
 /*-----------------------------------------------------------------------------*/
@@ -991,6 +991,7 @@ SMAANeighborhoodBlendingOperation::SMAANeighborhoodBlendingOperation()
   this->add_input_socket(DataType::Color); /* blend */
   this->add_output_socket(DataType::Color);
   flags_.complex = true;
+  flags_.can_be_constant = true;
   image1Reader_ = nullptr;
   image2Reader_ = nullptr;
 }
@@ -1028,7 +1029,7 @@ void SMAANeighborhoodBlendingOperation::execute_pixel(float output[4],
   }
 
   /* Calculate the blending offsets: */
-  void (*samplefunc)(SocketReader * reader, int x, int y, float xoffset, float color[4]);
+  void (*samplefunc)(SocketReader *reader, int x, int y, float xoffset, float color[4]);
   float offset1, offset2, weight1, weight2, color1[4], color2[4];
 
   if (fmaxf(right, left) > fmaxf(bottom, top)) { /* max(horizontal) > max(vertical) */
@@ -1080,7 +1081,7 @@ void SMAANeighborhoodBlendingOperation::update_memory_buffer_partial(MemoryBuffe
     }
 
     /* Calculate the blending offsets: */
-    void (*sample_fn)(MemoryBuffer * reader, int x, int y, float xoffset, float color[4]);
+    void (*sample_fn)(MemoryBuffer *reader, int x, int y, float xoffset, float color[4]);
     float offset1, offset2, weight1, weight2, color1[4], color2[4];
 
     if (fmaxf(right, left) > fmaxf(bottom, top)) { /* `max(horizontal) > max(vertical)` */

@@ -362,7 +362,14 @@ class StrokePanel(BrushPanel):
             col.row().prop(brush, "jitter_unit", expand=True)
 
         col.separator()
-        col.prop(settings, "input_samples")
+        UnifiedPaintPanel.prop_unified(
+            layout,
+            context,
+            brush,
+            "input_samples",
+            unified_name="use_unified_input_samples",
+            slider=True,
+        )
 
 
 class SmoothStrokePanel(BrushPanel):
@@ -943,7 +950,6 @@ def brush_settings_advanced(layout, context, brush, popover=False):
     use_frontface = False
 
     if mode == 'SCULPT':
-        sculpt = context.tool_settings.sculpt
         capabilities = brush.sculpt_capabilities
         use_accumulate = capabilities.has_accumulate
         use_frontface = True
@@ -1000,16 +1006,16 @@ def brush_settings_advanced(layout, context, brush, popover=False):
             col.prop(brush, "use_automasking_view_occlusion", text="Occlusion")
             subcol = col.column(align=True)
             subcol.active = not brush.use_automasking_view_occlusion
-            subcol.prop(sculpt, "automasking_view_normal_limit", text="Limit")
-            subcol.prop(sculpt, "automasking_view_normal_falloff", text="Falloff")
+            subcol.prop(brush, "automasking_view_normal_limit", text="Limit")
+            subcol.prop(brush, "automasking_view_normal_falloff", text="Falloff")
 
         col = layout.column()
         col.prop(brush, "use_automasking_start_normal", text="Area Normal")
 
         if brush.use_automasking_start_normal:
             col = layout.column(align=True)
-            col.prop(sculpt, "automasking_start_normal_limit", text="Limit")
-            col.prop(sculpt, "automasking_start_normal_falloff", text="Falloff")
+            col.prop(brush, "automasking_start_normal_limit", text="Limit")
+            col.prop(brush, "automasking_start_normal_falloff", text="Falloff")
 
         layout.separator()
 
@@ -1403,20 +1409,12 @@ def brush_basic_gpencil_sculpt_settings(layout, _context, brush, *, compact=Fals
     if compact:
         if tool in {'THICKNESS', 'STRENGTH', 'PINCH', 'TWIST'}:
             row.separator()
-            row.prop(gp_settings, "direction", expand=True, text="")
+            row.prop(brush, "direction", expand=True, text="")
     else:
         use_property_split_prev = layout.use_property_split
         layout.use_property_split = False
-        if tool in {'THICKNESS', 'STRENGTH'}:
-            layout.row().prop(gp_settings, "direction", expand=True)
-        elif tool == 'PINCH':
-            row = layout.row(align=True)
-            row.prop_enum(gp_settings, "direction", value='ADD', text="Pinch")
-            row.prop_enum(gp_settings, "direction", value='SUBTRACT', text="Inflate")
-        elif tool == 'TWIST':
-            row = layout.row(align=True)
-            row.prop_enum(gp_settings, "direction", value='ADD', text="CCW")
-            row.prop_enum(gp_settings, "direction", value='SUBTRACT', text="CW")
+        if tool in {'THICKNESS', 'STRENGTH', 'PINCH', 'TWIST'}:
+            layout.row().prop(brush, "direction", expand=True)
         layout.use_property_split = use_property_split_prev
 
 
@@ -1430,8 +1428,7 @@ def brush_basic_gpencil_weight_settings(layout, _context, brush, *, compact=Fals
     if brush.gpencil_weight_tool in {'WEIGHT'}:
         layout.prop(brush, "weight", slider=True)
 
-        gp_settings = brush.gpencil_settings
-        layout.prop(gp_settings, "direction", expand=True, text="" if compact else "Direction")
+        layout.prop(brush, "direction", expand=True, text="" if compact else "Direction")
 
 
 def brush_basic_gpencil_vertex_settings(layout, _context, brush, *, compact=False):

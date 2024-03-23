@@ -12,12 +12,12 @@
 
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "DNA_workspace_types.h"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "ED_gizmo_utils.hh"

@@ -16,13 +16,13 @@ else()
     set(LIBDIR_NATIVE_ABI ${CMAKE_SOURCE_DIR}/../lib/${LIBDIR_NAME})
 
     # Path to precompiled libraries with known glibc 2.28 ABI.
-    set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/../lib/linux_x86_64_glibc_228)
+    set(LIBDIR_GLIBC228_ABI ${CMAKE_SOURCE_DIR}/lib/linux_x64)
 
     # Choose the best suitable libraries.
     if(EXISTS ${LIBDIR_NATIVE_ABI})
       set(LIBDIR ${LIBDIR_NATIVE_ABI})
       set(WITH_LIBC_MALLOC_HOOK_WORKAROUND TRUE)
-    elseif(EXISTS ${LIBDIR_GLIBC228_ABI})
+    elseif(EXISTS "${LIBDIR_GLIBC228_ABI}/.git")
       set(LIBDIR ${LIBDIR_GLIBC228_ABI})
       if(WITH_MEM_JEMALLOC)
         # jemalloc provides malloc hooks.
@@ -37,9 +37,12 @@ else()
     unset(LIBDIR_GLIBC228_ABI)
   endif()
 
-  if(NOT (EXISTS ${LIBDIR}))
+  if(NOT DEFINED LIBDIR)
+    set(LIBDIR "")  # Suppress undefined warnings, allow printing even if empty.
+  endif()
+  if((LIBDIR STREQUAL "") OR (NOT (EXISTS "${LIBDIR}")))
     message(STATUS
-      "Unable to find LIBDIR: ${LIBDIR}, system libraries may be used "
+      "Unable to find LIBDIR: \"${LIBDIR}\", system libraries may be used "
       "(disable WITH_LIBS_PRECOMPILED to suppress this message)."
     )
     unset(LIBDIR)
@@ -114,10 +117,32 @@ find_package_wrapper(Epoxy REQUIRED)
 # XXX Linking errors with debian static tiff :/
 # find_package_wrapper(TIFF REQUIRED)
 find_package(TIFF)
+# CMake 3.28.1 defines this, it doesn't seem to be used, hide by default in the UI.
+if(DEFINED tiff_DIR)
+  mark_as_advanced(tiff_DIR)
+endif()
 
 if(WITH_VULKAN_BACKEND)
-  find_package_wrapper(Vulkan REQUIRED)
-  find_package_wrapper(ShaderC REQUIRED)
+  if(DEFINED LIBDIR)
+    # If these are missing, something went wrong (outdated LIBDIR?).
+    if(NOT ((EXISTS "${LIBDIR}/vulkan") AND (EXISTS "${LIBDIR}/shaderc")))
+      message(FATAL_ERROR "${LIBDIR}/vulkan & ${LIBDIR}/shaderc are missing!")
+    endif()
+    if(NOT DEFINED VULKAN_ROOT_DIR)
+      set(VULKAN_ROOT_DIR ${LIBDIR}/vulkan)
+    endif()
+    if(NOT DEFINED SHADERC_ROOT_DIR)
+      set(SHADERC_ROOT_DIR ${LIBDIR}/shaderc)
+    endif()
+
+    find_package_wrapper(Vulkan REQUIRED)
+    find_package_wrapper(ShaderC REQUIRED)
+  else()
+    # Use system libs
+    find_package(PkgConfig)
+    pkg_check_modules(VULKAN REQUIRED vulkan)
+    pkg_check_modules(SHADERC REQUIRED shaderc)
+  endif()
 endif()
 add_bundled_libraries(vulkan/lib)
 
@@ -142,6 +167,11 @@ endfunction()
 if(NOT WITH_SYSTEM_FREETYPE)
   # FreeType compiled with Brotli compression for woff2.
   find_package_wrapper(Freetype REQUIRED)
+  # CMake 3.28.1 defines this, it doesn't seem to be used, hide by default in the UI.
+  if(DEFINED freetype_DIR)
+    mark_as_advanced(freetype_DIR)
+  endif()
+
   if(DEFINED LIBDIR)
     find_package_wrapper(Brotli REQUIRED)
 
@@ -157,6 +187,14 @@ if(NOT WITH_SYSTEM_FREETYPE)
     set(BROTLI_LIBRARIES "")
   endif()
   check_freetype_for_brotli()
+endif()
+
+if(WITH_HARFBUZZ)
+  find_package(Harfbuzz)
+endif()
+
+if(WITH_FRIBIDI)
+  find_package(Fribidi)
 endif()
 
 if(WITH_PYTHON)
@@ -314,9 +352,11 @@ if(WITH_INPUT_NDOF)
 endif()
 
 if(WITH_CYCLES AND WITH_CYCLES_OSL)
-  set(CYCLES_OSL ${LIBDIR}/osl CACHE PATH "Path to OpenShadingLanguage installation")
-  if(EXISTS ${CYCLES_OSL} AND NOT OSL_ROOT)
-    set(OSL_ROOT ${CYCLES_OSL})
+  if(DEFINED LIBDIR)
+    set(CYCLES_OSL ${LIBDIR}/osl CACHE PATH "Path to OpenShadingLanguage installation")
+    if(EXISTS ${CYCLES_OSL} AND NOT OSL_ROOT)
+      set(OSL_ROOT ${CYCLES_OSL})
+    endif()
   endif()
   find_package_wrapper(OSL)
   set_and_warn_library_found("OSL" OSL_FOUND WITH_CYCLES_OSL)
@@ -333,8 +373,9 @@ if(WITH_CYCLES AND WITH_CYCLES_OSL)
     endif()
   endif()
 endif()
+add_bundled_libraries(osl/lib)
 
-if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI)
+if(WITH_CYCLES AND WITH_CYCLES_DEVICE_ONEAPI AND DEFINED LIBDIR)
   set(CYCLES_LEVEL_ZERO ${LIBDIR}/level-zero CACHE PATH "Path to Level Zero installation")
   mark_as_advanced(CYCLES_LEVEL_ZERO)
   if(EXISTS ${CYCLES_LEVEL_ZERO} AND NOT LEVEL_ZERO_ROOT_DIR)
@@ -461,7 +502,9 @@ if(WITH_PUGIXML)
 endif()
 
 if(WITH_IMAGE_WEBP)
-  set(WEBP_ROOT_DIR ${LIBDIR}/webp)
+  if(DEFINED LIBDIR)
+    set(WEBP_ROOT_DIR ${LIBDIR}/webp)
+  endif()
   find_package_wrapper(WebP)
   set_and_warn_library_found("WebP" WEBP_FOUND WITH_IMAGE_WEBP)
 endif()
@@ -485,6 +528,7 @@ add_bundled_libraries(embree/lib)
 if(WITH_OPENIMAGEDENOISE)
   find_package_wrapper(OpenImageDenoise)
   set_and_warn_library_found("OpenImageDenoise" OPENIMAGEDENOISE_FOUND WITH_OPENIMAGEDENOISE)
+  add_bundled_libraries(openimagedenoise/lib)
 endif()
 
 if(WITH_LLVM)
@@ -663,10 +707,11 @@ if(WITH_GHOST_WAYLAND)
   # When dynamically linked WAYLAND is used and `${LIBDIR}/wayland` is present,
   # there is no need to search for the libraries as they are not needed for building.
   # Only the headers are needed which can reference the known paths.
-  if((DEFINED LIBDIR) AND (EXISTS "${LIBDIR}/wayland" AND WITH_GHOST_WAYLAND_DYNLOAD))
-    set(_use_system_wayland OFF)
-  else()
-    set(_use_system_wayland ON)
+  set(_use_system_wayland ON)
+  if(DEFINED LIBDIR)
+    if(EXISTS "${LIBDIR}/wayland" AND WITH_GHOST_WAYLAND_DYNLOAD)
+      set(_use_system_wayland OFF)
+    endif()
   endif()
 
   if(_use_system_wayland)
@@ -735,8 +780,11 @@ if(WITH_GHOST_WAYLAND)
       add_definitions(-DWITH_GHOST_WAYLAND_LIBDECOR)
     endif()
 
-    if((DEFINED LIBDIR) AND (EXISTS "${LIBDIR}/wayland/bin/wayland-scanner"))
+    if(DEFINED LIBDIR)
       set(WAYLAND_SCANNER "${LIBDIR}/wayland/bin/wayland-scanner")
+      if(NOT (EXISTS "${WAYLAND_SCANNER}"))
+        message(FATAL_ERROR "${WAYLAND_SCANNER} is missing!")
+      endif()
     else()
       pkg_get_variable(WAYLAND_SCANNER wayland-scanner wayland_scanner)
     endif()
@@ -1075,4 +1123,8 @@ if(PLATFORM_BUNDLED_LIBRARIES)
   set(PLATFORM_ENV_BUILD "LD_LIBRARY_PATH=\"${_library_paths}:$LD_LIBRARY_PATH\"")
   set(PLATFORM_ENV_INSTALL "LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX_WITH_CONFIG}/lib/;$LD_LIBRARY_PATH")
   unset(_library_paths)
+else()
+  # Quiet unused variable warnings, unfortunately this can't be empty.
+  set(PLATFORM_ENV_BUILD "_DUMMY_ENV_VAR_=1")
+  set(PLATFORM_ENV_INSTALL "_DUMMY_ENV_VAR_=1")
 endif()

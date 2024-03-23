@@ -10,8 +10,8 @@
 
 #include "NOD_geometry.hh"
 
-#include "BKE_context.h"
-#include "BKE_layer.h"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
 #include "BKE_node.hh"
 #include "BKE_object.hh"
 
@@ -93,6 +93,14 @@ static bool geometry_node_tree_validate_link(eNodeSocketDatatype type_a,
   {
     return true;
   }
+  if (ELEM(type_a, SOCK_FLOAT, SOCK_VECTOR) && type_b == SOCK_ROTATION) {
+    /* Floats and vectors implicitly convert to rotations. */
+    return true;
+  }
+  if (type_a == SOCK_ROTATION && type_b == SOCK_VECTOR) {
+    /* Rotations implicitly convert to vectors. */
+    return true;
+  }
   return type_a == type_b;
 }
 
@@ -112,7 +120,8 @@ static bool geometry_node_tree_socket_type_valid(bNodeTreeType * /*treetype*/,
                                                                    SOCK_COLLECTION,
                                                                    SOCK_TEXTURE,
                                                                    SOCK_IMAGE,
-                                                                   SOCK_MATERIAL);
+                                                                   SOCK_MATERIAL,
+                                                                   SOCK_MENU);
 }
 
 void register_node_tree_type_geo()

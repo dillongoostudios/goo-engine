@@ -2,16 +2,10 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Cube-map support and fallback implementation declarations. */
-#ifdef GPU_ARB_texture_cube_map_array
-#  define textureLod_cubemapArray(tex, co, lod) textureLod(tex, co, lod)
-#else
-#  define samplerCubeArray sampler2DArray
-#endif
-
 /* Fast store variant macro. In GLSL this is the same as imageStore, but assumes no bounds
  * checking. */
 #define imageStoreFast imageStore
+#define imageLoadFast imageLoad
 
 /* Texture format tokens -- Type explicitness required by other Graphics APIs. */
 #define depth2D sampler2D
@@ -21,6 +15,13 @@
 #define depthCube samplerCube
 #define depthCubeArray samplerCubeArray
 #define depth2DArrayShadow sampler2DArrayShadow
+
+#define usampler2DArrayAtomic usampler2DArray
+#define usampler2DAtomic usampler2D
+#define usampler3DAtomic usampler3D
+#define isampler2DArrayAtomic isampler2DArray
+#define isampler2DAtomic isampler2D
+#define isampler3DAtomic isampler3D
 
 /* Backend Functions. */
 #define select(A, B, mask) mix(A, B, mask)

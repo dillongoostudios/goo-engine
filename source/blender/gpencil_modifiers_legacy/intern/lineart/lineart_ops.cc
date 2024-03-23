@@ -13,7 +13,7 @@
 #include "BLI_linklist.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
@@ -51,26 +51,27 @@ static bool lineart_mod_is_disabled(GpencilModifierData *md)
   return disabled;
 }
 
-static void clear_strokes(Object *ob, GpencilModifierData *md, int frame)
+static bool clear_strokes(Object *ob, GpencilModifierData *md, int frame)
 {
   if (md->type != eGpencilModifierType_Lineart) {
-    return;
+    return false;
   }
   LineartGpencilModifierData *lmd = (LineartGpencilModifierData *)md;
   bGPdata *gpd = static_cast<bGPdata *>(ob->data);
 
   bGPDlayer *gpl = BKE_gpencil_layer_get_by_name(gpd, lmd->target_layer, 1);
   if (!gpl) {
-    return;
+    return false;
   }
   bGPDframe *gpf = BKE_gpencil_layer_frame_find(gpl, frame);
 
   if (!gpf) {
     /* No greasepencil frame found. */
-    return;
+    return false;
   }
 
   BKE_gpencil_layer_frame_delete(gpl, gpf);
+  return true;
 }
 
 static bool bake_strokes(Object *ob,
@@ -182,7 +183,9 @@ static bool lineart_gpencil_bake_single_target(LineartBakeJob *bj, Object *ob, i
   if (bj->overwrite_frames) {
     LISTBASE_FOREACH (GpencilModifierData *, md, &ob->greasepencil_modifiers) {
       if (md->type == eGpencilModifierType_Lineart) {
-        clear_strokes(ob, md, frame);
+        if (clear_strokes(ob, md, frame)) {
+          touched = true;
+        }
       }
     }
   }
@@ -237,6 +240,7 @@ static void lineart_gpencil_bake_startjob(void *customdata, wmJobWorkerStatus *w
 
     BKE_scene_frame_set(bj->scene, frame);
     BKE_scene_graph_update_for_newframe(bj->dg);
+    DEG_graph_build_from_view_layer(bj->dg);
 
     for (LinkNode *l = bj->objects; l; l = l->next) {
       Object *ob = static_cast<Object *>(l->link);

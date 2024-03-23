@@ -12,11 +12,10 @@
 #include "COLLADASWSource.h"
 
 #include "DNA_action_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_global.h"
 #include "BKE_mesh.hh"
 
@@ -39,7 +38,7 @@ void ArmatureExporter::add_bone_collections(Object *ob_arm, COLLADASW::Node &nod
 
   std::stringstream collection_stream;
   std::stringstream visible_stream;
-  LISTBASE_FOREACH (const BoneCollection *, bcoll, &armature->collections) {
+  for (const BoneCollection *bcoll : armature->collections_span()) {
     collection_stream << bcoll->name << "\n";
 
     if (bcoll->flags & BONE_COLLECTION_VISIBLE) {
@@ -114,8 +113,8 @@ bool ArmatureExporter::add_instance_controller(Object *ob)
   COLLADASW::InstanceController ins(mSW);
   ins.setUrl(COLLADASW::URI(COLLADABU::Utils::EMPTY_STRING, controller_id));
 
-  Mesh *me = (Mesh *)ob->data;
-  if (BKE_mesh_deform_verts(me) == nullptr) {
+  Mesh *mesh = (Mesh *)ob->data;
+  if (mesh->deform_verts().is_empty()) {
     return false;
   }
 

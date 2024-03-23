@@ -30,14 +30,14 @@ void main()
     resource_id = (resource_id & 0x7FFFFFFFu);
 
     ObjectBounds bounds = bounds_buf[resource_id];
-    box = isect_data_setup(bounds.bounding_corners[0].xyz,
-                           bounds.bounding_corners[1].xyz,
-                           bounds.bounding_corners[2].xyz,
-                           bounds.bounding_corners[3].xyz);
+    box = isect_box_setup(bounds.bounding_corners[0].xyz,
+                          bounds.bounding_corners[1].xyz,
+                          bounds.bounding_corners[2].xyz,
+                          bounds.bounding_corners[3].xyz);
   }
   else {
     /* Create a dummy box so initialization happens even when there are no shadow casters. */
-    box = isect_data_setup(
+    box = isect_box_setup(
         vec3(-1.0), vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec3(0.0, 0.0, 1.0));
   }
 
@@ -52,7 +52,7 @@ void main()
       local_max = max(local_max, z);
     }
 
-    if (gl_LocalInvocationID.x == 0) {
+    if (gl_LocalInvocationIndex == 0u) {
       global_min = floatBitsToOrderedInt(FLT_MAX);
       global_max = floatBitsToOrderedInt(-FLT_MAX);
     }
@@ -69,7 +69,7 @@ void main()
 
     barrier();
 
-    if (gl_LocalInvocationID.x == 0) {
+    if (gl_LocalInvocationIndex == 0u) {
       /* Final result. Min/Max of the whole dispatch. */
       atomicMin(light_buf[l_idx].clip_near, global_min);
       atomicMax(light_buf[l_idx].clip_far, global_max);

@@ -11,6 +11,7 @@ from bpy.types import (
 from bpy.app.translations import (
     contexts as i18n_contexts,
     pgettext_iface as iface_,
+    pgettext_rpt as rpt_,
 )
 from bl_ui.properties_grease_pencil_common import (
     AnnotationDataPanel,
@@ -322,7 +323,10 @@ class SEQUENCER_PT_sequencer_overlay(Panel):
 
         layout.separator()
 
-        layout.prop_menu_enum(overlay_settings, "waveform_display_type")
+        layout.label(text="Waveforms")
+        layout.row().prop(overlay_settings, "waveform_display_type", expand=True)
+        layout.label(text="Waveform Style")
+        layout.row().prop(overlay_settings, "waveform_display_style", expand=True)
 
 
 class SEQUENCER_MT_view_cache(Menu):
@@ -411,22 +415,24 @@ class SEQUENCER_MT_view(Menu):
             # mode, else the lookup for the shortcut will fail in
             # wm_keymap_item_find_props() (see #32595).
             layout.operator_context = 'INVOKE_REGION_PREVIEW'
+        layout.prop(st, "show_region_toolbar")
         layout.prop(st, "show_region_ui")
         layout.prop(st, "show_region_tool_header")
-        layout.prop(st, "show_region_toolbar")
         layout.operator_context = 'INVOKE_DEFAULT'
-
         if is_sequencer_view:
             layout.prop(st, "show_region_hud")
             layout.prop(st, "show_region_channels")
-
         layout.separator()
 
         if st.view_type == 'SEQUENCER':
             layout.prop(st, "show_backdrop", text="Preview as Backdrop")
         if is_preview or st.show_backdrop:
             layout.prop(st, "show_transform_preview", text="Preview During Transform")
+        layout.separator()
 
+        layout.operator_context = 'INVOKE_REGION_WIN'
+        layout.operator("sequencer.refresh_all", icon='FILE_REFRESH', text="Refresh All")
+        layout.operator_context = 'INVOKE_DEFAULT'
         layout.separator()
 
         layout.operator_context = 'INVOKE_REGION_WIN'
@@ -434,26 +440,23 @@ class SEQUENCER_MT_view(Menu):
             # See above (#32595)
             layout.operator_context = 'INVOKE_REGION_PREVIEW'
         layout.operator("sequencer.view_selected", text="Frame Selected")
-
         if is_sequencer_view:
             layout.operator_context = 'INVOKE_REGION_WIN'
             layout.operator("sequencer.view_all")
             layout.operator("sequencer.view_frame")
-            layout.operator("view2d.zoom_border", text="Zoom")
+            layout.operator("view2d.zoom_border", text="Zoom to Border")
             layout.prop(st, "use_clamp_view")
 
         if is_preview:
+            if is_sequencer_view:
+                layout.separator()
             layout.operator_context = 'INVOKE_REGION_PREVIEW'
-            layout.separator()
-
             layout.operator("sequencer.view_all_preview", text="Fit Preview in Window")
-
             if is_sequencer_view:
                 layout.menu("SEQUENCER_MT_preview_zoom", text="Fractional Preview Zoom")
             else:
-                layout.operator("view2d.zoom_border", text="Zoom")
+                layout.operator("view2d.zoom_border", text="Zoom to Border")
                 layout.menu("SEQUENCER_MT_preview_zoom")
-
             layout.prop(st, "use_zoom_to_fit")
 
             if st.display_mode == 'WAVEFORM':
@@ -461,42 +464,34 @@ class SEQUENCER_MT_view(Menu):
                 layout.prop(st, "show_separate_color", text="Show Separate Color Channels")
 
             layout.separator()
-
             layout.menu("SEQUENCER_MT_proxy")
-
             layout.operator_context = 'INVOKE_DEFAULT'
-
-        layout.separator()
-        layout.operator_context = 'INVOKE_REGION_WIN'
-        layout.operator("sequencer.refresh_all", icon='FILE_REFRESH', text="Refresh All")
-        layout.operator_context = 'INVOKE_DEFAULT'
+            layout.separator()
 
         if is_sequencer_view:
+            layout.separator()
+
+            layout.prop(st, "show_markers")
+            layout.prop(st, "show_seconds")
+            layout.prop(st, "show_locked_time")
             layout.separator()
 
             layout.operator_context = 'INVOKE_DEFAULT'
             layout.menu("SEQUENCER_MT_navigation")
             layout.menu("SEQUENCER_MT_range")
-
             layout.separator()
-            layout.prop(st, "show_locked_time")
 
-            layout.separator()
-            layout.prop(st, "show_seconds")
-            layout.prop(st, "show_markers")
             if context.preferences.view.show_developer_ui:
-                layout.menu("SEQUENCER_MT_view_cache", text="Show Cache")
-
-        layout.separator()
+                layout.menu("SEQUENCER_MT_view_cache", text="Cache")
+                layout.separator()
 
         layout.operator("render.opengl", text="Sequence Render Image", icon='RENDER_STILL').sequencer = True
         props = layout.operator("render.opengl", text="Sequence Render Animation", icon='RENDER_ANIMATION')
         props.animation = True
         props.sequencer = True
-
         layout.separator()
-        layout.operator("sequencer.export_subtitles", text="Export Subtitles", icon='EXPORT')
 
+        layout.operator("sequencer.export_subtitles", text="Export Subtitles", icon='EXPORT')
         layout.separator()
 
         # Note that the context is needed for the shortcut to display properly.
@@ -510,7 +505,6 @@ class SEQUENCER_MT_view(Menu):
         props.value_1 = 'SEQUENCER'
         props.value_2 = 'PREVIEW'
         layout.operator_context = 'INVOKE_DEFAULT'
-
         layout.separator()
 
         layout.menu("INFO_MT_area")
@@ -675,6 +669,7 @@ class SEQUENCER_MT_navigation(Menu):
 class SEQUENCER_MT_add(Menu):
     bl_label = "Add"
     bl_translation_context = i18n_contexts.operator_default
+    bl_options = {'SEARCH_ON_KEY_PRESS'}
 
     def draw(self, context):
 
@@ -941,9 +936,9 @@ class SEQUENCER_MT_strip_retiming(Menu):
         layout = self.layout
 
         layout.operator("sequencer.retiming_key_add")
-        layout.operator("sequencer.retiming_freeze_frame_add")
+        layout.operator("sequencer.retiming_add_freeze_frame_slide")
         col = layout.column()
-        col.operator("sequencer.retiming_transition_add")
+        col.operator("sequencer.retiming_add_transition_slide")
         col.enabled = is_retiming
 
         layout.separator()
@@ -1107,7 +1102,7 @@ class SEQUENCER_MT_retiming(Menu):
         layout.operator_context = 'INVOKE_REGION_WIN'
 
         layout.operator("sequencer.retiming_key_add")
-        layout.operator("sequencer.retiming_freeze_frame_add")
+        layout.operator("sequencer.retiming_add_freeze_frame_slide")
 
 
 class SEQUENCER_MT_context_menu(Menu):
@@ -1214,14 +1209,14 @@ class SEQUENCER_MT_context_menu(Menu):
         layout.operator_context = 'INVOKE_REGION_WIN'
 
         if context.scene.sequence_editor.selected_retiming_keys:
-            layout.operator("sequencer.retiming_freeze_frame_add")
-            layout.operator("sequencer.retiming_transition_add")
+            layout.operator("sequencer.retiming_add_freeze_frame_slide")
+            layout.operator("sequencer.retiming_add_transition_slide")
             layout.separator()
 
             layout.operator("sequencer.retiming_segment_speed_set")
             layout.separator()
 
-            layout.operator("sequencer.retiming_key_remove")
+            layout.operator("sequencer.delete", text="Delete Retiming Keys")
 
     def draw(self, context):
         ed = context.scene.sequence_editor
@@ -1829,16 +1824,6 @@ class SEQUENCER_PT_scene(SequencerButtonsPanel, Panel):
         if strip.scene_input == 'CAMERA':
             layout.template_ID(strip, "scene_camera", text="Camera")
 
-        if scene:
-            # Build a manual split layout as a hack to get proper alignment with the rest of the buttons.
-            sub = layout.row(align=True)
-            sub.use_property_decorate = True
-            split = sub.split(factor=0.4, align=True)
-            split.alignment = 'RIGHT'
-            split.label(text="Volume", text_ctxt=i18n_contexts.id_sound)
-            split.prop(scene, "audio_volume", text="")
-            sub.use_property_decorate = False
-
         if strip.scene_input == 'CAMERA':
             layout = layout.column(heading="Show")
             layout.prop(strip, "use_annotations", text="Annotations")
@@ -1846,6 +1831,39 @@ class SEQUENCER_PT_scene(SequencerButtonsPanel, Panel):
                 # Warning, this is not a good convention to follow.
                 # Expose here because setting the alpha from the "Render" menu is very inconvenient.
                 layout.prop(scene.render, "film_transparent")
+
+
+class SEQUENCER_PT_scene_sound(SequencerButtonsPanel, Panel):
+    bl_label = "Sound"
+    bl_category = "Strip"
+
+    @classmethod
+    def poll(cls, context):
+        if not cls.has_sequencer(context):
+            return False
+
+        strip = context.active_sequence_strip
+        if not strip:
+            return False
+
+        return (strip.type == 'SCENE')
+
+    def draw(self, context):
+        strip = context.active_sequence_strip
+
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.active = not strip.mute
+
+        col = layout.column()
+
+        col.use_property_decorate = True
+        split = col.split(factor=0.4)
+        split.alignment = 'RIGHT'
+        split.label(text="Strip Volume", text_ctxt=i18n_contexts.id_sound)
+        split.prop(strip, "volume", text="")
+        col.use_property_decorate = False
 
 
 class SEQUENCER_PT_mask(SequencerButtonsPanel, Panel):
@@ -1878,7 +1896,7 @@ class SEQUENCER_PT_mask(SequencerButtonsPanel, Panel):
         if mask:
             sta = mask.frame_start
             end = mask.frame_end
-            layout.label(text=iface_("Original frame range: %d-%d (%d)") % (sta, end, end - sta + 1), translate=False)
+            layout.label(text=rpt_("Original frame range: %d-%d (%d)") % (sta, end, end - sta + 1), translate=False)
 
 
 class SEQUENCER_PT_time(SequencerButtonsPanel, Panel):
@@ -2705,6 +2723,8 @@ class SEQUENCER_PT_annotation_onion(AnnotationOnionSkin, SequencerButtonsPanel_O
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'UI'
     bl_category = "View"
+    bl_parent_id = "SEQUENCER_PT_annotation"
+    bl_options = {'DEFAULT_CLOSED'}
 
     @staticmethod
     def has_preview(context):
@@ -2812,6 +2832,7 @@ classes = (
 
     SEQUENCER_PT_effect,
     SEQUENCER_PT_scene,
+    SEQUENCER_PT_scene_sound,
     SEQUENCER_PT_mask,
     SEQUENCER_PT_effect_text_style,
     SEQUENCER_PT_effect_text_layout,

@@ -41,7 +41,7 @@ const float *NodeOperation::get_constant_elem_default(const float *default_elem)
 
 std::optional<NodeOperationHash> NodeOperation::generate_hash()
 {
-  params_hash_ = get_default_hash_2(canvas_.xmin, canvas_.xmax);
+  params_hash_ = get_default_hash(canvas_.xmin, canvas_.xmax);
 
   /* Hash subclasses params. */
   is_hash_output_params_implemented_ = true;
@@ -194,7 +194,7 @@ const rcti &NodeOperation::get_canvas() const
 
 void NodeOperation::unset_canvas()
 {
-  BLI_assert(inputs_.size() == 0);
+  BLI_assert(inputs_.is_empty());
   flags_.is_canvas_set = false;
 }
 
@@ -217,7 +217,7 @@ bool NodeOperation::determine_depending_area_of_interest(rcti *input,
                                                          ReadBufferOperation *read_operation,
                                                          rcti *output)
 {
-  if (inputs_.size() == 0) {
+  if (inputs_.is_empty()) {
     BLI_rcti_init(output, input->xmin, input->xmax, input->ymin, input->ymax);
     return false;
   }

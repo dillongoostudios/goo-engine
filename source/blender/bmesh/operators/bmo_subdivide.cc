@@ -19,11 +19,11 @@
 #include "BLI_stack.h"
 #include "BLI_vector.hh"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 
-#include "bmesh.h"
-#include "intern/bmesh_operators_private.h"
-#include "intern/bmesh_private.h"
+#include "bmesh.hh"
+#include "intern/bmesh_operators_private.hh"
+#include "intern/bmesh_private.hh"
 
 using blender::Vector;
 

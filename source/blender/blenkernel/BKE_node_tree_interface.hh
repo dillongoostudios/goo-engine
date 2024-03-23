@@ -27,7 +27,7 @@ class bNodeTreeInterfaceRuntime {
  private:
   /**
    * Keeps track of what changed in the node tree until the next update.
-   * Should not be changed directly, instead use the functions in `BKE_node_tree_update.h`.
+   * Should not be changed directly, instead use the functions in `BKE_node_tree_update.hh`.
    * #NodeTreeInterfaceChangedFlag.
    */
   uint32_t changed_flag_ = 0;
@@ -158,6 +158,7 @@ static const bNodeSocketStaticTypeInfo node_socket_subtypes[] = {
     {"NodeSocketCollection", "NodeTreeInterfaceSocketCollection", SOCK_COLLECTION, PROP_NONE},
     {"NodeSocketTexture", "NodeTreeInterfaceSocketTexture", SOCK_TEXTURE, PROP_NONE},
     {"NodeSocketMaterial", "NodeTreeInterfaceSocketMaterial", SOCK_MATERIAL, PROP_NONE},
+    {"NodeSocketMenu", "NodeTreeInterfaceSocketMenu", SOCK_MENU, PROP_NONE},
 };
 
 template<typename Fn> bool socket_data_to_static_type(const eNodeSocketDatatype type, const Fn &fn)
@@ -198,6 +199,9 @@ template<typename Fn> bool socket_data_to_static_type(const eNodeSocketDatatype 
       return true;
     case SOCK_MATERIAL:
       fn.template operator()<bNodeSocketValueMaterial>();
+      return true;
+    case SOCK_MENU:
+      fn.template operator()<bNodeSocketValueMenu>();
       return true;
 
     case SOCK_CUSTOM:

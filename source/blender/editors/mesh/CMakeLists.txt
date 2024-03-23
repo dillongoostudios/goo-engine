@@ -5,11 +5,9 @@
 set(INC
   ../include
   ../uvedit
-  ../../blenfont
   ../../blenkernel
   ../../blentranslation
   ../../bmesh
-  ../../depsgraph
   ../../draw
   ../../functions
   ../../geometry
@@ -18,7 +16,6 @@ set(INC
   ../../makesrna
   ../../render
   ../../windowmanager
-  ../../../../intern/clog
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
 )
@@ -52,6 +49,7 @@ set(SRC
   editmesh_rip_edge.cc
   editmesh_select.cc
   editmesh_select_similar.cc
+  editmesh_set_sharpness_by_angle.cc
   editmesh_tools.cc
   editmesh_undo.cc
   editmesh_utils.cc
@@ -60,13 +58,16 @@ set(SRC
   mesh_ops.cc
   meshtools.cc
 
-  mesh_intern.h
+  mesh_intern.hh
 )
 
 set(LIB
+  PRIVATE bf::blenfont
   bf_blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_windowmanager
 )

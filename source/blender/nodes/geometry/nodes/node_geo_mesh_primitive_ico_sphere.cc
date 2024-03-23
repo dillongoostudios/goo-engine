@@ -4,13 +4,13 @@
 
 #include "DNA_mesh_types.h"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
 
 #include "GEO_randomize.hh"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
 #include "node_geometry_util.hh"
 
@@ -105,7 +105,7 @@ static Mesh *create_ico_sphere_mesh(const int subdivisions,
   if (create_uv_map) {
     const VArraySpan orig_uv_map = *attributes.lookup<float2>("UVMap");
     SpanAttributeWriter<float2> uv_map = attributes.lookup_or_add_for_write_only_span<float2>(
-        uv_map_id, ATTR_DOMAIN_CORNER);
+        uv_map_id, AttrDomain::Corner);
     uv_map.span.copy_from(orig_uv_map);
     uv_map.finish();
   }

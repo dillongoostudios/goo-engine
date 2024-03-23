@@ -59,11 +59,17 @@ class DATA_PT_curves_surface(DataButtonsPanel, Panel):
         layout.prop(ob.data, "surface")
         has_surface = ob.data.surface is not None
         if has_surface:
-            layout.prop_search(ob.data, "surface_uv_map", ob.data.surface.data, "uv_layers", text="UV Map")
+            layout.prop_search(
+                ob.data,
+                "surface_uv_map",
+                ob.data.surface.data,
+                "uv_layers",
+                text="UV Map",
+                icon='GROUP_UVS')
         else:
             row = layout.row()
             row.prop(ob.data, "surface_uv_map", text="UV Map")
-            row.enabled = has_surface
+            row.active = has_surface
 
 
 class CURVES_MT_add_attribute(Menu):
@@ -111,6 +117,10 @@ class CURVES_UL_attributes(UIList):
         # Filtering internal attributes
         for idx, item in enumerate(attributes):
             flags[idx] = 0 if item.is_internal else flags[idx]
+
+        # Reorder by name.
+        if self.use_filter_sort_alpha:
+            indices = bpy.types.UI_UL_list.sort_items_by_name(attributes, "name")
 
         return flags, indices
 

@@ -34,8 +34,8 @@
 #include "BKE_camera.h"
 #include "BKE_collection.h"
 #include "BKE_editlattice.h"
-#include "BKE_editmesh.h"
-#include "BKE_layer.h"
+#include "BKE_editmesh.hh"
+#include "BKE_layer.hh"
 #include "BKE_object_deform.h"
 #include "BKE_paint.hh"
 
@@ -43,7 +43,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "BLI_sys_types.h" /* needed for intptr_t used in ED_mesh.hh */
 #include "ED_mesh.hh"
@@ -262,8 +262,8 @@ const EnumPropertyItem rna_enum_object_type_items[] = {
     {OB_CURVES, "CURVES", ICON_OUTLINER_OB_CURVES, "Hair Curves", ""},
     {OB_POINTCLOUD, "POINTCLOUD", ICON_OUTLINER_OB_POINTCLOUD, "Point Cloud", ""},
     {OB_VOLUME, "VOLUME", ICON_OUTLINER_OB_VOLUME, "Volume", ""},
-    {OB_GPENCIL_LEGACY, "GPENCIL", ICON_OUTLINER_OB_GREASEPENCIL, "Grease Pencil (legacy)", ""},
-    {OB_GREASE_PENCIL, "GREASEPENCIL", ICON_OUTLINER_OB_GREASEPENCIL, "Grease Pencil", ""},
+    {OB_GPENCIL_LEGACY, "GPENCIL", ICON_OUTLINER_OB_GREASEPENCIL, "Grease Pencil", ""},
+    {OB_GREASE_PENCIL, "GREASEPENCIL", ICON_OUTLINER_OB_GREASEPENCIL, "Grease Pencil v3", ""},
     RNA_ENUM_ITEM_SEPR,
     {OB_ARMATURE, "ARMATURE", ICON_OUTLINER_OB_ARMATURE, "Armature", ""},
     {OB_LATTICE, "LATTICE", ICON_OUTLINER_OB_LATTICE, "Lattice", ""},
@@ -314,6 +314,10 @@ const EnumPropertyItem rna_enum_object_axis_items[] = {
 
 #ifdef RNA_RUNTIME
 
+#  include <algorithm>
+
+#  include <fmt/format.h>
+
 #  include "DNA_ID.h"
 #  include "DNA_constraint_types.h"
 #  include "DNA_gpencil_legacy_types.h"
@@ -321,21 +325,21 @@ const EnumPropertyItem rna_enum_object_axis_items[] = {
 #  include "DNA_lattice_types.h"
 #  include "DNA_node_types.h"
 
-#  include "BKE_armature.h"
+#  include "BKE_armature.hh"
 #  include "BKE_brush.hh"
 #  include "BKE_constraint.h"
-#  include "BKE_context.h"
-#  include "BKE_curve.h"
-#  include "BKE_deform.h"
+#  include "BKE_context.hh"
+#  include "BKE_curve.hh"
+#  include "BKE_deform.hh"
 #  include "BKE_effect.h"
 #  include "BKE_global.h"
 #  include "BKE_gpencil_modifier_legacy.h"
-#  include "BKE_key.h"
+#  include "BKE_key.hh"
 #  include "BKE_light_linking.h"
 #  include "BKE_material.h"
 #  include "BKE_mesh.hh"
 #  include "BKE_mesh_wrapper.hh"
-#  include "BKE_modifier.h"
+#  include "BKE_modifier.hh"
 #  include "BKE_object.hh"
 #  include "BKE_particle.h"
 #  include "BKE_scene.h"
@@ -468,16 +472,16 @@ static void rna_Object_active_shape_update(Main *bmain, Scene * /*scene*/, Point
     /* exit/enter editmode to get new shape */
     switch (ob->type) {
       case OB_MESH: {
-        Mesh *me = static_cast<Mesh *>(ob->data);
-        BMEditMesh *em = me->edit_mesh;
+        Mesh *mesh = static_cast<Mesh *>(ob->data);
+        BMEditMesh *em = mesh->edit_mesh;
         int select_mode = em->selectmode;
         EDBM_mesh_load(bmain, ob);
         EDBM_mesh_make(ob, select_mode, true);
-        em = me->edit_mesh;
+        em = mesh->edit_mesh;
 
-        DEG_id_tag_update(&me->id, 0);
+        DEG_id_tag_update(&mesh->id, 0);
 
-        BKE_editmesh_looptri_and_normals_calc(em);
+        BKE_editmesh_looptris_and_normals_calc(em);
         break;
       }
       case OB_CURVES_LEGACY:
@@ -511,9 +515,9 @@ static PointerRNA rna_Object_data_get(PointerRNA *ptr)
 {
   Object *ob = static_cast<Object *>(ptr->data);
   if (ob->type == OB_MESH) {
-    Mesh *me = static_cast<Mesh *>(ob->data);
-    me = BKE_mesh_wrapper_ensure_subdivision(me);
-    return rna_pointer_inherit_refine(ptr, &RNA_Mesh, me);
+    Mesh *mesh = static_cast<Mesh *>(ob->data);
+    mesh = BKE_mesh_wrapper_ensure_subdivision(mesh);
+    return rna_pointer_inherit_refine(ptr, &RNA_Mesh, mesh);
   }
   return rna_pointer_inherit_refine(ptr, &RNA_ID, ob->data);
 }
@@ -1047,15 +1051,15 @@ void rna_object_uvlayer_name_set(PointerRNA *ptr,
                                  int result_maxncpy)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
-  Mesh *me;
+  Mesh *mesh;
   CustomDataLayer *layer;
   int a;
 
   if (ob->type == OB_MESH && ob->data) {
-    me = static_cast<Mesh *>(ob->data);
+    mesh = static_cast<Mesh *>(ob->data);
 
-    for (a = 0; a < me->loop_data.totlayer; a++) {
-      layer = &me->loop_data.layers[a];
+    for (a = 0; a < mesh->corner_data.totlayer; a++) {
+      layer = &mesh->corner_data.layers[a];
 
       if (layer->type == CD_PROP_FLOAT2 && STREQ(layer->name, value)) {
         BLI_strncpy(result, value, result_maxncpy);
@@ -1073,15 +1077,15 @@ void rna_object_vcollayer_name_set(PointerRNA *ptr,
                                    int result_maxncpy)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
-  Mesh *me;
+  Mesh *mesh;
   CustomDataLayer *layer;
   int a;
 
   if (ob->type == OB_MESH && ob->data) {
-    me = static_cast<Mesh *>(ob->data);
+    mesh = static_cast<Mesh *>(ob->data);
 
-    for (a = 0; a < me->fdata_legacy.totlayer; a++) {
-      layer = &me->fdata_legacy.layers[a];
+    for (a = 0; a < mesh->fdata_legacy.totlayer; a++) {
+      layer = &mesh->fdata_legacy.layers[a];
 
       if (layer->type == CD_MCOL && STREQ(layer->name, value)) {
         BLI_strncpy(result, value, result_maxncpy);
@@ -1096,7 +1100,7 @@ void rna_object_vcollayer_name_set(PointerRNA *ptr,
 static int rna_Object_active_material_index_get(PointerRNA *ptr)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
-  return MAX2(ob->actcol - 1, 0);
+  return std::max<int>(ob->actcol - 1, 0);
 }
 
 static void rna_Object_active_material_index_set(PointerRNA *ptr, int value)
@@ -1105,10 +1109,10 @@ static void rna_Object_active_material_index_set(PointerRNA *ptr, int value)
   ob->actcol = value + 1;
 
   if (ob->type == OB_MESH) {
-    Mesh *me = static_cast<Mesh *>(ob->data);
+    Mesh *mesh = static_cast<Mesh *>(ob->data);
 
-    if (me->edit_mesh) {
-      me->edit_mesh->mat_nr = value;
+    if (mesh->edit_mesh) {
+      mesh->edit_mesh->mat_nr = value;
     }
   }
 }
@@ -1149,7 +1153,7 @@ static void rna_Object_active_material_set(PointerRNA *ptr,
   }
 }
 
-static int rna_Object_active_material_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_Object_active_material_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   bool is_editable;
@@ -1233,7 +1237,7 @@ static void rna_Object_rotation_mode_set(PointerRNA *ptr, int value)
 static void rna_Object_dimensions_get(PointerRNA *ptr, float *value)
 {
   Object *ob = static_cast<Object *>(ptr->data);
-  BKE_object_dimensions_get(ob, value);
+  BKE_object_dimensions_eval_cached_get(ob, value);
 }
 
 static void rna_Object_dimensions_set(PointerRNA *ptr, const float *value)
@@ -1242,7 +1246,7 @@ static void rna_Object_dimensions_set(PointerRNA *ptr, const float *value)
   BKE_object_dimensions_set(ob, value, 0);
 }
 
-static int rna_Object_location_editable(PointerRNA *ptr, int index)
+static int rna_Object_location_editable(const PointerRNA *ptr, int index)
 {
   Object *ob = static_cast<Object *>(ptr->data);
 
@@ -1261,7 +1265,7 @@ static int rna_Object_location_editable(PointerRNA *ptr, int index)
   }
 }
 
-static int rna_Object_scale_editable(PointerRNA *ptr, int index)
+static int rna_Object_scale_editable(const PointerRNA *ptr, int index)
 {
   Object *ob = static_cast<Object *>(ptr->data);
 
@@ -1280,7 +1284,7 @@ static int rna_Object_scale_editable(PointerRNA *ptr, int index)
   }
 }
 
-static int rna_Object_rotation_euler_editable(PointerRNA *ptr, int index)
+static int rna_Object_rotation_euler_editable(const PointerRNA *ptr, int index)
 {
   Object *ob = static_cast<Object *>(ptr->data);
 
@@ -1299,7 +1303,7 @@ static int rna_Object_rotation_euler_editable(PointerRNA *ptr, int index)
   }
 }
 
-static int rna_Object_rotation_4d_editable(PointerRNA *ptr, int index)
+static int rna_Object_rotation_4d_editable(const PointerRNA *ptr, int index)
 {
   Object *ob = static_cast<Object *>(ptr->data);
 
@@ -1334,7 +1338,7 @@ static int rna_MaterialSlot_index_get(PointerRNA *ptr)
   return rna_MaterialSlot_index(ptr);
 }
 
-static int rna_MaterialSlot_material_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_MaterialSlot_material_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   const int index = rna_MaterialSlot_index(ptr);
@@ -1460,10 +1464,10 @@ static void rna_MaterialSlot_update(Main *bmain, Scene *scene, PointerRNA *ptr)
   DEG_relations_tag_update(bmain);
 }
 
-static char *rna_MaterialSlot_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_MaterialSlot_path(const PointerRNA *ptr)
 {
   int index = rna_MaterialSlot_index(ptr);
-  return BLI_sprintfN("material_slots[%d]", index);
+  return fmt::format("material_slots[{}]", index);
 }
 
 static int rna_Object_material_slots_length(PointerRNA *ptr)
@@ -1510,9 +1514,9 @@ static PointerRNA rna_Object_display_get(PointerRNA *ptr)
   return rna_pointer_inherit_refine(ptr, &RNA_ObjectDisplay, ptr->data);
 }
 
-static char *rna_ObjectDisplay_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_ObjectDisplay_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("display");
+  return "display";
 }
 
 static PointerRNA rna_Object_active_particle_system_get(PointerRNA *ptr)
@@ -1544,7 +1548,7 @@ static int rna_Object_active_shape_key_index_get(PointerRNA *ptr)
 {
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
 
-  return MAX2(ob->shapenr - 1, 0);
+  return std::max<int>(ob->shapenr - 1, 0);
 }
 
 static void rna_Object_active_shape_key_index_set(PointerRNA *ptr, int value)
@@ -1861,7 +1865,9 @@ bool rna_Object_modifiers_override_apply(Main *bmain,
   ParticleSystem *psys_dst = (mod_dst->type == eModifierType_ParticleSystem) ?
                                  (reinterpret_cast<ParticleSystemModifierData *>(mod_dst))->psys :
                                  nullptr;
+  const int persistent_uid = mod_dst->persistent_uid;
   BKE_modifier_copydata(mod_src, mod_dst);
+  mod_dst->persistent_uid = persistent_uid;
   if (mod_dst->type == eModifierType_ParticleSystem) {
     psys_dst->flag &= ~PSYS_DELETE;
     (reinterpret_cast<ParticleSystemModifierData *>(mod_dst))->psys = psys_dst;
@@ -1989,12 +1995,15 @@ static void rna_Object_shaderfx_clear(Object *object, bContext *C)
 
 static void rna_Object_boundbox_get(PointerRNA *ptr, float *values)
 {
+  using namespace blender;
   Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
-  if (const std::optional<BoundBox> bb = BKE_object_boundbox_get(ob)) {
-    memcpy(values, bb->vec, sizeof(bb->vec));
+  if (const std::optional<Bounds<float3>> bounds = BKE_object_boundbox_eval_cached_get(ob)) {
+    BoundBox bb;
+    BKE_boundbox_init_from_minmax(&bb, bounds->min, bounds->max);
+    memcpy(values, bb.vec, sizeof(bb.vec));
   }
   else {
-    copy_vn_fl(values, sizeof(bb->vec) / sizeof(float), 0.0f);
+    copy_vn_fl(values, 8 * 3, 0.0f);
   }
 }
 
@@ -2169,9 +2178,9 @@ static void rna_object_lineart_update(Main * /*bmain*/, Scene * /*scene*/, Point
   WM_main_add_notifier(NC_OBJECT | ND_MODIFIER, ptr->owner_id);
 }
 
-static char *rna_ObjectLineArt_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_ObjectLineArt_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("lineart");
+  return "lineart";
 }
 
 static bool mesh_symmetry_get_common(PointerRNA *ptr, const eMeshSymmetryType sym)
@@ -2233,7 +2242,7 @@ static void rna_Object_mesh_symmetry_z_set(PointerRNA *ptr, bool value)
   mesh_symmetry_set_common(ptr, value, ME_SYMMETRY_Z);
 }
 
-static int rna_Object_mesh_symmetry_yz_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_Object_mesh_symmetry_yz_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   const Object *ob = reinterpret_cast<Object *>(ptr->owner_id);
   if (ob->type != OB_MESH) {
@@ -2273,9 +2282,9 @@ static PointerRNA rna_Object_light_linking_get(PointerRNA *ptr)
   return rna_pointer_inherit_refine(ptr, &RNA_ObjectLightLinking, ptr->data);
 }
 
-static char *rna_ObjectLightLinking_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_ObjectLightLinking_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("light_linking");
+  return "light_linking";
 }
 
 static PointerRNA rna_LightLinking_receiver_collection_get(PointerRNA *ptr)
@@ -2914,15 +2923,16 @@ static void rna_def_object_visibility(StructRNA *srna)
   RNA_def_property_ui_text(prop, "Disable in Volume Probes", "Globally disable in volume probes");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_draw");
 
-  prop = RNA_def_property(srna, "hide_probe_cubemap", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "hide_probe_sphere", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "visibility_flag", OB_HIDE_PROBE_CUBEMAP);
   RNA_def_property_ui_text(
-      prop, "Disable in Cubemap Probes", "Globally disable in cubemap probes");
+      prop, "Disable in Spherical Light Probes", "Globally disable in spherical light probes");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_draw");
 
-  prop = RNA_def_property(srna, "hide_probe_planar", PROP_BOOLEAN, PROP_NONE);
+  prop = RNA_def_property(srna, "hide_probe_plane", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "visibility_flag", OB_HIDE_PROBE_PLANAR);
-  RNA_def_property_ui_text(prop, "Disable in Planar Probes", "Globally disable in planar probes");
+  RNA_def_property_ui_text(
+      prop, "Disable in Planar Light Probes", "Globally disable in planar light probes");
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Object_internal_update_draw");
 
   /* Instancer options. */

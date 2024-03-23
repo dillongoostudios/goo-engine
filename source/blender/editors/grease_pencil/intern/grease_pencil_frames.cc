@@ -10,7 +10,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_grease_pencil.hh"
 
 #include "DEG_depsgraph.hh"
@@ -152,7 +152,7 @@ bool duplicate_selected_frames(GreasePencil &grease_pencil, bke::greasepencil::L
     }
 
     /* Create the duplicate drawing. */
-    const Drawing *drawing = grease_pencil.get_editable_drawing_at(&layer, frame_number);
+    const Drawing *drawing = grease_pencil.get_editable_drawing_at(layer, frame_number);
     if (drawing == nullptr) {
       continue;
     }
@@ -264,7 +264,8 @@ void select_frames_region(KeyframeEditData *ked,
       }
       else if (tool == BEZT_OK_CHANNEL_CIRCLE) {
         if (keyframe_region_circle_test(static_cast<const KeyframeEdit_CircleData *>(ked->data),
-                                        pt)) {
+                                        pt))
+        {
           select_frame(frame, select_mode);
         }
       }
@@ -343,10 +344,8 @@ static int insert_blank_frame_exec(bContext *C, wmOperator *op)
     if (!grease_pencil.has_active_layer()) {
       return OPERATOR_CANCELLED;
     }
-    changed = grease_pencil.insert_blank_frame(*grease_pencil.get_active_layer_for_write(),
-                                               current_frame,
-                                               duration,
-                                               BEZT_KEYTYPE_KEYFRAME);
+    changed = grease_pencil.insert_blank_frame(
+        *grease_pencil.get_active_layer(), current_frame, duration, BEZT_KEYTYPE_KEYFRAME);
   }
 
   if (changed) {

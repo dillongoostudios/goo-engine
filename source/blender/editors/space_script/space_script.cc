@@ -14,8 +14,8 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
-#include "BKE_lib_query.h"
+#include "BKE_context.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_screen.hh"
 
 #include "ED_screen.hh"
@@ -27,9 +27,6 @@
 #include "UI_view2d.hh"
 
 #include "BLO_read_write.hh"
-
-#ifdef WITH_PYTHON
-#endif
 
 #include "script_intern.h" /* own include */
 
@@ -175,7 +172,7 @@ static void script_space_blend_write(BlendWriter *writer, SpaceLink *sl)
 
 void ED_spacetype_script()
 {
-  SpaceType *st = static_cast<SpaceType *>(MEM_callocN(sizeof(SpaceType), "spacetype script"));
+  std::unique_ptr<SpaceType> st = std::make_unique<SpaceType>();
   ARegionType *art;
 
   st->spaceid = SPACE_SCRIPT;
@@ -213,5 +210,5 @@ void ED_spacetype_script()
 
   BLI_addhead(&st->regiontypes, art);
 
-  BKE_spacetype_register(st);
+  BKE_spacetype_register(std::move(st));
 }

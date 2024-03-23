@@ -8,7 +8,6 @@
 
 #pragma once
 
-struct AssetLibrary;
 struct AssetLibraryReference;
 struct bContext;
 struct BlendHandle;
@@ -19,6 +18,9 @@ struct ID;
 struct ImBuf;
 struct bUUID;
 struct wmWindowManager;
+namespace blender::asset_system {
+class AssetLibrary;
+}
 
 struct FileDirEntry;
 
@@ -197,7 +199,7 @@ void filelist_entry_parent_select_set(FileList *filelist,
 
 void filelist_setrecursion(FileList *filelist, int recursion_level);
 
-AssetLibrary *filelist_asset_library(FileList *filelist);
+blender::asset_system::AssetLibrary *filelist_asset_library(FileList *filelist);
 
 BlendHandle *filelist_lib(FileList *filelist);
 /**
@@ -206,8 +208,10 @@ BlendHandle *filelist_lib(FileList *filelist);
 bool filelist_islibrary(FileList *filelist, char *dir, char **r_group);
 void filelist_freelib(FileList *filelist);
 
-/** Return the total raw number of entries listed in the given `filelist`, whether they are
- * filtered out or not. */
+/**
+ * Return the total raw number of entries listed in the given `filelist`, whether they are
+ * filtered out or not.
+ */
 int filelist_files_num_entries(FileList *filelist);
 
 void filelist_readjob_start(FileList *filelist, int space_notifier, const bContext *C);

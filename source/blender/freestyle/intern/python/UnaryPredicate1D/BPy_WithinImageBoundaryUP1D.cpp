@@ -18,7 +18,9 @@ using namespace Freestyle;
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char WithinImageBoundaryUP1D___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    WithinImageBoundaryUP1D___doc__,
     "Class hierarchy: :class:`freestyle.types.UnaryPredicate1D` > "
     ":class:`WithinImageBoundaryUP1D`\n"
     "\n"
@@ -37,7 +39,7 @@ static char WithinImageBoundaryUP1D___doc__[] =
     "\n"
     ".. method:: __call__(inter)\n"
     "\n"
-    "   Returns true if the Interface1D intersects with image boundary.\n";
+    "   Returns true if the Interface1D intersects with image boundary.\n");
 
 static int WithinImageBoundaryUP1D___init__(BPy_WithinImageBoundaryUP1D *self,
                                             PyObject *args,
@@ -47,7 +49,8 @@ static int WithinImageBoundaryUP1D___init__(BPy_WithinImageBoundaryUP1D *self,
   double xmin, ymin, xmax, ymax;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "dddd", (char **)kwlist, &xmin, &ymin, &xmax, &ymax)) {
+          args, kwds, "dddd", (char **)kwlist, &xmin, &ymin, &xmax, &ymax))
+  {
     return -1;
   }
   self->py_up1D.up1D = new Predicates1D::WithinImageBoundaryUP1D(xmin, ymin, xmax, ymax);

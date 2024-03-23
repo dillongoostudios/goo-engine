@@ -20,13 +20,13 @@
 
 /* #include "BLI_sys_types.h" */
 
-#include "rna_internal.h" /* own include */
+#include "rna_internal.hh" /* own include */
 
 #ifdef RNA_RUNTIME
 
 #  include "BKE_animsys.h"
-#  include "BKE_armature.h"
-#  include "BKE_context.h"
+#  include "BKE_armature.hh"
+#  include "BKE_context.hh"
 #  include "BKE_pose_backup.h"
 
 #  include "DNA_action_types.h"

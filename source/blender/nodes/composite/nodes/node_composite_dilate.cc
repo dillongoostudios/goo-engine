@@ -21,6 +21,7 @@
 
 #include "COM_algorithm_morphological_distance.hh"
 #include "COM_algorithm_morphological_distance_feather.hh"
+#include "COM_algorithm_smaa.hh"
 #include "COM_node_operation.hh"
 #include "COM_utilities.hh"
 
@@ -104,7 +105,7 @@ class DilateErodeOperation : public NodeOperation {
 
   Result execute_step_horizontal_pass()
   {
-    GPUShader *shader = shader_manager().get(get_morphological_step_shader_name());
+    GPUShader *shader = context().get_shader(get_morphological_step_shader_name());
     GPU_shader_bind(shader);
 
     /* Pass the absolute value of the distance. We have specialized shaders for each sign. */
@@ -124,7 +125,7 @@ class DilateErodeOperation : public NodeOperation {
     const Domain domain = compute_domain();
     const int2 transposed_domain = int2(domain.size.y, domain.size.x);
 
-    Result horizontal_pass_result = Result::Temporary(ResultType::Color, texture_pool());
+    Result horizontal_pass_result = context().create_temporary_result(ResultType::Color);
     horizontal_pass_result.allocate_texture(transposed_domain);
     horizontal_pass_result.bind_as_image(shader, "output_img");
 
@@ -139,7 +140,7 @@ class DilateErodeOperation : public NodeOperation {
 
   void execute_step_vertical_pass(Result &horizontal_pass_result)
   {
-    GPUShader *shader = shader_manager().get(get_morphological_step_shader_name());
+    GPUShader *shader = context().get_shader(get_morphological_step_shader_name());
     GPU_shader_bind(shader);
 
     /* Pass the absolute value of the distance. We have specialized shaders for each sign. */
@@ -184,7 +185,7 @@ class DilateErodeOperation : public NodeOperation {
 
   void execute_distance_threshold()
   {
-    GPUShader *shader = shader_manager().get("compositor_morphological_distance_threshold");
+    GPUShader *shader = context().get_shader("compositor_morphological_distance_threshold");
     GPU_shader_bind(shader);
 
     GPU_shader_uniform_1f(shader, "inset", get_inset());
@@ -195,7 +196,7 @@ class DilateErodeOperation : public NodeOperation {
     input_mask.bind_as_texture(shader, "input_tx");
 
     const Domain domain = compute_domain();
-    Result &output_mask = get_result("Mask");
+    Result output_mask = context().create_temporary_result(ResultType::Float);
     output_mask.allocate_texture(domain);
     output_mask.bind_as_image(shader, "output_img");
 
@@ -204,6 +205,17 @@ class DilateErodeOperation : public NodeOperation {
     GPU_shader_unbind();
     output_mask.unbind_as_image();
     input_mask.unbind_as_texture();
+
+    /* For configurations where there is little user-specified inset, anti-alias the result for
+     * smoother edges. */
+    Result &output = get_result("Mask");
+    if (get_inset() < 2.0f) {
+      smaa(context(), output_mask, output);
+      output_mask.release();
+    }
+    else {
+      output.steal_data(output_mask);
+    }
   }
 
   /* See the discussion in the implementation for more information. */

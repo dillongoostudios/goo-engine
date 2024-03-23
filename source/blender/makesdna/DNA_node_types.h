@@ -40,17 +40,22 @@ namespace blender::bke {
 class bNodeTreeZones;
 class bNodeTreeZone;
 }  // namespace blender::bke
+namespace blender::bke {
+struct RuntimeNodeEnumItems;
+}  // namespace blender::bke
 using NodeDeclarationHandle = blender::nodes::NodeDeclaration;
 using SocketDeclarationHandle = blender::nodes::SocketDeclaration;
 using bNodeTreeRuntimeHandle = blender::bke::bNodeTreeRuntime;
 using bNodeRuntimeHandle = blender::bke::bNodeRuntime;
 using bNodeSocketRuntimeHandle = blender::bke::bNodeSocketRuntime;
+using RuntimeNodeEnumItemsHandle = blender::bke::RuntimeNodeEnumItems;
 #else
 typedef struct NodeDeclarationHandle NodeDeclarationHandle;
 typedef struct SocketDeclarationHandle SocketDeclarationHandle;
 typedef struct bNodeTreeRuntimeHandle bNodeTreeRuntimeHandle;
 typedef struct bNodeRuntimeHandle bNodeRuntimeHandle;
 typedef struct bNodeSocketRuntimeHandle bNodeSocketRuntimeHandle;
+typedef struct RuntimeNodeEnumItemsHandle RuntimeNodeEnumItemsHandle;
 #endif
 
 struct AnimData;
@@ -69,6 +74,7 @@ struct bNodeLink;
 struct bNodePreview;
 struct bNodeType;
 struct bNode;
+struct NodeEnumDefinition;
 
 #define NODE_MAXSTR 64
 
@@ -149,7 +155,7 @@ typedef struct bNodeSocket {
   short stack_index;
   char display_shape;
 
-  /* #eAttrDomain used when the geometry nodes modifier creates an attribute for a group
+  /* #AttrDomain used when the geometry nodes modifier creates an attribute for a group
    * output. */
   char attribute_domain;
 
@@ -256,6 +262,7 @@ typedef enum eNodeSocketDatatype {
   SOCK_TEXTURE = 12,
   SOCK_MATERIAL = 13,
   SOCK_ROTATION = 14,
+  SOCK_MENU = 15,
 } eNodeSocketDatatype;
 
 /** Socket shape. */
@@ -669,6 +676,10 @@ typedef struct bNodeTree {
   int chunksize;
   /** Execution mode to use for compositor engine. */
   int execution_mode;
+  /** Execution mode to use for compositor engine. */
+  int precision;
+
+  char _pad[4];
 
   rctf viewer_border;
 
@@ -724,10 +735,10 @@ typedef struct bNodeTree {
   const bNestedNodeRef *nested_node_ref_from_node_id_path(blender::Span<int> node_ids) const;
   [[nodiscard]] bool node_id_path_from_nested_node_ref(const int32_t nested_node_id,
                                                        blender::Vector<int32_t> &r_node_ids) const;
-  const bNode *find_nested_node(int32_t nested_node_id) const;
+  const bNode *find_nested_node(int32_t nested_node_id, const bNodeTree **r_tree = nullptr) const;
 
   /**
-   * Update a run-time cache for the node tree based on it's current state. This makes many methods
+   * Update a run-time cache for the node tree based on its current state. This makes many methods
    * available which allow efficient lookup for topology information (like neighboring sockets).
    */
   void ensure_topology_cache() const;
@@ -776,13 +787,14 @@ typedef struct bNodeTree {
   bNode *group_output_node();
   const bNode *group_output_node() const;
   /** Get all input nodes of the node group. */
+  blender::Span<bNode *> group_input_nodes();
   blender::Span<const bNode *> group_input_nodes() const;
 
   /** Zones in the node tree. Currently there are only simulation zones in geometry nodes. */
   const blender::bke::bNodeTreeZones *zones() const;
 
   /**
-   * Update a run-time cache for the node tree interface based on it's current state.
+   * Update a run-time cache for the node tree interface based on its current state.
    * This should be done before accessing interface item spans below.
    */
   void ensure_interface_cache() const;
@@ -835,6 +847,12 @@ typedef enum eNodeTreeExecutionMode {
   NTREE_EXECUTION_MODE_FULL_FRAME = 1,
   NTREE_EXECUTION_MODE_REALTIME = 2,
 } eNodeTreeExecutionMode;
+
+/* tree->precision */
+typedef enum eNodeTreePrecision {
+  NODE_TREE_COMPOSITOR_PRECISION_AUTO = 0,
+  NODE_TREE_COMPOSITOR_PRECISION_FULL = 1,
+} eNodeTreePrecision;
 
 typedef enum eNodeTreeRuntimeFlag {
   /** There is a node that references an image with animation. */
@@ -909,6 +927,19 @@ typedef struct bNodeSocketValueMaterial {
   struct Material *value;
 } bNodeSocketValueMaterial;
 
+typedef struct bNodeSocketValueMenu {
+  /* Default input enum identifier. */
+  int value;
+  /* #NodeSocketValueMenuRuntimeFlag */
+  int runtime_flag;
+  /* Immutable runtime enum definition. */
+  const RuntimeNodeEnumItemsHandle *enum_items;
+
+#ifdef __cplusplus
+  bool has_conflict() const;
+#endif
+} bNodeSocketValueMenu;
+
 typedef struct GeometryNodeAssetTraits {
   int flag;
 } GeometryNodeAssetTraits;
@@ -921,8 +952,9 @@ typedef enum GeometryNodeAssetTraitFlag {
   GEO_NODE_ASSET_CURVE = (1 << 4),
   GEO_NODE_ASSET_POINT_CLOUD = (1 << 5),
   GEO_NODE_ASSET_MODIFIER = (1 << 6),
+  GEO_NODE_ASSET_OBJECT = (1 << 7),
 } GeometryNodeAssetTraitFlag;
-ENUM_OPERATORS(GeometryNodeAssetTraitFlag, GEO_NODE_ASSET_MODIFIER);
+ENUM_OPERATORS(GeometryNodeAssetTraitFlag, GEO_NODE_ASSET_OBJECT);
 
 /* Data structs, for `node->storage`. */
 
@@ -1023,7 +1055,7 @@ typedef struct NodeImageLayer {
   /** Index in the `image->layers->passes` lists. */
   int pass_index DNA_DEPRECATED;
   /* render pass name */
-  /** Amount defined in IMB_openexr.h. */
+  /** Amount defined in IMB_openexr.hh. */
   char pass_name[64];
 } NodeImageLayer;
 
@@ -1056,6 +1088,8 @@ typedef struct NodeKuwaharaData {
   int uniformity;
   float sharpness;
   float eccentricity;
+  char high_precision;
+  char _pad[3];
 } NodeKuwaharaData;
 
 typedef struct NodeAntiAliasingData {
@@ -1287,8 +1321,9 @@ typedef struct NodeTexGradient {
 typedef struct NodeTexNoise {
   NodeTexBase base;
   int dimensions;
+  uint8_t type;
   uint8_t normalize;
-  char _pad[3];
+  char _pad[2];
 } NodeTexNoise;
 
 typedef struct NodeTexVoronoi {
@@ -1302,9 +1337,9 @@ typedef struct NodeTexVoronoi {
 } NodeTexVoronoi;
 
 typedef struct NodeTexMusgrave {
-  NodeTexBase base;
-  int musgrave_type;
-  int dimensions;
+  NodeTexBase base DNA_DEPRECATED;
+  int musgrave_type DNA_DEPRECATED;
+  int dimensions DNA_DEPRECATED;
 } NodeTexMusgrave;
 
 typedef struct NodeTexWave {
@@ -1526,7 +1561,7 @@ typedef struct NodeRandomValue {
 typedef struct NodeAccumulateField {
   /** #eCustomDataType. */
   uint8_t data_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   uint8_t domain;
 } NodeAccumulateField;
 
@@ -1622,9 +1657,49 @@ typedef struct NodeGeometryMeshLine {
 } NodeGeometryMeshLine;
 
 typedef struct NodeSwitch {
-  /** #NodeSwitch. */
+  /** #eNodeSocketDatatype. */
   uint8_t input_type;
 } NodeSwitch;
+
+typedef struct NodeEnumItem {
+  char *name;
+  char *description;
+  /* Immutable unique identifier. */
+  int32_t identifier;
+  char _pad[4];
+} NodeEnumItem;
+
+typedef struct NodeEnumDefinition {
+  /* User-defined enum items owned and managed by this node. */
+  NodeEnumItem *items_array;
+  int16_t items_num;
+  int16_t active_index;
+  uint32_t next_identifier;
+
+#ifdef __cplusplus
+  blender::Span<NodeEnumItem> items() const;
+  blender::MutableSpan<NodeEnumItem> items_for_write();
+
+  NodeEnumItem *add_item(blender::StringRef name);
+  bool remove_item(NodeEnumItem &item);
+  void clear();
+  bool move_item(int from_index, int to_index);
+
+  const NodeEnumItem *active_item() const;
+  NodeEnumItem *active_item();
+  void active_item_set(NodeEnumItem *item);
+
+  void set_item_name(NodeEnumItem &item, blender::StringRef name);
+#endif
+} NodeEnumDefinition;
+
+typedef struct NodeMenuSwitch {
+  NodeEnumDefinition enum_definition;
+
+  /** #eNodeSocketDatatype. */
+  uint8_t data_type;
+  char _pad[7];
+} NodeMenuSwitch;
 
 typedef struct NodeGeometryCurveSplineType {
   /** #GeometryNodeSplineType. */
@@ -1707,7 +1782,7 @@ typedef struct NodeGeometryCurveSample {
 typedef struct NodeGeometryTransferAttribute {
   /** #eCustomDataType. */
   int8_t data_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
   /** #GeometryNodeAttributeTransferMode. */
   uint8_t mode;
@@ -1717,7 +1792,7 @@ typedef struct NodeGeometryTransferAttribute {
 typedef struct NodeGeometrySampleIndex {
   /** #eCustomDataType. */
   int8_t data_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
   int8_t clamp;
   char _pad[1];
@@ -1743,14 +1818,14 @@ typedef struct NodeGeometryMeshToPoints {
 typedef struct NodeGeometryAttributeCapture {
   /** #eCustomDataType. */
   int8_t data_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
 } NodeGeometryAttributeCapture;
 
 typedef struct NodeGeometryStoreNamedAttribute {
   /** #eCustomDataType. */
   int8_t data_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
 } NodeGeometryStoreNamedAttribute;
 
@@ -1771,19 +1846,19 @@ typedef struct NodeGeometryStringToCurves {
 } NodeGeometryStringToCurves;
 
 typedef struct NodeGeometryDeleteGeometry {
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
   /** #GeometryNodeDeleteGeometryMode. */
   int8_t mode;
 } NodeGeometryDeleteGeometry;
 
 typedef struct NodeGeometryDuplicateElements {
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
 } NodeGeometryDuplicateElements;
 
 typedef struct NodeGeometrySeparateGeometry {
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
 } NodeGeometrySeparateGeometry;
 
@@ -1795,7 +1870,7 @@ typedef struct NodeGeometryImageTexture {
 typedef struct NodeGeometryViewer {
   /** #eCustomDataType. */
   int8_t data_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   int8_t domain;
 } NodeGeometryViewer;
 
@@ -1808,7 +1883,7 @@ typedef struct NodeSimulationItem {
   char *name;
   /** #eNodeSocketDatatype. */
   short socket_type;
-  /** #eAttrDomain. */
+  /** #AttrDomain. */
   short attribute_domain;
   /**
    * Generates unique identifier for sockets which stays the same even when the item order or
@@ -1867,17 +1942,31 @@ typedef struct NodeGeometryRepeatOutput {
 #endif
 } NodeGeometryRepeatOutput;
 
+typedef struct IndexSwitchItem {
+  /** Generated unique identifier which stays the same even when the item order or names change. */
+  int identifier;
+} IndexSwitchItem;
+
+typedef struct NodeIndexSwitch {
+  IndexSwitchItem *items;
+  int items_num;
+
+  /* #eNodeSocketDataType. */
+  int data_type;
+  /** Identifier to give to the next item. */
+  int next_identifier;
+
+  char _pad[4];
+#ifdef __cplusplus
+  blender::Span<IndexSwitchItem> items_span() const;
+  blender::MutableSpan<IndexSwitchItem> items_span();
+#endif
+} NodeIndexSwitch;
+
 typedef struct NodeGeometryDistributePointsInVolume {
   /** #GeometryNodePointDistributeVolumeMode. */
   uint8_t mode;
 } NodeGeometryDistributePointsInVolume;
-
-typedef struct NodeGeometrySampleVolume {
-  /** #eCustomDataType. */
-  int8_t grid_type;
-  /** #GeometryNodeSampleVolumeInterpolationMode */
-  int8_t interpolation_mode;
-} NodeGeometrySampleVolume;
 
 typedef struct NodeFunctionCompare {
   /** #NodeCompareOperation */
@@ -1904,6 +1993,27 @@ typedef struct NodeShaderMix {
   int8_t blend_type;
   char _pad[3];
 } NodeShaderMix;
+
+typedef struct NodeGeometryBakeItem {
+  char *name;
+  int16_t socket_type;
+  int16_t attribute_domain;
+  int identifier;
+  int32_t flag;
+  char _pad[4];
+} NodeGeometryBakeItem;
+
+typedef enum NodeGeometryBakeItemFlag {
+  GEO_NODE_BAKE_ITEM_IS_ATTRIBUTE = (1 << 0),
+} NodeGeometryBakeItemFlag;
+
+typedef struct NodeGeometryBake {
+  NodeGeometryBakeItem *items;
+  int items_num;
+  int next_identifier;
+  int active_index;
+  char _pad[4];
+} NodeGeometryBake;
 
 /* script node mode */
 enum {
@@ -2051,13 +2161,22 @@ enum {
   SHD_VORONOI_N_SPHERE_RADIUS = 4,
 };
 
-/* musgrave texture */
+/* Deprecated Musgrave Texture. Keep for Versioning */
 enum {
   SHD_MUSGRAVE_MULTIFRACTAL = 0,
   SHD_MUSGRAVE_FBM = 1,
   SHD_MUSGRAVE_HYBRID_MULTIFRACTAL = 2,
   SHD_MUSGRAVE_RIDGED_MULTIFRACTAL = 3,
   SHD_MUSGRAVE_HETERO_TERRAIN = 4,
+};
+
+/* Noise Texture */
+enum {
+  SHD_NOISE_MULTIFRACTAL = 0,
+  SHD_NOISE_FBM = 1,
+  SHD_NOISE_HYBRID_MULTIFRACTAL = 2,
+  SHD_NOISE_RIDGED_MULTIFRACTAL = 3,
+  SHD_NOISE_HETERO_TERRAIN = 4,
 };
 
 /* wave texture */
@@ -2476,11 +2595,11 @@ enum {
   CMP_NODE_OUTPUT_IGNORE_ALPHA = 1,
 };
 
-/** Split Viewer Node. Stored in `custom2`. */
-typedef enum CMPNodeSplitViewerAxis {
-  CMP_NODE_SPLIT_VIEWER_HORIZONTAL = 0,
-  CMP_NODE_SPLIT_VIEWER_VERTICAL = 1,
-} CMPNodeSplitViewerAxis;
+/** Split Node. Stored in `custom2`. */
+typedef enum CMPNodeSplitAxis {
+  CMP_NODE_SPLIT_HORIZONTAL = 0,
+  CMP_NODE_SPLIT_VERTICAL = 1,
+} CMPNodeSplitAxis;
 
 /** Color Balance Node. Stored in `custom1`. */
 typedef enum CMPNodeColorBalanceMethod {
@@ -2628,6 +2747,20 @@ typedef enum CMPNodeCombSepColorMode {
   CMP_NODE_COMBSEP_COLOR_YCC = 3,
   CMP_NODE_COMBSEP_COLOR_YUV = 4,
 } CMPNodeCombSepColorMode;
+
+/* Filtering modes Compositor MapUV node, stored in custom2. */
+typedef enum CMPNodeMapUVFiltering {
+  CMP_NODE_MAP_UV_FILTERING_NEAREST = 0,
+  CMP_NODE_MAP_UV_FILTERING_BILINEAR = 1,
+  CMP_NODE_MAP_UV_FILTERING_BICUBIC = 2,
+  CMP_NODE_MAP_UV_FILTERING_ANISOTROPIC = 3,
+} CMPNodeMapUVFiltering;
+
+/* Cryptomatte node source. */
+typedef enum CMPNodeCryptomatteSource {
+  CMP_NODE_CRYPTOMATTE_SOURCE_RENDER = 0,
+  CMP_NODE_CRYPTOMATTE_SOURCE_IMAGE = 1,
+} CMPNodeCryptomatteSource;
 
 /* Point Density shader node */
 
@@ -2884,12 +3017,6 @@ typedef enum GeometryNodeScaleElementsMode {
   GEO_NODE_SCALE_ELEMENTS_UNIFORM = 0,
   GEO_NODE_SCALE_ELEMENTS_SINGLE_AXIS = 1,
 } GeometryNodeScaleElementsMode;
-
-typedef enum GeometryNodeSampleVolumeInterpolationMode {
-  GEO_NODE_SAMPLE_VOLUME_INTERPOLATION_MODE_NEAREST = 0,
-  GEO_NODE_SAMPLE_VOLUME_INTERPOLATION_MODE_TRILINEAR = 1,
-  GEO_NODE_SAMPLE_VOLUME_INTERPOLATION_MODE_TRIQUADRATIC = 2,
-} GeometryNodeSampleVolumeInterpolationMode;
 
 typedef enum NodeCombSepColorMode {
   NODE_COMBSEP_COLOR_RGB = 0,

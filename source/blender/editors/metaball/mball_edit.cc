@@ -27,14 +27,15 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "BKE_context.h"
-#include "BKE_layer.h"
-#include "BKE_mball.h"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
+#include "BKE_mball.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "DEG_depsgraph.hh"
 
-#include "GPU_select.h"
+#include "GPU_select.hh"
 
 #include "ED_mball.hh"
 #include "ED_object.hh"
@@ -46,6 +47,9 @@
 #include "WM_types.hh"
 
 #include "mball_intern.h"
+
+using blender::Span;
+using blender::Vector;
 
 /* -------------------------------------------------------------------- */
 /** \name Edit Mode Functions
@@ -88,12 +92,9 @@ bool ED_mball_deselect_all_multi(bContext *C)
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ViewContext vc = ED_view3d_viewcontext_init(C, depsgraph);
-  uint bases_len = 0;
-  Base **bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
-      vc.scene, vc.view_layer, vc.v3d, &bases_len);
-  bool changed_multi = BKE_mball_deselect_all_multi_ex(bases, bases_len);
-  MEM_freeN(bases);
-  return changed_multi;
+  Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
+      vc.scene, vc.view_layer, vc.v3d);
+  return BKE_mball_deselect_all_multi_ex(bases);
 }
 
 /** \} */
@@ -147,34 +148,31 @@ static int mball_select_all_exec(bContext *C, wmOperator *op)
 
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint bases_len = 0;
-  Base **bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &bases_len);
+  Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C));
 
   if (action == SEL_TOGGLE) {
-    action = BKE_mball_is_any_selected_multi(bases, bases_len) ? SEL_DESELECT : SEL_SELECT;
+    action = BKE_mball_is_any_selected_multi(bases) ? SEL_DESELECT : SEL_SELECT;
   }
 
   switch (action) {
     case SEL_SELECT:
-      BKE_mball_select_all_multi_ex(bases, bases_len);
+      BKE_mball_select_all_multi_ex(bases);
       break;
     case SEL_DESELECT:
-      BKE_mball_deselect_all_multi_ex(bases, bases_len);
+      BKE_mball_deselect_all_multi_ex(bases);
       break;
     case SEL_INVERT:
-      BKE_mball_select_swap_multi_ex(bases, bases_len);
+      BKE_mball_select_swap_multi_ex(bases);
       break;
   }
 
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    Object *obedit = bases[base_index]->object;
+  for (Base *base : bases) {
+    Object *obedit = base->object;
     MetaBall *mb = (MetaBall *)obedit->data;
     DEG_id_tag_update(&mb->id, ID_RECALC_SELECT);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, mb);
   }
-
-  MEM_freeN(bases);
 
   return OPERATOR_FINISHED;
 }
@@ -331,11 +329,10 @@ static int mball_select_similar_exec(bContext *C, wmOperator *op)
 
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint bases_len = 0;
-  Base **bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &bases_len);
+  Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C));
 
-  tot_mball_selected_all = BKE_mball_select_count_multi(bases, bases_len);
+  tot_mball_selected_all = BKE_mball_select_count_multi(bases);
 
   short type_ref = 0;
   KDTree_1d *tree_1d = nullptr;
@@ -352,8 +349,8 @@ static int mball_select_similar_exec(bContext *C, wmOperator *op)
   }
 
   /* Get type of selected MetaBall */
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    Object *obedit = bases[base_index]->object;
+  for (Base *base : bases) {
+    Object *obedit = base->object;
     MetaBall *mb = (MetaBall *)obedit->data;
 
     switch (type) {
@@ -386,8 +383,8 @@ static int mball_select_similar_exec(bContext *C, wmOperator *op)
     BLI_kdtree_3d_balance(tree_3d);
   }
   /* Select MetaBalls with desired type. */
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    Object *obedit = bases[base_index]->object;
+  for (Base *base : bases) {
+    Object *obedit = base->object;
     MetaBall *mb = (MetaBall *)obedit->data;
     bool changed = false;
 
@@ -418,7 +415,6 @@ static int mball_select_similar_exec(bContext *C, wmOperator *op)
     }
   }
 
-  MEM_freeN(bases);
   if (tree_1d != nullptr) {
     BLI_kdtree_1d_free(tree_1d);
   }
@@ -463,10 +459,9 @@ static int select_random_metaelems_exec(bContext *C, wmOperator *op)
 
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C));
+  for (const int ob_index : objects.index_range()) {
     Object *obedit = objects[ob_index];
     MetaBall *mb = (MetaBall *)obedit->data;
     if (!BKE_mball_is_any_unselected(mb)) {
@@ -497,7 +492,6 @@ static int select_random_metaelems_exec(bContext *C, wmOperator *op)
     DEG_id_tag_update(&mb->id, ID_RECALC_SELECT);
     WM_event_add_notifier(C, NC_GEOM | ND_SELECT, mb);
   }
-  MEM_freeN(objects);
   return OPERATOR_FINISHED;
 }
 
@@ -530,11 +524,9 @@ static int duplicate_metaelems_exec(bContext *C, wmOperator * /*op*/)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C));
+  for (Object *obedit : objects) {
     MetaBall *mb = (MetaBall *)obedit->data;
     MetaElem *ml, *newml;
 
@@ -557,7 +549,6 @@ static int duplicate_metaelems_exec(bContext *C, wmOperator * /*op*/)
       DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
     }
   }
-  MEM_freeN(objects);
   return OPERATOR_FINISHED;
 }
 
@@ -588,11 +579,9 @@ static int delete_metaelems_exec(bContext *C, wmOperator * /*op*/)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C));
+  for (Object *obedit : objects) {
     MetaBall *mb = (MetaBall *)obedit->data;
     MetaElem *ml, *next;
 
@@ -617,7 +606,6 @@ static int delete_metaelems_exec(bContext *C, wmOperator * /*op*/)
       DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
     }
   }
-  MEM_freeN(objects);
   return OPERATOR_FINISHED;
 }
 
@@ -738,8 +726,7 @@ void MBALL_OT_reveal_metaelems(wmOperatorType *ot)
 /** \name Select Pick Utility
  * \{ */
 
-Base *ED_mball_base_and_elem_from_select_buffer(Base **bases,
-                                                uint bases_len,
+Base *ED_mball_base_and_elem_from_select_buffer(const Span<Base *> bases,
                                                 const uint select_id,
                                                 MetaElem **r_ml)
 {
@@ -747,9 +734,9 @@ Base *ED_mball_base_and_elem_from_select_buffer(Base **bases,
   Base *base = nullptr;
   MetaElem *ml = nullptr;
   /* TODO(@ideasman42): optimize, eg: sort & binary search. */
-  for (uint base_index = 0; base_index < bases_len; base_index++) {
-    if (bases[base_index]->object->runtime.select_id == hit_object) {
-      base = bases[base_index];
+  for (Base *base_iter : bases) {
+    if (base_iter->object->runtime->select_id == hit_object) {
+      base = base_iter;
       break;
     }
   }
@@ -771,7 +758,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
 {
   Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   int a, hits;
-  GPUSelectResult buffer[MAXPICKELEMS];
+  GPUSelectBuffer buffer;
   rcti rect;
   bool found = false;
 
@@ -780,8 +767,7 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
   BLI_rcti_init_pt_radius(&rect, mval, 12);
 
   hits = view3d_opengl_select(&vc,
-                              buffer,
-                              ARRAY_SIZE(buffer),
+                              &buffer,
                               &rect,
                               use_cycle ? VIEW3D_SELECT_PICK_ALL : VIEW3D_SELECT_PICK_NEAREST,
                               VIEW3D_SELECT_FILTER_NOP);
@@ -790,14 +776,13 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
     return false;
   }
 
-  uint bases_len = 0;
-  Base **bases = BKE_view_layer_array_from_bases_in_edit_mode(
-      vc.scene, vc.view_layer, vc.v3d, &bases_len);
+  Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode(
+      vc.scene, vc.view_layer, vc.v3d);
 
   int hit_cycle_offset = 0;
   if (use_cycle) {
     /* When cycling, use the hit directly after the current active meta-element (when set). */
-    const int base_index = vc.obact->runtime.select_id;
+    const int base_index = vc.obact->runtime->select_id;
     MetaBall *mb = (MetaBall *)vc.obact->data;
     MetaElem *ml = mb->lastelem;
     if (ml && (ml->flag & SELECT)) {
@@ -808,13 +793,14 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
        * ensure this steps onto the next meta-element. */
       a = hits;
       while (a--) {
-        const int select_id = buffer[a].id;
+        const int select_id = buffer.storage[a].id;
         if (select_id == -1) {
           continue;
         }
 
         if (((select_id & 0xFFFF) == base_index) &&
-            ((select_id & ~MBALLSEL_ANY) >> 16 == ml_index)) {
+            ((select_id & ~MBALLSEL_ANY) >> 16 == ml_index))
+        {
           hit_cycle_offset = a + 1;
           break;
         }
@@ -824,13 +810,13 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
 
   for (a = 0; a < hits; a++) {
     const int index = (hit_cycle_offset == 0) ? a : ((a + hit_cycle_offset) % hits);
-    const uint select_id = buffer[index].id;
+    const uint select_id = buffer.storage[index].id;
     if (select_id == -1) {
       continue;
     }
 
     MetaElem *ml;
-    Base *base = ED_mball_base_and_elem_from_select_buffer(bases, bases_len, select_id, &ml);
+    Base *base = ED_mball_base_and_elem_from_select_buffer(bases, select_id, &ml);
     if (ml == nullptr) {
       continue;
     }
@@ -840,8 +826,6 @@ static bool ed_mball_findnearest_metaelem(bContext *C,
     found = true;
     break;
   }
-
-  MEM_freeN(bases);
 
   return found;
 }

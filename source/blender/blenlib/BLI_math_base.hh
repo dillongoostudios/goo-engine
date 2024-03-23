@@ -12,7 +12,7 @@
 #include <cmath>
 #include <type_traits>
 
-#include "BLI_math_base_safe.h"
+#include "BLI_math_numbers.hh"
 #include "BLI_utildefines.h"
 
 namespace blender::math {
@@ -184,7 +184,7 @@ template<typename T> inline T exp(const T &x)
 template<typename T> inline T safe_acos(const T &a)
 {
   if (UNLIKELY(a <= T(-1))) {
-    return T(M_PI);
+    return T(numbers::pi);
   }
   else if (UNLIKELY(a >= T(1))) {
     return T(0);
@@ -192,22 +192,22 @@ template<typename T> inline T safe_acos(const T &a)
   return math::acos((a));
 }
 
-/* Faster/approximate version of acosf. Max error 4.51803e-5 (0.00258 degrees).*/
+/** Faster/approximate version of #safe_acos. Max error 4.51803e-5 (0.00258 degrees). */
 inline float safe_acos_approx(float x)
 {
-  const float f = fabsf(x);
-  /* clamp and crush denormals. */
+  const float f = std::abs(x);
+  /* Clamp and crush denormals. */
   const float m = (f < 1.0f) ? 1.0f - (1.0f - f) : 1.0f;
   /* Based on http://www.pouet.net/topic.php?which=9132&page=2
    * 85% accurate (ULP 0)
-   * Examined 2130706434 values of acos:
-   *   15.2000597 avg ULP diff, 4492 max ULP, 4.51803e-05 max error // without "denormal crush"
-   * Examined 2130706434 values of acos:
-   *   15.2007108 avg ULP diff, 4492 max ULP, 4.51803e-05 max error // with "denormal crush"
+   * Examined 2130706434 values of `acos`:
+   *   15.2000597 avg ULP diff, 4492 max ULP, 4.51803e-05 max error // without "denormal crush".
+   * Examined 2130706434 values of `acos`:
+   *   15.2007108 avg ULP diff, 4492 max ULP, 4.51803e-05 max error // with "denormal crush".
    */
-  const float a = sqrtf(1.0f - m) *
+  const float a = std::sqrt(1.0f - m) *
                   (1.5707963267f + m * (-0.213300989f + m * (0.077980478f + m * -0.02164095f)));
-  return x < 0 ? (float)M_PI - a : a;
+  return x < 0.0f ? float(numbers::pi) - a : a;
 }
 
 template<typename T> inline T asin(const T &a)

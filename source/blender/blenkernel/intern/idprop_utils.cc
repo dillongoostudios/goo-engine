@@ -6,6 +6,7 @@
  * \ingroup bke
  */
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 
@@ -17,7 +18,7 @@
 #include "DNA_ID.h"
 
 #include "BKE_idprop.h"
-#include "BKE_idtype.h"
+#include "BKE_idtype.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -96,10 +97,13 @@ static void idp_repr_fn_recursive(ReprState *state, const IDProperty *prop)
 
   switch (prop->type) {
     case IDP_STRING: {
-      STR_APPEND_STR_LEN_QUOTE(IDP_String(prop), uint(MAX2(0, prop->len - 1)));
+      STR_APPEND_STR_LEN_QUOTE(IDP_String(prop), uint(std::max(0, prop->len - 1)));
       break;
     }
     case IDP_INT: {
+      if (const IDPropertyUIDataEnumItem *item = IDP_EnumItemFind(prop)) {
+        STR_APPEND_FMT("%s", item->name);
+      }
       STR_APPEND_FMT("%d", IDP_Int(prop));
       break;
     }

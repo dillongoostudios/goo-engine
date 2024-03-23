@@ -6,6 +6,8 @@
  * \ingroup modifiers
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
 #include "BLI_math_vector.h"
@@ -21,11 +23,11 @@
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_curveprofile.h"
-#include "BKE_deform.h"
+#include "BKE_deform.hh"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_screen.hh"
 
 #include "UI_interface.hh"
@@ -41,8 +43,8 @@
 
 #include "GEO_randomize.hh"
 
-#include "bmesh.h"
-#include "bmesh_tools.h"
+#include "bmesh.hh"
+#include "bmesh_tools.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -95,7 +97,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   const int offset_type = bmd->val_flags;
   const int profile_type = bmd->profile_type;
   const float value = bmd->value;
-  const int mat = CLAMPIS(bmd->mat, -1, ctx->object->totcol - 1);
+  const int mat = std::clamp(int(bmd->mat), -1, ctx->object->totcol - 1);
   const bool loop_slide = (bmd->flags & MOD_BEVEL_EVEN_WIDTHS) == 0;
   const bool mark_seam = (bmd->edge_flags & MOD_BEVEL_MARK_SEAM);
   const bool mark_sharp = (bmd->edge_flags & MOD_BEVEL_MARK_SHARP);
@@ -218,7 +220,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
 
   result = BKE_mesh_from_bmesh_for_eval_nomain(bm, nullptr, mesh);
 
-  /* Make sure we never alloc'd these. */
+  /* Make sure we never allocated these. */
   BLI_assert(bm->vtoolflagpool == nullptr && bm->etoolflagpool == nullptr &&
              bm->ftoolflagpool == nullptr);
 
@@ -420,7 +422,7 @@ ModifierTypeInfo modifierType_Bevel = {
     /*struct_name*/ "BevelModifierData",
     /*struct_size*/ sizeof(BevelModifierData),
     /*srna*/ &RNA_BevelModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsEditmode |
         eModifierTypeFlag_EnableInEditmode | eModifierTypeFlag_AcceptsCVs,
     /*icon*/ ICON_MOD_BEVEL,
@@ -444,4 +446,5 @@ ModifierTypeInfo modifierType_Bevel = {
     /*panel_register*/ panel_register,
     /*blend_write*/ blend_write,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
 };

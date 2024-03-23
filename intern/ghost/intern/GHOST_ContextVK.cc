@@ -12,8 +12,10 @@
 #  include <vulkan/vulkan_win32.h>
 #elif defined(__APPLE__)
 #  include <MoltenVK/vk_mvk_moltenvk.h>
-#else /* X11 */
-#  include <vulkan/vulkan_xlib.h>
+#else /* X11/WAYLAND. */
+#  ifdef WITH_GHOST_X11
+#    include <vulkan/vulkan_xlib.h>
+#  endif
 #  ifdef WITH_GHOST_WAYLAND
 #    include <vulkan/vulkan_wayland.h>
 #  endif
@@ -230,9 +232,11 @@ class GHOST_DeviceVK {
     device_features.logicOp = VK_TRUE;
     device_features.imageCubeArray = VK_TRUE;
     device_features.multiViewport = VK_TRUE;
+    device_features.shaderClipDistance = VK_TRUE;
 #endif
     device_features.drawIndirectFirstInstance = VK_TRUE;
     device_features.fragmentStoresAndAtomics = VK_TRUE;
+    device_features.samplerAnisotropy = features.features.samplerAnisotropy;
 
     VkDeviceCreateInfo device_create_info = {};
     device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -246,11 +250,13 @@ class GHOST_DeviceVK {
 
     void *device_create_info_p_next = nullptr;
 
-    /* Enable optional vulkan 12 features when supported on physical device. */
+    /* Enable optional vulkan 12 features when supported on physical device.
+     * Support level for timelineSemaphores is 99%+. */
     VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
     vulkan_12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     vulkan_12_features.shaderOutputLayer = features_12.shaderOutputLayer;
     vulkan_12_features.shaderOutputViewportIndex = features_12.shaderOutputViewportIndex;
+    vulkan_12_features.timelineSemaphore = VK_TRUE;
     vulkan_12_features.pNext = device_create_info_p_next;
     device_create_info_p_next = &vulkan_12_features;
 
@@ -298,7 +304,6 @@ class GHOST_DeviceVK {
     }
 
     fprintf(stderr, "Couldn't find any Graphic queue family on selected device\n");
-    return;
   }
 };
 
@@ -313,7 +318,7 @@ static std::optional<GHOST_DeviceVK> vulkan_device;
 
 static GHOST_TSuccess ensure_vulkan_device(VkInstance vk_instance,
                                            VkSurfaceKHR vk_surface,
-                                           vector<const char *> required_extensions)
+                                           const vector<const char *> &required_extensions)
 {
   if (vulkan_device.has_value()) {
     return GHOST_kSuccess;
@@ -618,7 +623,7 @@ static vector<VkExtensionProperties> getExtensionsAvailable()
   return extensions;
 }
 
-static bool checkExtensionSupport(vector<VkExtensionProperties> &extensions_available,
+static bool checkExtensionSupport(const vector<VkExtensionProperties> &extensions_available,
                                   const char *extension_name)
 {
   for (const auto &extension : extensions_available) {
@@ -629,7 +634,7 @@ static bool checkExtensionSupport(vector<VkExtensionProperties> &extensions_avai
   return false;
 }
 
-static void requireExtension(vector<VkExtensionProperties> &extensions_available,
+static void requireExtension(const vector<VkExtensionProperties> &extensions_available,
                              vector<const char *> &extensions_enabled,
                              const char *extension_name)
 {
@@ -652,7 +657,8 @@ static vector<VkLayerProperties> getLayersAvailable()
   return layers;
 }
 
-static bool checkLayerSupport(vector<VkLayerProperties> &layers_available, const char *layer_name)
+static bool checkLayerSupport(const vector<VkLayerProperties> &layers_available,
+                              const char *layer_name)
 {
   for (const auto &layer : layers_available) {
     if (strcmp(layer_name, layer.layerName) == 0) {
@@ -662,7 +668,7 @@ static bool checkLayerSupport(vector<VkLayerProperties> &layers_available, const
   return false;
 }
 
-static void enableLayer(vector<VkLayerProperties> &layers_available,
+static void enableLayer(const vector<VkLayerProperties> &layers_available,
                         vector<const char *> &layers_enabled,
                         const VkLayer layer,
                         const bool display_warning)
@@ -784,7 +790,7 @@ static bool selectSurfaceFormat(const VkPhysicalDevice physical_device,
   vector<VkSurfaceFormatKHR> formats(format_count);
   vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &format_count, formats.data());
 
-  for (VkSurfaceFormatKHR &format : formats) {
+  for (const VkSurfaceFormatKHR &format : formats) {
     if (surfaceFormatSupported(format)) {
       r_surfaceFormat = format;
       return true;
@@ -943,9 +949,11 @@ const char *GHOST_ContextVK::getPlatformSpecificSurfaceExtension() const
   return VK_EXT_METAL_SURFACE_EXTENSION_NAME;
 #else /* UNIX/Linux */
   switch (m_platform) {
+#  ifdef WITH_GHOST_X11
     case GHOST_kVulkanPlatformX11:
       return VK_KHR_XLIB_SURFACE_EXTENSION_NAME;
       break;
+#  endif
 #  ifdef WITH_GHOST_WAYLAND
     case GHOST_kVulkanPlatformWayland:
       return VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME;
@@ -965,9 +973,11 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
 #else /* UNIX/Linux */
   bool use_window_surface = false;
   switch (m_platform) {
+#  ifdef WITH_GHOST_X11
     case GHOST_kVulkanPlatformX11:
       use_window_surface = (m_display != nullptr) && (m_window != (Window) nullptr);
       break;
+#  endif
 #  ifdef WITH_GHOST_WAYLAND
     case GHOST_kVulkanPlatformWayland:
       use_window_surface = (m_wayland_display != nullptr) && (m_wayland_surface != nullptr);
@@ -996,8 +1006,9 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
 
     extensions_device.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
   }
-  extensions_device.push_back("VK_KHR_dedicated_allocation");
-  extensions_device.push_back("VK_KHR_get_memory_requirements2");
+  extensions_device.push_back(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME);
+  extensions_device.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+
   /* Enable MoltenVK required instance extensions. */
 #ifdef VK_MVK_MOLTENVK_EXTENSION_NAME
   requireExtension(
@@ -1057,6 +1068,7 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
     VK_CHECK(vkCreateMetalSurfaceEXT(instance, &info, nullptr, &m_surface));
 #else
     switch (m_platform) {
+#  ifdef WITH_GHOST_X11
       case GHOST_kVulkanPlatformX11: {
         VkXlibSurfaceCreateInfoKHR surface_create_info = {};
         surface_create_info.sType = VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR;
@@ -1065,6 +1077,7 @@ GHOST_TSuccess GHOST_ContextVK::initializeDrawingContext()
         VK_CHECK(vkCreateXlibSurfaceKHR(instance, &surface_create_info, nullptr, &m_surface));
         break;
       }
+#  endif
 #  ifdef WITH_GHOST_WAYLAND
       case GHOST_kVulkanPlatformWayland: {
         VkWaylandSurfaceCreateInfoKHR surface_create_info = {};

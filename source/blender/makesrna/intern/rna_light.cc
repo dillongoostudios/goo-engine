@@ -16,7 +16,7 @@
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
@@ -26,8 +26,8 @@
 
 #  include "MEM_guardedalloc.h"
 
-#  include "BKE_context.h"
-#  include "BKE_main.h"
+#  include "BKE_context.hh"
+#  include "BKE_main.hh"
 #  include "BKE_texture.h"
 
 #  include "DEG_depsgraph.hh"
@@ -355,6 +355,15 @@ static void rna_def_point_light(BlenderRNA *brna)
   RNA_def_struct_ui_text(srna, "Point Light", "Omnidirectional point Light");
   RNA_def_struct_ui_icon(srna, ICON_LIGHT_POINT);
 
+  PropertyRNA *prop;
+  prop = RNA_def_property(srna, "use_soft_falloff", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mode", LA_USE_SOFT_FALLOFF);
+  RNA_def_property_ui_text(
+      prop,
+      "Soft Falloff",
+      "Apply falloff to avoid sharp edges when the light geometry intersects with other objects");
+  RNA_def_property_update(prop, 0, "rna_Light_draw_update");
+
   rna_def_light_energy(srna, LA_LOCAL);
   rna_def_light_shadow(srna, false);
 }
@@ -450,6 +459,14 @@ static void rna_def_spot_light(BlenderRNA *brna)
       prop,
       "Show Cone",
       "Display transparent cone in 3D view to visualize which objects are contained in it");
+  RNA_def_property_update(prop, 0, "rna_Light_draw_update");
+
+  prop = RNA_def_property(srna, "use_soft_falloff", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "mode", LA_USE_SOFT_FALLOFF);
+  RNA_def_property_ui_text(
+      prop,
+      "Soft Falloff",
+      "Apply falloff to avoid sharp edges when the light geometry intersects with other objects");
   RNA_def_property_update(prop, 0, "rna_Light_draw_update");
 }
 

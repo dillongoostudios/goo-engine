@@ -12,7 +12,7 @@ from bpy.props import (
     IntProperty,
 )
 from bpy.app.translations import (
-    pgettext_tip as tip_,
+    pgettext_rpt as rpt_,
     pgettext_data as data_,
 )
 
@@ -190,10 +190,6 @@ class QuickFur(ObjectModeOperator, Operator):
 
             curves_object.modifiers.move(0, len(curves_object.modifiers) - 1)
 
-            # Workaround for #105965: Rebuild UI data of modifier input properties.
-            for modifier in curves_object.modifiers:
-                modifier.node_group = modifier.node_group
-
         if mesh_with_zero_area:
             self.report({'WARNING'}, "Mesh has no face area")
         if mesh_missing_uv_map:
@@ -282,7 +278,7 @@ class QuickExplode(ObjectModeOperator, Operator):
         for obj in mesh_objects:
             if obj.particle_systems:
                 self.report({'ERROR'},
-                            tip_("Object %r already has a "
+                            rpt_("Object %r already has a "
                                  "particle system") % obj.name)
 
                 return {'CANCELLED'}

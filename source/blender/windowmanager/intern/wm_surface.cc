@@ -6,9 +6,9 @@
  * \ingroup wm
  */
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_threads.h"
@@ -108,18 +108,16 @@ void wm_surface_add(wmSurface *surface)
 
 void wm_surface_remove(wmSurface *surface)
 {
-  if (surface == g_drawable) {
-    wm_surface_clear_drawable();
-  }
   BLI_remlink(&global_surface_list, surface);
+  /* Ensure GPU context is bound to free GPU resources. */
+  wm_surface_make_drawable(surface);
   surface->free_data(surface);
+  wm_surface_clear_drawable();
   MEM_freeN(surface);
 }
 
 void wm_surfaces_free()
 {
-  wm_surface_clear_drawable();
-
   LISTBASE_FOREACH_MUTABLE (wmSurface *, surf, &global_surface_list) {
     wm_surface_remove(surf);
   }

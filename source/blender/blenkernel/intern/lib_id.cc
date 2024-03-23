@@ -31,6 +31,7 @@
 #include "BLI_utildefines.h"
 
 #include "BLI_alloca.h"
+#include "BLI_array.hh"
 #include "BLI_blenlib.h"
 #include "BLI_ghash.h"
 #include "BLI_linklist.h"
@@ -40,21 +41,21 @@
 #include "BLT_translation.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_armature.h"
-#include "BKE_asset.h"
+#include "BKE_armature.hh"
+#include "BKE_asset.hh"
 #include "BKE_bpath.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_idprop.h"
-#include "BKE_idtype.h"
-#include "BKE_key.h"
-#include "BKE_lib_id.h"
+#include "BKE_idtype.hh"
+#include "BKE_key.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_lib_query.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
-#include "BKE_main_namemap.h"
+#include "BKE_lib_query.hh"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
+#include "BKE_main_namemap.hh"
 #include "BKE_node.h"
 #include "BKE_rigidbody.h"
 
@@ -68,12 +69,12 @@
 
 #include "atomic_ops.h"
 
-#include "lib_intern.h"
+#include "lib_intern.hh"
 
-//#define DEBUG_TIME
+// #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "PIL_time_utildefines.h"
+#  include "BLI_time_utildefines.h"
 #endif
 
 static CLG_LogRef LOG = {"bke.lib_id"};
@@ -205,9 +206,9 @@ void BKE_lib_id_clear_library_data(Main *bmain, ID *id, const int flags)
   }
 
   /* Conceptually, an ID made local is not the same as the linked one anymore. Reflect that by
-   * regenerating its session UUID. */
+   * regenerating its session UID. */
   if ((id->tag & LIB_TAG_TEMP_MAIN) == 0) {
-    BKE_lib_libblock_session_uuid_renew(id);
+    BKE_lib_libblock_session_uid_renew(id);
   }
 
   if (ID_IS_ASSET(id)) {
@@ -859,15 +860,10 @@ static void id_swap(Main *bmain,
 
   /* Finalize remapping of internal references to self broken by swapping, if requested. */
   if (do_self_remap) {
-    LinkNode ids{};
-    ids.next = nullptr;
-    ids.link = id_a;
-
     BKE_libblock_relink_multiple(
-        bmain, &ids, ID_REMAP_TYPE_REMAP, remapper_id_a, self_remap_flags);
-    ids.link = id_b;
+        bmain, {id_a}, ID_REMAP_TYPE_REMAP, remapper_id_a, self_remap_flags);
     BKE_libblock_relink_multiple(
-        bmain, &ids, ID_REMAP_TYPE_REMAP, remapper_id_b, self_remap_flags);
+        bmain, {id_b}, ID_REMAP_TYPE_REMAP, remapper_id_b, self_remap_flags);
   }
 
   if (input_remapper_id_a == nullptr && remapper_id_a != nullptr) {
@@ -907,7 +903,7 @@ static void id_embedded_swap(ID **embedded_id_a,
             remapper_id_b,
             0);
     /* Manual 'remap' of owning embedded pointer in owner ID. */
-    SWAP(ID *, *embedded_id_a, *embedded_id_b);
+    std::swap(*embedded_id_a, *embedded_id_b);
 
     /* Restore internal pointers to the swapped embedded IDs in their owners' data. This also
      * includes the potential self-references inside the embedded IDs themselves. */
@@ -1025,7 +1021,7 @@ void BKE_libblock_management_main_add(Main *bmain, void *idv)
   bmain->is_memfile_undo_written = false;
   BKE_main_unlock(bmain);
 
-  BKE_lib_libblock_session_uuid_ensure(id);
+  BKE_lib_libblock_session_uid_ensure(id);
 }
 
 void BKE_libblock_management_main_remove(Main *bmain, void *idv)
@@ -1170,7 +1166,8 @@ void BKE_main_lib_objects_recalc_all(Main *bmain)
 
   /* flag for full recalc */
   for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next)) {
+       ob = static_cast<Object *>(ob->id.next))
+  {
     if (ID_IS_LINKED(ob)) {
       DEG_id_tag_update(&ob->id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY | ID_RECALC_ANIMATION);
     }
@@ -1271,11 +1268,11 @@ void *BKE_libblock_alloc(Main *bmain, short type, const char *name, const int fl
       BLI_strncpy(id->name + 2, name, sizeof(id->name) - 2);
     }
 
-    /* We also need to ensure a valid `session_uuid` for some non-main data (like embedded IDs).
+    /* We also need to ensure a valid `session_uid` for some non-main data (like embedded IDs).
      * IDs not allocated however should not need those (this would e.g. avoid generating session
-     * uuids for depsgraph CoW IDs, if it was using this function). */
+     * uids for depsgraph CoW IDs, if it was using this function). */
     if ((flag & LIB_ID_CREATE_NO_ALLOCATE) == 0) {
-      BKE_lib_libblock_session_uuid_ensure(id);
+      BKE_lib_libblock_session_uid_ensure(id);
     }
   }
 
@@ -1304,26 +1301,26 @@ void BKE_libblock_runtime_reset_remapping_status(ID *id)
   id->runtime.remap.skipped_indirect = 0;
 }
 
-/* ********** ID session-wise UUID management. ********** */
-static uint global_session_uuid = 0;
+/* ********** ID session-wise UID management. ********** */
+static uint global_session_uid = 0;
 
-void BKE_lib_libblock_session_uuid_ensure(ID *id)
+void BKE_lib_libblock_session_uid_ensure(ID *id)
 {
-  if (id->session_uuid == MAIN_ID_SESSION_UUID_UNSET) {
+  if (id->session_uid == MAIN_ID_SESSION_UID_UNSET) {
     BLI_assert((id->tag & LIB_TAG_TEMP_MAIN) == 0); /* Caller must ensure this. */
-    id->session_uuid = atomic_add_and_fetch_uint32(&global_session_uuid, 1);
+    id->session_uid = atomic_add_and_fetch_uint32(&global_session_uid, 1);
     /* In case overflow happens, still assign a valid ID. This way opening files many times works
      * correctly. */
-    if (UNLIKELY(id->session_uuid == MAIN_ID_SESSION_UUID_UNSET)) {
-      id->session_uuid = atomic_add_and_fetch_uint32(&global_session_uuid, 1);
+    if (UNLIKELY(id->session_uid == MAIN_ID_SESSION_UID_UNSET)) {
+      id->session_uid = atomic_add_and_fetch_uint32(&global_session_uid, 1);
     }
   }
 }
 
-void BKE_lib_libblock_session_uuid_renew(ID *id)
+void BKE_lib_libblock_session_uid_renew(ID *id)
 {
-  id->session_uuid = MAIN_ID_SESSION_UUID_UNSET;
-  BKE_lib_libblock_session_uuid_ensure(id);
+  id->session_uid = MAIN_ID_SESSION_UID_UNSET;
+  BKE_lib_libblock_session_uid_ensure(id);
 }
 
 void *BKE_id_new(Main *bmain, const short type, const char *name)
@@ -1480,14 +1477,39 @@ ID *BKE_libblock_find_name(Main *bmain, const short type, const char *name)
   return static_cast<ID *>(BLI_findstring(lb, name, offsetof(ID, name) + 2));
 }
 
-ID *BKE_libblock_find_session_uuid(Main *bmain, const short type, const uint32_t session_uuid)
+ID *BKE_libblock_find_session_uid(Main *bmain, const short type, const uint32_t session_uid)
 {
   ListBase *lb = which_libbase(bmain, type);
   BLI_assert(lb != nullptr);
   LISTBASE_FOREACH (ID *, id, lb) {
-    if (id->session_uuid == session_uuid) {
+    if (id->session_uid == session_uid) {
       return id;
     }
+  }
+  return nullptr;
+}
+
+ID *BKE_libblock_find_name_and_library(Main *bmain,
+                                       const short type,
+                                       const char *name,
+                                       const char *lib_name)
+{
+  ListBase *lb = which_libbase(bmain, type);
+  BLI_assert(lb != nullptr);
+  LISTBASE_FOREACH (ID *, id, lb) {
+    if (!STREQ(id->name + 2, name)) {
+      continue;
+    }
+    if (lib_name == nullptr || lib_name[0] == '\0') {
+      if (id->lib == nullptr) {
+        return id;
+      }
+      return nullptr;
+    }
+    if (!STREQ(id->lib->id.name + 2, lib_name)) {
+      continue;
+    }
+    return id;
   }
   return nullptr;
 }
@@ -1636,6 +1658,9 @@ bool BKE_id_new_name_validate(
   }
 
   result = BKE_main_namemap_get_name(bmain, id, name, false);
+  if (!result && !STREQ(id->name + 2, name)) {
+    result = true;
+  }
 
   BLI_strncpy(id->name + 2, name, sizeof(id->name) - 2);
   id_sort_by_name(lb, id, nullptr);
@@ -2008,21 +2033,17 @@ void BKE_library_make_local(Main *bmain,
 #endif
 }
 
-void BLI_libblock_ensure_unique_name(Main *bmain, const char *name)
+void BKE_libblock_ensure_unique_name(Main *bmain, ID *id)
 {
   ListBase *lb;
-  ID *idtest;
 
-  lb = which_libbase(bmain, GS(name));
+  lb = which_libbase(bmain, GS(id->name));
   if (lb == nullptr) {
     return;
   }
 
-  /* search for id */
-  idtest = static_cast<ID *>(BLI_findstring(lb, name + 2, offsetof(ID, name) + 2));
-  if (idtest != nullptr && !ID_IS_LINKED(idtest)) {
-    /* BKE_id_new_name_validate also takes care of sorting. */
-    BKE_id_new_name_validate(bmain, lb, idtest, nullptr, false);
+  /* BKE_id_new_name_validate also takes care of sorting. */
+  if (!ID_IS_LINKED(id) && BKE_id_new_name_validate(bmain, lb, id, nullptr, false)) {
     bmain->is_memfile_undo_written = false;
   }
 }

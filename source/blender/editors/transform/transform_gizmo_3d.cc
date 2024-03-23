@@ -20,15 +20,15 @@
 #include "DNA_lattice_types.h"
 #include "DNA_meta_types.h"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
 #include "BKE_crazyspace.hh"
-#include "BKE_curve.h"
-#include "BKE_editmesh.h"
+#include "BKE_curve.hh"
+#include "BKE_editmesh.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
-#include "BKE_layer.h"
+#include "BKE_layer.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
 #include "BKE_pointcache.h"
@@ -52,7 +52,7 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 
 /* local module include */
 #include "transform.hh"
@@ -607,16 +607,13 @@ static int gizmo_3d_foreach_selected(const bContext *C,
 #define FOREACH_EDIT_OBJECT_BEGIN(ob_iter, use_mat_local) \
   { \
     invert_m4_m4(obedit->world_to_object, obedit->object_to_world); \
-    uint objects_len = 0; \
-    Object **objects = BKE_view_layer_array_from_objects_in_edit_mode( \
-        scene, view_layer, CTX_wm_view3d(C), &objects_len); \
-    for (uint ob_index = 0; ob_index < objects_len; ob_index++) { \
-      Object *ob_iter = objects[ob_index]; \
+    Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode( \
+        scene, view_layer, CTX_wm_view3d(C)); \
+    for (Object * ob_iter : objects) { \
       const bool use_mat_local = (ob_iter != obedit);
 
 #define FOREACH_EDIT_OBJECT_END() \
   } \
-  MEM_freeN(objects); \
   } \
   ((void)0)
 
@@ -847,11 +844,9 @@ static int gizmo_3d_foreach_selected(const bContext *C,
   else if (ob && (ob->mode & OB_MODE_POSE)) {
     invert_m4_m4(ob->world_to_object, ob->object_to_world);
 
-    uint objects_len = 0;
-    Object **objects = BKE_object_pose_array_get(scene, view_layer, v3d, &objects_len);
+    Vector<Object *> objects = BKE_object_pose_array_get(scene, view_layer, v3d);
 
-    for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-      Object *ob_iter = objects[ob_index];
+    for (Object *ob_iter : objects) {
       const bool use_mat_local = (ob_iter != ob);
       /* mislead counting bones... bah. We don't know the gizmo mode, could be mixed */
       const int mode = TFM_ROTATION;
@@ -880,7 +875,6 @@ static int gizmo_3d_foreach_selected(const bContext *C,
         }
       }
     }
-    MEM_freeN(objects);
   }
   else if (ob && (ob->mode & OB_MODE_ALL_PAINT)) {
     if (ob->mode & OB_MODE_SCULPT) {
@@ -933,7 +927,10 @@ static int gizmo_3d_foreach_selected(const bContext *C,
       /* Get the boundbox out of the evaluated object. */
       std::optional<BoundBox> bb;
       if (use_only_center == false) {
-        bb = BKE_object_boundbox_get(base->object);
+        if (std::optional<Bounds<float3>> bounds = BKE_object_boundbox_get(base->object)) {
+          bb.emplace();
+          BKE_boundbox_init_from_minmax(&*bb, bounds->min, bounds->max);
+        }
       }
 
       if (use_only_center || !bb) {

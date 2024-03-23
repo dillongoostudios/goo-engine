@@ -538,7 +538,7 @@ ccl_device Spectrum bsdf_microfacet_eval(ccl_private const ShaderClosure *sc,
   /* TODO: check if the refraction configuration is valid. See `btdf_ggx()` in
    * `eevee_bxdf_lib.glsl`. */
   float3 H = is_transmission ? -(bsdf->ior * wo + wi) : (wi + wo);
-  const float inv_len_H = 1.0f / len(H);
+  const float inv_len_H = safe_divide(1.0f, len(H));
   H *= inv_len_H;
 
   /* Compute Fresnel coefficients. */
@@ -792,7 +792,7 @@ ccl_device void bsdf_microfacet_setup_fresnel_generalized_schlick(
         s = saturatef(inverse_lerp(real_F0, 1.0f, real_Fss));
       }
       else {
-        /* Integral of 2*cosI * (1 - cosI)^exponent over 0...1*/
+        /* Integral of 2*cosI * (1 - cosI)^exponent over 0...1. */
         s = 2.0f / ((fresnel->exponent + 3.0f) * fresnel->exponent + 2.0f);
       }
       /* Due to the linearity of the generalized model, this ends up working. */

@@ -14,9 +14,9 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
-#include "BKE_layer.h"
+#include "BKE_layer.hh"
 #include "BKE_nla.h"
 #include "BKE_report.h"
 
@@ -27,6 +27,7 @@
 #include "UI_view2d.hh"
 
 #include "transform.hh"
+#include "transform_constraints.hh"
 #include "transform_convert.hh"
 #include "transform_mode.hh"
 #include "transform_snap.hh"
@@ -145,6 +146,24 @@ static bool graph_edit_use_local_center(TransInfo *t)
   return ((t->around == V3D_AROUND_LOCAL_ORIGINS) && (graph_edit_is_translation_mode(t) == false));
 }
 
+static void enable_autolock(TransInfo *t, SpaceGraph *space_graph)
+{
+  /* Locking the axis makes most sense for translation. We may want to enable it for scaling as
+   * well if artists require that. */
+  if (t->mode != TFM_TRANSLATION) {
+    return;
+  }
+
+  /* These flags are set when using tweak mode on handles. */
+  if ((space_graph->runtime.flag & SIPO_RUNTIME_FLAG_TWEAK_HANDLES_LEFT) ||
+      (space_graph->runtime.flag & SIPO_RUNTIME_FLAG_TWEAK_HANDLES_RIGHT))
+  {
+    return;
+  }
+
+  initSelectConstraint(t);
+}
+
 /**
  * Get the effective selection of a triple for transform, i.e. return if the left handle, right
  * handle and/or the center point should be affected by transform.
@@ -240,7 +259,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
     return;
   }
 
-  anim_map_flag |= ANIM_get_normalization_flags(&ac);
+  anim_map_flag |= ANIM_get_normalization_flags(ac.sl);
 
   /* filter data */
   filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_CURVE_VISIBLE |
@@ -367,6 +386,8 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
     }
   }
 
+  bool at_least_one_key_selected = false;
+
   /* loop 2: build transdata arrays */
   LISTBASE_FOREACH (bAnimListElem *, ale, &anim_data) {
     AnimData *adt = ANIM_nla_mapping_get(&ac, ale);
@@ -405,7 +426,7 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
         TransDataCurveHandleFlags *hdata = nullptr;
 
         graph_bezt_get_transform_selection(t, bezt, use_handle, &sel_left, &sel_key, &sel_right);
-
+        at_least_one_key_selected |= sel_key;
         if (is_prop_edit) {
           bool is_sel = (sel_key || sel_left || sel_right);
           /* we always select all handles for proportional editing if central handle is selected */
@@ -616,6 +637,10 @@ static void createTransGraphEditData(bContext *C, TransInfo *t)
     }
   }
 
+  if (sipo->flag & SIPO_AUTOLOCK_AXIS && at_least_one_key_selected) {
+    enable_autolock(t, sipo);
+  }
+
   /* cleanup temp list */
   ANIM_animdata_freelist(&anim_data);
 }
@@ -644,18 +669,6 @@ static bool fcu_test_selected(FCurve *fcu)
   return false;
 }
 
-static void invert_snap(eSnapMode &snap_mode)
-{
-  if (snap_mode & SCE_SNAP_TO_FRAME) {
-    snap_mode &= ~SCE_SNAP_TO_FRAME;
-    snap_mode |= SCE_SNAP_TO_SECOND;
-  }
-  else if (snap_mode & SCE_SNAP_TO_SECOND) {
-    snap_mode &= ~SCE_SNAP_TO_SECOND;
-    snap_mode |= SCE_SNAP_TO_FRAME;
-  }
-}
-
 /* This function is called on recalc_data to apply the transforms applied
  * to the transdata on to the actual keyframe data
  */
@@ -667,10 +680,6 @@ static void flushTransGraphData(TransInfo *t)
   int a;
 
   eSnapMode snap_mode = t->tsnap.mode;
-
-  if (t->modifiers & MOD_SNAP_INVERT) {
-    invert_snap(snap_mode);
-  }
 
   TransDataContainer *tc = TRANS_DATA_CONTAINER_FIRST_SINGLE(t);
   /* flush to 2d vector from internally used 3d vector */
@@ -773,7 +782,7 @@ static void sort_time_beztmaps(BeztMap *bezms, int totvert)
           bezm->newIndex++;
           (bezm + 1)->newIndex--;
 
-          SWAP(BeztMap, *bezm, *(bezm + 1));
+          std::swap(*bezm, *(bezm + 1));
 
           ok = 1;
         }

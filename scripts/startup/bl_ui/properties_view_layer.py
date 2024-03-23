@@ -156,7 +156,7 @@ class VIEWLAYER_PT_eevee_layer_passes_light(ViewLayerButtonsPanel, Panel):
                  text="Ambient Occlusion")
 
 
-class VIEWLAYER_PT_eevee_layer_passes_light(ViewLayerButtonsPanel, Panel):
+class VIEWLAYER_PT_eevee_next_layer_passes_light(ViewLayerButtonsPanel, Panel):
     bl_label = "Light"
     bl_parent_id = "VIEWLAYER_PT_layer_passes"
     COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
@@ -320,6 +320,32 @@ class VIEWLAYER_PT_layer_passes_lightgroups(ViewLayerLightgroupsPanel):
     COMPAT_ENGINES = {'CYCLES'}
 
 
+class VIEWLAYER_PT_filter(ViewLayerButtonsPanel, Panel):
+    bl_label = "Filter"
+    bl_options = {'DEFAULT_CLOSED'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+
+        scene = context.scene
+        rd = scene.render
+        view_layer = context.view_layer
+
+        col = layout.column(heading="Include")
+        col.prop(view_layer, "use_sky", text="Environment")
+        col.prop(view_layer, "use_solid", text="Surfaces")
+        col.prop(view_layer, "use_strand", text="Curves")
+        col.prop(view_layer, "use_volumes", text="Volumes")
+
+        col = layout.column(heading="Use")
+        sub = col.row()
+        sub.prop(view_layer, "use_motion_blur", text="Motion Blur")
+        sub.active = scene.eevee.use_motion_blur
+
+
 class VIEWLAYER_PT_layer_custom_props(PropertyPanel, Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -336,10 +362,12 @@ classes = (
     VIEWLAYER_PT_eevee_layer_passes_data,
     VIEWLAYER_PT_eevee_next_layer_passes_data,
     VIEWLAYER_PT_eevee_layer_passes_light,
+    VIEWLAYER_PT_eevee_next_layer_passes_light,
     VIEWLAYER_PT_eevee_layer_passes_effects,
     VIEWLAYER_PT_layer_passes_cryptomatte,
     VIEWLAYER_PT_layer_passes_aov,
     VIEWLAYER_PT_layer_passes_lightgroups,
+    VIEWLAYER_PT_filter,
     VIEWLAYER_PT_layer_custom_props,
     VIEWLAYER_UL_aov,
 )

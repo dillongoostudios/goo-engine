@@ -6,10 +6,12 @@
  * \ingroup edmask
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_mask.h"
 
 #include "BLI_math_matrix.h"
@@ -85,13 +87,13 @@ static void setup_vertex_point(Mask *mask,
 
         current_point = &spline->points[point_index];
         if (current_point->bezt.h1 != HD_VECT || current_point->bezt.h2 != HD_VECT) {
-          bezt->h1 = bezt->h2 = MAX2(current_point->bezt.h2, current_point->bezt.h1);
+          bezt->h1 = bezt->h2 = std::max(current_point->bezt.h2, current_point->bezt.h1);
           break;
         }
       }
     }
     else {
-      bezt->h1 = bezt->h2 = MAX2(reference_point->bezt.h2, reference_point->bezt.h1);
+      bezt->h1 = bezt->h2 = std::max(reference_point->bezt.h2, reference_point->bezt.h1);
     }
 
     reference_parent_point = reference_point;
@@ -121,12 +123,12 @@ static void setup_vertex_point(Mask *mask,
       }
 
       /* handle type */
-      char handle_type = 0;
+      uint8_t handle_type = 0;
       if (prev_point) {
         handle_type = prev_point->bezt.h2;
       }
       if (next_point) {
-        handle_type = MAX2(next_point->bezt.h2, handle_type);
+        handle_type = std::max(next_point->bezt.h2, handle_type);
       }
       bezt->h1 = bezt->h2 = handle_type;
 
@@ -183,7 +185,8 @@ static void finSelectedSplinePoint(MaskLayer *mask_layer,
   if (check_active) {
     /* TODO: having an active point but no active spline is possible, why? */
     if (mask_layer->act_spline && mask_layer->act_point &&
-        MASKPOINT_ISSEL_ANY(mask_layer->act_point)) {
+        MASKPOINT_ISSEL_ANY(mask_layer->act_point))
+    {
       *spline = mask_layer->act_spline;
       *point = mask_layer->act_point;
       return;

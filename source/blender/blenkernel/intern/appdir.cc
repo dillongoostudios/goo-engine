@@ -22,7 +22,7 @@
 #include "BLI_tempfile.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_appdir.h" /* own include */
+#include "BKE_appdir.hh" /* own include */
 #include "BKE_blender_version.h"
 
 #include "BLT_translation.h"
@@ -84,7 +84,7 @@ static bool is_appdir_init = false;
 #  define ASSERT_IS_INIT() BLI_assert(is_appdir_init)
 #else
 #  define ASSERT_IS_INIT() ((void)0)
-#endif
+#endif /* NDEBUG */
 
 void BKE_appdir_init()
 {
@@ -685,46 +685,51 @@ bool BKE_appdir_folder_id_ex(const int folder_id,
   return true;
 }
 
-const char *BKE_appdir_folder_id(const int folder_id, const char *subfolder)
+std::optional<std::string> BKE_appdir_folder_id(const int folder_id, const char *subfolder)
 {
-  static char path[FILE_MAX] = "";
+  char path[FILE_MAX] = "";
   if (BKE_appdir_folder_id_ex(folder_id, subfolder, path, sizeof(path))) {
     return path;
   }
-  return nullptr;
+  return std::nullopt;
 }
 
-const char *BKE_appdir_folder_id_user_notest(const int folder_id, const char *subfolder)
+std::optional<std::string> BKE_appdir_folder_id_user_notest(const int folder_id,
+                                                            const char *subfolder)
 {
   const int version = BLENDER_VERSION;
-  static char path[FILE_MAX] = "";
+  char path[FILE_MAX] = "";
   const bool check_is_dir = false;
 
   switch (folder_id) {
     case BLENDER_USER_DATAFILES:
       if (get_path_environment_ex(
-              path, sizeof(path), subfolder, "BLENDER_USER_DATAFILES", check_is_dir)) {
+              path, sizeof(path), subfolder, "BLENDER_USER_DATAFILES", check_is_dir))
+      {
         break;
       }
       get_path_user_ex(path, sizeof(path), "datafiles", subfolder, version, check_is_dir);
       break;
     case BLENDER_USER_CONFIG:
       if (get_path_environment_ex(
-              path, sizeof(path), subfolder, "BLENDER_USER_CONFIG", check_is_dir)) {
+              path, sizeof(path), subfolder, "BLENDER_USER_CONFIG", check_is_dir))
+      {
         break;
       }
       get_path_user_ex(path, sizeof(path), "config", subfolder, version, check_is_dir);
       break;
     case BLENDER_USER_AUTOSAVE:
       if (get_path_environment_ex(
-              path, sizeof(path), subfolder, "BLENDER_USER_AUTOSAVE", check_is_dir)) {
+              path, sizeof(path), subfolder, "BLENDER_USER_AUTOSAVE", check_is_dir))
+      {
         break;
       }
       get_path_user_ex(path, sizeof(path), "autosave", subfolder, version, check_is_dir);
       break;
     case BLENDER_USER_SCRIPTS:
       if (get_path_environment_ex(
-              path, sizeof(path), subfolder, "BLENDER_USER_SCRIPTS", check_is_dir)) {
+              path, sizeof(path), subfolder, "BLENDER_USER_SCRIPTS", check_is_dir))
+      {
         break;
       }
       get_path_user_ex(path, sizeof(path), "scripts", subfolder, version, check_is_dir);
@@ -735,15 +740,13 @@ const char *BKE_appdir_folder_id_user_notest(const int folder_id, const char *su
   }
 
   if ('\0' == path[0]) {
-    return nullptr;
+    return std::nullopt;
   }
   return path;
 }
 
-const char *BKE_appdir_folder_id_create(const int folder_id, const char *subfolder)
+std::optional<std::string> BKE_appdir_folder_id_create(const int folder_id, const char *subfolder)
 {
-  const char *path;
-
   /* Only for user folders. */
   if (!ELEM(folder_id,
             BLENDER_USER_DATAFILES,
@@ -752,26 +755,26 @@ const char *BKE_appdir_folder_id_create(const int folder_id, const char *subfold
             BLENDER_USER_AUTOSAVE))
   {
     BLI_assert_unreachable();
-    return nullptr;
+    return std::nullopt;
   }
 
-  path = BKE_appdir_folder_id(folder_id, subfolder);
+  std::optional<std::string> path = BKE_appdir_folder_id(folder_id, subfolder);
 
-  if (!path) {
+  if (!path.has_value()) {
     path = BKE_appdir_folder_id_user_notest(folder_id, subfolder);
-    if (path) {
-      BLI_dir_create_recursive(path);
+    if (path.has_value()) {
+      BLI_dir_create_recursive(path->c_str());
     }
   }
 
   return path;
 }
 
-const char *BKE_appdir_resource_path_id_with_version(const int folder_id,
-                                                     const bool check_is_dir,
-                                                     const int version)
+std::optional<std::string> BKE_appdir_resource_path_id_with_version(const int folder_id,
+                                                                    const bool check_is_dir,
+                                                                    const int version)
 {
-  static char path[FILE_MAX] = "";
+  char path[FILE_MAX] = "";
   bool ok;
   switch (folder_id) {
     case BLENDER_RESOURCE_PATH_USER:
@@ -789,10 +792,14 @@ const char *BKE_appdir_resource_path_id_with_version(const int folder_id,
       BLI_assert_msg(0, "incorrect ID");
       break;
   }
-  return ok ? path : nullptr;
+  if (!ok) {
+    return std::nullopt;
+  }
+  return path;
 }
 
-const char *BKE_appdir_resource_path_id(const int folder_id, const bool check_is_dir)
+std::optional<std::string> BKE_appdir_resource_path_id(const int folder_id,
+                                                       const bool check_is_dir)
 {
   return BKE_appdir_resource_path_id_with_version(folder_id, check_is_dir, BLENDER_VERSION);
 }
@@ -882,7 +889,7 @@ static void where_am_i(char *program_filepath,
     /* Remove "/./" and "/../" so string comparisons can be used on the path. */
     BLI_path_normalize_native(program_filepath);
 
-#  if defined(DEBUG)
+#  ifndef NDEBUG
     if (!STREQ(program_name, program_filepath)) {
       CLOG_INFO(&LOG, 2, "guessing '%s' == '%s'", program_name, program_filepath);
     }
@@ -960,11 +967,13 @@ bool BKE_appdir_program_python_search(char *program_filepath,
   SNPRINTF(python_version, "%s%d.%d", basename, version_major, version_minor);
 
   {
-    const char *python_bin_dir = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON, "bin");
-    if (python_bin_dir) {
+    const std::optional<std::string> python_bin_dir = BKE_appdir_folder_id(BLENDER_SYSTEM_PYTHON,
+                                                                           "bin");
+    if (python_bin_dir.has_value()) {
 
       for (int i = 0; i < ARRAY_SIZE(python_names); i++) {
-        BLI_path_join(program_filepath, program_filepath_maxncpy, python_bin_dir, python_names[i]);
+        BLI_path_join(
+            program_filepath, program_filepath_maxncpy, python_bin_dir->c_str(), python_names[i]);
 
         if (
 #ifdef _WIN32
@@ -1053,7 +1062,8 @@ bool BKE_appdir_app_template_has_userpref(const char *app_template)
 
   char app_template_path[FILE_MAX];
   if (!BKE_appdir_app_template_id_search(
-          app_template, app_template_path, sizeof(app_template_path))) {
+          app_template, app_template_path, sizeof(app_template_path)))
+  {
     return false;
   }
 
@@ -1108,16 +1118,9 @@ void BKE_appdir_app_templates(ListBase *templates)
  */
 static void where_is_temp(char *tempdir, const size_t tempdir_maxncpy, const char *userdir)
 {
-
-  tempdir[0] = '\0';
-
-  if (userdir && userdir[0] != '\0' && BLI_is_dir(userdir)) {
-    BLI_strncpy(tempdir, userdir, tempdir_maxncpy);
-    /* Add a trailing slash if needed. */
-    BLI_path_slash_ensure(tempdir, tempdir_maxncpy);
+  if (BLI_temp_directory_path_copy_if_valid(tempdir, tempdir_maxncpy, userdir)) {
     return;
   }
-
   BLI_temp_directory_path_get(tempdir, tempdir_maxncpy);
 }
 

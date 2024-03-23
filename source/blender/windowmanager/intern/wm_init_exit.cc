@@ -12,11 +12,6 @@
 #include <cstdlib>
 #include <cstring>
 
-#ifdef _WIN32
-#  define WIN32_LEAN_AND_MEAN
-#  include <windows.h>
-#endif
-
 #include "MEM_guardedalloc.h"
 
 #include "CLG_log.h"
@@ -39,26 +34,26 @@
 #include "BLO_writefile.hh"
 
 #include "BKE_blender.h"
-#include "BKE_blendfile.h"
+#include "BKE_blendfile.hh"
 #include "BKE_callbacks.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_icons.h"
 #include "BKE_image.h"
 #include "BKE_keyconfig.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
-#include "BKE_mball_tessellate.h"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
+#include "BKE_mball_tessellate.hh"
 #include "BKE_node.hh"
 #include "BKE_preview_image.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
 #include "BKE_sound.h"
-#include "BKE_vfont.h"
+#include "BKE_vfont.hh"
 
 #include "BKE_addon.h"
-#include "BKE_appdir.h"
+#include "BKE_appdir.hh"
 #include "BKE_mask.h"     /* free mask clipboard */
 #include "BKE_material.h" /* BKE_material_copybuf_clear */
 #include "BKE_studiolight.h"
@@ -68,9 +63,7 @@
 #include "RE_engine.h"
 #include "RE_pipeline.h" /* RE_ free stuff */
 
-#include "SEQ_clipboard.hh" /* free seq clipboard */
-
-#include "IMB_thumbs.h"
+#include "IMB_thumbs.hh"
 
 #ifdef WITH_PYTHON
 #  include "BPY_extern.h"
@@ -89,9 +82,9 @@
 
 #include "wm.hh"
 #include "wm_cursors.hh"
-#include "wm_event_system.h"
+#include "wm_event_system.hh"
 #include "wm_files.hh"
-#include "wm_platform_support.h"
+#include "wm_platform_support.hh"
 #include "wm_surface.hh"
 #include "wm_window.hh"
 
@@ -109,7 +102,7 @@
 #include "ED_util.hh"
 #include "ED_view3d.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 #include "BLT_lang.h"
 
 #include "UI_interface.hh"
@@ -118,14 +111,14 @@
 
 #include "GPU_context.h"
 #include "GPU_init_exit.h"
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "COM_compositor.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 CLG_LOGREF_DECLARE_GLOBAL(WM_LOG_OPERATORS, "wm.operator");
 CLG_LOGREF_DECLARE_GLOBAL(WM_LOG_HANDLERS, "wm.handler");
@@ -173,6 +166,10 @@ void WM_init_gpu()
   GPU_init();
 
   GPU_pass_cache_init();
+
+  if (G.debug & G_DEBUG_GPU_COMPILE_SHADERS) {
+    GPU_shader_compile_static();
+  }
 
   gpu_is_init = true;
 }
@@ -382,10 +379,10 @@ static bool wm_init_splash_show_on_startup_check()
   else {
     /* A less common case, if there is no user preferences, show the splash screen
      * so the user has the opportunity to restore settings from a previous version. */
-    const char *const cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, nullptr);
-    if (cfgdir) {
+    const std::optional<std::string> cfgdir = BKE_appdir_folder_id(BLENDER_USER_CONFIG, nullptr);
+    if (cfgdir.has_value()) {
       char userpref[FILE_MAX];
-      BLI_path_join(userpref, sizeof(userpref), cfgdir, BLENDER_USERPREF_FILE);
+      BLI_path_join(userpref, sizeof(userpref), cfgdir->c_str(), BLENDER_USERPREF_FILE);
       if (!BLI_exists(userpref)) {
         use_splash = true;
       }
@@ -442,30 +439,6 @@ static void free_openrecent()
   BLI_freelistN(&(G.recent_files));
 }
 
-#ifdef WIN32
-/* Read console events until there is a key event. Also returns on any error. */
-static void wait_for_console_key()
-{
-  HANDLE hConsoleInput = GetStdHandle(STD_INPUT_HANDLE);
-
-  if (!ELEM(hConsoleInput, nullptr, INVALID_HANDLE_VALUE) &&
-      FlushConsoleInputBuffer(hConsoleInput)) {
-    for (;;) {
-      INPUT_RECORD buffer;
-      DWORD ignored;
-
-      if (!ReadConsoleInput(hConsoleInput, &buffer, 1, &ignored)) {
-        break;
-      }
-
-      if (buffer.EventType == KEY_EVENT) {
-        break;
-      }
-    }
-  }
-}
-#endif
-
 static int wm_exit_handler(bContext *C, const wmEvent *event, void *userdata)
 {
   WM_exit(C, EXIT_SUCCESS);
@@ -492,6 +465,7 @@ void UV_clipboard_free();
 
 void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_actions)
 {
+  using namespace blender;
   wmWindowManager *wm = C ? CTX_wm_manager(C) : nullptr;
 
   /* While nothing technically prevents saving user data in background mode,
@@ -608,9 +582,8 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
 
   ED_preview_free_dbase(); /* frees a Main dbase, before BKE_blender_free! */
   ED_preview_restart_queue_free();
-  ED_assetlist_storage_exit();
+  ed::asset::list::storage_exit();
 
-  SEQ_clipboard_free(); /* `sequencer.cc` */
   BKE_tracking_clipboard_free();
   BKE_mask_clipboard_free();
   BKE_vfont_clipboard_free();
@@ -639,7 +612,7 @@ void WM_exit_ex(bContext *C, const bool do_python_exit, const bool do_user_exit_
   /* Free the GPU subdivision data after the database to ensure that subdivision structs used by
    * the modifiers were garbage collected. */
   if (gpu_is_init) {
-    DRW_subdiv_free();
+    blender::draw::DRW_subdiv_free();
   }
 
   ANIM_fcurves_copybuf_free();
@@ -737,14 +710,6 @@ void WM_exit(bContext *C, const int exit_code)
   WM_exit_ex(C, true, do_user_exit_actions);
 
   printf("\nBlender quit\n");
-
-#ifdef WIN32
-  /* ask user to press a key when in debug mode */
-  if (G.debug & G_DEBUG) {
-    printf("Press any key to exit . . .\n\n");
-    wait_for_console_key();
-  }
-#endif
 
   exit(exit_code);
 }

@@ -116,6 +116,9 @@ HIPDevice::HIPDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
   hipDeviceGetAttribute(&minor, hipDeviceAttributeComputeCapabilityMinor, hipDevId);
   hipDevArchitecture = major * 100 + minor * 10;
 
+  /* Get hip runtime Version needed for memory types. */
+  hip_assert(hipRuntimeGetVersion(&hipRuntimeVersion));
+
   /* Pop context set by hipCtxCreate. */
   hipCtxPopCurrent(NULL);
 }
@@ -123,7 +126,9 @@ HIPDevice::HIPDevice(const DeviceInfo &info, Stats &stats, Profiler &profiler)
 HIPDevice::~HIPDevice()
 {
   texture_info.free();
-
+  if (hipModule) {
+    hip_assert(hipModuleUnload(hipModule));
+  }
   hip_assert(hipCtxDestroy(hipContext));
 }
 
@@ -222,19 +227,11 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
   int major, minor;
   hipDeviceGetAttribute(&major, hipDeviceAttributeComputeCapabilityMajor, hipDevId);
   hipDeviceGetAttribute(&minor, hipDeviceAttributeComputeCapabilityMinor, hipDevId);
-  hipDeviceProp_t props;
-  hipGetDeviceProperties(&props, hipDevId);
-
-  /* gcnArchName can contain tokens after the arch name with features, ie.
-   * `gfx1010:sramecc-:xnack-` so we tokenize it to get the first part. */
-  char *arch = strtok(props.gcnArchName, ":");
-  if (arch == NULL) {
-    arch = props.gcnArchName;
-  }
+  const std::string arch = hipDeviceArch(hipDevId);
 
   /* Attempt to use kernel provided with Blender. */
   if (!use_adaptive_compilation()) {
-    const string fatbin = path_get(string_printf("lib/%s_%s.fatbin", name, arch));
+    const string fatbin = path_get(string_printf("lib/%s_%s.fatbin", name, arch.c_str()));
     VLOG_INFO << "Testing for pre-compiled kernel " << fatbin << ".";
     if (path_exists(fatbin)) {
       VLOG_INFO << "Using precompiled kernel.";
@@ -259,13 +256,14 @@ string HIPDevice::compile_kernel(const uint kernel_features, const char *name, c
 #  else
   options.append("Wno-parentheses-equality -Wno-unused-value --hipcc-func-supp -O3 -ffast-math");
 #  endif
-#  ifdef _DEBUG
+#  ifndef NDEBUG
   options.append(" -save-temps");
 #  endif
-  options.append(" --amdgpu-target=").append(arch);
+  options.append(" --amdgpu-target=").append(arch.c_str());
 
   const string include_path = source_path;
-  const string fatbin_file = string_printf("cycles_%s_%s_%s", name, arch, kernel_md5.c_str());
+  const string fatbin_file = string_printf(
+      "cycles_%s_%s_%s", name, arch.c_str(), kernel_md5.c_str());
   const string fatbin = path_cache_get(path_join("kernels", fatbin_file));
   VLOG_INFO << "Testing for locally compiled kernel " << fatbin << ".";
   if (path_exists(fatbin)) {
@@ -658,9 +656,7 @@ void HIPDevice::tex_alloc(device_texture &mem)
       address_mode = hipAddressModeClamp;
       break;
     case EXTENSION_CLIP:
-      /* TODO(@arya): setting this to Mode Clamp instead of Mode Border
-       * because it's unsupported in HIP. */
-      address_mode = hipAddressModeClamp;
+      address_mode = hipAddressModeBorder;
       break;
     case EXTENSION_MIRROR:
       address_mode = hipAddressModeMirror;
@@ -745,9 +741,9 @@ void HIPDevice::tex_alloc(device_texture &mem)
 
     HIP_MEMCPY3D param;
     memset(&param, 0, sizeof(HIP_MEMCPY3D));
-    param.dstMemoryType = hipMemoryTypeArray;
+    param.dstMemoryType = get_memory_type(hipMemoryTypeArray);
     param.dstArray = array_3d;
-    param.srcMemoryType = hipMemoryTypeHost;
+    param.srcMemoryType = get_memory_type(hipMemoryTypeHost);
     param.srcHost = mem.host_pointer;
     param.srcPitch = src_pitch;
     param.WidthInBytes = param.srcPitch;
@@ -777,10 +773,10 @@ void HIPDevice::tex_alloc(device_texture &mem)
 
     hip_Memcpy2D param;
     memset(&param, 0, sizeof(param));
-    param.dstMemoryType = hipMemoryTypeDevice;
+    param.dstMemoryType = get_memory_type(hipMemoryTypeDevice);
     param.dstDevice = mem.device_pointer;
     param.dstPitch = dst_pitch;
-    param.srcMemoryType = hipMemoryTypeHost;
+    param.srcMemoryType = get_memory_type(hipMemoryTypeHost);
     param.srcHost = mem.host_pointer;
     param.srcPitch = src_pitch;
     param.WidthInBytes = param.srcPitch;
@@ -852,7 +848,11 @@ void HIPDevice::tex_alloc(device_texture &mem)
     thread_scoped_lock lock(device_mem_map_mutex);
     cmem = &device_mem_map[&mem];
 
-    hip_assert(hipTexObjectCreate(&cmem->texobject, &resDesc, &texDesc, NULL));
+    if (hipTexObjectCreate(&cmem->texobject, &resDesc, &texDesc, NULL) != hipSuccess) {
+      set_error(
+          "Failed to create texture. Maximum GPU texture size or available GPU memory was likely "
+          "exceeded.");
+    }
 
     texture_info[slot].data = (uint64_t)cmem->texobject;
   }
@@ -956,6 +956,11 @@ int HIPDevice::get_device_default_attribute(hipDeviceAttribute_t attribute, int 
     return default_value;
   }
   return value;
+}
+
+hipMemoryType HIPDevice::get_memory_type(hipMemoryType mem_type)
+{
+  return get_hip_memory_type(mem_type, hipRuntimeVersion);
 }
 
 CCL_NAMESPACE_END

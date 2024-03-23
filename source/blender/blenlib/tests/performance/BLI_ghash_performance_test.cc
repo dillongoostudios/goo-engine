@@ -12,8 +12,8 @@
 #include "BLI_ghash.h"
 #include "BLI_rand.h"
 #include "BLI_string.h"
+#include "BLI_time_utildefines.h"
 #include "BLI_utildefines.h"
-#include "PIL_time_utildefines.h"
 
 /* Using http://corpora.uni-leipzig.de/downloads/eng_wikipedia_2010_1M-text.tar.gz
  * (1 million of words, about 122MB of text) from
@@ -24,10 +24,10 @@
 #endif
 
 /* Resizing the hash has a huge cost over global filling operation! */
-//#define GHASH_RESERVE
+// #define GHASH_RESERVE
 
 /* Run the longest tests! */
-//#define GHASH_RUN_BIG
+// #define GHASH_RUN_BIG
 
 /* Size of 'small case' ghash (number of entries). */
 #define TESTCASE_SIZE_SMALL 17

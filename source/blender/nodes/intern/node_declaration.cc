@@ -12,6 +12,7 @@
 #include "BKE_geometry_fields.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
+#include "BKE_node_socket_value.hh"
 
 namespace blender::nodes {
 
@@ -145,19 +146,6 @@ void NodeDeclarationBuilder::set_active_panel_builder(const PanelDeclarationBuil
 }
 
 namespace anonymous_attribute_lifetime {
-
-bool operator==(const RelationsInNode &a, const RelationsInNode &b)
-{
-  return a.propagate_relations == b.propagate_relations &&
-         a.reference_relations == b.reference_relations && a.eval_relations == b.eval_relations &&
-         a.available_relations == b.available_relations &&
-         a.available_on_none == b.available_on_none;
-}
-
-bool operator!=(const RelationsInNode &a, const RelationsInNode &b)
-{
-  return !(a == b);
-}
 
 std::ostream &operator<<(std::ostream &stream, const RelationsInNode &relations)
 {
@@ -440,6 +428,8 @@ std::unique_ptr<SocketDeclaration> make_declaration_for_socket_type(
       return std::make_unique<decl::Collection>();
     case SOCK_MATERIAL:
       return std::make_unique<decl::Material>();
+    case SOCK_MENU:
+      return std::make_unique<decl::Menu>();
     default:
       return {};
   }
@@ -473,10 +463,19 @@ BaseSocketDeclarationBuilder &NodeDeclarationBuilder::add_input(
       return this->add_input<decl::Collection>(name, identifier);
     case SOCK_MATERIAL:
       return this->add_input<decl::Material>(name, identifier);
+    case SOCK_MENU:
+      return this->add_input<decl::Menu>(name, identifier);
     default:
       BLI_assert_unreachable();
       return this->add_input<decl::Float>("", "");
   }
+}
+
+BaseSocketDeclarationBuilder &NodeDeclarationBuilder::add_input(const eCustomDataType data_type,
+                                                                const StringRef name,
+                                                                const StringRef identifier)
+{
+  return this->add_input(*bke::custom_data_type_to_socket_type(data_type), name, identifier);
 }
 
 BaseSocketDeclarationBuilder &NodeDeclarationBuilder::add_output(
@@ -507,10 +506,19 @@ BaseSocketDeclarationBuilder &NodeDeclarationBuilder::add_output(
       return this->add_output<decl::Collection>(name, identifier);
     case SOCK_MATERIAL:
       return this->add_output<decl::Material>(name, identifier);
+    case SOCK_MENU:
+      return this->add_output<decl::Menu>(name, identifier);
     default:
       BLI_assert_unreachable();
       return this->add_output<decl::Float>("", "");
   }
+}
+
+BaseSocketDeclarationBuilder &NodeDeclarationBuilder::add_output(const eCustomDataType data_type,
+                                                                 const StringRef name,
+                                                                 const StringRef identifier)
+{
+  return this->add_output(*bke::custom_data_type_to_socket_type(data_type), name, identifier);
 }
 
 BaseSocketDeclarationBuilder &BaseSocketDeclarationBuilder::supports_field()
@@ -842,26 +850,6 @@ Span<int> OutputFieldDependency::linked_input_indices() const
   return linked_input_indices_;
 }
 
-bool operator==(const OutputFieldDependency &a, const OutputFieldDependency &b)
-{
-  return a.type_ == b.type_ && a.linked_input_indices_ == b.linked_input_indices_;
-}
-
-bool operator!=(const OutputFieldDependency &a, const OutputFieldDependency &b)
-{
-  return !(a == b);
-}
-
-bool operator==(const FieldInferencingInterface &a, const FieldInferencingInterface &b)
-{
-  return a.inputs == b.inputs && a.outputs == b.outputs;
-}
-
-bool operator!=(const FieldInferencingInterface &a, const FieldInferencingInterface &b)
-{
-  return !(a == b);
-}
-
 const CompositorInputRealizationOptions &SocketDeclaration::compositor_realization_options() const
 {
   return compositor_realization_options_;
@@ -906,24 +894,24 @@ namespace implicit_field_inputs {
 
 void position(const bNode & /*node*/, void *r_value)
 {
-  new (r_value) fn::ValueOrField<float3>(bke::AttributeFieldInput::Create<float3>("position"));
+  new (r_value) bke::SocketValueVariant(bke::AttributeFieldInput::Create<float3>("position"));
 }
 
 void normal(const bNode & /*node*/, void *r_value)
 {
   new (r_value)
-      fn::ValueOrField<float3>(fn::Field<float3>(std::make_shared<bke::NormalFieldInput>()));
+      bke::SocketValueVariant(fn::Field<float3>(std::make_shared<bke::NormalFieldInput>()));
 }
 
 void index(const bNode & /*node*/, void *r_value)
 {
-  new (r_value) fn::ValueOrField<int>(fn::Field<int>(std::make_shared<fn::IndexFieldInput>()));
+  new (r_value) bke::SocketValueVariant(fn::Field<int>(std::make_shared<fn::IndexFieldInput>()));
 }
 
 void id_or_index(const bNode & /*node*/, void *r_value)
 {
   new (r_value)
-      fn::ValueOrField<int>(fn::Field<int>(std::make_shared<bke::IDAttributeFieldInput>()));
+      bke::SocketValueVariant(fn::Field<int>(std::make_shared<bke::IDAttributeFieldInput>()));
 }
 
 }  // namespace implicit_field_inputs

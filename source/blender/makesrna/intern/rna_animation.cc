@@ -12,6 +12,7 @@
 #include "DNA_anim_types.h"
 #include "DNA_scene_types.h"
 
+#include "BLI_listbase_wrapper.hh"
 #include "BLI_utildefines.h"
 
 #include "BLT_translation.h"
@@ -22,7 +23,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "WM_types.hh"
 
@@ -51,12 +52,12 @@ const EnumPropertyItem rna_enum_keying_flag_items[] = {
      0,
      "Visual Keying",
      "Insert keyframes based on 'visual transforms'"},
-    {INSERTKEY_XYZ2RGB,
+    {0,
      "INSERTKEY_XYZ_TO_RGB",
      0,
-     "XYZ=RGB Colors",
-     "Color for newly added transformation F-Curves (Location, Rotation, Scale) "
-     "and also Color is based on the transform axis"},
+     "XYZ=RGB Colors (ignored)",
+     "This flag is no longer in use, and is here so that code that uses it doesn't break. The "
+     "XYZ=RGB coloring is determined by the animation preferences"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -72,12 +73,12 @@ const EnumPropertyItem rna_enum_keying_flag_api_items[] = {
      0,
      "Visual Keying",
      "Insert keyframes based on 'visual transforms'"},
-    {INSERTKEY_XYZ2RGB,
+    {0,
      "INSERTKEY_XYZ_TO_RGB",
      0,
-     "XYZ=RGB Colors",
-     "Color for newly added transformation F-Curves (Location, Rotation, Scale) "
-     "and also Color is based on the transform axis"},
+     "XYZ=RGB Colors (ignored)",
+     "This flag is no longer in use, and is here so that code that uses it doesn't break. The "
+     "XYZ=RGB coloring is determined by the animation preferences"},
     {INSERTKEY_REPLACE,
      "INSERTKEY_REPLACE",
      0,
@@ -98,6 +99,8 @@ const EnumPropertyItem rna_enum_keying_flag_api_items[] = {
 };
 
 #ifdef RNA_RUNTIME
+
+#  include <algorithm>
 
 #  include "BLI_math_base.h"
 
@@ -129,7 +132,7 @@ static void rna_AnimData_dependency_update(Main *bmain, Scene *scene, PointerRNA
   rna_AnimData_update(bmain, scene, ptr);
 }
 
-static int rna_AnimData_action_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_AnimData_action_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   AnimData *adt = (AnimData *)ptr->data;
   return BKE_animdata_action_editable(adt) ? PROP_EDITABLE : PropertyFlag(0);
@@ -187,6 +190,34 @@ bool rna_AnimData_tweakmode_override_apply(Main * /*bmain*/,
 
   anim_data_dst->flag = (anim_data_dst->flag & ~ADT_NLA_EDIT_ON) |
                         (anim_data_src->flag & ADT_NLA_EDIT_ON);
+
+  if (!(anim_data_dst->flag & ADT_NLA_EDIT_ON)) {
+    /* If tweak mode is not enabled, there's nothing left to do. */
+    return true;
+  }
+
+  if (!anim_data_src->act_track || !anim_data_src->actstrip) {
+    /* If there is not enough information to find the active track/strip, don't bother. */
+    return true;
+  }
+
+  /* AnimData::act_track and AnimData::actstrip are not directly exposed to RNA as editable &
+   * overridable, so the override doesn't contain this info. Reconstruct the pointers by name. */
+  for (NlaTrack *track : blender::ListBaseWrapper<NlaTrack>(anim_data_dst->nla_tracks)) {
+    if (!STREQ(track->name, anim_data_src->act_track->name)) {
+      continue;
+    }
+
+    NlaStrip *strip = BKE_nlastrip_find_by_name(track, anim_data_src->actstrip->name);
+    if (!strip) {
+      continue;
+    }
+
+    anim_data_dst->act_track = track;
+    anim_data_dst->actstrip = strip;
+    break;
+  }
+
   return true;
 }
 
@@ -337,6 +368,13 @@ static StructRNA *rna_KeyingSetInfo_register(Main *bmain,
   /* check if we have registered this info before, and remove it */
   ksi = ANIM_keyingset_info_find_name(dummy_ksi.idname);
   if (ksi) {
+    BKE_reportf(reports,
+                RPT_INFO,
+                "%s '%s', bl_idname '%s' has been registered before, unregistering previous",
+                error_prefix,
+                identifier,
+                dummy_ksi.idname);
+
     StructRNA *srna = ksi->rna_ext.srna;
     if (!(srna && rna_KeyingSetInfo_unregister(bmain, srna))) {
       BKE_reportf(reports,
@@ -384,7 +422,7 @@ static StructRNA *rna_ksPath_id_typef(PointerRNA *ptr)
   return ID_code_to_RNA_type(ksp->idtype);
 }
 
-static int rna_ksPath_id_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_ksPath_id_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   KS_Path *ksp = (KS_Path *)ptr->data;
   return (ksp->idtype) ? PROP_EDITABLE : PropertyFlag(0);
@@ -464,7 +502,8 @@ static void rna_KeyingSet_name_set(PointerRNA *ptr, const char *value)
            * conflicts
            */
           for (agrp = static_cast<bActionGroup *>(adt->action->groups.first); agrp;
-               agrp = agrp->next) {
+               agrp = agrp->next)
+          {
             if (STREQ(ks->name, agrp->name)) {
               /* there should only be one of these in the action, so can stop... */
               STRNCPY(agrp->name, value);
@@ -480,7 +519,7 @@ static void rna_KeyingSet_name_set(PointerRNA *ptr, const char *value)
   STRNCPY(ks->name, value);
 }
 
-static int rna_KeyingSet_active_ksPath_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_KeyingSet_active_ksPath_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   KeyingSet *ks = (KeyingSet *)ptr->data;
 
@@ -507,7 +546,7 @@ static void rna_KeyingSet_active_ksPath_set(PointerRNA *ptr,
 static int rna_KeyingSet_active_ksPath_index_get(PointerRNA *ptr)
 {
   KeyingSet *ks = (KeyingSet *)ptr->data;
-  return MAX2(ks->active_path - 1, 0);
+  return std::max(ks->active_path - 1, 0);
 }
 
 static void rna_KeyingSet_active_ksPath_index_set(PointerRNA *ptr, int value)
@@ -877,17 +916,6 @@ static void rna_def_common_keying_flags(StructRNA *srna, short reg)
     RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
   }
 
-  prop = RNA_def_property(srna, "use_insertkey_override_xyz_to_rgb", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "keyingoverride", INSERTKEY_XYZ2RGB);
-  RNA_def_property_ui_text(
-      prop,
-      "Override F-Curve Colors - XYZ to RGB",
-      "Override default setting to set color for newly added transformation F-Curves "
-      "(Location, Rotation, Scale) to be based on the transform axis");
-  if (reg) {
-    RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
-  }
-
   /* value to override defaults with */
   prop = RNA_def_property(srna, "use_insertkey_needed", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "keyingflag", INSERTKEY_NEEDED);
@@ -902,16 +930,6 @@ static void rna_def_common_keying_flags(StructRNA *srna, short reg)
   RNA_def_property_boolean_sdna(prop, nullptr, "keyingflag", INSERTKEY_MATRIX);
   RNA_def_property_ui_text(
       prop, "Insert Keyframes - Visual", "Insert keyframes based on 'visual transforms'");
-  if (reg) {
-    RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
-  }
-
-  prop = RNA_def_property(srna, "use_insertkey_xyz_to_rgb", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "keyingflag", INSERTKEY_XYZ2RGB);
-  RNA_def_property_ui_text(prop,
-                           "F-Curve Colors - XYZ to RGB",
-                           "Color for newly added transformation F-Curves (Location, Rotation, "
-                           "Scale) is based on the transform axis");
   if (reg) {
     RNA_def_property_flag(prop, PROP_REGISTER_OPTIONAL);
   }

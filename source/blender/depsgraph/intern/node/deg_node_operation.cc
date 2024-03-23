@@ -168,6 +168,8 @@ const char *operationCodeAsString(OperationCode opcode)
     /* Shading. */
     case OperationCode::SHADING:
       return "SHADING";
+    case OperationCode::SHADING_DONE:
+      return "SHADING_DONE";
     case OperationCode::MATERIAL_UPDATE:
       return "MATERIAL_UPDATE";
     case OperationCode::LIGHT_UPDATE:
@@ -197,9 +199,11 @@ const char *operationCodeAsString(OperationCode opcode)
     /* Sequencer. */
     case OperationCode::SEQUENCES_EVAL:
       return "SEQUENCES_EVAL";
-    /* instancing/duplication. */
-    case OperationCode::DUPLI:
-      return "DUPLI";
+    /* instancing. */
+    case OperationCode::INSTANCER:
+      return "INSTANCER";
+    case OperationCode::INSTANCE:
+      return "INSTANCE";
   }
   BLI_assert_msg(0, "Unhandled operation code, should never happen.");
   return "UNKNOWN";
@@ -246,6 +250,7 @@ void OperationNode::tag_update(Depsgraph *graph, eUpdateSource source)
     case DEG_UPDATE_SOURCE_TIME:
     case DEG_UPDATE_SOURCE_RELATIONS:
     case DEG_UPDATE_SOURCE_VISIBILITY:
+    case DEG_UPDATE_SOURCE_SIDE_EFFECT_REQUEST:
       /* Currently nothing. */
       break;
     case DEG_UPDATE_SOURCE_USER_EDIT:

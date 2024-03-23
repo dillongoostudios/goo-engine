@@ -417,12 +417,14 @@ static PyObject *available_devices_func(PyObject * /*self*/, PyObject *args)
   for (size_t i = 0; i < devices.size(); i++) {
     DeviceInfo &device = devices[i];
     string type_name = Device::string_from_type(device.type);
-    PyObject *device_tuple = PyTuple_New(5);
+    PyObject *device_tuple = PyTuple_New(6);
     PyTuple_SET_ITEM(device_tuple, 0, pyunicode_from_string(device.description.c_str()));
     PyTuple_SET_ITEM(device_tuple, 1, pyunicode_from_string(type_name.c_str()));
     PyTuple_SET_ITEM(device_tuple, 2, pyunicode_from_string(device.id.c_str()));
     PyTuple_SET_ITEM(device_tuple, 3, PyBool_FromLong(device.has_peer_memory));
     PyTuple_SET_ITEM(device_tuple, 4, PyBool_FromLong(device.use_hardware_raytracing));
+    PyTuple_SET_ITEM(
+        device_tuple, 5, PyBool_FromLong(device.denoisers & DENOISER_OPENIMAGEDENOISE));
     PyTuple_SET_ITEM(ret, i, device_tuple);
   }
 
@@ -759,7 +761,7 @@ static PyObject *denoise_func(PyObject * /*self*/, PyObject *args, PyObject *key
       (ID *)PyLong_AsVoidPtr(pyscene), &RNA_ViewLayer, PyLong_AsVoidPtr(pyviewlayer));
   BL::ViewLayer b_view_layer(viewlayerptr);
 
-  DenoiseParams params = BlenderSync::get_denoise_params(b_scene, b_view_layer, true);
+  DenoiseParams params = BlenderSync::get_denoise_params(b_scene, b_view_layer, true, device);
   params.use = true;
 
   /* Parse file paths list. */
@@ -807,7 +809,8 @@ static PyObject *merge_func(PyObject * /*self*/, PyObject *args, PyObject *keywo
   PyObject *pyinput, *pyoutput = NULL;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, keywords, "OO", (char **)keyword_list, &pyinput, &pyoutput)) {
+          args, keywords, "OO", (char **)keyword_list, &pyinput, &pyoutput))
+  {
     return NULL;
   }
 

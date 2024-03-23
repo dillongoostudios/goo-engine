@@ -16,8 +16,8 @@
 #include "DNA_space_types.h" /* for FILE_MAX */
 
 #include "BKE_constraint.h"
-#include "BKE_lib_id.h"
-#include "BKE_modifier.h"
+#include "BKE_lib_id.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 
 #include "BLI_listbase.h"
@@ -270,6 +270,7 @@ void AbcObjectReader::addCacheModifier()
 {
   ModifierData *md = BKE_modifier_new(eModifierType_MeshSequenceCache);
   BLI_addtail(&m_object->modifiers, md);
+  BKE_modifiers_persistent_uid_init(*m_object, *md);
 
   MeshSeqCacheModifierData *mcmd = reinterpret_cast<MeshSeqCacheModifierData *>(md);
 

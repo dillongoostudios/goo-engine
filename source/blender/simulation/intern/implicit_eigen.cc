@@ -10,13 +10,13 @@
 
 #ifdef IMPLICIT_SOLVER_EIGEN
 
-//#define USE_EIGEN_CORE
+// #define USE_EIGEN_CORE
 #  define USE_EIGEN_CONSTRAINED_CG
 
 #  ifdef __GNUC__
 #    pragma GCC diagnostic push
 /* XXX suppress verbose warnings in eigen */
-//#  pragma GCC diagnostic ignored "-Wlogical-op"
+// #  pragma GCC diagnostic ignored "-Wlogical-op"
 #  endif
 
 #  ifndef IMPLICIT_ENABLE_EIGEN_DEBUG
@@ -48,7 +48,6 @@
 #  include "MEM_guardedalloc.h"
 
 extern "C" {
-#  include "DNA_meshdata_types.h"
 #  include "DNA_object_force_types.h"
 #  include "DNA_object_types.h"
 #  include "DNA_scene_types.h"
@@ -874,7 +873,7 @@ BLI_INLINE void dfdx_damp(float to[3][3],
   // return (I - outerprod(dir, dir)) * (-damping * -(dot(dir, vel) / Max(length, rest)));
   mul_fvectorT_fvector(to, dir, dir);
   sub_fmatrix_fmatrix(to, I, to);
-  mul_fmatrix_S(to, (-damping * -(dot_v3v3(dir, vel) / MAX2(length, rest))));
+  mul_fmatrix_S(to, (-damping * -(dot_v3v3(dir, vel) / std::max(length, rest))));
 }
 #  endif
 

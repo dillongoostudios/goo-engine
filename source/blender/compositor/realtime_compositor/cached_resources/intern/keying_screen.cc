@@ -13,7 +13,7 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_vector.hh"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "DNA_defaults.h"
 #include "DNA_movieclip_types.h"
@@ -28,6 +28,7 @@
 
 #include "COM_context.hh"
 #include "COM_keying_screen.hh"
+#include "COM_result.hh"
 #include "COM_utilities.hh"
 
 namespace blender::realtime_compositor {
@@ -43,7 +44,7 @@ KeyingScreenKey::KeyingScreenKey(int frame, float smoothness)
 
 uint64_t KeyingScreenKey::hash() const
 {
-  return get_default_hash_2(frame, smoothness);
+  return get_default_hash(frame, smoothness);
 }
 
 bool operator==(const KeyingScreenKey &a, const KeyingScreenKey &b)
@@ -63,8 +64,8 @@ static void compute_marker_points(MovieClip *movie_clip,
                                   Vector<float2> &marker_positions,
                                   Vector<float4> &marker_colors)
 {
-  BLI_assert(marker_positions.size() == 0);
-  BLI_assert(marker_colors.size() == 0);
+  BLI_assert(marker_positions.is_empty());
+  BLI_assert(marker_colors.is_empty());
 
   ImBuf *image_buffer = BKE_movieclip_get_ibuf(movie_clip, &movie_clip_user);
   if (!image_buffer) {
@@ -137,7 +138,7 @@ KeyingScreen::KeyingScreen(Context &context,
   compute_marker_points(
       movie_clip, movie_clip_user, movie_tracking_object, marker_positions, marker_colors);
 
-  GPUShader *shader = context.shader_manager().get("compositor_keying_screen");
+  GPUShader *shader = context.get_shader("compositor_keying_screen");
   GPU_shader_bind(shader);
 
   GPU_shader_uniform_1f(shader, "smoothness", smoothness);
@@ -168,7 +169,13 @@ KeyingScreen::KeyingScreen(Context &context,
   GPU_storagebuf_bind(colors_ssbo, colors_ssbo_location);
 
   texture_ = GPU_texture_create_2d(
-      "Keying Screen", size.x, size.y, 1, GPU_RGBA16F, GPU_TEXTURE_USAGE_SHADER_READ, nullptr);
+      "Keying Screen",
+      size.x,
+      size.y,
+      1,
+      Result::texture_format(ResultType::Color, context.get_precision()),
+      GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_SHADER_WRITE,
+      nullptr);
   const int image_unit = GPU_shader_get_sampler_binding(shader, "output_img");
   GPU_texture_image_bind(texture_, image_unit);
 

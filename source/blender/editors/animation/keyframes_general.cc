@@ -15,6 +15,7 @@
 
 #include "BLI_blenlib.h"
 #include "BLI_math_vector.h"
+#include "BLI_math_vector_types.hh"
 #include "BLI_string_utils.hh"
 #include "BLI_utildefines.h"
 
@@ -24,9 +25,9 @@
 #include "DNA_space_types.h"
 
 #include "BKE_action.h"
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_fcurve.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 
@@ -935,7 +936,7 @@ void time_offset_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float
     /* This simulates the fcu curve moving in time. */
     const float time = fcu->bezt[segment->start_index + i].vec[1][0] + frame_offset;
     /* Need to normalize time to first_key to specify that as the wrapping point. */
-    const float wrapped_time = mod_f_positive(time - first_key_x, fcu_x_range) + first_key_x;
+    const float wrapped_time = floored_fmod(time - first_key_x, fcu_x_range) + first_key_x;
     const float delta_y = fcu_y_range * floorf((time - first_key_x) / fcu_x_range);
 
     const float key_y_value = evaluate_fcurve(fcu, wrapped_time) + delta_y;
@@ -946,6 +947,29 @@ void time_offset_fcurve_segment(FCurve *fcu, FCurveSegment *segment, const float
     BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[segment->start_index + i], y_values[i]);
   }
   MEM_freeN(y_values);
+}
+
+/* ---------------- */
+
+void scale_from_fcurve_segment_neighbor(FCurve *fcu,
+                                        FCurveSegment *segment,
+                                        const float factor,
+                                        const FCurveSegmentAnchor anchor)
+{
+  const BezTriple *reference_key;
+  switch (anchor) {
+    case FCurveSegmentAnchor::LEFT:
+      reference_key = fcurve_segment_start_get(fcu, segment->start_index);
+      break;
+    case FCurveSegmentAnchor::RIGHT:
+      reference_key = fcurve_segment_end_get(fcu, segment->start_index + segment->length);
+      break;
+  }
+
+  for (int i = segment->start_index; i < segment->start_index + segment->length; i++) {
+    const float key_y_value = interpf(fcu->bezt[i].vec[1][1], reference_key->vec[1][1], factor);
+    BKE_fcurve_keyframe_move_value_with_handles(&fcu->bezt[i], key_y_value);
+  }
 }
 
 /* ---------------- */
@@ -1211,7 +1235,7 @@ struct TempFrameValCache {
 
 void sample_fcurve_segment(FCurve *fcu,
                            const float start_frame,
-                           const int sample_rate,
+                           const float sample_rate,
                            float *samples,
                            const int sample_count)
 {
@@ -1221,8 +1245,107 @@ void sample_fcurve_segment(FCurve *fcu,
   }
 }
 
+static void remove_fcurve_key_range(FCurve *fcu,
+                                    const blender::int2 range,
+                                    const BakeCurveRemove removal_mode)
+{
+  switch (removal_mode) {
+
+    case BakeCurveRemove::REMOVE_ALL: {
+      BKE_fcurve_delete_keys_all(fcu);
+      break;
+    }
+
+    case BakeCurveRemove::REMOVE_OUT_RANGE: {
+      bool replace;
+
+      int before_index = BKE_fcurve_bezt_binarysearch_index(
+          fcu->bezt, range[0], fcu->totvert, &replace);
+
+      if (before_index > 0) {
+        BKE_fcurve_delete_keys(fcu, {0, uint(before_index)});
+      }
+
+      int after_index = BKE_fcurve_bezt_binarysearch_index(
+          fcu->bezt, range[1], fcu->totvert, &replace);
+      /* #REMOVE_OUT_RANGE is treated as exclusive on both ends. */
+      if (replace) {
+        after_index++;
+      }
+      if (after_index < fcu->totvert) {
+        BKE_fcurve_delete_keys(fcu, {uint(after_index), fcu->totvert});
+      }
+      break;
+    }
+
+    case BakeCurveRemove::REMOVE_IN_RANGE: {
+      bool replace;
+      const int range_start_index = BKE_fcurve_bezt_binarysearch_index(
+          fcu->bezt, range[0], fcu->totvert, &replace);
+      int range_end_index = BKE_fcurve_bezt_binarysearch_index(
+          fcu->bezt, range[1], fcu->totvert, &replace);
+      if (replace) {
+        range_end_index++;
+      }
+
+      if (range_end_index > range_start_index) {
+        BKE_fcurve_delete_keys(fcu, {uint(range_start_index), uint(range_end_index)});
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+}
+
+void bake_fcurve(FCurve *fcu,
+                 const blender::int2 range,
+                 const float step,
+                 const BakeCurveRemove remove_existing)
+{
+  using namespace blender::animrig;
+  BLI_assert(step > 0);
+  const int sample_count = (range[1] - range[0]) / step + 1;
+  float *samples = static_cast<float *>(
+      MEM_callocN(sample_count * sizeof(float), "Channel Bake Samples"));
+  const float sample_rate = 1.0f / step;
+  sample_fcurve_segment(fcu, range[0], sample_rate, samples, sample_count);
+
+  if (remove_existing != BakeCurveRemove::REMOVE_NONE) {
+    remove_fcurve_key_range(fcu, range, remove_existing);
+  }
+
+  BezTriple *baked_keys = static_cast<BezTriple *>(
+      MEM_callocN(sample_count * sizeof(BezTriple), "beztriple"));
+
+  const KeyframeSettings settings = get_keyframe_settings(true);
+
+  for (int i = 0; i < sample_count; i++) {
+    BezTriple *key = &baked_keys[i];
+    blender::float2 key_position = {range[0] + i * step, samples[i]};
+    initialize_bezt(key, key_position, settings, eFCurve_Flags(fcu->flag));
+  }
+
+  int merged_size;
+  BezTriple *merged_bezt = BKE_bezier_array_merge(
+      baked_keys, sample_count, fcu->bezt, fcu->totvert, &merged_size);
+
+  if (fcu->bezt != nullptr) {
+    /* Can happen if we removed all keys beforehand. */
+    MEM_freeN(fcu->bezt);
+  }
+  MEM_freeN(baked_keys);
+  fcu->bezt = merged_bezt;
+  fcu->totvert = merged_size;
+
+  MEM_freeN(samples);
+  BKE_fcurve_handles_recalc(fcu);
+}
+
 void bake_fcurve_segments(FCurve *fcu)
 {
+  using namespace blender::animrig;
   BezTriple *bezt, *start = nullptr, *end = nullptr;
   TempFrameValCache *value_cache, *fp;
   int sfra, range;
@@ -1231,6 +1354,9 @@ void bake_fcurve_segments(FCurve *fcu)
   if (fcu->bezt == nullptr) { /* ignore baked */
     return;
   }
+
+  KeyframeSettings settings = get_keyframe_settings(true);
+  settings.keyframe_type = BEZT_KEYTYPE_BREAKDOWN;
 
   /* Find selected keyframes... once pair has been found, add keyframes. */
   for (i = 0, bezt = fcu->bezt; i < fcu->totvert; i++, bezt++) {
@@ -1272,7 +1398,7 @@ void bake_fcurve_segments(FCurve *fcu)
           /* add keyframes with these, tagging as 'breakdowns' */
           for (n = 1, fp = value_cache; n < range && fp; n++, fp++) {
             blender::animrig::insert_vert_fcurve(
-                fcu, fp->frame, fp->val, BEZT_KEYTYPE_BREAKDOWN, eInsertKeyFlags(1));
+                fcu, {fp->frame, fp->val}, settings, eInsertKeyFlags(1));
           }
 
           /* free temp cache */

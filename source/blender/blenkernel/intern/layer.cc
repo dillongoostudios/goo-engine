@@ -25,11 +25,12 @@
 #include "BKE_collection.h"
 #include "BKE_freestyle.h"
 #include "BKE_idprop.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_node.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "DNA_ID.h"
 #include "DNA_collection_types.h"
@@ -47,7 +48,7 @@
 #include "DEG_depsgraph_debug.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 #include "RE_engine.h"
 
@@ -402,6 +403,9 @@ Base *BKE_view_layer_base_find(ViewLayer *view_layer, Object *ob)
 
 void BKE_view_layer_base_deselect_all(const Scene *scene, ViewLayer *view_layer)
 {
+  BLI_assert(scene);
+  BLI_assert(view_layer);
+
   BKE_view_layer_synced_ensure(scene, view_layer);
   LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
     base->flag &= ~BASE_SELECTED;
@@ -986,6 +990,9 @@ void BKE_view_layer_need_resync_tag(ViewLayer *view_layer)
 
 void BKE_view_layer_synced_ensure(const Scene *scene, ViewLayer *view_layer)
 {
+  BLI_assert(scene);
+  BLI_assert(view_layer);
+
   if (view_layer->flag & VIEW_LAYER_OUT_OF_SYNC) {
     BKE_layer_collection_sync(scene, view_layer);
     view_layer->flag &= ~VIEW_LAYER_OUT_OF_SYNC;
@@ -1602,7 +1609,7 @@ bool BKE_base_is_visible(const View3D *v3d, const Base *base)
     return base->flag & BASE_ENABLED_AND_VISIBLE_IN_DEFAULT_VIEWPORT;
   }
 
-  if ((v3d->localvd) && ((v3d->local_view_uuid & base->local_view_bits) == 0)) {
+  if ((v3d->localvd) && ((v3d->local_view_uid & base->local_view_bits) == 0)) {
     return false;
   }
 
@@ -1611,7 +1618,7 @@ bool BKE_base_is_visible(const View3D *v3d, const Base *base)
   }
 
   if (v3d->flag & V3D_LOCAL_COLLECTIONS) {
-    return (v3d->local_collections_uuid & base->local_collections_bits) != 0;
+    return (v3d->local_collections_uid & base->local_collections_bits) != 0;
   }
 
   return base->flag & BASE_ENABLED_AND_VISIBLE_IN_DEFAULT_VIEWPORT;
@@ -1629,12 +1636,12 @@ bool BKE_object_is_visible_in_viewport(const View3D *v3d, const Object *ob)
     return false;
   }
 
-  if (v3d->localvd && ((v3d->local_view_uuid & ob->base_local_view_bits) == 0)) {
+  if (v3d->localvd && ((v3d->local_view_uid & ob->base_local_view_bits) == 0)) {
     return false;
   }
 
   if ((v3d->flag & V3D_LOCAL_COLLECTIONS) &&
-      ((v3d->local_collections_uuid & ob->runtime.local_collections_bits) == 0))
+      ((v3d->local_collections_uid & ob->runtime->local_collections_bits) == 0))
   {
     return false;
   }
@@ -1718,30 +1725,30 @@ void BKE_layer_collection_isolate_global(Scene * /*scene*/,
 }
 
 static void layer_collection_local_visibility_set_recursive(LayerCollection *layer_collection,
-                                                            const int local_collections_uuid)
+                                                            const int local_collections_uid)
 {
-  layer_collection->local_collections_bits |= local_collections_uuid;
+  layer_collection->local_collections_bits |= local_collections_uid;
   LISTBASE_FOREACH (LayerCollection *, child, &layer_collection->layer_collections) {
-    layer_collection_local_visibility_set_recursive(child, local_collections_uuid);
+    layer_collection_local_visibility_set_recursive(child, local_collections_uid);
   }
 }
 
 static void layer_collection_local_visibility_unset_recursive(LayerCollection *layer_collection,
-                                                              const int local_collections_uuid)
+                                                              const int local_collections_uid)
 {
-  layer_collection->local_collections_bits &= ~local_collections_uuid;
+  layer_collection->local_collections_bits &= ~local_collections_uid;
   LISTBASE_FOREACH (LayerCollection *, child, &layer_collection->layer_collections) {
-    layer_collection_local_visibility_unset_recursive(child, local_collections_uuid);
+    layer_collection_local_visibility_unset_recursive(child, local_collections_uid);
   }
 }
 
 static void layer_collection_local_sync(const Scene *scene,
                                         ViewLayer *view_layer,
                                         LayerCollection *layer_collection,
-                                        const ushort local_collections_uuid,
+                                        const ushort local_collections_uid,
                                         bool visible)
 {
-  if ((layer_collection->local_collections_bits & local_collections_uuid) == 0) {
+  if ((layer_collection->local_collections_bits & local_collections_uid) == 0) {
     visible = false;
   }
 
@@ -1753,13 +1760,13 @@ static void layer_collection_local_sync(const Scene *scene,
 
       BKE_view_layer_synced_ensure(scene, view_layer);
       Base *base = BKE_view_layer_base_find(view_layer, cob->ob);
-      base->local_collections_bits |= local_collections_uuid;
+      base->local_collections_bits |= local_collections_uid;
     }
   }
 
   LISTBASE_FOREACH (LayerCollection *, child, &layer_collection->layer_collections) {
     if ((child->flag & LAYER_COLLECTION_EXCLUDE) == 0) {
-      layer_collection_local_sync(scene, view_layer, child, local_collections_uuid, visible);
+      layer_collection_local_sync(scene, view_layer, child, local_collections_uid, visible);
     }
   }
 }
@@ -1770,16 +1777,16 @@ void BKE_layer_collection_local_sync(const Scene *scene, ViewLayer *view_layer, 
     return;
   }
 
-  const ushort local_collections_uuid = v3d->local_collections_uuid;
+  const ushort local_collections_uid = v3d->local_collections_uid;
 
   /* Reset flags and set the bases visible by default. */
   BKE_view_layer_synced_ensure(scene, view_layer);
   LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    base->local_collections_bits &= ~local_collections_uuid;
+    base->local_collections_bits &= ~local_collections_uid;
   }
 
   LISTBASE_FOREACH (LayerCollection *, layer_collection, &view_layer->layer_collections) {
-    layer_collection_local_sync(scene, view_layer, layer_collection, local_collections_uuid, true);
+    layer_collection_local_sync(scene, view_layer, layer_collection, local_collections_uid, true);
   }
 }
 
@@ -1810,18 +1817,18 @@ void BKE_layer_collection_isolate_local(
     const Scene *scene, ViewLayer *view_layer, const View3D *v3d, LayerCollection *lc, bool extend)
 {
   LayerCollection *lc_master = static_cast<LayerCollection *>(view_layer->layer_collections.first);
-  bool hide_it = extend && ((v3d->local_collections_uuid & lc->local_collections_bits) != 0);
+  bool hide_it = extend && ((v3d->local_collections_uid & lc->local_collections_bits) != 0);
 
   if (!extend) {
     /* Hide all collections. */
     LISTBASE_FOREACH (LayerCollection *, lc_iter, &lc_master->layer_collections) {
-      layer_collection_local_visibility_unset_recursive(lc_iter, v3d->local_collections_uuid);
+      layer_collection_local_visibility_unset_recursive(lc_iter, v3d->local_collections_uid);
     }
   }
 
   /* Make all the direct parents visible. */
   if (hide_it) {
-    lc->local_collections_bits &= ~(v3d->local_collections_uuid);
+    lc->local_collections_bits &= ~(v3d->local_collections_uid);
   }
   else {
     LayerCollection *lc_parent = lc;
@@ -1833,7 +1840,7 @@ void BKE_layer_collection_isolate_local(
     }
 
     while (lc_parent != lc) {
-      lc_parent->local_collections_bits |= v3d->local_collections_uuid;
+      lc_parent->local_collections_bits |= v3d->local_collections_uid;
 
       LISTBASE_FOREACH (LayerCollection *, lc_iter, &lc_parent->layer_collections) {
         if (BKE_layer_collection_has_layer_collection(lc_iter, lc)) {
@@ -1844,7 +1851,7 @@ void BKE_layer_collection_isolate_local(
     }
 
     /* Make all the children visible. */
-    layer_collection_local_visibility_set_recursive(lc, v3d->local_collections_uuid);
+    layer_collection_local_visibility_set_recursive(lc, v3d->local_collections_uid);
   }
 
   BKE_layer_collection_local_sync(scene, view_layer, v3d);
@@ -2670,7 +2677,8 @@ void BKE_view_layer_rename_lightgroup(Scene *scene,
 
     /* Update the scene's world to refer to the new name instead. */
     if (scene->world != nullptr && !ID_IS_LINKED(scene->world) &&
-        scene->world->lightgroup != nullptr) {
+        scene->world->lightgroup != nullptr)
+    {
       LightgroupMembership *lgm = scene->world->lightgroup;
       if (STREQ(lgm->name, old_name)) {
         STRNCPY_UTF8(lgm->name, lightgroup->name);

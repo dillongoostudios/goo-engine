@@ -20,20 +20,22 @@
 
 #include "BLI_linklist.h"
 #include "BLI_listbase.h"
+#include "BLI_vector.hh"
 
 #include "BKE_anim_data.h"
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 #include "BKE_idprop.h"
-#include "BKE_idtype.h"
-#include "BKE_key.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_idtype.hh"
+#include "BKE_key.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
-#include "BKE_main_namemap.h"
+#include "BKE_lib_remap.hh"
+#include "BKE_library.hh"
+#include "BKE_main.hh"
+#include "BKE_main_namemap.hh"
 
-#include "lib_intern.h"
+#include "lib_intern.hh"
 
 #include "DEG_depsgraph.hh"
 
@@ -212,9 +214,15 @@ void BKE_id_free_us(Main *bmain, void *idv) /* test users */
   }
 
   if (id->us == 0) {
+    const bool is_lib = GS(id->name) == ID_LI;
+
     BKE_libblock_unlink(bmain, id, false, false);
 
     BKE_id_free(bmain, id);
+
+    if (is_lib) {
+      BKE_library_main_rebuild_hierarchy(bmain);
+    }
   }
 }
 
@@ -225,6 +233,7 @@ static size_t id_delete(Main *bmain,
   const int tag = LIB_TAG_DOIT;
   ListBase *lbarray[INDEX_ID_MAX];
   int base_count, i;
+  bool has_deleted_library = false;
 
   /* Used by batch tagged deletion, when we call BKE_id_free then, id is no more in Main database,
    * and has already properly unlinked its other IDs usages.
@@ -302,10 +311,11 @@ static size_t id_delete(Main *bmain,
     }
 
     /* Since we removed IDs from Main, their own other IDs usages need to be removed 'manually'. */
-    LinkNode *cleanup_ids = nullptr;
+    blender::Vector<ID *> cleanup_ids;
     for (ID *id = static_cast<ID *>(tagged_deleted_ids.first); id;
-         id = static_cast<ID *>(id->next)) {
-      BLI_linklist_prepend(&cleanup_ids, id);
+         id = static_cast<ID *>(id->next))
+    {
+      cleanup_ids.append(id);
     }
     BKE_libblock_relink_multiple(bmain,
                                  cleanup_ids,
@@ -313,9 +323,8 @@ static size_t id_delete(Main *bmain,
                                  id_remapper,
                                  ID_REMAP_FORCE_INTERNAL_RUNTIME_POINTERS |
                                      ID_REMAP_SKIP_USER_CLEAR);
-
+    cleanup_ids.clear();
     BKE_id_remapper_free(id_remapper);
-    BLI_linklist_free(cleanup_ids, nullptr);
 
     BKE_layer_collection_resync_allow();
     BKE_main_collection_sync_remap(bmain);
@@ -325,7 +334,8 @@ static size_t id_delete(Main *bmain,
      * deleted IDs may not be properly decreased by the remappings (since `NO_MAIN` ID user-counts
      * is never affected). */
     for (ID *id = static_cast<ID *>(tagged_deleted_ids.first); id;
-         id = static_cast<ID *>(id->next)) {
+         id = static_cast<ID *>(id->next))
+    {
       id->tag |= LIB_TAG_NO_MAIN;
       /* User-count needs to be reset artificially, since some usages may not be cleared in batch
        * deletion (typically, if one deleted ID uses another deleted ID, this may not be cleared by
@@ -398,6 +408,9 @@ static size_t id_delete(Main *bmain,
                      ID_REAL_USERS(id),
                      (id->tag & LIB_TAG_EXTRAUSER_SET) != 0 ? 1 : 0);
         }
+        if (!has_deleted_library && GS(id->name) == ID_LI) {
+          has_deleted_library = true;
+        }
         id_free(bmain, id, free_flag, !do_tagged_deletion);
         ++num_datablocks_deleted;
       }
@@ -406,6 +419,10 @@ static size_t id_delete(Main *bmain,
 
   BKE_layer_collection_resync_allow();
   BKE_main_collection_sync_remap(bmain);
+
+  if (has_deleted_library) {
+    BKE_library_main_rebuild_hierarchy(bmain);
+  }
 
   bmain->is_memfile_undo_written = false;
   return num_datablocks_deleted;

@@ -10,8 +10,8 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BKE_context.h"
-#include "BKE_layer.h"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
 #include "BKE_screen.hh"
 
 #include "BLI_listbase.h"
@@ -63,7 +63,8 @@ int view3d_context(const bContext *C, const char *member, bContextDataResult *re
       Object *ob = base->object;
       /* if hidden but in edit mode, we still display, can happen with animation */
       if ((base->flag & BASE_ENABLED_AND_MAYBE_VISIBLE_IN_VIEWPORT) != 0 ||
-          (ob->mode != OB_MODE_OBJECT)) {
+          (ob->mode != OB_MODE_OBJECT))
+      {
         CTX_data_id_pointer_set(result, &ob->id);
       }
     }

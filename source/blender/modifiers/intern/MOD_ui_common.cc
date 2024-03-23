@@ -11,8 +11,8 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.h"
-#include "BKE_modifier.h"
+#include "BKE_context.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_screen.hh"
 
@@ -95,7 +95,7 @@ void modifier_panel_end(uiLayout *layout, PointerRNA *ptr)
   ModifierData *md = static_cast<ModifierData *>(ptr->data);
   if (md->error) {
     uiLayout *row = uiLayoutRow(layout, false);
-    uiItemL(row, TIP_(md->error), ICON_ERROR);
+    uiItemL(row, RPT_(md->error), ICON_ERROR);
   }
 }
 
@@ -105,7 +105,7 @@ void modifier_panel_end(uiLayout *layout, PointerRNA *ptr)
  *
  * \note The modifier #PointerRNA is owned by the panel so we only need a pointer to it.
  */
-#define ERROR_LIBDATA_MESSAGE TIP_("External library data")
+#define ERROR_LIBDATA_MESSAGE N_("External library data")
 PointerRNA *modifier_panel_get_property_pointers(Panel *panel, PointerRNA *r_ob_ptr)
 {
   PointerRNA *ptr = UI_panel_custom_data_get(panel);
@@ -141,6 +141,24 @@ void modifier_vgroup_ui(uiLayout *layout,
     uiLayoutSetPropDecorate(sub, false);
     uiItemR(sub, ptr, invert_vgroup_prop, UI_ITEM_NONE, "", ICON_ARROW_LEFTRIGHT);
   }
+}
+
+void modifier_grease_pencil_curve_header_draw(const bContext * /*C*/, Panel *panel)
+{
+  uiLayout *layout = panel->layout;
+
+  PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
+
+  uiItemR(layout, ptr, "use_custom_curve", UI_ITEM_NONE, nullptr, ICON_NONE);
+}
+
+void modifier_grease_pencil_curve_panel_draw(const bContext * /*C*/, Panel *panel)
+{
+  uiLayout *layout = panel->layout;
+
+  PointerRNA *ptr = modifier_panel_get_property_pointers(panel, nullptr);
+
+  uiTemplateCurveMapping(layout, ptr, "curve", 0, false, false, false, false);
 }
 
 /**
@@ -364,9 +382,9 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
                                     0.0,
                                     0.0,
                                     0.0,
-                                    TIP_("Apply on Spline"));
-      UI_but_disable(
-          but, TIP_("This modifier can only deform filled curve/surface, not the control points"));
+                                    RPT_("Apply on Spline"));
+      UI_but_disable(but,
+                     "This modifier can only deform filled curve/surface, not the control points");
       buttons_number++;
     }
     /* Some modifiers can work with pre-tessellated curves only. */
@@ -390,12 +408,12 @@ static void modifier_panel_header(const bContext *C, Panel *panel)
                                     0.0,
                                     0.0,
                                     0.0,
-                                    TIP_("Apply on Spline"));
-      UI_but_disable(
-          but, TIP_("This modifier can only deform control points, not the filled curve/surface"));
+                                    RPT_("Apply on Spline"));
+      UI_but_disable(but,
+                     "This modifier can only deform control points, not the filled curve/surface");
       buttons_number++;
     }
-    else if (mti->type != eModifierTypeType_Constructive) {
+    else if (mti->type != ModifierTypeType::Constructive) {
       /* Constructive modifiers tessellates curve before applying. */
       uiItemR(row, ptr, "use_apply_on_spline", UI_ITEM_NONE, "", ICON_NONE);
       buttons_number++;

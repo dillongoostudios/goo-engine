@@ -14,17 +14,16 @@
 #include "DNA_windowmanager_types.h"
 
 #ifdef WITH_FREESTYLE
-#  include "BKE_customdata.h"
 #  include "DNA_meshdata_types.h"
 #endif
 
 #include "BLI_linklist.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_context.h"
-#include "BKE_customdata.h"
-#include "BKE_editmesh.h"
-#include "BKE_layer.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_layer.hh"
 #include "BKE_report.h"
 
 #include "ED_mesh.hh"
@@ -40,12 +39,14 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
-#include "bmesh.h"
-#include "bmesh_tools.h"
+#include "bmesh.hh"
+#include "bmesh_tools.hh"
 
 #include "DEG_depsgraph.hh"
 
-#include "mesh_intern.h" /* own include */
+#include "mesh_intern.hh" /* own include */
+
+using blender::Vector;
 
 /* -------------------------------------------------------------------- */
 /** \name Path Select Struct & Properties
@@ -149,7 +150,7 @@ static bool path_select_poll_property(const bContext *C,
 
 struct UserData {
   BMesh *bm;
-  Mesh *me;
+  Mesh *mesh;
   int cd_offset;
   const PathSelectParams *op_params;
 };
@@ -273,7 +274,7 @@ static void mouse_mesh_shortest_path_vert(Scene * /*scene*/,
   }
 
   EDBMUpdate_Params params{};
-  params.calc_looptri = false;
+  params.calc_looptris = false;
   params.calc_normals = false;
   params.is_destructive = false;
   EDBM_update(static_cast<Mesh *>(obedit->data), &params);
@@ -353,9 +354,9 @@ static void edgetag_set_cb(BMEdge *e, bool val, void *user_data_v)
   }
 }
 
-static void edgetag_ensure_cd_flag(Mesh *me, const char edge_mode)
+static void edgetag_ensure_cd_flag(Mesh *mesh, const char edge_mode)
 {
-  BMesh *bm = me->edit_mesh->bm;
+  BMesh *bm = mesh->edit_mesh->bm;
 
   switch (edge_mode) {
     case EDGE_MODE_TAG_CREASE:
@@ -494,13 +495,13 @@ static void mouse_mesh_shortest_path_edge(
   }
 
   EDBMUpdate_Params params{};
-  params.calc_looptri = false;
+  params.calc_looptris = false;
   params.calc_normals = false;
   params.is_destructive = false;
   EDBM_update(static_cast<Mesh *>(obedit->data), &params);
 
   if (op_params->edge_mode == EDGE_MODE_TAG_SEAM) {
-    ED_uvedit_live_unwrap(scene, &obedit, 1);
+    ED_uvedit_live_unwrap(scene, {obedit});
   }
 }
 
@@ -628,7 +629,7 @@ static void mouse_mesh_shortest_path_face(Scene * /*scene*/,
   }
 
   EDBMUpdate_Params params{};
-  params.calc_looptri = false;
+  params.calc_looptris = false;
   params.calc_normals = false;
   params.is_destructive = false;
   EDBM_update(static_cast<Mesh *>(obedit->data), &params);
@@ -725,15 +726,13 @@ static int edbm_shortest_path_pick_invoke(bContext *C, wmOperator *op, const wmE
 
   {
     int base_index = -1;
-    uint bases_len = 0;
-    Base **bases = BKE_view_layer_array_from_bases_in_edit_mode(
-        vc.scene, vc.view_layer, vc.v3d, &bases_len);
-    if (EDBM_unified_findnearest(&vc, bases, bases_len, &base_index, &eve, &eed, &efa)) {
+    Vector<Base *> bases = BKE_view_layer_array_from_bases_in_edit_mode(
+        vc.scene, vc.view_layer, vc.v3d);
+    if (EDBM_unified_findnearest(&vc, bases, &base_index, &eve, &eed, &efa)) {
       basact = bases[base_index];
       ED_view3d_viewcontext_init_object(&vc, basact->object);
       em = vc.em;
     }
-    MEM_freeN(bases);
   }
 
   /* If nothing is selected, let's select the picked vertex/edge/face. */
@@ -855,11 +854,9 @@ static int edbm_shortest_path_select_exec(bContext *C, wmOperator *op)
   bool found_valid_elements = false;
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data(
+      scene, view_layer, CTX_wm_view3d(C));
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     BMesh *bm = em->bm;
     BMIter iter;
@@ -939,7 +936,6 @@ static int edbm_shortest_path_select_exec(bContext *C, wmOperator *op)
       found_valid_elements = true;
     }
   }
-  MEM_freeN(objects);
 
   if (!found_valid_elements) {
     BKE_report(

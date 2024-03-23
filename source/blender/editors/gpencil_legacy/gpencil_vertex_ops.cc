@@ -18,8 +18,8 @@
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_material_types.h"
 
-#include "BKE_context.h"
-#include "BKE_main.h"
+#include "BKE_context.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_paint.hh"
 #include "BKE_report.h"
@@ -183,7 +183,8 @@ static int gpencil_vertexpaint_brightness_contrast_exec(bContext *C, wmOperator 
               bGPDspoint *pt;
               for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
                 if (((!any_selected) || (pt->flag & GP_SPOINT_SELECT)) &&
-                    (pt->vert_color[3] > 0.0f)) {
+                    (pt->vert_color[3] > 0.0f))
+                {
                   for (int i2 = 0; i2 < 3; i2++) {
                     pt->vert_color[i2] = gain * pt->vert_color[i2] + offset;
                   }
@@ -295,7 +296,8 @@ static int gpencil_vertexpaint_hsv_exec(bContext *C, wmOperator *op)
               bGPDspoint *pt;
               for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
                 if (((!any_selected) || (pt->flag & GP_SPOINT_SELECT)) &&
-                    (pt->vert_color[3] > 0.0f)) {
+                    (pt->vert_color[3] > 0.0f))
+                {
                   rgb_to_hsv_v(pt->vert_color, hsv);
 
                   hsv[0] += (hue - 0.5f);
@@ -400,7 +402,8 @@ static int gpencil_vertexpaint_invert_exec(bContext *C, wmOperator *op)
 
               for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
                 if (((!any_selected) || (pt->flag & GP_SPOINT_SELECT)) &&
-                    (pt->vert_color[3] > 0.0f)) {
+                    (pt->vert_color[3] > 0.0f))
+                {
                   for (int i2 = 0; i2 < 3; i2++) {
                     pt->vert_color[i2] = 1.0f - pt->vert_color[i2];
                   }
@@ -492,7 +495,8 @@ static int gpencil_vertexpaint_levels_exec(bContext *C, wmOperator *op)
 
               for (i = 0, pt = gps->points; i < gps->totpoints; i++, pt++) {
                 if (((!any_selected) || (pt->flag & GP_SPOINT_SELECT)) &&
-                    (pt->vert_color[3] > 0.0f)) {
+                    (pt->vert_color[3] > 0.0f))
+                {
                   for (int i2 = 0; i2 < 3; i2++) {
                     pt->vert_color[i2] = gain * (pt->vert_color[i2] + offset);
                   }
@@ -745,21 +749,21 @@ static uint get_material_type(MaterialGPencilStyle *gp_style,
                               char *name,
                               size_t name_maxncpy)
 {
-  uint r_i = 0;
+  uint i = 0;
   if ((use_stroke) && (use_fill)) {
     switch (gp_style->mode) {
       case GP_MATERIAL_MODE_LINE: {
-        r_i = 1;
+        i = 1;
         BLI_strncpy(name, "Line Stroke-Fill", name_maxncpy);
         break;
       }
       case GP_MATERIAL_MODE_DOT: {
-        r_i = 2;
+        i = 2;
         BLI_strncpy(name, "Dots Stroke-Fill", name_maxncpy);
         break;
       }
       case GP_MATERIAL_MODE_SQUARE: {
-        r_i = 3;
+        i = 3;
         BLI_strncpy(name, "Squares Stroke-Fill", name_maxncpy);
         break;
       }
@@ -770,17 +774,17 @@ static uint get_material_type(MaterialGPencilStyle *gp_style,
   else if (use_stroke) {
     switch (gp_style->mode) {
       case GP_MATERIAL_MODE_LINE: {
-        r_i = 4;
+        i = 4;
         BLI_strncpy(name, "Line Stroke", name_maxncpy);
         break;
       }
       case GP_MATERIAL_MODE_DOT: {
-        r_i = 5;
+        i = 5;
         BLI_strncpy(name, "Dots Stroke", name_maxncpy);
         break;
       }
       case GP_MATERIAL_MODE_SQUARE: {
-        r_i = 6;
+        i = 6;
         BLI_strncpy(name, "Squares Stroke", name_maxncpy);
         break;
       }
@@ -789,20 +793,20 @@ static uint get_material_type(MaterialGPencilStyle *gp_style,
     }
   }
   else {
-    r_i = 7;
+    i = 7;
     BLI_strncpy(name, "Solid Fill", name_maxncpy);
   }
 
   /* Create key TSSSSFFFF (T: Type S: Stroke Alpha F: Fill Alpha) */
-  r_i *= 1e8;
+  i *= 1e8;
   if (use_stroke) {
-    r_i += gp_style->stroke_rgba[3] * 1e7;
+    i += gp_style->stroke_rgba[3] * 1e7;
   }
   if (use_fill) {
-    r_i += gp_style->fill_rgba[3] * 1e3;
+    i += gp_style->fill_rgba[3] * 1e3;
   }
 
-  return r_i;
+  return i;
 }
 
 static bool gpencil_material_to_vertex_poll(bContext *C)

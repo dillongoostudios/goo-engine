@@ -6,6 +6,7 @@
  * \ingroup ikplugin
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -33,7 +34,7 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
 #include "BKE_global.h"
 #include "DNA_action_types.h"
@@ -299,11 +300,11 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
     treecount = 1;
   }
   else {
-    tree->iterations = MAX2(data->iterations, tree->iterations);
+    tree->iterations = std::max<int>(data->iterations, tree->iterations);
     tree->stretch = tree->stretch && !(data->flag & CONSTRAINT_IK_STRETCH);
 
     /* Skip common pose channels and add remaining. */
-    size = MIN2(segcount, tree->totchannel);
+    size = std::min(segcount, tree->totchannel);
     a = t = 0;
     while (a < size && t < tree->totchannel) {
       /* locate first matching channel */
@@ -314,7 +315,8 @@ static int initialize_chain(Object *ob, bPoseChannel *pchan_tip, bConstraint *co
         break;
       }
       for (; a < size && t < tree->totchannel && tree->pchan[t] == chanlist[segcount - a - 1];
-           a++, t++) {
+           a++, t++)
+      {
         /* pass */
       }
     }

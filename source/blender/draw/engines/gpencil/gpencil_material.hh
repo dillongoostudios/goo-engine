@@ -11,7 +11,7 @@
 #include "BKE_gpencil_legacy.h"
 #include "BKE_image.h"
 #include "DRW_gpu_wrapper.hh"
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "draw_manager.hh"
 #include "draw_pass.hh"
@@ -89,10 +89,8 @@ class MaterialModule {
   /* Returns the correct flag for this texture. */
   gpMaterialFlag texture_sync(::Image *image, gpMaterialFlag use_flag, gpMaterialFlag premul_flag)
   {
-    ImBuf *ibuf;
     ImageUser iuser = {nullptr};
     GPUTexture *gpu_tex = nullptr;
-    void *lock;
     bool premul = false;
 
     if (image == nullptr) {
@@ -100,13 +98,10 @@ class MaterialModule {
       return GP_FLAG_NONE;
     }
 
-    ibuf = BKE_image_acquire_ibuf(image, &iuser, &lock);
-
-    if (ibuf != nullptr) {
-      gpu_tex = BKE_image_get_gpu_texture(image, &iuser, ibuf);
+    gpu_tex = BKE_image_get_gpu_texture(image, &iuser);
+    if (gpu_tex) {
       premul = (image->alpha_mode == IMA_ALPHA_PREMUL) != 0;
     }
-    BKE_image_release_ibuf(image, ibuf, lock);
 
     texture_pool_.append(gpu_tex);
 
@@ -178,7 +173,8 @@ class MaterialModule {
         }
 
         if ((gp_style_override->fill_style == GP_MATERIAL_FILL_STYLE_TEXTURE) &&
-            (gp_style_override->ima)) {
+            (gp_style_override->ima))
+        {
           copy_v4_fl(gp_style_override->fill_rgba, 1.0f);
           gp_style_override->mix_factor = 0.0f;
         }
@@ -243,7 +239,8 @@ class MaterialModule {
 
     /* Overlap. */
     if ((gp_style->mode != GP_MATERIAL_MODE_LINE) ||
-        (gp_style->flag & GP_MATERIAL_DISABLE_STENCIL)) {
+        (gp_style->flag & GP_MATERIAL_DISABLE_STENCIL))
+    {
       material.flag |= GP_STROKE_OVERLAP;
     }
 

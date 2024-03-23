@@ -30,18 +30,16 @@
 
 #include "BLI_linklist_stack.h"
 #include "BLI_utildefines_stack.h"
-#ifndef NDEBUG
-#endif
 
 #include "BLI_buffer.h"
 #include "BLI_kdopbvh.h"
 
-#include "bmesh.h"
-#include "intern/bmesh_private.h"
+#include "bmesh.hh"
+#include "intern/bmesh_private.hh"
 
-#include "bmesh_intersect.h" /* own include */
+#include "bmesh_intersect.hh" /* own include */
 
-#include "tools/bmesh_edgesplit.h"
+#include "tools/bmesh_edgesplit.hh"
 
 #include "BLI_strict_flags.h"
 
@@ -317,7 +315,8 @@ static enum ISectType intersect_line_tri(const float p0[3],
   /* check ray isn't planar with tri */
   if (fabsf(dot_v3v3(p_dir, t_nor)) >= e->eps) {
     if (isect_line_segment_tri_epsilon_v3(
-            p0, p1, t_cos[0], t_cos[1], t_cos[2], &fac, nullptr, 0.0f)) {
+            p0, p1, t_cos[0], t_cos[1], t_cos[2], &fac, nullptr, 0.0f))
+    {
       if ((fac >= e->eps_margin) && (fac <= 1.0f - e->eps_margin)) {
         interp_v3_v3v3(r_ix, p0, p1, fac);
         if (min_fff(len_squared_v3v3(t_cos[0], r_ix),
@@ -350,7 +349,7 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
   float ix[3];
 
   if (BM_elem_index_get(e_v0) > BM_elem_index_get(e_v1)) {
-    SWAP(BMVert *, e_v0, e_v1);
+    std::swap(e_v0, e_v1);
   }
 
 #ifdef USE_PARANOID
@@ -375,11 +374,11 @@ static BMVert *bm_isect_edge_tri(ISectState *s,
 #define KEY_EDGE_TRI_ORDER(k) \
   { \
     if (k[2] > k[3]) { \
-      SWAP(int, k[2], k[3]); \
+      std::swap(k[2], k[3]); \
     } \
     if (k[0] > k[2]) { \
-      SWAP(int, k[0], k[2]); \
-      SWAP(int, k[1], k[3]); \
+      std::swap(k[0], k[2]); \
+      std::swap(k[1], k[3]); \
     } \
   } \
   (void)0
@@ -1086,7 +1085,7 @@ bool BM_mesh_intersect(BMesh *bm,
   const bool isect_tri_tri_no_shared = (boolean_mode != BMESH_ISECT_BOOLEAN_NONE);
 
   int flag = BVH_OVERLAP_USE_THREADING | BVH_OVERLAP_RETURN_PAIRS;
-#  ifdef DEBUG
+#  ifndef NDEBUG
   /* The overlap result must match that obtained in Release to succeed
    * in the `bmesh_boolean` test. */
   if (looptris_tot < 1024) {
@@ -1306,7 +1305,7 @@ bool BM_mesh_intersect(BMesh *bm,
 #  endif
         }
         else {
-          SWAP(BMVert *, v_a, v_b);
+          std::swap(v_a, v_b);
           e = e_pair[1];
 #  ifdef USE_PARANOID
           e_keep = e_pair[0];
@@ -1428,7 +1427,8 @@ bool BM_mesh_intersect(BMesh *bm,
               !BLI_gset_haskey(verts_invalid, splice_ls[i][1]))
           {
             if (!BM_edge_exists(UNPACK2(splice_ls[i])) &&
-                !BM_vert_splice_check_double(UNPACK2(splice_ls[i]))) {
+                !BM_vert_splice_check_double(UNPACK2(splice_ls[i])))
+            {
               BM_vert_splice(bm, splice_ls[i][1], splice_ls[i][0]);
             }
           }

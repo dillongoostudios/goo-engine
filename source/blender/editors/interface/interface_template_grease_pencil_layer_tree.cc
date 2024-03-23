@@ -6,7 +6,7 @@
  * \ingroup edinterface
  */
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_grease_pencil.hh"
 
 #include "BLT_translation.h"
@@ -60,8 +60,8 @@ class LayerNodeDropTarget : public TreeViewItemDropTarget {
         static_cast<const wmDragGreasePencilLayer *>(drag_info.drag_data.poin);
     Layer &drag_layer = drag_grease_pencil->layer->wrap();
 
-    std::string_view drag_name = drag_layer.name();
-    std::string_view drop_name = drop_tree_node_.name();
+    const StringRef drag_name = drag_layer.name();
+    const StringRef drop_name = drop_tree_node_.name();
 
     switch (drag_info.drop_location) {
       case DropLocation::Into:
@@ -268,8 +268,6 @@ class LayerViewItem : public AbstractTreeViewItem {
                         0,
                         0.0f,
                         0.0f,
-                        0.0f,
-                        0.0f,
                         nullptr);
     if (!layer_.parent_group().is_visible()) {
       UI_but_flag_enable(but, UI_BUT_INACTIVE);
@@ -286,8 +284,6 @@ class LayerViewItem : public AbstractTreeViewItem {
                         &layer_ptr,
                         "lock",
                         0,
-                        0.0f,
-                        0.0f,
                         0.0f,
                         0.0f,
                         nullptr);
@@ -374,12 +370,12 @@ void LayerTreeView::build_tree_node_recursive(TreeViewOrItem &parent, TreeNode &
   if (node.is_layer()) {
     LayerViewItem &item = parent.add_tree_item<LayerViewItem>(this->grease_pencil_,
                                                               node.as_layer());
-    item.set_collapsed(false);
+    item.uncollapse_by_default();
   }
   else if (node.is_group()) {
     LayerGroupViewItem &group_item = parent.add_tree_item<LayerGroupViewItem>(this->grease_pencil_,
                                                                               node.as_group());
-    group_item.set_collapsed(false);
+    group_item.uncollapse_by_default();
     LISTBASE_FOREACH_BACKWARD (GreasePencilLayerTreeNode *, node_, &node.as_group().children) {
       build_tree_node_recursive(group_item, node_->wrap());
     }

@@ -8,32 +8,33 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_brush_types.h"
+
 #include "BLI_hash.h"
 #include "BLI_math_color_blend.h"
+#include "BLI_math_vector.hh"
 #include "BLI_task.h"
 #include "BLI_vector.hh"
 
-#include "DNA_meshdata_types.h"
-
 #include "BKE_brush.hh"
-#include "BKE_colorband.h"
-#include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_colorband.hh"
+#include "BKE_colortools.hh"
+#include "BKE_context.hh"
 #include "BKE_paint.hh"
 #include "BKE_pbvh_api.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
 #include "sculpt_intern.hh"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
 #include <cmath>
 #include <cstdlib>
 
-using blender::Vector;
+namespace blender::ed::sculpt_paint::color {
 
 static void do_color_smooth_task(Object *ob, const Brush *brush, PBVHNode *node)
 {
@@ -47,15 +48,15 @@ static void do_color_smooth_task(Object *ob, const Brush *brush, PBVHNode *node)
       ss, &test, brush->falloff_shape);
   const int thread_id = BLI_task_parallel_thread_id(nullptr);
 
-  AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(ob, ss, ss->cache->automasking, &automask_data, node);
+  auto_mask::NodeData automask_data = auto_mask::node_begin(
+      *ob, ss->cache->automasking.get(), *node);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
     if (!sculpt_brush_test_sq_fn(&test, vd.co)) {
       continue;
     }
 
-    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+    auto_mask::node_update(automask_data, vd);
 
     const float fade = bstrength * SCULPT_brush_strength_factor(ss,
                                                                 brush,
@@ -69,7 +70,7 @@ static void do_color_smooth_task(Object *ob, const Brush *brush, PBVHNode *node)
                                                                 &automask_data);
 
     float smooth_color[4];
-    SCULPT_neighbor_color_average(ss, smooth_color, vd.vertex);
+    smooth::neighbor_color_average(ss, smooth_color, vd.vertex);
     float col[4];
 
     SCULPT_vertex_color_get(ss, vd.vertex, col);
@@ -92,7 +93,7 @@ static void do_paint_brush_task(Object *ob,
   PBVHColorBufferNode *color_buffer;
 
   SculptOrigVertData orig_data;
-  SCULPT_orig_vert_data_init(&orig_data, ob, node, SCULPT_UNDO_COLOR);
+  SCULPT_orig_vert_data_init(&orig_data, ob, node, undo::Type::Color);
 
   color_buffer = BKE_pbvh_node_color_buffer_get(node);
 
@@ -109,8 +110,8 @@ static void do_paint_brush_task(Object *ob,
 
   IMB_colormanagement_srgb_to_scene_linear_v3(brush_color, brush_color);
 
-  AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(ob, ss, ss->cache->automasking, &automask_data, node);
+  auto_mask::NodeData automask_data = auto_mask::node_begin(
+      *ob, ss->cache->automasking.get(), *node);
 
   if (brush->flag & BRUSH_USE_GRADIENT) {
     switch (brush->gradient_stroke_mode) {
@@ -149,7 +150,7 @@ static void do_paint_brush_task(Object *ob,
       continue;
     }
 
-    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+    auto_mask::node_update(automask_data, vd);
 
     float fade = bstrength * SCULPT_brush_strength_factor(ss,
                                                           brush,
@@ -188,14 +189,14 @@ static void do_paint_brush_task(Object *ob,
 
     /* Final mix over the original color using brush alpha. We apply auto-making again
      * at this point to avoid washing out non-binary masking modes like cavity masking. */
-    float automasking = SCULPT_automasking_factor_get(
-        ss->cache->automasking, ss, vd.vertex, &automask_data);
+    float automasking = auto_mask::factor_get(
+        ss->cache->automasking.get(), ss, vd.vertex, &automask_data);
     mul_v4_v4fl(buffer_color, color_buffer->color[vd.i], brush->alpha * automasking);
 
-    float col[4];
+    float4 col;
     SCULPT_vertex_color_get(ss, vd.vertex, col);
     IMB_blend_color_float(col, orig_data.col, buffer_color, IMB_BlendMode(brush->blend));
-    CLAMP4(col, 0.0f, 1.0f);
+    col = math::clamp(col, 0.0f, 1.0f);
     SCULPT_vertex_color_set(ss, vd.vertex, col);
   }
   BKE_pbvh_vertex_iter_end;
@@ -234,13 +235,12 @@ static void do_sample_wet_paint_task(SculptSession *ss,
   BKE_pbvh_vertex_iter_end;
 }
 
-void SCULPT_do_paint_brush(PaintModeSettings *paint_mode_settings,
-                           Sculpt *sd,
-                           Object *ob,
-                           Span<PBVHNode *> nodes,
-                           Span<PBVHNode *> texnodes)
+void do_paint_brush(PaintModeSettings *paint_mode_settings,
+                    Sculpt *sd,
+                    Object *ob,
+                    Span<PBVHNode *> nodes,
+                    Span<PBVHNode *> texnodes)
 {
-  using namespace blender;
   if (SCULPT_use_image_paint_brush(paint_mode_settings, ob)) {
     SCULPT_do_paint_brush_image(paint_mode_settings, sd, ob, texnodes);
     return;
@@ -287,7 +287,7 @@ void SCULPT_do_paint_brush(PaintModeSettings *paint_mode_settings,
   /* Regular Paint mode. */
 
   /* Wet paint color sampling. */
-  float wet_color[4] = {0.0f};
+  float4 wet_color(0);
   if (ss->cache->paint_brush.wet_mix > 0.0f) {
     const SampleWetPaintData swptd = threading::parallel_reduce(
         nodes.index_range(),
@@ -309,7 +309,7 @@ void SCULPT_do_paint_brush(PaintModeSettings *paint_mode_settings,
     if (swptd.tot_samples > 0 && is_finite_v4(swptd.color)) {
       copy_v4_v4(wet_color, swptd.color);
       mul_v4_fl(wet_color, 1.0f / swptd.tot_samples);
-      CLAMP4(wet_color, 0.0f, 1.0f);
+      wet_color = math::clamp(wet_color, 0.0f, 1.0f);
 
       if (ss->cache->first_time) {
         copy_v4_v4(ss->cache->wet_mix_prev_color, wet_color);
@@ -319,7 +319,7 @@ void SCULPT_do_paint_brush(PaintModeSettings *paint_mode_settings,
                                     ss->cache->wet_mix_prev_color,
                                     ss->cache->paint_brush.wet_persistence);
       copy_v4_v4(ss->cache->wet_mix_prev_color, wet_color);
-      CLAMP4(ss->cache->wet_mix_prev_color, 0.0f, 1.0f);
+      ss->cache->wet_mix_prev_color = math::clamp(ss->cache->wet_mix_prev_color, 0.0f, 1.0f);
     }
   }
 
@@ -351,15 +351,15 @@ static void do_smear_brush_task(Object *ob, const Brush *brush, PBVHNode *node)
     sub_v3_v3v3(brush_delta, ss->cache->location, ss->cache->last_location);
   }
 
-  AutomaskingNodeData automask_data;
-  SCULPT_automasking_node_begin(ob, ss, ss->cache->automasking, &automask_data, node);
+  auto_mask::NodeData automask_data = auto_mask::node_begin(
+      *ob, ss->cache->automasking.get(), *node);
 
   BKE_pbvh_vertex_iter_begin (ss->pbvh, node, vd, PBVH_ITER_UNIQUE) {
     if (!sculpt_brush_test_sq_fn(&test, vd.co)) {
       continue;
     }
 
-    SCULPT_automasking_node_update(ss, &automask_data, &vd);
+    auto_mask::node_update(automask_data, vd);
 
     const float fade = bstrength * SCULPT_brush_strength_factor(ss,
                                                                 brush,
@@ -489,9 +489,8 @@ static void do_smear_store_prev_colors_task(SculptSession *ss,
   BKE_pbvh_vertex_iter_end;
 }
 
-void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes)
+void do_smear_brush(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes)
 {
-  using namespace blender;
   Brush *brush = BKE_paint_brush(&sd->paint);
   SculptSession *ss = ob->sculpt;
 
@@ -534,3 +533,5 @@ void SCULPT_do_smear_brush(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes)
     });
   }
 }
+
+}  // namespace blender::ed::sculpt_paint::color

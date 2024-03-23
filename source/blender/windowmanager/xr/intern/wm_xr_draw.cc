@@ -12,7 +12,7 @@
 
 #include <cstring>
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
@@ -31,7 +31,7 @@
 #include "WM_api.hh"
 
 #include "wm_surface.hh"
-#include "wm_xr_intern.h"
+#include "wm_xr_intern.hh"
 
 void wm_xr_pose_to_mat(const GHOST_XrPose *pose, float r_mat[4][4])
 {
@@ -129,7 +129,7 @@ static void wm_xr_draw_viewport_buffers_to_active_framebuffer(
 
   /* For upside down contexts, draw with inverted y-values. */
   if (is_upside_down) {
-    SWAP(int, rect.ymin, rect.ymax);
+    std::swap(rect.ymin, rect.ymax);
   }
   GPU_viewport_draw_to_screen_ex(vp->viewport, 0, &rect, draw_view->expects_srgb_buffer, true);
 }

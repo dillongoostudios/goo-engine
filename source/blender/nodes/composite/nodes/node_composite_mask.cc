@@ -87,7 +87,7 @@ class MaskOperation : public NodeOperation {
   void execute() override
   {
     Result &output_mask = get_result("Mask");
-    if (!get_mask()) {
+    if (!get_mask() || (!is_fixed_size() && !context().is_valid_compositing_region())) {
       output_mask.allocate_invalid();
       return;
     }
@@ -97,12 +97,12 @@ class MaskOperation : public NodeOperation {
         context(),
         get_mask(),
         domain.size,
+        get_aspect_ratio(),
         get_use_feather(),
         get_motion_blur_samples(),
         get_motion_blur_shutter());
 
-    output_mask.allocate_texture(domain);
-    GPU_texture_copy(output_mask.texture(), cached_mask.texture());
+    output_mask.wrap_external(cached_mask.texture());
   }
 
   Domain compute_domain() override
@@ -126,6 +126,20 @@ class MaskOperation : public NodeOperation {
   int2 get_size()
   {
     return int2(node_storage(bnode()).size_x, node_storage(bnode()).size_y);
+  }
+
+  float get_aspect_ratio()
+  {
+    if (is_fixed_size()) {
+      return 1.0f;
+    }
+
+    return context().get_render_data().yasp / context().get_render_data().xasp;
+  }
+
+  bool is_fixed_size()
+  {
+    return get_flags() & (CMP_NODE_MASK_FLAG_SIZE_FIXED | CMP_NODE_MASK_FLAG_SIZE_FIXED_SCENE);
   }
 
   bool get_use_feather()

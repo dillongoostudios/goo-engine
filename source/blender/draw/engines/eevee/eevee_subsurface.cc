@@ -8,14 +8,14 @@
  * Screen space subsurface scattering technique.
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BLI_string_utils.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "GPU_capabilities.h"
-#include "GPU_material.h"
+#include "GPU_material.hh"
 #include "GPU_texture.h"
 
 #include "eevee_private.h"

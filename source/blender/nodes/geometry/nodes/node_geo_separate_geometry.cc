@@ -9,6 +9,8 @@
 
 #include "RNA_enum_types.hh"
 
+#include "GEO_separate_geometry.hh"
+
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_separate_geometry_cc {
@@ -39,8 +41,7 @@ static void node_layout(uiLayout *layout, bContext * /*C*/, PointerRNA *ptr)
 static void node_init(bNodeTree * /*tree*/, bNode *node)
 {
   NodeGeometrySeparateGeometry *data = MEM_cnew<NodeGeometrySeparateGeometry>(__func__);
-  data->domain = ATTR_DOMAIN_POINT;
-
+  data->domain = int8_t(AttrDomain::Point);
   node->storage = data;
 }
 
@@ -51,30 +52,30 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<bool> selection_field = params.extract_input<Field<bool>>("Selection");
 
   const NodeGeometrySeparateGeometry &storage = node_storage(params.node());
-  const eAttrDomain domain = eAttrDomain(storage.domain);
+  const AttrDomain domain = AttrDomain(storage.domain);
 
   auto separate_geometry_maybe_recursively =
       [&](GeometrySet &geometry_set,
           const Field<bool> &selection,
           const AnonymousAttributePropagationInfo &propagation_info) {
         bool is_error;
-        if (domain == ATTR_DOMAIN_INSTANCE) {
+        if (domain == AttrDomain::Instance) {
           /* Only delete top level instances. */
-          separate_geometry(geometry_set,
-                            domain,
-                            GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
-                            selection,
-                            propagation_info,
-                            is_error);
+          geometry::separate_geometry(geometry_set,
+                                      domain,
+                                      GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
+                                      selection,
+                                      propagation_info,
+                                      is_error);
         }
         else {
           geometry_set.modify_geometry_sets([&](GeometrySet &geometry_set) {
-            separate_geometry(geometry_set,
-                              domain,
-                              GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
-                              selection,
-                              propagation_info,
-                              is_error);
+            geometry::separate_geometry(geometry_set,
+                                        domain,
+                                        GEO_NODE_DELETE_GEOMETRY_MODE_ALL,
+                                        selection,
+                                        propagation_info,
+                                        is_error);
           });
         }
       };
@@ -101,7 +102,8 @@ static void node_rna(StructRNA *srna)
                     "Which domain to separate on",
                     rna_enum_attribute_domain_without_corner_items,
                     NOD_storage_enum_accessors(domain),
-                    ATTR_DOMAIN_POINT);
+                    int(AttrDomain::Point),
+                    enums::domain_without_corner_experimental_grease_pencil_version3_fn);
 }
 
 static void node_register()

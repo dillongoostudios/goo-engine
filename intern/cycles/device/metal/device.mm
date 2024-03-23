@@ -6,6 +6,7 @@
 
 #  include "device/metal/device.h"
 #  include "device/metal/device_impl.h"
+#  include "integrator/denoiser_oidn_gpu.h"
 
 #endif
 
@@ -55,6 +56,11 @@ void device_metal_info(vector<DeviceInfo> &devices)
     info.display_device = true;
     info.denoisers = DENOISER_NONE;
     info.id = id;
+#  if defined(WITH_OPENIMAGEDENOISE)
+    if (OIDNDenoiserGPU::is_device_supported(info)) {
+      info.denoisers |= DENOISER_OPENIMAGEDENOISE;
+    }
+#  endif
 
     MetalGPUVendor vendor = MetalInfo::get_device_vendor(device);
 
@@ -70,15 +76,21 @@ void device_metal_info(vector<DeviceInfo> &devices)
     if (vendor != METAL_GPU_INTEL) {
       if (@available(macos 14.0, *)) {
         info.use_hardware_raytracing = device.supportsRaytracing;
+
+        /* Use hardware raytracing for faster rendering on architectures that support it. */
+        info.use_metalrt_by_default = (MetalInfo::get_apple_gpu_architecture(device) >= APPLE_M3);
       }
     }
 #  endif
 
-    /* Use hardware raytracing for faster rendering on architectures that support it. */
-    info.use_metalrt_by_default = (MetalInfo::get_apple_gpu_architecture(device) >= APPLE_M3);
-
     devices.push_back(info);
     device_index++;
+
+    VLOG_INFO << "Added device \"" << info.description << "\" with id \"" << info.id << "\".";
+
+    if (info.denoisers & DENOISER_OPENIMAGEDENOISE)
+      VLOG_INFO << "Device with id \"" << info.id << "\" supports "
+                << denoiserTypeToHumanReadable(DENOISER_OPENIMAGEDENOISE) << ".";
   }
 }
 

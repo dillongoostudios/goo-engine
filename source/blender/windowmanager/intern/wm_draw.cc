@@ -26,10 +26,10 @@
 #include "BLI_math_vector_types.hh"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_image.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
 
@@ -53,11 +53,11 @@
 #include "RE_engine.h"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 #include "wm.hh"
 #include "wm_draw.hh"
-#include "wm_event_system.h"
+#include "wm_event_system.hh"
 #include "wm_surface.hh"
 #include "wm_window.hh"
 
@@ -1543,6 +1543,13 @@ void wm_draw_update(bContext *C)
   GPU_render_step();
 
   BKE_image_free_unused_gpu_textures();
+
+#ifdef WITH_METAL_BACKEND
+  /* Reset drawable to ensure GPU context activation happens at least once per frame if only a
+   * single context exists. This is required to ensure the default framebuffer is updated
+   * to be the latest backbuffer. */
+  wm_window_clear_drawable(wm);
+#endif
 
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
 #ifdef WIN32

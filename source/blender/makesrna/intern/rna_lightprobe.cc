@@ -11,7 +11,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "DNA_lightprobe_types.h"
 
@@ -21,7 +21,7 @@
 
 #  include "MEM_guardedalloc.h"
 
-#  include "BKE_main.h"
+#  include "BKE_main.hh"
 #  include "DEG_depsgraph.hh"
 
 #  include "DNA_collection_types.h"

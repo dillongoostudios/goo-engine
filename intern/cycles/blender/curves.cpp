@@ -20,6 +20,7 @@
 #include "util/hash.h"
 #include "util/log.h"
 
+#include "BKE_attribute.hh"
 #include "BKE_curves.hh"
 
 CCL_NAMESPACE_BEGIN
@@ -682,11 +683,14 @@ static void fill_generic_attribute(const int num_curves,
   }
 }
 
-static void attr_create_motion(Hair *hair,
-                               const blender::Span<blender::float3> src,
-                               const float motion_scale)
+static void attr_create_motion_from_velocity(Hair *hair,
+                                             const blender::Span<blender::float3> src,
+                                             const float motion_scale)
 {
   const int num_curve_keys = hair->get_curve_keys().size();
+
+  /* Override motion steps to fixed number. */
+  hair->set_motion_steps(3);
 
   /* Find or add attribute */
   float3 *P = &hair->get_curve_keys()[0];
@@ -725,18 +729,20 @@ static void attr_create_generic(Scene *scene,
                            const blender::bke::AttributeMetaData meta_data) {
     const ustring name{std::string_view(id.name())};
 
-    const eAttrDomain b_domain = meta_data.domain;
+    const blender::bke::AttrDomain b_domain = meta_data.domain;
     const eCustomDataType b_data_type = meta_data.data_type;
 
     if (need_motion && name == u_velocity) {
-      const blender::VArraySpan b_attr = *b_attributes.lookup<blender::float3>(id,
-                                                                               ATTR_DOMAIN_POINT);
-      attr_create_motion(hair, b_attr, motion_scale);
+      const blender::VArraySpan b_attr = *b_attributes.lookup<blender::float3>(
+          id, blender::bke::AttrDomain::Point);
+      attr_create_motion_from_velocity(hair, b_attr, motion_scale);
       return true;
     }
 
     /* Weak, use first float2 attribute as standard UV. */
-    if (need_uv && !have_uv && b_data_type == CD_PROP_FLOAT2 && b_domain == ATTR_DOMAIN_CURVE) {
+    if (need_uv && !have_uv && b_data_type == CD_PROP_FLOAT2 &&
+        b_domain == blender::bke::AttrDomain::Curve)
+    {
       Attribute *attr = attributes.add(ATTR_STD_UV, name);
 
       const blender::VArraySpan b_attr = *b_attributes.lookup<blender::float2>(id);
@@ -759,10 +765,10 @@ static void attr_create_generic(Scene *scene,
 
     AttributeElement element = ATTR_ELEMENT_NONE;
     switch (b_attr.domain) {
-      case ATTR_DOMAIN_POINT:
+      case blender::bke::AttrDomain::Point:
         element = ATTR_ELEMENT_CURVE_KEY;
         break;
-      case ATTR_DOMAIN_CURVE:
+      case blender::bke::AttrDomain::Curve:
         element = ATTR_ELEMENT_CURVE;
         break;
       default:
@@ -856,8 +862,8 @@ static void export_hair_curves(Scene *scene,
     }
   }
 
-  const blender::VArraySpan b_radius = *b_curves.attributes().lookup<float>("radius",
-                                                                            ATTR_DOMAIN_POINT);
+  const blender::VArraySpan b_radius = *b_curves.attributes().lookup<float>(
+      "radius", blender::bke::AttrDomain::Point);
 
   std::copy(points_by_curve.data().data(),
             points_by_curve.data().data() + points_by_curve.size(),
@@ -925,7 +931,8 @@ static void export_hair_curves_motion(Hair *hair,
   }
 
   /* Export motion keys. */
-  const int num_keys = hair->get_curve_keys().size();
+  const size_t num_keys = hair->num_keys();
+  const size_t num_curves = hair->num_curves();
   float4 *mP = attr_mP->data_float4() + motion_step * num_keys;
   bool have_motion = false;
   int num_motion_keys = 0;
@@ -933,11 +940,14 @@ static void export_hair_curves_motion(Hair *hair,
 
   const blender::Span<blender::float3> b_positions = b_curves.positions();
   const blender::OffsetIndices points_by_curve = b_curves.points_by_curve();
-  const blender::VArraySpan b_radius = *b_curves.attributes().lookup<float>("radius",
-                                                                            ATTR_DOMAIN_POINT);
+  const blender::VArraySpan b_radius = *b_curves.attributes().lookup<float>(
+      "radius", blender::bke::AttrDomain::Point);
 
   for (const int i : points_by_curve.index_range()) {
     const blender::IndexRange points = points_by_curve[i];
+    if (curve_index >= num_curves) {
+      break;
+    }
 
     Hair::Curve curve = hair->get_curve(curve_index);
     curve_index++;

@@ -2,11 +2,11 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_mesh.hh"
 
-#include "bmesh.h"
-#include "bmesh_tools.h"
+#include "bmesh.hh"
+#include "bmesh_tools.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -91,7 +91,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     }
     const Mesh &mesh_in = *geometry_set.get_mesh();
 
-    const bke::MeshFieldContext context{mesh_in, ATTR_DOMAIN_FACE};
+    const bke::MeshFieldContext context{mesh_in, AttrDomain::Face};
     FieldEvaluator evaluator{context, mesh_in.faces_num};
     evaluator.add(selection_field);
     evaluator.evaluate();
@@ -156,7 +156,9 @@ static void node_rna(StructRNA *srna)
                     "Method for splitting the quads into triangles",
                     rna_node_geometry_triangulate_quad_method_items,
                     NOD_inline_enum_accessors(custom1),
-                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT);
+                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT,
+                    nullptr,
+                    true);
 
   RNA_def_node_enum(srna,
                     "ngon_method",
@@ -164,7 +166,9 @@ static void node_rna(StructRNA *srna)
                     "Method for splitting the n-gons into triangles",
                     rna_node_geometry_triangulate_ngon_method_items,
                     NOD_inline_enum_accessors(custom2),
-                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT);
+                    GEO_NODE_POINTS_TO_VOLUME_RESOLUTION_MODE_AMOUNT,
+                    nullptr,
+                    true);
 }
 
 static void node_register()

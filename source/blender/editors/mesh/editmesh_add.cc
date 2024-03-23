@@ -15,8 +15,8 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -28,7 +28,7 @@
 #include "ED_object.hh"
 #include "ED_screen.hh"
 
-#include "mesh_intern.h" /* own include */
+#include "mesh_intern.hh" /* own include */
 
 #define MESH_ADD_VERTS_MAXI 10000000
 
@@ -78,7 +78,7 @@ static void make_prim_finish(bContext *C,
 
   /* Only recalculate edit-mode tessellation if we are staying in edit-mode. */
   EDBMUpdate_Params params{};
-  params.calc_looptri = !exit_editmode;
+  params.calc_looptris = !exit_editmode;
   params.calc_normals = false;
   params.is_destructive = true;
   EDBM_update(static_cast<Mesh *>(obedit->data), &params);

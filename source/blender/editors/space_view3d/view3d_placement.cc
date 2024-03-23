@@ -16,14 +16,14 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 
 #include "ED_gizmo_utils.hh"
 #include "ED_screen.hh"
@@ -1134,7 +1134,7 @@ static int view3d_interactive_add_modal(bContext *C, wmOperator *op, const wmEve
             bToolRef *tref = ipd->area->runtime.tool;
             PointerRNA temp_props;
             WM_toolsystem_ref_properties_init_for_keymap(tref, &temp_props, &op_props, ot);
-            SWAP(PointerRNA, temp_props, op_props);
+            std::swap(temp_props, op_props);
             WM_operator_properties_free(&temp_props);
           }
 

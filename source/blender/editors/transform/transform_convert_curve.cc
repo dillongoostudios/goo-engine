@@ -15,8 +15,10 @@
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
+
+#include "ED_object.hh"
 
 #include "transform.hh"
 #include "transform_snap.hh"
@@ -85,6 +87,13 @@ static void createTransCurveVerts(bContext * /*C*/, TransInfo *t)
     int a;
     int count = 0, countsel = 0;
     int count_pt = 0, countsel_pt = 0;
+
+    /* Avoid editing locked shapes. */
+    if (t->mode != TFM_DUMMY &&
+        ED_object_edit_report_if_shape_key_is_locked(tc->obedit, t->reports))
+    {
+      continue;
+    }
 
     /* count total of vertices, check identical as in 2nd loop for making transdata! */
     ListBase *nurbs = BKE_curve_editNurbs_get(cu);
@@ -400,7 +409,8 @@ static void createTransCurveVerts(bContext * /*C*/, TransInfo *t)
       /* TODO: in the case of tilt and radius we can also avoid allocating the
        * initTransDataCurveHandles but for now just don't change handle types */
       if ((nu->type == CU_BEZIER) &&
-          ELEM(t->mode, TFM_CURVE_SHRINKFATTEN, TFM_TILT, TFM_DUMMY) == 0) {
+          ELEM(t->mode, TFM_CURVE_SHRINKFATTEN, TFM_TILT, TFM_DUMMY) == 0)
+      {
         /* sets the handles based on their selection,
          * do this after the data is copied to the TransData */
         BKE_nurb_handles_test(nu, handle_mode, use_around_origins_for_handles_test);

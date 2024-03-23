@@ -11,7 +11,7 @@
 #include <iomanip>
 #include <optional>
 
-#include "ED_asset_indexer.h"
+#include "ED_asset_indexer.hh"
 
 #include "DNA_asset_types.h"
 #include "DNA_userdef_types.h"
@@ -24,11 +24,12 @@
 #include "BLI_set.hh"
 #include "BLI_string.h"
 #include "BLI_string_ref.hh"
+#include "BLI_string_utf8.h"
 #include "BLI_uuid.h"
 
 #include "AS_asset_catalog.hh"
-#include "BKE_appdir.h"
-#include "BKE_asset.h"
+#include "BKE_appdir.hh"
+#include "BKE_asset.hh"
 #include "BKE_idprop.hh"
 
 #include "CLG_log.h"
@@ -429,7 +430,7 @@ static void init_indexer_entry_from_value(FileIndexerEntry &indexer_entry,
   }
 
   const StringRefNull catalog_name = entry.get_catalog_name();
-  STRNCPY(asset_data->catalog_simple_name, catalog_name.c_str());
+  STRNCPY_UTF8(asset_data->catalog_simple_name, catalog_name.c_str());
 
   asset_data->catalog_id = entry.get_catalog_id();
 
@@ -648,7 +649,7 @@ struct AssetIndex {
   const int UNKNOWN_VERSION = -1;
 
   /**
-   * `blender::io::serialize::Value` representing the contents of an index file.
+   * `io::serialize::Value` representing the contents of an index file.
    *
    * Value is used over #DictionaryValue as the contents of the index could be corrupted and
    * doesn't represent an object. In case corrupted files are detected the `get_version` would
@@ -940,8 +941,6 @@ constexpr FileIndexerType asset_indexer()
   return indexer;
 }
 
-}  // namespace blender::ed::asset::index
+const FileIndexerType file_indexer_asset = asset_indexer();
 
-extern "C" {
-const FileIndexerType file_indexer_asset = blender::ed::asset::index::asset_indexer();
-}
+}  // namespace blender::ed::asset::index

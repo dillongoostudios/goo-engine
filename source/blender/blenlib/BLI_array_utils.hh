@@ -83,6 +83,19 @@ inline void scatter(const Span<T> src,
   });
 }
 
+template<typename T>
+inline void scatter(const Span<T> src,
+                    const IndexMask &indices,
+                    MutableSpan<T> dst,
+                    const int64_t grain_size = 4096)
+{
+  BLI_assert(indices.size() == src.size());
+  BLI_assert(indices.min_array_size() <= dst.size());
+  indices.foreach_index_optimized<int64_t>(
+      GrainSize(grain_size),
+      [&](const int64_t index, const int64_t pos) { dst[index] = src[pos]; });
+}
+
 /**
  * Fill the destination span by gathering indexed values from the `src` array.
  */
@@ -165,6 +178,29 @@ inline void gather(const VArray<T> &src,
   });
 }
 
+template<typename T>
+inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
+                                  const OffsetIndices<int> dst_offsets,
+                                  const IndexMask &selection,
+                                  const Span<T> src,
+                                  MutableSpan<T> dst)
+{
+  selection.foreach_index(GrainSize(512), [&](const int64_t src_i, const int64_t dst_i) {
+    dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[src_i]));
+  });
+}
+
+template<typename T>
+inline void gather_to_groups(const OffsetIndices<int> dst_offsets,
+                             const IndexMask &src_selection,
+                             const Span<T> src,
+                             MutableSpan<T> dst)
+{
+  src_selection.foreach_index(GrainSize(1024), [&](const int src_i, const int dst_i) {
+    dst.slice(dst_offsets[dst_i]).fill(src[src_i]);
+  });
+}
+
 /**
  * Copy the \a src data from the groups defined by \a src_offsets to the groups in \a dst defined
  * by \a dst_offsets. Groups to use are masked by \a selection, and it is assumed that the
@@ -199,6 +235,7 @@ void invert_booleans(MutableSpan<bool> span);
 void invert_booleans(MutableSpan<bool> span, const IndexMask &mask);
 
 int64_t count_booleans(const VArray<bool> &varray);
+int64_t count_booleans(const VArray<bool> &varray, const IndexMask &mask);
 
 enum class BooleanMix {
   None,
@@ -245,5 +282,18 @@ template<typename T> inline void fill_index_range(MutableSpan<T> span, const T s
 {
   std::iota(span.begin(), span.end(), start);
 }
+
+template<typename T>
+bool indexed_data_equal(const Span<T> all_values, const Span<int> indices, const Span<T> values)
+{
+  for (const int i : indices.index_range()) {
+    if (all_values[indices[i]] != values[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool indices_are_range(Span<int> indices, IndexRange range);
 
 }  // namespace blender::array_utils

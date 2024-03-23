@@ -73,7 +73,7 @@ class MetalDevice : public Device {
   /* Bindless Textures */
   bool is_texture(const TextureInfo &tex);
   device_vector<TextureInfo> texture_info;
-  bool need_texture_info;
+  bool need_texture_info = false;
   id<MTLArgumentEncoder> mtlTextureArgEncoder = nil;
   id<MTLArgumentEncoder> mtlBufferArgEncoder = nil;
   id<MTLBuffer> buffer_bindings_1d = nil;
@@ -134,9 +134,13 @@ class MetalDevice : public Device {
 
   virtual bool should_use_graphics_interop() override;
 
+  virtual void *get_native_buffer(device_ptr ptr) override;
+
   virtual unique_ptr<DeviceQueue> gpu_queue_create() override;
 
   virtual void build_bvh(BVH *bvh, Progress &progress, bool refit) override;
+
+  virtual void release_bvh(BVH *bvh) override;
 
   virtual void optimize_for_scene(Scene *scene) override;
 

@@ -13,7 +13,7 @@
 
 #include "DNA_screen_types.h"
 
-#include "BKE_asset.h"
+#include "BKE_asset.hh"
 #include "BKE_report.h"
 
 #include "BLT_translation.h"
@@ -25,7 +25,6 @@
 #include "RNA_enum_types.hh"
 #include "RNA_prototypes.h"
 
-#include "ED_asset_list.h"
 #include "ED_asset_list.hh"
 #include "ED_asset_menu_utils.hh"
 
@@ -38,7 +37,7 @@ void operator_asset_reference_props_register(StructRNA &srna)
   PropertyRNA *prop;
   prop = RNA_def_enum(&srna,
                       "asset_library_type",
-                      rna_enum_aset_library_type_items,
+                      rna_enum_asset_library_type_items,
                       ASSET_LIBRARY_LOCAL,
                       "Asset Library Type",
                       "");
@@ -70,11 +69,10 @@ static const asset_system::AssetRepresentation *get_local_asset_from_relative_id
 {
   AssetLibraryReference library_ref{};
   library_ref.type = ASSET_LIBRARY_LOCAL;
-  ED_assetlist_storage_fetch(&library_ref, &C);
-  ED_assetlist_ensure_previews_job(&library_ref, &C);
+  list::storage_fetch(&library_ref, &C);
 
   const asset_system::AssetRepresentation *matching_asset = nullptr;
-  ED_assetlist_iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
+  list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
     if (asset.get_identifier().library_relative_identifier() == relative_identifier) {
       matching_asset = &asset;
       return false;
@@ -83,7 +81,7 @@ static const asset_system::AssetRepresentation *get_local_asset_from_relative_id
   });
 
   if (reports && !matching_asset) {
-    if (ED_assetlist_is_loaded(&library_ref)) {
+    if (list::is_loaded(&library_ref)) {
       BKE_reportf(
           reports, RPT_ERROR, "No asset found at path \"%s\"", relative_identifier.c_str());
     }
@@ -103,9 +101,8 @@ static const asset_system::AssetRepresentation *find_asset_from_weak_ref(
   }
 
   const AssetLibraryReference library_ref = asset_system::all_library_reference();
-  ED_assetlist_storage_fetch(&library_ref, &C);
-  ED_assetlist_ensure_previews_job(&library_ref, &C);
-  asset_system::AssetLibrary *all_library = ED_assetlist_library_get_once_available(
+  list::storage_fetch(&library_ref, &C);
+  asset_system::AssetLibrary *all_library = list::library_get_once_available(
       asset_system::all_library_reference());
   if (!all_library) {
     BKE_report(reports, RPT_WARNING, "Asset loading is unfinished");
@@ -114,7 +111,7 @@ static const asset_system::AssetRepresentation *find_asset_from_weak_ref(
   const std::string full_path = all_library->resolve_asset_weak_reference_to_full_path(weak_ref);
 
   const asset_system::AssetRepresentation *matching_asset = nullptr;
-  ED_assetlist_iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
+  list::iterate(library_ref, [&](asset_system::AssetRepresentation &asset) {
     if (asset.get_identifier().full_path() == full_path) {
       matching_asset = &asset;
       return false;
@@ -123,7 +120,7 @@ static const asset_system::AssetRepresentation *find_asset_from_weak_ref(
   });
 
   if (reports && !matching_asset) {
-    if (ED_assetlist_is_loaded(&library_ref)) {
+    if (list::is_loaded(&library_ref)) {
       BKE_reportf(reports, RPT_ERROR, "No asset found at path \"%s\"", full_path.c_str());
     }
   }

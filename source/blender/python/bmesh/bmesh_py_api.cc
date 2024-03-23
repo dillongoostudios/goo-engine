@@ -12,7 +12,7 @@
 
 #include "BLI_utildefines.h"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
 #include "bmesh_py_types.h"
 #include "bmesh_py_types_customdata.h"
@@ -23,7 +23,7 @@
 #include "bmesh_py_ops.h"
 #include "bmesh_py_utils.h"
 
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 
 #include "DNA_mesh_types.h"
 
@@ -31,14 +31,16 @@
 
 #include "bmesh_py_api.h" /* own include */
 
-PyDoc_STRVAR(bpy_bm_new_doc,
-             ".. method:: new(use_operators=True)\n"
-             "\n"
-             "   :arg use_operators: Support calling operators in :mod:`bmesh.ops` (uses some "
-             "extra memory per vert/edge/face).\n"
-             "   :type use_operators: bool\n"
-             "   :return: Return a new, empty BMesh.\n"
-             "   :rtype: :class:`bmesh.types.BMesh`\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_bm_new_doc,
+    ".. method:: new(use_operators=True)\n"
+    "\n"
+    "   :arg use_operators: Support calling operators in :mod:`bmesh.ops` (uses some "
+    "extra memory per vert/edge/face).\n"
+    "   :type use_operators: bool\n"
+    "   :return: Return a new, empty BMesh.\n"
+    "   :rtype: :class:`bmesh.types.BMesh`\n");
 
 static PyObject *bpy_bm_new(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
@@ -60,53 +62,57 @@ static PyObject *bpy_bm_new(PyObject * /*self*/, PyObject *args, PyObject *kw)
   return BPy_BMesh_CreatePyObject(bm, BPY_BMFLAG_NOP);
 }
 
-PyDoc_STRVAR(bpy_bm_from_edit_mesh_doc,
-             ".. method:: from_edit_mesh(mesh)\n"
-             "\n"
-             "   Return a BMesh from this mesh, currently the mesh must already be in editmode.\n"
-             "\n"
-             "   :arg mesh: The editmode mesh.\n"
-             "   :type mesh: :class:`bpy.types.Mesh`\n"
-             "   :return: the BMesh associated with this mesh.\n"
-             "   :rtype: :class:`bmesh.types.BMesh`\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_bm_from_edit_mesh_doc,
+    ".. method:: from_edit_mesh(mesh)\n"
+    "\n"
+    "   Return a BMesh from this mesh, currently the mesh must already be in editmode.\n"
+    "\n"
+    "   :arg mesh: The editmode mesh.\n"
+    "   :type mesh: :class:`bpy.types.Mesh`\n"
+    "   :return: the BMesh associated with this mesh.\n"
+    "   :rtype: :class:`bmesh.types.BMesh`\n");
 static PyObject *bpy_bm_from_edit_mesh(PyObject * /*self*/, PyObject *value)
 {
   BMesh *bm;
-  Mesh *me = static_cast<Mesh *>(PyC_RNA_AsPointer(value, "Mesh"));
+  Mesh *mesh = static_cast<Mesh *>(PyC_RNA_AsPointer(value, "Mesh"));
 
-  if (me == nullptr) {
+  if (mesh == nullptr) {
     return nullptr;
   }
 
-  if (me->edit_mesh == nullptr) {
+  if (mesh->edit_mesh == nullptr) {
     PyErr_SetString(PyExc_ValueError, "The mesh must be in editmode");
     return nullptr;
   }
 
-  bm = me->edit_mesh->bm;
+  bm = mesh->edit_mesh->bm;
 
   return BPy_BMesh_CreatePyObject(bm, BPY_BMFLAG_IS_WRAPPED);
 }
 
-void EDBM_update_extern(Mesh *me, const bool do_tessface, const bool is_destructive);
+void EDBM_update_extern(Mesh *mesh, const bool do_tessface, const bool is_destructive);
 
-PyDoc_STRVAR(bpy_bm_update_edit_mesh_doc,
-             ".. method:: update_edit_mesh(mesh, loop_triangles=True, destructive=True)\n"
-             "\n"
-             "   Update the mesh after changes to the BMesh in editmode,\n"
-             "   optionally recalculating n-gon tessellation.\n"
-             "\n"
-             "   :arg mesh: The editmode mesh.\n"
-             "   :type mesh: :class:`bpy.types.Mesh`\n"
-             "   :arg loop_triangles: Option to recalculate n-gon tessellation.\n"
-             "   :type loop_triangles: boolean\n"
-             "   :arg destructive: Use when geometry has been added or removed.\n"
-             "   :type destructive: boolean\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_bm_update_edit_mesh_doc,
+    ".. method:: update_edit_mesh(mesh, loop_triangles=True, destructive=True)\n"
+    "\n"
+    "   Update the mesh after changes to the BMesh in editmode,\n"
+    "   optionally recalculating n-gon tessellation.\n"
+    "\n"
+    "   :arg mesh: The editmode mesh.\n"
+    "   :type mesh: :class:`bpy.types.Mesh`\n"
+    "   :arg loop_triangles: Option to recalculate n-gon tessellation.\n"
+    "   :type loop_triangles: boolean\n"
+    "   :arg destructive: Use when geometry has been added or removed.\n"
+    "   :type destructive: boolean\n");
 static PyObject *bpy_bm_update_edit_mesh(PyObject * /*self*/, PyObject *args, PyObject *kw)
 {
   static const char *kwlist[] = {"mesh", "loop_triangles", "destructive", nullptr};
   PyObject *py_me;
-  Mesh *me;
+  Mesh *mesh;
   bool do_loop_triangles = true;
   bool is_destructive = true;
 
@@ -123,19 +129,19 @@ static PyObject *bpy_bm_update_edit_mesh(PyObject * /*self*/, PyObject *args, Py
     return nullptr;
   }
 
-  me = static_cast<Mesh *>(PyC_RNA_AsPointer(py_me, "Mesh"));
+  mesh = static_cast<Mesh *>(PyC_RNA_AsPointer(py_me, "Mesh"));
 
-  if (me == nullptr) {
+  if (mesh == nullptr) {
     return nullptr;
   }
 
-  if (me->edit_mesh == nullptr) {
+  if (mesh->edit_mesh == nullptr) {
     PyErr_SetString(PyExc_ValueError, "The mesh must be in editmode");
     return nullptr;
   }
 
   {
-    EDBM_update_extern(me, do_loop_triangles, is_destructive);
+    EDBM_update_extern(mesh, do_loop_triangles, is_destructive);
   }
 
   Py_RETURN_NONE;
@@ -160,10 +166,12 @@ static PyMethodDef BPy_BM_methods[] = {
 #  pragma GCC diagnostic pop
 #endif
 
-PyDoc_STRVAR(BPy_BM_doc,
-             "This module provides access to blenders bmesh data structures.\n"
-             "\n"
-             ".. include:: include__bmesh.rst\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_BM_doc,
+    "This module provides access to blenders bmesh data structures.\n"
+    "\n"
+    ".. include:: include__bmesh.rst\n");
 static PyModuleDef BPy_BM_module_def = {
     /*m_base*/ PyModuleDef_HEAD_INIT,
     /*m_name*/ "bmesh",

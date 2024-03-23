@@ -57,7 +57,7 @@ class DisplaceOperation : public NodeOperation {
       return;
     }
 
-    GPUShader *shader = shader_manager().get("compositor_displace");
+    GPUShader *shader = context().get_shader("compositor_displace");
     GPU_shader_bind(shader);
 
     const Result &input_image = get_input("Image");
@@ -97,7 +97,8 @@ class DisplaceOperation : public NodeOperation {
 
     const Result &input_displacement = get_input("Vector");
     if (input_displacement.is_single_value() &&
-        math::is_zero(input_displacement.get_vector_value())) {
+        math::is_zero(input_displacement.get_vector_value()))
+    {
       return true;
     }
 

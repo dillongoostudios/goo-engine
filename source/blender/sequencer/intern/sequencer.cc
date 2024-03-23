@@ -22,14 +22,14 @@
 
 #include "BKE_fcurve.h"
 #include "BKE_idprop.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_scene.h"
 #include "BKE_sound.h"
 
 #include "DEG_depsgraph.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "SEQ_channels.hh"
 #include "SEQ_edit.hh"
@@ -77,7 +77,7 @@ static Strip *seq_strip_alloc(int type)
     strip->transform->scale_y = 1;
     strip->transform->origin[0] = 0.5f;
     strip->transform->origin[1] = 0.5f;
-    strip->transform->filter = SEQ_TRANSFORM_FILTER_BILINEAR;
+    strip->transform->filter = SEQ_TRANSFORM_FILTER_AUTO;
     strip->crop = static_cast<StripCrop *>(MEM_callocN(sizeof(StripCrop), "StripCrop"));
   }
 
@@ -156,7 +156,7 @@ Sequence *SEQ_sequence_alloc(ListBase *lb, int timeline_frame, int machine, int 
     SEQ_channels_ensure(&seq->channels);
   }
 
-  SEQ_relations_session_uuid_generate(seq);
+  SEQ_relations_session_uid_generate(seq);
 
   return seq;
 }
@@ -489,7 +489,7 @@ static Sequence *seq_dupli(const Scene *scene_src,
   Sequence *seqn = static_cast<Sequence *>(MEM_dupallocN(seq));
 
   if ((flag & LIB_ID_CREATE_NO_MAIN) == 0) {
-    SEQ_relations_session_uuid_generate(seqn);
+    SEQ_relations_session_uid_generate(seqn);
   }
 
   seq->tmp = seqn;
@@ -789,8 +789,8 @@ static bool seq_read_data_cb(Sequence *seq, void *user_data)
   BLI_listbase_clear(&seq->anims);
   seq->flag &= ~SEQ_FLAG_SKIP_THUMBNAILS;
 
-  /* Do as early as possible, so that other parts of reading can rely on valid session UUID. */
-  SEQ_relations_session_uuid_generate(seq);
+  /* Do as early as possible, so that other parts of reading can rely on valid session UID. */
+  SEQ_relations_session_uid_generate(seq);
 
   BLO_read_data_address(reader, &seq->seq1);
   BLO_read_data_address(reader, &seq->seq2);
@@ -877,7 +877,7 @@ void SEQ_doversion_250_sound_proxy_update(Main *bmain, Editing *ed)
 
 /* Depsgraph update functions. */
 
-static bool seq_disable_sound_strips_cb(Sequence *seq, void *user_data)
+static bool seq_mute_sound_strips_cb(Sequence *seq, void *user_data)
 {
   Scene *scene = (Scene *)user_data;
   if (seq->scene_sound != nullptr) {
@@ -887,52 +887,98 @@ static bool seq_disable_sound_strips_cb(Sequence *seq, void *user_data)
   return true;
 }
 
-static bool seq_update_seq_cb(Sequence *seq, void *user_data)
+/* Adds sound of strip to the `scene->sound_scene` - "sound timeline". */
+static void seq_update_mix_sounds(Scene *scene, Sequence *seq)
+{
+  if (seq->scene_sound != nullptr) {
+    return;
+  }
+
+  if (seq->sound != nullptr) {
+    /* Adds `seq->sound->playback_handle` to `scene->sound_scene` */
+    seq->scene_sound = BKE_sound_add_scene_sound_defaults(scene, seq);
+  }
+  else if (seq->type == SEQ_TYPE_SCENE && seq->scene != nullptr) {
+    /* Adds `seq->scene->sound_scene` to `scene->sound_scene`. */
+    BKE_sound_ensure_scene(seq->scene);
+    seq->scene_sound = BKE_sound_scene_add_scene_sound_defaults(scene, seq);
+  }
+}
+
+static void seq_update_sound_properties(const Scene *scene, const Sequence *seq)
+{
+  const int frame = BKE_scene_frame_get(scene);
+  BKE_sound_set_scene_sound_volume_at_frame(
+      seq->scene_sound, frame, seq->volume, (seq->flag & SEQ_AUDIO_VOLUME_ANIMATED) != 0);
+  SEQ_retiming_sound_animation_data_set(scene, seq);
+  BKE_sound_set_scene_sound_pan_at_frame(
+      seq->scene_sound, frame, seq->pan, (seq->flag & SEQ_AUDIO_PAN_ANIMATED) != 0);
+}
+
+static void seq_update_sound_modifiers(Sequence *seq)
+{
+  void *sound_handle = seq->sound->playback_handle;
+  if (!BLI_listbase_is_empty(&seq->modifiers)) {
+    LISTBASE_FOREACH (SequenceModifierData *, smd, &seq->modifiers) {
+      sound_handle = SEQ_sound_modifier_recreator(seq, smd, sound_handle);
+    }
+  }
+
+  /* Assign modified sound back to `seq`. */
+  BKE_sound_update_sequence_handle(seq->scene_sound, sound_handle);
+}
+
+static bool must_update_strip_sound(Scene *scene, Sequence *seq)
+{
+  return (scene->id.recalc & (ID_RECALC_AUDIO | ID_RECALC_COPY_ON_WRITE)) != 0 ||
+         (seq->sound->id.recalc & (ID_RECALC_AUDIO | ID_RECALC_COPY_ON_WRITE)) != 0;
+}
+
+static void seq_update_sound_strips(Scene *scene, Sequence *seq)
+{
+  if (seq->sound == nullptr || !must_update_strip_sound(scene, seq)) {
+    return;
+  }
+  /* Ensure strip is playing correct sound. */
+  BKE_sound_update_scene_sound(seq->scene_sound, seq->sound);
+  seq_update_sound_modifiers(seq);
+}
+
+static void seq_update_scene_strip_sound(Sequence *seq)
+{
+  if (seq->type != SEQ_TYPE_SCENE || seq->scene == nullptr) {
+    return;
+  }
+
+  /* Set `seq->scene` volume.
+   * Note: Currently this doesn't work well, when this property is animated. Scene strip volume is
+   * also controlled by `seq_update_sound_properties()` via `seq->volume` which works if animated.
+   *
+   * Ideally, the entire `BKE_scene_update_sound()` will happen from a dependency graph, so
+   * then it is no longer needed to do such manual forced updates. */
+  BKE_sound_set_scene_volume(seq->scene, seq->scene->audio.volume);
+
+  /* Mute nested strips of scene when not using sequencer as input. */
+  if ((seq->flag & SEQ_SCENE_STRIPS) == 0 && seq->scene->sound_scene != nullptr &&
+      seq->scene->ed != nullptr)
+  {
+    SEQ_for_each_callback(&seq->scene->ed->seqbase, seq_mute_sound_strips_cb, seq->scene);
+  }
+}
+
+static bool seq_sound_update_cb(Sequence *seq, void *user_data)
 {
   Scene *scene = (Scene *)user_data;
-  if (seq->scene_sound == nullptr) {
-    if (seq->sound != nullptr) {
-      seq->scene_sound = BKE_sound_add_scene_sound_defaults(scene, seq);
-    }
-    else if (seq->type == SEQ_TYPE_SCENE) {
-      if (seq->scene != nullptr) {
-        BKE_sound_ensure_scene(seq->scene);
-        seq->scene_sound = BKE_sound_scene_add_scene_sound_defaults(scene, seq);
-      }
-    }
-  }
-  if (seq->scene_sound != nullptr) {
-    /* Make sure changing volume via sequence's properties panel works correct.
-     *
-     * Ideally, the entire BKE_scene_update_sound() will happen from a dependency graph, so
-     * then it is no longer needed to do such manual forced updates. */
-    if (seq->type == SEQ_TYPE_SCENE && seq->scene != nullptr) {
-      BKE_sound_set_scene_volume(seq->scene, seq->scene->audio.volume);
-      if ((seq->flag & SEQ_SCENE_STRIPS) == 0 && seq->scene->sound_scene != nullptr &&
-          seq->scene->ed != nullptr)
-      {
-        SEQ_for_each_callback(&seq->scene->ed->seqbase, seq_disable_sound_strips_cb, seq->scene);
-      }
-    }
-    if (seq->sound != nullptr) {
-      if (scene->id.recalc & ID_RECALC_AUDIO || seq->sound->id.recalc & ID_RECALC_AUDIO) {
-        BKE_sound_update_scene_sound(seq->scene_sound, seq->sound);
-        void *sound = seq->sound->playback_handle;
 
-        if (!BLI_listbase_is_empty(&seq->modifiers)) {
-          LISTBASE_FOREACH (SequenceModifierData *, smd, &seq->modifiers) {
-            sound = SEQ_sound_modifier_recreator(seq, smd, sound);
-          }
-        }
-        BKE_sound_update_sequence_handle(seq->scene_sound, sound);
-      }
-    }
-    BKE_sound_set_scene_sound_volume(
-        seq->scene_sound, seq->volume, (seq->flag & SEQ_AUDIO_VOLUME_ANIMATED) != 0);
-    SEQ_retiming_sound_animation_data_set(scene, seq);
-    BKE_sound_set_scene_sound_pan(
-        seq->scene_sound, seq->pan, (seq->flag & SEQ_AUDIO_PAN_ANIMATED) != 0);
+  seq_update_mix_sounds(scene, seq);
+
+  if (seq->scene_sound == nullptr) {
+    return true;
   }
+
+  seq_update_sound_strips(scene, seq);
+  seq_update_scene_strip_sound(seq);
+  seq_update_sound_properties(scene, seq);
   return true;
 }
 
@@ -941,7 +987,7 @@ void SEQ_eval_sequences(Depsgraph *depsgraph, Scene *scene, ListBase *seqbase)
   DEG_debug_print_eval(depsgraph, __func__, scene->id.name, scene);
   BKE_sound_ensure_scene(scene);
 
-  SEQ_for_each_callback(seqbase, seq_update_seq_cb, scene);
+  SEQ_for_each_callback(seqbase, seq_sound_update_cb, scene);
 
   SEQ_edit_update_muting(scene->ed);
   SEQ_sound_update_bounds_all(scene);

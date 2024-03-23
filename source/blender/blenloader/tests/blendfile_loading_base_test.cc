@@ -5,20 +5,22 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_appdir.h"
+#include "BKE_appdir.hh"
 #include "BKE_blender.h"
 #include "BKE_callbacks.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
-#include "BKE_idtype.h"
+#include "BKE_idtype.hh"
 #include "BKE_image.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
-#include "BKE_mball_tessellate.h"
-#include "BKE_modifier.h"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
+#include "BKE_mball_tessellate.hh"
+#include "BKE_modifier.hh"
 #include "BKE_node.hh"
 #include "BKE_scene.h"
-#include "BKE_vfont.h"
+#include "BKE_vfont.hh"
+
+#include "BLF_api.hh"
 
 #include "BLI_path_util.h"
 #include "BLI_threads.h"
@@ -31,7 +33,7 @@
 #include "DNA_genfile.h" /* for DNA_sdna_current_init() */
 #include "DNA_windowmanager_types.h"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "ED_datafiles.h"
 
@@ -65,6 +67,7 @@ void BlendfileLoadingBaseTest::SetUpTestCase()
   BKE_node_system_init();
   BKE_callback_global_init();
   BKE_vfont_builtin_register(datatoc_bfont_pfb, datatoc_bfont_pfb_size);
+  BLF_init();
 
   G.background = true;
   G.factory_startup = true;
@@ -87,6 +90,7 @@ void BlendfileLoadingBaseTest::TearDownTestCase()
   BKE_blender_free();
   RNA_exit();
 
+  BLF_exit();
   DEG_free_node_types();
   GHOST_DisposeSystemPaths();
   DNA_sdna_current_free();

@@ -39,20 +39,20 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_collection.h"
 #include "BKE_constraint.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_grease_pencil.hh"
-#include "BKE_idtype.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_idtype.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_lib_query.h"
-#include "BKE_lib_remap.h"
-#include "BKE_main.h"
+#include "BKE_lib_query.hh"
+#include "BKE_lib_remap.hh"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -281,9 +281,9 @@ static void unlink_material_fn(bContext * /*C*/,
       break;
     }
     case ID_ME: {
-      Mesh *me = (Mesh *)tsep->id;
-      totcol = me->totcol;
-      matar = me->mat;
+      Mesh *mesh = (Mesh *)tsep->id;
+      totcol = mesh->totcol;
+      matar = mesh->mat;
       break;
     }
     case ID_CU_LEGACY: {
@@ -473,9 +473,18 @@ static void unlink_object_fn(bContext *C,
         DEG_relations_tag_update(bmain);
       }
       else if (GS(tsep->id->name) == ID_SCE) {
+        /* Following execution is expected to happen exclusively in the Outliner scene view. */
+#ifdef NDEBUG
+        BLI_assert(CTX_wm_space_outliner(C)->outlinevis == SO_SCENES);
+#endif
+
         Scene *scene = (Scene *)tsep->id;
-        Collection *parent = scene->master_collection;
-        BKE_collection_object_remove(bmain, parent, ob, true);
+        FOREACH_SCENE_COLLECTION_BEGIN (scene, collection) {
+          if (BKE_collection_has_object(collection, ob)) {
+            BKE_collection_object_remove(bmain, collection, ob, true);
+          }
+        }
+        FOREACH_SCENE_COLLECTION_END;
         DEG_id_tag_update(&scene->id, ID_RECALC_COPY_ON_WRITE | ID_RECALC_HIERARCHY);
         DEG_relations_tag_update(bmain);
       }
@@ -521,7 +530,8 @@ static void outliner_do_libdata_operation(bContext *C,
     TreeStoreElem *tselem = TREESTORE(te);
     if (tselem->flag & TSE_SELECTED) {
       if (((tselem->type == TSE_SOME_ID) && (te->idcode != 0)) ||
-          tselem->type == TSE_LAYER_COLLECTION) {
+          tselem->type == TSE_LAYER_COLLECTION)
+      {
         TreeStoreElem *tsep = te->parent ? TREESTORE(te->parent) : nullptr;
         operation_fn(C, reports, scene, te, tsep, tselem, user_data);
       }
@@ -1046,7 +1056,7 @@ struct OutlinerLibOverrideData {
    * solving broken overrides while not losing *all* of your overrides. */
   bool do_resync_hierarchy_enforce;
 
-  /** A set of the selected tree elements' ID 'uuid'. Used to clear 'system override' flags on
+  /** A set of the selected tree elements' ID 'uid'. Used to clear 'system override' flags on
    * their newly-created liboverrides in post-process step of override hierarchy creation. */
   Set<uint> selected_id_uid;
 
@@ -1057,7 +1067,7 @@ struct OutlinerLibOverrideData {
    * override), or an actual already existing override. */
   Map<ID *, Vector<OutlinerLiboverrideDataIDRoot>> id_hierarchy_roots;
 
-  /** All 'session_uuid' of all hierarchy root IDs used or created by the operation. */
+  /** All 'session_uid' of all hierarchy root IDs used or created by the operation. */
   Set<uint> id_hierarchy_roots_uid;
 
   void id_root_add(ID *id_hierarchy_root_reference,
@@ -1115,10 +1125,10 @@ static void id_override_library_create_hierarchy_pre_process_fn(bContext *C,
 
   /* Only process a given ID once. Otherwise, all kind of weird things can happen if e.g. a
    * selected sub-collection is part of more than one override hierarchies. */
-  if (data->selected_id_uid.contains(id_root_reference->session_uuid)) {
+  if (data->selected_id_uid.contains(id_root_reference->session_uid)) {
     return;
   }
-  data->selected_id_uid.add(id_root_reference->session_uuid);
+  data->selected_id_uid.add(id_root_reference->session_uid);
 
   if (ID_IS_OVERRIDE_LIBRARY_REAL(id_root_reference) && !ID_IS_LINKED(id_root_reference)) {
     id_root_reference->override_library->flag &= ~LIBOVERRIDE_FLAG_SYSTEM_DEFINED;
@@ -1147,7 +1157,7 @@ static void id_override_library_create_hierarchy_pre_process_fn(bContext *C,
     Collection *root_collection = reinterpret_cast<Collection *>(id_root_reference);
     FOREACH_COLLECTION_OBJECT_RECURSIVE_BEGIN (root_collection, object_iter) {
       if (id_root_reference->lib == object_iter->id.lib && object_iter->type == OB_ARMATURE) {
-        data->selected_id_uid.add(object_iter->id.session_uuid);
+        data->selected_id_uid.add(object_iter->id.session_uid);
       }
     }
     FOREACH_COLLECTION_OBJECT_RECURSIVE_END;
@@ -1347,7 +1357,7 @@ static void id_override_library_create_hierarchy(
           BLI_assert(id_hierarchy_root_override == id_hierarchy_root_reference);
         }
         data_idroot.id_hierarchy_root_override = id_hierarchy_root_override;
-        data.id_hierarchy_roots_uid.add(id_hierarchy_root_override->session_uuid);
+        data.id_hierarchy_roots_uid.add(id_hierarchy_root_override->session_uid);
       }
     }
     else if (ID_IS_OVERRIDABLE_LIBRARY(data_idroot.id_root_reference)) {
@@ -1413,12 +1423,12 @@ static void id_override_library_create_hierarchy_process(bContext *C,
     }
     if (id_iter->override_library->hierarchy_root != nullptr &&
         !data.id_hierarchy_roots_uid.contains(
-            id_iter->override_library->hierarchy_root->session_uuid))
+            id_iter->override_library->hierarchy_root->session_uid))
     {
       continue;
     }
-    if (data.selected_id_uid.contains(id_iter->override_library->reference->session_uuid) ||
-        data.selected_id_uid.contains(id_iter->session_uuid))
+    if (data.selected_id_uid.contains(id_iter->override_library->reference->session_uid) ||
+        data.selected_id_uid.contains(id_iter->session_uid))
     {
       id_iter->override_library->flag &= ~LIBOVERRIDE_FLAG_SYSTEM_DEFINED;
     }
@@ -2108,6 +2118,7 @@ enum eOutliner_PropModifierOps {
   OL_MODIFIER_OP_TOGVIS = 1,
   OL_MODIFIER_OP_TOGREN,
   OL_MODIFIER_OP_DELETE,
+  OL_MODIFIER_OP_APPLY,
 };
 
 static void pchan_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void * /*arg*/)
@@ -2285,7 +2296,7 @@ static void constraint_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/
       lb = &ob->constraints;
     }
 
-    if (BKE_constraint_remove_ex(lb, ob, constraint, true)) {
+    if (BKE_constraint_remove_ex(lb, ob, constraint)) {
       /* there's no active constraint now, so make sure this is the case */
       BKE_constraints_active_set(&ob->constraints, nullptr);
 
@@ -2298,11 +2309,18 @@ static void constraint_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/
   }
 }
 
-static void modifier_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void *Carg)
+struct ModifierFnArgs {
+  bContext *C;
+  ReportList *reports;
+};
+
+static void modifier_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, void *arg)
 {
-  bContext *C = (bContext *)Carg;
+  ModifierFnArgs *data = static_cast<ModifierFnArgs *>(arg);
+  bContext *C = data->C;
   Main *bmain = CTX_data_main(C);
   Scene *scene = CTX_data_scene(C);
+  Depsgraph *depsgraph = CTX_data_ensure_evaluated_depsgraph(C);
   ModifierData *md = (ModifierData *)te->directdata;
   Object *ob = (Object *)outliner_search_back(te, ID_OB);
 
@@ -2317,8 +2335,16 @@ static void modifier_fn(int event, TreeElement *te, TreeStoreElem * /*tselem*/, 
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
   }
   else if (event == OL_MODIFIER_OP_DELETE) {
-    ED_object_modifier_remove(nullptr, bmain, scene, ob, md);
+    ED_object_modifier_remove(data->reports, bmain, scene, ob, md);
     WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER | NA_REMOVED, ob);
+    te->store_elem->flag &= ~TSE_SELECTED;
+  }
+  else if (event == OL_MODIFIER_OP_APPLY) {
+    ED_object_modifier_apply(
+        bmain, data->reports, depsgraph, scene, ob, md, MODIFIER_APPLY_DATA, false);
+    DEG_id_tag_update(&ob->id, ID_RECALC_GEOMETRY);
+    DEG_relations_tag_update(bmain);
+    WM_event_add_notifier(C, NC_OBJECT | ND_MODIFIER, ob);
     te->store_elem->flag &= ~TSE_SELECTED;
   }
 }
@@ -3249,6 +3275,7 @@ static int outliner_action_set_exec(bContext *C, wmOperator *op)
   }
 
   /* set notifier that things have changed */
+  DEG_id_tag_update(te->store_elem->id, ID_RECALC_ANIMATION);
   WM_event_add_notifier(C, NC_ANIMATION | ND_NLA_ACTCHANGE, nullptr);
   ED_undo_push(C, "Set action");
 
@@ -3447,9 +3474,11 @@ void OUTLINER_OT_constraint_operation(wmOperatorType *ot)
  * \{ */
 
 static const EnumPropertyItem prop_modifier_op_types[] = {
+    {OL_MODIFIER_OP_APPLY, "APPLY", ICON_CHECKMARK, "Apply", ""},
+    {OL_MODIFIER_OP_DELETE, "DELETE", ICON_X, "Delete", ""},
+    RNA_ENUM_ITEM_SEPR,
     {OL_MODIFIER_OP_TOGVIS, "TOGVIS", ICON_RESTRICT_VIEW_OFF, "Toggle Viewport Use", ""},
     {OL_MODIFIER_OP_TOGREN, "TOGREN", ICON_RESTRICT_RENDER_OFF, "Toggle Render Use", ""},
-    {OL_MODIFIER_OP_DELETE, "DELETE", ICON_X, "Delete", ""},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
@@ -3458,9 +3487,13 @@ static int outliner_modifier_operation_exec(bContext *C, wmOperator *op)
   SpaceOutliner *space_outliner = CTX_wm_space_outliner(C);
   eOutliner_PropModifierOps event = (eOutliner_PropModifierOps)RNA_enum_get(op->ptr, "type");
 
-  outliner_do_data_operation(space_outliner, TSE_MODIFIER, event, modifier_fn, C);
+  ModifierFnArgs args{};
+  args.C = C;
+  args.reports = op->reports;
 
-  if (event == OL_MODIFIER_OP_DELETE) {
+  outliner_do_data_operation(space_outliner, TSE_MODIFIER, event, modifier_fn, &args);
+
+  if (ELEM(event, OL_MODIFIER_OP_DELETE, OL_MODIFIER_OP_APPLY)) {
     outliner_cleanup_tree(space_outliner);
   }
 

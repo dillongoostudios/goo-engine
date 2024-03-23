@@ -39,15 +39,15 @@
 #include "BLT_translation.h"
 
 #include "BKE_fcurve.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_movieclip.h"
 #include "BKE_object.hh"
 #include "BKE_scene.h"
 #include "BKE_tracking.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "RNA_access.hh"
 #include "RNA_prototypes.h"
@@ -500,7 +500,7 @@ MovieTrackingTrack *BKE_tracking_track_add_empty(MovieTracking *tracking, ListBa
   const MovieTrackingSettings *settings = &tracking->settings;
 
   MovieTrackingTrack *track = MEM_cnew<MovieTrackingTrack>("add_marker_exec track");
-  STRNCPY(track->name, "Track");
+  STRNCPY(track->name, CTX_DATA_(BLT_I18NCONTEXT_ID_MOVIECLIP, "Track"));
 
   /* Fill track's settings from default settings. */
   track->motion_model = settings->default_motion_model;
@@ -2124,7 +2124,7 @@ void BKE_tracking_camera_to_blender(
   float focal = tracking->camera.focal;
 
   camera->sensor_x = tracking->camera.sensor_width;
-  camera->sensor_fit = CAMERA_SENSOR_FIT_AUTO;
+  camera->sensor_fit = CAMERA_SENSOR_FIT_HOR;
   camera->lens = focal * camera->sensor_x / width;
 
   scene->r.xsch = width;
@@ -2237,22 +2237,22 @@ uint64_t BKE_tracking_camera_distortion_hash(const MovieTrackingCamera *camera)
   using namespace blender;
   switch (camera->distortion_model) {
     case TRACKING_DISTORTION_MODEL_POLYNOMIAL:
-      return get_default_hash_4(camera->distortion_model,
-                                float2(camera->pixel_aspect, camera->focal),
-                                float2(camera->principal_point),
-                                float3(camera->k1, camera->k2, camera->k3));
+      return get_default_hash(camera->distortion_model,
+                              float2(camera->pixel_aspect, camera->focal),
+                              float2(camera->principal_point),
+                              float3(camera->k1, camera->k2, camera->k3));
     case TRACKING_DISTORTION_MODEL_DIVISION:
-      return get_default_hash_4(camera->distortion_model,
-                                float2(camera->pixel_aspect, camera->focal),
-                                float2(camera->principal_point),
-                                float2(camera->division_k1, camera->division_k2));
+      return get_default_hash(camera->distortion_model,
+                              float2(camera->pixel_aspect, camera->focal),
+                              float2(camera->principal_point),
+                              float2(camera->division_k1, camera->division_k2));
     case TRACKING_DISTORTION_MODEL_NUKE:
-      return get_default_hash_4(camera->distortion_model,
-                                float2(camera->pixel_aspect, camera->focal),
-                                float2(camera->principal_point),
-                                float2(camera->nuke_k1, camera->nuke_k2));
+      return get_default_hash(camera->distortion_model,
+                              float2(camera->pixel_aspect, camera->focal),
+                              float2(camera->principal_point),
+                              float2(camera->nuke_k1, camera->nuke_k2));
     case TRACKING_DISTORTION_MODEL_BROWN:
-      return get_default_hash_4(
+      return get_default_hash(
           float2(camera->pixel_aspect, camera->focal),
           float2(camera->principal_point),
           float4(camera->brown_k1, camera->brown_k2, camera->brown_k3, camera->brown_k4),
@@ -2527,7 +2527,7 @@ void BKE_tracking_max_distortion_delta_across_bound(MovieTracking *tracking,
 {
   float pos[2], warped_pos[2];
   const int coord_delta = 5;
-  void (*apply_distortion)(MovieTracking * tracking,
+  void (*apply_distortion)(MovieTracking *tracking,
                            int image_width,
                            int image_height,
                            const float pos[2],

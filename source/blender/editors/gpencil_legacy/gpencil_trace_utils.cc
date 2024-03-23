@@ -18,7 +18,7 @@
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_image.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 
 #include "DNA_gpencil_legacy_types.h"
@@ -26,8 +26,8 @@
 #include "DNA_material_types.h"
 #include "DNA_object_types.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "gpencil_trace.h"
 

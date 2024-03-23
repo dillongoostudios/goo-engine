@@ -117,7 +117,7 @@ ccl_device float3 ensure_valid_specular_reflection(float3 Ng, float3 I, float3 N
   const float3 R = 2 * dot(N, I) * N - I;
 
   const float Iz = dot(I, Ng);
-  kernel_assert(Iz > 0);
+  kernel_assert(Iz >= 0);
 
   /* Reflection rays may always be at least as shallow as the incoming ray. */
   const float threshold = min(0.9f * Iz, 0.01f);
@@ -129,7 +129,7 @@ ccl_device float3 ensure_valid_specular_reflection(float3 Ng, float3 I, float3 N
    * The X axis is found by normalizing the component of N that's orthogonal to Ng.
    * The Y axis isn't actually needed.
    */
-  const float3 X = normalize(N - dot(N, Ng) * Ng);
+  const float3 X = safe_normalize_fallback(N - dot(N, Ng) * Ng, N);
 
   /* Calculate N.z and N.x in the local coordinate system.
    *

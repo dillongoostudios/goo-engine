@@ -22,7 +22,9 @@ using namespace Freestyle;
 
 //------------------------INSTANCE METHODS ----------------------------------
 
-static char QuantitativeInvisibilityF1D___doc__[] =
+PyDoc_STRVAR(
+    /* Wrap. */
+    QuantitativeInvisibilityF1D___doc__,
     "Class hierarchy: :class:`freestyle.types.UnaryFunction1D` > "
     ":class:`freestyle.types.UnaryFunction1DUnsigned` > :class:`QuantitativeInvisibilityF1D`\n"
     "\n"
@@ -45,7 +47,7 @@ static char QuantitativeInvisibilityF1D___doc__[] =
     "   :arg inter: An Interface1D object.\n"
     "   :type inter: :class:`freestyle.types.Interface1D`\n"
     "   :return: The Quantitative Invisibility of the Interface1D.\n"
-    "   :rtype: int\n";
+    "   :rtype: int\n");
 
 static int QuantitativeInvisibilityF1D___init__(BPy_QuantitativeInvisibilityF1D *self,
                                                 PyObject *args,
@@ -55,7 +57,8 @@ static int QuantitativeInvisibilityF1D___init__(BPy_QuantitativeInvisibilityF1D 
   PyObject *obj = nullptr;
 
   if (!PyArg_ParseTupleAndKeywords(
-          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj)) {
+          args, kwds, "|O!", (char **)kwlist, &IntegrationType_Type, &obj))
+  {
     return -1;
   }
   IntegrationType t = (obj) ? IntegrationType_from_BPy_IntegrationType(obj) : MEAN;

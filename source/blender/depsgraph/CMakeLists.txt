@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
-  .
+  PUBLIC .
   ../blenkernel
   ../bmesh
   ../draw
@@ -88,6 +88,7 @@ set(SRC
   intern/depsgraph_tag.cc
   intern/depsgraph_type.cc
   intern/depsgraph_update.cc
+  intern/depsgraph_writeback_sync.cc
 
   DEG_depsgraph.hh
   DEG_depsgraph_build.hh
@@ -95,6 +96,7 @@ set(SRC
   DEG_depsgraph_light_linking.hh
   DEG_depsgraph_physics.hh
   DEG_depsgraph_query.hh
+  DEG_depsgraph_writeback_sync.hh
 
   intern/builder/deg_builder.h
   intern/builder/deg_builder_cache.h
@@ -116,7 +118,6 @@ set(SRC
   intern/builder/pipeline_render.h
   intern/builder/pipeline_view_layer.h
   intern/debug/deg_debug.h
-  intern/debug/deg_time_average.h
   intern/eval/deg_eval.h
   intern/eval/deg_eval_copy_on_write.h
   intern/eval/deg_eval_flush.h
@@ -165,6 +166,7 @@ if(WITH_PYTHON)
 endif()
 
 blender_add_lib(bf_depsgraph "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+add_library(bf::depsgraph ALIAS bf_depsgraph)
 
 # RNA_prototypes.h
 add_dependencies(bf_depsgraph bf_rna)
@@ -178,6 +180,5 @@ if(WITH_GTESTS)
   set(TEST_LIB
     bf_depsgraph
   )
-  include(GTestTesting)
-  blender_add_test_lib(bf_depsgraph_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB}")
+  blender_add_test_suite_lib(depsgraph "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB}")
 endif()

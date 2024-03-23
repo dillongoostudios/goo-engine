@@ -7,6 +7,7 @@
  */
 
 // #include "BLI_map.hh"
+#include "BKE_colortools.hh"
 #include "DEG_depsgraph_query.hh"
 
 #include "eevee_instance.hh"
@@ -25,8 +26,12 @@ namespace blender::eevee {
 void MotionBlurModule::init()
 {
   const Scene *scene = inst_.scene;
+  const ViewLayer *view_layer = inst_.view_layer;
 
   enabled_ = (scene->eevee.flag & SCE_EEVEE_MOTION_BLUR_ENABLED) != 0;
+  if (enabled_) {
+    enabled_ = (view_layer->layflag & SCE_LAY_MOTION_BLUR) != 0;
+  }
 
   if (!enabled_) {
     motion_blur_fx_enabled_ = false;
@@ -139,8 +144,8 @@ void MotionBlurModule::sync()
   RenderBuffers &render_buffers = inst_.render_buffers;
 
   motion_blur_ps_.init();
-  inst_.velocity.bind_resources(motion_blur_ps_);
-  inst_.sampling.bind_resources(motion_blur_ps_);
+  motion_blur_ps_.bind_resources(inst_.velocity);
+  motion_blur_ps_.bind_resources(inst_.sampling);
   {
     /* Create max velocity tiles. */
     PassSimple::Sub &sub = motion_blur_ps_.sub("TilesFlatten");

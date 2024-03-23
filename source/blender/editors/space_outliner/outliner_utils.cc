@@ -6,6 +6,7 @@
  * \ingroup spoutliner
  */
 
+#include <algorithm>
 #include <cstring>
 
 #include "BLI_listbase.h"
@@ -15,9 +16,9 @@
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
 
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_layer.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
 #include "BKE_object.hh"
 #include "BKE_outliner_treehash.hh"
 
@@ -74,7 +75,8 @@ TreeElement *outliner_find_item_at_y(const SpaceOutliner *space_outliner,
       }
 
       if (BLI_listbase_is_empty(&te_iter->subtree) ||
-          !TSELEM_OPEN(TREESTORE(te_iter), space_outliner)) {
+          !TSELEM_OPEN(TREESTORE(te_iter), space_outliner))
+      {
         /* No need for recursion. */
         continue;
       }
@@ -420,7 +422,7 @@ void outliner_scroll_view(SpaceOutliner *space_outliner, ARegion *region, int de
 {
   int tree_width, tree_height;
   outliner_tree_dimensions(space_outliner, &tree_width, &tree_height);
-  int y_min = MIN2(region->v2d.cur.ymin, -tree_height);
+  int y_min = std::min(int(region->v2d.cur.ymin), -tree_height);
 
   region->v2d.cur.ymax += delta_y;
   region->v2d.cur.ymin += delta_y;

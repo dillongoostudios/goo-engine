@@ -47,9 +47,10 @@ static void node_declare(NodeDeclarationBuilder &b)
       .subtype(PROP_DISTANCE)
       .description("The height of the cylinder");
   b.add_output<decl::Geometry>("Mesh");
-  b.add_output<decl::Bool>("Top").field_on_all();
+  b.add_output<decl::Bool>("Top").field_on_all().translation_context(BLT_I18NCONTEXT_ID_NODETREE);
   b.add_output<decl::Bool>("Side").field_on_all();
-  b.add_output<decl::Bool>("Bottom").field_on_all();
+  b.add_output<decl::Bool>("Bottom").field_on_all().translation_context(
+      BLT_I18NCONTEXT_ID_NODETREE);
   b.add_output<decl::Vector>("UV Map").field_on_all();
 }
 
@@ -138,7 +139,9 @@ static void node_rna(StructRNA *srna)
                     "",
                     rna_enum_node_geometry_mesh_circle_fill_type_items,
                     NOD_storage_enum_accessors(fill_type),
-                    GEO_NODE_MESH_CIRCLE_FILL_NGON);
+                    GEO_NODE_MESH_CIRCLE_FILL_NGON,
+                    nullptr,
+                    true);
 }
 
 static void node_register()

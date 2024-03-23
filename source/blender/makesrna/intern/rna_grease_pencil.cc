@@ -14,11 +14,13 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "WM_api.hh"
 
 #ifdef RNA_RUNTIME
+
+#  include <fmt/format.h>
 
 #  include "BKE_grease_pencil.hh"
 
@@ -72,17 +74,18 @@ static int tree_node_name_length(blender::bke::greasepencil::TreeNode &node)
   return 0;
 }
 
-static char *tree_node_name_path(blender::bke::greasepencil::TreeNode &node, const char *prefix)
+static std::optional<std::string> tree_node_name_path(blender::bke::greasepencil::TreeNode &node,
+                                                      const char *prefix)
 {
   using namespace blender::bke::greasepencil;
   BLI_assert(!node.name().is_empty());
   const size_t name_length = node.name().size();
   std::string name_esc(name_length * 2, '\0');
   BLI_str_escape(name_esc.data(), node.name().c_str(), name_length * 2);
-  return BLI_sprintfN("%s[\"%s\"]", prefix, name_esc.c_str());
+  return fmt::format("{}[\"{}\"]", prefix, name_esc.c_str());
 }
 
-static char *rna_GreasePencilLayer_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_GreasePencilLayer_path(const PointerRNA *ptr)
 {
   GreasePencilLayer *layer = static_cast<GreasePencilLayer *>(ptr->data);
   return tree_node_name_path(layer->wrap().as_node(), "layers");
@@ -113,9 +116,7 @@ static PointerRNA rna_GreasePencil_active_layer_get(PointerRNA *ptr)
   GreasePencil *grease_pencil = rna_grease_pencil(ptr);
   if (grease_pencil->has_active_layer()) {
     return rna_pointer_inherit_refine(
-        ptr,
-        &RNA_GreasePencilLayer,
-        static_cast<void *>(grease_pencil->get_active_layer_for_write()));
+        ptr, &RNA_GreasePencilLayer, static_cast<void *>(grease_pencil->get_active_layer()));
   }
   return rna_pointer_inherit_refine(ptr, nullptr, nullptr);
 }
@@ -129,7 +130,7 @@ static void rna_GreasePencil_active_layer_set(PointerRNA *ptr,
   WM_main_add_notifier(NC_GPENCIL | NA_EDITED, nullptr);
 }
 
-static char *rna_GreasePencilLayerGroup_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_GreasePencilLayerGroup_path(const PointerRNA *ptr)
 {
   GreasePencilLayerTreeGroup *group = static_cast<GreasePencilLayerTreeGroup *>(ptr->data);
   return tree_node_name_path(group->wrap().as_node(), "layer_groups");
@@ -302,6 +303,22 @@ static void rna_def_grease_pencil_data(BlenderRNA *brna)
 
   /* Animation Data */
   rna_def_animdata_common(srna);
+
+  /* Materials */
+  prop = RNA_def_property(srna, "materials", PROP_COLLECTION, PROP_NONE);
+  RNA_def_property_collection_sdna(prop, nullptr, "material_array", "material_array_num");
+  RNA_def_property_struct_type(prop, "Material");
+  RNA_def_property_ui_text(prop, "Materials", "");
+  RNA_def_property_srna(prop, "IDMaterials"); /* see rna_ID.cc */
+  RNA_def_property_collection_funcs(prop,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    nullptr,
+                                    "rna_IDMaterials_assign_int");
 
   /* Layers */
   prop = RNA_def_property(srna, "layers", PROP_COLLECTION, PROP_NONE);

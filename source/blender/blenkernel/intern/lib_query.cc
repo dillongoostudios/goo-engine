@@ -17,10 +17,10 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_idprop.h"
-#include "BKE_idtype.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_idtype.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 #include "BKE_node.h"
 
 /* status */
@@ -441,9 +441,9 @@ uint64_t BKE_library_id_can_use_filter_id(const ID *owner_id, const bool include
       /* Could be more specific, but simpler to just always say 'yes' here. */
       return FILTER_ID_ALL;
     case ID_ME:
-      return FILTER_ID_ME | FILTER_ID_MA | FILTER_ID_IM;
+      return FILTER_ID_ME | FILTER_ID_MA | FILTER_ID_IM | FILTER_ID_KE;
     case ID_CU_LEGACY:
-      return FILTER_ID_OB | FILTER_ID_MA | FILTER_ID_VF;
+      return FILTER_ID_OB | FILTER_ID_MA | FILTER_ID_VF | FILTER_ID_KE;
     case ID_MB:
       return FILTER_ID_MA;
     case ID_MA:
@@ -451,7 +451,7 @@ uint64_t BKE_library_id_can_use_filter_id(const ID *owner_id, const bool include
     case ID_TE:
       return FILTER_ID_IM | FILTER_ID_OB;
     case ID_LT:
-      return 0;
+      return FILTER_ID_KE;
     case ID_LA:
       return FILTER_ID_TE;
     case ID_CA:
@@ -653,7 +653,10 @@ bool BKE_library_ID_is_indirectly_used(Main *bmain, void *idv)
   return library_ID_is_used(bmain, idv, true);
 }
 
-void BKE_library_ID_test_usages(Main *bmain, void *idv, bool *is_used_local, bool *is_used_linked)
+void BKE_library_ID_test_usages(Main *bmain,
+                                void *idv,
+                                bool *r_is_used_local,
+                                bool *r_is_used_linked)
 {
   IDUsersIter iter;
   ListBase *lb_array[INDEX_ID_MAX];
@@ -683,8 +686,8 @@ void BKE_library_ID_test_usages(Main *bmain, void *idv, bool *is_used_local, boo
     }
   }
 
-  *is_used_local = (iter.count_direct != 0);
-  *is_used_linked = (iter.count_indirect != 0);
+  *r_is_used_local = (iter.count_direct != 0);
+  *r_is_used_linked = (iter.count_indirect != 0);
 }
 
 /* ***** IDs usages.checking/tagging. ***** */
@@ -707,7 +710,7 @@ static bool lib_query_unused_ids_tag_recurse(Main *bmain,
   if ((id_relations->tags & MAINIDRELATIONS_ENTRY_TAGS_PROCESSED) != 0) {
     return false;
   }
-  else if ((id_relations->tags & MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS) != 0) {
+  if ((id_relations->tags & MAINIDRELATIONS_ENTRY_TAGS_INPROGRESS) != 0) {
     /* This ID has not yet been fully processed. If this condition is reached, it means this is a
      * dependency loop case. */
     return true;
@@ -848,7 +851,8 @@ void BKE_lib_query_unused_ids_tag(Main *bmain,
   BKE_main_relations_create(bmain, 0);
   FOREACH_MAIN_ID_BEGIN (bmain, id) {
     if (lib_query_unused_ids_tag_recurse(
-            bmain, tag, do_local_ids, do_linked_ids, id, r_num_tagged)) {
+            bmain, tag, do_local_ids, do_linked_ids, id, r_num_tagged))
+    {
       /* This root processed ID is part of one or more dependency loops.
        *
        * If it was not tagged, and its matching relations entry is not marked as processed, it

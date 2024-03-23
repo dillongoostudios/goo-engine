@@ -26,8 +26,8 @@
 #include "MEM_guardedalloc.h"
 
 #include "BKE_cachefile.h"
-#include "BKE_context.h"
-#include "BKE_lib_query.h"
+#include "BKE_context.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 #include "BKE_scene.h"
@@ -51,7 +51,7 @@
 
 #if defined(WITH_USD) || defined(WITH_ALEMBIC)
 #  include "BKE_global.h"
-#  include "BKE_lib_id.h"
+#  include "BKE_lib_id.hh"
 #endif
 
 #ifdef WITH_ALEMBIC
@@ -59,7 +59,7 @@
 #endif
 
 #ifdef WITH_USD
-#  include "usd.h"
+#  include "usd.hh"
 #endif
 
 using blender::float3;
@@ -136,7 +136,9 @@ static bool can_use_mesh_for_orco_evaluation(MeshSeqCacheModifierData *mcmd,
       break;
     case CACHEFILE_TYPE_USD:
 #  ifdef WITH_USD
-      if (!USD_mesh_topology_changed(mcmd->reader, ctx->object, mesh, time, err_str)) {
+      if (!blender::io::usd::USD_mesh_topology_changed(
+              mcmd->reader, ctx->object, mesh, time, err_str))
+      {
         return true;
       }
 #  endif
@@ -174,7 +176,8 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   MeshSeqCacheModifierData *mcmd = reinterpret_cast<MeshSeqCacheModifierData *>(md);
 
   /* Only used to check whether we are operating on org data or not... */
-  Mesh *me = (ctx->object->type == OB_MESH) ? static_cast<Mesh *>(ctx->object->data) : nullptr;
+  Mesh *object_mesh = (ctx->object->type == OB_MESH) ? static_cast<Mesh *>(ctx->object->data) :
+                                                       nullptr;
   Mesh *org_mesh = mesh;
 
   Scene *scene = DEG_get_evaluated_scene(ctx->depsgraph);
@@ -205,13 +208,13 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     return mesh;
   }
 
-  if (me != nullptr) {
+  if (object_mesh != nullptr) {
     const Span<float3> mesh_positions = mesh->vert_positions();
     const Span<blender::int2> mesh_edges = mesh->edges();
     const blender::OffsetIndices mesh_faces = mesh->faces();
-    const Span<float3> me_positions = me->vert_positions();
-    const Span<blender::int2> me_edges = me->edges();
-    const blender::OffsetIndices me_faces = me->faces();
+    const Span<float3> me_positions = object_mesh->vert_positions();
+    const Span<blender::int2> me_edges = object_mesh->edges();
+    const blender::OffsetIndices me_faces = object_mesh->faces();
 
     /* TODO(sybren+bastien): possibly check relevant custom data layers (UV/color depending on
      * flags) and duplicate those too.
@@ -253,8 +256,9 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
     }
     case CACHEFILE_TYPE_USD: {
 #  ifdef WITH_USD
-      const USDMeshReadParams params = create_mesh_read_params(time * FPS, mcmd->read_flag);
-      result = USD_read_mesh(mcmd->reader, ctx->object, mesh, params, &err_str);
+      const blender::io::usd::USDMeshReadParams params = blender::io::usd::create_mesh_read_params(
+          time * FPS, mcmd->read_flag);
+      result = blender::io::usd::USD_read_mesh(mcmd->reader, ctx->object, mesh, params, &err_str);
 #  endif
       break;
     }
@@ -434,7 +438,7 @@ ModifierTypeInfo modifierType_MeshSequenceCache = {
     /*struct_name*/ "MeshSeqCacheModifierData",
     /*struct_size*/ sizeof(MeshSeqCacheModifierData),
     /*srna*/ &RNA_MeshSequenceCacheModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/
     static_cast<ModifierTypeFlag>(eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_AcceptsCVs),
     /*icon*/ ICON_MOD_MESHDEFORM, /* TODO: Use correct icon. */
@@ -461,4 +465,5 @@ ModifierTypeInfo modifierType_MeshSequenceCache = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ blend_read,
+    /*foreach_cache*/ nullptr,
 };

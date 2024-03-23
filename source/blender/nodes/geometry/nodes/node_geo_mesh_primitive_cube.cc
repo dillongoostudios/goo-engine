@@ -2,8 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
+#include "BLI_math_euler.hh"
 
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
@@ -11,6 +10,7 @@
 #include "GEO_mesh_primitive_cuboid.hh"
 #include "GEO_mesh_primitive_grid.hh"
 #include "GEO_mesh_primitive_line.hh"
+#include "GEO_transform.hh"
 
 #include "node_geometry_util.hh"
 
@@ -76,12 +76,14 @@ static Mesh *create_cube_mesh(const float3 size,
     }
     if (verts_y == 1) { /* XZ plane. */
       Mesh *mesh = geometry::create_grid_mesh(verts_x, verts_z, size.x, size.z, uv_map_id);
-      transform_mesh(*mesh, float3(0), float3(M_PI_2, 0.0f, 0.0f), float3(1));
+      geometry::transform_mesh(
+          *mesh, float3(0), math::to_quaternion(math::EulerXYZ(M_PI_2, 0.0f, 0.0f)), float3(1));
       return mesh;
     }
     /* YZ plane. */
     Mesh *mesh = geometry::create_grid_mesh(verts_z, verts_y, size.z, size.y, uv_map_id);
-    transform_mesh(*mesh, float3(0), float3(0.0f, M_PI_2, 0.0f), float3(1));
+    geometry::transform_mesh(
+        *mesh, float3(0), math::to_quaternion(math::EulerXYZ(0.0f, M_PI_2, 0.0f)), float3(1));
     return mesh;
   }
 

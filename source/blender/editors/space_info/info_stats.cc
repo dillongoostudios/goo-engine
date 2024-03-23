@@ -23,7 +23,7 @@
 #include "DNA_space_types.h"
 #include "DNA_windowmanager_types.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 #include "BLI_listbase.h"
 #include "BLI_math_geom.h"
@@ -36,18 +36,18 @@
 #include "BLT_translation.h"
 
 #include "BKE_action.h"
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_blender_version.h"
-#include "BKE_context.h"
-#include "BKE_curve.h"
+#include "BKE_context.hh"
+#include "BKE_curve.hh"
 #include "BKE_curves.hh"
 #include "BKE_displist.h"
-#include "BKE_editmesh.h"
+#include "BKE_editmesh.hh"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_grease_pencil.hh"
-#include "BKE_key.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_key.hh"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 #include "BKE_paint.hh"
@@ -105,11 +105,10 @@ static bool stats_mesheval(const Mesh *me_eval, bool is_selected, SceneStats *st
 
   int totvert, totedge, totface, totloop;
 
-  const SubdivCCG *subdiv_ccg = me_eval->runtime->subdiv_ccg;
   const SubsurfRuntimeData *subsurf_runtime_data = me_eval->runtime->subsurf_runtime_data;
 
-  if (subdiv_ccg != nullptr) {
-    BKE_subdiv_ccg_topology_counters(subdiv_ccg, &totvert, &totedge, &totface, &totloop);
+  if (const std::unique_ptr<SubdivCCG> &subdiv_ccg = me_eval->runtime->subdiv_ccg) {
+    BKE_subdiv_ccg_topology_counters(*subdiv_ccg, totvert, totedge, totface, totloop);
   }
   else if (subsurf_runtime_data && subsurf_runtime_data->resolution != 0) {
     totvert = subsurf_runtime_data->stats_totvert;
@@ -118,10 +117,10 @@ static bool stats_mesheval(const Mesh *me_eval, bool is_selected, SceneStats *st
     totloop = subsurf_runtime_data->stats_totloop;
   }
   else {
-    totvert = me_eval->totvert;
-    totedge = me_eval->totedge;
+    totvert = me_eval->verts_num;
+    totedge = me_eval->edges_num;
     totface = me_eval->faces_num;
-    totloop = me_eval->totloop;
+    totloop = me_eval->corners_num;
   }
 
   stats->totvert += totvert;
@@ -560,13 +559,14 @@ static void get_stats_string(char *info,
 
   if (obedit) {
     if (BKE_keyblock_from_object(obedit)) {
-      *ofs += BLI_strncpy_rlen(info + *ofs, TIP_("(Key) "), len - *ofs);
+      *ofs += BLI_strncpy_rlen(info + *ofs, IFACE_("(Key) "), len - *ofs);
     }
 
     if (obedit->type == OB_MESH) {
       *ofs += BLI_snprintf_rlen(info + *ofs,
                                 len - *ofs,
-                                TIP_("Verts:%s/%s | Edges:%s/%s | Faces:%s/%s | Tris:%s"),
+
+                                IFACE_("Verts:%s/%s | Edges:%s/%s | Faces:%s/%s | Tris:%s"),
                                 stats_fmt->totvertsel,
                                 stats_fmt->totvert,
                                 stats_fmt->totedgesel,
@@ -578,25 +578,30 @@ static void get_stats_string(char *info,
     else if (obedit->type == OB_ARMATURE) {
       *ofs += BLI_snprintf_rlen(info + *ofs,
                                 len - *ofs,
-                                TIP_("Joints:%s/%s | Bones:%s/%s"),
+
+                                IFACE_("Joints:%s/%s | Bones:%s/%s"),
                                 stats_fmt->totvertsel,
                                 stats_fmt->totvert,
                                 stats_fmt->totbonesel,
                                 stats_fmt->totbone);
     }
     else {
-      *ofs += BLI_snprintf_rlen(
-          info + *ofs, len - *ofs, TIP_("Verts:%s/%s"), stats_fmt->totvertsel, stats_fmt->totvert);
+      *ofs += BLI_snprintf_rlen(info + *ofs,
+                                len - *ofs,
+                                IFACE_("Verts:%s/%s"),
+                                stats_fmt->totvertsel,
+                                stats_fmt->totvert);
     }
   }
   else if (ob && (object_mode & OB_MODE_POSE)) {
     *ofs += BLI_snprintf_rlen(
-        info + *ofs, len - *ofs, TIP_("Bones:%s/%s"), stats_fmt->totbonesel, stats_fmt->totbone);
+        info + *ofs, len - *ofs, IFACE_("Bones:%s/%s"), stats_fmt->totbonesel, stats_fmt->totbone);
   }
   else if ((ob) && (ob->type == OB_GPENCIL_LEGACY)) {
     *ofs += BLI_snprintf_rlen(info + *ofs,
                               len - *ofs,
-                              TIP_("Layers:%s | Frames:%s | Strokes:%s | Points:%s"),
+
+                              IFACE_("Layers:%s | Frames:%s | Strokes:%s | Points:%s"),
                               stats_fmt->totgplayer,
                               stats_fmt->totgpframe,
                               stats_fmt->totgpstroke,
@@ -606,14 +611,16 @@ static void get_stats_string(char *info,
     if (stats_is_object_dynamic_topology_sculpt(ob)) {
       *ofs += BLI_snprintf_rlen(info + *ofs,
                                 len - *ofs,
-                                TIP_("Verts:%s | Tris:%s"),
+
+                                IFACE_("Verts:%s | Tris:%s"),
                                 stats_fmt->totvertsculpt,
                                 stats_fmt->tottri);
     }
     else {
       *ofs += BLI_snprintf_rlen(info + *ofs,
                                 len - *ofs,
-                                TIP_("Verts:%s | Faces:%s"),
+
+                                IFACE_("Verts:%s | Faces:%s"),
                                 stats_fmt->totvertsculpt,
                                 stats_fmt->totfacesculpt);
     }
@@ -621,7 +628,8 @@ static void get_stats_string(char *info,
   else {
     *ofs += BLI_snprintf_rlen(info + *ofs,
                               len - *ofs,
-                              TIP_("Verts:%s | Faces:%s | Tris:%s"),
+
+                              IFACE_("Verts:%s | Faces:%s | Tris:%s"),
                               stats_fmt->totvert,
                               stats_fmt->totface,
                               stats_fmt->tottri);
@@ -630,7 +638,8 @@ static void get_stats_string(char *info,
   if (!STREQ(&stats_fmt->totobj[0], "0")) {
     *ofs += BLI_snprintf_rlen(info + *ofs,
                               len - *ofs,
-                              TIP_(" | Objects:%s/%s"),
+
+                              IFACE_(" | Objects:%s/%s"),
                               stats_fmt->totobjsel,
                               stats_fmt->totobj);
   }
@@ -668,7 +677,8 @@ const char *ED_info_statusbar_string_ex(Main *bmain,
         timecode, sizeof(timecode), -2, FRA2TIME(frame_count), FPS, U.timecode_style);
     ofs += BLI_snprintf_rlen(info + ofs,
                              len - ofs,
-                             TIP_("Duration: %s (Frame %i/%i)"),
+
+                             IFACE_("Duration: %s (Frame %i/%i)"),
                              timecode,
                              relative_current_frame,
                              frame_count);
@@ -681,7 +691,7 @@ const char *ED_info_statusbar_string_ex(Main *bmain,
     }
     uintptr_t mem_in_use = MEM_get_memory_in_use();
     BLI_str_format_byte_unit(formatted_mem, mem_in_use, false);
-    ofs += BLI_snprintf_rlen(info + ofs, len, TIP_("Memory: %s"), formatted_mem);
+    ofs += BLI_snprintf_rlen(info + ofs, len, IFACE_("Memory: %s"), formatted_mem);
   }
 
   /* GPU VRAM status. */
@@ -696,13 +706,14 @@ const char *ED_info_statusbar_string_ex(Main *bmain,
     if (gpu_free_mem_kb && gpu_tot_mem_kb) {
       ofs += BLI_snprintf_rlen(info + ofs,
                                len - ofs,
-                               TIP_("VRAM: %.1f/%.1f GiB"),
+
+                               IFACE_("VRAM: %.1f/%.1f GiB"),
                                gpu_total_gb - gpu_free_gb,
                                gpu_total_gb);
     }
     else {
       /* Can only show amount of GPU VRAM available. */
-      ofs += BLI_snprintf_rlen(info + ofs, len - ofs, TIP_("VRAM: %.1f GiB Free"), gpu_free_gb);
+      ofs += BLI_snprintf_rlen(info + ofs, len - ofs, IFACE_("VRAM: %.1f GiB Free"), gpu_free_gb);
     }
   }
 
@@ -711,7 +722,7 @@ const char *ED_info_statusbar_string_ex(Main *bmain,
     if (info[0]) {
       ofs += BLI_snprintf_rlen(info + ofs, len - ofs, " | ");
     }
-    ofs += BLI_snprintf_rlen(info + ofs, len - ofs, TIP_("%s"), BKE_blender_version_string());
+    ofs += BLI_snprintf_rlen(info + ofs, len - ofs, IFACE_("%s"), BKE_blender_version_string());
   }
 
   return info;
@@ -741,10 +752,10 @@ static void stats_row(int col1,
                       int height)
 {
   *y -= height;
-  BLF_draw_default(col1, *y, 0.0f, key, 128);
+  BLF_draw_default_shadowed(col1, *y, 0.0f, key, 128);
   char values[128];
   SNPRINTF(values, (value2) ? "%s / %s" : "%s", value1, value2);
-  BLF_draw_default(col2, *y, 0.0f, values, sizeof(values));
+  BLF_draw_default_shadowed(col2, *y, 0.0f, values, sizeof(values));
 }
 
 void ED_info_draw_stats(
@@ -763,10 +774,6 @@ void ED_info_draw_stats(
   const int font_id = BLF_default();
 
   UI_FontThemeColor(font_id, TH_TEXT_HI);
-  BLF_enable(font_id, BLF_SHADOW);
-  const float shadow_color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-  BLF_shadow(font_id, 5, shadow_color);
-  BLF_shadow_offset(font_id, 1, -1);
 
   /* Translated labels for each stat row. */
   enum {
@@ -877,6 +884,4 @@ void ED_info_draw_stats(
     stats_row(col1, labels[FACES], col2, stats_fmt.totfacesel, stats_fmt.totface, y, height);
     stats_row(col1, labels[TRIS], col2, stats_fmt.tottrisel, stats_fmt.tottri, y, height);
   }
-
-  BLF_disable(font_id, BLF_SHADOW);
 }

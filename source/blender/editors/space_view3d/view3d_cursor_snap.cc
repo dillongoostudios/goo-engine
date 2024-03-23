@@ -17,10 +17,10 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
@@ -815,7 +815,7 @@ static void v3d_cursor_snap_update(V3DSnapCursorState *state,
       v3d_cursor_snap_calc_incremental(scene, v3d, region, state->prevpoint, co);
     }
   }
-  else if (snap_elem == SCE_SNAP_TO_VERTEX) {
+  else if (snap_elem & SCE_SNAP_TO_VERTEX) {
     snap_elem_index[0] = index;
   }
   else if (snap_elem &

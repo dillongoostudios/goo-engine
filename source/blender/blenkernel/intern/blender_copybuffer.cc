@@ -21,17 +21,17 @@
 #include "BLI_blenlib.h"
 #include "BLI_utildefines.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_moviecache.h"
+#include "IMB_imbuf.hh"
+#include "IMB_moviecache.hh"
 
-#include "BKE_blender_copybuffer.h" /* own include */
-#include "BKE_blendfile.h"
-#include "BKE_blendfile_link_append.h"
-#include "BKE_context.h"
+#include "BKE_blender_copybuffer.hh" /* own include */
+#include "BKE_blendfile.hh"
+#include "BKE_blendfile_link_append.hh"
+#include "BKE_context.hh"
 #include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_scene.h"
 
 #include "DEG_depsgraph.hh"
@@ -40,7 +40,7 @@
 #include "BLO_readfile.h"
 #include "BLO_writefile.hh"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Copy/Paste `.blend`, partial saves.

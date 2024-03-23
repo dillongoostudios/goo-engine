@@ -61,13 +61,6 @@ GHOST_TSuccess GHOST_System::putClipboardImage(uint * /*rgba*/,
   return GHOST_kFailure;
 }
 
-uint64_t GHOST_System::getMilliSeconds() const
-{
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-             std::chrono::steady_clock::now().time_since_epoch())
-      .count();
-}
-
 GHOST_ITimerTask *GHOST_System::installTimer(uint64_t delay,
                                              uint64_t interval,
                                              GHOST_TimerProcPtr timerProc,
@@ -211,16 +204,27 @@ bool GHOST_System::getFullScreen()
 GHOST_IWindow *GHOST_System::getWindowUnderCursor(int32_t x, int32_t y)
 {
   /* TODO: This solution should follow the order of the activated windows (Z-order).
-   * It is imperfect but usable in most cases. */
-  for (GHOST_IWindow *iwindow : m_windowManager->getWindows()) {
-    if (iwindow->getState() == GHOST_kWindowStateMinimized) {
+   * It is imperfect but usable in most cases. Ideally each platform should provide
+   * a custom version of this function that properly considers z-order. */
+
+  std::vector<GHOST_IWindow *> windows = m_windowManager->getWindows();
+  std::vector<GHOST_IWindow *>::reverse_iterator iwindow_iter;
+
+  /* Search through the windows in reverse order because in most cases
+   * the window that is on top was created after those that are below it. */
+
+  for (iwindow_iter = windows.rbegin(); iwindow_iter != windows.rend(); ++iwindow_iter) {
+
+    GHOST_IWindow *win = *iwindow_iter;
+
+    if (win->getState() == GHOST_kWindowStateMinimized) {
       continue;
     }
 
     GHOST_Rect bounds;
-    iwindow->getClientBounds(bounds);
+    win->getClientBounds(bounds);
     if (bounds.isInside(x, y)) {
-      return iwindow;
+      return win;
     }
   }
 

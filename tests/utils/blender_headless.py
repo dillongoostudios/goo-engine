@@ -5,10 +5,10 @@
 
 """
 Wrapper for Blender that launches a graphical instances of Blender
-in it's own display-server.
+in its own display-server.
 
 This can be useful when a graphical context is required (when ``--background`` can't be used)
-and it's preferable not to have windows opening on the users system.
+and it's preferable not to have windows opening on the user's system.
 
 The main use case for this is tests that run simulated events, see: ``bl_run_operators_event_simulate.py``.
 
@@ -116,7 +116,8 @@ class backend_wayland(backend_base):
         """
         # NOTE(@ideasman42): WESTON does not make it convenient to run a portable instance,
         # a reasonable amount of logic here is simply to get WESTON running with references to portable paths.
-        # Once pcakges are available on RedHad8, we might consider to remove this entire function.
+        # Once packages are available on the Linux distribution used for the CI-environment,
+        # we can consider removing this entire function.
         weston_env = {}
         weston_ini = []
         ld_library_paths = []

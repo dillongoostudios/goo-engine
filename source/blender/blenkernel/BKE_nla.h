@@ -63,7 +63,7 @@ void BKE_nla_tracks_free(ListBase *tracks, bool do_id_user);
  *
  * \param use_same_action: When true, the existing action is used (instead of being duplicated)
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
- * flags in BKE_lib_id.h
+ * flags in BKE_lib_id.hh
  */
 struct NlaStrip *BKE_nlastrip_copy(struct Main *bmain,
                                    struct NlaStrip *strip,
@@ -72,7 +72,7 @@ struct NlaStrip *BKE_nlastrip_copy(struct Main *bmain,
 /**
  * Copy a single NLA Track.
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
- * flags in BKE_lib_id.h
+ * flags in BKE_lib_id.hh
  */
 struct NlaTrack *BKE_nlatrack_copy(struct Main *bmain,
                                    struct NlaTrack *nlt,
@@ -81,7 +81,7 @@ struct NlaTrack *BKE_nlatrack_copy(struct Main *bmain,
 /**
  * Copy all NLA data.
  * \param flag: Control ID pointers management, see LIB_ID_CREATE_.../LIB_ID_COPY_...
- * flags in BKE_lib_id.h
+ * flags in BKE_lib_id.hh
  */
 void BKE_nla_tracks_copy(struct Main *bmain, ListBase *dst, const ListBase *src, int flag);
 
@@ -395,6 +395,12 @@ struct NlaStrip *BKE_nlastrip_find_active(struct NlaTrack *nlt);
  * Make the given NLA-Strip the active one within the given block.
  */
 void BKE_nlastrip_set_active(struct AnimData *adt, struct NlaStrip *strip);
+/**
+ * Find the NLA-strip with the given name within the given track.
+ *
+ * \return pointer to the strip, or nullptr when not found.
+ */
+struct NlaStrip *BKE_nlastrip_find_by_name(struct NlaTrack *nlt, const char *name);
 
 /**
  * Does the given NLA-strip fall within the given bounds (times)?.

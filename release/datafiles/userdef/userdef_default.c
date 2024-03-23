@@ -155,7 +155,7 @@ const UserDef U_default = {
     .pressure_softness = 0.0,
     .ndof_sensitivity = 4.0,
     .ndof_orbit_sensitivity = 4.0,
-    .ndof_deadzone = 0.1,
+    .ndof_deadzone = 0.0,
     .ndof_flag = (NDOF_MODE_ORBIT | NDOF_LOCK_HORIZON | NDOF_SHOULD_PAN | NDOF_SHOULD_ZOOM |
                   NDOF_SHOULD_ROTATE |
                   /* Software from the driver authors follows this convention
@@ -166,7 +166,9 @@ const UserDef U_default = {
     .image_draw_method = IMAGE_DRAW_METHOD_AUTO,
     .glalphaclip = 0.004,
     .autokey_mode = (AUTOKEY_MODE_NORMAL & ~AUTOKEY_ON),
-    .autokey_flag = AUTOKEY_FLAG_XYZ2RGB,
+    .keying_flag = KEYING_FLAG_XYZ2RGB | AUTOKEY_FLAG_INSERTNEEDED,
+    .key_insert_channels = (USER_ANIM_KEY_CHANNEL_LOCATION | USER_ANIM_KEY_CHANNEL_ROTATION |
+                            USER_ANIM_KEY_CHANNEL_SCALE | USER_ANIM_KEY_CHANNEL_CUSTOM_PROPERTIES),
     .animation_flag = USER_ANIM_HIGH_QUALITY_DRAWING,
     .text_render = 0,
     .navigation_mode = VIEW_NAVIGATION_WALK,

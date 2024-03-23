@@ -21,13 +21,13 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_visualization.h"
-#include "BKE_armature.h"
-#include "BKE_context.h"
-#include "BKE_deform.h"
+#include "BKE_armature.hh"
+#include "BKE_context.hh"
+#include "BKE_deform.hh"
 #include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -50,19 +50,21 @@
 #include "ED_screen.hh"
 #include "ED_view3d.hh"
 
-#include "ANIM_bone_collections.h"
+#include "ANIM_bone_collections.hh"
 #include "ANIM_keyframing.hh"
 
 #include "UI_interface.hh"
 
-#include "armature_intern.h"
+#include "armature_intern.hh"
 
 #undef DEBUG_TIME
 
-#include "PIL_time.h"
+#include "BLI_time.h"
 #ifdef DEBUG_TIME
-#  include "PIL_time_utildefines.h"
+#  include "BLI_time_utildefines.h"
 #endif
+
+using blender::Vector;
 
 Object *ED_pose_object_from_context(bContext *C)
 {
@@ -74,7 +76,7 @@ Object *ED_pose_object_from_context(bContext *C)
   /* Since this call may also be used from the buttons window,
    * we need to check for where to get the object. */
   if (area && area->spacetype == SPACE_PROPERTIES) {
-    ob = ED_object_context(C);
+    ob = ED_object_active_context(C);
   }
   else {
     ob = BKE_object_pose_armature_get(CTX_data_active_object(C));
@@ -235,7 +237,8 @@ static int pose_calculate_paths_invoke(bContext *C, wmOperator *op, const wmEven
 
   /* show popup dialog to allow editing of range... */
   /* FIXME: hard-coded dimensions here are just arbitrary. */
-  return WM_operator_props_dialog_popup(C, op, 270);
+  return WM_operator_props_dialog_popup(
+      C, op, 270, IFACE_("Calculate Paths for the Selected Bones"), IFACE_("Calculate"));
 }
 
 /**
@@ -674,7 +677,7 @@ static int hide_pose_bone_fn(Object *ob, Bone *bone, void *ptr)
   bArmature *arm = static_cast<bArmature *>(ob->data);
   const bool hide_select = bool(POINTER_AS_INT(ptr));
   int count = 0;
-  if (ANIM_bonecoll_is_visible(arm, bone)) {
+  if (ANIM_bone_in_visible_collection(arm, bone)) {
     if (((bone->flag & BONE_SELECTED) != 0) == hide_select) {
       bone->flag |= BONE_HIDDEN_P;
       /* only needed when 'hide_select' is true, but harmless. */
@@ -693,16 +696,13 @@ static int pose_hide_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint objects_len;
-  Object **objects = BKE_object_pose_array_get_unique(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(scene, view_layer, CTX_wm_view3d(C));
   bool changed_multi = false;
 
   const int hide_select = !RNA_boolean_get(op->ptr, "unselected");
   void *hide_select_p = POINTER_FROM_INT(hide_select);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob_iter = objects[ob_index];
+  for (Object *ob_iter : objects) {
     bArmature *arm = static_cast<bArmature *>(ob_iter->data);
 
     bool changed = bone_looper(ob_iter,
@@ -715,7 +715,6 @@ static int pose_hide_exec(bContext *C, wmOperator *op)
       DEG_id_tag_update(&arm->id, ID_RECALC_COPY_ON_WRITE);
     }
   }
-  MEM_freeN(objects);
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }
@@ -744,7 +743,7 @@ static int show_pose_bone_cb(Object *ob, Bone *bone, void *data)
 
   bArmature *arm = static_cast<bArmature *>(ob->data);
   int count = 0;
-  if (ANIM_bonecoll_is_visible(arm, bone)) {
+  if (ANIM_bone_in_visible_collection(arm, bone)) {
     if (bone->flag & BONE_HIDDEN_P) {
       if (!(bone->flag & BONE_UNSELECTABLE)) {
         SET_FLAG_FROM_TEST(bone->flag, select, BONE_SELECTED);
@@ -762,15 +761,12 @@ static int pose_reveal_exec(bContext *C, wmOperator *op)
 {
   const Scene *scene = CTX_data_scene(C);
   ViewLayer *view_layer = CTX_data_view_layer(C);
-  uint objects_len;
-  Object **objects = BKE_object_pose_array_get_unique(
-      scene, view_layer, CTX_wm_view3d(C), &objects_len);
+  Vector<Object *> objects = BKE_object_pose_array_get_unique(scene, view_layer, CTX_wm_view3d(C));
   bool changed_multi = false;
   const bool select = RNA_boolean_get(op->ptr, "select");
   void *select_p = POINTER_FROM_INT(select);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *ob_iter = objects[ob_index];
+  for (Object *ob_iter : objects) {
     bArmature *arm = static_cast<bArmature *>(ob_iter->data);
 
     bool changed = bone_looper(
@@ -781,7 +777,6 @@ static int pose_reveal_exec(bContext *C, wmOperator *op)
       DEG_id_tag_update(&arm->id, ID_RECALC_COPY_ON_WRITE);
     }
   }
-  MEM_freeN(objects);
 
   return changed_multi ? OPERATOR_FINISHED : OPERATOR_CANCELLED;
 }

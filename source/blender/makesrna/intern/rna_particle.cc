@@ -34,7 +34,7 @@
 
 #include "BLT_translation.h"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -136,16 +136,18 @@ static const EnumPropertyItem part_fluid_type_items[] = {
 
 #ifdef RNA_RUNTIME
 
+#  include <fmt/format.h>
+
 #  include "BLI_string_utils.hh"
 
 #  include "BKE_boids.h"
 #  include "BKE_cloth.hh"
-#  include "BKE_colortools.h"
-#  include "BKE_context.h"
-#  include "BKE_deform.h"
+#  include "BKE_context.hh"
+#  include "BKE_customdata.hh"
+#  include "BKE_deform.hh"
 #  include "BKE_effect.h"
 #  include "BKE_material.h"
-#  include "BKE_modifier.h"
+#  include "BKE_modifier.hh"
 #  include "BKE_particle.h"
 #  include "BKE_pointcache.h"
 #  include "BKE_texture.h"
@@ -385,7 +387,7 @@ static void rna_Particle_uv_on_emitter(ParticleData *particle,
   int num = particle->num_dmcache;
   int from = modifier->psys->part->from;
 
-  if (!CustomData_has_layer(&modifier->mesh_final->loop_data, CD_PROP_FLOAT2)) {
+  if (!CustomData_has_layer(&modifier->mesh_final->corner_data, CD_PROP_FLOAT2)) {
     BKE_report(reports, RPT_ERROR, "Mesh has no UV data");
     return;
   }
@@ -534,7 +536,7 @@ static int rna_ParticleSystem_tessfaceidx_on_emitter(ParticleSystem *particlesys
 
   BKE_mesh_tessface_ensure(modifier->mesh_final); /* BMESH - UNTIL MODIFIER IS UPDATED FOR POLYS */
   totface = modifier->mesh_final->totface_legacy;
-  totvert = modifier->mesh_final->totvert;
+  totvert = modifier->mesh_final->verts_num;
 
   /* 1. check that everything is ok & updated */
   if (!particlesystem || !totface) {
@@ -647,7 +649,7 @@ static void rna_ParticleSystem_uv_on_emitter(ParticleSystem *particlesystem,
     zero_v2(r_uv);
     return;
   }
-  if (!CustomData_has_layer(&modifier->mesh_final->loop_data, CD_PROP_FLOAT2)) {
+  if (!CustomData_has_layer(&modifier->mesh_final->corner_data, CD_PROP_FLOAT2)) {
     BKE_report(reports, RPT_ERROR, "Mesh has no UV data");
     zero_v2(r_uv);
     return;
@@ -683,7 +685,7 @@ static void rna_ParticleSystem_mcol_on_emitter(ParticleSystem *particlesystem,
                                                int vcol_no,
                                                float r_mcol[3])
 {
-  if (!CustomData_has_layer(&modifier->mesh_final->loop_data, CD_PROP_BYTE_COLOR)) {
+  if (!CustomData_has_layer(&modifier->mesh_final->corner_data, CD_PROP_BYTE_COLOR)) {
     BKE_report(reports, RPT_ERROR, "Mesh has no VCol data");
     zero_v3(r_mcol);
     return;
@@ -1207,7 +1209,7 @@ static size_t rna_ParticleTarget_name_get_impl(PointerRNA *ptr,
     }
   }
 
-  return BLI_strncpy_rlen(value, TIP_("Invalid target!"), value_maxncpy);
+  return BLI_strncpy_rlen(value, RPT_("Invalid target!"), value_maxncpy);
 }
 
 static void rna_ParticleTarget_name_get(PointerRNA *ptr, char *value)
@@ -1230,7 +1232,7 @@ static int particle_id_check(const PointerRNA *ptr)
   return (GS(id->name) == ID_PA);
 }
 
-static char *rna_SPHFluidSettings_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_SPHFluidSettings_path(const PointerRNA *ptr)
 {
   const SPHFluidSettings *fluid = (SPHFluidSettings *)ptr->data;
 
@@ -1238,10 +1240,10 @@ static char *rna_SPHFluidSettings_path(const PointerRNA *ptr)
     const ParticleSettings *part = (ParticleSettings *)ptr->owner_id;
 
     if (part->fluid == fluid) {
-      return BLI_strdup("fluid");
+      return "fluid";
     }
   }
-  return nullptr;
+  return std::nullopt;
 }
 
 static bool rna_ParticleSystem_multiple_caches_get(PointerRNA *ptr)
@@ -1486,13 +1488,13 @@ static void psys_vg_name_set__internal(PointerRNA *ptr, const char *value, int i
   }
 }
 
-static char *rna_ParticleSystem_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_ParticleSystem_path(const PointerRNA *ptr)
 {
   const ParticleSystem *psys = (ParticleSystem *)ptr->data;
   char name_esc[sizeof(psys->name) * 2];
 
   BLI_str_escape(name_esc, psys->name, sizeof(name_esc));
-  return BLI_sprintfN("particle_systems[\"%s\"]", name_esc);
+  return fmt::format("particle_systems[\"{}\"]", name_esc);
 }
 
 static void rna_ParticleSettings_mtex_begin(CollectionPropertyIterator *iter, PointerRNA *ptr)

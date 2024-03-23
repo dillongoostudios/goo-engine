@@ -40,11 +40,15 @@
  * if any of these reference becomes invalid.
  */
 
-#include "BKE_image.h"
+#include "BLI_listbase_wrapper.hh"
 #include "BLI_vector.hh"
-#include "DRW_gpu_wrapper.hh"
+
+#include "BKE_image.h"
+
 #include "GPU_debug.h"
-#include "GPU_material.h"
+#include "GPU_material.hh"
+
+#include "DRW_gpu_wrapper.hh"
 
 #include "draw_command.hh"
 #include "draw_handle.hh"
@@ -359,6 +363,38 @@ class PassBase {
   void push_constant(const char *name, const float4x4 *data);
 
   /**
+   * Update a shader specialization constant.
+   *
+   * IMPORTANT: Non-specialized constants can have undefined values.
+   * Specialize every constant before binding a shader.
+   *
+   * Reference versions are to be used when the resource might change between the time it is
+   * referenced and the time it is dereferenced for drawing.
+   *
+   * IMPORTANT: Will keep a reference to the data and dereference it upon drawing. Make sure data
+   * still alive until pass submission.
+   */
+  void specialize_constant(GPUShader *shader, const char *name, const float &data);
+  void specialize_constant(GPUShader *shader, const char *name, const int &data);
+  void specialize_constant(GPUShader *shader, const char *name, const uint &data);
+  void specialize_constant(GPUShader *shader, const char *name, const bool &data);
+  void specialize_constant(GPUShader *shader, const char *name, const float *data);
+  void specialize_constant(GPUShader *shader, const char *name, const int *data);
+  void specialize_constant(GPUShader *shader, const char *name, const uint *data);
+  void specialize_constant(GPUShader *shader, const char *name, const bool *data);
+
+  /**
+   * Custom resource binding.
+   * Syntactic sugar to avoid calling `resources.bind_resources(pass)` which is semantically less
+   * pleasing.
+   * `U` type must have a `bind_resources<Pass<T> &pass>()` method.
+   */
+  template<class U> void bind_resources(U &resources)
+  {
+    resources.bind_resources(*this);
+  }
+
+  /**
    * Turn the pass into a string for inspection.
    */
   std::string serialize(std::string line_prefix = "") const;
@@ -460,7 +496,15 @@ class PassSortable : public PassMain {
     int64_t index = sub_passes_.append_and_get_index(
         PassBase(name, draw_commands_buf_, sub_passes_, shader_));
     headers_.append({Type::SubPass, uint(index)});
-    sorting_values_.append(sorting_value);
+    /* Some sub-pass can also create sub-sub-passes (curve, point-clouds...) which will de-sync
+     * the `sub_passes_.size()` and `sorting_values_.size()`, making the  `Header::index` not
+     * reusable for the sorting value in the `sort()` function. To fix this, we flood the
+     * `sorting_values_` to ensure the same index is valid for `sorting_values_` and
+     * `sub_passes_`. */
+    int64_t sorting_index;
+    do {
+      sorting_index = sorting_values_.append_and_get_index(sorting_value);
+    } while (sorting_index != index);
     return sub_passes_[index];
   }
 
@@ -569,6 +613,9 @@ template<class T> void PassBase<T>::submit(command::RecordingState &state) const
         break;
       case command::Type::PushConstant:
         commands_[header.index].push_constant.execute(state);
+        break;
+      case command::Type::SpecializeConstant:
+        commands_[header.index].specialize_constant.execute();
         break;
       case command::Type::Draw:
         commands_[header.index].draw.execute(state);
@@ -884,25 +931,26 @@ template<class T> inline void PassBase<T>::material_set(Manager &manager, GPUMat
   for (GPUMaterialTexture *tex : ListBaseWrapper<GPUMaterialTexture>(textures)) {
     if (tex->ima) {
       /* Image */
+      const bool use_tile_mapping = tex->tiled_mapping_name[0];
       ImageUser *iuser = tex->iuser_available ? &tex->iuser : nullptr;
-      if (tex->tiled_mapping_name[0]) {
-        GPUTexture *tiles = BKE_image_get_gpu_tiles(tex->ima, iuser, nullptr);
-        manager.acquire_texture(tiles);
-        bind_texture(tex->sampler_name, tiles, tex->sampler_state);
+      ImageGPUTextures gputex = BKE_image_get_gpu_material_texture(
+          tex->ima, iuser, use_tile_mapping);
 
-        GPUTexture *tile_map = BKE_image_get_gpu_tilemap(tex->ima, iuser, nullptr);
-        manager.acquire_texture(tile_map);
-        bind_texture(tex->tiled_mapping_name, tile_map, tex->sampler_state);
-      }
-      else {
-        GPUTexture *texture = BKE_image_get_gpu_texture(tex->ima, iuser, nullptr);
-        manager.acquire_texture(texture);
-        bind_texture(tex->sampler_name, texture, tex->sampler_state);
+      manager.acquire_texture(gputex.texture);
+      bind_texture(tex->sampler_name, gputex.texture, tex->sampler_state);
+
+      if (gputex.tile_mapping) {
+        manager.acquire_texture(gputex.tile_mapping);
+        bind_texture(tex->tiled_mapping_name, gputex.tile_mapping, tex->sampler_state);
       }
     }
     else if (tex->colorband) {
       /* Color Ramp */
       bind_texture(tex->sampler_name, *tex->colorband);
+    }
+    else if (tex->sky) {
+      /* Sky */
+      bind_texture(tex->sampler_name, *tex->sky, tex->sampler_state);
     }
   }
 
@@ -1217,6 +1265,84 @@ template<class T> inline void PassBase<T>::push_constant(const char *name, const
   create_command(Type::PushConstant) = commands[0];
   create_command(Type::None) = commands[1];
   create_command(Type::None) = commands[2];
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Resource bind Implementation
+ * \{ */
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const int &constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const uint &constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const float &constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const bool &constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const int *constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const uint *constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const float *constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
+}
+
+template<class T>
+inline void PassBase<T>::specialize_constant(GPUShader *shader,
+                                             const char *constant_name,
+                                             const bool *constant_value)
+{
+  create_command(Type::SpecializeConstant).specialize_constant = {
+      shader, GPU_shader_get_constant(shader, constant_name), constant_value};
 }
 
 /** \} */

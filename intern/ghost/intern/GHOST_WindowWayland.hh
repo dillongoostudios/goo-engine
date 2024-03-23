@@ -51,6 +51,9 @@
  *
  * - Lock #GWL_Window.frame_pending_mutex before changing window size & frame settings,
  *   this is flushed in #GHOST_WindowWayland::pending_actions_handle.
+ *
+ * \note Keep this define as it can be useful to disable threading when troubleshooting
+ * issues with events.
  */
 #define USE_EVENT_BACKGROUND_THREAD
 
@@ -135,10 +138,6 @@ class GHOST_WindowWayland : public GHOST_Window {
   GHOST_TSuccess endFullScreen() const override;
 
   bool isDialog() const override;
-
-#ifdef GHOST_OPENGL_ALPHA
-  void setOpaque() const;
-#endif
 
 #ifdef WITH_INPUT_IME
   void beginIME(int32_t x, int32_t y, int32_t w, int32_t h, bool completed) override;

@@ -40,18 +40,18 @@ ccl_device_inline float bsdf_get_specular_roughness_squared(ccl_private const Sh
   return 1.0f;
 }
 
-ccl_device_inline float bsdf_get_roughness_squared(ccl_private const ShaderClosure *sc)
+ccl_device_inline float bsdf_get_roughness_pass_squared(ccl_private const ShaderClosure *sc)
 {
-  /* This version includes diffuse, mainly for baking Principled BSDF
-   * where specular and metallic zero otherwise does not bake the
-   * specified roughness parameter. */
   if (sc->type == CLOSURE_BSDF_OREN_NAYAR_ID) {
     ccl_private OrenNayarBsdf *bsdf = (ccl_private OrenNayarBsdf *)sc;
     return sqr(sqr(bsdf->roughness));
   }
 
+  /* For the Principled BSDF, we want the Roughness pass to return the value that
+   * was set in the node. However, this value doesn't affect all closures (e.g.
+   * diffuse), so skip those that don't really have a concept of roughness. */
   if (CLOSURE_IS_BSDF_DIFFUSE(sc->type)) {
-    return 0.0f;
+    return -1.0f;
   }
 
   return bsdf_get_specular_roughness_squared(sc);
@@ -460,7 +460,6 @@ ccl_device_inline
 {
   Spectrum eval = zero_spectrum();
   *pdf = 0.f;
-  const float3 Ng = (sd->type & PRIMITIVE_CURVE) ? sc->N : sd->Ng;
 
   switch (sc->type) {
     case CLOSURE_BSDF_DIFFUSE_ID:
@@ -487,15 +486,18 @@ ccl_device_inline
     case CLOSURE_BSDF_MICROFACET_GGX_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_GGX_GLASS_ID:
-      eval = bsdf_microfacet_ggx_eval(sc, Ng, sd->wi, wo, pdf);
+      /* For consistency with eval() this should be using sd->Ng, but that causes
+       * artifacts (see shadow_terminator_metal test). Needs deeper investigation
+       * for how to solve this. */
+      eval = bsdf_microfacet_ggx_eval(sc, sd->N, sd->wi, wo, pdf);
       break;
     case CLOSURE_BSDF_MICROFACET_BECKMANN_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_REFRACTION_ID:
     case CLOSURE_BSDF_MICROFACET_BECKMANN_GLASS_ID:
-      eval = bsdf_microfacet_beckmann_eval(sc, Ng, sd->wi, wo, pdf);
+      eval = bsdf_microfacet_beckmann_eval(sc, sd->N, sd->wi, wo, pdf);
       break;
     case CLOSURE_BSDF_ASHIKHMIN_SHIRLEY_ID:
-      eval = bsdf_ashikhmin_shirley_eval(sc, Ng, sd->wi, wo, pdf);
+      eval = bsdf_ashikhmin_shirley_eval(sc, sd->N, sd->wi, wo, pdf);
       break;
     case CLOSURE_BSDF_ASHIKHMIN_VELVET_ID:
       eval = bsdf_ashikhmin_velvet_eval(sc, sd->wi, wo, pdf);

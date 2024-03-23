@@ -5,12 +5,10 @@
 set(INC
   ../include
   ../../asset_system
-  ../../blenfont
   ../../blenkernel
   ../../blenloader
   ../../blentranslation
   ../../compositor
-  ../../depsgraph
   ../../draw
   ../../functions
   ../../geometry
@@ -20,7 +18,6 @@ set(INC
   ../../nodes
   ../../render
   ../../windowmanager
-  ../../../../extern/fmtlib/include
 
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -53,12 +50,14 @@ set(SRC
 )
 
 set(LIB
+  PRIVATE bf::blenfont
   bf_blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   bf_editor_screen
   PRIVATE bf::intern::guardedalloc
-  extern_fmtlib
+  PRIVATE bf::extern::fmtlib
 )
 
 if(WITH_COMPOSITOR_CPU)
@@ -71,6 +70,20 @@ endif()
 
 if(WITH_OPENSUBDIV)
   add_definitions(-DWITH_OPENSUBDIV)
+endif()
+
+if(WITH_OPENVDB)
+  list(APPEND INC
+    ../../../../intern/openvdb
+  )
+  list(APPEND INC_SYS
+    ${OPENVDB_INCLUDE_DIRS}
+  )
+  list(APPEND LIB
+    bf_intern_openvdb
+    ${OPENVDB_LIBRARIES}
+  )
+  add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
 endif()
 
 if(WITH_TBB)

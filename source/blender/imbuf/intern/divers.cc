@@ -9,13 +9,13 @@
 #include "BLI_rect.h"
 #include "BLI_utildefines.h"
 
-#include "IMB_filter.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
-#include "imbuf.h"
+#include "IMB_filter.hh"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "imbuf.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_colormanagement_intern.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_colormanagement_intern.hh"
 
 #include "MEM_guardedalloc.h"
 
@@ -853,26 +853,6 @@ void IMB_color_to_bw(ImBuf *ibuf)
     for (i = IMB_get_rect_len(ibuf); i > 0; i--, rct += 4) {
       rct[0] = rct[1] = rct[2] = IMB_colormanagement_get_luminance_byte(rct);
     }
-  }
-}
-
-void IMB_buffer_float_unpremultiply(float *buf, int width, int height)
-{
-  size_t total = size_t(width) * height;
-  float *fp = buf;
-  while (total--) {
-    premul_to_straight_v4(fp);
-    fp += 4;
-  }
-}
-
-void IMB_buffer_float_premultiply(float *buf, int width, int height)
-{
-  size_t total = size_t(width) * height;
-  float *fp = buf;
-  while (total--) {
-    straight_to_premul_v4(fp);
-    fp += 4;
   }
 }
 

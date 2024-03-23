@@ -20,13 +20,13 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_image.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
-#include "IMB_imbuf_types.h"
-#include "IMB_metadata.h"
+#include "IMB_imbuf_types.hh"
+#include "IMB_metadata.hh"
 
 #include "ED_screen.hh"
 #include "ED_space_api.hh"
@@ -377,6 +377,10 @@ static void slider_update_factor(tSlider *slider, const wmEvent *event)
   slider->factor = slider->raw_factor;
   copy_v2fl_v2i(slider->last_cursor, event->xy);
 
+  if (slider->increments) {
+    slider->factor = round(slider->factor * 10) / 10;
+  }
+
   if (!slider->overshoot) {
     slider->factor = clamp_f(slider->factor, slider->factor_bounds[0], slider->factor_bounds[1]);
   }
@@ -387,10 +391,6 @@ static void slider_update_factor(tSlider *slider, const wmEvent *event)
     if (!slider->allow_overshoot_upper) {
       slider->factor = min_ff(slider->factor, slider->factor_bounds[1]);
     }
-  }
-
-  if (slider->increments) {
-    slider->factor = round(slider->factor * 10) / 10;
   }
 }
 
@@ -483,29 +483,29 @@ void ED_slider_status_string_get(const tSlider *slider,
 
   if (slider->allow_overshoot_lower || slider->allow_overshoot_upper) {
     if (slider->overshoot) {
-      STRNCPY(overshoot_str, TIP_("[E] - Disable overshoot"));
+      STRNCPY(overshoot_str, IFACE_("[E] - Disable overshoot"));
     }
     else {
-      STRNCPY(overshoot_str, TIP_("[E] - Enable overshoot"));
+      STRNCPY(overshoot_str, IFACE_("[E] - Enable overshoot"));
     }
   }
   else {
-    STRNCPY(overshoot_str, TIP_("Overshoot disabled"));
+    STRNCPY(overshoot_str, IFACE_("Overshoot disabled"));
   }
 
   if (slider->precision) {
-    STRNCPY(precision_str, TIP_("[Shift] - Precision active"));
+    STRNCPY(precision_str, IFACE_("[Shift] - Precision active"));
   }
   else {
-    STRNCPY(precision_str, TIP_("Shift - Hold for precision"));
+    STRNCPY(precision_str, IFACE_("Shift - Hold for precision"));
   }
 
   if (slider->allow_increments) {
     if (slider->increments) {
-      STRNCPY(increments_str, TIP_(" | [Ctrl] - Increments active"));
+      STRNCPY(increments_str, IFACE_(" | [Ctrl] - Increments active"));
     }
     else {
-      STRNCPY(increments_str, TIP_(" | Ctrl - Hold for 10% increments"));
+      STRNCPY(increments_str, IFACE_(" | Ctrl - Hold for 10% increments"));
     }
   }
   else {
@@ -870,7 +870,7 @@ void ED_region_image_metadata_draw(
     uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     GPU_blend(GPU_BLEND_ALPHA);
-    immUniformThemeColor(TH_METADATA_BG);
+    immUniformThemeColorAlpha(TH_METADATA_BG, 1.0f);
     immRectf(pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
     immUnbindProgram();
 
@@ -897,7 +897,7 @@ void ED_region_image_metadata_draw(
     uint pos = GPU_vertformat_attr_add(format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
     immBindBuiltinProgram(GPU_SHADER_3D_UNIFORM_COLOR);
     GPU_blend(GPU_BLEND_ALPHA);
-    immUniformThemeColor(TH_METADATA_BG);
+    immUniformThemeColorAlpha(TH_METADATA_BG, 1.0f);
     immRectf(pos, rect.xmin, rect.ymin, rect.xmax, rect.ymax);
     immUnbindProgram();
 

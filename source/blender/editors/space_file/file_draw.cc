@@ -9,6 +9,9 @@
 #include <cerrno>
 #include <cmath>
 #include <cstring>
+#include <string>
+
+#include <fmt/format.h>
 
 #include "MEM_guardedalloc.h"
 
@@ -25,15 +28,20 @@
 
 #include "BIF_glutil.hh"
 
-#include "BKE_blendfile.h"
-#include "BKE_context.h"
+#include "BKE_blendfile.hh"
+#include "BKE_context.hh"
 #include "BKE_report.h"
+
+#include "BLO_readfile.h"
 
 #include "BLT_translation.h"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
+#include "IMB_metadata.hh"
+#include "IMB_thumbs.hh"
 
 #include "DNA_userdef_types.h"
 #include "DNA_windowmanager_types.h"
@@ -88,8 +96,6 @@ void ED_file_path_button(bScreen *screen,
                   0,
                   0.0f,
                   float(FILE_MAX),
-                  0.0f,
-                  0.0f,
                   TIP_("File path"));
 
   BLI_assert(!UI_but_flag_is_set(but, UI_BUT_UNDO));
@@ -108,14 +114,214 @@ void ED_file_path_button(bScreen *screen,
   UI_block_func_set(block, nullptr, nullptr, nullptr);
 }
 
-/* Dummy helper - we need dynamic tooltips here. */
-static char *file_draw_tooltip_func(bContext * /*C*/, void *argN, const char * /*tip*/)
+struct FileTooltipData {
+  const SpaceFile *sfile;
+  const FileDirEntry *file;
+};
+
+static FileTooltipData *file_tooltip_data_create(const SpaceFile *sfile, const FileDirEntry *file)
 {
-  char *dyn_tooltip = static_cast<char *>(argN);
-  return BLI_strdup(dyn_tooltip);
+  FileTooltipData *data = (FileTooltipData *)MEM_mallocN(sizeof(FileTooltipData), __func__);
+  data->sfile = sfile;
+  data->file = file;
+  return data;
 }
 
-static char *file_draw_asset_tooltip_func(bContext * /*C*/, void *argN, const char * /*tip*/)
+static void file_draw_tooltip_custom_func(bContext * /*C*/, uiTooltipData *tip, void *argN)
+{
+  FileTooltipData *file_data = static_cast<FileTooltipData *>(argN);
+  const SpaceFile *sfile = file_data->sfile;
+  const FileList *files = sfile->files;
+  const FileSelectParams *params = ED_fileselect_get_active_params(sfile);
+  const FileDirEntry *file = file_data->file;
+
+  BLI_assert_msg(!file->asset, "Asset tooltip should never be overridden here.");
+
+  /* Check the FileDirEntry first to see if the preview is already loaded. */
+  ImBuf *thumb = filelist_file_getimage(file);
+
+  /* Only free if it is loaded later. */
+  bool free_imbuf = (thumb == nullptr);
+
+  UI_tooltip_text_field_add(tip, file->name, {}, UI_TIP_STYLE_HEADER, UI_TIP_LC_MAIN);
+  UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+
+  if (!(file->typeflag & FILE_TYPE_BLENDERLIB)) {
+
+    char full_path[FILE_MAX_LIBEXTRA];
+    filelist_file_get_full_path(files, file, full_path);
+
+    if (params->recursion_level > 0) {
+      char root[FILE_MAX];
+      BLI_path_split_dir_part(full_path, root, FILE_MAX);
+      UI_tooltip_text_field_add(tip, root, {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_NORMAL);
+    }
+
+    if (file->redirection_path) {
+      UI_tooltip_text_field_add(tip,
+                                fmt::format("{}: {}", N_("Link target"), file->redirection_path),
+                                {},
+                                UI_TIP_STYLE_NORMAL,
+                                UI_TIP_LC_NORMAL);
+    }
+    if (file->attributes & FILE_ATTR_OFFLINE) {
+      UI_tooltip_text_field_add(
+          tip, N_("This file is offline"), {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_ALERT);
+    }
+    if (file->attributes & FILE_ATTR_READONLY) {
+      UI_tooltip_text_field_add(
+          tip, N_("This file is read-only"), {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_ALERT);
+    }
+    if (file->attributes & (FILE_ATTR_SYSTEM | FILE_ATTR_RESTRICTED)) {
+      UI_tooltip_text_field_add(
+          tip, N_("This is a restricted system file"), {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_ALERT);
+    }
+
+    if (file->typeflag & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) {
+      char version_st[128] = {0};
+      if (!thumb) {
+        /* Load the thumbnail from cache if existing, but don't create if not. */
+        thumb = IMB_thumb_read(full_path, THB_LARGE);
+      }
+      if (thumb) {
+        /* Look for version in existing thumbnail if available. */
+        IMB_metadata_get_field(
+            thumb->metadata, "Thumb::Blender::Version", version_st, sizeof(version_st));
+      }
+
+      if (!version_st[0] && !(file->attributes & FILE_ATTR_OFFLINE)) {
+        /* Load Blender version directly from the file. */
+        short version = BLO_version_from_file(full_path);
+        if (version != 0) {
+          SNPRINTF(version_st, "%d.%01d", version / 100, version % 100);
+        }
+      }
+
+      if (version_st[0]) {
+        UI_tooltip_text_field_add(
+            tip, fmt::format("Blender {}", version_st), {}, UI_TIP_STYLE_NORMAL, UI_TIP_LC_NORMAL);
+        UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+      }
+    }
+    else if (file->typeflag & FILE_TYPE_IMAGE) {
+      if (!thumb) {
+        /* Load the thumbnail from cache if existing, create if not. */
+        thumb = IMB_thumb_manage(full_path, THB_LARGE, THB_SOURCE_IMAGE);
+      }
+      if (thumb) {
+        char value1[128];
+        char value2[128];
+        if (IMB_metadata_get_field(
+                thumb->metadata, "Thumb::Image::Width", value1, sizeof(value1)) &&
+            IMB_metadata_get_field(
+                thumb->metadata, "Thumb::Image::Height", value2, sizeof(value2)))
+        {
+          UI_tooltip_text_field_add(tip,
+                                    fmt::format("{} \u00D7 {}", value1, value2),
+                                    {},
+                                    UI_TIP_STYLE_NORMAL,
+                                    UI_TIP_LC_NORMAL);
+          UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+        }
+      }
+    }
+    else if (file->typeflag & FILE_TYPE_MOVIE) {
+      if (!thumb) {
+        /* This could possibly take a while. */
+        thumb = IMB_thumb_manage(full_path, THB_LARGE, THB_SOURCE_MOVIE);
+      }
+      if (thumb) {
+        char value1[128];
+        char value2[128];
+        char value3[128];
+        if (IMB_metadata_get_field(
+                thumb->metadata, "Thumb::Video::Width", value1, sizeof(value1)) &&
+            IMB_metadata_get_field(
+                thumb->metadata, "Thumb::Video::Height", value2, sizeof(value2)))
+        {
+          UI_tooltip_text_field_add(tip,
+                                    fmt::format("{} \u00D7 {}", value1, value2),
+                                    {},
+                                    UI_TIP_STYLE_NORMAL,
+                                    UI_TIP_LC_NORMAL);
+        }
+        if (IMB_metadata_get_field(
+                thumb->metadata, "Thumb::Video::Frames", value1, sizeof(value1)) &&
+            IMB_metadata_get_field(thumb->metadata, "Thumb::Video::FPS", value2, sizeof(value2)) &&
+            IMB_metadata_get_field(
+                thumb->metadata, "Thumb::Video::Duration", value3, sizeof(value3)))
+        {
+          UI_tooltip_text_field_add(
+              tip,
+              fmt::format("{} {} @ {} {}", value1, N_("Frames"), value2, N_("FPS")),
+              {},
+              UI_TIP_STYLE_NORMAL,
+              UI_TIP_LC_NORMAL);
+          UI_tooltip_text_field_add(tip,
+                                    fmt::format("{} {}", value3, N_("seconds")),
+                                    {},
+                                    UI_TIP_STYLE_NORMAL,
+                                    UI_TIP_LC_NORMAL);
+          UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+        }
+      }
+    }
+
+    char date_st[FILELIST_DIRENTRY_DATE_LEN], time_st[FILELIST_DIRENTRY_TIME_LEN];
+    bool is_today, is_yesterday;
+    std::string day_string = ("");
+    BLI_filelist_entry_datetime_to_string(
+        nullptr, file->time, false, time_st, date_st, &is_today, &is_yesterday);
+    if (is_today || is_yesterday) {
+      day_string = (is_today ? N_("Today") : N_("Yesterday")) + std::string(" ");
+    }
+    UI_tooltip_text_field_add(tip,
+                              fmt::format("{}: {}{}{}",
+                                          N_("Modified"),
+                                          day_string,
+                                          (is_today || is_yesterday) ? "" : date_st,
+                                          (is_today || is_yesterday) ? time_st : ""),
+                              {},
+                              UI_TIP_STYLE_NORMAL,
+                              UI_TIP_LC_NORMAL);
+
+    if (!(file->typeflag & FILE_TYPE_DIR) && file->size > 0) {
+      char size[16];
+      BLI_filelist_entry_size_to_string(nullptr, file->size, false, size);
+      if (file->size < 10000) {
+        char size_full[16];
+        BLI_str_format_uint64_grouped(size_full, file->size);
+        UI_tooltip_text_field_add(
+            tip,
+            fmt::format("{}: {} ({} {})", N_("Size"), size, size_full, N_("bytes")),
+            {},
+            UI_TIP_STYLE_NORMAL,
+            UI_TIP_LC_NORMAL);
+      }
+      else {
+        UI_tooltip_text_field_add(tip,
+                                  fmt::format("{}: {}", N_("Size"), size),
+                                  {},
+                                  UI_TIP_STYLE_NORMAL,
+                                  UI_TIP_LC_NORMAL);
+      }
+    }
+  }
+
+  if (thumb && params->display != FILE_IMGDISPLAY) {
+    float scale = (96.0f * UI_SCALE_FAC) / float(std::max(thumb->x, thumb->y));
+    short size[2] = {short(float(thumb->x) * scale), short(float(thumb->y) * scale)};
+    UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+    UI_tooltip_text_field_add(tip, {}, {}, UI_TIP_STYLE_SPACER, UI_TIP_LC_NORMAL);
+    UI_tooltip_image_field_add(tip, thumb, size);
+  }
+
+  if (thumb && free_imbuf) {
+    IMB_freeImBuf(thumb);
+  }
+}
+
+static std::string file_draw_asset_tooltip_func(bContext * /*C*/, void *argN, const char * /*tip*/)
 {
   const auto *asset = static_cast<blender::asset_system::AssetRepresentation *>(argN);
   std::string complete_string = asset->get_name();
@@ -124,7 +330,7 @@ static char *file_draw_asset_tooltip_func(bContext * /*C*/, void *argN, const ch
     complete_string += '\n';
     complete_string += meta_data.description;
   }
-  return BLI_strdupn(complete_string.c_str(), complete_string.size());
+  return complete_string;
 }
 
 static void draw_tile_background(const rcti *draw_rect, int colorid, int shade)
@@ -155,7 +361,8 @@ static void file_but_enable_drag(uiBut *but,
     }
   }
   else if (sfile->browse_mode == FILE_BROWSE_MODE_ASSETS &&
-           (file->typeflag & FILE_TYPE_ASSET) != 0) {
+           (file->typeflag & FILE_TYPE_ASSET) != 0)
+  {
     const int import_method = ED_fileselect_asset_import_method_get(sfile, file);
     BLI_assert(import_method > -1);
 
@@ -172,7 +379,7 @@ static void file_but_enable_drag(uiBut *but,
 
 static uiBut *file_add_icon_but(const SpaceFile *sfile,
                                 uiBlock *block,
-                                const char *path,
+                                const char * /*path*/,
                                 const FileDirEntry *file,
                                 const rcti *tile_draw_rect,
                                 int icon,
@@ -195,7 +402,8 @@ static uiBut *file_add_icon_but(const SpaceFile *sfile,
     UI_but_func_tooltip_set(but, file_draw_asset_tooltip_func, file->asset, nullptr);
   }
   else {
-    UI_but_func_tooltip_set(but, file_draw_tooltip_func, BLI_strdup(path), MEM_freeN);
+    UI_but_func_tooltip_custom_set(
+        but, file_draw_tooltip_custom_func, file_tooltip_data_create(sfile, file), MEM_freeN);
   }
 
   return but;
@@ -335,7 +543,8 @@ static void file_add_preview_drag_but(const SpaceFile *sfile,
     UI_but_func_tooltip_set(but, file_draw_asset_tooltip_func, file->asset, nullptr);
   }
   else {
-    UI_but_func_tooltip_set(but, file_draw_tooltip_func, BLI_strdup(path), MEM_freeN);
+    UI_but_func_tooltip_custom_set(
+        but, file_draw_tooltip_custom_func, file_tooltip_data_create(sfile, file), MEM_freeN);
   }
 }
 
@@ -612,26 +821,28 @@ static void renamebutton_cb(bContext *C, void * /*arg1*/, char *oldname)
   BLI_path_join(newname, sizeof(newname), params->dir, filename);
 
   if (!STREQ(orgname, newname)) {
-    if (!BLI_exists(newname)) {
-      errno = 0;
-      if ((BLI_rename(orgname, newname) != 0) || !BLI_exists(newname)) {
-        WM_reportf(RPT_ERROR, "Could not rename: %s", errno ? strerror(errno) : "unknown error");
-        WM_report_banner_show(wm, win);
-      }
-      else {
-        /* If rename is successful, scroll to newly renamed entry. */
-        STRNCPY(params->renamefile, filename);
-        file_params_invoke_rename_postscroll(wm, win, sfile);
-      }
-
-      /* to make sure we show what is on disk */
-      ED_fileselect_clear(wm, sfile);
-    }
-    else {
+    errno = 0;
+    if ((BLI_rename(orgname, newname) != 0) || !BLI_exists(newname)) {
+      WM_reportf(RPT_ERROR, "Could not rename: %s", errno ? strerror(errno) : "unknown error");
+      WM_report_banner_show(wm, win);
       /* Renaming failed, reset the name for further renaming handling. */
       STRNCPY(params->renamefile, oldname);
     }
+    else {
+      /* If rename is successful, set renamefile to newly renamed entry.
+       * This is used later to select and scroll to the file.
+       */
+      STRNCPY(params->renamefile, filename);
+    }
 
+    /* Ensure we select and scroll to the renamed file.
+     * This is done even if the rename fails as we want to make sure that the file we tried to
+     * rename is still selected and in view. (it can move if something added files/folders to the
+     * directory while we were renaming.
+     */
+    file_params_invoke_rename_postscroll(wm, win, sfile);
+    /* to make sure we show what is on disk */
+    ED_fileselect_clear(wm, sfile);
     ED_region_tag_redraw(region);
   }
 }
@@ -743,7 +954,8 @@ static void draw_columnheader_columns(const FileSelectParams *params,
   int sx = v2d->cur.xmin, sy = v2d->cur.ymax;
 
   for (int column_type = 0; column_type < ATTRIBUTE_COLUMN_MAX; column_type++) {
-    if (!file_attribute_column_type_enabled(params, FileAttributeColumnType(column_type))) {
+    if (!file_attribute_column_type_enabled(params, FileAttributeColumnType(column_type), layout))
+    {
       continue;
     }
     const FileAttributeColumn *column = &layout->attribute_columns[column_type];
@@ -806,22 +1018,24 @@ static void draw_columnheader_columns(const FileSelectParams *params,
 static const char *filelist_get_details_column_string(
     FileAttributeColumnType column,
     /* Generated string will be cached in the file, so non-const. */
-    FileDirEntry *file)
+    FileDirEntry *file,
+    const bool compact,
+    const bool update_stat_strings)
 {
   switch (column) {
     case COLUMN_DATETIME:
       if (!(file->typeflag & FILE_TYPE_BLENDERLIB) && !FILENAME_IS_CURRPAR(file->relpath)) {
-        if (file->draw_data.datetime_str[0] == '\0') {
+        if (file->draw_data.datetime_str[0] == '\0' || update_stat_strings) {
           char date[FILELIST_DIRENTRY_DATE_LEN], time[FILELIST_DIRENTRY_TIME_LEN];
           bool is_today, is_yesterday;
 
           BLI_filelist_entry_datetime_to_string(
-              nullptr, file->time, false, time, date, &is_today, &is_yesterday);
+              nullptr, file->time, compact, time, date, &is_today, &is_yesterday);
 
-          if (is_today || is_yesterday) {
+          if (!compact && (is_today || is_yesterday)) {
             STRNCPY(date, is_today ? IFACE_("Today") : IFACE_("Yesterday"));
           }
-          SNPRINTF(file->draw_data.datetime_str, "%s %s", date, time);
+          SNPRINTF(file->draw_data.datetime_str, compact ? "%s" : "%s %s", date, time);
         }
 
         return file->draw_data.datetime_str;
@@ -831,8 +1045,9 @@ static const char *filelist_get_details_column_string(
       if ((file->typeflag & (FILE_TYPE_BLENDER | FILE_TYPE_BLENDER_BACKUP)) ||
           !(file->typeflag & (FILE_TYPE_DIR | FILE_TYPE_BLENDERLIB)))
       {
-        if (file->draw_data.size_str[0] == '\0') {
-          BLI_filelist_entry_size_to_string(nullptr, file->size, false, file->draw_data.size_str);
+        if (file->draw_data.size_str[0] == '\0' || update_stat_strings) {
+          BLI_filelist_entry_size_to_string(
+              nullptr, file->size, compact, file->draw_data.size_str);
         }
 
         return file->draw_data.size_str;
@@ -851,6 +1066,8 @@ static void draw_details_columns(const FileSelectParams *params,
                                  const rcti *tile_draw_rect,
                                  const uchar text_col[4])
 {
+  const bool compact = FILE_LAYOUT_COMPACT(layout);
+  const bool update_stat_strings = layout->width != layout->curr_size;
   int sx = tile_draw_rect->xmin - layout->tile_border_x - (UI_UNIT_X * 0.1f);
 
   for (int column_type = 0; column_type < ATTRIBUTE_COLUMN_MAX; column_type++) {
@@ -861,12 +1078,13 @@ static void draw_details_columns(const FileSelectParams *params,
       sx += column->width;
       continue;
     }
-    if (!file_attribute_column_type_enabled(params, FileAttributeColumnType(column_type))) {
+    if (!file_attribute_column_type_enabled(params, FileAttributeColumnType(column_type), layout))
+    {
       continue;
     }
 
-    const char *str = filelist_get_details_column_string(FileAttributeColumnType(column_type),
-                                                         file);
+    const char *str = filelist_get_details_column_string(
+        FileAttributeColumnType(column_type), file, compact, update_stat_strings);
 
     if (str) {
       file_draw_string(sx + ATTRIBUTE_COLUMN_PADDING,
@@ -1063,7 +1281,8 @@ void file_draw_list(const bContext *C, ARegion *region)
       if (do_drag) {
         const uiStyle *style = UI_style_get();
         const int str_width = UI_fontstyle_string_width(&style->widget, file->name);
-        const int drag_width = MIN2(str_width + icon_ofs, column_width - ATTRIBUTE_COLUMN_PADDING);
+        const int drag_width = std::min(str_width + icon_ofs,
+                                        int(column_width - ATTRIBUTE_COLUMN_PADDING));
         if (drag_width > 0) {
           uiBut *drag_but = uiDefBut(block,
                                      UI_BTYPE_LABEL,
@@ -1159,6 +1378,29 @@ void file_draw_list(const bContext *C, ARegion *region)
     }
   }
 
+  if (numfiles < 1) {
+    const rcti tile_draw_rect = tile_draw_rect_get(
+        v2d, layout, eFileDisplayType(params->display), 0, 0);
+    const uiStyle *style = UI_style_get();
+
+    const bool is_filtered = params->filter_search[0] != '\0';
+
+    uchar text_col[4];
+    UI_GetThemeColor4ubv(TH_TEXT, text_col);
+    if (!is_filtered) {
+      text_col[3] /= 2;
+    }
+
+    const char *message = is_filtered ? IFACE_("No results match the search filter") :
+                                        IFACE_("No items");
+
+    UI_fontstyle_draw_simple(&style->widget,
+                             tile_draw_rect.xmin + UI_UNIT_X,
+                             tile_draw_rect.ymax - UI_UNIT_Y,
+                             message,
+                             text_col);
+  }
+
   BLF_batch_draw_end();
 
   UI_block_end(C, block);
@@ -1170,7 +1412,10 @@ void file_draw_list(const bContext *C, ARegion *region)
     draw_columnheader_columns(params, layout, v2d, text_col);
   }
 
-  layout->curr_size = params->thumbnail_size;
+  if (numfiles != -1) {
+    /* Only save current size if there is something to show. */
+    layout->curr_size = layout->width;
+  }
 }
 
 static void file_draw_invalid_asset_library_hint(const bContext *C,
@@ -1193,7 +1438,7 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
   int sy = v2d->tot.ymax;
 
   {
-    const char *message = TIP_("Path to asset library does not exist:");
+    const char *message = RPT_("Path to asset library does not exist:");
     file_draw_string_multiline(sx, sy, message, width, line_height, text_col, nullptr, &sy);
 
     sy -= line_height;
@@ -1206,25 +1451,26 @@ static void file_draw_invalid_asset_library_hint(const bContext *C,
   {
     UI_icon_draw(sx, sy - UI_UNIT_Y, ICON_INFO);
 
-    const char *suggestion = TIP_(
+    const char *suggestion = RPT_(
         "Asset Libraries are local directories that can contain .blend files with assets inside.\n"
         "Manage Asset Libraries from the File Paths section in Preferences");
     file_draw_string_multiline(
         sx + UI_UNIT_X, sy, suggestion, width - UI_UNIT_X, line_height, text_col, nullptr, &sy);
 
     uiBlock *block = UI_block_begin(C, region, __func__, UI_EMBOSS);
-    uiBut *but = uiDefIconTextButO(block,
-                                   UI_BTYPE_BUT,
-                                   "SCREEN_OT_userpref_show",
-                                   WM_OP_INVOKE_DEFAULT,
-                                   ICON_PREFERENCES,
-                                   nullptr,
-                                   sx + UI_UNIT_X,
-                                   sy - line_height - UI_UNIT_Y * 1.2f,
-                                   UI_UNIT_X * 8,
-                                   UI_UNIT_Y,
-                                   nullptr);
-    PointerRNA *but_opptr = UI_but_operator_ptr_get(but);
+    wmOperatorType *ot = WM_operatortype_find("SCREEN_OT_userpref_show", false);
+    uiBut *but = uiDefIconTextButO_ptr(block,
+                                       UI_BTYPE_BUT,
+                                       ot,
+                                       WM_OP_INVOKE_DEFAULT,
+                                       ICON_PREFERENCES,
+                                       WM_operatortype_name(ot, nullptr),
+                                       sx + UI_UNIT_X,
+                                       sy - line_height - UI_UNIT_Y * 1.2f,
+                                       UI_UNIT_X * 8,
+                                       UI_UNIT_Y,
+                                       nullptr);
+    PointerRNA *but_opptr = UI_but_operator_ptr_ensure(but);
     RNA_enum_set(but_opptr, "section", USER_SECTION_FILE_PATHS);
 
     UI_block_end(C, block);
@@ -1250,7 +1496,7 @@ static void file_draw_invalid_library_hint(const bContext * /*C*/,
   int sy = v2d->tot.ymax;
 
   {
-    const char *message = TIP_("Unreadable Blender library file:");
+    const char *message = RPT_("Unreadable Blender library file:");
     file_draw_string_multiline(sx, sy, message, width, line_height, text_col, nullptr, &sy);
 
     sy -= line_height;
@@ -1274,7 +1520,7 @@ static void file_draw_invalid_library_hint(const bContext * /*C*/,
 
     file_draw_string_multiline(sx + UI_UNIT_X,
                                sy,
-                               TIP_(report->message),
+                               RPT_(report->message),
                                width - UI_UNIT_X,
                                line_height,
                                text_col,

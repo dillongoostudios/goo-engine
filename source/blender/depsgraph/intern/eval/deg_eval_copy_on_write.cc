@@ -25,13 +25,14 @@
 #include "BLI_threads.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_update_cache_legacy.h"
 #include "BKE_idprop.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_object_types.hh"
 #include "BKE_scene.h"
 
 #include "DEG_depsgraph.hh"
@@ -52,7 +53,7 @@
 #include "DNA_sequence_types.h"
 #include "DNA_sound_types.h"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 #ifdef NESTED_ID_NASTY_WORKAROUND
 #  include "DNA_curve_types.h"
@@ -70,10 +71,10 @@
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_armature.h"
-#include "BKE_editmesh.h"
-#include "BKE_lib_query.h"
-#include "BKE_modifier.h"
+#include "BKE_armature.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_pointcache.h"
 #include "BKE_sound.h"
@@ -269,11 +270,11 @@ bool id_copy_inplace_no_main(const ID *id, ID *newid)
 {
   const ID *id_for_copy = id;
 
-  if (G.debug & G_DEBUG_DEPSGRAPH_UUID) {
+  if (G.debug & G_DEBUG_DEPSGRAPH_UID) {
     const ID_Type id_type = GS(id_for_copy->name);
     if (id_type == ID_OB) {
       const Object *object = reinterpret_cast<const Object *>(id_for_copy);
-      BKE_object_check_uuids_unique_and_report(object);
+      BKE_object_check_uids_unique_and_report(object);
     }
   }
 
@@ -302,8 +303,8 @@ bool id_copy_inplace_no_main(const ID *id, ID *newid)
 bool scene_copy_inplace_no_main(const Scene *scene, Scene *new_scene)
 {
 
-  if (G.debug & G_DEBUG_DEPSGRAPH_UUID) {
-    SEQ_relations_check_uuids_unique_and_report(scene);
+  if (G.debug & G_DEBUG_DEPSGRAPH_UID) {
+    SEQ_relations_check_uids_unique_and_report(scene);
   }
 
 #ifdef NESTED_ID_NASTY_WORKAROUND
@@ -706,7 +707,7 @@ void update_id_after_copy(const Depsgraph *depsgraph,
       const Object *object_orig = (const Object *)id_orig;
       object_cow->mode = object_orig->mode;
       object_cow->sculpt = object_orig->sculpt;
-      object_cow->runtime.data_orig = (ID *)object_cow->data;
+      object_cow->runtime->data_orig = (ID *)object_cow->data;
       if (object_cow->type == OB_ARMATURE) {
         const bArmature *armature_orig = (bArmature *)object_orig->data;
         bArmature *armature_cow = (bArmature *)object_cow->data;

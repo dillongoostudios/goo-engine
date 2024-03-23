@@ -18,16 +18,19 @@
 
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #ifdef RNA_RUNTIME
+
+#  include <algorithm>
+#  include <fmt/format.h>
 
 #  include "DNA_object_types.h"
 #  include "DNA_scene_types.h"
 
-#  include "BKE_deform.h"
-#  include "BKE_lattice.h"
-#  include "BKE_main.h"
+#  include "BKE_deform.hh"
+#  include "BKE_lattice.hh"
+#  include "BKE_main.hh"
 #  include "BLI_string.h"
 
 #  include "DEG_depsgraph.hh"
@@ -126,7 +129,8 @@ static void rna_Lattice_update_size(Main *bmain, Scene *scene, PointerRNA *ptr)
 
   /* #BKE_lattice_resize needs an object, any object will have the same result */
   for (ob = static_cast<Object *>(bmain->objects.first); ob;
-       ob = static_cast<Object *>(ob->id.next)) {
+       ob = static_cast<Object *>(ob->id.next))
+  {
     if (ob->data == lt) {
       BKE_lattice_resize(lt, newu, newv, neww, ob);
       if (lt->editlatt) {
@@ -172,7 +176,7 @@ static void rna_Lattice_use_outside_set(PointerRNA *ptr, bool value)
   }
 }
 
-static int rna_Lattice_size_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_Lattice_size_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   Lattice *lt = (Lattice *)ptr->data;
 
@@ -183,21 +187,21 @@ static void rna_Lattice_points_u_set(PointerRNA *ptr, int value)
 {
   Lattice *lt = (Lattice *)ptr->data;
 
-  lt->opntsu = CLAMPIS(value, 1, 64);
+  lt->opntsu = std::clamp(value, 1, 64);
 }
 
 static void rna_Lattice_points_v_set(PointerRNA *ptr, int value)
 {
   Lattice *lt = (Lattice *)ptr->data;
 
-  lt->opntsv = CLAMPIS(value, 1, 64);
+  lt->opntsv = std::clamp(value, 1, 64);
 }
 
 static void rna_Lattice_points_w_set(PointerRNA *ptr, int value)
 {
   Lattice *lt = (Lattice *)ptr->data;
 
-  lt->opntsw = CLAMPIS(value, 1, 64);
+  lt->opntsw = std::clamp(value, 1, 64);
 }
 
 static void rna_Lattice_vg_name_set(PointerRNA *ptr, const char *value)
@@ -211,7 +215,7 @@ static void rna_Lattice_vg_name_set(PointerRNA *ptr, const char *value)
 }
 
 /* annoying, but is a consequence of RNA structures... */
-static char *rna_LatticePoint_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_LatticePoint_path(const PointerRNA *ptr)
 {
   const Lattice *lt = (Lattice *)ptr->owner_id;
   const void *point = ptr->data;
@@ -231,11 +235,11 @@ static char *rna_LatticePoint_path(const PointerRNA *ptr)
     if ((point >= (void *)points) && (point < (void *)(points + tot))) {
       int pt_index = int((BPoint *)point - points);
 
-      return BLI_sprintfN("points[%d]", pt_index);
+      return fmt::format("points[{}]", pt_index);
     }
   }
 
-  return BLI_strdup("");
+  return "";
 }
 
 static bool rna_Lattice_is_editmode_get(PointerRNA *ptr)

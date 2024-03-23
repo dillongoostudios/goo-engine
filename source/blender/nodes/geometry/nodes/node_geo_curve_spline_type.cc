@@ -57,7 +57,7 @@ static void node_geo_exec(GeoNodeExecParams params)
       return;
     }
 
-    const bke::CurvesFieldContext field_context{src_curves, ATTR_DOMAIN_CURVE};
+    const bke::CurvesFieldContext field_context{src_curves, AttrDomain::Curve};
     fn::FieldEvaluator evaluator{field_context, src_curves.curves_num()};
     evaluator.set_selection(selection_field);
     evaluator.evaluate();
@@ -93,7 +93,9 @@ static void node_rna(StructRNA *srna)
                     "The curve type to change the selected curves to",
                     rna_enum_curves_type_items,
                     NOD_storage_enum_accessors(spline_type),
-                    CURVE_TYPE_POLY);
+                    CURVE_TYPE_POLY,
+                    nullptr,
+                    true);
 }
 
 static void node_register()

@@ -103,13 +103,13 @@
 #include "BKE_bpath.h"
 #include "BKE_global.h" /* For #Global `G`. */
 #include "BKE_idprop.h"
-#include "BKE_idtype.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
+#include "BKE_idtype.hh"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
 #include "BKE_lib_override.hh"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
-#include "BKE_main_namemap.h"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
+#include "BKE_main_namemap.hh"
 #include "BKE_node.hh"
 #include "BKE_packedFile.h"
 #include "BKE_report.h"
@@ -435,7 +435,7 @@ struct BlendWriter {
 
 static WriteData *writedata_new(WriteWrap *ww)
 {
-  WriteData *wd = static_cast<WriteData *>(MEM_callocN(sizeof(*wd), "writedata"));
+  WriteData *wd = MEM_new<WriteData>(__func__);
 
   wd->sdna = DNA_sdna_current_get();
 
@@ -487,7 +487,7 @@ static void writedata_free(WriteData *wd)
   if (wd->buffer.buf) {
     MEM_freeN(wd->buffer.buf);
   }
-  MEM_freeN(wd);
+  MEM_delete(wd);
 }
 
 /** \} */
@@ -612,28 +612,27 @@ static bool mywrite_end(WriteData *wd)
 static void mywrite_id_begin(WriteData *wd, ID *id)
 {
   if (wd->use_memfile) {
-    wd->mem.current_id_session_uuid = id->session_uuid;
+    wd->mem.current_id_session_uid = id->session_uid;
 
     /* If current next memchunk does not match the ID we are about to write, or is not the _first_
-     * one for said ID, try to find the correct memchunk in the mapping using ID's session_uuid. */
+     * one for said ID, try to find the correct memchunk in the mapping using ID's session_uid. */
     MemFileChunk *curr_memchunk = wd->mem.reference_current_chunk;
     MemFileChunk *prev_memchunk = curr_memchunk != nullptr ?
                                       static_cast<MemFileChunk *>(curr_memchunk->prev) :
                                       nullptr;
-    if (wd->mem.id_session_uuid_mapping != nullptr &&
-        (curr_memchunk == nullptr || curr_memchunk->id_session_uuid != id->session_uuid ||
+    if ((curr_memchunk == nullptr || curr_memchunk->id_session_uid != id->session_uid ||
          (prev_memchunk != nullptr &&
-          (prev_memchunk->id_session_uuid == curr_memchunk->id_session_uuid))))
+          (prev_memchunk->id_session_uid == curr_memchunk->id_session_uid))))
     {
-      void *ref = BLI_ghash_lookup(wd->mem.id_session_uuid_mapping,
-                                   POINTER_FROM_UINT(id->session_uuid));
-      if (ref != nullptr) {
+      if (MemFileChunk *ref = wd->mem.id_session_uid_mapping.lookup_default(id->session_uid,
+                                                                            nullptr))
+      {
         wd->mem.reference_current_chunk = static_cast<MemFileChunk *>(ref);
       }
       /* Else, no existing memchunk found, i.e. this is supposed to be a new ID. */
     }
     /* Otherwise, we try with the current memchunk in any case, whether it is matching current
-     * ID's session_uuid or not. */
+     * ID's session_uid or not. */
   }
 }
 
@@ -648,7 +647,7 @@ static void mywrite_id_end(WriteData *wd, ID * /*id*/)
     /* Very important to do it after every ID write now, otherwise we cannot know whether a
      * specific ID changed or not. */
     mywrite_flush(wd);
-    wd->mem.current_id_session_uuid = MAIN_ID_SESSION_UUID_UNSET;
+    wd->mem.current_id_session_uid = MAIN_ID_SESSION_UID_UNSET;
   }
 }
 
@@ -704,13 +703,13 @@ static void writedata(WriteData *wd, int filecode, size_t len, const void *adr)
     return;
   }
 
+  /* Align to 4 (writes uninitialized bytes in some cases). */
+  len = (len + 3) & ~size_t(3);
+
   if (len > INT_MAX) {
     BLI_assert_msg(0, "Cannot write chunks bigger than INT_MAX.");
     return;
   }
-
-  /* Align to 4 (writes uninitialized bytes in some cases). */
-  len = (len + 3) & ~size_t(3);
 
   /* Initialize #BHead. */
   bh.code = filecode;
@@ -761,9 +760,6 @@ static void writelist_id(WriteData *wd, int filecode, const char *structname, co
 
 #define writestruct(wd, filecode, struct_id, nr, adr) \
   writestruct_nr(wd, filecode, SDNA_TYPE_FROM_STRUCT(struct_id), nr, adr)
-
-#define writelist(wd, filecode, struct_id, lb) \
-  writelist_nr(wd, filecode, SDNA_TYPE_FROM_STRUCT(struct_id), lb)
 
 /** \} */
 
@@ -1231,6 +1227,22 @@ static bool write_file_handle(Main *mainvar,
            * FIXME: Workaround some BAT tool limitations for Heist production, should be removed
            * asap afterward. */
           id_lib_extern(id_iter);
+        }
+        else if (GS(id_iter->name) == ID_SCE) {
+          /* For scenes, do not force them into 'indirectly linked' status.
+           * The main reason is that scenes typically have no users, so most linked scene would be
+           * systematically 'lost' on file save.
+           *
+           * While this change re-introduces the 'no-more-used data laying around in files for
+           * ever' issue when it comes to scenes, this solution seems to be the most sensible one
+           * for the time being, considering that:
+           *   - Scene are a top-level container.
+           *   - Linked scenes are typically explicitly linked by the user.
+           *   - Cases where scenes would be indirectly linked by other data (e.g. when linking a
+           *     collection or material) can be considered at the very least as not following sane
+           *     practice in data dependencies.
+           *   - There are typically not hundreds of scenes in a file, and they are always very
+           *     easily discoverable and browsable from the main UI. */
         }
         else {
           id_iter->tag |= LIB_TAG_INDIRECT;

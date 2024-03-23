@@ -35,10 +35,9 @@
 #include "BLI_generic_pointer.hh"
 #include "BLI_multi_value_map.hh"
 
-#include "BKE_attribute.h"
 #include "BKE_geometry_set.hh"
 #include "BKE_node_tree_zones.hh"
-#include "BKE_viewer_path.h"
+#include "BKE_viewer_path.hh"
 
 #include "FN_field.hh"
 
@@ -112,7 +111,7 @@ class FieldInfoLog : public ValueLog {
 struct GeometryAttributeInfo {
   std::string name;
   /** Can be empty when #name does not actually exist on a geometry yet. */
-  std::optional<eAttrDomain> domain;
+  std::optional<bke::AttrDomain> domain;
   std::optional<eCustomDataType> data_type;
 };
 

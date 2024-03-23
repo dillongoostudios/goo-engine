@@ -17,10 +17,10 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "BKE_fluid.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_pointcache.h"
 
 #include "BLT_translation.h"
@@ -37,10 +37,12 @@
 
 #ifdef RNA_RUNTIME
 
+#  include <fmt/format.h>
+
 #  include "BLI_threads.h"
 
-#  include "BKE_colorband.h"
-#  include "BKE_context.h"
+#  include "BKE_colorband.hh"
+#  include "BKE_context.hh"
 #  include "BKE_particle.h"
 
 #  include "DEG_depsgraph.hh"
@@ -464,7 +466,8 @@ static void rna_Fluid_combined_export_update(Main *bmain, Scene *scene, PointerR
     }
   }
   else if (fmd->domain->sndparticle_combined_export ==
-           SNDPARTICLE_COMBINED_EXPORT_SPRAY_FOAM_BUBBLE) {
+           SNDPARTICLE_COMBINED_EXPORT_SPRAY_FOAM_BUBBLE)
+  {
     if (ob->type == OB_MESH && !rna_Fluid_parts_exists(ptr, PART_FLUID_SPRAYFOAMBUBBLE)) {
 
       rna_Fluid_parts_create(bmain,
@@ -862,34 +865,34 @@ static void rna_Fluid_domaintype_set(PointerRNA *ptr, int value)
   BKE_fluid_fields_sanitize(settings);
 }
 
-static char *rna_FluidDomainSettings_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_FluidDomainSettings_path(const PointerRNA *ptr)
 {
   const FluidDomainSettings *settings = (FluidDomainSettings *)ptr->data;
   const ModifierData *md = (ModifierData *)settings->fmd;
   char name_esc[sizeof(md->name) * 2];
 
   BLI_str_escape(name_esc, md->name, sizeof(name_esc));
-  return BLI_sprintfN("modifiers[\"%s\"].domain_settings", name_esc);
+  return fmt::format("modifiers[\"{}\"].domain_settings", name_esc);
 }
 
-static char *rna_FluidFlowSettings_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_FluidFlowSettings_path(const PointerRNA *ptr)
 {
   const FluidFlowSettings *settings = (FluidFlowSettings *)ptr->data;
   const ModifierData *md = (ModifierData *)settings->fmd;
   char name_esc[sizeof(md->name) * 2];
 
   BLI_str_escape(name_esc, md->name, sizeof(name_esc));
-  return BLI_sprintfN("modifiers[\"%s\"].flow_settings", name_esc);
+  return fmt::format("modifiers[\"{}\"].flow_settings", name_esc);
 }
 
-static char *rna_FluidEffectorSettings_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_FluidEffectorSettings_path(const PointerRNA *ptr)
 {
   const FluidEffectorSettings *settings = (FluidEffectorSettings *)ptr->data;
   const ModifierData *md = (ModifierData *)settings->fmd;
   char name_esc[sizeof(md->name) * 2];
 
   BLI_str_escape(name_esc, md->name, sizeof(name_esc));
-  return BLI_sprintfN("modifiers[\"%s\"].effector_settings", name_esc);
+  return fmt::format("modifiers[\"{}\"].effector_settings", name_esc);
 }
 
 /* -------------------------------------------------------------------- */
@@ -1903,7 +1906,8 @@ static void rna_def_fluid_domain_settings(BlenderRNA *brna)
 
   prop = RNA_def_property(srna, "use_viscosity", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flags", FLUID_DOMAIN_USE_VISCOSITY);
-  RNA_def_property_ui_text(prop, "Use Viscosity", "Enable fluid viscosity settings");
+  RNA_def_property_ui_text(
+      prop, "Use Viscosity", "Simulate fluids with high viscosity using a special solver");
   RNA_def_property_update(prop, NC_OBJECT | ND_MODIFIER, "rna_Fluid_datacache_reset");
 
   prop = RNA_def_property(srna, "viscosity_value", PROP_FLOAT, PROP_NONE);

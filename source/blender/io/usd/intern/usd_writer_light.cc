@@ -1,8 +1,8 @@
 /* SPDX-FileCopyrightText: 2019 Blender Authors
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
-#include "usd_writer_light.h"
-#include "usd_hierarchy_iterator.h"
+#include "usd_writer_light.hh"
+#include "usd_hierarchy_iterator.hh"
 
 #include <pxr/usd/usdLux/diskLight.h>
 #include <pxr/usd/usdLux/distantLight.h>
@@ -24,6 +24,18 @@ USDLightWriter::USDLightWriter(const USDExporterContext &ctx) : USDAbstractWrite
 bool USDLightWriter::is_supported(const HierarchyContext * /*context*/) const
 {
   return true;
+}
+
+static void set_light_extents(const pxr::UsdPrim &prim, const pxr::UsdTimeCode time)
+{
+  if (auto boundable = pxr::UsdGeomBoundable(prim)) {
+    pxr::VtArray<pxr::GfVec3f> extent;
+    pxr::UsdGeomBoundable::ComputeExtentFromPlugins(boundable, time, &extent);
+    boundable.CreateExtentAttr().Set(extent, time);
+  }
+
+  /* We're intentionally not setting an error on non-boundable lights,
+   * because overly noisy errors are annoying. */
 }
 
 void USDLightWriter::do_write(HierarchyContext &context)
@@ -115,6 +127,8 @@ void USDLightWriter::do_write(HierarchyContext &context)
   usd_light_api.CreateDiffuseAttr().Set(light->diff_fac, timecode);
   usd_light_api.CreateSpecularAttr().Set(light->spec_fac, timecode);
   usd_light_api.CreateNormalizeAttr().Set(true, timecode);
+
+  set_light_extents(usd_light_api.GetPrim(), timecode);
 }
 
 }  // namespace blender::io::usd

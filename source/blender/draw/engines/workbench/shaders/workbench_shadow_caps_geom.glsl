@@ -2,10 +2,6 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifdef GPU_ARB_gpu_shader5
-#  define USE_INVOC_EXT
-#endif
-
 vec4 get_pos(int v, bool backface)
 {
   return (backface) ? vData[v].backPosition : vData[v].frontPosition;
@@ -15,19 +11,19 @@ void emit_cap(const bool front, bool reversed)
 {
   if (front) {
     gl_Position = vData[0].frontPosition;
-    EmitVertex();
+    gpu_EmitVertex();
     gl_Position = vData[reversed ? 2 : 1].frontPosition;
-    EmitVertex();
+    gpu_EmitVertex();
     gl_Position = vData[reversed ? 1 : 2].frontPosition;
-    EmitVertex();
+    gpu_EmitVertex();
   }
   else {
     gl_Position = vData[0].backPosition;
-    EmitVertex();
+    gpu_EmitVertex();
     gl_Position = vData[reversed ? 1 : 2].backPosition;
-    EmitVertex();
+    gpu_EmitVertex();
     gl_Position = vData[reversed ? 2 : 1].backPosition;
-    EmitVertex();
+    gpu_EmitVertex();
   }
   EndPrimitive();
 }
@@ -54,12 +50,7 @@ void main()
 #endif
 
   if (!is_manifold || !backface) {
-#ifdef USE_INVOC_EXT
     bool do_front = (gl_InvocationID & 1) == 0;
     emit_cap(do_front, invert);
-#else
-    emit_cap(true, invert);
-    emit_cap(false, invert);
-#endif
   }
 }

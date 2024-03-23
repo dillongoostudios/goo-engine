@@ -20,13 +20,13 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_duplilist.h"
 #include "BKE_gpencil_geom_legacy.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_object.hh"
 #include "BKE_report.h"
@@ -219,7 +219,7 @@ static int gpencil_bake_grease_pencil_animation_exec(bContext *C, wmOperator *op
 
   /* Create a new grease pencil object. */
   Object *ob_gpencil = nullptr;
-  ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uuid : 0;
+  ushort local_view_bits = (v3d && v3d->localvd) ? v3d->local_view_uid : 0;
   ob_gpencil = ED_gpencil_add_object(C, scene->cursor.location, local_view_bits);
   float invmat[4][4];
   invert_m4_m4(invmat, ob_gpencil->object_to_world);

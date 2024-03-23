@@ -8,6 +8,7 @@
  * Manages materials, lights and textures.
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -20,22 +21,21 @@
 #include "BLI_listbase.h"
 #include "BLI_math_vector.h"
 #include "BLI_string.h"
+#include "BLI_time.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_main.h"
+#include "BKE_main.hh"
 #include "BKE_material.h"
 #include "BKE_node.h"
 
 #include "NOD_shader.h"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
 #include "GPU_uniform_buffer.h"
 
-#include "DRW_engine.h"
-
-#include "PIL_time.h"
+#include "DRW_engine.hh"
 
 #include "gpu_codegen.h"
 #include "gpu_node_graph.h"
@@ -46,7 +46,8 @@
 #define MAX_COLOR_BAND 128
 #define MAX_GPU_SKIES 8
 
-/** Whether the optimized variant of the GPUPass should be created asynchronously.
+/**
+ * Whether the optimized variant of the GPUPass should be created asynchronously.
  * Usage of this depends on whether there are possible threading challenges of doing so.
  * Currently, the overhead of GPU_generate_pass is relatively small in comparison to shader
  * compilation, though this option exists in case any potential scenarios for material graph
@@ -98,8 +99,9 @@ struct GPUMaterial {
   eGPUMaterialStatus status;
   /** Some flags about the nodetree & the needed resources. */
   eGPUMaterialFlag flag;
-  /* Identify shader variations (shadow, probe, world background...).
-   * Should be unique even across render engines. */
+  /** The engine type this material is compiled for. */
+  eGPUMaterialEngine engine;
+  /* Identify shader variations (shadow, probe, world background...) */
   uint64_t uuid;
   /* Number of generated function. */
   int generated_function_len;
@@ -345,7 +347,7 @@ void GPU_material_uniform_buffer_create(GPUMaterial *material, ListBase *inputs)
   material->ubo = GPU_uniformbuf_create_from_list(inputs, material->name);
 }
 
-ListBase GPU_material_attributes(GPUMaterial *material)
+ListBase GPU_material_attributes(const GPUMaterial *material)
 {
   return material->graph.attributes;
 }
@@ -432,8 +434,8 @@ static void compute_sss_kernel(GPUSssKernelData *kd, const float radii[3], int s
 {
   float rad[3];
   /* Minimum radius */
-  rad[0] = MAX2(radii[0], 1e-15f);
-  rad[1] = MAX2(radii[1], 1e-15f);
+  rad[0] = std::max(radii[0], 1e-15f);
+  rad[1] = std::max(radii[1], 1e-15f);
   rad[2] = std::max(radii[2], 1e-15f);
 
   kd->avg_inv_radius = 3.0f / (rad[0] + rad[1] + rad[2]);
@@ -447,7 +449,7 @@ static void compute_sss_kernel(GPUSssKernelData *kd, const float radii[3], int s
   /* XXX 0.6f Out of nowhere to match cycles! Empirical! Can be tweak better. */
   mul_v3_v3fl(d, l, 0.6f / s);
   mul_v3_v3fl(rad, d, BURLEY_TRUNCATE);
-  kd->max_radius = MAX3(rad[0], rad[1], rad[2]);
+  kd->max_radius = std::max({rad[0], rad[1], rad[2]});
 
   copy_v3_v3(kd->param, d);
 
@@ -745,7 +747,7 @@ void GPU_material_optimization_status_set(GPUMaterial *mat, eGPUMaterialOptimiza
   mat->optimization_status = status;
   if (mat->optimization_status == GPU_MAT_OPTIMIZATION_READY) {
     /* Reset creation timer to delay optimization pass. */
-    mat->creation_time = PIL_check_seconds_timer();
+    mat->creation_time = BLI_check_seconds_timer();
   }
 }
 
@@ -759,7 +761,7 @@ bool GPU_material_optimization_ready(GPUMaterial *mat)
    * to do this quickly to avoid build-up and improve runtime performance.
    * The threshold just prevents compilations being queued frame after frame. */
   const double optimization_time_threshold_s = 1.2;
-  return ((PIL_check_seconds_timer() - mat->creation_time) >= optimization_time_threshold_s);
+  return ((BLI_check_seconds_timer() - mat->creation_time) >= optimization_time_threshold_s);
 }
 
 void GPU_material_set_default(GPUMaterial *material, GPUMaterial *default_material)
@@ -843,6 +845,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
                                         bNodeTree *ntree,
                                         ListBase *gpumaterials,
                                         const char *name,
+                                        eGPUMaterialEngine engine,
                                         uint64_t shader_uuid,
                                         bool is_volume_shader,
                                         bool is_lookdev,
@@ -852,7 +855,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   /* Search if this material is not already compiled. */
   LISTBASE_FOREACH (LinkData *, link, gpumaterials) {
     GPUMaterial *mat = (GPUMaterial *)link->data;
-    if (mat->uuid == shader_uuid) {
+    if (mat->uuid == shader_uuid && mat->engine == engine) {
       return mat;
     }
   }
@@ -860,6 +863,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
   GPUMaterial *mat = static_cast<GPUMaterial *>(MEM_callocN(sizeof(GPUMaterial), "GPUMaterial"));
   mat->ma = ma;
   mat->scene = scene;
+  mat->engine = engine;
   mat->uuid = shader_uuid;
   mat->flag = GPU_MATFLAG_UPDATED;
   mat->status = GPU_MAT_CREATED;
@@ -885,7 +889,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
 
   {
     /* Create source code and search pass cache for an already compiled version. */
-    mat->pass = GPU_generate_pass(mat, &mat->graph, callback, thunk, false);
+    mat->pass = GPU_generate_pass(mat, &mat->graph, engine, callback, thunk, false);
 
     if (mat->pass == nullptr) {
       /* We had a cache hit and the shader has already failed to compile. */
@@ -916,7 +920,7 @@ GPUMaterial *GPU_material_from_nodetree(Scene *scene,
         mat->optimize_pass_info.callback = callback;
         mat->optimize_pass_info.thunk = thunk;
 #else
-        mat->optimized_pass = GPU_generate_pass(mat, &mat->graph, callback, thunk, true);
+        mat->optimized_pass = GPU_generate_pass(mat, &mat->graph, engine, callback, thunk, true);
         if (mat->optimized_pass == nullptr) {
           /* Failed to create optimized pass. */
           gpu_node_graph_free_nodes(&mat->graph);
@@ -1049,8 +1053,12 @@ void GPU_material_optimize(GPUMaterial *mat)
    * optimal, as these do not benefit from caching, due to baked constants. However, this could
    * possibly be cause for concern for certain cases. */
   if (!mat->optimized_pass) {
-    mat->optimized_pass = GPU_generate_pass(
-        mat, &mat->graph, mat->optimize_pass_info.callback, mat->optimize_pass_info.thunk, true);
+    mat->optimized_pass = GPU_generate_pass(mat,
+                                            &mat->graph,
+                                            mat->engine,
+                                            mat->optimize_pass_info.callback,
+                                            mat->optimize_pass_info.thunk,
+                                            true);
     BLI_assert(mat->optimized_pass);
   }
 #else
@@ -1122,7 +1130,8 @@ void GPU_materials_free(Main *bmain)
   BKE_material_defaults_free_gpu();
 }
 
-GPUMaterial *GPU_material_from_callbacks(ConstructGPUMaterialFn construct_function_cb,
+GPUMaterial *GPU_material_from_callbacks(eGPUMaterialEngine engine,
+                                         ConstructGPUMaterialFn construct_function_cb,
                                          GPUCodegenCallbackFn generate_code_function_cb,
                                          void *thunk)
 {
@@ -1135,6 +1144,7 @@ GPUMaterial *GPU_material_from_callbacks(ConstructGPUMaterialFn construct_functi
   material->optimization_status = GPU_MAT_OPTIMIZATION_SKIP;
   material->optimized_pass = nullptr;
   material->default_mat = nullptr;
+  material->engine = engine;
 
   /* Construct the material graph by adding and linking the necessary GPU material nodes. */
   construct_function_cb(thunk, material);
@@ -1144,7 +1154,7 @@ GPUMaterial *GPU_material_from_callbacks(ConstructGPUMaterialFn construct_functi
 
   /* Lookup an existing pass in the cache or generate a new one. */
   material->pass = GPU_generate_pass(
-      material, &material->graph, generate_code_function_cb, thunk, false);
+      material, &material->graph, material->engine, generate_code_function_cb, thunk, false);
   material->optimized_pass = nullptr;
 
   /* The pass already exists in the pass cache but its shader already failed to compile. */

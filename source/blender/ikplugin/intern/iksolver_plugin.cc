@@ -6,6 +6,8 @@
  * \ingroup ikplugin
  */
 
+#include <algorithm>
+
 #include "MEM_guardedalloc.h"
 
 #include "BIK_api.h"
@@ -16,7 +18,7 @@
 #include "BLI_utildefines.h"
 #include "BLI_vector.hh"
 
-#include "BKE_armature.h"
+#include "BKE_armature.hh"
 #include "BKE_constraint.h"
 
 #include "DNA_action_types.h"
@@ -65,7 +67,7 @@ static void initialize_posetree(Object * /*ob*/, bPoseChannel *pchan_tip)
   blender::Vector<bConstraint *> ik_constraints;
   find_ik_constraints(&pchan_tip->constraints, ik_constraints);
 
-  if (ik_constraints.size() == 0) {
+  if (ik_constraints.is_empty()) {
     return;
   }
 
@@ -76,7 +78,7 @@ static void initialize_posetree(Object * /*ob*/, bPoseChannel *pchan_tip)
     PoseTree *tree;
     bKinematicConstraint *data = (bKinematicConstraint *)constraint->data;
     /* exclude tip from chain? */
-    if (!(data->flag & CONSTRAINT_IK_TIP)) {
+    if (!(data->flag & CONSTRAINT_IK_TIP) && pchan_tip->parent != nullptr) {
       pchan_tip = pchan_tip->parent;
     }
 
@@ -142,11 +144,11 @@ static void initialize_posetree(Object * /*ob*/, bPoseChannel *pchan_tip)
       BLI_addtail(&pchan_root->iktree, tree);
     }
     else {
-      tree->iterations = MAX2(data->iterations, tree->iterations);
+      tree->iterations = std::max<int>(data->iterations, tree->iterations);
       tree->stretch = tree->stretch && !(data->flag & CONSTRAINT_IK_STRETCH);
 
       /* Skip common pose channels and add remaining. */
-      const int size = MIN2(segcount, tree->totchannel);
+      const int size = std::min(segcount, tree->totchannel);
       int a, t;
       a = t = 0;
       while (a < size && t < tree->totchannel) {
@@ -158,7 +160,8 @@ static void initialize_posetree(Object * /*ob*/, bPoseChannel *pchan_tip)
           break;
         }
         for (; a < size && t < tree->totchannel && tree->pchan[t] == chanlist[segcount - a - 1];
-             a++, t++) {
+             a++, t++)
+        {
           /* pass */
         }
       }
@@ -213,7 +216,7 @@ static void initialize_posetree(Object * /*ob*/, bPoseChannel *pchan_tip)
     pchan_root->flag |= POSE_IKTREE;
 
     /* Per bone only one active IK constraint is supported. Inactive constraints still need to be
-     * added for the depsgraph to evaluate properly.*/
+     * added for the depsgraph to evaluate properly. */
     if (constraint->enforce != 0.0 && !(constraint->flag & CONSTRAINT_OFF)) {
       break;
     }

@@ -1160,7 +1160,7 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
     if (geom->geometry_type == Geometry::HAIR) {
       /* Build BLAS for curve primitives. */
       Hair *const hair = static_cast<Hair *const>(geom);
-      if (hair->num_curves() == 0) {
+      if (hair->num_segments() == 0) {
         return;
       }
 
@@ -1680,7 +1680,7 @@ void OptiXDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
   }
 }
 
-void OptiXDevice::release_optix_bvh(BVH *bvh)
+void OptiXDevice::release_bvh(BVH *bvh)
 {
   thread_scoped_lock lock(delayed_free_bvh_mutex);
   /* Do delayed free of BVH memory, since geometry holding BVH might be deleted

@@ -20,17 +20,17 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_blender_undo.h"
+#include "BKE_blender_undo.hh"
 #include "BKE_callbacks.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_paint.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_screen.hh"
-#include "BKE_undo_system.h"
+#include "BKE_undo_system.hh"
 #include "BKE_workspace.h"
 
 #include "BLO_blend_validate.hh"
@@ -44,7 +44,7 @@
 #include "ED_undo.hh"
 
 #include "WM_api.hh"
-#include "WM_toolsystem.h"
+#include "WM_toolsystem.hh"
 #include "WM_types.hh"
 
 #include "RNA_access.hh"
@@ -205,6 +205,7 @@ static void ed_undo_step_post(bContext *C,
                               const enum eUndoStepDir undo_dir,
                               ReportList *reports)
 {
+  using namespace blender::ed;
   BLI_assert(ELEM(undo_dir, STEP_UNDO, STEP_REDO));
 
   Main *bmain = CTX_data_main(C);
@@ -249,7 +250,7 @@ static void ed_undo_step_post(bContext *C,
   WM_toolsystem_refresh_active(C);
   WM_toolsystem_refresh_screen_all(bmain);
 
-  ED_assetlist_storage_tag_main_data_dirty();
+  asset::list::storage_tag_main_data_dirty();
 
   if (CLOG_CHECK(&LOG, 1)) {
     BKE_undosys_print(wm->undo_stack);
@@ -462,7 +463,8 @@ bool ED_undo_is_legacy_compatible_for_property(bContext *C, ID *id)
       }
       if (obact->mode & OB_MODE_EDIT) {
         if ((id == nullptr) || (obact->data == nullptr) ||
-            (GS(id->name) != GS(((ID *)obact->data)->name))) {
+            (GS(id->name) != GS(((ID *)obact->data)->name)))
+        {
           /* No undo push on id type mismatch in edit-mode. */
           CLOG_INFO(&LOG, 1, "skipping undo for edit-mode");
           return false;

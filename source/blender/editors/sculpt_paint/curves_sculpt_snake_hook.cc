@@ -13,14 +13,13 @@
 #include "BLI_rand.hh"
 #include "BLI_vector.hh"
 
-#include "PIL_time.h"
-
 #include "DEG_depsgraph.hh"
 
+#include "BKE_attribute.hh"
 #include "BKE_attribute_math.hh"
 #include "BKE_brush.hh"
-#include "BKE_bvhutils.h"
-#include "BKE_context.h"
+#include "BKE_bvhutils.hh"
+#include "BKE_context.hh"
 #include "BKE_curves.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_runtime.hh"
@@ -29,8 +28,6 @@
 #include "DNA_brush_enums.h"
 #include "DNA_brush_types.h"
 #include "DNA_curves_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_screen_types.h"
 #include "DNA_space_types.h"
@@ -81,8 +78,6 @@ struct SnakeHookOperatorExecutor {
   float brush_radius_factor_;
   float brush_strength_;
 
-  eBrushFalloffShape falloff_shape_;
-
   Object *object_ = nullptr;
   Curves *curves_id_ = nullptr;
   CurvesGeometry *curves_ = nullptr;
@@ -115,7 +110,7 @@ struct SnakeHookOperatorExecutor {
     brush_radius_factor_ = brush_radius_factor(*brush_, stroke_extension);
     brush_strength_ = brush_strength_get(*ctx_.scene, *brush_, stroke_extension);
 
-    falloff_shape_ = static_cast<eBrushFalloffShape>(brush_->falloff_shape);
+    const eBrushFalloffShape falloff_shape = eBrushFalloffShape(brush_->falloff_shape);
 
     curves_id_ = static_cast<Curves *>(object_->data);
     curves_ = &curves_id_->geometry.wrap();
@@ -126,7 +121,7 @@ struct SnakeHookOperatorExecutor {
     transforms_ = CurvesSurfaceTransforms(*object_, curves_id_->surface);
 
     curve_factors_ = *curves_->attributes().lookup_or_default(
-        ".selection", ATTR_DOMAIN_CURVE, 1.0f);
+        ".selection", bke::AttrDomain::Curve, 1.0f);
     curve_selection_ = curves::retrieve_selected_curves(*curves_id_, selected_curve_memory_);
 
     brush_pos_prev_re_ = self.last_mouse_position_re_;
@@ -134,7 +129,7 @@ struct SnakeHookOperatorExecutor {
     brush_pos_diff_re_ = brush_pos_re_ - brush_pos_prev_re_;
 
     if (stroke_extension.is_first) {
-      if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
+      if (falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
         std::optional<CurvesBrush3D> brush_3d = sample_curves_3d_brush(*ctx_.depsgraph,
                                                                        *ctx_.region,
                                                                        *ctx_.v3d,
@@ -149,10 +144,10 @@ struct SnakeHookOperatorExecutor {
       return;
     }
 
-    if (falloff_shape_ == PAINT_FALLOFF_SHAPE_SPHERE) {
+    if (falloff_shape == PAINT_FALLOFF_SHAPE_SPHERE) {
       this->spherical_snake_hook_with_symmetry();
     }
-    else if (falloff_shape_ == PAINT_FALLOFF_SHAPE_TUBE) {
+    else if (falloff_shape == PAINT_FALLOFF_SHAPE_TUBE) {
       this->projected_snake_hook_with_symmetry();
     }
     else {
@@ -183,8 +178,7 @@ struct SnakeHookOperatorExecutor {
 
     MutableSpan<float3> positions_cu = curves_->positions_for_write();
 
-    float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.ptr());
+    const float4x4 projection = ED_view3d_ob_project_mat_get(ctx_.rv3d, object_);
 
     const float brush_radius_re = brush_radius_base_re_ * brush_radius_factor_;
     const float brush_radius_sq_re = pow2f(brush_radius_re);
@@ -197,9 +191,8 @@ struct SnakeHookOperatorExecutor {
         const float3 old_pos_cu = deformation.positions[last_point_i];
         const float3 old_symm_pos_cu = math::transform_point(brush_transform_inv, old_pos_cu);
 
-        float2 old_symm_pos_re;
-        ED_view3d_project_float_v2_m4(
-            ctx_.region, old_symm_pos_cu, old_symm_pos_re, projection.ptr());
+        const float2 old_symm_pos_re = ED_view3d_project_float_v2_m4(
+            ctx_.region, old_symm_pos_cu, projection);
 
         const float distance_to_brush_sq_re = math::distance_squared(old_symm_pos_re,
                                                                      brush_pos_prev_re_);
@@ -232,9 +225,6 @@ struct SnakeHookOperatorExecutor {
 
   void spherical_snake_hook_with_symmetry()
   {
-    float4x4 projection;
-    ED_view3d_ob_project_mat_get(ctx_.rv3d, object_, projection.ptr());
-
     float3 brush_start_wo, brush_end_wo;
     ED_view3d_win_to_3d(
         ctx_.v3d,

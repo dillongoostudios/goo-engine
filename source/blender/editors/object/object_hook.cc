@@ -26,12 +26,12 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_action.h"
-#include "BKE_context.h"
-#include "BKE_deform.h"
-#include "BKE_editmesh.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_context.hh"
+#include "BKE_deform.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -131,8 +131,8 @@ static bool return_editmesh_vgroup(Object *obedit, BMEditMesh *em, char *r_name,
 
 static void select_editbmesh_hook(Object *ob, HookModifierData *hmd)
 {
-  Mesh *me = static_cast<Mesh *>(ob->data);
-  BMEditMesh *em = me->edit_mesh;
+  Mesh *mesh = static_cast<Mesh *>(ob->data);
+  BMEditMesh *em = mesh->edit_mesh;
   BMVert *eve;
   BMIter iter;
   int index = 0, nr = 0;
@@ -333,7 +333,7 @@ static bool object_hook_index_array(Main *bmain,
 
   switch (obedit->type) {
     case OB_MESH: {
-      Mesh *me = static_cast<Mesh *>(obedit->data);
+      Mesh *mesh = static_cast<Mesh *>(obedit->data);
 
       BMEditMesh *em;
 
@@ -342,9 +342,9 @@ static bool object_hook_index_array(Main *bmain,
 
       DEG_id_tag_update(static_cast<ID *>(obedit->data), 0);
 
-      em = me->edit_mesh;
+      em = mesh->edit_mesh;
 
-      BKE_editmesh_looptri_and_normals_calc(em);
+      BKE_editmesh_looptris_and_normals_calc(em);
 
       /* check selected vertices first */
       if (return_editmesh_indexar(em, r_indexar_num, r_indexar, r_cent) == 0) {
@@ -497,7 +497,7 @@ static Object *add_hook_object_new(
   Base *basact = BKE_view_layer_active_base_get(view_layer);
   BLI_assert(basact->object == ob);
   if (v3d && v3d->localvd) {
-    basact->local_view_bits |= v3d->local_view_uuid;
+    basact->local_view_bits |= v3d->local_view_uid;
   }
 
   /* icky, BKE_object_add sets new base as active.
@@ -542,7 +542,7 @@ static int add_hook_object(const bContext *C,
   }
 
   md = static_cast<ModifierData *>(obedit->modifiers.first);
-  while (md && BKE_modifier_get_info(ModifierType(md->type))->type == eModifierTypeType_OnlyDeform)
+  while (md && BKE_modifier_get_info(ModifierType(md->type))->type == ModifierTypeType::OnlyDeform)
   {
     md = md->next;
   }
@@ -551,6 +551,7 @@ static int add_hook_object(const bContext *C,
   BLI_insertlinkbefore(&obedit->modifiers, md, hmd);
   SNPRINTF(hmd->modifier.name, "Hook-%s", ob->id.name + 2);
   BKE_modifier_unique_name(&obedit->modifiers, (ModifierData *)hmd);
+  BKE_modifiers_persistent_uid_init(*obedit, hmd->modifier);
 
   hmd->object = ob;
   hmd->indexar = indexar;
@@ -603,6 +604,7 @@ static int add_hook_object(const bContext *C,
   /* apparently this call goes from right to left... */
   mul_m4_series(hmd->parentinv, pose_mat, object_eval->world_to_object, obedit->object_to_world);
 
+  DEG_id_tag_update(&obedit->id, ID_RECALC_GEOMETRY);
   DEG_relations_tag_update(bmain);
 
   return true;

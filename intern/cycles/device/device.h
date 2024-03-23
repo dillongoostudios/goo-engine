@@ -217,11 +217,10 @@ class Device {
   /* Get OpenShadingLanguage memory buffer. */
   virtual void *get_cpu_osl_memory();
 
-  /* acceleration structure building */
+  /* Acceleration structure building. */
   virtual void build_bvh(BVH *bvh, Progress &progress, bool refit);
-
-  /* OptiX specific destructor. */
-  virtual void release_optix_bvh(BVH * /*bvh*/){};
+  /* Used by Metal and OptiX. */
+  virtual void release_bvh(BVH * /*bvh*/) {}
 
   /* multi device */
   virtual int device_number(Device * /*sub_device*/)
@@ -255,6 +254,12 @@ class Device {
   virtual bool should_use_graphics_interop()
   {
     return false;
+  }
+
+  /* Returns native buffer handle for device pointer. */
+  virtual void *get_native_buffer(device_ptr /*ptr*/)
+  {
+    return nullptr;
   }
 
   /* Guiding */

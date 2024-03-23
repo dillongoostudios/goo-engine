@@ -88,10 +88,8 @@ MetalDevice::MetalDevice(const DeviceInfo &info, Stats &stats, Profiler &profile
 
     default_storage_mode = MTLResourceStorageModeManaged;
 
-    if (@available(macos 11.0, *)) {
-      if ([mtlDevice hasUnifiedMemory]) {
-        default_storage_mode = MTLResourceStorageModeShared;
-      }
+    if ([mtlDevice hasUnifiedMemory]) {
+      default_storage_mode = MTLResourceStorageModeShared;
     }
 
     switch (device_vendor) {
@@ -243,14 +241,13 @@ MetalDevice::MetalDevice(const DeviceInfo &info, Stats &stats, Profiler &profile
       mtlAncillaryArgEncoder = [mtlDevice newArgumentEncoderWithArguments:ancillary_desc];
 
       // preparing the blas arg encoder
-      if (@available(macos 11.0, *)) {
-        if (use_metalrt) {
-          MTLArgumentDescriptor *arg_desc_blas = [[MTLArgumentDescriptor alloc] init];
-          arg_desc_blas.dataType = MTLDataTypeInstanceAccelerationStructure;
-          arg_desc_blas.access = MTLArgumentAccessReadOnly;
-          mtlBlasArgEncoder = [mtlDevice newArgumentEncoderWithArguments:@[ arg_desc_blas ]];
-          [arg_desc_blas release];
-        }
+
+      if (use_metalrt) {
+        MTLArgumentDescriptor *arg_desc_blas = [[MTLArgumentDescriptor alloc] init];
+        arg_desc_blas.dataType = MTLDataTypeInstanceAccelerationStructure;
+        arg_desc_blas.access = MTLArgumentAccessReadOnly;
+        mtlBlasArgEncoder = [mtlDevice newArgumentEncoderWithArguments:@[ arg_desc_blas ]];
+        [arg_desc_blas release];
       }
 
       for (int i = 0; i < ancillary_desc.count; i++) {
@@ -343,11 +340,6 @@ string MetalDevice::preprocess_source(MetalPipelineType pso_type,
     }
   }
 
-  if (@available(macos 14.0, *)) {
-    /* Use Program Scope Global Built-ins, when available. */
-    global_defines += "#define __METAL_GLOBAL_BUILTINS__\n";
-  }
-
 #  ifdef WITH_CYCLES_DEBUG
   global_defines += "#define __KERNEL_DEBUG__\n";
 #  endif
@@ -362,13 +354,22 @@ string MetalDevice::preprocess_source(MetalPipelineType pso_type,
       global_defines += "#define __KERNEL_METAL_AMD__\n";
       /* The increased amount of BSDF code leads to a big performance regression
        * on AMD. There is currently no workaround to fix this general. Instead
-       * disable Principled Hair. */
+       * disable Principled Hair and patch evaluation. */
       if (kernel_features & KERNEL_FEATURE_NODE_PRINCIPLED_HAIR) {
         global_defines += "#define WITH_PRINCIPLED_HAIR\n";
+      }
+      if (kernel_features & KERNEL_FEATURE_PATCH_EVALUATION) {
+        global_defines += "#define WITH_PATCH_EVAL\n";
       }
       break;
     case METAL_GPU_APPLE:
       global_defines += "#define __KERNEL_METAL_APPLE__\n";
+
+      if (@available(macos 14.0, *)) {
+        /* Use Program Scope Global Built-ins, when available. */
+        global_defines += "#define __METAL_GLOBAL_BUILTINS__\n";
+      }
+
 #  ifdef WITH_NANOVDB
       /* Compiling in NanoVDB results in a marginal drop in render performance,
        * so disable it for specialized PSOs when no textures are using it. */
@@ -579,6 +580,11 @@ void MetalDevice::compile_and_load(int device_id, MetalPipelineType pso_type)
     if (@available(macos 12.0, *)) {
       options.languageVersion = MTLLanguageVersion2_4;
     }
+#  if defined(MAC_OS_VERSION_13_0)
+    if (@available(macos 13.0, *)) {
+      options.languageVersion = MTLLanguageVersion3_0;
+    }
+#  endif
 #  if defined(MAC_OS_VERSION_14_0)
     if (@available(macos 14.0, *)) {
       options.languageVersion = MTLLanguageVersion3_1;
@@ -717,12 +723,6 @@ MetalDevice::MetalMem *MetalDevice::generic_alloc(device_memory &mem)
 
     id<MTLBuffer> metal_buffer = nil;
     MTLResourceOptions options = default_storage_mode;
-
-    /* Workaround for "bake" unit tests which fail if RenderBuffers is allocated with
-     * MTLResourceStorageModeShared. */
-    if (strstr(mem.name, "RenderBuffers")) {
-      options = MTLResourceStorageModeManaged;
-    }
 
     if (size > 0) {
       if (mem.type == MEM_DEVICE_ONLY && !capture_enabled) {
@@ -1151,11 +1151,9 @@ void MetalDevice::tex_alloc(device_texture &mem)
       }
     }
     MTLStorageMode storage_mode = MTLStorageModeManaged;
-    if (@available(macos 10.15, *)) {
-      /* Intel GPUs don't support MTLStorageModeShared for MTLTextures. */
-      if ([mtlDevice hasUnifiedMemory] && device_vendor != METAL_GPU_INTEL) {
-        storage_mode = MTLStorageModeShared;
-      }
+    /* Intel GPUs don't support MTLStorageModeShared for MTLTextures. */
+    if ([mtlDevice hasUnifiedMemory] && device_vendor != METAL_GPU_INTEL) {
+      storage_mode = MTLStorageModeShared;
     }
 
     /* General variables for both architectures */
@@ -1333,14 +1331,12 @@ void MetalDevice::tex_alloc(device_texture &mem)
       }
     }
 
-    if (@available(macos 10.14, *)) {
-      /* Optimize the texture for GPU access. */
-      id<MTLCommandBuffer> commandBuffer = [mtlGeneralCommandQueue commandBuffer];
-      id<MTLBlitCommandEncoder> blitCommandEncoder = [commandBuffer blitCommandEncoder];
-      [blitCommandEncoder optimizeContentsForGPUAccess:mtlTexture];
-      [blitCommandEncoder endEncoding];
-      [commandBuffer commit];
-    }
+    /* Optimize the texture for GPU access. */
+    id<MTLCommandBuffer> commandBuffer = [mtlGeneralCommandQueue commandBuffer];
+    id<MTLBlitCommandEncoder> blitCommandEncoder = [commandBuffer blitCommandEncoder];
+    [blitCommandEncoder optimizeContentsForGPUAccess:mtlTexture];
+    [blitCommandEncoder endEncoding];
+    [commandBuffer commit];
 
     /* Set Mapping and tag that we need to (re-)upload to device */
     texture_slot_map[slot] = mtlTexture;
@@ -1390,6 +1386,11 @@ bool MetalDevice::should_use_graphics_interop()
   return false;
 }
 
+void *MetalDevice::get_native_buffer(device_ptr ptr)
+{
+  return ((MetalMem *)ptr)->mtlBuffer;
+}
+
 void MetalDevice::flush_delayed_free_list()
 {
   /* free any Metal buffers that may have been freed by host while a command
@@ -1414,26 +1415,24 @@ void MetalDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
     bvh_metal->motion_blur = motion_blur;
     if (bvh_metal->build(progress, mtlDevice, mtlGeneralCommandQueue, refit)) {
 
-      if (@available(macos 11.0, *)) {
-        if (bvh->params.top_level) {
-          bvhMetalRT = bvh_metal;
+      if (bvh->params.top_level) {
+        bvhMetalRT = bvh_metal;
 
-          // allocate required buffers for BLAS array
-          uint64_t count = bvhMetalRT->blas_array.size();
-          uint64_t bufferSize = mtlBlasArgEncoder.encodedLength * count;
-          blas_buffer = [mtlDevice newBufferWithLength:bufferSize options:default_storage_mode];
-          stats.mem_alloc(blas_buffer.allocatedSize);
+        // allocate required buffers for BLAS array
+        uint64_t count = bvhMetalRT->blas_array.size();
+        uint64_t bufferSize = mtlBlasArgEncoder.encodedLength * count;
+        blas_buffer = [mtlDevice newBufferWithLength:bufferSize options:default_storage_mode];
+        stats.mem_alloc(blas_buffer.allocatedSize);
 
-          for (uint64_t i = 0; i < count; ++i) {
-            if (bvhMetalRT->blas_array[i]) {
-              [mtlBlasArgEncoder setArgumentBuffer:blas_buffer
-                                            offset:i * mtlBlasArgEncoder.encodedLength];
-              [mtlBlasArgEncoder setAccelerationStructure:bvhMetalRT->blas_array[i] atIndex:0];
-            }
+        for (uint64_t i = 0; i < count; ++i) {
+          if (bvhMetalRT->blas_array[i]) {
+            [mtlBlasArgEncoder setArgumentBuffer:blas_buffer
+                                          offset:i * mtlBlasArgEncoder.encodedLength];
+            [mtlBlasArgEncoder setAccelerationStructure:bvhMetalRT->blas_array[i] atIndex:0];
           }
-          if (default_storage_mode == MTLResourceStorageModeManaged) {
-            [blas_buffer didModifyRange:NSMakeRange(0, blas_buffer.length)];
-          }
+        }
+        if (default_storage_mode == MTLResourceStorageModeManaged) {
+          [blas_buffer didModifyRange:NSMakeRange(0, blas_buffer.length)];
         }
       }
     }
@@ -1441,6 +1440,13 @@ void MetalDevice::build_bvh(BVH *bvh, Progress &progress, bool refit)
     if (max_working_set_exceeded()) {
       set_error("System is out of GPU memory");
     }
+  }
+}
+
+void MetalDevice::release_bvh(BVH *bvh)
+{
+  if (bvhMetalRT == bvh) {
+    bvhMetalRT = nullptr;
   }
 }
 

@@ -5,9 +5,9 @@
  *
  * Adapted from the Blender Alembic importer implementation. */
 
-#include "usd_reader_nurbs.h"
+#include "usd_reader_nurbs.hh"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_mesh.hh"
 #include "BKE_object.hh"
 

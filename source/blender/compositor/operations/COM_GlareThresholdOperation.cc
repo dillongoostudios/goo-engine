@@ -4,7 +4,7 @@
 
 #include "COM_GlareThresholdOperation.h"
 
-#include "IMB_colormanagement.h"
+#include "IMB_colormanagement.hh"
 
 namespace blender::compositor {
 
@@ -13,6 +13,8 @@ GlareThresholdOperation::GlareThresholdOperation()
   this->add_input_socket(DataType::Color, ResizeMode::FitAny);
   this->add_output_socket(DataType::Color);
   input_program_ = nullptr;
+
+  flags_.can_be_constant = true;
 }
 
 void GlareThresholdOperation::determine_canvas(const rcti &preferred_area, rcti &r_area)
@@ -42,9 +44,9 @@ void GlareThresholdOperation::execute_pixel_sampled(float output[4],
     output[1] -= threshold;
     output[2] -= threshold;
 
-    output[0] = MAX2(output[0], 0.0f);
-    output[1] = MAX2(output[1], 0.0f);
-    output[2] = MAX2(output[2], 0.0f);
+    output[0] = std::max(output[0], 0.0f);
+    output[1] = std::max(output[1], 0.0f);
+    output[2] = std::max(output[2], 0.0f);
   }
   else {
     zero_v3(output);

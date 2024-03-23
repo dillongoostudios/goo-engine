@@ -23,18 +23,18 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_collection.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_legacy.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 #include "BKE_screen.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "RNA_access.hh"
 
 #include "DEG_depsgraph.hh"
@@ -475,7 +475,7 @@ static void options_panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(layout, !is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first line art modifier"), ICON_INFO);
+    uiItemL(layout, RPT_("Cached from the first line art modifier"), ICON_INFO);
     return;
   }
 
@@ -521,7 +521,7 @@ static void occlusion_panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(layout, !is_baked);
 
   if (!show_in_front) {
-    uiItemL(layout, TIP_("Object is not in front"), ICON_INFO);
+    uiItemL(layout, RPT_("Object is not in front"), ICON_INFO);
   }
 
   layout = uiLayoutColumn(layout, false);
@@ -655,7 +655,7 @@ static void face_mark_panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(layout, !is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first line art modifier"), ICON_INFO);
+    uiItemL(layout, RPT_("Cached from the first line art modifier"), ICON_INFO);
     return;
   }
 
@@ -686,7 +686,7 @@ static void chaining_panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(layout, !is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first line art modifier"), ICON_INFO);
+    uiItemL(layout, RPT_("Cached from the first line art modifier"), ICON_INFO);
     return;
   }
 
@@ -727,7 +727,7 @@ static void vgroup_panel_draw(const bContext * /*C*/, Panel *panel)
   uiLayoutSetEnabled(layout, !is_baked);
 
   if (use_cache && !is_first) {
-    uiItemL(layout, TIP_("Cached from the first line art modifier"), ICON_INFO);
+    uiItemL(layout, RPT_("Cached from the first line art modifier"), ICON_INFO);
     return;
   }
 
@@ -761,7 +761,7 @@ static void bake_panel_draw(const bContext * /*C*/, Panel *panel)
   if (is_baked) {
     uiLayout *col = uiLayoutColumn(layout, false);
     uiLayoutSetPropSep(col, false);
-    uiItemL(col, TIP_("Modifier has baked data"), ICON_NONE);
+    uiItemL(col, RPT_("Modifier has baked data"), ICON_NONE);
     uiItemR(
         col, ptr, "is_baked", UI_ITEM_R_TOGGLE, IFACE_("Continue Without Clearing"), ICON_NONE);
   }
@@ -791,7 +791,7 @@ static void composition_panel_draw(const bContext * /*C*/, Panel *panel)
   uiItemR(layout, ptr, "use_image_boundary_trimming", UI_ITEM_NONE, nullptr, ICON_NONE);
 
   if (show_in_front) {
-    uiItemL(layout, TIP_("Object is shown in front"), ICON_ERROR);
+    uiItemL(layout, RPT_("Object is shown in front"), ICON_ERROR);
   }
 
   uiLayout *col = uiLayoutColumn(layout, false);

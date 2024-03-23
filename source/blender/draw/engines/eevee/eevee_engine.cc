@@ -6,7 +6,7 @@
  * \ingroup draw_engine
  */
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "draw_color_management.h" /* TODO: remove dependency. */
 
@@ -22,7 +22,7 @@
 
 #include "GPU_context.h"
 
-#include "IMB_imbuf.h"
+#include "IMB_imbuf.hh"
 
 #include "eevee_private.h"
 
@@ -173,7 +173,7 @@ static void eevee_cache_finish(void *vedata)
   if (vl_samples > 0){
     tot_samples = vl_samples;
   }
-  
+
   if (tot_samples == 0) {
 
     /* Use a high number of samples so the outputs accumulation buffers
@@ -190,11 +190,11 @@ static void eevee_cache_finish(void *vedata)
   }
 
   if (g_data->queued_shaders_count > 0) {
-    SNPRINTF(ved->info, TIP_("Compiling Shaders (%d remaining)"), g_data->queued_shaders_count);
+    SNPRINTF(ved->info, RPT_("Compiling Shaders (%d remaining)"), g_data->queued_shaders_count);
   }
   else if (g_data->queued_optimise_shaders_count > 0) {
     SNPRINTF(ved->info,
-             TIP_("Optimizing Shaders (%d remaining)"),
+             RPT_("Optimizing Shaders (%d remaining)"),
              g_data->queued_optimise_shaders_count);
   }
 }
@@ -678,7 +678,7 @@ RenderEngineType DRW_engine_viewport_eevee_type = {
     /*next*/ nullptr,
     /*prev*/ nullptr,
     /*idname*/ EEVEE_ENGINE,
-    /*name*/ N_("Goo Engine (Legacy)"),
+    /*name*/ N_("Goo Engine"),
     /*flag*/ RE_INTERNAL | RE_USE_PREVIEW | RE_USE_STEREO_VIEWPORT | RE_USE_GPU_CONTEXT,
     /*update*/ nullptr,
     /*render*/ &DRW_render_to_image,

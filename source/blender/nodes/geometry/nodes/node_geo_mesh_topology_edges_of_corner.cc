@@ -34,10 +34,10 @@ class CornerNextEdgeFieldInput final : public bke::MeshFieldInput {
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
-    if (domain != ATTR_DOMAIN_CORNER) {
+    if (domain != AttrDomain::Corner) {
       return {};
     }
     return VArray<int>::ForSpan(mesh.corner_edges());
@@ -53,9 +53,9 @@ class CornerNextEdgeFieldInput final : public bke::MeshFieldInput {
     return dynamic_cast<const CornerNextEdgeFieldInput *>(&other) != nullptr;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
   {
-    return ATTR_DOMAIN_CORNER;
+    return AttrDomain::Corner;
   }
 };
 
@@ -67,10 +67,10 @@ class CornerPreviousEdgeFieldInput final : public bke::MeshFieldInput {
   }
 
   GVArray get_varray_for_context(const Mesh &mesh,
-                                 const eAttrDomain domain,
+                                 const AttrDomain domain,
                                  const IndexMask & /*mask*/) const final
   {
-    if (domain != ATTR_DOMAIN_CORNER) {
+    if (domain != AttrDomain::Corner) {
       return {};
     }
     const OffsetIndices faces = mesh.faces();
@@ -92,9 +92,9 @@ class CornerPreviousEdgeFieldInput final : public bke::MeshFieldInput {
     return dynamic_cast<const CornerPreviousEdgeFieldInput *>(&other) != nullptr;
   }
 
-  std::optional<eAttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
+  std::optional<AttrDomain> preferred_domain(const Mesh & /*mesh*/) const final
   {
-    return ATTR_DOMAIN_CORNER;
+    return AttrDomain::Corner;
   }
 };
 
@@ -103,17 +103,17 @@ static void node_geo_exec(GeoNodeExecParams params)
   const Field<int> corner_index = params.extract_input<Field<int>>("Corner Index");
   if (params.output_is_required("Next Edge Index")) {
     params.set_output("Next Edge Index",
-                      Field<int>(std::make_shared<EvaluateAtIndexInput>(
+                      Field<int>(std::make_shared<bke::EvaluateAtIndexInput>(
                           corner_index,
                           Field<int>(std::make_shared<CornerNextEdgeFieldInput>()),
-                          ATTR_DOMAIN_CORNER)));
+                          AttrDomain::Corner)));
   }
   if (params.output_is_required("Previous Edge Index")) {
     params.set_output("Previous Edge Index",
-                      Field<int>(std::make_shared<EvaluateAtIndexInput>(
+                      Field<int>(std::make_shared<bke::EvaluateAtIndexInput>(
                           corner_index,
                           Field<int>(std::make_shared<CornerPreviousEdgeFieldInput>()),
-                          ATTR_DOMAIN_CORNER)));
+                          AttrDomain::Corner)));
   }
 }
 

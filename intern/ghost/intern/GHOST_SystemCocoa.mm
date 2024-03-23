@@ -529,11 +529,6 @@ extern "C" int GHOST_HACK_getFirstFile(char buf[FIRSTFILEBUFLG])
 
 GHOST_SystemCocoa::GHOST_SystemCocoa()
 {
-  int mib[2];
-  struct timeval boottime;
-  size_t len;
-  char *rstring = nullptr;
-
   m_modifierMask = 0;
   m_outsideLoopEventProcessed = false;
   m_needDelayedApplicationBecomeActiveEventProcessing = false;
@@ -541,31 +536,25 @@ GHOST_SystemCocoa::GHOST_SystemCocoa()
   GHOST_ASSERT(m_displayManager, "GHOST_SystemCocoa::GHOST_SystemCocoa(): m_displayManager==0\n");
   m_displayManager->initialize();
 
-  // NSEvent timeStamp is given in system uptime, state start date is boot time
-  mib[0] = CTL_KERN;
-  mib[1] = KERN_BOOTTIME;
-  len = sizeof(struct timeval);
-
-  sysctl(mib, 2, &boottime, &len, nullptr, 0);
-  m_start_time = ((boottime.tv_sec * 1000) + (boottime.tv_usec / 1000));
-
-  /* Detect multi-touch track-pad. */
-  mib[0] = CTL_HW;
-  mib[1] = HW_MODEL;
-  sysctl(mib, 2, nullptr, &len, nullptr, 0);
-  rstring = (char *)malloc(len);
-  sysctl(mib, 2, rstring, &len, nullptr, 0);
-
-  free(rstring);
-  rstring = nullptr;
-
   m_ignoreWindowSizedMessages = false;
   m_ignoreMomentumScroll = false;
   m_multiTouchScroll = false;
   m_last_warp_timestamp = 0;
 }
 
-GHOST_SystemCocoa::~GHOST_SystemCocoa() {}
+GHOST_SystemCocoa::~GHOST_SystemCocoa()
+{
+  /* The application delegate integrates the Cocoa application with the GHOST system.
+   *
+   * Since the GHOST system is about to be fully destroyed release the application delegate as
+   * well, so it does not point back to a freed system, forcing the delegate to be created with the
+   * new GHOST system in init(). */
+  CocoaAppDelegate *appDelegate = (CocoaAppDelegate *)[NSApp delegate];
+  if (appDelegate) {
+    [NSApp setDelegate:nil];
+    [appDelegate release];
+  }
+}
 
 GHOST_TSuccess GHOST_SystemCocoa::init()
 {
@@ -684,14 +673,8 @@ GHOST_TSuccess GHOST_SystemCocoa::init()
 
 uint64_t GHOST_SystemCocoa::getMilliSeconds() const
 {
-  // Cocoa equivalent exists in 10.6 ([[NSProcessInfo processInfo] systemUptime])
-  struct timeval currentTime;
-
-  gettimeofday(&currentTime, nullptr);
-
-  // Return timestamp of system uptime
-
-  return ((currentTime.tv_sec * 1000) + (currentTime.tv_usec / 1000) - m_start_time);
+  // For comparing to NSEvent timestamp, this particular API function matches.
+  return (uint64_t)([[NSProcessInfo processInfo] systemUptime] * 1000);
 }
 
 uint8_t GHOST_SystemCocoa::getNumDisplays() const
@@ -888,6 +871,70 @@ GHOST_TSuccess GHOST_SystemCocoa::setCursorPosition(int32_t x, int32_t y)
   return GHOST_kSuccess;
 }
 
+GHOST_TSuccess GHOST_SystemCocoa::getPixelAtCursor(float r_color[3]) const
+{
+  /* NOTE: There are known issues/limitations at the moment:
+   *
+   * - User needs to allow screen capture permission for Blender.
+   * - Blender has no control of the cursor outside of its window, so it is
+   *   not going to be the eyedropper icon.
+   * - GHOST does not report click events from outside of the window, so the
+   *   user needs to press Enter instead.
+   *
+   * Ref #111303.
+   */
+
+  @autoreleasepool {
+    /* Check for screen capture access permission early to prevent issues.
+     * Without permission, macOS may capture only the Blender window, wallpaper, and taskbar.
+     * This behavior could confuse users, especially when trying to pick a color from another app,
+     * potentially capturing the wallpaper under that app window.
+     */
+
+    /* Although these methods are documented as available for macOS 10.15, they are not actually
+     * shipped, leading to a crash if used on macOS 10.15.
+     *
+     * Ref: https://developer.apple.com/forums/thread/683860?answerId=684400022#684400022
+     */
+    if (!CGPreflightScreenCaptureAccess()) {
+      CGRequestScreenCaptureAccess();
+      return GHOST_kFailure;
+    }
+
+    CGEventRef event = CGEventCreate(nil);
+    if (!event) {
+      return GHOST_kFailure;
+    }
+    CGPoint mouseLocation = CGEventGetLocation(event);
+    CFRelease(event);
+
+    CGRect rect = CGRectMake(mouseLocation.x, mouseLocation.y, 1, 1);
+    CGImageRef image = CGWindowListCreateImage(
+        rect, kCGWindowListOptionOnScreenOnly, kCGNullWindowID, kCGWindowImageDefault);
+    if (!image) {
+      return GHOST_kFailure;
+    }
+    NSBitmapImageRep *bitmap = [[NSBitmapImageRep alloc] initWithCGImage:image];
+    CGImageRelease(image);
+
+    NSColor *color = [bitmap colorAtX:0 y:0];
+    if (!color) {
+      return GHOST_kFailure;
+    }
+    NSColor *srgbColor = [color colorUsingColorSpace:[NSColorSpace sRGBColorSpace]];
+    if (!srgbColor) {
+      return GHOST_kFailure;
+    }
+
+    CGFloat red = 0.0, green = 0.0, blue = 0.0;
+    [color getRed:&red green:&green blue:&blue alpha:nil];
+    r_color[0] = red;
+    r_color[1] = green;
+    r_color[2] = blue;
+  }
+  return GHOST_kSuccess;
+}
+
 GHOST_TSuccess GHOST_SystemCocoa::setMouseCursorPosition(int32_t x, int32_t y)
 {
   float xf = (float)x, yf = (float)y;
@@ -953,8 +1000,6 @@ GHOST_TCapabilityFlag GHOST_SystemCocoa::getCapabilities() const
       ~(
           /* Cocoa has no support for a primary selection clipboard. */
           GHOST_kCapabilityPrimaryClipboard |
-          /* Cocoa has no support for sampling colors from the desktop. */
-          GHOST_kCapabilityDesktopSample |
           /* This Cocoa back-end has not yet implemented image copy/paste. */
           GHOST_kCapabilityClipboardImages));
 }
@@ -1972,7 +2017,8 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
                                      false));
       }
       if ((modifiers & NSEventModifierFlagControl) !=
-          (m_modifierMask & NSEventModifierFlagControl)) {
+          (m_modifierMask & NSEventModifierFlagControl))
+      {
         pushEvent(new GHOST_EventKey(
             [event timestamp] * 1000,
             (modifiers & NSEventModifierFlagControl) ? GHOST_kEventKeyDown : GHOST_kEventKeyUp,
@@ -1990,7 +2036,8 @@ GHOST_TSuccess GHOST_SystemCocoa::handleKeyEvent(void *eventPtr)
             false));
       }
       if ((modifiers & NSEventModifierFlagCommand) !=
-          (m_modifierMask & NSEventModifierFlagCommand)) {
+          (m_modifierMask & NSEventModifierFlagCommand))
+      {
         pushEvent(new GHOST_EventKey(
             [event timestamp] * 1000,
             (modifiers & NSEventModifierFlagCommand) ? GHOST_kEventKeyDown : GHOST_kEventKeyUp,

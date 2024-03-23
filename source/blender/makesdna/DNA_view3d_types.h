@@ -192,7 +192,6 @@ typedef struct View3DOverlay {
   int edit_flag;
   float normals_length;
   float normals_constant_screen_size;
-  float backwire_opacity;
 
   /** Paint mode settings. */
   int paint_flag;
@@ -232,7 +231,6 @@ typedef struct View3DOverlay {
 
   /** Curves sculpt mode settings. */
   float sculpt_curves_cage_opacity;
-  char _pad[4];
 } View3DOverlay;
 
 /** #View3DOverlay.handle_display */
@@ -299,10 +297,10 @@ typedef struct View3D {
   /** Optional string for armature bone to define center, MAXBONENAME. */
   char ob_center_bone[64];
 
-  unsigned short local_view_uuid;
+  unsigned short local_view_uid;
   char _pad6[2];
   int layact DNA_DEPRECATED;
-  unsigned short local_collections_uuid;
+  unsigned short local_collections_uid;
   short _pad7[2];
 
   short debug_flag;
@@ -575,6 +573,7 @@ enum {
   V3D_OVERLAY_SCULPT_SHOW_FACE_SETS = (1 << 15),
   V3D_OVERLAY_SCULPT_CURVES_CAGE = (1 << 16),
   V3D_OVERLAY_SHOW_LIGHT_COLORS = (1 << 17),
+  V3D_OVERLAY_VIEWER_ATTRIBUTE_TEXT = (1 << 18),
 };
 
 /** #View3DOverlay.edit_flag */

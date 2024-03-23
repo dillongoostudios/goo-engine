@@ -895,7 +895,8 @@ void zbuf_accumulate_vecblur(NodeBlurData *nbd,
       rw = rectweight;
       rm = rectmax;
       for (dr = rectdraw, dz2 = newrect, x = xsize * ysize - 1; x >= 0;
-           x--, dr++, dz2 += 4, rw++, rm++) {
+           x--, dr++, dz2 += 4, rw++, rm++)
+      {
         if (dr->colpoin) {
           float bfac = dr->alpha * blendfac;
 
@@ -905,7 +906,7 @@ void zbuf_accumulate_vecblur(NodeBlurData *nbd,
           dz2[3] += bfac * dr->colpoin[3];
 
           *rw += bfac;
-          *rm = MAX2(*rm, bfac);
+          *rm = std::max(*rm, bfac);
         }
       }
     }

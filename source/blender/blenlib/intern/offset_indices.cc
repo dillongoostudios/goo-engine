@@ -48,16 +48,31 @@ void gather_group_sizes(const OffsetIndices<int> offsets,
   });
 }
 
+void gather_group_sizes(const OffsetIndices<int> offsets,
+                        const Span<int> indices,
+                        MutableSpan<int> sizes)
+{
+  threading::parallel_for(indices.index_range(), 4096, [&](const IndexRange range) {
+    for (const int i : range) {
+      sizes[i] = offsets[indices[i]].size();
+    }
+  });
+}
+
 OffsetIndices<int> gather_selected_offsets(const OffsetIndices<int> src_offsets,
                                            const IndexMask &selection,
+                                           const int start_offset,
                                            MutableSpan<int> dst_offsets)
 {
   if (selection.is_empty()) {
     return {};
   }
-  BLI_assert(selection.size() == (dst_offsets.size() - 1));
-  gather_group_sizes(src_offsets, selection, dst_offsets);
-  accumulate_counts_to_offsets(dst_offsets);
+  int offset = start_offset;
+  selection.foreach_index_optimized<int>([&](const int i, const int pos) {
+    dst_offsets[pos] = offset;
+    offset += src_offsets[i].size();
+  });
+  dst_offsets.last() = offset;
   return OffsetIndices<int>(dst_offsets);
 }
 

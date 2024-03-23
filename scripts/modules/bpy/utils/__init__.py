@@ -219,8 +219,8 @@ def load_scripts(*, reload_scripts=False, refresh_scripts=False, extensions=True
         # to reload. note that they will only actually reload of the
         # modification time changes. This `won't` work for packages so...
         # its not perfect.
-        for module_name in [ext.module for ext in _preferences.addons]:
-            _addon_utils.disable(module_name)
+        for addon_module_name in [ext.module for ext in _preferences.addons]:
+            _addon_utils.disable(addon_module_name)
 
     def register_module_call(mod):
         register = getattr(mod, "register", None)
@@ -888,11 +888,7 @@ def register_tool(tool_cls, *, after=None, separator=False, group=False):
         tool_cls._bl_tool = tool_def
 
         keymap_data = tool_def.keymap
-        if keymap_data is not None:
-            if context_mode is None:
-                context_descr = "All"
-            else:
-                context_descr = context_mode.replace("_", " ").title()
+        if keymap_data is not None and callable(keymap_data[0]):
             from bpy import context
             wm = context.window_manager
             keyconfigs = wm.keyconfigs
@@ -900,7 +896,11 @@ def register_tool(tool_cls, *, after=None, separator=False, group=False):
             # Note that Blender's default tools use the default key-config for both.
             # We need to use the add-ons for 3rd party tools so reloading the key-map doesn't clear them.
             kc = keyconfigs.addon
-            if callable(keymap_data[0]):
+            if kc is not None:
+                if context_mode is None:
+                    context_descr = "All"
+                else:
+                    context_descr = context_mode.replace("_", " ").title()
                 cls._km_action_simple(kc_default, kc, context_descr, tool_def.label, keymap_data)
         return tool_def
 
@@ -1025,6 +1025,8 @@ def unregister_tool(tool_cls):
         wm = context.window_manager
         keyconfigs = wm.keyconfigs
         for kc in (keyconfigs.default, keyconfigs.addon):
+            if kc is None:
+                continue
             km = kc.keymaps.get(keymap_data[0])
             if km is None:
                 print("Warning keymap %r not found in %r!" % (keymap_data[0], kc.name))

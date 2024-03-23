@@ -398,8 +398,14 @@ void BlenderSession::render(BL::Depsgraph &b_depsgraph_)
     /* update scene */
     BL::Object b_camera_override(b_engine.camera_override());
     sync->sync_camera(b_render, b_camera_override, width, height, b_rview_name.c_str());
-    sync->sync_data(
-        b_render, b_depsgraph, b_v3d, b_camera_override, width, height, &python_thread_state);
+    sync->sync_data(b_render,
+                    b_depsgraph,
+                    b_v3d,
+                    b_camera_override,
+                    width,
+                    height,
+                    &python_thread_state,
+                    session_params.device);
     builtin_images_load();
 
     /* Attempt to free all data which is held by Blender side, since at this
@@ -650,6 +656,13 @@ static bool bake_setup_pass(Scene *scene, const string &bake_type, const int bak
   integrator->set_use_direct_light(use_direct_light);
   integrator->set_use_indirect_light(use_indirect_light);
 
+  /* Disable denoiser if the pass does not support it.
+   * For the passes which support denoising follow the user configuration. */
+  const PassInfo pass_info = Pass::get_info(type);
+  if (integrator->get_use_denoise() && !pass_info.support_denoise) {
+    integrator->set_use_denoise(false);
+  }
+
   return true;
 }
 
@@ -662,6 +675,10 @@ void BlenderSession::bake(BL::Depsgraph &b_depsgraph_,
 {
   b_depsgraph = b_depsgraph_;
 
+  /* Get session parameters. */
+  const SessionParams session_params = BlenderSync::get_session_params(
+      b_engine, b_userpref, b_scene, background);
+
   /* Initialize bake manager, before we load the baking kernels. */
   scene->bake_manager->set(scene, b_object.name());
 
@@ -672,8 +689,19 @@ void BlenderSession::bake(BL::Depsgraph &b_depsgraph_,
   /* Sync scene. */
   BL::Object b_camera_override(b_engine.camera_override());
   sync->sync_camera(b_render, b_camera_override, width, height, "");
-  sync->sync_data(
-      b_render, b_depsgraph, b_v3d, b_camera_override, width, height, &python_thread_state);
+  sync->sync_data(b_render,
+                  b_depsgraph,
+                  b_v3d,
+                  b_camera_override,
+                  width,
+                  height,
+                  &python_thread_state,
+                  session_params.device);
+
+  /* Save the current state of the denoiser, as it might be disabled by the pass configuration (for
+   * passed which do not support denoising). */
+  Integrator *integrator = scene->integrator;
+  const bool was_denoiser_enabled = integrator->get_use_denoise();
 
   /* Add render pass that we want to bake, and name it Combined so that it is
    * used as that on the Blender side. */
@@ -708,10 +736,7 @@ void BlenderSession::bake(BL::Depsgraph &b_depsgraph_,
   }
 
   if (bake_object && !session->progress.get_cancel()) {
-    /* Get session and buffer parameters. */
-    const SessionParams session_params = BlenderSync::get_session_params(
-        b_engine, b_userpref, b_scene, background);
-
+    /* Get buffer parameters. */
     BufferParams buffer_params;
     buffer_params.width = bake_width;
     buffer_params.height = bake_height;
@@ -737,6 +762,10 @@ void BlenderSession::bake(BL::Depsgraph &b_depsgraph_,
   if (bake_object) {
     bake_object->set_is_shadow_catcher(was_shadow_catcher);
   }
+
+  /* Restore the state of denoiser to before it was possibly disabled by the pass, so that the
+   * next baking pass can use the original value. */
+  integrator->set_use_denoise(was_denoiser_enabled);
 }
 
 void BlenderSession::synchronize(BL::Depsgraph &b_depsgraph_)
@@ -785,8 +814,14 @@ void BlenderSession::synchronize(BL::Depsgraph &b_depsgraph_)
   b_depsgraph = b_depsgraph_;
 
   BL::Object b_camera_override(b_engine.camera_override());
-  sync->sync_data(
-      b_render, b_depsgraph, b_v3d, b_camera_override, width, height, &python_thread_state);
+  sync->sync_data(b_render,
+                  b_depsgraph,
+                  b_v3d,
+                  b_camera_override,
+                  width,
+                  height,
+                  &python_thread_state,
+                  session_params.device);
 
   if (b_rv3d) {
     sync->sync_view(b_v3d, b_rv3d, width, height);

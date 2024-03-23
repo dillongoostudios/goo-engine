@@ -12,7 +12,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_windowmanager_types.h"
@@ -26,10 +25,10 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_customdata.h"
-#include "BKE_editmesh.h"
-#include "BKE_layer.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_layer.hh"
 #include "BKE_mesh_mapping.hh"
 #include "BKE_report.h"
 
@@ -55,7 +54,9 @@
 #include "UI_resources.hh"
 #include "UI_view2d.hh"
 
-#include "uvedit_intern.h"
+#include "uvedit_intern.hh"
+
+using blender::Vector;
 
 /* ********************** smart stitch operator *********************** */
 
@@ -270,7 +271,7 @@ static void stitch_preview_delete(StitchPreviewer *stitch_preview)
 /* This function updates the header of the UV editor when the stitch tool updates its settings */
 static void stitch_update_header(StitchStateContainer *ssc, bContext *C)
 {
-  const char *str = TIP_(
+  const char *str = IFACE_(
       "Mode(TAB) %s, "
       "(S)nap %s, "
       "(M)idpoints %s, "
@@ -284,7 +285,7 @@ static void stitch_update_header(StitchStateContainer *ssc, bContext *C)
   if (area) {
     SNPRINTF(msg,
              str,
-             ssc->mode == STITCH_VERT ? TIP_("Vertex") : TIP_("Edge"),
+             ssc->mode == STITCH_VERT ? IFACE_("Vertex") : IFACE_("Edge"),
              WM_bool_as_string(ssc->snap_islands),
              WM_bool_as_string(ssc->midpoints),
              ssc->limit_dist,
@@ -697,7 +698,7 @@ static void stitch_uv_edge_generate_linked_edges(GHash *edge_hash, StitchState *
 
           /* make sure the indices are well behaved */
           if (index1 > index2) {
-            SWAP(int, index1, index2);
+            std::swap(index1, index2);
           }
 
           edgetmp.uv1 = index1;
@@ -831,7 +832,8 @@ static void stitch_validate_uv_stitchability(const int cd_loop_uv_offset,
       }
       if (stitch_check_uvs_state_stitchable(cd_loop_uv_offset, element, element_iter, ssc)) {
         if ((element_iter->island == ssc->static_island) ||
-            (element->island == ssc->static_island)) {
+            (element->island == ssc->static_island))
+        {
           element->flag |= STITCH_STITCHABLE;
           preview->num_stitchable++;
           stitch_setup_face_preview_for_uv_group(
@@ -932,7 +934,8 @@ static void stitch_propagate_uv_final_position(Scene *scene,
 
       /* end of calculations, keep only the selection flag */
       if ((!ssc->snap_islands) ||
-          ((!ssc->midpoints) && (element_iter->island == ssc->static_island))) {
+          ((!ssc->midpoints) && (element_iter->island == ssc->static_island)))
+      {
         element_iter->flag &= STITCH_SELECTED;
       }
 
@@ -2186,23 +2189,20 @@ static int stitch_init_all(bContext *C, wmOperator *op)
 
   ViewLayer *view_layer = CTX_data_view_layer(C);
   View3D *v3d = CTX_wm_view3d(C);
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, view_layer, v3d, &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, view_layer, v3d);
 
-  if (objects_len == 0) {
-    MEM_freeN(objects);
+  if (objects.is_empty()) {
     BKE_report(op->reports, RPT_ERROR, "No objects selected");
     return 0;
   }
 
-  if (objects_len > RNA_MAX_ARRAY_LENGTH) {
-    MEM_freeN(objects);
+  if (objects.size() > RNA_MAX_ARRAY_LENGTH) {
     BKE_reportf(op->reports,
                 RPT_ERROR,
-                "Stitching only works with less than %i objects selected (%u selected)",
+                "Stitching only works with less than %i objects selected (%i selected)",
                 RNA_MAX_ARRAY_LENGTH,
-                objects_len);
+                int(objects.size()));
     return 0;
   }
 
@@ -2241,9 +2241,9 @@ static int stitch_init_all(bContext *C, wmOperator *op)
   }
 
   ssc->objects = static_cast<Object **>(
-      MEM_callocN(sizeof(Object *) * objects_len, "Object *ssc->objects"));
+      MEM_callocN(sizeof(Object *) * objects.size(), "Object *ssc->objects"));
   ssc->states = static_cast<StitchState **>(
-      MEM_callocN(sizeof(StitchState *) * objects_len, "StitchState"));
+      MEM_callocN(sizeof(StitchState *) * objects.size(), "StitchState"));
   ssc->objects_len = 0;
 
   int *objs_selection_count = nullptr;
@@ -2257,11 +2257,11 @@ static int stitch_init_all(bContext *C, wmOperator *op)
      * for all objects. */
 
     objs_selection_count = static_cast<int *>(
-        MEM_mallocN(sizeof(int *) * objects_len, "objects_selection_count"));
+        MEM_mallocN(sizeof(int *) * objects.size(), "objects_selection_count"));
     RNA_int_get_array(op->ptr, "objects_selection_count", objs_selection_count);
 
     int total_selected = 0;
-    for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+    for (uint ob_index = 0; ob_index < objects.size(); ob_index++) {
       total_selected += objs_selection_count[ob_index];
     }
 
@@ -2283,7 +2283,7 @@ static int stitch_init_all(bContext *C, wmOperator *op)
     state_init->to_select = selected_uvs_arr;
   }
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
+  for (uint ob_index = 0; ob_index < objects.size(); ob_index++) {
     Object *obedit = objects[ob_index];
 
     if (state_init != nullptr) {
@@ -2304,7 +2304,6 @@ static int stitch_init_all(bContext *C, wmOperator *op)
     }
   }
 
-  MEM_freeN(objects);
   MEM_SAFE_FREE(selected_uvs_arr);
   MEM_SAFE_FREE(objs_selection_count);
   MEM_SAFE_FREE(state_init);
@@ -2488,7 +2487,7 @@ static StitchState *stitch_select(bContext *C,
   UI_view2d_region_to_view(&region->v2d, event->mval[0], event->mval[1], &co[0], &co[1]);
 
   if (ssc->mode == STITCH_VERT) {
-    if (uv_find_nearest_vert_multi(scene, ssc->objects, ssc->objects_len, co, 0.0f, &hit)) {
+    if (uv_find_nearest_vert_multi(scene, {ssc->objects, ssc->objects_len}, co, 0.0f, &hit)) {
       /* Add vertex to selection, deselect all common uv's of vert other than selected and
        * update the preview. This behavior was decided so that you can do stuff like deselect
        * the opposite stitchable vertex and the initial still gets deselected */
@@ -2511,7 +2510,7 @@ static StitchState *stitch_select(bContext *C,
       return state;
     }
   }
-  else if (uv_find_nearest_edge_multi(scene, ssc->objects, ssc->objects_len, co, 0.0f, &hit)) {
+  else if (uv_find_nearest_edge_multi(scene, {ssc->objects, ssc->objects_len}, co, 0.0f, &hit)) {
     /* find StitchState from hit->ob */
     StitchState *state = nullptr;
     for (uint ob_index = 0; ob_index < ssc->objects_len; ob_index++) {

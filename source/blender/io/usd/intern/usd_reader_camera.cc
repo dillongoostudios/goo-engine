@@ -5,7 +5,7 @@
  *
  * Adapted from the Blender Alembic importer implementation. */
 
-#include "usd_reader_camera.h"
+#include "usd_reader_camera.hh"
 
 #include "DNA_camera_types.h"
 #include "DNA_object_types.h"
@@ -82,6 +82,7 @@ void USDCameraReader::read_object_data(Main *bmain, const double motionSampleTim
 
   /* Call UncheckedGet() to silence compiler warnings.
    * Clamp to 1e-6 matching range defined in RNA. */
+  bcam->clip_start = max_ff(1e-6f, clippingRangeVal.UncheckedGet<pxr::GfVec2f>()[0]);
   bcam->clip_end = clippingRangeVal.UncheckedGet<pxr::GfVec2f>()[1];
 
   bcam->dof.focus_distance = focalDistanceVal.Get<float>();

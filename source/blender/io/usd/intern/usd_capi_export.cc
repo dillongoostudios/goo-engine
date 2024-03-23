@@ -2,10 +2,13 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "usd.h"
+#include <iostream>
+
+#include "IO_subdiv_disabler.hh"
 #include "usd.hh"
-#include "usd_hierarchy_iterator.h"
-#include "usd_hook.h"
+#include "usd_hierarchy_iterator.hh"
+#include "usd_hook.hh"
+#include "usd_private.hh"
 
 #include <pxr/base/plug/registry.h>
 #include <pxr/base/tf/token.h>
@@ -25,9 +28,9 @@
 
 #include "DNA_scene_types.h"
 
-#include "BKE_appdir.h"
+#include "BKE_appdir.hh"
 #include "BKE_blender_version.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -224,6 +227,15 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
   Scene *scene = DEG_get_input_scene(depsgraph);
   Main *bmain = DEG_get_bmain(depsgraph);
 
+  SubdivModifierDisabler mod_disabler(depsgraph);
+
+  /* If we want to set the subdiv scheme, then we need to the export the mesh
+   * without the subdiv modifier applied. */
+  if (ELEM(params.export_subdiv, USD_SUBDIV_BEST_MATCH, USD_SUBDIV_IGNORE)) {
+    mod_disabler.disable_modifiers();
+    BKE_scene_graph_update_tagged(depsgraph, bmain);
+  }
+
   /* This whole `export_to_stage` function is assumed to cover about 80% of the whole export
    * process, from 0.1f to 0.9f. */
   worker_status->progress = 0.10f;
@@ -243,8 +255,8 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
   /* For restoring the current frame after exporting animation is done. */
   const int orig_frame = scene->r.cfra;
 
-  /* Ensure Python types for invoking export hooks are registered. */
-  register_export_hook_converters();
+  /* Ensure Python types for invoking hooks are registered. */
+  register_hook_converters();
 
   usd_stage->SetMetadata(pxr::UsdGeomTokens->upAxis, pxr::VtValue(pxr::UsdGeomTokens->z));
   ensure_root_prim(usd_stage, params);
@@ -284,6 +296,10 @@ pxr::UsdStageRefPtr export_to_stage(const USDExportParams &params,
   worker_status->do_update = true;
 
   iter.release_writers();
+
+  if (params.export_shapekeys || params.export_armatures) {
+    iter.process_usd_skel();
+  }
 
   /* Set the default prim if it doesn't exist */
   if (!usd_stage->GetDefaultPrim()) {
@@ -409,8 +425,6 @@ static void export_endjob(void *customdata)
   report_job_duration(data);
 }
 
-}  // namespace blender::io::usd
-
 /* To create a usdz file, we must first create a .usd/a/c file and then covert it to .usdz. The
  * temporary files will be created in Blender's temporary session storage. The .usdz file will then
  * be moved to job->usdz_filepath. */
@@ -521,3 +535,5 @@ int USD_get_version()
    */
   return PXR_VERSION;
 }
+
+}  // namespace blender::io::usd

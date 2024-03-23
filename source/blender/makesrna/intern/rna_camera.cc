@@ -17,12 +17,14 @@
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
 
 #ifdef RNA_RUNTIME
+
+#  include <fmt/format.h>
 
 #  include "BKE_camera.h"
 #  include "BKE_object.hh"
@@ -115,7 +117,7 @@ static void rna_Camera_background_images_clear(Camera *cam)
   WM_main_add_notifier(NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, cam);
 }
 
-static char *rna_Camera_background_image_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_Camera_background_image_path(const PointerRNA *ptr)
 {
   const CameraBGImage *bgpic = static_cast<const CameraBGImage *>(ptr->data);
   Camera *camera = (Camera *)ptr->owner_id;
@@ -123,28 +125,29 @@ static char *rna_Camera_background_image_path(const PointerRNA *ptr)
   const int bgpic_index = BLI_findindex(&camera->bg_images, bgpic);
 
   if (bgpic_index >= 0) {
-    return BLI_sprintfN("background_images[%d]", bgpic_index);
+    return fmt::format("background_images[{}]", bgpic_index);
   }
 
-  return nullptr;
+  return std::nullopt;
 }
 
-char *rna_CameraBackgroundImage_image_or_movieclip_user_path(const PointerRNA *ptr)
+std::optional<std::string> rna_CameraBackgroundImage_image_or_movieclip_user_path(
+    const PointerRNA *ptr)
 {
   const char *user = static_cast<const char *>(ptr->data);
   Camera *camera = (Camera *)ptr->owner_id;
 
   int bgpic_index = BLI_findindex(&camera->bg_images, user - offsetof(CameraBGImage, iuser));
   if (bgpic_index >= 0) {
-    return BLI_sprintfN("background_images[%d].image_user", bgpic_index);
+    return fmt::format("background_images[{}].image_user", bgpic_index);
   }
 
   bgpic_index = BLI_findindex(&camera->bg_images, user - offsetof(CameraBGImage, cuser));
   if (bgpic_index >= 0) {
-    return BLI_sprintfN("background_images[%d].clip_user", bgpic_index);
+    return fmt::format("background_images[{}].clip_user", bgpic_index);
   }
 
-  return nullptr;
+  return std::nullopt;
 }
 
 static bool rna_Camera_background_images_override_apply(
@@ -191,7 +194,7 @@ static void rna_Camera_dof_update(Main *bmain, Scene *scene, PointerRNA * /*ptr*
   WM_main_add_notifier(NC_SCENE | ND_SEQUENCER, scene);
 }
 
-char *rna_CameraDOFSettings_path(const PointerRNA *ptr)
+std::optional<std::string> rna_CameraDOFSettings_path(const PointerRNA *ptr)
 {
   /* if there is ID-data, resolve the path using the index instead of by name,
    * since the name used is the name of the texture assigned, but the texture
@@ -199,11 +202,11 @@ char *rna_CameraDOFSettings_path(const PointerRNA *ptr)
    */
   if (ptr->owner_id) {
     if (GS(ptr->owner_id->name) == ID_CA) {
-      return BLI_strdup("dof");
+      return "dof";
     }
   }
 
-  return BLI_strdup("");
+  return "";
 }
 
 static void rna_CameraDOFSettings_aperture_blades_set(PointerRNA *ptr, const int value)
@@ -334,7 +337,7 @@ static void rna_def_camera_background_image(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Flip Vertically", "Flip the background image vertically");
   RNA_def_property_update(prop, NC_CAMERA | ND_DRAW_RENDER_VIEWPORT, nullptr);
 
-  prop = RNA_def_property(srna, "alpha", PROP_FLOAT, PROP_NONE);
+  prop = RNA_def_property(srna, "alpha", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "alpha");
   RNA_def_property_ui_text(
       prop, "Opacity", "Image opacity to blend the image against the background color");
@@ -345,7 +348,7 @@ static void rna_def_camera_background_image(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_NO_DEG_UPDATE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAM_BGIMG_FLAG_EXPANDED);
   RNA_def_property_ui_text(prop, "Show Expanded", "Show the details in the user interface");
-  RNA_def_property_ui_icon(prop, ICON_DISCLOSURE_TRI_RIGHT, 1);
+  RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
 
   prop = RNA_def_property(srna, "use_camera_clip", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", CAM_BGIMG_FLAG_CAMERACLIP);
@@ -557,7 +560,7 @@ static void rna_def_camera_dof_settings_data(BlenderRNA *brna)
   prop = RNA_def_property(srna, "aperture_ratio", PROP_FLOAT, PROP_NONE);
   RNA_def_property_ui_text(prop, "Ratio", "Distortion to simulate anamorphic lens bokeh");
   RNA_def_property_range(prop, 0.01f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 1.0f, 2.0f, 0.1, 3);
+  RNA_def_property_ui_range(prop, 0.01f, 2.0f, 0.1, 3);
   RNA_def_property_update(prop, NC_OBJECT | ND_DRAW, "rna_Camera_dof_update");
 
   RNA_define_lib_overridable(false);

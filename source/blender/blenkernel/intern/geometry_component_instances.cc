@@ -32,19 +32,24 @@ namespace blender::bke {
 
 InstancesComponent::InstancesComponent() : GeometryComponent(Type::Instance) {}
 
+InstancesComponent::InstancesComponent(Instances *instances, GeometryOwnershipType ownership)
+    : GeometryComponent(Type::Instance), instances_(instances), ownership_(ownership)
+{
+}
+
 InstancesComponent::~InstancesComponent()
 {
   this->clear();
 }
 
-GeometryComponent *InstancesComponent::copy() const
+GeometryComponentPtr InstancesComponent::copy() const
 {
   InstancesComponent *new_component = new InstancesComponent();
   if (instances_ != nullptr) {
     new_component->instances_ = new Instances(*instances_);
     new_component->ownership_ = GeometryOwnershipType::Owned;
   }
-  return new_component;
+  return GeometryComponentPtr(new_component);
 }
 
 void InstancesComponent::clear()
@@ -118,7 +123,7 @@ class InstancePositionAttributeProvider final : public BuiltinAttributeProvider 
  public:
   InstancePositionAttributeProvider()
       : BuiltinAttributeProvider(
-            "position", ATTR_DOMAIN_INSTANCE, CD_PROP_FLOAT3, NonCreatable, NonDeletable)
+            "position", AttrDomain::Instance, CD_PROP_FLOAT3, NonCreatable, NonDeletable)
   {
   }
 
@@ -163,6 +168,12 @@ class InstancePositionAttributeProvider final : public BuiltinAttributeProvider 
   }
 };
 
+static void tag_component_reference_index_changed(void *owner)
+{
+  Instances &instances = *static_cast<Instances *>(owner);
+  instances.tag_reference_handles_changed();
+}
+
 static ComponentAttributeProviders create_attribute_providers_for_instances()
 {
   static InstancePositionAttributeProvider position;
@@ -187,7 +198,7 @@ static ComponentAttributeProviders create_attribute_providers_for_instances()
    * instance will be used for the final ID.
    */
   static BuiltinCustomDataLayerProvider id("id",
-                                           ATTR_DOMAIN_INSTANCE,
+                                           AttrDomain::Instance,
                                            CD_PROP_INT32,
                                            CD_PROP_INT32,
                                            BuiltinAttributeProvider::Creatable,
@@ -195,10 +206,20 @@ static ComponentAttributeProviders create_attribute_providers_for_instances()
                                            instance_custom_data_access,
                                            nullptr);
 
-  static CustomDataAttributeProvider instance_custom_data(ATTR_DOMAIN_INSTANCE,
+  /** Indices into `Instances::references_`. Determines what data is instanced. */
+  static BuiltinCustomDataLayerProvider reference_index(".reference_index",
+                                                        AttrDomain::Instance,
+                                                        CD_PROP_INT32,
+                                                        CD_PROP_INT32,
+                                                        BuiltinAttributeProvider::Creatable,
+                                                        BuiltinAttributeProvider::NonDeletable,
+                                                        instance_custom_data_access,
+                                                        tag_component_reference_index_changed);
+
+  static CustomDataAttributeProvider instance_custom_data(AttrDomain::Instance,
                                                           instance_custom_data_access);
 
-  return ComponentAttributeProviders({&position, &id}, {&instance_custom_data});
+  return ComponentAttributeProviders({&position, &id, &reference_index}, {&instance_custom_data});
 }
 
 static AttributeAccessorFunctions get_instances_accessor_functions()
@@ -206,26 +227,26 @@ static AttributeAccessorFunctions get_instances_accessor_functions()
   static const ComponentAttributeProviders providers = create_attribute_providers_for_instances();
   AttributeAccessorFunctions fn =
       attribute_accessor_functions::accessor_functions_for_providers<providers>();
-  fn.domain_size = [](const void *owner, const eAttrDomain domain) {
+  fn.domain_size = [](const void *owner, const AttrDomain domain) {
     if (owner == nullptr) {
       return 0;
     }
     const Instances *instances = static_cast<const Instances *>(owner);
     switch (domain) {
-      case ATTR_DOMAIN_INSTANCE:
+      case AttrDomain::Instance:
         return instances->instances_num();
       default:
         return 0;
     }
   };
-  fn.domain_supported = [](const void * /*owner*/, const eAttrDomain domain) {
-    return domain == ATTR_DOMAIN_INSTANCE;
+  fn.domain_supported = [](const void * /*owner*/, const AttrDomain domain) {
+    return domain == AttrDomain::Instance;
   };
   fn.adapt_domain = [](const void * /*owner*/,
                        const GVArray &varray,
-                       const eAttrDomain from_domain,
-                       const eAttrDomain to_domain) {
-    if (from_domain == to_domain && from_domain == ATTR_DOMAIN_INSTANCE) {
+                       const AttrDomain from_domain,
+                       const AttrDomain to_domain) {
+    if (from_domain == to_domain && from_domain == AttrDomain::Instance) {
       return varray;
     }
     return GVArray{};

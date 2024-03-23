@@ -9,7 +9,7 @@
 #include "BKE_cryptomatte.h"
 #include "BKE_cryptomatte.hh"
 #include "BKE_image.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
 #include "DNA_layer_types.h"
 #include "DNA_material_types.h"
@@ -19,7 +19,7 @@
 
 #include "BLI_compiler_attrs.h"
 #include "BLI_dynstr.h"
-#include "BLI_hash_mm3.h"
+#include "BLI_hash_mm3.hh"
 #include "BLI_listbase.h"
 #include "BLI_string.h"
 

@@ -53,7 +53,7 @@ TEST(string, StrCopyUTF8_ASCII_Truncate)
     char dst[sizeof(src)]; \
     memset(dst, 0xff, sizeof(dst)); \
     BLI_strncpy_utf8(dst, src, maxncpy); \
-    int len_expect = MIN2(sizeof(src), maxncpy) - 1; \
+    int len_expect = std::min<int>(sizeof(src), maxncpy) - 1; \
     src[len_expect] = '\0'; /* To be able to use `EXPECT_STREQ`. */ \
     EXPECT_EQ(strlen(dst), len_expect); \
     EXPECT_STREQ(dst, src); \
@@ -948,9 +948,10 @@ TEST(string, StrJoin_Truncate)
     EXPECT_STREQ(buffer, "");
   }
   { /* Empty array. */
-    string_join_array_test_truncate(nullptr, 0, buffer);
+    const char *strings[] = {"a"};
+    string_join_array_test_truncate(strings, 0, buffer);
     EXPECT_STREQ(buffer, "");
-    string_join_array_with_sep_char_test_truncate(nullptr, 0, buffer);
+    string_join_array_with_sep_char_test_truncate(strings, 0, buffer);
     EXPECT_STREQ(buffer, "");
   }
 }
@@ -1389,7 +1390,7 @@ class StringEscape : public testing::Test {
     size_t dst_test_len;
     char dst_test[64]; /* Must be big enough for all input. */
     for (const auto &item : items) {
-      /* Validate the static size is big enough (test the test it's self). */
+      /* Validate the static size is big enough (test the test itself). */
       EXPECT_LT((strlen(item[0]) * 2) + 1, sizeof(dst_test));
       /* Escape the string. */
       dst_test_len = BLI_str_escape(dst_test, item[0], sizeof(dst_test));

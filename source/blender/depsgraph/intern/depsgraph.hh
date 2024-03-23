@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <functional>
+#include <mutex>
 #include <stdlib.h>
 
 #include "MEM_guardedalloc.h"
@@ -43,8 +45,8 @@ struct TimeSourceNode;
 
 /* Dependency Graph object */
 struct Depsgraph {
-  typedef Vector<OperationNode *> OperationNodes;
-  typedef Vector<IDNode *> IDDepsNodes;
+  using OperationNodes = Vector<OperationNode *>;
+  using IDDepsNodes = Vector<IDNode *>;
 
   Depsgraph(Main *bmain, Scene *scene, ViewLayer *view_layer, eEvaluationMode mode);
   ~Depsgraph();
@@ -170,6 +172,17 @@ struct Depsgraph {
   Map<const ID *, ListBase *> *physics_relations[DEG_PHYSICS_RELATIONS_NUM];
 
   light_linking::Cache light_linking_cache;
+
+  /* The number of times this graph has been evaluated. */
+  uint64_t update_count;
+
+  /**
+   * Stores functions that can be called after depsgraph evaluation to writeback some changes to
+   * original data. Also see `DEG_depsgraph_writeback_sync.hh`.
+   */
+  Vector<std::function<void()>> sync_writeback_callbacks;
+  /** Needs to be locked when adding a writeback callback during evaluation. */
+  std::mutex sync_writeback_callbacks_mutex;
 
   MEM_CXX_CLASS_ALLOC_FUNCS("Depsgraph");
 };

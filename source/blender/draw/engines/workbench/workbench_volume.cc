@@ -4,8 +4,8 @@
 
 #include "workbench_private.hh"
 
-#include "BKE_volume.h"
-#include "BKE_volume_render.h"
+#include "BKE_volume.hh"
+#include "BKE_volume_render.hh"
 #include "BLI_rand.h"
 #include "DNA_fluid_types.h"
 #include "DNA_modifier_types.h"
@@ -45,7 +45,7 @@ void VolumePass::object_sync_volume(Manager &manager,
   /* Create 3D textures. */
   Volume *volume = static_cast<Volume *>(ob->data);
   BKE_volume_load(volume, G.main);
-  const VolumeGrid *volume_grid = BKE_volume_grid_active_get_for_read(volume);
+  const bke::VolumeGridData *volume_grid = BKE_volume_grid_active_get_for_read(volume);
   if (volume_grid == nullptr) {
     return;
   }
@@ -62,6 +62,7 @@ void VolumePass::object_sync_volume(Manager &manager,
   const bool use_slice = (volume->display.axis_slice_method == AXIS_SLICE_SINGLE);
 
   sub_ps.shader_set(get_shader(use_slice, false, volume->display.interpolation_method, false));
+  sub_ps.push_constant("do_depth_test", scene_state.shading.type >= OB_SOLID);
 
   const float density_scale = volume->display.density *
                               BKE_volume_density_scale(volume, ob->object_to_world);
@@ -128,6 +129,7 @@ void VolumePass::object_sync_modifier(Manager &manager,
   const bool use_slice = settings.axis_slice_method == AXIS_SLICE_SINGLE;
 
   sub_ps.shader_set(get_shader(use_slice, settings.use_coba, settings.interp_method, true));
+  sub_ps.push_constant("do_depth_test", scene_state.shading.type >= OB_SOLID);
 
   if (settings.use_coba) {
     const bool show_flags = settings.coba_field == FLUID_DOMAIN_FIELD_FLAGS;

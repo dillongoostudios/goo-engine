@@ -32,11 +32,11 @@ IndexMask retrieve_selected_curves(const bke::CurvesGeometry &curves, IndexMaskM
    * interested in whether any point in each curve is selected. Retrieve meta data since
    * #lookup_or_default from the attribute API doesn't give the domain of the attribute. */
   std::optional<bke::AttributeMetaData> meta_data = attributes.lookup_meta_data(".selection");
-  if (meta_data && meta_data->domain == ATTR_DOMAIN_POINT) {
+  if (meta_data && meta_data->domain == bke::AttrDomain::Point) {
     /* Avoid the interpolation from interpolating the attribute to the
      * curve domain by retrieving the point domain values directly. */
     const VArray<bool> selection = *attributes.lookup_or_default<bool>(
-        ".selection", ATTR_DOMAIN_POINT, true);
+        ".selection", bke::AttrDomain::Point, true);
     if (selection.is_single()) {
       return selection.get_internal_single() ? IndexMask(curves_range) : IndexMask();
     }
@@ -51,7 +51,7 @@ IndexMask retrieve_selected_curves(const bke::CurvesGeometry &curves, IndexMaskM
         });
   }
   const VArray<bool> selection = *attributes.lookup_or_default<bool>(
-      ".selection", ATTR_DOMAIN_CURVE, true);
+      ".selection", bke::AttrDomain::Curve, true);
   return IndexMask::from_bools(curves_range, selection, memory);
 }
 
@@ -64,7 +64,8 @@ IndexMask retrieve_selected_curves(const Curves &curves_id, IndexMaskMemory &mem
 IndexMask retrieve_selected_points(const bke::CurvesGeometry &curves, IndexMaskMemory &memory)
 {
   return IndexMask::from_bools(
-      *curves.attributes().lookup_or_default<bool>(".selection", ATTR_DOMAIN_POINT, true), memory);
+      *curves.attributes().lookup_or_default<bool>(".selection", bke::AttrDomain::Point, true),
+      memory);
 }
 
 IndexMask retrieve_selected_points(const Curves &curves_id, IndexMaskMemory &memory)
@@ -74,7 +75,7 @@ IndexMask retrieve_selected_points(const Curves &curves_id, IndexMaskMemory &mem
 }
 
 bke::GSpanAttributeWriter ensure_selection_attribute(bke::CurvesGeometry &curves,
-                                                     const eAttrDomain selection_domain,
+                                                     const bke::AttrDomain selection_domain,
                                                      const eCustomDataType create_type)
 {
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
@@ -127,6 +128,16 @@ void fill_selection_true(GMutableSpan selection)
   }
 }
 
+void fill_selection(GMutableSpan selection, bool value)
+{
+  if (selection.type().is<bool>()) {
+    selection.typed<bool>().fill(value);
+  }
+  else if (selection.type().is<float>()) {
+    selection.typed<float>().fill(value ? 1.0f : 0.0f);
+  }
+}
+
 void fill_selection_false(GMutableSpan selection, const IndexMask &mask)
 {
   if (selection.type().is<bool>()) {
@@ -147,7 +158,9 @@ void fill_selection_true(GMutableSpan selection, const IndexMask &mask)
   }
 }
 
-static bool contains(const VArray<bool> &varray, const IndexRange range_to_check, const bool value)
+static bool contains(const VArray<bool> &varray,
+                     const IndexMask &indices_to_check,
+                     const bool value)
 {
   const CommonVArrayInfo info = varray.common_info();
   if (info.type == CommonVArrayInfo::Type::Single) {
@@ -156,31 +169,58 @@ static bool contains(const VArray<bool> &varray, const IndexRange range_to_check
   if (info.type == CommonVArrayInfo::Type::Span) {
     const Span<bool> span(static_cast<const bool *>(info.data), varray.size());
     return threading::parallel_reduce(
-        range_to_check,
+        indices_to_check.index_range(),
         4096,
         false,
         [&](const IndexRange range, const bool init) {
-          return init || span.slice(range).contains(value);
+          if (init) {
+            return init;
+          }
+          const IndexMask sliced_mask = indices_to_check.slice(range);
+          if (std::optional<IndexRange> range = sliced_mask.to_range()) {
+            return span.slice(*range).contains(value);
+          }
+          for (const int64_t segment_i : IndexRange(sliced_mask.segments_num())) {
+            const IndexMaskSegment segment = sliced_mask.segment(segment_i);
+            for (const int i : segment) {
+              if (span[i] == value) {
+                return true;
+              }
+            }
+          }
+          return false;
         },
-        [&](const bool a, const bool b) { return a || b; });
+        std::logical_or());
   }
   return threading::parallel_reduce(
-      range_to_check,
+      indices_to_check.index_range(),
       2048,
       false,
       [&](const IndexRange range, const bool init) {
         if (init) {
           return init;
         }
-        /* Alternatively, this could use #materialize to retrieve many values at once. */
-        for (const int64_t i : range) {
-          if (varray[i] == value) {
+        constexpr int64_t MaxChunkSize = 512;
+        const int64_t slice_end = range.one_after_last();
+        for (int64_t start = range.start(); start < slice_end; start += MaxChunkSize) {
+          const int64_t end = std::min<int64_t>(start + MaxChunkSize, slice_end);
+          const int64_t size = end - start;
+          const IndexMask sliced_mask = indices_to_check.slice(start, size);
+          std::array<bool, MaxChunkSize> values;
+          auto values_end = values.begin() + size;
+          varray.materialize_compressed(sliced_mask, values);
+          if (std::find(values.begin(), values_end, value) != values_end) {
             return true;
           }
         }
         return false;
       },
-      [&](const bool a, const bool b) { return a || b; });
+      std::logical_or());
+}
+
+static bool contains(const VArray<bool> &varray, const IndexRange range_to_check, const bool value)
+{
+  return contains(varray, IndexMask(range_to_check), value);
 }
 
 bool has_anything_selected(const VArray<bool> &varray, const IndexRange range_to_check)
@@ -188,10 +228,21 @@ bool has_anything_selected(const VArray<bool> &varray, const IndexRange range_to
   return contains(varray, range_to_check, true);
 }
 
+bool has_anything_selected(const VArray<bool> &varray, const IndexMask &indices_to_check)
+{
+  return contains(varray, indices_to_check, true);
+}
+
 bool has_anything_selected(const bke::CurvesGeometry &curves)
 {
   const VArray<bool> selection = *curves.attributes().lookup<bool>(".selection");
   return !selection || contains(selection, selection.index_range(), true);
+}
+
+bool has_anything_selected(const bke::CurvesGeometry &curves, const IndexMask &mask)
+{
+  const VArray<bool> selection = *curves.attributes().lookup<bool>(".selection");
+  return !selection || contains(selection, mask, true);
 }
 
 bool has_anything_selected(const GSpan selection)
@@ -228,44 +279,82 @@ static void invert_selection(GMutableSpan selection)
   }
 }
 
-void select_all(bke::CurvesGeometry &curves, const eAttrDomain selection_domain, int action)
+static void invert_selection(MutableSpan<float> selection, const IndexMask &mask)
+{
+  mask.foreach_index_optimized<int64_t>(
+      GrainSize(2048), [&](const int64_t i) { selection[i] = 1.0f - selection[i]; });
+}
+
+static void invert_selection(GMutableSpan selection, const IndexMask &mask)
+{
+  if (selection.type().is<bool>()) {
+    array_utils::invert_booleans(selection.typed<bool>(), mask);
+  }
+  else if (selection.type().is<float>()) {
+    invert_selection(selection.typed<float>(), mask);
+  }
+}
+
+void select_all(bke::CurvesGeometry &curves,
+                const IndexMask &mask,
+                const bke::AttrDomain selection_domain,
+                int action)
 {
   bke::MutableAttributeAccessor attributes = curves.attributes_for_write();
   if (action == SEL_SELECT) {
-    /* As an optimization, just remove the selection attributes when everything is selected. */
-    attributes.remove(".selection");
-  }
-  else {
-    bke::GSpanAttributeWriter selection = ensure_selection_attribute(
-        curves, selection_domain, CD_PROP_BOOL);
-    if (action == SEL_DESELECT) {
-      fill_selection_false(selection.span);
+    std::optional<IndexRange> range = mask.to_range();
+    if (range.has_value() &&
+        (*range == IndexRange(curves.attributes().domain_size(selection_domain))))
+    {
+      /* As an optimization, just remove the selection attributes when everything is selected. */
+      attributes.remove(".selection");
+      return;
     }
-    else if (action == SEL_INVERT) {
-      invert_selection(selection.span);
-    }
-    selection.finish();
   }
+  bke::GSpanAttributeWriter selection = ensure_selection_attribute(
+      curves, selection_domain, CD_PROP_BOOL);
+  if (action == SEL_SELECT) {
+    fill_selection_true(selection.span, mask);
+  }
+  else if (action == SEL_DESELECT) {
+    fill_selection_false(selection.span, mask);
+  }
+  else if (action == SEL_INVERT) {
+    invert_selection(selection.span, mask);
+  }
+  selection.finish();
+}
+
+void select_all(bke::CurvesGeometry &curves, const bke::AttrDomain selection_domain, int action)
+{
+  const IndexRange selection(curves.attributes().domain_size(selection_domain));
+  select_all(curves, selection, selection_domain, action);
+}
+
+void select_linked(bke::CurvesGeometry &curves, const IndexMask &curves_mask)
+{
+  const OffsetIndices points_by_curve = curves.points_by_curve();
+  bke::GSpanAttributeWriter selection = ensure_selection_attribute(
+      curves, bke::AttrDomain::Point, CD_PROP_BOOL);
+
+  curves_mask.foreach_index(GrainSize(256), [&](const int64_t curve_i) {
+    GMutableSpan selection_curve = selection.span.slice(points_by_curve[curve_i]);
+    if (has_anything_selected(selection_curve)) {
+      fill_selection_true(selection_curve);
+    }
+  });
+
+  selection.finish();
 }
 
 void select_linked(bke::CurvesGeometry &curves)
 {
-  const OffsetIndices points_by_curve = curves.points_by_curve();
-  bke::GSpanAttributeWriter selection = ensure_selection_attribute(
-      curves, ATTR_DOMAIN_POINT, CD_PROP_BOOL);
-
-  threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange range) {
-    for (const int curve_i : range) {
-      GMutableSpan selection_curve = selection.span.slice(points_by_curve[curve_i]);
-      if (has_anything_selected(selection_curve)) {
-        fill_selection_true(selection_curve);
-      }
-    }
-  });
-  selection.finish();
+  select_linked(curves, curves.curves_range());
 }
 
-void select_alternate(bke::CurvesGeometry &curves, const bool deselect_ends)
+void select_alternate(bke::CurvesGeometry &curves,
+                      const IndexMask &curves_mask,
+                      const bool deselect_ends)
 {
   if (!has_anything_selected(curves)) {
     return;
@@ -273,49 +362,52 @@ void select_alternate(bke::CurvesGeometry &curves, const bool deselect_ends)
 
   const OffsetIndices points_by_curve = curves.points_by_curve();
   bke::GSpanAttributeWriter selection = ensure_selection_attribute(
-      curves, ATTR_DOMAIN_POINT, CD_PROP_BOOL);
+      curves, bke::AttrDomain::Point, CD_PROP_BOOL);
   const VArray<bool> cyclic = curves.cyclic();
 
   MutableSpan<bool> selection_typed = selection.span.typed<bool>();
-  threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange range) {
-    for (const int curve_i : range) {
-      const IndexRange points = points_by_curve[curve_i];
+  curves_mask.foreach_index([&](const int64_t curve_i) {
+    const IndexRange points = points_by_curve[curve_i];
+    if (!has_anything_selected(selection.span.slice(points))) {
+      return;
+    }
 
-      if (!has_anything_selected(selection.span.slice(points))) {
-        continue;
-      }
+    const int half_of_size = points.size() / 2;
+    const IndexRange selected = points.shift(deselect_ends ? 1 : 0);
+    const IndexRange deselected = points.shift(deselect_ends ? 0 : 1);
+    for (const int i : IndexRange(half_of_size)) {
+      const int index = i * 2;
+      selection_typed[selected[index]] = true;
+      selection_typed[deselected[index]] = false;
+    }
 
-      for (const int index : points.index_range()) {
-        selection_typed[points[index]] = deselect_ends ? index % 2 : !(index % 2);
-      }
+    selection_typed[points.first()] = !deselect_ends;
+    const bool end_parity_to_selected = bool(points.size() % 2);
+    const bool selected_end = cyclic[curve_i] || end_parity_to_selected;
+    selection_typed[points.last()] = !deselect_ends && selected_end;
 
-      if (cyclic[curve_i]) {
-        if (deselect_ends) {
-          selection_typed[points.last()] = false;
-        }
-        else {
-          selection_typed[points.last()] = true;
-          if (points.size() > 2) {
-            selection_typed[points.last() - 1] = false;
-          }
-        }
-      }
-      else {
-        if (deselect_ends) {
-          selection_typed[points.last()] = false;
-        }
-      }
+    /* Selected last one require to deselect pre-last one point which is not first. */
+    const IndexRange curve_body = points.drop_front(1).drop_back(1);
+    if (!deselect_ends && cyclic[curve_i] && !curve_body.is_empty()) {
+      selection_typed[curve_body.last()] = false;
     }
   });
 
   selection.finish();
 }
 
-void select_adjacent(bke::CurvesGeometry &curves, const bool deselect)
+void select_alternate(bke::CurvesGeometry &curves, const bool deselect_ends)
+{
+  select_alternate(curves, curves.curves_range(), deselect_ends);
+}
+
+void select_adjacent(bke::CurvesGeometry &curves,
+                     const IndexMask &curves_mask,
+                     const bool deselect)
 {
   const OffsetIndices points_by_curve = curves.points_by_curve();
   bke::GSpanAttributeWriter selection = ensure_selection_attribute(
-      curves, ATTR_DOMAIN_POINT, CD_PROP_BOOL);
+      curves, bke::AttrDomain::Point, CD_PROP_BOOL);
   const VArray<bool> cyclic = curves.cyclic();
 
   if (deselect) {
@@ -324,60 +416,56 @@ void select_adjacent(bke::CurvesGeometry &curves, const bool deselect)
 
   if (selection.span.type().is<bool>()) {
     MutableSpan<bool> selection_typed = selection.span.typed<bool>();
-    threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        const IndexRange points = points_by_curve[curve_i];
+    curves_mask.foreach_index([&](const int64_t curve_i) {
+      const IndexRange points = points_by_curve[curve_i];
 
-        /* Handle all cases in the forward direction. */
-        for (int point_i = points.first(); point_i < points.last(); point_i++) {
-          if (!selection_typed[point_i] && selection_typed[point_i + 1]) {
-            selection_typed[point_i] = true;
-          }
+      /* Handle all cases in the forward direction. */
+      for (int point_i = points.first(); point_i < points.last(); point_i++) {
+        if (!selection_typed[point_i] && selection_typed[point_i + 1]) {
+          selection_typed[point_i] = true;
         }
+      }
 
-        /* Handle all cases in the backwards direction. */
-        for (int point_i = points.last(); point_i > points.first(); point_i--) {
-          if (!selection_typed[point_i] && selection_typed[point_i - 1]) {
-            selection_typed[point_i] = true;
-          }
+      /* Handle all cases in the backwards direction. */
+      for (int point_i = points.last(); point_i > points.first(); point_i--) {
+        if (!selection_typed[point_i] && selection_typed[point_i - 1]) {
+          selection_typed[point_i] = true;
         }
+      }
 
-        /* Handle cyclic curve case. */
-        if (cyclic[curve_i]) {
-          if (selection_typed[points.first()] != selection_typed[points.last()]) {
-            selection_typed[points.first()] = true;
-            selection_typed[points.last()] = true;
-          }
+      /* Handle cyclic curve case. */
+      if (cyclic[curve_i]) {
+        if (selection_typed[points.first()] != selection_typed[points.last()]) {
+          selection_typed[points.first()] = true;
+          selection_typed[points.last()] = true;
         }
       }
     });
   }
   else if (selection.span.type().is<float>()) {
     MutableSpan<float> selection_typed = selection.span.typed<float>();
-    threading::parallel_for(curves.curves_range(), 256, [&](const IndexRange range) {
-      for (const int curve_i : range) {
-        const IndexRange points = points_by_curve[curve_i];
+    curves_mask.foreach_index([&](const int64_t curve_i) {
+      const IndexRange points = points_by_curve[curve_i];
 
-        /* Handle all cases in the forward direction. */
-        for (int point_i = points.first(); point_i < points.last(); point_i++) {
-          if ((selection_typed[point_i] == 0.0f) && (selection_typed[point_i + 1] > 0.0f)) {
-            selection_typed[point_i] = 1.0f;
-          }
+      /* Handle all cases in the forward direction. */
+      for (int point_i = points.first(); point_i < points.last(); point_i++) {
+        if ((selection_typed[point_i] == 0.0f) && (selection_typed[point_i + 1] > 0.0f)) {
+          selection_typed[point_i] = 1.0f;
         }
+      }
 
-        /* Handle all cases in the backwards direction. */
-        for (int point_i = points.last(); point_i > points.first(); point_i--) {
-          if ((selection_typed[point_i] == 0.0f) && (selection_typed[point_i - 1] > 0.0f)) {
-            selection_typed[point_i] = 1.0f;
-          }
+      /* Handle all cases in the backwards direction. */
+      for (int point_i = points.last(); point_i > points.first(); point_i--) {
+        if ((selection_typed[point_i] == 0.0f) && (selection_typed[point_i - 1] > 0.0f)) {
+          selection_typed[point_i] = 1.0f;
         }
+      }
 
-        /* Handle cyclic curve case. */
-        if (cyclic[curve_i]) {
-          if (selection_typed[points.first()] != selection_typed[points.last()]) {
-            selection_typed[points.first()] = 1.0f;
-            selection_typed[points.last()] = 1.0f;
-          }
+      /* Handle cyclic curve case. */
+      if (cyclic[curve_i]) {
+        if (selection_typed[points.first()] != selection_typed[points.last()]) {
+          selection_typed[points.first()] = 1.0f;
+          selection_typed[points.last()] = 1.0f;
         }
       }
     });
@@ -388,6 +476,11 @@ void select_adjacent(bke::CurvesGeometry &curves, const bool deselect)
   }
 
   selection.finish();
+}
+
+void select_adjacent(bke::CurvesGeometry &curves, const bool deselect)
+{
+  select_adjacent(curves, curves.curves_range(), deselect);
 }
 
 void apply_selection_operation_at_index(GMutableSpan selection,
@@ -434,32 +527,32 @@ static std::optional<FindClosestData> find_closest_point_to_screen_co(
     const ARegion *region,
     const RegionView3D *rv3d,
     const Object &object,
-    const bke::CurvesGeometry &curves,
-    Span<float3> deformed_positions,
-    float2 mouse_pos,
+    const Span<float3> positions,
+    const IndexMask &points_mask,
+    const float2 mouse_pos,
     float radius,
     const FindClosestData &initial_closest)
 {
-  float4x4 projection;
-  ED_view3d_ob_project_mat_get(rv3d, &object, projection.ptr());
+  const float4x4 projection = ED_view3d_ob_project_mat_get(rv3d, &object);
 
   const float radius_sq = pow2f(radius);
   const FindClosestData new_closest_data = threading::parallel_reduce(
-      curves.points_range(),
+      points_mask.index_range(),
       1024,
       initial_closest,
-      [&](const IndexRange point_range, const FindClosestData &init) {
+      [&](const IndexRange point_indicies_range, const FindClosestData &init) {
         FindClosestData best_match = init;
-        for (const int point_i : point_range) {
-          const float3 pos = deformed_positions[point_i];
+        for (const int index : point_indicies_range) {
+          const int point_i = points_mask[index];
+          const float3 pos = positions[point_i];
 
           /* Find the position of the point in screen space. */
-          float2 pos_proj;
-          ED_view3d_project_float_v2_m4(region, pos, pos_proj, projection.ptr());
+          const float2 pos_proj = ED_view3d_project_float_v2_m4(region, pos, projection);
 
           const float distance_proj_sq = math::distance_squared(pos_proj, mouse_pos);
           if (distance_proj_sq > radius_sq ||
-              distance_proj_sq > best_match.distance * best_match.distance) {
+              distance_proj_sq > best_match.distance * best_match.distance)
+          {
             /* Ignore the point because it's too far away or there is already a better point. */
             continue;
           }
@@ -490,36 +583,36 @@ static std::optional<FindClosestData> find_closest_curve_to_screen_co(
     const ARegion *region,
     const RegionView3D *rv3d,
     const Object &object,
-    const bke::CurvesGeometry &curves,
-    Span<float3> deformed_positions,
-    float2 mouse_pos,
+    const OffsetIndices<int> points_by_curve,
+    const Span<float3> positions,
+    const IndexMask &curves_mask,
+    const float2 mouse_pos,
     float radius,
     const FindClosestData &initial_closest)
 {
-  float4x4 projection;
-  ED_view3d_ob_project_mat_get(rv3d, &object, projection.ptr());
+  const float4x4 projection = ED_view3d_ob_project_mat_get(rv3d, &object);
 
   const float radius_sq = pow2f(radius);
 
-  const OffsetIndices points_by_curve = curves.points_by_curve();
   const FindClosestData new_closest_data = threading::parallel_reduce(
-      curves.curves_range(),
+      curves_mask.index_range(),
       256,
       initial_closest,
-      [&](const IndexRange curves_range, const FindClosestData &init) {
+      [&](const IndexRange curves_indices_range, const FindClosestData &init) {
         FindClosestData best_match = init;
-        for (const int curve_i : curves_range) {
+        for (const int index : curves_indices_range) {
+          const int curve_i = curves_mask[index];
           const IndexRange points = points_by_curve[curve_i];
           if (points.size() == 1) {
-            const float3 pos = deformed_positions[points.first()];
+            const float3 pos = positions[points.first()];
 
             /* Find the position of the point in screen space. */
-            float2 pos_proj;
-            ED_view3d_project_float_v2_m4(region, pos, pos_proj, projection.ptr());
+            const float2 pos_proj = ED_view3d_project_float_v2_m4(region, pos, projection);
 
             const float distance_proj_sq = math::distance_squared(pos_proj, mouse_pos);
             if (distance_proj_sq > radius_sq ||
-                distance_proj_sq > best_match.distance * best_match.distance) {
+                distance_proj_sq > best_match.distance * best_match.distance)
+            {
               /* Ignore the point because it's too far away or there is already a better point.
                */
               continue;
@@ -534,17 +627,16 @@ static std::optional<FindClosestData> find_closest_curve_to_screen_co(
           }
 
           for (const int segment_i : points.drop_back(1)) {
-            const float3 pos1 = deformed_positions[segment_i];
-            const float3 pos2 = deformed_positions[segment_i + 1];
-
-            float2 pos1_proj, pos2_proj;
-            ED_view3d_project_float_v2_m4(region, pos1, pos1_proj, projection.ptr());
-            ED_view3d_project_float_v2_m4(region, pos2, pos2_proj, projection.ptr());
+            const float3 pos1 = positions[segment_i];
+            const float3 pos2 = positions[segment_i + 1];
+            const float2 pos1_proj = ED_view3d_project_float_v2_m4(region, pos1, projection);
+            const float2 pos2_proj = ED_view3d_project_float_v2_m4(region, pos2, projection);
 
             const float distance_proj_sq = dist_squared_to_line_segment_v2(
                 mouse_pos, pos1_proj, pos2_proj);
             if (distance_proj_sq > radius_sq ||
-                distance_proj_sq > best_match.distance * best_match.distance) {
+                distance_proj_sq > best_match.distance * best_match.distance)
+            {
               /* Ignore the segment because it's too far away or there is already a better point.
                */
               continue;
@@ -576,28 +668,30 @@ static std::optional<FindClosestData> find_closest_curve_to_screen_co(
 std::optional<FindClosestData> closest_elem_find_screen_space(
     const ViewContext &vc,
     const Object &object,
-    bke::CurvesGeometry &curves,
-    const Span<float3> deformed_positions,
-    const eAttrDomain domain,
+    const OffsetIndices<int> points_by_curve,
+    const Span<float3> positions,
+    const IndexMask &mask,
+    const bke::AttrDomain domain,
     const int2 coord,
     const FindClosestData &initial_closest)
 {
   switch (domain) {
-    case ATTR_DOMAIN_POINT:
+    case bke::AttrDomain::Point:
       return find_closest_point_to_screen_co(vc.region,
                                              vc.rv3d,
                                              object,
-                                             curves,
-                                             deformed_positions,
+                                             positions,
+                                             mask,
                                              float2(coord),
                                              ED_view3d_select_dist_px(),
                                              initial_closest);
-    case ATTR_DOMAIN_CURVE:
+    case bke::AttrDomain::Curve:
       return find_closest_curve_to_screen_co(vc.region,
                                              vc.rv3d,
                                              object,
-                                             curves,
-                                             deformed_positions,
+                                             points_by_curve,
+                                             positions,
+                                             mask,
                                              float2(coord),
                                              ED_view3d_select_dist_px(),
                                              initial_closest);
@@ -609,8 +703,9 @@ std::optional<FindClosestData> closest_elem_find_screen_space(
 
 bool select_box(const ViewContext &vc,
                 bke::CurvesGeometry &curves,
-                const Span<float3> deformed_positions,
-                const eAttrDomain selection_domain,
+                const Span<float3> positions,
+                const IndexMask &mask,
+                const bke::AttrDomain selection_domain,
                 const rcti &rect,
                 const eSelectOp sel_op)
 {
@@ -619,54 +714,46 @@ bool select_box(const ViewContext &vc,
 
   bool changed = false;
   if (sel_op == SEL_OP_SET) {
-    fill_selection_false(selection.span);
+    fill_selection_false(selection.span, mask);
     changed = true;
   }
 
-  float4x4 projection;
-  ED_view3d_ob_project_mat_get(vc.rv3d, vc.obact, projection.ptr());
+  const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, vc.obact);
 
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  if (selection_domain == ATTR_DOMAIN_POINT) {
-    threading::parallel_for(curves.points_range(), 1024, [&](const IndexRange point_range) {
-      for (const int point_i : point_range) {
-        float2 pos_proj;
-        ED_view3d_project_float_v2_m4(
-            vc.region, deformed_positions[point_i], pos_proj, projection.ptr());
-        if (BLI_rcti_isect_pt_v(&rect, int2(pos_proj))) {
-          apply_selection_operation_at_index(selection.span, point_i, sel_op);
-          changed = true;
-        }
+  if (selection_domain == bke::AttrDomain::Point) {
+    mask.foreach_index(GrainSize(1024), [&](const int point_i) {
+      const float2 pos_proj = ED_view3d_project_float_v2_m4(
+          vc.region, positions[point_i], projection);
+      if (BLI_rcti_isect_pt_v(&rect, int2(pos_proj))) {
+        apply_selection_operation_at_index(selection.span, point_i, sel_op);
+        changed = true;
       }
     });
   }
-  else if (selection_domain == ATTR_DOMAIN_CURVE) {
-    threading::parallel_for(curves.curves_range(), 512, [&](const IndexRange curves_range) {
-      for (const int curve_i : curves_range) {
-        const IndexRange points = points_by_curve[curve_i];
-        if (points.size() == 1) {
-          float2 pos_proj;
-          ED_view3d_project_float_v2_m4(
-              vc.region, deformed_positions[points.first()], pos_proj, projection.ptr());
-          if (BLI_rcti_isect_pt_v(&rect, int2(pos_proj))) {
-            apply_selection_operation_at_index(selection.span, curve_i, sel_op);
-            changed = true;
-          }
-          continue;
+  else if (selection_domain == bke::AttrDomain::Curve) {
+    mask.foreach_index(GrainSize(512), [&](const int curve_i) {
+      const IndexRange points = points_by_curve[curve_i];
+      if (points.size() == 1) {
+        const float2 pos_proj = ED_view3d_project_float_v2_m4(
+            vc.region, positions[points.first()], projection);
+        if (BLI_rcti_isect_pt_v(&rect, int2(pos_proj))) {
+          apply_selection_operation_at_index(selection.span, curve_i, sel_op);
+          changed = true;
         }
-        for (const int segment_i : points.drop_back(1)) {
-          const float3 pos1 = deformed_positions[segment_i];
-          const float3 pos2 = deformed_positions[segment_i + 1];
+        return;
+      }
+      for (const int segment_i : points.drop_back(1)) {
+        const float3 pos1 = positions[segment_i];
+        const float3 pos2 = positions[segment_i + 1];
 
-          float2 pos1_proj, pos2_proj;
-          ED_view3d_project_float_v2_m4(vc.region, pos1, pos1_proj, projection.ptr());
-          ED_view3d_project_float_v2_m4(vc.region, pos2, pos2_proj, projection.ptr());
+        const float2 pos1_proj = ED_view3d_project_float_v2_m4(vc.region, pos1, projection);
+        const float2 pos2_proj = ED_view3d_project_float_v2_m4(vc.region, pos2, projection);
 
-          if (BLI_rcti_isect_segment(&rect, int2(pos1_proj), int2(pos2_proj))) {
-            apply_selection_operation_at_index(selection.span, curve_i, sel_op);
-            changed = true;
-            break;
-          }
+        if (BLI_rcti_isect_segment(&rect, int2(pos1_proj), int2(pos2_proj))) {
+          apply_selection_operation_at_index(selection.span, curve_i, sel_op);
+          changed = true;
+          break;
         }
       }
     });
@@ -678,8 +765,9 @@ bool select_box(const ViewContext &vc,
 
 bool select_lasso(const ViewContext &vc,
                   bke::CurvesGeometry &curves,
-                  const Span<float3> deformed_positions,
-                  const eAttrDomain selection_domain,
+                  const Span<float3> positions,
+                  const IndexMask &mask,
+                  const bke::AttrDomain selection_domain,
                   const Span<int2> coords,
                   const eSelectOp sel_op)
 {
@@ -692,71 +780,63 @@ bool select_lasso(const ViewContext &vc,
 
   bool changed = false;
   if (sel_op == SEL_OP_SET) {
-    fill_selection_false(selection.span);
+    fill_selection_false(selection.span, mask);
     changed = true;
   }
 
-  float4x4 projection;
-  ED_view3d_ob_project_mat_get(vc.rv3d, vc.obact, projection.ptr());
+  const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, vc.obact);
 
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  if (selection_domain == ATTR_DOMAIN_POINT) {
-    threading::parallel_for(curves.points_range(), 1024, [&](const IndexRange point_range) {
-      for (const int point_i : point_range) {
-        float2 pos_proj;
-        ED_view3d_project_float_v2_m4(
-            vc.region, deformed_positions[point_i], pos_proj, projection.ptr());
+  if (selection_domain == bke::AttrDomain::Point) {
+    mask.foreach_index(GrainSize(1024), [&](const int point_i) {
+      const float2 pos_proj = ED_view3d_project_float_v2_m4(
+          vc.region, positions[point_i], projection);
+      /* Check the lasso bounding box first as an optimization. */
+      if (BLI_rcti_isect_pt_v(&bbox, int2(pos_proj)) &&
+          BLI_lasso_is_point_inside(
+              coord_array, coords.size(), int(pos_proj.x), int(pos_proj.y), IS_CLIPPED))
+      {
+        apply_selection_operation_at_index(selection.span, point_i, sel_op);
+        changed = true;
+      }
+    });
+  }
+  else if (selection_domain == bke::AttrDomain::Curve) {
+    mask.foreach_index(GrainSize(512), [&](const int curve_i) {
+      const IndexRange points = points_by_curve[curve_i];
+      if (points.size() == 1) {
+        const float2 pos_proj = ED_view3d_project_float_v2_m4(
+            vc.region, positions[points.first()], projection);
         /* Check the lasso bounding box first as an optimization. */
         if (BLI_rcti_isect_pt_v(&bbox, int2(pos_proj)) &&
             BLI_lasso_is_point_inside(
                 coord_array, coords.size(), int(pos_proj.x), int(pos_proj.y), IS_CLIPPED))
         {
-          apply_selection_operation_at_index(selection.span, point_i, sel_op);
+          apply_selection_operation_at_index(selection.span, curve_i, sel_op);
           changed = true;
         }
+        return;
       }
-    });
-  }
-  else if (selection_domain == ATTR_DOMAIN_CURVE) {
-    threading::parallel_for(curves.curves_range(), 512, [&](const IndexRange curves_range) {
-      for (const int curve_i : curves_range) {
-        const IndexRange points = points_by_curve[curve_i];
-        if (points.size() == 1) {
-          float2 pos_proj;
-          ED_view3d_project_float_v2_m4(
-              vc.region, deformed_positions[points.first()], pos_proj, projection.ptr());
-          /* Check the lasso bounding box first as an optimization. */
-          if (BLI_rcti_isect_pt_v(&bbox, int2(pos_proj)) &&
-              BLI_lasso_is_point_inside(
-                  coord_array, coords.size(), int(pos_proj.x), int(pos_proj.y), IS_CLIPPED))
-          {
-            apply_selection_operation_at_index(selection.span, curve_i, sel_op);
-            changed = true;
-          }
-          continue;
-        }
-        for (const int segment_i : points.drop_back(1)) {
-          const float3 pos1 = deformed_positions[segment_i];
-          const float3 pos2 = deformed_positions[segment_i + 1];
+      for (const int segment_i : points.drop_back(1)) {
+        const float3 pos1 = positions[segment_i];
+        const float3 pos2 = positions[segment_i + 1];
 
-          float2 pos1_proj, pos2_proj;
-          ED_view3d_project_float_v2_m4(vc.region, pos1, pos1_proj, projection.ptr());
-          ED_view3d_project_float_v2_m4(vc.region, pos2, pos2_proj, projection.ptr());
+        const float2 pos1_proj = ED_view3d_project_float_v2_m4(vc.region, pos1, projection);
+        const float2 pos2_proj = ED_view3d_project_float_v2_m4(vc.region, pos2, projection);
 
-          /* Check the lasso bounding box first as an optimization. */
-          if (BLI_rcti_isect_segment(&bbox, int2(pos1_proj), int2(pos2_proj)) &&
-              BLI_lasso_is_edge_inside(coord_array,
-                                       coords.size(),
-                                       int(pos1_proj.x),
-                                       int(pos1_proj.y),
-                                       int(pos2_proj.x),
-                                       int(pos2_proj.y),
-                                       IS_CLIPPED))
-          {
-            apply_selection_operation_at_index(selection.span, curve_i, sel_op);
-            changed = true;
-            break;
-          }
+        /* Check the lasso bounding box first as an optimization. */
+        if (BLI_rcti_isect_segment(&bbox, int2(pos1_proj), int2(pos2_proj)) &&
+            BLI_lasso_is_edge_inside(coord_array,
+                                     coords.size(),
+                                     int(pos1_proj.x),
+                                     int(pos1_proj.y),
+                                     int(pos2_proj.x),
+                                     int(pos2_proj.y),
+                                     IS_CLIPPED))
+        {
+          apply_selection_operation_at_index(selection.span, curve_i, sel_op);
+          changed = true;
+          break;
         }
       }
     });
@@ -768,8 +848,9 @@ bool select_lasso(const ViewContext &vc,
 
 bool select_circle(const ViewContext &vc,
                    bke::CurvesGeometry &curves,
-                   const Span<float3> deformed_positions,
-                   const eAttrDomain selection_domain,
+                   const Span<float3> positions,
+                   const IndexMask &mask,
+                   const bke::AttrDomain selection_domain,
                    const int2 coord,
                    const float radius,
                    const eSelectOp sel_op)
@@ -780,56 +861,48 @@ bool select_circle(const ViewContext &vc,
 
   bool changed = false;
   if (sel_op == SEL_OP_SET) {
-    fill_selection_false(selection.span);
+    fill_selection_false(selection.span, mask);
     changed = true;
   }
 
-  float4x4 projection;
-  ED_view3d_ob_project_mat_get(vc.rv3d, vc.obact, projection.ptr());
+  const float4x4 projection = ED_view3d_ob_project_mat_get(vc.rv3d, vc.obact);
 
   const OffsetIndices points_by_curve = curves.points_by_curve();
-  if (selection_domain == ATTR_DOMAIN_POINT) {
-    threading::parallel_for(curves.points_range(), 1024, [&](const IndexRange point_range) {
-      for (const int point_i : point_range) {
-        float2 pos_proj;
-        ED_view3d_project_float_v2_m4(
-            vc.region, deformed_positions[point_i], pos_proj, projection.ptr());
-        if (math::distance_squared(pos_proj, float2(coord)) <= radius_sq) {
-          apply_selection_operation_at_index(selection.span, point_i, sel_op);
-          changed = true;
-        }
+  if (selection_domain == bke::AttrDomain::Point) {
+    mask.foreach_index(GrainSize(1024), [&](const int point_i) {
+      const float2 pos_proj = ED_view3d_project_float_v2_m4(
+          vc.region, positions[point_i], projection);
+      if (math::distance_squared(pos_proj, float2(coord)) <= radius_sq) {
+        apply_selection_operation_at_index(selection.span, point_i, sel_op);
+        changed = true;
       }
     });
   }
-  else if (selection_domain == ATTR_DOMAIN_CURVE) {
-    threading::parallel_for(curves.curves_range(), 512, [&](const IndexRange curves_range) {
-      for (const int curve_i : curves_range) {
-        const IndexRange points = points_by_curve[curve_i];
-        if (points.size() == 1) {
-          float2 pos_proj;
-          ED_view3d_project_float_v2_m4(
-              vc.region, deformed_positions[points.first()], pos_proj, projection.ptr());
-          if (math::distance_squared(pos_proj, float2(coord)) <= radius_sq) {
-            apply_selection_operation_at_index(selection.span, curve_i, sel_op);
-            changed = true;
-          }
-          continue;
+  else if (selection_domain == bke::AttrDomain::Curve) {
+    mask.foreach_index(GrainSize(512), [&](const int curve_i) {
+      const IndexRange points = points_by_curve[curve_i];
+      if (points.size() == 1) {
+        const float2 pos_proj = ED_view3d_project_float_v2_m4(
+            vc.region, positions[points.first()], projection);
+        if (math::distance_squared(pos_proj, float2(coord)) <= radius_sq) {
+          apply_selection_operation_at_index(selection.span, curve_i, sel_op);
+          changed = true;
         }
-        for (const int segment_i : points.drop_back(1)) {
-          const float3 pos1 = deformed_positions[segment_i];
-          const float3 pos2 = deformed_positions[segment_i + 1];
+        return;
+      }
+      for (const int segment_i : points.drop_back(1)) {
+        const float3 pos1 = positions[segment_i];
+        const float3 pos2 = positions[segment_i + 1];
 
-          float2 pos1_proj, pos2_proj;
-          ED_view3d_project_float_v2_m4(vc.region, pos1, pos1_proj, projection.ptr());
-          ED_view3d_project_float_v2_m4(vc.region, pos2, pos2_proj, projection.ptr());
+        const float2 pos1_proj = ED_view3d_project_float_v2_m4(vc.region, pos1, projection);
+        const float2 pos2_proj = ED_view3d_project_float_v2_m4(vc.region, pos2, projection);
 
-          const float distance_proj_sq = dist_squared_to_line_segment_v2(
-              float2(coord), pos1_proj, pos2_proj);
-          if (distance_proj_sq <= radius_sq) {
-            apply_selection_operation_at_index(selection.span, curve_i, sel_op);
-            changed = true;
-            break;
-          }
+        const float distance_proj_sq = dist_squared_to_line_segment_v2(
+            float2(coord), pos1_proj, pos2_proj);
+        if (distance_proj_sq <= radius_sq) {
+          apply_selection_operation_at_index(selection.span, curve_i, sel_op);
+          changed = true;
+          break;
         }
       }
     });

@@ -11,7 +11,6 @@
 #include "DNA_uuid_types.h"
 
 struct ARegion;
-struct AssetLibrary;
 struct FileAssetSelectParams;
 struct FileDirEntry;
 struct FileSelectParams;
@@ -28,6 +27,9 @@ struct wmWindow;
 struct wmWindowManager;
 struct View2D;
 struct rcti;
+namespace blender::asset_system {
+class AssetLibrary;
+}
 
 #define FILE_LAYOUT_HOR 1
 #define FILE_LAYOUT_VER 2
@@ -140,7 +142,8 @@ void ED_fileselect_exit(wmWindowManager *wm, SpaceFile *sfile);
 
 bool ED_fileselect_is_file_browser(const SpaceFile *sfile);
 bool ED_fileselect_is_asset_browser(const SpaceFile *sfile);
-AssetLibrary *ED_fileselect_active_asset_library_get(const SpaceFile *sfile);
+blender::asset_system::AssetLibrary *ED_fileselect_active_asset_library_get(
+    const SpaceFile *sfile);
 ID *ED_fileselect_active_asset_get(const SpaceFile *sfile);
 
 void ED_fileselect_activate_asset_catalog(const SpaceFile *sfile, bUUID catalog_id);
@@ -170,7 +173,7 @@ void ED_fileselect_activate_by_id(SpaceFile *sfile, ID *asset_id, bool deferred)
 void ED_fileselect_deselect_all(SpaceFile *sfile);
 void ED_fileselect_activate_by_relpath(SpaceFile *sfile, const char *relative_path);
 
-void ED_fileselect_window_params_get(const wmWindow *win, int win_size[2], bool *is_maximized);
+void ED_fileselect_window_params_get(const wmWindow *win, int r_win_size[2], bool *r_is_maximized);
 
 /**
  * Return the File Browser area in which \a file_operator is active.

@@ -11,7 +11,6 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
 #include "DNA_screen_types.h"
@@ -23,10 +22,10 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
-#include "BKE_customdata.h"
-#include "BKE_editmesh.h"
-#include "BKE_layer.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_layer.hh"
 #include "BKE_screen.hh"
 
 #include "DEG_depsgraph.hh"
@@ -39,11 +38,14 @@
 #include "WM_api.hh"
 #include "WM_types.hh"
 
+using blender::Span;
+using blender::Vector;
+
 #define B_UVEDIT_VERTEX 3
 
 /* UV Utilities */
 
-static int uvedit_center(Scene *scene, Object **objects, uint objects_len, float center[2])
+static int uvedit_center(Scene *scene, const Span<Object *> objects, float center[2])
 {
   BMFace *f;
   BMLoop *l;
@@ -53,8 +55,7 @@ static int uvedit_center(Scene *scene, Object **objects, uint objects_len, float
 
   zero_v2(center);
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
     const BMUVOffsets offsets = BM_uv_map_get_offsets(em->bm);
 
@@ -81,18 +82,14 @@ static int uvedit_center(Scene *scene, Object **objects, uint objects_len, float
   return tot;
 }
 
-static void uvedit_translate(Scene *scene,
-                             Object **objects,
-                             uint objects_len,
-                             const float delta[2])
+static void uvedit_translate(Scene *scene, const Span<Object *> objects, const float delta[2])
 {
   BMFace *f;
   BMLoop *l;
   BMIter iter, liter;
   float *luv;
 
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     BMEditMesh *em = BKE_editmesh_from_object(obedit);
 
     const BMUVOffsets offsets = BM_uv_map_get_offsets(em->bm);
@@ -122,13 +119,12 @@ static void uvedit_vertex_buttons(const bContext *C, uiBlock *block)
   Scene *scene = CTX_data_scene(C);
   float center[2];
   int imx, imy, step, digits;
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, CTX_data_view_layer(C), CTX_wm_view3d(C), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, CTX_data_view_layer(C), CTX_wm_view3d(C));
 
   ED_space_image_get_size(sima, &imx, &imy);
 
-  if (uvedit_center(scene, objects, objects_len, center)) {
+  if (uvedit_center(scene, objects, center)) {
     float range_xy[2][2] = {
         {-10.0f, 10.0f},
         {-10.0f, 10.0f},
@@ -173,8 +169,6 @@ static void uvedit_vertex_buttons(const bContext *C, uiBlock *block)
                     UI_UNIT_Y,
                     &uvedit_old_center[0],
                     UNPACK2(range_xy[0]),
-                    0,
-                    0,
                     "");
     UI_but_number_step_size_set(but, step);
     UI_but_number_precision_set(but, digits);
@@ -188,15 +182,11 @@ static void uvedit_vertex_buttons(const bContext *C, uiBlock *block)
                     UI_UNIT_Y,
                     &uvedit_old_center[1],
                     UNPACK2(range_xy[1]),
-                    0,
-                    0,
                     "");
     UI_but_number_step_size_set(but, step);
     UI_but_number_precision_set(but, digits);
     UI_block_align_end(block);
   }
-
-  MEM_freeN(objects);
 }
 
 static void do_uvedit_vertex(bContext *C, void * /*arg*/, int event)
@@ -210,12 +200,11 @@ static void do_uvedit_vertex(bContext *C, void * /*arg*/, int event)
     return;
   }
 
-  uint objects_len = 0;
-  Object **objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
-      scene, CTX_data_view_layer(C), CTX_wm_view3d(C), &objects_len);
+  Vector<Object *> objects = BKE_view_layer_array_from_objects_in_edit_mode_unique_data_with_uvs(
+      scene, CTX_data_view_layer(C), CTX_wm_view3d(C));
 
   ED_space_image_get_size(sima, &imx, &imy);
-  uvedit_center(scene, objects, objects_len, center);
+  uvedit_center(scene, objects, center);
 
   if (sima->flag & SI_COORDFLOATS) {
     delta[0] = uvedit_old_center[0] - center[0];
@@ -226,15 +215,12 @@ static void do_uvedit_vertex(bContext *C, void * /*arg*/, int event)
     delta[1] = uvedit_old_center[1] / imy - center[1];
   }
 
-  uvedit_translate(scene, objects, objects_len, delta);
+  uvedit_translate(scene, objects, delta);
 
   WM_event_add_notifier(C, NC_IMAGE, sima->image);
-  for (uint ob_index = 0; ob_index < objects_len; ob_index++) {
-    Object *obedit = objects[ob_index];
+  for (Object *obedit : objects) {
     DEG_id_tag_update((ID *)obedit->data, ID_RECALC_GEOMETRY);
   }
-
-  MEM_freeN(objects);
 }
 
 /* Panels */

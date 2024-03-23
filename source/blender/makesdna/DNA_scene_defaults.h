@@ -164,6 +164,7 @@
                     RAYTRACE_EEVEE_DENOISE_BILATERAL, \
     .screen_trace_quality = 0.25f, \
     .screen_trace_thickness = 0.2f, \
+    .screen_trace_max_roughness = 0.5f, \
     .sample_clamp = 10.0f, \
     .resolution_scale = 2, \
   }
@@ -236,12 +237,9 @@
     .shadow_step_count = 6, \
     .shadow_normal_bias = 0.02f, \
  \
-    .ray_split_settings = 0, \
     .ray_tracing_method = RAYTRACE_EEVEE_METHOD_SCREEN, \
  \
-    .reflection_options = _DNA_DEFAULT_RaytraceEEVEE, \
-    .refraction_options = _DNA_DEFAULT_RaytraceEEVEE, \
-    .diffuse_options = _DNA_DEFAULT_RaytraceEEVEE, \
+    .ray_tracing_options = _DNA_DEFAULT_RaytraceEEVEE, \
  \
     .light_cache_data = NULL, \
     .light_threshold = 0.01f, \
@@ -310,6 +308,7 @@
 #define _DNA_DEFAULTS_UnifiedPaintSettings \
   { \
     .size = 50, \
+    .input_samples = 1, \
     .unprojected_radius = 0.29, \
     .alpha = 0.5f, \
     .weight = 0.5f, \
@@ -420,6 +419,7 @@
     .automasking_start_normal_falloff = 0.25f, \
     .automasking_view_normal_limit = 1.570796, /* 0.5 * pi. */ \
     .automasking_view_normal_falloff = 0.25f, \
+    .automasking_boundary_edges_propagation_steps = 1, \
     .flags = SCULPT_DYNTOPO_SUBDIVIDE | SCULPT_DYNTOPO_COLLAPSE,\
     .paint = {\
       .symmetry_flags = PAINT_SYMMETRY_FEATHER,\

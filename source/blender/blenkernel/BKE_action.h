@@ -136,6 +136,8 @@ void action_group_colors_set(struct bActionGroup *grp, const struct BoneColor *c
  *
  * If `pchan->color` is set to a non-default color, that is used. Otherwise the
  * armature bone color is used.
+ *
+ * Note that if `pchan->bone` is `nullptr`, this function silently does nothing.
  */
 void action_group_colors_set_from_posebone(bActionGroup *grp, const bPoseChannel *pchan);
 
@@ -260,7 +262,7 @@ void BKE_pose_copy_data(struct bPose **dst, const struct bPose *src, bool copy_c
  * \note use when copying bones in edit-mode (on returned value from #BKE_pose_channel_ensure)
  */
 void BKE_pose_channel_copy_data(struct bPoseChannel *pchan, const struct bPoseChannel *pchan_from);
-void BKE_pose_channel_session_uuid_generate(struct bPoseChannel *pchan);
+void BKE_pose_channel_session_uid_generate(struct bPoseChannel *pchan);
 /**
  * Return a pointer to the pose channel of the given name
  * from this pose.
@@ -316,7 +318,7 @@ struct bPoseChannel *BKE_pose_channel_ensure(struct bPose *pose, const char *nam
 struct bPoseChannel *BKE_pose_channel_get_mirrored(const struct bPose *pose,
                                                    const char *name) ATTR_WARN_UNUSED_RESULT;
 
-void BKE_pose_check_uuids_unique_and_report(const struct bPose *pose);
+void BKE_pose_check_uids_unique_and_report(const struct bPose *pose);
 
 #ifndef NDEBUG
 bool BKE_pose_channels_is_valid(const struct bPose *pose) ATTR_WARN_UNUSED_RESULT;

@@ -13,13 +13,15 @@
 
 #include "BKE_global.h"
 #include "BKE_gpencil_modifier_legacy.h"
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_material.h"
 #include "BKE_object.hh"
 #include "BKE_scene.h"
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
+#include "BLI_task.h"
+#include "BLI_time.h"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -27,15 +29,10 @@
 #include "DNA_gpencil_legacy_types.h"
 #include "DNA_light_types.h"
 #include "DNA_material_types.h"
-#include "DNA_mesh_types.h"
-#include "DNA_meshdata_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_scene_types.h"
 
 #include "MEM_guardedalloc.h"
-
-#include "BLI_task.h"
-#include "PIL_time.h"
 
 /* Shadow loading etc. ================== */
 
@@ -245,6 +242,12 @@ static bool lineart_do_closest_segment(bool is_persp,
 {
   int side = 0;
   int z_index = is_persp ? 3 : 2;
+
+  /* No need to do anything if the segment has no length. */
+  if (s2_fb_co_1[z_index] == s2_fb_co_2[z_index]) {
+    return false;
+  }
+
   /* Always use the closest point to the light camera. */
   if (s1_fb_co_1[z_index] >= s2_fb_co_1[z_index]) {
     copy_v4_v4_db(r_fb_co_1, s2_fb_co_1);
@@ -732,17 +735,17 @@ static bool lineart_shadow_cast_onto_triangle(LineartData *ld,
                                               double *r_gloc_2,
                                               bool *r_facing_light)
 {
-
+  using namespace blender;
   double *LFBC = sedge->fbc1, *RFBC = sedge->fbc2, *FBC0 = tri->v[0]->fbcoord,
          *FBC1 = tri->v[1]->fbcoord, *FBC2 = tri->v[2]->fbcoord;
 
   /* Bound box check. Because we have already done occlusion in the shadow camera, so any visual
    * intersection found in this function must mean that the triangle is behind the given line so it
    * will always project a shadow, hence no need to do depth bound-box check. */
-  if ((MAX3(FBC0[0], FBC1[0], FBC2[0]) < MIN2(LFBC[0], RFBC[0])) ||
-      (MIN3(FBC0[0], FBC1[0], FBC2[0]) > MAX2(LFBC[0], RFBC[0])) ||
-      (MAX3(FBC0[1], FBC1[1], FBC2[1]) < MIN2(LFBC[1], RFBC[1])) ||
-      (MIN3(FBC0[1], FBC1[1], FBC2[1]) > MAX2(LFBC[1], RFBC[1])))
+  if ((std::max({FBC0[0], FBC1[0], FBC2[0]}) < std::min(LFBC[0], RFBC[0])) ||
+      (std::min({FBC0[0], FBC1[0], FBC2[0]}) > std::max(LFBC[0], RFBC[0])) ||
+      (std::max({FBC0[1], FBC1[1], FBC2[1]}) < std::min(LFBC[1], RFBC[1])) ||
+      (std::min({FBC0[1], FBC1[1], FBC2[1]}) > std::max(LFBC[1], RFBC[1])))
   {
     return false;
   }
@@ -761,7 +764,8 @@ static bool lineart_shadow_cast_onto_triangle(LineartData *ld,
      * the edge
      */
     if (!(pi && LRT_DOUBLE_CLOSE_ENOUGH(ratio[0], 1.0f) &&
-          LRT_DOUBLE_CLOSE_ENOUGH(ratio[1], 0.0f))) {
+          LRT_DOUBLE_CLOSE_ENOUGH(ratio[1], 0.0f)))
+    {
       trie[pi] = 1;
       pi++;
     }
@@ -788,7 +792,7 @@ static bool lineart_shadow_cast_onto_triangle(LineartData *ld,
 
   /* Get projected global position. */
 
-  double gpos1[3], gpos2[3];
+  double3 gpos1, gpos2;
   double *v1 = (trie[0] == 0 ? FBC0 : (trie[0] == 1 ? FBC1 : FBC2));
   double *v2 = (trie[0] == 0 ? FBC1 : (trie[0] == 1 ? FBC2 : FBC0));
   double *v3 = (trie[1] == 0 ? FBC0 : (trie[1] == 1 ? FBC1 : FBC2));
@@ -808,7 +812,7 @@ static bool lineart_shadow_cast_onto_triangle(LineartData *ld,
   interp_v3_v3v3_db(gpos1, gv1, gv2, gr1);
   interp_v3_v3v3_db(gpos2, gv3, gv4, gr2);
 
-  double fbc1[4], fbc2[4];
+  double4 fbc1, fbc2;
 
   mul_v4_m4v3_db(fbc1, ld->conf.view_projection, gpos1);
   mul_v4_m4v3_db(fbc2, ld->conf.view_projection, gpos2);
@@ -821,9 +825,9 @@ static bool lineart_shadow_cast_onto_triangle(LineartData *ld,
   double at1 = ratiod(LFBC[use], RFBC[use], fbc1[use]);
   double at2 = ratiod(LFBC[use], RFBC[use], fbc2[use]);
   if (at1 > at2) {
-    swap_v3_v3_db(gpos1, gpos2);
-    swap_v4_v4_db(fbc1, fbc2);
-    SWAP(double, at1, at2);
+    std::swap(gpos1, gpos2);
+    std::swap(fbc1, fbc2);
+    std::swap(at1, at2);
   }
 
   /* If not effectively projecting anything. */
@@ -1153,7 +1157,7 @@ bool lineart_main_try_generate_shadow(Depsgraph *depsgraph,
 
   double t_start;
   if (G.debug_value == 4000) {
-    t_start = PIL_check_seconds_timer();
+    t_start = BLI_check_seconds_timer();
   }
 
   bool is_persp = true;
@@ -1285,7 +1289,7 @@ bool lineart_main_try_generate_shadow(Depsgraph *depsgraph,
   }
 
   if (G.debug_value == 4000) {
-    double t_elapsed = PIL_check_seconds_timer() - t_start;
+    double t_elapsed = BLI_check_seconds_timer() - t_start;
     printf("Line art shadow stage 1 time: %f\n", t_elapsed);
   }
 
@@ -1369,7 +1373,7 @@ void lineart_main_make_enclosed_shapes(LineartData *ld, LineartData *shadow_ld)
 {
   double t_start;
   if (G.debug_value == 4000) {
-    t_start = PIL_check_seconds_timer();
+    t_start = BLI_check_seconds_timer();
   }
 
   if (shadow_ld || ld->conf.shadow_use_silhouette) {
@@ -1380,7 +1384,7 @@ void lineart_main_make_enclosed_shapes(LineartData *ld, LineartData *shadow_ld)
   }
 
   if (G.debug_value == 4000) {
-    double t_elapsed = PIL_check_seconds_timer() - t_start;
+    double t_elapsed = BLI_check_seconds_timer() - t_start;
     printf("Line art shadow stage 2 cast and silhouette time: %f\n", t_elapsed);
   }
 
@@ -1429,7 +1433,7 @@ void lineart_main_make_enclosed_shapes(LineartData *ld, LineartData *shadow_ld)
   lineart_shadow_register_enclosed_shapes(ld, shadow_ld);
 
   if (G.debug_value == 4000) {
-    double t_elapsed = PIL_check_seconds_timer() - t_start;
+    double t_elapsed = BLI_check_seconds_timer() - t_start;
     printf("Line art shadow stage 2 total time: %f\n", t_elapsed);
   }
 }

@@ -5,12 +5,11 @@
 
 #include "BLI_path_util.h"
 
-class BlendfileLoadingTest : public BlendfileLoadingBaseTest {
-};
+class BlendfileLoadingTest : public BlendfileLoadingBaseTest {};
 
 TEST_F(BlendfileLoadingTest, CanaryTest)
 {
-  /* Load the smallest blend file we have in the SVN lib/tests directory. */
+  /* Load the smallest blend file we have in the tests/data directory. */
   if (!blendfile_load("modifier_stack" SEP_STR "array_test.blend")) {
     return;
   }

@@ -11,11 +11,13 @@
 
 #include <optional>
 
+#include "BLI_bounds_types.hh"
 #include "BLI_compiler_attrs.h"
+#include "BLI_math_vector_types.hh"
 #include "BLI_sys_types.h"
+#include "BLI_vector.hh"
 
 #include "DNA_object_enums.h"
-#include "DNA_object_types.h" /* #BoundBox. */
 #include "DNA_userdef_enums.h"
 
 struct Base;
@@ -113,7 +115,8 @@ bool BKE_object_copy_gpencil_modifier(Object *ob_dst, GpencilModifierData *gmd_s
  * Copy the whole stack of modifiers from one object into another.
  *
  * \warning *Does not* clear modifier stack and related data (particle systems, soft-body,
- * etc.) in `ob_dst`, if needed calling code must do it.
+ * etc.) in `ob_dst`, if needed calling code must do it. The caller is also responsible for
+ * ensuring the modifier identifiers are unique.
  *
  * \param do_copy_all: If true, even modifiers that should not support copying (like Hook one)
  * will be duplicated.
@@ -291,33 +294,27 @@ Object *BKE_object_pose_armature_get_visible(Object *ob,
 /**
  * Access pose array with special check to get pose object when in weight paint mode.
  */
-Object **BKE_object_pose_array_get_ex(const Scene *scene,
-                                      ViewLayer *view_layer,
-                                      View3D *v3d,
-                                      unsigned int *r_objects_len,
-                                      bool unique);
-Object **BKE_object_pose_array_get_unique(const Scene *scene,
-                                          ViewLayer *view_layer,
-                                          View3D *v3d,
-                                          unsigned int *r_objects_len);
-Object **BKE_object_pose_array_get(const Scene *scene,
-                                   ViewLayer *view_layer,
-                                   View3D *v3d,
-                                   unsigned int *r_objects_len);
+blender::Vector<Object *> BKE_object_pose_array_get_ex(const Scene *scene,
+                                                       ViewLayer *view_layer,
+                                                       View3D *v3d,
+                                                       bool unique);
+blender::Vector<Object *> BKE_object_pose_array_get_unique(const Scene *scene,
+                                                           ViewLayer *view_layer,
+                                                           View3D *v3d);
+blender::Vector<Object *> BKE_object_pose_array_get(const Scene *scene,
+                                                    ViewLayer *view_layer,
+                                                    View3D *v3d);
 
-Base **BKE_object_pose_base_array_get_ex(const Scene *scene,
-                                         ViewLayer *view_layer,
-                                         View3D *v3d,
-                                         unsigned int *r_bases_len,
-                                         bool unique);
-Base **BKE_object_pose_base_array_get_unique(const Scene *scene,
-                                             ViewLayer *view_layer,
-                                             View3D *v3d,
-                                             unsigned int *r_bases_len);
-Base **BKE_object_pose_base_array_get(const Scene *scene,
-                                      ViewLayer *view_layer,
-                                      View3D *v3d,
-                                      unsigned int *r_bases_len);
+blender::Vector<Base *> BKE_object_pose_base_array_get_ex(const Scene *scene,
+                                                          ViewLayer *view_layer,
+                                                          View3D *v3d,
+                                                          bool unique);
+blender::Vector<Base *> BKE_object_pose_base_array_get_unique(const Scene *scene,
+                                                              ViewLayer *view_layer,
+                                                              View3D *v3d);
+blender::Vector<Base *> BKE_object_pose_base_array_get(const Scene *scene,
+                                                       ViewLayer *view_layer,
+                                                       View3D *v3d);
 
 void BKE_object_get_parent_matrix(Object *ob, Object *par, float r_parentmat[4][4]);
 
@@ -338,17 +335,31 @@ void BKE_object_where_is_calc_mat4(Object *ob, float r_obmat[4][4]);
 
 /* Possibly belong in own module? */
 
-BoundBox *BKE_boundbox_alloc_unit();
 void BKE_boundbox_init_from_minmax(BoundBox *bb, const float min[3], const float max[3]);
-void BKE_boundbox_calc_center_aabb(const BoundBox *bb, float r_cent[3]);
-void BKE_boundbox_calc_size_aabb(const BoundBox *bb, float r_size[3]);
 void BKE_boundbox_minmax(const BoundBox *bb,
                          const float obmat[4][4],
                          float r_min[3],
                          float r_max[3]);
 
-std::optional<BoundBox> BKE_object_boundbox_get(Object *ob);
+/**
+ * Retrieve the bounds of the object's geometry, in the local space of the object
+ * (not accounting for the object's transform). For evaluated objects, this includes
+ * the evaluated geometry (not just #Object.data).
+ */
+std::optional<blender::Bounds<blender::float3>> BKE_object_boundbox_get(const Object *ob);
 void BKE_object_dimensions_get(Object *ob, float r_vec[3]);
+
+/**
+ * Retrieve the bounds of the evaluated object's geometry, stored on the original object as part of
+ * the latest dependency graph evaluation, or fall back to the current bounds of the object if no
+ * such cache exists. For evaluated objects this indirection is unnecessary, so
+ * #BKE_object_boundbox_get should be used instead.
+ */
+std::optional<blender::Bounds<blender::float3>> BKE_object_boundbox_eval_cached_get(
+    const Object *ob);
+/** Similar to #BKE_object_boundbox_eval_cached_get but gives the size of the bounds instead. */
+void BKE_object_dimensions_eval_cached_get(Object *ob, float r_vec[3]);
+
 /**
  * The original scale and object matrix can be passed in so any difference
  * of the objects matrix and the final matrix can be accounted for,
@@ -366,9 +377,9 @@ void BKE_object_dimensions_set(Object *ob, const float value[3], int axis_mask);
 
 void BKE_object_empty_draw_type_set(Object *ob, int value);
 
-void BKE_object_boundbox_calc_from_mesh(Object *ob, const Mesh *me_eval);
-bool BKE_object_boundbox_calc_from_evaluated_geometry(Object *ob);
-void BKE_object_minmax(Object *ob, float r_min[3], float r_max[3], bool use_hidden);
+std::optional<blender::Bounds<blender::float3>> BKE_object_evaluated_geometry_bounds(
+    const Object *ob);
+void BKE_object_minmax(Object *ob, float r_min[3], float r_max[3]);
 bool BKE_object_minmax_dupli(Depsgraph *depsgraph,
                              Scene *scene,
                              Object *ob,
@@ -435,6 +446,8 @@ void BKE_object_eval_transform_final(Depsgraph *depsgraph, Object *ob);
 
 void BKE_object_eval_uber_transform(Depsgraph *depsgraph, Object *object);
 void BKE_object_eval_uber_data(Depsgraph *depsgraph, Scene *scene, Object *ob);
+
+void BKE_object_eval_shading(Depsgraph *depsgraph, Object *ob);
 
 void BKE_object_eval_light_linking(Depsgraph *depsgraph, Object *object);
 
@@ -544,7 +557,7 @@ int BKE_object_is_deform_modified(Scene *scene, Object *ob);
  * Check of objects moves in time.
  *
  * \note This function is currently optimized for usage in combination
- * with modifier deformation checks (#eModifierTypeType_OnlyDeform),
+ * with modifier deformation checks (#ModifierTypeType::OnlyDeform),
  * so modifiers can quickly check if their target objects moves
  * (causing deformation motion blur) or not.
  *
@@ -668,7 +681,7 @@ Curve *BKE_object_to_curve(Object *object, Depsgraph *depsgraph, bool apply_modi
 
 void BKE_object_to_curve_clear(Object *object);
 
-void BKE_object_check_uuids_unique_and_report(const Object *object);
+void BKE_object_check_uids_unique_and_report(const Object *object);
 
 /**
  * Return the last subsurf modifier of an object, this does not check whether modifiers on top of

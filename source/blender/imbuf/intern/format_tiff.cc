@@ -8,9 +8,9 @@
 
 #include "oiio/openimageio_support.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_filetype.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_colormanagement.hh"
+#include "IMB_filetype.hh"
+#include "IMB_imbuf_types.hh"
 
 OIIO_NAMESPACE_USING
 using namespace blender::imbuf;
@@ -19,15 +19,7 @@ extern "C" {
 
 bool imb_is_a_tiff(const uchar *mem, size_t size)
 {
-  constexpr int MAGIC_SIZE = 4;
-  if (size < MAGIC_SIZE) {
-    return false;
-  }
-
-  const char big_endian[MAGIC_SIZE] = {0x4d, 0x4d, 0x00, 0x2a};
-  const char lil_endian[MAGIC_SIZE] = {0x49, 0x49, 0x2a, 0x00};
-  return ((memcmp(big_endian, mem, MAGIC_SIZE) == 0) ||
-          (memcmp(lil_endian, mem, MAGIC_SIZE) == 0));
+  return imb_oiio_check(mem, size, "tif");
 }
 
 ImBuf *imb_load_tiff(const uchar *mem, size_t size, int flags, char colorspace[IM_MAX_SPACE])
@@ -76,6 +68,9 @@ bool imb_save_tiff(ImBuf *ibuf, const char *filepath, int flags)
   }
   else if (ibuf->foptions.flag & TIF_COMPRESS_PACKBITS) {
     file_spec.attribute("compression", "packbits");
+  }
+  else if (ibuf->foptions.flag & TIF_COMPRESS_NONE) {
+    file_spec.attribute("compression", "none");
   }
 
   return imb_oiio_write(ctx, filepath, file_spec);

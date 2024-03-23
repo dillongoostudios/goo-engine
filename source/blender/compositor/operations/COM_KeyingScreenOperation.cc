@@ -15,8 +15,8 @@
 #include "BKE_movieclip.h"
 #include "BKE_tracking.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 namespace blender::compositor {
 
@@ -144,7 +144,7 @@ Array<KeyingScreenOperation::MarkerPoint> *KeyingScreenOperation::compute_marker
   return marker_points;
 }
 
-void *KeyingScreenOperation::initialize_tile_data(rcti * /* rect*/)
+void *KeyingScreenOperation::initialize_tile_data(rcti * /*rect*/)
 {
   if (movie_clip_ == nullptr) {
     return nullptr;

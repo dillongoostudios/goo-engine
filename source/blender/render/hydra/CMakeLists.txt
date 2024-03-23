@@ -19,7 +19,7 @@ add_definitions(-DBOOST_ALL_NO_LIB)
 # Clang as well works around the issue.
 if(UNIX AND NOT APPLE)
   if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    if(EXISTS ${LIBDIR})
+    if(DEFINED LIBDIR)
       add_definitions(-DARCH_HAS_GNU_STL_EXTENSIONS)
     endif()
   endif()
@@ -36,11 +36,9 @@ if(WIN32)
 endif()
 
 set(INC
-  ../../../../intern/clog
   ../../../../intern/guardedalloc
   ../../blenkernel
   ../../blenlib
-  ../../depsgraph
   ../../imbuf
   ../../makesdna
   ../../makesrna
@@ -70,10 +68,13 @@ set(LIB
   ${BOOST_LIBRARIES}
   ${USD_LIBRARIES}
   ${TBB_LIBRARIES}
+  PRIVATE bf::depsgraph
+  PRIVATE bf::intern::clog
   bf_io_usd
 )
 
 set(SRC
+  camera.cc
   engine.cc
   final_engine.cc
   light_tasks_delegate.cc
@@ -82,13 +83,14 @@ set(SRC
   render_task_delegate.cc
   viewport_engine.cc
 
-  engine.h
-  final_engine.h
-  light_tasks_delegate.h
-  preview_engine.h
-  render_task_delegate.h
-  settings.h
-  viewport_engine.h
+  camera.hh
+  engine.hh
+  final_engine.hh
+  light_tasks_delegate.hh
+  preview_engine.hh
+  render_task_delegate.hh
+  settings.hh
+  viewport_engine.hh
 )
 
 blender_add_lib(bf_render_hydra "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

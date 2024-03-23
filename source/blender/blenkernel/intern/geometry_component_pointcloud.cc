@@ -5,8 +5,8 @@
 #include "DNA_pointcloud_types.h"
 
 #include "BKE_geometry_set.hh"
-#include "BKE_lib_id.h"
-#include "BKE_pointcloud.h"
+#include "BKE_lib_id.hh"
+#include "BKE_pointcloud.hh"
 
 #include "attribute_access_intern.hh"
 
@@ -18,19 +18,24 @@ namespace blender::bke {
 
 PointCloudComponent::PointCloudComponent() : GeometryComponent(Type::PointCloud) {}
 
+PointCloudComponent::PointCloudComponent(PointCloud *pointcloud, GeometryOwnershipType ownership)
+    : GeometryComponent(Type::PointCloud), pointcloud_(pointcloud), ownership_(ownership)
+{
+}
+
 PointCloudComponent::~PointCloudComponent()
 {
   this->clear();
 }
 
-GeometryComponent *PointCloudComponent::copy() const
+GeometryComponentPtr PointCloudComponent::copy() const
 {
   PointCloudComponent *new_component = new PointCloudComponent();
   if (pointcloud_ != nullptr) {
     new_component->pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_);
     new_component->ownership_ = GeometryOwnershipType::Owned;
   }
-  return new_component;
+  return GeometryComponentPtr(new_component);
 }
 
 void PointCloudComponent::clear()
@@ -94,7 +99,9 @@ void PointCloudComponent::ensure_owns_direct_data()
 {
   BLI_assert(this->is_mutable());
   if (ownership_ != GeometryOwnershipType::Owned) {
-    pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_);
+    if (pointcloud_) {
+      pointcloud_ = BKE_pointcloud_copy_for_eval(pointcloud_);
+    }
     ownership_ = GeometryOwnershipType::Owned;
   }
 }
@@ -138,7 +145,7 @@ static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
       }};
 
   static BuiltinCustomDataLayerProvider position("position",
-                                                 ATTR_DOMAIN_POINT,
+                                                 AttrDomain::Point,
                                                  CD_PROP_FLOAT3,
                                                  CD_PROP_FLOAT3,
                                                  BuiltinAttributeProvider::Creatable,
@@ -146,7 +153,7 @@ static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
                                                  point_access,
                                                  tag_component_positions_changed);
   static BuiltinCustomDataLayerProvider radius("radius",
-                                               ATTR_DOMAIN_POINT,
+                                               AttrDomain::Point,
                                                CD_PROP_FLOAT,
                                                CD_PROP_FLOAT,
                                                BuiltinAttributeProvider::Creatable,
@@ -154,14 +161,14 @@ static ComponentAttributeProviders create_attribute_providers_for_point_cloud()
                                                point_access,
                                                tag_component_radius_changed);
   static BuiltinCustomDataLayerProvider id("id",
-                                           ATTR_DOMAIN_POINT,
+                                           AttrDomain::Point,
                                            CD_PROP_INT32,
                                            CD_PROP_INT32,
                                            BuiltinAttributeProvider::Creatable,
                                            BuiltinAttributeProvider::Deletable,
                                            point_access,
                                            nullptr);
-  static CustomDataAttributeProvider point_custom_data(ATTR_DOMAIN_POINT, point_access);
+  static CustomDataAttributeProvider point_custom_data(AttrDomain::Point, point_access);
   return ComponentAttributeProviders({&position, &radius, &id}, {&point_custom_data});
 }
 
@@ -171,26 +178,26 @@ static AttributeAccessorFunctions get_pointcloud_accessor_functions()
       create_attribute_providers_for_point_cloud();
   AttributeAccessorFunctions fn =
       attribute_accessor_functions::accessor_functions_for_providers<providers>();
-  fn.domain_size = [](const void *owner, const eAttrDomain domain) {
+  fn.domain_size = [](const void *owner, const AttrDomain domain) {
     if (owner == nullptr) {
       return 0;
     }
     const PointCloud &pointcloud = *static_cast<const PointCloud *>(owner);
     switch (domain) {
-      case ATTR_DOMAIN_POINT:
+      case AttrDomain::Point:
         return pointcloud.totpoint;
       default:
         return 0;
     }
   };
-  fn.domain_supported = [](const void * /*owner*/, const eAttrDomain domain) {
-    return domain == ATTR_DOMAIN_POINT;
+  fn.domain_supported = [](const void * /*owner*/, const AttrDomain domain) {
+    return domain == AttrDomain::Point;
   };
   fn.adapt_domain = [](const void * /*owner*/,
                        const GVArray &varray,
-                       const eAttrDomain from_domain,
-                       const eAttrDomain to_domain) {
-    if (from_domain == to_domain && from_domain == ATTR_DOMAIN_POINT) {
+                       const AttrDomain from_domain,
+                       const AttrDomain to_domain) {
+    if (from_domain == to_domain && from_domain == AttrDomain::Point) {
       return varray;
     }
     return GVArray{};

@@ -19,11 +19,11 @@
 #include "DNA_space_types.h"
 #include "DNA_view3d_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "GPU_immediate.h"
 #include "GPU_matrix.h"
-#include "GPU_select.h"
+#include "GPU_select.hh"
 #include "GPU_state.h"
 
 #include "RNA_access.hh"

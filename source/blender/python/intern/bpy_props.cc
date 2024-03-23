@@ -13,10 +13,13 @@
 /* Future-proof, See https://docs.python.org/3/c-api/arg.html#strings-and-buffers */
 #define PY_SSIZE_T_CLEAN
 
+#include <algorithm>
+
 #include <Python.h>
 
 #include "RNA_types.hh"
 
+#include "BLI_array.hh"
 #include "BLI_listbase.h"
 #include "BLI_utildefines.h"
 
@@ -38,6 +41,8 @@
 #include "../generic/py_capi_rna.h"
 #include "../generic/py_capi_utils.h"
 #include "../generic/python_compat.h"
+
+using blender::Array;
 
 /* Disabled duplicating strings because the array can still be freed and
  * the strings from it referenced, for now we can't support dynamically
@@ -273,12 +278,14 @@ static PyGetSetDef bpy_prop_deferred_getset[] = {
     {nullptr, nullptr, nullptr, nullptr, nullptr} /* Sentinel */
 };
 
-PyDoc_STRVAR(bpy_prop_deferred_doc,
-             "Intermediate storage for properties before registration.\n"
-             "\n"
-             ".. note::\n"
-             "\n"
-             "   This is not part of the stable API and may change between releases.");
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_prop_deferred_doc,
+    "Intermediate storage for properties before registration.\n"
+    "\n"
+    ".. note::\n"
+    "\n"
+    "   This is not part of the stable API and may change between releases.");
 
 PyTypeObject bpy_prop_deferred_Type = {
     /*ob_base*/ PyVarObject_HEAD_INIT(nullptr, 0)
@@ -462,6 +469,7 @@ static int bpy_prop_array_length_parse(PyObject *o, void *p)
     }
 
     PyObject **seq_items = PySequence_Fast_ITEMS(seq_fast);
+    array_len_info->len_total = 1;
     for (int i = 0; i < seq_len; i++) {
       int size;
       if ((size = PyLong_AsLong(seq_items[i])) == -1) {
@@ -483,6 +491,7 @@ static int bpy_prop_array_length_parse(PyObject *o, void *p)
 
       array_len_info->dims[i] = size;
       array_len_info->dims_len = seq_len;
+      array_len_info->len_total *= size;
     }
   }
   return 1;
@@ -2555,7 +2564,7 @@ static StructRNA *bpy_prop_deferred_data_or_srna(PyObject *self,
 
 /* Crash if this is ever used by accident! */
 #ifndef NDEBUG
-  *r_deferred_result = (PyObject *)(intptr_t)1;
+  *r_deferred_result = (PyObject *)intptr_t(1);
 #endif
 
   /* No error or deferred result, perform registration immediately. */
@@ -2767,24 +2776,25 @@ static int bpy_struct_id_used(StructRNA *srna, char *identifier)
  *
  * \{ */
 
-PyDoc_STRVAR(BPy_BoolProperty_doc,
-             ".. function:: BoolProperty(name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "default=False, "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set(), "
-             "subtype='NONE', "
-             "update=None, "
-             "get=None, "
-             "set=None)\n"
-             "\n"
-             "   Returns a new boolean property definition.\n"
-             "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
-                 BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC
-                     BPY_PROPDEF_SUBTYPE_NUMBER_DOC BPY_PROPDEF_UPDATE_DOC BPY_PROPDEF_GET_DOC
-                         BPY_PROPDEF_SET_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_BoolProperty_doc,
+    ".. function:: BoolProperty(name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "default=False, "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set(), "
+    "subtype='NONE', "
+    "update=None, "
+    "get=None, "
+    "set=None)\n"
+    "\n"
+    "   Returns a new boolean property definition.\n"
+    "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC BPY_PROPDEF_OPTIONS_DOC
+        BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_SUBTYPE_NUMBER_DOC
+            BPY_PROPDEF_UPDATE_DOC BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC);
 static PyObject *BPy_BoolProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -2919,6 +2929,7 @@ static PyObject *BPy_BoolProperty(PyObject *self, PyObject *args, PyObject *kw)
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     BPy_BoolVectorProperty_doc,
     ".. function:: BoolVectorProperty(name=\"\", "
     "description=\"\", "
@@ -2956,7 +2967,7 @@ static PyObject *BPy_BoolVectorProperty(PyObject *self, PyObject *args, PyObject
 
   const char *name = nullptr, *description = "";
   const char *translation_context = nullptr;
-  bool default_value[RNA_MAX_ARRAY_DIMENSION][PYRNA_STACK_ARRAY] = {{false}};
+  Array<bool, RNA_STACK_ARRAY> default_value;
   BPyPropArrayLength array_len_info{};
   array_len_info.len_total = 3;
   PropertyRNA *prop;
@@ -3044,8 +3055,9 @@ static PyObject *BPy_BoolVectorProperty(PyObject *self, PyObject *args, PyObject
   }
 
   if (default_py != nullptr) {
-    if (bpy_prop_array_from_py_with_dims(default_value[0],
-                                         sizeof(*default_value[0]),
+    default_value.reinitialize(array_len_info.len_total);
+    if (bpy_prop_array_from_py_with_dims(default_value.data(),
+                                         sizeof(*default_value.data()),
                                          default_py,
                                          &array_len_info,
                                          &PyBool_Type,
@@ -3073,13 +3085,13 @@ static PyObject *BPy_BoolVectorProperty(PyObject *self, PyObject *args, PyObject
   if (array_len_info.dims_len == 0) {
     RNA_def_property_array(prop, array_len_info.len_total);
     if (default_py != nullptr) {
-      RNA_def_property_boolean_array_default(prop, default_value[0]);
+      RNA_def_property_boolean_array_default(prop, default_value.data());
     }
   }
   else {
     RNA_def_property_multi_array(prop, array_len_info.dims_len, array_len_info.dims);
     if (default_py != nullptr) {
-      RNA_def_property_boolean_array_default(prop, &default_value[0][0]);
+      RNA_def_property_boolean_array_default(prop, default_value.data());
     }
   }
 
@@ -3105,6 +3117,7 @@ static PyObject *BPy_BoolVectorProperty(PyObject *self, PyObject *args, PyObject
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     BPy_IntProperty_doc,
     ".. function:: IntProperty(name=\"\", "
     "description=\"\", "
@@ -3262,7 +3275,7 @@ static PyObject *BPy_IntProperty(PyObject *self, PyObject *args, PyObject *kw)
     RNA_def_property_translation_context(prop, translation_context);
   }
   RNA_def_property_range(prop, min, max);
-  RNA_def_property_ui_range(prop, std::max(soft_min, min), MIN2(soft_max, max), step, 3);
+  RNA_def_property_ui_range(prop, std::max(soft_min, min), std::min(soft_max, max), step, 3);
 
   if (tags_enum.base.is_set) {
     RNA_def_property_tags(prop, tags_enum.base.value);
@@ -3280,34 +3293,35 @@ static PyObject *BPy_IntProperty(PyObject *self, PyObject *args, PyObject *kw)
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(BPy_IntVectorProperty_doc,
-             ".. function:: IntVectorProperty(name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "default=(0, 0, 0), min=-2**31, max=2**31-1, "
-             "soft_min=-2**31, "
-             "soft_max=2**31-1, "
-             "step=1, "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set(), "
-             "subtype='NONE', "
-             "size=3, "
-             "update=None, "
-             "get=None, "
-             "set=None)\n"
-             "\n"
-             "   Returns a new vector int property definition.\n"
-             "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
-             "   :arg default: sequence of ints the length of *size*.\n"
-             "   :type default: sequence\n" BPY_PROPDEF_NUM_MIN_DOC
-             "   :type min: int\n" BPY_PROPDEF_NUM_MAX_DOC
-             "   :type max: int\n" BPY_PROPDEF_NUM_SOFTMIN_DOC
-             "   :type soft_min: int\n" BPY_PROPDEF_NUM_SOFTMAX_DOC
-             "   :type soft_max: int\n" BPY_PROPDEF_INT_STEP_DOC BPY_PROPDEF_OPTIONS_DOC
-                 BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC
-                     BPY_PROPDEF_SUBTYPE_NUMBER_ARRAY_DOC BPY_PROPDEF_VECSIZE_DOC
-                         BPY_PROPDEF_UPDATE_DOC BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_IntVectorProperty_doc,
+    ".. function:: IntVectorProperty(name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "default=(0, 0, 0), min=-2**31, max=2**31-1, "
+    "soft_min=-2**31, "
+    "soft_max=2**31-1, "
+    "step=1, "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set(), "
+    "subtype='NONE', "
+    "size=3, "
+    "update=None, "
+    "get=None, "
+    "set=None)\n"
+    "\n"
+    "   Returns a new vector int property definition.\n"
+    "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
+    "   :arg default: sequence of ints the length of *size*.\n"
+    "   :type default: sequence\n" BPY_PROPDEF_NUM_MIN_DOC
+    "   :type min: int\n" BPY_PROPDEF_NUM_MAX_DOC "   :type max: int\n" BPY_PROPDEF_NUM_SOFTMIN_DOC
+    "   :type soft_min: int\n" BPY_PROPDEF_NUM_SOFTMAX_DOC
+    "   :type soft_max: int\n" BPY_PROPDEF_INT_STEP_DOC BPY_PROPDEF_OPTIONS_DOC
+        BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_SUBTYPE_NUMBER_ARRAY_DOC
+            BPY_PROPDEF_VECSIZE_DOC BPY_PROPDEF_UPDATE_DOC BPY_PROPDEF_GET_DOC
+                BPY_PROPDEF_SET_DOC);
 static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -3327,7 +3341,7 @@ static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject 
   const char *translation_context = nullptr;
   int min = INT_MIN, max = INT_MAX, soft_min = INT_MIN, soft_max = INT_MAX;
   int step = 1;
-  int default_value[RNA_MAX_ARRAY_DIMENSION][PYRNA_STACK_ARRAY] = {};
+  Array<int, RNA_STACK_ARRAY> default_value;
   BPyPropArrayLength array_len_info{};
   array_len_info.len_total = 3;
   PropertyRNA *prop;
@@ -3416,8 +3430,9 @@ static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject 
   }
 
   if (default_py != nullptr) {
-    if (bpy_prop_array_from_py_with_dims(default_value[0],
-                                         sizeof(*default_value[0]),
+    default_value.reinitialize(array_len_info.len_total);
+    if (bpy_prop_array_from_py_with_dims(default_value.data(),
+                                         sizeof(*default_value.data()),
                                          default_py,
                                          &array_len_info,
                                          &PyLong_Type,
@@ -3445,13 +3460,13 @@ static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject 
   if (array_len_info.dims_len == 0) {
     RNA_def_property_array(prop, array_len_info.len_total);
     if (default_py != nullptr) {
-      RNA_def_property_int_array_default(prop, default_value[0]);
+      RNA_def_property_int_array_default(prop, default_value.data());
     }
   }
   else {
     RNA_def_property_multi_array(prop, array_len_info.dims_len, array_len_info.dims);
     if (default_py != nullptr) {
-      RNA_def_property_int_array_default(prop, &default_value[0][0]);
+      RNA_def_property_int_array_default(prop, default_value.data());
     }
   }
 
@@ -3460,7 +3475,7 @@ static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject 
   if (translation_context) {
     RNA_def_property_translation_context(prop, translation_context);
   }
-  RNA_def_property_ui_range(prop, std::max(soft_min, min), MIN2(soft_max, max), step, 3);
+  RNA_def_property_ui_range(prop, std::max(soft_min, min), std::min(soft_max, max), step, 3);
 
   if (tags_enum.base.is_set) {
     RNA_def_property_tags(prop, tags_enum.base.value);
@@ -3478,33 +3493,35 @@ static PyObject *BPy_IntVectorProperty(PyObject *self, PyObject *args, PyObject 
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(BPy_FloatProperty_doc,
-             ".. function:: FloatProperty(name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "default=0.0, "
-             "min=-3.402823e+38, max=3.402823e+38, "
-             "soft_min=-3.402823e+38, soft_max=3.402823e+38, "
-             "step=3, "
-             "precision=2, "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set(), "
-             "subtype='NONE', "
-             "unit='NONE', "
-             "update=None, "
-             "get=None, "
-             "set=None)\n"
-             "\n"
-             "   Returns a new float (single precision) property definition.\n"
-             "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
-                 BPY_PROPDEF_NUM_MIN_DOC "   :type min: float\n" BPY_PROPDEF_NUM_MAX_DOC
-             "   :type max: float\n" BPY_PROPDEF_NUM_SOFTMIN_DOC
-             "   :type soft_min: float\n" BPY_PROPDEF_NUM_SOFTMAX_DOC
-             "   :type soft_max: float\n" BPY_PROPDEF_FLOAT_STEP_DOC BPY_PROPDEF_FLOAT_PREC_DOC
-                 BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC
-                     BPY_PROPDEF_SUBTYPE_NUMBER_DOC BPY_PROPDEF_UNIT_DOC BPY_PROPDEF_UPDATE_DOC
-                         BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_FloatProperty_doc,
+    ".. function:: FloatProperty(name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "default=0.0, "
+    "min=-3.402823e+38, max=3.402823e+38, "
+    "soft_min=-3.402823e+38, soft_max=3.402823e+38, "
+    "step=3, "
+    "precision=2, "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set(), "
+    "subtype='NONE', "
+    "unit='NONE', "
+    "update=None, "
+    "get=None, "
+    "set=None)\n"
+    "\n"
+    "   Returns a new float (single precision) property definition.\n"
+    "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC BPY_PROPDEF_NUM_MIN_DOC
+    "   :type min: float\n" BPY_PROPDEF_NUM_MAX_DOC
+    "   :type max: float\n" BPY_PROPDEF_NUM_SOFTMIN_DOC
+    "   :type soft_min: float\n" BPY_PROPDEF_NUM_SOFTMAX_DOC
+    "   :type soft_max: float\n" BPY_PROPDEF_FLOAT_STEP_DOC BPY_PROPDEF_FLOAT_PREC_DOC
+        BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC
+            BPY_PROPDEF_SUBTYPE_NUMBER_DOC BPY_PROPDEF_UNIT_DOC BPY_PROPDEF_UPDATE_DOC
+                BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC);
 static PyObject *BPy_FloatProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -3636,7 +3653,8 @@ static PyObject *BPy_FloatProperty(PyObject *self, PyObject *args, PyObject *kw)
   if (translation_context) {
     RNA_def_property_translation_context(prop, translation_context);
   }
-  RNA_def_property_ui_range(prop, MAX2(soft_min, min), MIN2(soft_max, max), step, precision);
+  RNA_def_property_ui_range(
+      prop, std::max(soft_min, min), std::min(soft_max, max), step, precision);
 
   if (tags_enum.base.is_set) {
     RNA_def_property_tags(prop, tags_enum.base.value);
@@ -3654,37 +3672,38 @@ static PyObject *BPy_FloatProperty(PyObject *self, PyObject *args, PyObject *kw)
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(BPy_FloatVectorProperty_doc,
-             ".. function:: FloatVectorProperty(name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "default=(0.0, 0.0, 0.0), "
-             "min=sys.float_info.min, max=sys.float_info.max, "
-             "soft_min=sys.float_info.min, soft_max=sys.float_info.max, "
-             "step=3, "
-             "precision=2, "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set(), "
-             "subtype='NONE', "
-             "unit='NONE', "
-             "size=3, "
-             "update=None, "
-             "get=None, "
-             "set=None)\n"
-             "\n"
-             "   Returns a new vector float property definition.\n"
-             "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
-             "   :arg default: sequence of floats the length of *size*.\n"
-             "   :type default: sequence\n" BPY_PROPDEF_NUM_MIN_DOC
-             "   :type min: float\n" BPY_PROPDEF_NUM_MAX_DOC
-             "   :type max: float\n" BPY_PROPDEF_NUM_SOFTMIN_DOC
-             "   :type soft_min: float\n" BPY_PROPDEF_NUM_SOFTMAX_DOC
-             "   :type soft_max: float\n" BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC
-                 BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_FLOAT_STEP_DOC BPY_PROPDEF_FLOAT_PREC_DOC
-                     BPY_PROPDEF_SUBTYPE_NUMBER_ARRAY_DOC BPY_PROPDEF_UNIT_DOC
-                         BPY_PROPDEF_VECSIZE_DOC BPY_PROPDEF_UPDATE_DOC BPY_PROPDEF_GET_DOC
-                             BPY_PROPDEF_SET_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_FloatVectorProperty_doc,
+    ".. function:: FloatVectorProperty(name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "default=(0.0, 0.0, 0.0), "
+    "min=sys.float_info.min, max=sys.float_info.max, "
+    "soft_min=sys.float_info.min, soft_max=sys.float_info.max, "
+    "step=3, "
+    "precision=2, "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set(), "
+    "subtype='NONE', "
+    "unit='NONE', "
+    "size=3, "
+    "update=None, "
+    "get=None, "
+    "set=None)\n"
+    "\n"
+    "   Returns a new vector float property definition.\n"
+    "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
+    "   :arg default: sequence of floats the length of *size*.\n"
+    "   :type default: sequence\n" BPY_PROPDEF_NUM_MIN_DOC
+    "   :type min: float\n" BPY_PROPDEF_NUM_MAX_DOC
+    "   :type max: float\n" BPY_PROPDEF_NUM_SOFTMIN_DOC
+    "   :type soft_min: float\n" BPY_PROPDEF_NUM_SOFTMAX_DOC
+    "   :type soft_max: float\n" BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC
+        BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_FLOAT_STEP_DOC BPY_PROPDEF_FLOAT_PREC_DOC
+            BPY_PROPDEF_SUBTYPE_NUMBER_ARRAY_DOC BPY_PROPDEF_UNIT_DOC BPY_PROPDEF_VECSIZE_DOC
+                BPY_PROPDEF_UPDATE_DOC BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC);
 static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -3704,7 +3723,7 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
   const char *translation_context = nullptr;
   float min = -FLT_MAX, max = FLT_MAX, soft_min = -FLT_MAX, soft_max = FLT_MAX;
   float step = 3;
-  float default_value[RNA_MAX_ARRAY_DIMENSION][PYRNA_STACK_ARRAY] = {{0.0f}};
+  Array<float, RNA_STACK_ARRAY> default_value;
   int precision = 2;
   BPyPropArrayLength array_len_info{};
   array_len_info.len_total = 3;
@@ -3804,8 +3823,9 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
   }
 
   if (default_py != nullptr) {
-    if (bpy_prop_array_from_py_with_dims(default_value[0],
-                                         sizeof(*default_value[0]),
+    default_value.reinitialize(array_len_info.len_total);
+    if (bpy_prop_array_from_py_with_dims(default_value.data(),
+                                         sizeof(*default_value.data()),
                                          default_py,
                                          &array_len_info,
                                          &PyFloat_Type,
@@ -3814,7 +3834,7 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
       return nullptr;
     }
     if (bpy_prop_array_is_matrix_compatible_ex(subtype_enum.value, &array_len_info)) {
-      bpy_prop_array_matrix_swap_row_column_vn(&default_value[0][0], &array_len_info);
+      bpy_prop_array_matrix_swap_row_column_vn(default_value.data(), &array_len_info);
     }
   }
 
@@ -3836,13 +3856,13 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
   if (array_len_info.dims_len == 0) {
     RNA_def_property_array(prop, array_len_info.len_total);
     if (default_py != nullptr) {
-      RNA_def_property_float_array_default(prop, default_value[0]);
+      RNA_def_property_float_array_default(prop, default_value.data());
     }
   }
   else {
     RNA_def_property_multi_array(prop, array_len_info.dims_len, array_len_info.dims);
     if (default_py != nullptr) {
-      RNA_def_property_float_array_default(prop, &default_value[0][0]);
+      RNA_def_property_float_array_default(prop, default_value.data());
     }
   }
 
@@ -3851,7 +3871,8 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
   if (translation_context) {
     RNA_def_property_translation_context(prop, translation_context);
   }
-  RNA_def_property_ui_range(prop, MAX2(soft_min, min), MIN2(soft_max, max), step, precision);
+  RNA_def_property_ui_range(
+      prop, std::max(soft_min, min), std::min(soft_max, max), step, precision);
 
   if (tags_enum.base.is_set) {
     RNA_def_property_tags(prop, tags_enum.base.value);
@@ -3869,30 +3890,32 @@ static PyObject *BPy_FloatVectorProperty(PyObject *self, PyObject *args, PyObjec
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(BPy_StringProperty_doc,
-             ".. function:: StringProperty(name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "default=\"\", "
-             "maxlen=0, "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set(), "
-             "subtype='NONE', "
-             "update=None, "
-             "get=None, "
-             "set=None, "
-             "search=None, "
-             "search_options={'SUGGESTION'})\n"
-             "\n"
-             "   Returns a new string property definition.\n"
-             "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
-             "   :arg default: initializer string.\n"
-             "   :type default: string\n"
-             "   :arg maxlen: maximum length of the string.\n"
-             "   :type maxlen: int\n" BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC
-                 BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_SUBTYPE_STRING_DOC BPY_PROPDEF_UPDATE_DOC
-                     BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC BPY_PROPDEF_SEARCH_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_StringProperty_doc,
+    ".. function:: StringProperty(name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "default=\"\", "
+    "maxlen=0, "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set(), "
+    "subtype='NONE', "
+    "update=None, "
+    "get=None, "
+    "set=None, "
+    "search=None, "
+    "search_options={'SUGGESTION'})\n"
+    "\n"
+    "   Returns a new string property definition.\n"
+    "\n" BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC BPY_PROPDEF_CTXT_DOC
+    "   :arg default: initializer string.\n"
+    "   :type default: string\n"
+    "   :arg maxlen: maximum length of the string.\n"
+    "   :type maxlen: int\n" BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC
+        BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_SUBTYPE_STRING_DOC BPY_PROPDEF_UPDATE_DOC
+            BPY_PROPDEF_GET_DOC BPY_PROPDEF_SET_DOC BPY_PROPDEF_SEARCH_DOC);
 static PyObject *BPy_StringProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -4051,6 +4074,7 @@ static PyObject *BPy_StringProperty(PyObject *self, PyObject *args, PyObject *kw
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     BPy_EnumProperty_doc,
     ".. function:: EnumProperty(items, "
     "name=\"\", "
@@ -4101,7 +4125,7 @@ PyDoc_STRVAR(
     "*items*, or integer matching an item number.\n"
     "      If the *ENUM_FLAG* option is used this must be a set of such string identifiers "
     "instead.\n"
-    "      WARNING: Strings can not be specified for dynamic enums\n"
+    "      WARNING: Strings cannot be specified for dynamic enums\n"
     "      (i.e. if a callback function is given as *items* parameter).\n"
     "   :type default: string, integer or set\n" BPY_PROPDEF_OPTIONS_ENUM_DOC
         BPY_PROPDEF_OPTIONS_OVERRIDE_DOC BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_UPDATE_DOC
@@ -4326,21 +4350,23 @@ StructRNA *pointer_type_from_py(PyObject *value, const char *error_prefix)
   return srna;
 }
 
-PyDoc_STRVAR(BPy_PointerProperty_doc,
-             ".. function:: PointerProperty(type=None, "
-             "name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set(), "
-             "poll=None, "
-             "update=None)\n"
-             "\n"
-             "   Returns a new pointer property definition.\n"
-             "\n" BPY_PROPDEF_POINTER_TYPE_DOC BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC
-                 BPY_PROPDEF_CTXT_DOC BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC
-                     BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_POLL_DOC BPY_PROPDEF_UPDATE_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_PointerProperty_doc,
+    ".. function:: PointerProperty(type=None, "
+    "name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set(), "
+    "poll=None, "
+    "update=None)\n"
+    "\n"
+    "   Returns a new pointer property definition.\n"
+    "\n" BPY_PROPDEF_POINTER_TYPE_DOC BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC
+        BPY_PROPDEF_CTXT_DOC BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_DOC
+            BPY_PROPDEF_TAGS_DOC BPY_PROPDEF_POLL_DOC BPY_PROPDEF_UPDATE_DOC);
 PyObject *BPy_PointerProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -4475,19 +4501,21 @@ PyObject *BPy_PointerProperty(PyObject *self, PyObject *args, PyObject *kw)
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(BPy_CollectionProperty_doc,
-             ".. function:: CollectionProperty(type=None, "
-             "name=\"\", "
-             "description=\"\", "
-             "translation_context=\"*\", "
-             "options={'ANIMATABLE'}, "
-             "override=set(), "
-             "tags=set())\n"
-             "\n"
-             "   Returns a new collection property definition.\n"
-             "\n" BPY_PROPDEF_COLLECTION_TYPE_DOC BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC
-                 BPY_PROPDEF_CTXT_DOC BPY_PROPDEF_OPTIONS_DOC
-                     BPY_PROPDEF_OPTIONS_OVERRIDE_COLLECTION_DOC BPY_PROPDEF_TAGS_DOC);
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_CollectionProperty_doc,
+    ".. function:: CollectionProperty(type=None, "
+    "name=\"\", "
+    "description=\"\", "
+    "translation_context=\"*\", "
+    "options={'ANIMATABLE'}, "
+    "override=set(), "
+    "tags=set())\n"
+    "\n"
+    "   Returns a new collection property definition.\n"
+    "\n" BPY_PROPDEF_COLLECTION_TYPE_DOC BPY_PROPDEF_NAME_DOC BPY_PROPDEF_DESC_DOC
+        BPY_PROPDEF_CTXT_DOC BPY_PROPDEF_OPTIONS_DOC BPY_PROPDEF_OPTIONS_OVERRIDE_COLLECTION_DOC
+            BPY_PROPDEF_TAGS_DOC);
 PyObject *BPy_CollectionProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -4606,18 +4634,20 @@ PyObject *BPy_CollectionProperty(PyObject *self, PyObject *args, PyObject *kw)
   Py_RETURN_NONE;
 }
 
-PyDoc_STRVAR(BPy_RemoveProperty_doc,
-             ".. function:: RemoveProperty(cls, attr)\n"
-             "\n"
-             "   Removes a dynamically defined property.\n"
-             "\n"
-             "   :arg cls: The class containing the property (must be a positional argument).\n"
-             "   :type cls: type\n"
-             "   :arg attr: Property name (must be passed as a keyword).\n"
-             "   :type attr: string\n"
-             "\n"
-             ".. note:: Typically this function doesn't need to be accessed directly.\n"
-             "   Instead use ``del cls.attr``\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_RemoveProperty_doc,
+    ".. function:: RemoveProperty(cls, attr)\n"
+    "\n"
+    "   Removes a dynamically defined property.\n"
+    "\n"
+    "   :arg cls: The class containing the property (must be a positional argument).\n"
+    "   :type cls: type\n"
+    "   :arg attr: Property name (must be passed as a keyword).\n"
+    "   :type attr: string\n"
+    "\n"
+    ".. note:: Typically this function doesn't need to be accessed directly.\n"
+    "   Instead use ``del cls.attr``\n");
 static PyObject *BPy_RemoveProperty(PyObject *self, PyObject *args, PyObject *kw)
 {
   StructRNA *srna;
@@ -4756,6 +4786,7 @@ static int props_clear(PyObject * /*self*/)
 }
 
 PyDoc_STRVAR(
+    /* Wrap. */
     props_module_doc,
     "This module defines properties to extend Blender's internal data. The result of these "
     "functions"

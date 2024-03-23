@@ -23,7 +23,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "WM_types.hh"
 
@@ -35,7 +35,7 @@
 #endif
 
 const EnumPropertyItem rna_enum_fmodifier_type_items[] = {
-    {FMODIFIER_TYPE_NULL, "nullptr", 0, "Invalid", ""},
+    {FMODIFIER_TYPE_NULL, "NULL", 0, "Invalid", ""},
     {FMODIFIER_TYPE_GENERATOR,
      "GENERATOR",
      0,
@@ -182,6 +182,8 @@ static const EnumPropertyItem rna_enum_driver_target_context_property_items[] = 
 };
 
 #ifdef RNA_RUNTIME
+
+#  include <algorithm>
 
 #  include "WM_api.hh"
 
@@ -366,13 +368,13 @@ static StructRNA *rna_DriverTarget_id_typef(PointerRNA *ptr)
   return ID_code_to_RNA_type(dtar->idtype);
 }
 
-static int rna_DriverTarget_id_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_DriverTarget_id_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   DriverTarget *dtar = (DriverTarget *)ptr->data;
   return (dtar->idtype) ? PROP_EDITABLE : PropertyFlag(0);
 }
 
-static int rna_DriverTarget_id_type_editable(PointerRNA *ptr, const char ** /*r_info*/)
+static int rna_DriverTarget_id_type_editable(const PointerRNA *ptr, const char ** /*r_info*/)
 {
   DriverTarget *dtar = (DriverTarget *)ptr->data;
 
@@ -1026,7 +1028,7 @@ static void rna_FModifierStepped_frame_start_set(PointerRNA *ptr, float value)
   float prop_clamp_min = -FLT_MAX, prop_clamp_max = FLT_MAX, prop_soft_min, prop_soft_max;
   rna_FModifierStepped_start_frame_range(
       ptr, &prop_clamp_min, &prop_clamp_max, &prop_soft_min, &prop_soft_max);
-  value = CLAMPIS(value, prop_clamp_min, prop_clamp_max);
+  value = std::clamp(value, prop_clamp_min, prop_clamp_max);
 
   /* Need to set both step-data's start/end and the start/end on the base-data,
    * or else Restrict-Range doesn't work due to RNA-property shadowing (#52009)
@@ -1043,7 +1045,7 @@ static void rna_FModifierStepped_frame_end_set(PointerRNA *ptr, float value)
   float prop_clamp_min = -FLT_MAX, prop_clamp_max = FLT_MAX, prop_soft_min, prop_soft_max;
   rna_FModifierStepped_end_frame_range(
       ptr, &prop_clamp_min, &prop_clamp_max, &prop_soft_min, &prop_soft_max);
-  value = CLAMPIS(value, prop_clamp_min, prop_clamp_max);
+  value = std::clamp(value, prop_clamp_min, prop_clamp_max);
 
   /* Need to set both step-data's start/end and the start/end on the base-data,
    * or else Restrict-Range doesn't work due to RNA-property shadowing (#52009)
@@ -1055,11 +1057,10 @@ static void rna_FModifierStepped_frame_end_set(PointerRNA *ptr, float value)
 static BezTriple *rna_FKeyframe_points_insert(
     ID *id, FCurve *fcu, Main *bmain, float frame, float value, int keyframe_type, int flag)
 {
-  int index = blender::animrig::insert_vert_fcurve(fcu,
-                                                   frame,
-                                                   value,
-                                                   eBezTriple_KeyframeType(keyframe_type),
-                                                   eInsertKeyFlags(flag) | INSERTKEY_NO_USERPREF);
+  using namespace blender::animrig;
+  KeyframeSettings settings = get_keyframe_settings(false);
+  settings.keyframe_type = eBezTriple_KeyframeType(keyframe_type);
+  int index = insert_vert_fcurve(fcu, {frame, value}, settings, eInsertKeyFlags(flag));
 
   if ((fcu->bezt) && (index >= 0)) {
     rna_tag_animation_update(bmain, id);
@@ -1771,7 +1772,7 @@ static void rna_def_fmodifier(BlenderRNA *brna)
   // RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_boolean_funcs(prop, nullptr, "rna_FModifier_show_expanded_set");
   RNA_def_property_ui_text(prop, "Expanded", "F-Curve Modifier's panel is expanded in UI");
-  RNA_def_property_ui_icon(prop, ICON_DISCLOSURE_TRI_RIGHT, 1);
+  RNA_def_property_ui_icon(prop, ICON_RIGHTARROW, 1);
 
   prop = RNA_def_property(srna, "mute", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", FMODIFIER_FLAG_MUTED);
@@ -1975,6 +1976,28 @@ static void rna_def_drivertarget(BlenderRNA *brna)
   RNA_def_property_ui_text(
       prop, "Context Property", "Type of a context-dependent data-block to access property from");
   RNA_def_property_update(prop, 0, "rna_DriverTarget_update_data");
+
+  prop = RNA_def_property(srna, "use_fallback_value", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "options", DTAR_OPTION_USE_FALLBACK);
+  RNA_def_property_ui_text(prop,
+                           "Use Fallback",
+                           "Use the fallback value if the data path can't be resolved, instead of "
+                           "failing to evaluate the driver");
+  RNA_def_property_update(prop, 0, "rna_DriverTarget_update_data");
+
+  prop = RNA_def_property(srna, "fallback_value", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "fallback_value");
+  RNA_def_property_ui_text(
+      prop, "Fallback", "The value to use if the data path can't be resolved");
+  RNA_def_property_update(prop, 0, "rna_DriverTarget_update_data");
+
+  prop = RNA_def_property(srna, "is_fallback_used", PROP_BOOLEAN, PROP_NONE);
+  RNA_def_property_boolean_sdna(prop, nullptr, "flag", DTAR_FLAG_FALLBACK_USED);
+  RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_ui_text(
+      prop,
+      "Is Fallback Used",
+      "Indicates that the most recent variable evaluation used the fallback value");
 }
 
 static void rna_def_drivervar(BlenderRNA *brna)
@@ -2186,7 +2209,7 @@ static void rna_def_fkeyframe(BlenderRNA *brna)
   srna = RNA_def_struct(brna, "Keyframe", nullptr);
   RNA_def_struct_sdna(srna, "BezTriple");
   RNA_def_struct_ui_text(
-      srna, "Keyframe", "Bezier curve point with two handles defining a Keyframe on an F-Curve");
+      srna, "Keyframe", "Bézier curve point with two handles defining a Keyframe on an F-Curve");
 
   /* Boolean values */
   prop = RNA_def_property(srna, "select_left_handle", PROP_BOOLEAN, PROP_NONE);

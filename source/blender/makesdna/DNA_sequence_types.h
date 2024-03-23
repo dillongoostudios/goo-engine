@@ -18,8 +18,8 @@
 #include "DNA_color_types.h"
 #include "DNA_defs.h"
 #include "DNA_listBase.h"
-#include "DNA_session_uuid_types.h" /* for #SessionUUID */
-#include "DNA_vec_types.h"          /* for #rctf */
+#include "DNA_session_uid_types.h" /* for #SessionUID */
+#include "DNA_vec_types.h"         /* for #rctf */
 
 struct Ipo;
 struct MovieClip;
@@ -36,7 +36,7 @@ struct bSound;
 
 typedef struct StripAnim {
   struct StripAnim *next, *prev;
-  struct anim *anim;
+  struct ImBufAnim *anim;
 } StripAnim;
 
 typedef struct StripElem {
@@ -84,7 +84,7 @@ typedef struct StripProxy {
   char dirpath[768];
   /** Custom file. */
   char filename[256];
-  struct anim *anim; /* custom proxy anim file */
+  struct ImBufAnim *anim; /* custom proxy anim file */
 
   short tc; /* time code in use */
 
@@ -127,17 +127,19 @@ typedef enum eSeqRetimingKeyFlag {
 } eSeqRetimingKeyFlag;
 
 typedef struct SeqRetimingKey {
-  int strip_frame_index;
+  double strip_frame_index;
   int flag; /* eSeqRetimingKeyFlag */
   int _pad0;
   float retiming_factor; /* Value between 0-1 mapped to original content range. */
 
-  int original_strip_frame_index; /* Used for transition keys only. */
-  float original_retiming_factor; /* Used for transition keys only. */
+  char _pad1[4];
+  double original_strip_frame_index; /* Used for transition keys only. */
+  float original_retiming_factor;    /* Used for transition keys only. */
+  char _pad2[4];
 } SeqRetimingKey;
 
 typedef struct SequenceRuntime {
-  SessionUUID session_uuid;
+  SessionUID session_uid;
 } SequenceRuntime;
 
 /**
@@ -225,6 +227,7 @@ typedef struct Sequence {
 
   /** The linked "bSound" object. */
   struct bSound *sound;
+  /** Handle to #AUD_SequenceEntry*/
   void *scene_sound;
   float volume;
 
@@ -542,18 +545,8 @@ typedef struct SoundEqualizerModifierData {
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Scopes
+/** \name Flags & Types
  * \{ */
-
-typedef struct SequencerScopes {
-  struct ImBuf *reference_ibuf;
-
-  struct ImBuf *zebra_ibuf;
-  struct ImBuf *waveform_ibuf;
-  struct ImBuf *sep_waveform_ibuf;
-  struct ImBuf *vector_ibuf;
-  struct ImBuf *histogram_ibuf;
-} SequencerScopes;
 
 #define MAXSEQ 128
 
@@ -579,12 +572,6 @@ enum {
   SEQ_SPEED_UNUSED_3 = 1 << 2, /* cleared */
   SEQ_SPEED_USE_INTERPOLATION = 1 << 3,
 };
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Flags & Types
- * \{ */
 
 #define SEQ_NAME_MAXSTR 64
 
@@ -656,7 +643,7 @@ enum {
 };
 
 /**
- * \warning has to be same as `IMB_imbuf.h`: `IMB_PROXY_*` and `IMB_TC_*`.
+ * \warning has to be same as `IMB_imbuf.hh`: `IMB_PROXY_*` and `IMB_TC_*`.
  */
 enum {
   SEQ_PROXY_IMAGE_SIZE_25 = 1 << 0,
@@ -666,7 +653,7 @@ enum {
 };
 
 /**
- * \warning has to be same as `IMB_imbuf.h`: `IMB_TC_*`.
+ * \warning has to be same as `IMB_imbuf.hh`: `IMB_TC_*`.
  */
 enum {
   SEQ_PROXY_TC_NONE = 0,
@@ -849,9 +836,12 @@ typedef enum SequenceColorTag {
 
 /* Sequence->StripTransform->filter */
 enum {
+  SEQ_TRANSFORM_FILTER_AUTO = -1,
   SEQ_TRANSFORM_FILTER_NEAREST = 0,
   SEQ_TRANSFORM_FILTER_BILINEAR = 1,
-  SEQ_TRANSFORM_FILTER_NEAREST_3x3 = 2,
+  SEQ_TRANSFORM_FILTER_BOX = 2,
+  SEQ_TRANSFORM_FILTER_CUBIC_BSPLINE = 3,
+  SEQ_TRANSFORM_FILTER_CUBIC_MITCHELL = 4,
 };
 
 typedef enum eSeqChannelFlag {

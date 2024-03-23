@@ -15,7 +15,7 @@
 #include "BLI_math_base.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 
 #include "UI_view2d.hh"
@@ -472,6 +472,7 @@ void graphedit_operatortypes()
   WM_operatortype_append(GRAPH_OT_ease);
   WM_operatortype_append(GRAPH_OT_shear);
   WM_operatortype_append(GRAPH_OT_scale_average);
+  WM_operatortype_append(GRAPH_OT_scale_from_neighbor);
   WM_operatortype_append(GRAPH_OT_blend_offset);
   WM_operatortype_append(GRAPH_OT_blend_to_ease);
   WM_operatortype_append(GRAPH_OT_match_slope);

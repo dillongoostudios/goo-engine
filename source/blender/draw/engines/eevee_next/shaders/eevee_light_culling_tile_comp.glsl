@@ -84,7 +84,7 @@ CullingTile tile_culling_get(uvec2 tile_co)
   tile.bounds = (is_persp) ? tile_bound_cone(corners[0], corners[4], corners[7], corners[3]) :
                              tile_bound_cylinder(corners[0], corners[4], corners[7], corners[3]);
 
-  tile.frustum = isect_data_setup(shape_frustum(corners));
+  tile.frustum = isect_frustum_setup(shape_frustum(corners));
   return tile;
 }
 
@@ -158,7 +158,8 @@ void main()
     bool intersect_tile = intersect(tile, sphere);
 
     switch (light.type) {
-      case LIGHT_SPOT:
+      case LIGHT_SPOT_SPHERE:
+      case LIGHT_SPOT_DISK:
         /* Only for < ~170 degree Cone due to plane extraction precision. */
         if (light.spot_tan < 10.0) {
           Pyramid pyramid = shape_pyramid_non_oblique(

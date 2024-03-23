@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "BLI_span.hh"
+
 #include "intern/builder/deg_builder.h"
 #include "intern/builder/deg_builder_key.h"
 #include "intern/builder/deg_builder_map.h"
@@ -195,6 +197,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_object_transform(Object *object);
   virtual void build_object_constraints(Object *object);
   virtual void build_object_pointcache(Object *object);
+  virtual void build_object_shading(Object *object);
 
   virtual void build_object_light_linking(Object *object);
   virtual void build_light_linking_collection(Collection *collection);
@@ -246,7 +249,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
   virtual void build_rig(Object *object);
   virtual void build_armature(bArmature *armature);
   virtual void build_armature_bones(ListBase *bones);
-  virtual void build_armature_bone_collections(ListBase *collections);
+  virtual void build_armature_bone_collections(blender::Span<BoneCollection *> collections);
   virtual void build_shapekeys(Key *key);
   virtual void build_camera(Camera *camera);
   virtual void build_light(Light *lamp);
@@ -319,7 +322,7 @@ class DepsgraphNodeBuilder : public DepsgraphBuilder {
    * very root is visible (aka not restricted.). */
   bool is_parent_collection_visible_;
 
-  /* Indexed by original ID.session_uuid, values are IDInfo. */
+  /* Indexed by original ID.session_uid, values are IDInfo. */
   Map<uint, IDInfo *> id_info_hash_;
 
   /* Set of IDs which were already build. Makes it easier to keep track of

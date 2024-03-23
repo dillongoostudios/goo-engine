@@ -22,7 +22,7 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_fcurve_driver.h"
 #include "BKE_report.h"
@@ -95,6 +95,7 @@ FCurve *alloc_driver_fcurve(const char rna_path[],
                             const int array_index,
                             eDriverFCurveCreationMode creation_mode)
 {
+  using namespace blender::animrig;
   FCurve *fcu = BKE_fcurve_create();
 
   fcu->flag = (FCURVE_VISIBLE | FCURVE_SELECTED);
@@ -124,10 +125,9 @@ FCurve *alloc_driver_fcurve(const char rna_path[],
        * - These are configured to 0,0 and 1,1 to give a 1-1 mapping
        *   which can be easily tweaked from there.
        */
-      blender::animrig::insert_vert_fcurve(
-          fcu, 0.0f, 0.0f, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST | INSERTKEY_NO_USERPREF);
-      blender::animrig::insert_vert_fcurve(
-          fcu, 1.0f, 1.0f, BEZT_KEYTYPE_KEYFRAME, INSERTKEY_FAST | INSERTKEY_NO_USERPREF);
+      const KeyframeSettings settings = get_keyframe_settings(false);
+      insert_vert_fcurve(fcu, {0.0f, 0.0f}, settings, INSERTKEY_FAST);
+      insert_vert_fcurve(fcu, {1.0f, 1.0f}, settings, INSERTKEY_FAST);
       fcu->extend = FCURVE_EXTRAPOLATE_LINEAR;
       BKE_fcurve_handles_recalc(fcu);
     }
@@ -811,7 +811,7 @@ void ANIM_copy_as_driver(ID *target_id, const char *target_path, const char *var
 
   target->idtype = GS(target_id->name);
   target->id = target_id;
-  target->rna_path = static_cast<char *>(MEM_dupallocN(target_path));
+  target->rna_path = BLI_strdup(target_path);
 
   /* Set the variable name. */
   if (var_name) {
@@ -891,7 +891,7 @@ static const EnumPropertyItem *driver_mapping_type_itemf(bContext *C,
 
   UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_animateable(&ptr, prop)) {
+  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
     const bool is_array = RNA_property_array_check(prop);
 
     while (input->identifier) {
@@ -927,7 +927,7 @@ static bool add_driver_button_poll(bContext *C)
   if (!(ptr.owner_id && ptr.data && prop)) {
     return false;
   }
-  if (!RNA_property_animateable(&ptr, prop)) {
+  if (!RNA_property_driver_editable(&ptr, prop)) {
     return false;
   }
 
@@ -952,14 +952,12 @@ static int add_driver_button_none(bContext *C, wmOperator *op, short mapping_typ
     index = -1;
   }
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_animateable(&ptr, prop)) {
-    char *path = RNA_path_from_ID_to_property(&ptr, prop);
+  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
     short flags = CREATEDRIVER_WITH_DEFAULT_DVAR;
 
-    if (path) {
+    if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       success += ANIM_add_driver(
-          op->reports, ptr.owner_id, path, index, flags, DRIVER_TYPE_PYTHON);
-      MEM_freeN(path);
+          op->reports, ptr.owner_id, path->c_str(), index, flags, DRIVER_TYPE_PYTHON);
     }
   }
 
@@ -1045,16 +1043,15 @@ static int add_driver_button_invoke(bContext *C, wmOperator *op, const wmEvent *
 
   UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_animateable(&ptr, prop)) {
+  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
     /* 1) Create a new "empty" driver for this property */
-    char *path = RNA_path_from_ID_to_property(&ptr, prop);
     short flags = CREATEDRIVER_WITH_DEFAULT_DVAR;
     bool changed = false;
 
-    if (path) {
-      changed |= (ANIM_add_driver(
-                      op->reports, ptr.owner_id, path, index, flags, DRIVER_TYPE_PYTHON) != 0);
-      MEM_freeN(path);
+    if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
+      changed |=
+          (ANIM_add_driver(
+               op->reports, ptr.owner_id, path->c_str(), index, flags, DRIVER_TYPE_PYTHON) != 0);
     }
 
     if (changed) {
@@ -1106,12 +1103,8 @@ static int remove_driver_button_exec(bContext *C, wmOperator *op)
   }
 
   if (ptr.owner_id && ptr.data && prop) {
-    char *path = RNA_path_from_ID_to_property(&ptr, prop);
-
-    if (path) {
-      changed = ANIM_remove_driver(op->reports, ptr.owner_id, path, index, 0);
-
-      MEM_freeN(path);
+    if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
+      changed = ANIM_remove_driver(op->reports, ptr.owner_id, path->c_str(), index, 0);
     }
   }
 
@@ -1188,16 +1181,12 @@ static int copy_driver_button_exec(bContext *C, wmOperator *op)
 
   UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_animateable(&ptr, prop)) {
-    char *path = RNA_path_from_ID_to_property(&ptr, prop);
-
-    if (path) {
+  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+    if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       /* only copy the driver for the button that this was involved for */
-      changed = ANIM_copy_driver(op->reports, ptr.owner_id, path, index, 0);
+      changed = ANIM_copy_driver(op->reports, ptr.owner_id, path->c_str(), index, 0);
 
       UI_context_update_anim_flag(C);
-
-      MEM_freeN(path);
     }
   }
 
@@ -1231,12 +1220,10 @@ static int paste_driver_button_exec(bContext *C, wmOperator *op)
 
   UI_context_active_but_prop_get(C, &ptr, &prop, &index);
 
-  if (ptr.owner_id && ptr.data && prop && RNA_property_animateable(&ptr, prop)) {
-    char *path = RNA_path_from_ID_to_property(&ptr, prop);
-
-    if (path) {
+  if (ptr.owner_id && ptr.data && prop && RNA_property_driver_editable(&ptr, prop)) {
+    if (const std::optional<std::string> path = RNA_path_from_ID_to_property(&ptr, prop)) {
       /* only copy the driver for the button that this was involved for */
-      changed = ANIM_paste_driver(op->reports, ptr.owner_id, path, index, 0);
+      changed = ANIM_paste_driver(op->reports, ptr.owner_id, path->c_str(), index, 0);
 
       UI_context_update_anim_flag(C);
 
@@ -1245,8 +1232,6 @@ static int paste_driver_button_exec(bContext *C, wmOperator *op)
       DEG_id_tag_update(ptr.owner_id, ID_RECALC_ANIMATION);
 
       WM_event_add_notifier(C, NC_ANIMATION | ND_KEYFRAME_PROP, nullptr); /* XXX */
-
-      MEM_freeN(path);
     }
   }
 

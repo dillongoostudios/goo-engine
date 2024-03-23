@@ -5,7 +5,7 @@
 #include "node_shader_util.hh"
 #include "node_util.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -34,7 +34,7 @@ static void node_shader_buts_vertex_color(uiLayout *layout, bContext *C, Pointer
     uiItemPointerR(layout, ptr, "layer_name", &dataptr, "color_attributes", "", ICON_GROUP_VCOL);
   }
   else {
-    uiItemL(layout, TIP_("No mesh in active object"), ICON_ERROR);
+    uiItemL(layout, RPT_("No mesh in active object"), ICON_ERROR);
   }
 }
 

@@ -30,15 +30,15 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_camera.h"
-#include "BKE_context.h"
-#include "BKE_customdata.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_image_format.h"
 #include "BKE_image_save.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
 #include "BKE_writeavi.h"
@@ -46,7 +46,7 @@
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_query.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -56,9 +56,8 @@
 #include "ED_view3d.hh"
 #include "ED_view3d_offscreen.hh"
 
-#include "IMB_colormanagement.h"
-#include "IMB_imbuf.h"
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf.hh"
+#include "IMB_imbuf_types.hh"
 
 #include "RE_pipeline.h"
 
@@ -71,6 +70,7 @@
 
 #include "GPU_framebuffer.h"
 #include "GPU_matrix.h"
+#include "GPU_viewport.h"
 
 #include "render_intern.hh"
 
@@ -78,7 +78,7 @@
 // #define DEBUG_TIME
 
 #ifdef DEBUG_TIME
-#  include "PIL_time.h"
+#  include "BLI_time.h"
 #endif
 
 /* TODO(sergey): Find better approximation of the scheduled frames.
@@ -114,6 +114,8 @@ struct OGLRender {
   GPUOffScreen *ofs;
   int sizex, sizey;
   int write_still;
+
+  GPUViewport *viewport;
 
   ReportList *reports;
   bMovieHandle *mh;
@@ -348,6 +350,7 @@ static void screen_opengl_render_doit(const bContext *C, OGLRender *oglrender, R
                                                  viewname,
                                                  true,
                                                  oglrender->ofs,
+                                                 oglrender->viewport,
                                                  err_out);
 
       /* for stamp only */
@@ -368,6 +371,7 @@ static void screen_opengl_render_doit(const bContext *C, OGLRender *oglrender, R
                                                         alpha_mode,
                                                         viewname,
                                                         oglrender->ofs,
+                                                        oglrender->viewport,
                                                         err_out);
       camera = scene->camera;
     }
@@ -469,6 +473,7 @@ static void screen_opengl_render_apply(const bContext *C, OGLRender *oglrender)
     for (view_id = 0; view_id < oglrender->views_len; view_id++) {
       context.view_id = view_id;
       context.gpu_offscreen = oglrender->ofs;
+      context.gpu_viewport = oglrender->viewport;
       oglrender->seq_data.ibufs_arr[view_id] = SEQ_render_give_ibuf(
           &context, scene->r.cfra, chanshown);
     }
@@ -759,6 +764,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   oglrender->ofs = ofs;
   oglrender->sizex = sizex;
   oglrender->sizey = sizey;
+  oglrender->viewport = GPU_viewport_create();
   oglrender->bmain = CTX_data_main(C);
   oglrender->scene = scene;
   oglrender->workspace = workspace;
@@ -786,8 +792,12 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   oglrender->prevar = prevar;
 
   if (is_view_context) {
-    /* so quad view renders camera */
-    ED_view3d_context_user_region(C, &oglrender->v3d, &oglrender->region);
+    /* Prefer rendering camera in quad view if possible. */
+    if (!ED_view3d_context_user_region(C, &oglrender->v3d, &oglrender->region)) {
+      /* If not get region activated by ED_view3d_context_activate earlier. */
+      oglrender->v3d = CTX_wm_view3d(C);
+      oglrender->region = CTX_wm_region(C);
+    }
 
     oglrender->rv3d = static_cast<RegionView3D *>(oglrender->region->regiondata);
 
@@ -853,7 +863,7 @@ static bool screen_opengl_render_init(bContext *C, wmOperator *op)
   BLI_condition_init(&oglrender->task_condition);
 
 #ifdef DEBUG_TIME
-  oglrender->time_start = PIL_check_seconds_timer();
+  oglrender->time_start = BLI_check_seconds_timer();
 #endif
 
   return true;
@@ -889,7 +899,7 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
   BLI_condition_end(&oglrender->task_condition);
 
 #ifdef DEBUG_TIME
-  printf("Total render time: %f\n", PIL_check_seconds_timer() - oglrender->time_start);
+  printf("Total render time: %f\n", BLI_check_seconds_timer() - oglrender->time_start);
 #endif
 
   MEM_SAFE_FREE(oglrender->render_frames);
@@ -921,6 +931,7 @@ static void screen_opengl_render_end(bContext *C, OGLRender *oglrender)
 
   DRW_gpu_context_enable();
   GPU_offscreen_free(oglrender->ofs);
+  GPU_viewport_free(oglrender->viewport);
   DRW_gpu_context_disable();
 
   if (oglrender->is_sequencer) {
@@ -1161,7 +1172,8 @@ static bool screen_opengl_render_anim_step(bContext *C, wmOperator *op)
 
   if (view_context) {
     if (oglrender->rv3d->persp == RV3D_CAMOB && oglrender->v3d->camera &&
-        oglrender->v3d->scenelock) {
+        oglrender->v3d->scenelock)
+    {
       /* since BKE_scene_graph_update_for_newframe() is used rather
        * then ED_update_for_newframe() the camera needs to be set */
       if (BKE_scene_camera_switch_update(scene)) {
@@ -1364,7 +1376,7 @@ void RENDER_OT_opengl(wmOperatorType *ot)
       "write_still",
       false,
       "Write Image",
-      "Save rendered the image to the output path (used only when animation is disabled)");
+      "Save the rendered image to the output path (used only when animation is disabled)");
   RNA_def_property_flag(prop, PROP_SKIP_SAVE);
   prop = RNA_def_boolean(ot->srna,
                          "view_context",

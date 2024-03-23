@@ -8,9 +8,9 @@
 #include <pxr/usd/usd/prim.h>
 #include <pxr/usd/usd/stage.h>
 
-#include "BKE_appdir.h"
-#include "BKE_context.h"
-#include "BKE_main.h"
+#include "BKE_appdir.hh"
+#include "BKE_context.hh"
+#include "BKE_main.hh"
 #include "BLI_fileops.h"
 #include "BLI_path_util.h"
 #include "BLO_readfile.h"
@@ -19,7 +19,7 @@
 
 #include "WM_api.hh"
 
-#include "usd.h"
+#include "usd.hh"
 
 namespace blender::io::usd {
 

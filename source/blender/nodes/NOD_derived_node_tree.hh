@@ -83,8 +83,8 @@ class DNode {
   const bNode *operator->() const;
   const bNode &operator*() const;
 
-  friend bool operator==(const DNode &a, const DNode &b);
-  friend bool operator!=(const DNode &a, const DNode &b);
+  BLI_STRUCT_EQUALITY_OPERATORS_2(DNode, context_, bnode_)
+
   operator bool() const;
 
   uint64_t hash() const;
@@ -119,8 +119,8 @@ class DSocket {
   const bNodeSocket *operator->() const;
   const bNodeSocket &operator*() const;
 
-  friend bool operator==(const DSocket &a, const DSocket &b);
-  friend bool operator!=(const DSocket &a, const DSocket &b);
+  BLI_STRUCT_EQUALITY_OPERATORS_2(DSocket, context_, bsocket_)
+
   operator bool() const;
 
   uint64_t hash() const;
@@ -295,16 +295,6 @@ inline const bNode *DNode::bnode() const
   return bnode_;
 }
 
-inline bool operator==(const DNode &a, const DNode &b)
-{
-  return a.context_ == b.context_ && a.bnode_ == b.bnode_;
-}
-
-inline bool operator!=(const DNode &a, const DNode &b)
-{
-  return !(a == b);
-}
-
 inline DNode::operator bool() const
 {
   return bnode_ != nullptr;
@@ -323,7 +313,7 @@ inline const bNode &DNode::operator*() const
 
 inline uint64_t DNode::hash() const
 {
-  return get_default_hash_2(context_, bnode_);
+  return get_default_hash(context_, bnode_);
 }
 
 inline DInputSocket DNode::input(int index) const
@@ -379,16 +369,6 @@ inline const bNodeSocket *DSocket::bsocket() const
   return bsocket_;
 }
 
-inline bool operator==(const DSocket &a, const DSocket &b)
-{
-  return a.context_ == b.context_ && a.bsocket_ == b.bsocket_;
-}
-
-inline bool operator!=(const DSocket &a, const DSocket &b)
-{
-  return !(a == b);
-}
-
 inline DSocket::operator bool() const
 {
   return bsocket_ != nullptr;
@@ -407,7 +387,7 @@ inline const bNodeSocket &DSocket::operator*() const
 
 inline uint64_t DSocket::hash() const
 {
-  return get_default_hash_2(context_, bsocket_);
+  return get_default_hash(context_, bsocket_);
 }
 
 inline DNode DSocket::node() const

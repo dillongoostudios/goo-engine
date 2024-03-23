@@ -108,7 +108,7 @@ static void fillet_grease_pencil(GreasePencil &grease_pencil,
       continue;
     }
     const bke::GreasePencilLayerFieldContext field_context(
-        grease_pencil, ATTR_DOMAIN_CURVE, layer_index);
+        grease_pencil, AttrDomain::Curve, layer_index);
     bke::CurvesGeometry dst_curves = fillet_curve(src_curves,
                                                   mode,
                                                   field_context,
@@ -143,7 +143,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     if (geometry_set.has_curves()) {
       const Curves &curves_id = *geometry_set.get_curves();
       const bke::CurvesGeometry &src_curves = curves_id.geometry.wrap();
-      const bke::CurvesFieldContext field_context{src_curves, ATTR_DOMAIN_POINT};
+      const bke::CurvesFieldContext field_context{src_curves, AttrDomain::Point};
       bke::CurvesGeometry dst_curves = fillet_curve(src_curves,
                                                     mode,
                                                     field_context,
@@ -171,13 +171,13 @@ static void node_rna(StructRNA *srna)
       {GEO_NODE_CURVE_FILLET_BEZIER,
        "BEZIER",
        0,
-       "Bezier",
-       "Align Bezier handles to create circular arcs at each control point"},
+       "Bézier",
+       "Align Bézier handles to create circular arcs at each control point"},
       {GEO_NODE_CURVE_FILLET_POLY,
        "POLY",
        0,
        "Poly",
-       "Add control points along a circular arc (handle type is vector if Bezier Spline)"},
+       "Add control points along a circular arc (handle type is vector if Bézier Spline)"},
       {0, nullptr, 0, nullptr, nullptr},
   };
 

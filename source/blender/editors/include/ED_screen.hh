@@ -89,7 +89,10 @@ void ED_region_search_filter_update(const ScrArea *area, ARegion *region);
 const char *ED_area_region_search_filter_get(const ScrArea *area, const ARegion *region);
 
 void ED_region_panels_init(wmWindowManager *wm, ARegion *region);
-void ED_region_panels_ex(const bContext *C, ARegion *region, const char *contexts[]);
+void ED_region_panels_ex(const bContext *C,
+                         ARegion *region,
+                         wmOperatorCallContext op_context,
+                         const char *contexts[]);
 void ED_region_panels(const bContext *C, ARegion *region);
 /**
  * \param contexts: A NULL terminated array of context strings to match against.
@@ -99,6 +102,7 @@ void ED_region_panels(const bContext *C, ARegion *region);
 void ED_region_panels_layout_ex(const bContext *C,
                                 ARegion *region,
                                 ListBase *paneltypes,
+                                wmOperatorCallContext op_context,
                                 const char *contexts[],
                                 const char *category_override);
 /**
@@ -137,6 +141,8 @@ void ED_region_toggle_hidden(bContext *C, ARegion *region);
 /**
  * For use after changing visibility of regions.
  */
+void ED_region_visibility_change_update_ex(
+    bContext *C, ScrArea *area, ARegion *region, bool is_hidden, bool do_init);
 void ED_region_visibility_change_update(bContext *C, ScrArea *area, ARegion *region);
 /* `screen_ops.cc` */
 

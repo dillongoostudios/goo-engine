@@ -8,6 +8,7 @@
  * Deform coordinates by a lattice object (used by modifier).
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -27,16 +28,17 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_object_types.h"
 
-#include "BKE_curve.h"
+#include "BKE_curve.hh"
 #include "BKE_displist.h"
-#include "BKE_editmesh.h"
-#include "BKE_key.h"
-#include "BKE_lattice.h"
+#include "BKE_editmesh.hh"
+#include "BKE_key.hh"
+#include "BKE_lattice.hh"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
-#include "BKE_deform.h"
+#include "BKE_deform.hh"
 
 /* -------------------------------------------------------------------- */
 /** \name Lattice Deform API
@@ -58,9 +60,8 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
 {
   /* we make an array with all differences */
   Lattice *lt = BKE_object_get_lattice(oblatt);
-  BPoint *bp;
-  DispList *dl = oblatt->runtime.curve_cache ?
-                     BKE_displist_find(&oblatt->runtime.curve_cache->disp, DL_VERTS) :
+  DispList *dl = oblatt->runtime->curve_cache ?
+                     BKE_displist_find(&oblatt->runtime->curve_cache->disp, DL_VERTS) :
                      nullptr;
   const float *co = dl ? dl->verts : nullptr;
   float *fp, imat[4][4];
@@ -70,8 +71,8 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
   float *lattice_weights = nullptr;
   float latmat[4][4];
   LatticeDeformData *lattice_deform_data;
-
-  bp = lt->def;
+  /* May be null. */
+  BPoint *bp = lt->def;
 
   const int32_t num_points = lt->pntsu * lt->pntsv * lt->pntsw;
   /* We allocate one additional float for SSE2 optimizations. Without this
@@ -113,7 +114,7 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
 
   for (w = 0, fw = lt->fw; w < lt->pntsw; w++, fw += lt->dw) {
     for (v = 0, fv = lt->fv; v < lt->pntsv; v++, fv += lt->dv) {
-      for (u = 0, fu = lt->fu; u < lt->pntsu; u++, bp++, co += 3, fp += 3, fu += lt->du) {
+      for (u = 0, fu = lt->fu; u < lt->pntsu; u++, co += 3, fp += 3, fu += lt->du) {
         if (dl) {
           fp[0] = co[0] - fu;
           fp[1] = co[1] - fv;
@@ -123,6 +124,7 @@ LatticeDeformData *BKE_lattice_deform_data_create(const Object *oblatt, const Ob
           fp[0] = bp->vec[0] - fu;
           fp[1] = bp->vec[1] - fv;
           fp[2] = bp->vec[2] - fw;
+          bp++;
         }
 
         mul_mat3_m4_v3(imat, fp);
@@ -209,13 +211,13 @@ void BKE_lattice_deform_data_eval_co(LatticeDeformData *lattice_deform_data,
 
   for (ww = wi - 1; ww <= wi + 2; ww++) {
     w = weight * tw[ww - wi + 1];
-    idx_w = CLAMPIS(ww * w_stride, 0, idx_w_max);
+    idx_w = std::clamp(ww * w_stride, 0, idx_w_max);
     for (vv = vi - 1; vv <= vi + 2; vv++) {
       v = w * tv[vv - vi + 1];
-      idx_v = CLAMPIS(vv * v_stride, 0, idx_v_max);
+      idx_v = std::clamp(vv * v_stride, 0, idx_v_max);
       for (uu = ui - 1; uu <= ui + 2; uu++) {
         u = v * tu[uu - ui + 1];
-        idx_u = CLAMPIS(uu, 0, idx_u_max);
+        idx_u = std::clamp(uu, 0, idx_u_max);
         const int idx = idx_w + idx_v + idx_u;
 #if BLI_HAVE_SSE2
         {
@@ -371,7 +373,7 @@ static void lattice_deform_coords_impl(const Object *ob_lattice,
         dvert = ((Lattice *)ob_target->data)->dvert;
       }
       else {
-        dvert = BKE_mesh_deform_verts((Mesh *)ob_target->data);
+        dvert = ((Mesh *)ob_target->data)->deform_verts().data();
       }
     }
   }

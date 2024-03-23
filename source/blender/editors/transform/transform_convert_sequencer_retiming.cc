@@ -8,13 +8,14 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "DNA_sequence_types.h"
 #include "DNA_space_types.h"
 
 #include "BLI_listbase.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_vector.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_report.h"
 
 #include "SEQ_relations.hh"
@@ -87,7 +88,7 @@ static void createTransSeqRetimingData(bContext * /*C*/, TransInfo *t)
 
   const blender::Map selection = SEQ_retiming_selection_get(SEQ_editing_get(t->scene));
 
-  if (selection.size() == 0) {
+  if (selection.is_empty()) {
     return;
   }
 
@@ -104,22 +105,6 @@ static void createTransSeqRetimingData(bContext * /*C*/, TransInfo *t)
   for (auto item : selection.items()) {
     SeqToTransData(t->scene, item.value, item.key, td++, td2d++, tdseq++);
   }
-}
-
-static void seq_resize_speed_transition(const Scene *scene,
-                                        const Sequence *seq,
-                                        SeqRetimingKey *key,
-                                        const float loc)
-{
-  SeqRetimingKey *key_start = SEQ_retiming_transition_start_get(key);
-  float offset;
-  if (key == key_start) {
-    offset = loc - SEQ_retiming_key_timeline_frame_get(scene, seq, key);
-  }
-  else {
-    offset = SEQ_retiming_key_timeline_frame_get(scene, seq, key) - loc;
-  }
-  SEQ_retiming_offset_transition_key(scene, seq, key_start, offset);
 }
 
 static void recalcData_sequencer_retiming(TransInfo *t)
@@ -141,7 +126,7 @@ static void recalcData_sequencer_retiming(TransInfo *t)
     if (SEQ_retiming_key_is_transition_type(key) &&
         !SEQ_retiming_selection_has_whole_transition(SEQ_editing_get(t->scene), key))
     {
-      seq_resize_speed_transition(t->scene, seq, key, td2d->loc[0]);
+      SEQ_retiming_transition_key_frame_set(t->scene, seq, key, round_fl_to_int(td2d->loc[0]));
     }
     else {
       SEQ_retiming_key_timeline_frame_set(t->scene, seq, key, td2d->loc[0]);

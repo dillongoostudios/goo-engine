@@ -18,22 +18,22 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "IMB_imbuf.h"
-#include "IMB_moviecache.h"
+#include "IMB_imbuf.hh"
+#include "IMB_moviecache.hh"
 
 #include "BKE_addon.h"
-#include "BKE_blender.h" /* own include */
-#include "BKE_blender_user_menu.h"
-#include "BKE_blender_version.h" /* own include */
-#include "BKE_blendfile.h"
+#include "BKE_blender.h"            /* own include */
+#include "BKE_blender_user_menu.hh" /* own include */
+#include "BKE_blender_version.h"    /* own include */
+#include "BKE_blendfile.hh"
 #include "BKE_brush.hh"
 #include "BKE_cachefile.h"
 #include "BKE_callbacks.h"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
-#include "BKE_layer.h"
-#include "BKE_main.h"
+#include "BKE_layer.hh"
+#include "BKE_main.hh"
 #include "BKE_node.h"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -47,7 +47,7 @@
 
 #include "SEQ_sequencer.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 
 Global G;
 UserDef U;
@@ -325,7 +325,8 @@ static void userdef_free_addons(UserDef *userdef)
 void BKE_blender_userdef_data_free(UserDef *userdef, bool clear_fonts)
 {
 #define U BLI_STATIC_ASSERT(false, "Global 'U' not allowed, only use arguments passed in!")
-#ifdef U /* quiet warning */
+#ifdef U
+  /* Quiet warning. */
 #endif
 
   userdef_free_keymaps(userdef);
@@ -373,12 +374,6 @@ void BKE_blender_userdef_app_template_data_swap(UserDef *userdef_a, UserDef *use
   } \
   ((void)0)
 
-#define LISTBASE_SWAP(id) \
-  { \
-    SWAP(ListBase, userdef_a->id, userdef_b->id); \
-  } \
-  ((void)0)
-
 #define FLAG_SWAP(id, ty, flags) \
   { \
     CHECK_TYPE(&(userdef_a->id), ty *); \
@@ -390,12 +385,12 @@ void BKE_blender_userdef_app_template_data_swap(UserDef *userdef_a, UserDef *use
   } \
   ((void)0)
 
-  LISTBASE_SWAP(uistyles);
-  LISTBASE_SWAP(uifonts);
-  LISTBASE_SWAP(themes);
-  LISTBASE_SWAP(addons);
-  LISTBASE_SWAP(user_keymaps);
-  LISTBASE_SWAP(user_keyconfig_prefs);
+  std::swap(userdef_a->uistyles, userdef_b->uistyles);
+  std::swap(userdef_a->uifonts, userdef_b->uifonts);
+  std::swap(userdef_a->themes, userdef_b->themes);
+  std::swap(userdef_a->addons, userdef_b->addons);
+  std::swap(userdef_a->user_keymaps, userdef_b->user_keymaps);
+  std::swap(userdef_a->user_keyconfig_prefs, userdef_b->user_keyconfig_prefs);
 
   DATA_SWAP(font_path_ui);
   DATA_SWAP(font_path_ui_mono);

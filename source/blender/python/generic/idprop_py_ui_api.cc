@@ -66,6 +66,105 @@ static bool idprop_ui_data_update_base(IDPropertyUIData *ui_data,
   return true;
 }
 
+/* Utility function for parsing ints in an if statement. */
+static bool py_long_as_int(PyObject *py_long, int *r_int)
+{
+  if (PyLong_CheckExact(py_long)) {
+    *r_int = int(PyLong_AS_LONG(py_long));
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Similar to #enum_items_from_py, which parses enum items for RNA properties.
+ * This function is simpler, since it doesn't have to parse a default value or handle the case of
+ * enum flags (PROP_ENUM_FLAG).
+ */
+static bool try_parse_enum_item(PyObject *py_item, const int index, IDPropertyUIDataEnumItem &item)
+{
+  if (!PyTuple_CheckExact(py_item)) {
+    return false;
+  }
+  Py_ssize_t item_size = PyTuple_GET_SIZE(py_item);
+  if (item_size < 3 || item_size > 5) {
+    return false;
+  }
+
+  Py_ssize_t identifier_len;
+  Py_ssize_t name_len;
+  Py_ssize_t description_len;
+  const char *identifier = PyUnicode_AsUTF8AndSize(PyTuple_GET_ITEM(py_item, 0), &identifier_len);
+  const char *name = PyUnicode_AsUTF8AndSize(PyTuple_GET_ITEM(py_item, 1), &name_len);
+  const char *description = PyUnicode_AsUTF8AndSize(PyTuple_GET_ITEM(py_item, 2),
+                                                    &description_len);
+  if (!identifier || !name || !description) {
+    return false;
+  }
+
+  const char *icon_name = nullptr;
+  if (item_size <= 3) {
+    item.value = index;
+  }
+  else if (item_size == 4) {
+    if (!py_long_as_int(PyTuple_GET_ITEM(py_item, 3), &item.value)) {
+      return false;
+    }
+  }
+  else if (item_size == 5) {
+    /* Must have icon value or name. */
+    if (!py_long_as_int(PyTuple_GET_ITEM(py_item, 3), &item.icon) &&
+        !(icon_name = PyUnicode_AsUTF8(PyTuple_GET_ITEM(py_item, 3))))
+    {
+      return false;
+    }
+    if (!py_long_as_int(PyTuple_GET_ITEM(py_item, 4), &item.value)) {
+      return false;
+    }
+  }
+
+  item.identifier = BLI_strdup(identifier);
+  item.name = BLI_strdup(name);
+  item.description = BLI_strdup_null(description);
+  if (icon_name) {
+    RNA_enum_value_from_identifier(rna_enum_icon_items, icon_name, &item.icon);
+  }
+  return true;
+}
+
+static IDPropertyUIDataEnumItem *idprop_enum_items_from_py(PyObject *seq_fast, int &r_items_num)
+{
+  IDPropertyUIDataEnumItem *items;
+
+  const Py_ssize_t seq_len = PySequence_Fast_GET_SIZE(seq_fast);
+  PyObject **seq_fast_items = PySequence_Fast_ITEMS(seq_fast);
+  int i;
+
+  items = MEM_cnew_array<IDPropertyUIDataEnumItem>(seq_len, __func__);
+  r_items_num = seq_len;
+
+  for (i = 0; i < seq_len; i++) {
+    IDPropertyUIDataEnumItem item = {nullptr, nullptr, nullptr, 0, 0};
+    PyObject *py_item = seq_fast_items[i];
+    if (try_parse_enum_item(py_item, i, item)) {
+      items[i] = item;
+    }
+    else if (py_item == Py_None) {
+      items[i].identifier = nullptr;
+    }
+    else {
+      MEM_freeN(items);
+      PyErr_SetString(PyExc_TypeError,
+                      "expected a tuple containing "
+                      "(identifier, name, description) and optionally an "
+                      "icon name and unique number");
+      return nullptr;
+    }
+  }
+
+  return items;
+}
+
 /**
  * \note The default value needs special handling because for array IDProperties it can
  * be a single value or an array, but for non-array properties it can only be a value.
@@ -114,11 +213,22 @@ static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObje
   const char *description = nullptr;
   int min, max, soft_min, soft_max, step;
   PyObject *default_value = nullptr;
+  PyObject *items = nullptr;
   const char *kwlist[] = {
-      "min", "max", "soft_min", "soft_max", "step", "default", "subtype", "description", nullptr};
+      "min",
+      "max",
+      "soft_min",
+      "soft_max",
+      "step",
+      "default",
+      "items",
+      "subtype",
+      "description",
+      nullptr,
+  };
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
-                                   "|$iiiiiOzz:update",
+                                   "|$iiiiiOOzz:update",
                                    (char **)kwlist,
                                    &min,
                                    &max,
@@ -126,6 +236,7 @@ static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObje
                                    &soft_max,
                                    &step,
                                    &default_value,
+                                   &items,
                                    &rna_subtype,
                                    &description))
   {
@@ -171,6 +282,36 @@ static bool idprop_ui_data_update_int(IDProperty *idprop, PyObject *args, PyObje
           &ui_data.base, IDP_ui_data_type(idprop), &ui_data_orig->base);
       return false;
     }
+  }
+
+  if (!ELEM(items, nullptr, Py_None)) {
+    PyObject *items_fast;
+    if (!(items_fast = PySequence_Fast(items, "expected a sequence of tuples for the enum items")))
+    {
+      return false;
+    }
+
+    int idprop_items_num = 0;
+    IDPropertyUIDataEnumItem *idprop_items = idprop_enum_items_from_py(items_fast,
+                                                                       idprop_items_num);
+    if (!idprop_items) {
+      Py_DECREF(items_fast);
+      return false;
+    }
+    if (!IDP_EnumItemsValidate(idprop_items, idprop_items_num, [](const char *msg) {
+          PyErr_SetString(PyExc_ValueError, msg);
+        }))
+    {
+      Py_DECREF(items_fast);
+      return false;
+    }
+    Py_DECREF(items_fast);
+    ui_data.enum_items = idprop_items;
+    ui_data.enum_items_num = idprop_items_num;
+  }
+  else {
+    ui_data.enum_items = nullptr;
+    ui_data.enum_items_num = 0;
   }
 
   /* Write back to the property's UI data. */
@@ -364,12 +505,12 @@ static bool idprop_ui_data_update_float(IDProperty *idprop, PyObject *args, PyOb
   }
   if (args_contain_key(kwargs, "soft_min")) {
     ui_data.soft_min = soft_min;
-    ui_data.soft_min = MAX2(ui_data.soft_min, ui_data.min);
+    ui_data.soft_min = std::max(ui_data.soft_min, ui_data.min);
     ui_data.soft_max = std::max(ui_data.soft_min, ui_data.soft_max);
   }
   if (args_contain_key(kwargs, "soft_max")) {
     ui_data.soft_max = soft_max;
-    ui_data.soft_max = MIN2(ui_data.soft_max, ui_data.max);
+    ui_data.soft_max = std::min(ui_data.soft_max, ui_data.max);
     ui_data.soft_min = std::min(ui_data.soft_min, ui_data.soft_max);
   }
   if (args_contain_key(kwargs, "step")) {
@@ -400,7 +541,7 @@ static bool idprop_ui_data_update_string(IDProperty *idprop, PyObject *args, PyO
 {
   const char *rna_subtype = nullptr;
   const char *description = nullptr;
-  const char *default_value;
+  const char *default_value = nullptr;
   const char *kwlist[] = {"default", "subtype", "description", nullptr};
   if (!PyArg_ParseTupleAndKeywords(args,
                                    kwargs,
@@ -471,22 +612,25 @@ static bool idprop_ui_data_update_id(IDProperty *idprop, PyObject *args, PyObjec
   return true;
 }
 
-PyDoc_STRVAR(BPy_IDPropertyUIManager_update_doc,
-             ".. method:: update( "
-             "subtype=None, "
-             "min=None, "
-             "max=None, "
-             "soft_min=None, "
-             "soft_max=None, "
-             "precision=None, "
-             "step=None, "
-             "default=None, "
-             "id_type=None, "
-             "description=None)\n"
-             "\n"
-             "   Update the RNA information of the IDProperty used for interaction and\n"
-             "   display in the user interface. The required types for many of the keyword\n"
-             "   arguments depend on the type of the property.\n ");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_IDPropertyUIManager_update_doc,
+    ".. method:: update( "
+    "subtype=None, "
+    "min=None, "
+    "max=None, "
+    "soft_min=None, "
+    "soft_max=None, "
+    "precision=None, "
+    "step=None, "
+    "default=None, "
+    "id_type=None, "
+    "items=None, "
+    "description=None)\n"
+    "\n"
+    "   Update the RNA information of the IDProperty used for interaction and\n"
+    "   display in the user interface. The required types for many of the keyword\n"
+    "   arguments depend on the type of the property.\n ");
 static PyObject *BPy_IDPropertyUIManager_update(BPy_IDPropertyUIManager *self,
                                                 PyObject *args,
                                                 PyObject *kwargs)
@@ -567,6 +711,27 @@ static void idprop_ui_data_to_dict_int(IDProperty *property, PyObject *dict)
     PyDict_SetItemString(dict, "default", item = PyLong_FromLong(ui_data->default_value));
     Py_DECREF(item);
   }
+
+  if (ui_data->enum_items_num > 0) {
+    PyObject *items_list = PyList_New(ui_data->enum_items_num);
+    for (int i = 0; i < ui_data->enum_items_num; ++i) {
+      const IDPropertyUIDataEnumItem &item = ui_data->enum_items[i];
+      BLI_assert(item.identifier != nullptr);
+      BLI_assert(item.name != nullptr);
+
+      PyObject *item_tuple = PyTuple_New(5);
+      PyTuple_SET_ITEM(item_tuple, 0, PyUnicode_FromString(item.identifier));
+      PyTuple_SET_ITEM(item_tuple, 1, PyUnicode_FromString(item.name));
+      PyTuple_SET_ITEM(
+          item_tuple, 2, PyUnicode_FromString(item.description ? item.description : ""));
+      PyTuple_SET_ITEM(item_tuple, 3, PyLong_FromLong(item.icon));
+      PyTuple_SET_ITEM(item_tuple, 4, PyLong_FromLong(item.value));
+
+      PyList_SET_ITEM(items_list, i, item_tuple);
+    }
+    PyDict_SetItemString(dict, "items", items_list);
+    Py_DECREF(items_list);
+  }
 }
 
 static void idprop_ui_data_to_dict_bool(IDProperty *property, PyObject *dict)
@@ -636,25 +801,31 @@ static void idprop_ui_data_to_dict_id(IDProperty *property, PyObject *dict)
 
   short id_type_value = ui_data->id_type;
   if (id_type_value == 0) {
-    /* While UI exposed custom properties do not allow the 'all ID types' `0` value, in py-defined
-     * IDProperties it is accepted. So force defining a valid id_type value when this function is
-     * called. */
+    /* While UI exposed custom properties do not allow the 'all ID types' `0` value, in
+     * py-defined IDProperties it is accepted. So force defining a valid id_type value when this
+     * function is called. */
     ID *id = IDP_Id(property);
     id_type_value = id ? GS(id->name) : ID_OB;
   }
 
   const char *id_type = nullptr;
-  RNA_enum_identifier(rna_enum_id_type_items, id_type_value, &id_type);
+  if (!RNA_enum_identifier(rna_enum_id_type_items, id_type_value, &id_type)) {
+    /* Same fall-back as above, in case it is an unknown ID type (from a future version of
+     * Blender e.g.). */
+    RNA_enum_identifier(rna_enum_id_type_items, ID_OB, &id_type);
+  }
   PyObject *item = PyUnicode_FromString(id_type);
   PyDict_SetItemString(dict, "id_type", item);
   Py_DECREF(item);
 }
 
-PyDoc_STRVAR(BPy_IDPropertyUIManager_as_dict_doc,
-             ".. method:: as_dict()\n"
-             "\n"
-             "   Return a dictionary of the property's RNA UI data. The fields in the\n"
-             "   returned dictionary and their types will depend on the property's type.\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_IDPropertyUIManager_as_dict_doc,
+    ".. method:: as_dict()\n"
+    "\n"
+    "   Return a dictionary of the property's RNA UI data. The fields in the\n"
+    "   returned dictionary and their types will depend on the property's type.\n");
 static PyObject *BPy_IDIDPropertyUIManager_as_dict(BPy_IDPropertyUIManager *self)
 {
   IDProperty *property = self->property;
@@ -711,10 +882,12 @@ static PyObject *BPy_IDIDPropertyUIManager_as_dict(BPy_IDPropertyUIManager *self
 /** \name UI Data Clear
  * \{ */
 
-PyDoc_STRVAR(BPy_IDPropertyUIManager_clear_doc,
-             ".. method:: clear()\n"
-             "\n"
-             "   Remove the RNA UI data from this IDProperty.\n");
+PyDoc_STRVAR(
+    /* Wrap. */
+    BPy_IDPropertyUIManager_clear_doc,
+    ".. method:: clear()\n"
+    "\n"
+    "   Remove the RNA UI data from this IDProperty.\n");
 static PyObject *BPy_IDPropertyUIManager_clear(BPy_IDPropertyUIManager *self)
 {
   IDProperty *property = self->property;
@@ -740,6 +913,7 @@ static PyObject *BPy_IDPropertyUIManager_clear(BPy_IDPropertyUIManager *self)
  * \{ */
 
 PyDoc_STRVAR(
+    /* Wrap. */
     BPy_IDPropertyUIManager_update_from_doc,
     ".. method:: update_from(ui_manager_source)\n"
     "\n"

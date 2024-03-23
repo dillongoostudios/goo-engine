@@ -11,6 +11,7 @@
 #include "BLI_utildefines.h"
 
 #include "BLI_listbase.h"
+#include "BLI_math_base_safe.h"
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
@@ -24,12 +25,13 @@
 #include "DNA_meshdata_types.h"
 #include "DNA_screen_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
+#include "BKE_customdata.hh"
 #include "BKE_effect.h"
-#include "BKE_lattice.h"
-#include "BKE_lib_query.h"
+#include "BKE_lattice.hh"
+#include "BKE_lib_query.hh"
 #include "BKE_mesh.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_particle.h"
 #include "BKE_pointcache.h"
 #include "BKE_screen.hh"
@@ -281,10 +283,10 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
       break;
   }
 
-  totvert = mesh->totvert;
+  totvert = mesh->verts_num;
   faces_num = mesh->faces_num;
-  totloop = mesh->totloop;
-  totedge = mesh->totedge;
+  totloop = mesh->corners_num;
+  totedge = mesh->edges_num;
 
   /* count particles */
   maxvert = 0;
@@ -324,9 +326,9 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
   blender::MutableSpan<int> corner_edges = result->corner_edges_for_write();
 
   MLoopCol *mloopcols_index = static_cast<MLoopCol *>(CustomData_get_layer_named_for_write(
-      &result->loop_data, CD_PROP_BYTE_COLOR, pimd->index_layer_name, result->totloop));
+      &result->corner_data, CD_PROP_BYTE_COLOR, pimd->index_layer_name, result->corners_num));
   MLoopCol *mloopcols_value = static_cast<MLoopCol *>(CustomData_get_layer_named_for_write(
-      &result->loop_data, CD_PROP_BYTE_COLOR, pimd->value_layer_name, result->totloop));
+      &result->corner_data, CD_PROP_BYTE_COLOR, pimd->value_layer_name, result->corners_num));
   int *vert_part_index = nullptr;
   float *vert_part_value = nullptr;
   if (mloopcols_index != nullptr) {
@@ -451,7 +453,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
           cross_v3_v3v3(cross, temp, state.vel);
 
           /* state.vel[axis] is the only component surviving from a dot product with the axis */
-          axis_angle_to_quat(state.rot, cross, saacos(state.vel[axis]));
+          axis_angle_to_quat(state.rot, cross, safe_acosf(state.vel[axis]));
         }
 #endif
       }
@@ -491,7 +493,7 @@ static Mesh *modify_mesh(ModifierData *md, const ModifierEvalContext *ctx, Mesh 
         int j = in_face.size();
 
         CustomData_copy_data(
-            &mesh->loop_data, &result->loop_data, in_face.start(), dst_face_start, j);
+            &mesh->corner_data, &result->corner_data, in_face.start(), dst_face_start, j);
         for (; j; j--, orig_corner_i++, dst_corner_i++) {
           corner_verts[dst_corner_i] = orig_corner_verts[orig_corner_i] + (p_skip * totvert);
           corner_edges[dst_corner_i] = orig_corner_edges[orig_corner_i] + (p_skip * totedge);
@@ -641,7 +643,7 @@ ModifierTypeInfo modifierType_ParticleInstance = {
     /*struct_name*/ "ParticleInstanceModifierData",
     /*struct_size*/ sizeof(ParticleInstanceModifierData),
     /*srna*/ &RNA_ParticleInstanceModifier,
-    /*type*/ eModifierTypeType_Constructive,
+    /*type*/ ModifierTypeType::Constructive,
     /*flags*/ eModifierTypeFlag_AcceptsMesh | eModifierTypeFlag_SupportsMapping |
         eModifierTypeFlag_SupportsEditmode | eModifierTypeFlag_EnableInEditmode,
     /*icon*/ ICON_MOD_PARTICLE_INSTANCE,
@@ -668,4 +670,5 @@ ModifierTypeInfo modifierType_ParticleInstance = {
     /*panel_register*/ panel_register,
     /*blend_write*/ nullptr,
     /*blend_read*/ nullptr,
+    /*foreach_cache*/ nullptr,
 };

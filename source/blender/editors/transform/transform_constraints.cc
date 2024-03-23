@@ -27,7 +27,7 @@
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "ED_view3d.hh"
 
@@ -277,7 +277,9 @@ static void constraint_snap_plane_to_edge(const TransInfo *t, const float plane[
   const float *edge_snap_point = t->tsnap.snap_target;
   const float *edge_dir = t->tsnap.snapNormal;
   bool is_aligned = fabsf(dot_v3v3(edge_dir, plane)) < CONSTRAIN_EPSILON;
-  if (!is_aligned && isect_ray_plane_v3(edge_snap_point, edge_dir, plane, &lambda, false)) {
+  if (!is_aligned &&
+      isect_ray_plane_v3_factor(edge_snap_point, edge_dir, t->tsnap.snap_source, plane, &lambda))
+  {
     madd_v3_v3v3fl(r_out, edge_snap_point, edge_dir, lambda);
     sub_v3_v3(r_out, t->tsnap.snap_source);
   }
@@ -903,15 +905,6 @@ void drawPropCircle(TransInfo *t)
     else if (t->spacetype == SPACE_IMAGE) {
       GPU_matrix_scale_2f(1.0f / t->aspect[0], 1.0f / t->aspect[1]);
     }
-    else if (ELEM(t->spacetype, SPACE_GRAPH, SPACE_ACTION)) {
-      /* only scale y */
-      float xscale, yscale;
-      UI_view2d_scale_get(&t->region->v2d, &xscale, &yscale);
-
-      const float fac_scale = xscale / yscale;
-      GPU_matrix_scale_2f(1.0f, fac_scale);
-      GPU_matrix_translate_2f(0.0f, (t->center_global[1] / fac_scale) - t->center_global[1]);
-    }
 
     eGPUDepthTest depth_test_enabled = GPU_depth_test_get();
     if (depth_test_enabled) {
@@ -944,6 +937,40 @@ void drawPropCircle(TransInfo *t)
 
     GPU_matrix_pop();
   }
+}
+
+void drawPropRange(TransInfo *t)
+{
+  if ((t->flag & T_PROP_EDIT) == 0) {
+    return;
+  }
+
+  uint pos = GPU_vertformat_attr_add(immVertexFormat(), "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+
+  immBindBuiltinProgram(GPU_SHADER_3D_POLYLINE_UNIFORM_COLOR);
+
+  float viewport[4];
+  GPU_viewport_size_get_f(viewport);
+  GPU_blend(GPU_BLEND_ALPHA);
+
+  immUniform2fv("viewportSize", &viewport[2]);
+
+  View2D *v2d = &t->region->v2d;
+  const float x1 = t->center_global[0] - t->prop_size;
+  const float y1 = v2d->cur.ymin;
+  const float x2 = t->center_global[0] + t->prop_size;
+  const float y2 = v2d->cur.ymax;
+
+  immUniform1f("lineWidth", 3.0f * U.pixelsize);
+  immUniformThemeColorShadeAlpha(TH_GRID, -20, 255);
+  imm_draw_box_wire_3d(pos, x1, y1, x2, y2);
+
+  immUniform1f("lineWidth", 1.0f * U.pixelsize);
+  immUniformThemeColorShadeAlpha(TH_GRID, 20, 255);
+  imm_draw_box_wire_3d(pos, x1, y1, x2, y2);
+
+  immUnbindProgram();
+  GPU_blend(GPU_BLEND_NONE);
 }
 
 static void drawObjectConstraint(TransInfo *t)
@@ -1081,11 +1108,11 @@ static void setNearestAxis2d(TransInfo *t)
   blender::float2 dvec = t->mval - t->mouse.imval;
   if (abs(dvec.x) < abs(dvec.y)) {
     t->con.mode |= CON_AXIS1;
-    STRNCPY(t->con.text, TIP_(" along Y axis"));
+    STRNCPY(t->con.text, IFACE_(" along Y axis"));
   }
   else {
     t->con.mode |= CON_AXIS0;
-    STRNCPY(t->con.text, TIP_(" along X axis"));
+    STRNCPY(t->con.text, IFACE_(" along X axis"));
   }
 }
 
@@ -1139,31 +1166,31 @@ static void setNearestAxis3d(TransInfo *t)
   if (len[0] <= len[1] && len[0] <= len[2]) {
     if (t->modifiers & MOD_CONSTRAINT_SELECT_PLANE) {
       t->con.mode |= (CON_AXIS1 | CON_AXIS2);
-      SNPRINTF(t->con.text, TIP_(" locking %s X axis"), t->spacename);
+      SNPRINTF(t->con.text, IFACE_(" locking %s X axis"), t->spacename);
     }
     else {
       t->con.mode |= CON_AXIS0;
-      SNPRINTF(t->con.text, TIP_(" along %s X axis"), t->spacename);
+      SNPRINTF(t->con.text, IFACE_(" along %s X axis"), t->spacename);
     }
   }
   else if (len[1] <= len[0] && len[1] <= len[2]) {
     if (t->modifiers & MOD_CONSTRAINT_SELECT_PLANE) {
       t->con.mode |= (CON_AXIS0 | CON_AXIS2);
-      SNPRINTF(t->con.text, TIP_(" locking %s Y axis"), t->spacename);
+      SNPRINTF(t->con.text, IFACE_(" locking %s Y axis"), t->spacename);
     }
     else {
       t->con.mode |= CON_AXIS1;
-      SNPRINTF(t->con.text, TIP_(" along %s Y axis"), t->spacename);
+      SNPRINTF(t->con.text, IFACE_(" along %s Y axis"), t->spacename);
     }
   }
   else if (len[2] <= len[1] && len[2] <= len[0]) {
     if (t->modifiers & MOD_CONSTRAINT_SELECT_PLANE) {
       t->con.mode |= (CON_AXIS0 | CON_AXIS1);
-      SNPRINTF(t->con.text, TIP_(" locking %s Z axis"), t->spacename);
+      SNPRINTF(t->con.text, IFACE_(" locking %s Z axis"), t->spacename);
     }
     else {
       t->con.mode |= CON_AXIS2;
-      SNPRINTF(t->con.text, TIP_(" along %s Z axis"), t->spacename);
+      SNPRINTF(t->con.text, IFACE_(" along %s Z axis"), t->spacename);
     }
   }
 }

@@ -9,8 +9,6 @@
 namespace blender::compositor {
 
 class BaseScaleOperation : public MultiThreadedOperation {
- public:
-  static constexpr float DEFAULT_MAX_SCALE_CANVAS_SIZE = 12000;
 
  public:
   void set_sampler(PixelSampler sampler)
@@ -22,8 +20,6 @@ class BaseScaleOperation : public MultiThreadedOperation {
     variable_size_ = variable_size;
   };
 
-  void set_scale_canvas_max_size(Size2f size);
-
  protected:
   BaseScaleOperation();
 
@@ -32,7 +28,6 @@ class BaseScaleOperation : public MultiThreadedOperation {
     return (sampler_ == -1) ? sampler : (PixelSampler)sampler_;
   }
 
-  Size2f max_scale_canvas_size_ = {DEFAULT_MAX_SCALE_CANVAS_SIZE, DEFAULT_MAX_SCALE_CANVAS_SIZE};
   int sampler_;
   /* TODO(manzanilla): to be removed with tiled implementation. */
   bool variable_size_;
@@ -59,14 +54,14 @@ class ScaleOperation : public BaseScaleOperation {
 
   static float scale_coord(const float coord, const float center, const float relative_scale)
   {
-    return center + (coord - center) * MAX2(relative_scale, MIN_RELATIVE_SCALE);
+    return center + (coord - center) * std::max(relative_scale, MIN_RELATIVE_SCALE);
   }
 
   static float scale_coord_inverted(const float coord,
                                     const float center,
                                     const float relative_scale)
   {
-    return center + (coord - center) / MAX2(relative_scale, MIN_RELATIVE_SCALE);
+    return center + (coord - center) / std::max(relative_scale, MIN_RELATIVE_SCALE);
   }
 
   static void get_scale_offset(const rcti &input_canvas,

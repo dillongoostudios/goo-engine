@@ -6,6 +6,7 @@
  * \ingroup edinterface
  */
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -249,7 +250,7 @@ void UI_list_filter_and_sort_items(uiList *ui_list,
         const eUIListFilterResult filter_result = item_filter_fn(itemptr, name, i);
 
         if (filter_result == UI_LIST_ITEM_NEVER_SHOW) {
-          /* Pass. */
+          dyn_data->items_filter_flags[i] = UILST_FLT_ITEM_NEVER_SHOW;
         }
         else if (filter_result == UI_LIST_ITEM_FILTER_MATCHES) {
           dyn_data->items_filter_flags[i] = UILST_FLT_ITEM;
@@ -430,7 +431,8 @@ static void ui_template_list_collect_items(PointerRNA *list_ptr,
 
   RNA_PROP_BEGIN (list_ptr, itemptr, list_prop) {
     if (!dyn_data->items_filter_flags ||
-        ((dyn_data->items_filter_flags[i] & UILST_FLT_ITEM) ^ filter_exclude))
+        (((dyn_data->items_filter_flags[i] & UILST_FLT_ITEM_NEVER_SHOW) == 0) &&
+         ((dyn_data->items_filter_flags[i] & UILST_FLT_ITEM) ^ filter_exclude)))
     {
       int new_order_idx;
       if (dyn_data->items_filter_neworder) {
@@ -588,7 +590,8 @@ static void uilist_prepare(uiList *ui_list,
   /* If list length changes or list is tagged to check this,
    * and active is out of view, scroll to it. */
   if ((ui_list->list_last_len != items->tot_items) ||
-      (ui_list->flag & UILST_SCROLL_TO_ACTIVE_ITEM)) {
+      (ui_list->flag & UILST_SCROLL_TO_ACTIVE_ITEM))
+  {
     if (activei_row < ui_list->list_scroll) {
       ui_list->list_scroll = activei_row;
     }
@@ -638,7 +641,7 @@ static void *uilist_item_use_dynamic_tooltip(PointerRNA *itemptr, const char *pr
   return nullptr;
 }
 
-static char *uilist_item_tooltip_func(bContext * /*C*/, void *argN, const char *tip)
+static std::string uilist_item_tooltip_func(bContext * /*C*/, void *argN, const char *tip)
 {
   char *dyn_tooltip = static_cast<char *>(argN);
   std::string tooltip_string = dyn_tooltip;
@@ -646,7 +649,7 @@ static char *uilist_item_tooltip_func(bContext * /*C*/, void *argN, const char *
     tooltip_string += '\n';
     tooltip_string += tip;
   }
-  return BLI_strdupn(tooltip_string.c_str(), tooltip_string.size());
+  return tooltip_string;
 }
 
 /**
@@ -778,11 +781,10 @@ static void ui_template_list_layout_draw(const bContext *C,
                                0,
                                0,
                                org_i,
-                               0,
-                               0,
                                editable ? TIP_("Double click to rename") : "");
           if ((dyntip_data = uilist_item_use_dynamic_tooltip(itemptr,
-                                                             input_data->item_dyntip_propname))) {
+                                                             input_data->item_dyntip_propname)))
+          {
             UI_but_func_tooltip_set(but, uilist_item_tooltip_func, dyntip_data, MEM_freeN);
           }
 
@@ -886,8 +888,6 @@ static void ui_template_list_layout_draw(const bContext *C,
                                    0,
                                    0,
                                    0,
-                                   0,
-                                   0,
                                    "");
       if (dyn_data->items_shown == 0) {
         UI_but_flag_enable(but, UI_BUT_DISABLED);
@@ -936,8 +936,6 @@ static void ui_template_list_layout_draw(const bContext *C,
                                0,
                                0,
                                org_i,
-                               0,
-                               0,
                                nullptr);
           UI_but_drawflag_enable(but, UI_BUT_NO_TOOLTIP);
 
@@ -1004,7 +1002,8 @@ static void ui_template_list_layout_draw(const bContext *C,
       const int size_x = UI_preview_tile_size_x();
       const int size_y = show_names ? UI_preview_tile_size_y() : UI_preview_tile_size_y_no_label();
 
-      const int cols_per_row = MAX2((uiLayoutGetWidth(box) - V2D_SCROLL_WIDTH) / size_x, 1);
+      const int cols_per_row = std::max(int((uiLayoutGetWidth(box) - V2D_SCROLL_WIDTH) / size_x),
+                                        1);
       uiLayout *grid = uiLayoutGridFlow(row, true, cols_per_row, true, true, true);
 
       TemplateListLayoutDrawData adjusted_layout_data = *layout_data;
@@ -1037,8 +1036,6 @@ static void ui_template_list_layout_draw(const bContext *C,
                                0,
                                0,
                                org_i,
-                               0,
-                               0,
                                nullptr);
           UI_but_drawflag_enable(but, UI_BUT_NO_TOOLTIP);
 

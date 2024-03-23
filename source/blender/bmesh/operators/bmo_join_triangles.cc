@@ -13,18 +13,16 @@
 
 #include "MEM_guardedalloc.h"
 
-#include "DNA_meshdata_types.h"
-
 #include "BLI_math_geom.h"
 #include "BLI_math_rotation.h"
 #include "BLI_math_vector.h"
 #include "BLI_sort_utils.h"
 
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 
-#include "bmesh.h"
+#include "bmesh.hh"
 
-#include "intern/bmesh_operators_private.h" /* own include */
+#include "intern/bmesh_operators_private.hh" /* own include */
 
 /**
  * \note Assumes edges are validated before reaching this point.

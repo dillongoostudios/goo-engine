@@ -44,4 +44,13 @@ if(WITH_IMAGE_OPENEXR)
   )
 endif()
 
+# Keep until APPLE/ARM libraries are updated.
+if(APPLE)
+  if(CMAKE_OSX_ARCHITECTURES MATCHES arm64)
+    list(APPEND INC_SYS
+      ${IMATH_INCLUDE_DIRS}
+    )
+  endif()
+endif()
+
 blender_add_lib(bf_imbuf_openimageio "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")

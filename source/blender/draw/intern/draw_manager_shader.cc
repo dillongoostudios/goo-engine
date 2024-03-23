@@ -10,21 +10,20 @@
 #include "DNA_object_types.h"
 #include "DNA_world_types.h"
 
-#include "PIL_time.h"
-
 #include "BLI_dynstr.h"
 #include "BLI_listbase.h"
 #include "BLI_string_utils.hh"
 #include "BLI_threads.h"
+#include "BLI_time.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
-#include "BKE_main.h"
+#include "BKE_main.hh"
 
 #include "DEG_depsgraph_query.hh"
 
 #include "GPU_capabilities.h"
-#include "GPU_material.h"
+#include "GPU_material.hh"
 #include "GPU_shader.h"
 
 #include "WM_api.hh"
@@ -86,8 +85,6 @@ static void drw_deferred_shader_compilation_exec(void *custom_data,
 
   while (true) {
     if (worker_status->stop != 0) {
-      /* We don't want user to be able to cancel the compilation
-       * but wm can kill the task if we are closing blender. */
       break;
     }
 
@@ -152,6 +149,13 @@ static void drw_deferred_shader_compilation_free(void *custom_data)
   DRWShaderCompiler *comp = (DRWShaderCompiler *)custom_data;
 
   BLI_spin_lock(&comp->list_lock);
+  LISTBASE_FOREACH (LinkData *, link, &comp->queue) {
+    GPU_material_status_set(static_cast<GPUMaterial *>(link->data), GPU_MAT_CREATED);
+  }
+  LISTBASE_FOREACH (LinkData *, link, &comp->optimize_queue) {
+    GPU_material_optimization_status_set(static_cast<GPUMaterial *>(link->data),
+                                         GPU_MAT_OPTIMIZATION_READY);
+  }
   BLI_freelistN(&comp->queue);
   BLI_freelistN(&comp->optimize_queue);
   BLI_spin_unlock(&comp->list_lock);
@@ -271,7 +275,7 @@ static void drw_deferred_shader_add(GPUMaterial *mat, bool deferred)
     DRW_deferred_shader_remove(mat);
     /* Shaders could already be compiling. Have to wait for compilation to finish. */
     while (GPU_material_status(mat) == GPU_MAT_QUEUED) {
-      PIL_sleep_ms(20);
+      BLI_sleep_ms(20);
     }
     if (GPU_material_status(mat) == GPU_MAT_CREATED) {
       GPU_material_compile(mat);
@@ -493,6 +497,7 @@ GPUShader *DRW_shader_create_fullscreen_with_shaderlib_ex(const char *frag,
 
 GPUMaterial *DRW_shader_from_world(World *wo,
                                    bNodeTree *ntree,
+                                   eGPUMaterialEngine engine,
                                    const uint64_t shader_id,
                                    const bool is_volume_shader,
                                    bool deferred,
@@ -505,6 +510,7 @@ GPUMaterial *DRW_shader_from_world(World *wo,
                                                 ntree,
                                                 &wo->gpumaterial,
                                                 wo->id.name,
+                                                engine,
                                                 shader_id,
                                                 is_volume_shader,
                                                 false,
@@ -525,6 +531,7 @@ GPUMaterial *DRW_shader_from_world(World *wo,
 
 GPUMaterial *DRW_shader_from_material(Material *ma,
                                       bNodeTree *ntree,
+                                      eGPUMaterialEngine engine,
                                       const uint64_t shader_id,
                                       const bool is_volume_shader,
                                       bool deferred,
@@ -537,6 +544,7 @@ GPUMaterial *DRW_shader_from_material(Material *ma,
                                                 ntree,
                                                 &ma->gpumaterial,
                                                 ma->id.name,
+                                                engine,
                                                 shader_id,
                                                 is_volume_shader,
                                                 false,
@@ -565,7 +573,7 @@ void DRW_shader_queue_optimize_material(GPUMaterial *mat)
       DRW_deferred_shader_optimize_remove(mat);
       /* If optimization job had already started, wait for it to complete. */
       while (GPU_material_optimization_status(mat) == GPU_MAT_OPTIMIZATION_QUEUED) {
-        PIL_sleep_ms(20);
+        BLI_sleep_ms(20);
       }
     }
     return;

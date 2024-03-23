@@ -12,7 +12,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "DNA_curves_types.h"
 #include "DNA_customdata_types.h"
@@ -22,12 +22,14 @@
 
 #include "BLI_math_color.h"
 
-#include "BKE_attribute.h"
-#include "BKE_customdata.h"
+#include "BKE_attribute.hh"
+#include "BKE_customdata.hh"
 
 #include "BLT_translation.h"
 
 #include "WM_types.hh"
+
+using blender::bke::AttrDomain;
 
 const EnumPropertyItem rna_enum_attribute_type_items[] = {
     {CD_PROP_FLOAT, "FLOAT", 0, "Float", "Floating-point value"},
@@ -80,87 +82,89 @@ const EnumPropertyItem rna_enum_attribute_type_with_auto_items[] = {
 const EnumPropertyItem rna_enum_attribute_domain_items[] = {
     /* Not implement yet */
     // {ATTR_DOMAIN_GEOMETRY, "GEOMETRY", 0, "Geometry", "Attribute on (whole) geometry"},
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CORNER, "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Corner), "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
     /* Not implement yet */
     // {ATTR_DOMAIN_GRIDS, "GRIDS", 0, "Grids", "Attribute on mesh multires grids"},
-    {ATTR_DOMAIN_CURVE, "CURVE", 0, "Spline", "Attribute on spline"},
-    {ATTR_DOMAIN_INSTANCE, "INSTANCE", 0, "Instance", "Attribute on instance"},
-    {ATTR_DOMAIN_LAYER, "LAYER", 0, "Layer", "Attribute on Grease Pencil layer"},
+    {int(AttrDomain::Curve), "CURVE", 0, "Spline", "Attribute on spline"},
+    {int(AttrDomain::Instance), "INSTANCE", 0, "Instance", "Attribute on instance"},
+    {int(AttrDomain::Layer), "LAYER", 0, "Layer", "Attribute on Grease Pencil layer"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_only_mesh_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CORNER, "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Corner), "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_only_mesh_no_edge_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CORNER, "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Corner), "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_point_face_curve_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CURVE, "CURVE", 0, "Spline", "Attribute on spline"},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Curve), "CURVE", 0, "Spline", "Attribute on spline"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_point_edge_face_curve_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CURVE, "CURVE", 0, "Spline", "Attribute on spline"},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Curve), "CURVE", 0, "Spline", "Attribute on spline"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_edge_face_items[] = {
-    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_without_corner_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CURVE, "CURVE", 0, "Spline", "Attribute on spline"},
-    {ATTR_DOMAIN_INSTANCE, "INSTANCE", 0, "Instance", "Attribute on instance"},
-    {ATTR_DOMAIN_LAYER, "LAYER", 0, "Layer", "Attribute on Grease Pencil layer"},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Curve), "CURVE", 0, "Spline", "Attribute on spline"},
+    {int(AttrDomain::Instance), "INSTANCE", 0, "Instance", "Attribute on instance"},
+    {int(AttrDomain::Layer), "LAYER", 0, "Layer", "Attribute on Grease Pencil layer"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_attribute_domain_with_auto_items[] = {
-    {ATTR_DOMAIN_AUTO, "AUTO", 0, "Auto", ""},
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Point", "Attribute on point"},
-    {ATTR_DOMAIN_EDGE, "EDGE", 0, "Edge", "Attribute on mesh edge"},
-    {ATTR_DOMAIN_FACE, "FACE", 0, "Face", "Attribute on mesh faces"},
-    {ATTR_DOMAIN_CORNER, "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
-    {ATTR_DOMAIN_CURVE, "CURVE", 0, "Spline", "Attribute on spline"},
-    {ATTR_DOMAIN_INSTANCE, "INSTANCE", 0, "Instance", "Attribute on instance"},
-    {ATTR_DOMAIN_LAYER, "LAYER", 0, "Layer", "Attribute on Grease Pencil layer"},
+    {int(AttrDomain::Auto), "AUTO", 0, "Auto", ""},
+    {int(AttrDomain::Point), "POINT", 0, "Point", "Attribute on point"},
+    {int(AttrDomain::Edge), "EDGE", 0, "Edge", "Attribute on mesh edge"},
+    {int(AttrDomain::Face), "FACE", 0, "Face", "Attribute on mesh faces"},
+    {int(AttrDomain::Corner), "CORNER", 0, "Face Corner", "Attribute on mesh face corner"},
+    {int(AttrDomain::Curve), "CURVE", 0, "Spline", "Attribute on spline"},
+    {int(AttrDomain::Instance), "INSTANCE", 0, "Instance", "Attribute on instance"},
+    {int(AttrDomain::Layer), "LAYER", 0, "Layer", "Attribute on Grease Pencil layer"},
     {0, nullptr, 0, nullptr, nullptr},
 };
 
 const EnumPropertyItem rna_enum_color_attribute_domain_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Vertex", ""},
-    {ATTR_DOMAIN_CORNER, "CORNER", 0, "Face Corner", ""},
+    {int(AttrDomain::Point), "POINT", 0, "Vertex", ""},
+    {int(AttrDomain::Corner), "CORNER", 0, "Face Corner", ""},
     {0, nullptr, 0, nullptr, nullptr}};
 
 const EnumPropertyItem rna_enum_attribute_curves_domain_items[] = {
-    {ATTR_DOMAIN_POINT, "POINT", 0, "Control Point", ""},
-    {ATTR_DOMAIN_CURVE, "CURVE", 0, "Curve", ""},
+    {int(AttrDomain::Point), "POINT", 0, "Control Point", ""},
+    {int(AttrDomain::Curve), "CURVE", 0, "Curve", ""},
     {0, nullptr, 0, nullptr, nullptr}};
 
 #ifdef RNA_RUNTIME
+
+#  include <fmt/format.h>
 
 #  include "DEG_depsgraph.hh"
 
@@ -170,12 +174,12 @@ const EnumPropertyItem rna_enum_attribute_curves_domain_items[] = {
 
 /* Attribute */
 
-static char *rna_Attribute_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_Attribute_path(const PointerRNA *ptr)
 {
   const CustomDataLayer *layer = static_cast<const CustomDataLayer *>(ptr->data);
   char layer_name_esc[sizeof(layer->name) * 2];
   BLI_str_escape(layer_name_esc, layer->name, sizeof(layer_name_esc));
-  return BLI_sprintfN("attributes[\"%s\"]", layer_name_esc);
+  return fmt::format("attributes[\"{}\"]", layer_name_esc);
 }
 
 static StructRNA *srna_by_custom_data_layer_type(const eCustomDataType type)
@@ -220,7 +224,7 @@ static void rna_Attribute_name_set(PointerRNA *ptr, const char *value)
   BKE_id_attribute_rename(ptr->owner_id, layer->name, value, nullptr);
 }
 
-static int rna_Attribute_name_editable(PointerRNA *ptr, const char **r_info)
+static int rna_Attribute_name_editable(const PointerRNA *ptr, const char **r_info)
 {
   CustomDataLayer *layer = static_cast<CustomDataLayer *>(ptr->data);
   if (BKE_id_attribute_required(ptr->owner_id, layer->name)) {
@@ -247,28 +251,31 @@ const EnumPropertyItem *rna_enum_attribute_domain_itemf(ID *id,
   int totitem = 0, a;
 
   static EnumPropertyItem mesh_vertex_domain_item = {
-      ATTR_DOMAIN_POINT, "POINT", 0, N_("Vertex"), N_("Attribute per point/vertex")};
+      int(AttrDomain::Point), "POINT", 0, N_("Vertex"), N_("Attribute per point/vertex")};
 
   for (a = 0; rna_enum_attribute_domain_items[a].identifier; a++) {
     domain_item = &rna_enum_attribute_domain_items[a];
 
-    if (id_type == ID_PT && !ELEM(domain_item->value, ATTR_DOMAIN_POINT)) {
+    if (id_type == ID_PT && !ELEM(domain_item->value, int(AttrDomain::Point))) {
       continue;
     }
-    if (id_type == ID_CV && !ELEM(domain_item->value, ATTR_DOMAIN_POINT, ATTR_DOMAIN_CURVE)) {
+    if (id_type == ID_CV &&
+        !ELEM(domain_item->value, int(AttrDomain::Point), int(AttrDomain::Curve)))
+    {
       continue;
     }
-    if (id_type == ID_ME && ELEM(domain_item->value, ATTR_DOMAIN_CURVE)) {
+    if (id_type == ID_ME && ELEM(domain_item->value, int(AttrDomain::Curve))) {
       continue;
     }
-    if (!include_instances && domain_item->value == ATTR_DOMAIN_INSTANCE) {
+    if (!include_instances && domain_item->value == int(AttrDomain::Instance)) {
       continue;
     }
-    if (!U.experimental.use_grease_pencil_version3 && domain_item->value == ATTR_DOMAIN_LAYER) {
+    if (!U.experimental.use_grease_pencil_version3 && domain_item->value == int(AttrDomain::Layer))
+    {
       continue;
     }
 
-    if (domain_item->value == ATTR_DOMAIN_POINT && id_type == ID_ME) {
+    if (domain_item->value == int(AttrDomain::Point) && id_type == ID_ME) {
       RNA_enum_item_add(&item, &totitem, &mesh_vertex_domain_item);
     }
     else {
@@ -291,7 +298,8 @@ static const EnumPropertyItem *rna_Attribute_domain_itemf(bContext * /*C*/,
 
 static int rna_Attribute_domain_get(PointerRNA *ptr)
 {
-  return BKE_id_attribute_domain(ptr->owner_id, static_cast<const CustomDataLayer *>(ptr->data));
+  return int(
+      BKE_id_attribute_domain(ptr->owner_id, static_cast<const CustomDataLayer *>(ptr->data)));
 }
 
 static bool rna_Attribute_is_internal_get(PointerRNA *ptr)
@@ -383,35 +391,17 @@ static void rna_FloatColorAttributeValue_color_srgb_set(PointerRNA *ptr, const f
   srgb_to_linearrgb_v4(col->color, values);
 }
 
-/* Int8 Attribute. */
-
-static int rna_ByteIntAttributeValue_get(PointerRNA *ptr)
-{
-  int8_t *value = (int8_t *)ptr->data;
-  return int(*value);
-}
-
-static void rna_ByteIntAttributeValue_set(PointerRNA *ptr, const int new_value)
-{
-  int8_t *value = (int8_t *)ptr->data;
-  if (new_value > INT8_MAX) {
-    *value = INT8_MAX;
-  }
-  else if (new_value < INT8_MIN) {
-    *value = INT8_MIN;
-  }
-  else {
-    *value = int8_t(new_value);
-  }
-}
-
 /* Attribute Group */
 
 static PointerRNA rna_AttributeGroup_new(
     ID *id, ReportList *reports, const char *name, const int type, const int domain)
 {
   CustomDataLayer *layer = BKE_id_attribute_new(
-      id, name, eCustomDataType(type), eAttrDomain(domain), reports);
+      id, name, eCustomDataType(type), AttrDomain(domain), reports);
+
+  if (!layer) {
+    return PointerRNA_NULL;
+  }
 
   if ((GS(id->name) == ID_ME) && ELEM(layer->type, CD_PROP_COLOR, CD_PROP_BYTE_COLOR)) {
     Mesh *mesh = (Mesh *)id;
@@ -452,7 +442,7 @@ static int rna_Attributes_noncolor_layer_skip(CollectionPropertyIterator *iter, 
 
   /* Check valid domain here, too, keep in line with rna_AttributeGroup_color_length(). */
   ID *id = iter->parent.owner_id;
-  const eAttrDomain domain = BKE_id_attribute_domain(id, layer);
+  const AttrDomain domain = BKE_id_attribute_domain(id, layer);
   if (!(ATTR_DOMAIN_AS_MASK(domain) & ATTR_DOMAIN_MASK_COLOR)) {
     return 1;
   }
@@ -1007,7 +997,7 @@ static void rna_def_attribute_bool(BlenderRNA *brna)
   RNA_def_struct_sdna(srna, "MBoolProperty");
   RNA_def_struct_ui_text(srna, "Bool Attribute Value", "Bool value in geometry attribute");
   prop = RNA_def_property(srna, "value", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "b", 0x01);
+  RNA_def_property_boolean_sdna(prop, nullptr, "b", 0);
 }
 
 static void rna_def_attribute_int8(BlenderRNA *brna)
@@ -1038,8 +1028,7 @@ static void rna_def_attribute_int8(BlenderRNA *brna)
   RNA_def_struct_ui_text(
       srna, "8-bit Integer Attribute Value", "8-bit value in geometry attribute");
   prop = RNA_def_property(srna, "value", PROP_INT, PROP_NONE);
-  RNA_def_property_int_funcs(
-      prop, "rna_ByteIntAttributeValue_get", "rna_ByteIntAttributeValue_set", nullptr);
+  RNA_def_property_int_sdna(prop, nullptr, "i");
 }
 
 static void rna_def_attribute_int2(BlenderRNA *brna)
@@ -1229,7 +1218,7 @@ static void rna_def_attribute_group(BlenderRNA *brna)
   parm = RNA_def_enum(func,
                       "domain",
                       rna_enum_attribute_domain_items,
-                      ATTR_DOMAIN_POINT,
+                      int(AttrDomain::Point),
                       "Domain",
                       "Type of element that attribute is stored on");
   RNA_def_parameter_flags(parm, PropertyFlag(0), PARM_REQUIRED);

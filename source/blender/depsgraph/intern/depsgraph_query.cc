@@ -16,9 +16,9 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_action.h" /* XXX: BKE_pose_channel_find_name */
-#include "BKE_customdata.h"
-#include "BKE_idtype.h"
-#include "BKE_main.h"
+#include "BKE_customdata.hh"
+#include "BKE_idtype.hh"
+#include "BKE_main.hh"
 
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -254,15 +254,14 @@ void DEG_get_evaluated_rna_pointer(const Depsgraph *depsgraph,
      * given the COW ID pointer as the new lookup point */
     /* TODO: Find a faster alternative, or implement support for other
      * common types too above (e.g. modifiers) */
-    char *path = RNA_path_from_ID_to_struct(ptr);
-    if (path) {
+    if (const std::optional<std::string> path = RNA_path_from_ID_to_struct(ptr)) {
       PointerRNA cow_id_ptr = RNA_id_pointer_create(cow_id);
-      if (!RNA_path_resolve(&cow_id_ptr, path, r_ptr_eval, nullptr)) {
+      if (!RNA_path_resolve(&cow_id_ptr, path->c_str(), r_ptr_eval, nullptr)) {
         /* Couldn't find COW copy of data */
         fprintf(stderr,
                 "%s: Couldn't resolve RNA path ('%s') relative to COW ID (%p) for '%s'\n",
                 __func__,
-                path,
+                path->c_str(),
                 (void *)cow_id,
                 orig_id->name);
       }
@@ -307,7 +306,8 @@ bool DEG_is_original_id(const ID *id)
    *
    * NOTE: We consider ID evaluated if ANY of those flags is set. We do NOT require ALL of them. */
   if (id->tag &
-      (LIB_TAG_COPIED_ON_WRITE | LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT | LIB_TAG_LOCALIZED)) {
+      (LIB_TAG_COPIED_ON_WRITE | LIB_TAG_COPIED_ON_WRITE_EVAL_RESULT | LIB_TAG_LOCALIZED))
+  {
     return false;
   }
   return true;

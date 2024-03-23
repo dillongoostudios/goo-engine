@@ -10,6 +10,7 @@
 
 #include "DNA_view3d_enums.h"
 
+enum class PaintMode : int8_t;
 struct bContext;
 struct bToolRef;
 struct PaintModeSettings;
@@ -38,13 +39,18 @@ void ED_imapaint_bucket_fill(bContext *C, float color[3], wmOperator *op, const 
 
 /* `paint_image_proj.cc` */
 
-void ED_paint_data_warning(ReportList *reports, bool uvs, bool mat, bool tex, bool stencil);
+void ED_paint_data_warning(
+    ReportList *reports, bool has_uvs, bool has_mat, bool has_tex, bool has_stencil);
 /**
  * Make sure that active object has a material,
  * and assign UVs and image layers if they do not exist.
  */
-bool ED_paint_proj_mesh_data_check(
-    Scene *scene, Object *ob, bool *uvs, bool *mat, bool *tex, bool *stencil);
+bool ED_paint_proj_mesh_data_check(Scene *scene,
+                                   Object *ob,
+                                   bool *r_has_uvs,
+                                   bool *r_has_mat,
+                                   bool *r_has_tex,
+                                   bool *r_has_stencil);
 
 /* `image_undo.cc` */
 
@@ -52,7 +58,7 @@ bool ED_paint_proj_mesh_data_check(
  * The caller is responsible for running #ED_image_undo_push_end,
  * failure to do so causes an invalid state for the undo system.
  */
-void ED_image_undo_push_begin(const char *name, int paint_mode);
+void ED_image_undo_push_begin(const char *name, PaintMode paint_mode);
 void ED_image_undo_push_begin_with_image(const char *name,
                                          Image *image,
                                          ImBuf *ibuf,

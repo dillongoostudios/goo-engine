@@ -14,6 +14,8 @@
 #include "UI_interface.hh"
 #include "UI_resources.hh"
 
+#include "GEO_transform.hh"
+
 #include "node_geometry_util.hh"
 
 namespace blender::nodes::node_geo_object_info_cc {
@@ -28,7 +30,7 @@ static void node_declare(NodeDeclarationBuilder &b)
           "Output the entire object as single instance. "
           "This allows instancing non-geometry object types");
   b.add_output<decl::Vector>("Location");
-  b.add_output<decl::Vector>("Rotation");
+  b.add_output<decl::Rotation>("Rotation");
   b.add_output<decl::Vector>("Scale");
   b.add_output<decl::Geometry>("Geometry");
 }
@@ -56,15 +58,15 @@ static void node_geo_exec(GeoNodeExecParams params)
   const float4x4 transform = float4x4(self_object->world_to_object) * object_matrix;
 
   float3 location, scale;
-  math::EulerXYZ rotation;
+  math::Quaternion rotation;
   if (transform_space_relative) {
-    math::to_loc_rot_scale(transform, location, rotation, scale);
+    math::to_loc_rot_scale<true>(transform, location, rotation, scale);
   }
   else {
-    math::to_loc_rot_scale(object_matrix, location, rotation, scale);
+    math::to_loc_rot_scale<true>(object_matrix, location, rotation, scale);
   }
   params.set_output("Location", location);
-  params.set_output("Rotation", float3(rotation));
+  params.set_output("Rotation", rotation);
   params.set_output("Scale", scale);
 
   if (params.output_is_required("Geometry")) {
@@ -90,7 +92,7 @@ static void node_geo_exec(GeoNodeExecParams params)
     else {
       geometry_set = bke::object_get_evaluated_geometry_set(*object);
       if (transform_space_relative) {
-        transform_geometry_set(params, geometry_set, transform, *params.depsgraph());
+        geometry::transform_geometry(geometry_set, transform);
       }
     }
 
@@ -124,13 +126,14 @@ static void node_rna(StructRNA *srna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
-  RNA_def_node_enum(srna,
-                    "transform_space",
-                    "Transform Space",
-                    "The transformation of the vector and geometry outputs",
-                    rna_node_geometry_object_info_transform_space_items,
-                    NOD_storage_enum_accessors(transform_space),
-                    GEO_NODE_TRANSFORM_SPACE_ORIGINAL);
+  PropertyRNA *prop = RNA_def_node_enum(srna,
+                                        "transform_space",
+                                        "Transform Space",
+                                        "The transformation of the vector and geometry outputs",
+                                        rna_node_geometry_object_info_transform_space_items,
+                                        NOD_storage_enum_accessors(transform_space),
+                                        GEO_NODE_TRANSFORM_SPACE_ORIGINAL);
+  RNA_def_property_update_runtime(prop, rna_Node_update_relations);
 }
 
 static void node_register()

@@ -7,23 +7,29 @@
  * \ingroup bke
  */
 
+#include <memory>
+#include <string>
+
 #include "BLI_compiler_attrs.h"
+#include "BLI_vector.hh"
 
 #include "RNA_types.hh"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 namespace blender::asset_system {
 class AssetRepresentation;
 }
 
 struct ARegion;
+struct AssetShelfType;
 struct BlendDataReader;
 struct BlendLibReader;
 struct BlendWriter;
 struct Header;
 struct ID;
 struct IDRemapper;
+struct LayoutPanelState;
 struct LibraryForeachIDData;
 struct ListBase;
 struct Menu;
@@ -63,8 +69,6 @@ struct wmSpaceTypeListenerParams {
 };
 
 struct SpaceType {
-  SpaceType *next, *prev;
-
   char name[BKE_ST_MAXNAME]; /* for menus */
   int spaceid;               /* unique space identifier */
   int iconid;                /* icon lookup for menus */
@@ -137,12 +141,14 @@ struct SpaceType {
   ListBase regiontypes;
 
   /** Asset shelf type definitions. */
-  ListBase asset_shelf_types; /* #AssetShelfType */
+  blender::Vector<std::unique_ptr<AssetShelfType>> asset_shelf_types;
 
   /* read and write... */
 
   /** Default key-maps to add. */
   int keymapflag;
+
+  ~SpaceType();
 };
 
 /* region types are also defined using spacetypes_init, via a callback */
@@ -340,7 +346,38 @@ enum {
   PANEL_TYPE_NO_SEARCH = (1 << 7),
 };
 
-typedef struct Panel_Runtime {
+struct LayoutPanelHeader {
+  float start_y;
+  float end_y;
+  PointerRNA open_owner_ptr;
+  std::string open_prop_name;
+};
+
+struct LayoutPanelBody {
+  float start_y;
+  float end_y;
+};
+
+/**
+ * "Layout Panels" are panels which are defined as part of the #uiLayout. As such they have a
+ * specific place in the layout and can not be freely dragged around like top level panels.
+ *
+ * This struct gathers information about the layout panels created by layout code. This is then
+ * used for e.g. drawing the backdrop of nested panels and to support opening and closing multiple
+ * panels with a single mouse gesture.
+ */
+struct LayoutPanels {
+  blender::Vector<LayoutPanelHeader> headers;
+  blender::Vector<LayoutPanelBody> bodies;
+
+  void clear()
+  {
+    this->headers.clear();
+    this->bodies.clear();
+  }
+};
+
+struct Panel_Runtime {
   /* Applied to Panel.ofsx, but saved separately so we can track changes between redraws. */
   int region_ofsx = 0;
 
@@ -359,7 +396,10 @@ typedef struct Panel_Runtime {
 
   /* Non-owning pointer. The context is stored in the block. */
   bContextStore *context = nullptr;
-} Panel_Runtime;
+
+  /** Information about nested layout panels generated in layout code. */
+  LayoutPanels layout_panels;
+};
 
 /* #uiList types. */
 
@@ -479,8 +519,6 @@ enum AssetShelfTypeFlag {
 ENUM_OPERATORS(AssetShelfTypeFlag, ASSET_SHELF_TYPE_FLAG_MAX);
 
 struct AssetShelfType {
-  AssetShelfType *next, *prev;
-
   char idname[BKE_ST_MAXNAME]; /* unique name */
 
   int space_type;
@@ -509,8 +547,8 @@ struct AssetShelfType {
 
 SpaceType *BKE_spacetype_from_id(int spaceid);
 ARegionType *BKE_regiontype_from_id(const SpaceType *st, int regionid);
-const ListBase *BKE_spacetypes_list();
-void BKE_spacetype_register(SpaceType *st);
+blender::Span<std::unique_ptr<SpaceType>> BKE_spacetypes_list();
+void BKE_spacetype_register(std::unique_ptr<SpaceType> st);
 bool BKE_spacetype_exists(int spaceid);
 void BKE_spacetypes_free(); /* only for quitting blender */
 
@@ -568,6 +606,14 @@ void BKE_screen_area_free(ScrArea *area);
  */
 void BKE_region_callback_free_gizmomap_set(void (*callback)(wmGizmoMap *));
 void BKE_region_callback_refresh_tag_gizmomap_set(void (*callback)(wmGizmoMap *));
+
+/**
+ * Get the layout panel state for the given idname. If it does not exist yet, initialize a new
+ * panel state with the given default value.
+ */
+LayoutPanelState *BKE_panel_layout_panel_state_ensure(Panel *panel,
+                                                      const char *idname,
+                                                      bool default_closed);
 
 /**
  * Find a region of type \a region_type in provided \a regionbase.

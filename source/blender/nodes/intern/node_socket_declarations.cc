@@ -7,7 +7,7 @@
 #include "NOD_socket_declarations.hh"
 #include "NOD_socket_declarations_geometry.hh"
 
-#include "BKE_lib_id.h"
+#include "BKE_lib_id.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
 
@@ -115,6 +115,9 @@ bool Float::can_connect(const bNodeSocket &socket) const
 {
   if (!sockets_can_connect(*this, socket)) {
     return false;
+  }
+  if (this->in_out == SOCK_OUT && socket.type == SOCK_ROTATION) {
+    return true;
   }
   return basic_types_can_connect(*this, socket);
 }
@@ -254,6 +257,9 @@ bool Vector::can_connect(const bNodeSocket &socket) const
 {
   if (!sockets_can_connect(*this, socket)) {
     return false;
+  }
+  if (socket.type == SOCK_ROTATION) {
+    return true;
   }
   return basic_types_can_connect(*this, socket);
 }
@@ -411,7 +417,10 @@ bool Rotation::can_connect(const bNodeSocket &socket) const
   if (!sockets_can_connect(*this, socket)) {
     return false;
   }
-  return socket.type == SOCK_ROTATION;
+  if (this->in_out == SOCK_IN) {
+    return ELEM(socket.type, SOCK_ROTATION, SOCK_FLOAT, SOCK_VECTOR);
+  }
+  return ELEM(socket.type, SOCK_ROTATION, SOCK_VECTOR);
 }
 
 bNodeSocket &Rotation::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
@@ -463,6 +472,53 @@ bool String::can_connect(const bNodeSocket &socket) const
 bNodeSocket &String::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
 {
   if (socket.type != SOCK_STRING) {
+    BLI_assert(socket.in_out == this->in_out);
+    return this->build(ntree, node);
+  }
+  this->set_common_flags(socket);
+  return socket;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name #Menu
+ * \{ */
+
+bNodeSocket &Menu::build(bNodeTree &ntree, bNode &node) const
+{
+  bNodeSocket &socket = *nodeAddStaticSocket(&ntree,
+                                             &node,
+                                             this->in_out,
+                                             SOCK_MENU,
+                                             PROP_NONE,
+                                             this->identifier.c_str(),
+                                             this->name.c_str());
+
+  ((bNodeSocketValueMenu *)socket.default_value)->value = this->default_value;
+  this->set_common_flags(socket);
+  return socket;
+}
+
+bool Menu::matches(const bNodeSocket &socket) const
+{
+  if (!this->matches_common_data(socket)) {
+    return false;
+  }
+  if (socket.type != SOCK_MENU) {
+    return false;
+  }
+  return true;
+}
+
+bool Menu::can_connect(const bNodeSocket &socket) const
+{
+  return sockets_can_connect(*this, socket) && socket.type == SOCK_MENU;
+}
+
+bNodeSocket &Menu::update_or_build(bNodeTree &ntree, bNode &node, bNodeSocket &socket) const
+{
+  if (socket.type != SOCK_MENU) {
     BLI_assert(socket.in_out == this->in_out);
     return this->build(ntree, node);
   }

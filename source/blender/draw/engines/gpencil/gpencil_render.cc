@@ -7,7 +7,7 @@
  */
 #include "BLI_rect.h"
 
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BKE_object.hh"
 
@@ -17,7 +17,7 @@
 
 #include "RE_pipeline.h"
 
-#include "IMB_imbuf_types.h"
+#include "IMB_imbuf_types.hh"
 
 #include "gpencil_engine.h"
 

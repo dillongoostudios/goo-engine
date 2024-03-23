@@ -19,7 +19,7 @@ add_definitions(-DBOOST_ALL_NO_LIB)
 # Clang as well works around the issue.
 if(UNIX AND NOT APPLE)
   if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-    if(EXISTS ${LIBDIR})
+    if(DEFINED LIBDIR)
       add_definitions(-DARCH_HAS_GNU_STL_EXTENSIONS)
     endif()
   endif()
@@ -61,14 +61,12 @@ set(INC
   ../../blenloader
   ../../blentranslation
   ../../bmesh
-  ../../depsgraph
   ../../editors/include
   ../../imbuf
   ../../makesrna
   ../../nodes
   ../../python/intern
   ../../windowmanager
-  ../../../../intern/clog
   ../../../../intern/utfconv
   # RNA_prototypes.h
   ${CMAKE_BINARY_DIR}/source/blender/makesrna
@@ -79,15 +77,19 @@ set(INC_SYS
   ${BOOST_INCLUDE_DIR}
   ${TBB_INCLUDE_DIR}
   ${PYTHON_INCLUDE_DIR}
+
 )
 
 set(SRC
+  intern/usd_armature_utils.cc
   intern/usd_asset_utils.cc
+  intern/usd_blend_shape_utils.cc
   intern/usd_capi_export.cc
   intern/usd_capi_import.cc
   intern/usd_hierarchy_iterator.cc
   intern/usd_hook.cc
   intern/usd_writer_abstract.cc
+  intern/usd_writer_armature.cc
   intern/usd_writer_camera.cc
   intern/usd_writer_curves.cc
   intern/usd_writer_hair.cc
@@ -101,6 +103,7 @@ set(SRC
   intern/usd_reader_camera.cc
   intern/usd_reader_curve.cc
   intern/usd_reader_geom.cc
+  intern/usd_reader_instance.cc
   intern/usd_reader_light.cc
   intern/usd_reader_material.cc
   intern/usd_reader_mesh.cc
@@ -111,46 +114,53 @@ set(SRC
   intern/usd_reader_stage.cc
   intern/usd_reader_volume.cc
   intern/usd_reader_xform.cc
+  intern/usd_reader_pointinstancer.cc
   intern/usd_skel_convert.cc
+  intern/usd_skel_root_utils.cc
 
-  usd.h
   usd.hh
+  usd_private.hh
 
-  intern/usd_asset_utils.h
-  intern/usd_exporter_context.h
-  intern/usd_hash_types.h
-  intern/usd_hierarchy_iterator.h
-  intern/usd_hook.h
-  intern/usd_writer_abstract.h
-  intern/usd_writer_camera.h
-  intern/usd_writer_curves.h
-  intern/usd_writer_hair.h
-  intern/usd_writer_light.h
-  intern/usd_writer_material.h
-  intern/usd_writer_mesh.h
-  intern/usd_writer_metaball.h
-  intern/usd_writer_transform.h
-  intern/usd_writer_volume.h
+  intern/usd_armature_utils.hh
+  intern/usd_asset_utils.hh
+  intern/usd_blend_shape_utils.hh
+  intern/usd_exporter_context.hh
+  intern/usd_hash_types.hh
+  intern/usd_hierarchy_iterator.hh
+  intern/usd_hook.hh
+  intern/usd_writer_abstract.hh
+  intern/usd_writer_armature.hh
+  intern/usd_writer_camera.hh
+  intern/usd_writer_curves.hh
+  intern/usd_writer_hair.hh
+  intern/usd_writer_light.hh
+  intern/usd_writer_material.hh
+  intern/usd_writer_mesh.hh
+  intern/usd_writer_metaball.hh
+  intern/usd_writer_transform.hh
+  intern/usd_writer_volume.hh
 
-  intern/usd_reader_camera.h
-  intern/usd_reader_curve.h
-  intern/usd_reader_geom.h
-  intern/usd_reader_light.h
-  intern/usd_reader_material.h
-  intern/usd_reader_mesh.h
-  intern/usd_reader_nurbs.h
-  intern/usd_reader_prim.h
-  intern/usd_reader_shape.h
-  intern/usd_reader_skeleton.h
-  intern/usd_reader_stage.h
-  intern/usd_reader_volume.h
-  intern/usd_reader_xform.h
-  intern/usd_skel_convert.h
+  intern/usd_reader_camera.hh
+  intern/usd_reader_curve.hh
+  intern/usd_reader_geom.hh
+  intern/usd_reader_instance.hh
+  intern/usd_reader_light.hh
+  intern/usd_reader_material.hh
+  intern/usd_reader_mesh.hh
+  intern/usd_reader_nurbs.hh
+  intern/usd_reader_prim.hh
+  intern/usd_reader_shape.hh
+  intern/usd_reader_skeleton.hh
+  intern/usd_reader_stage.hh
+  intern/usd_reader_volume.hh
+  intern/usd_reader_xform.hh
+  intern/usd_reader_pointinstancer.hh
+  intern/usd_skel_convert.hh
+  intern/usd_skel_root_utils.hh
 )
 
 if(WITH_HYDRA)
   list(APPEND SRC
-    hydra/camera.cc
     hydra/curves.cc
     hydra/hydra_scene_delegate.cc
     hydra/id.cc
@@ -165,31 +175,33 @@ if(WITH_HYDRA)
     hydra/volume_modifier.cc
     hydra/world.cc
 
-    hydra/camera.h
-    hydra/curves.h
-    hydra/hydra_scene_delegate.h
-    hydra/id.h
-    hydra/image.h
-    hydra/instancer.h
-    hydra/light.h
-    hydra/material.h
-    hydra/mesh.h
-    hydra/object.h
-    hydra/usd_scene_delegate.h
-    hydra/volume.h
-    hydra/volume_modifier.h
-    hydra/world.h
+    hydra/curves.hh
+    hydra/hydra_scene_delegate.hh
+    hydra/id.hh
+    hydra/image.hh
+    hydra/instancer.hh
+    hydra/light.hh
+    hydra/material.hh
+    hydra/mesh.hh
+    hydra/object.hh
+    hydra/usd_scene_delegate.hh
+    hydra/volume.hh
+    hydra/volume_modifier.hh
+    hydra/world.hh
   )
 endif()
 
 set(LIB
   bf_blenkernel
   PRIVATE bf::blenlib
+  PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::animrig
   bf_imbuf
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
   bf_io_common
+  PRIVATE bf::extern::fmtlib
 )
 
 list(APPEND LIB
@@ -202,6 +214,9 @@ list(APPEND LIB
 
 if(WITH_OPENVDB)
   add_definitions(-DWITH_OPENVDB ${OPENVDB_DEFINITIONS})
+  list(APPEND INC
+    ../../../../intern/openvdb
+  )
   list(APPEND INC_SYS
     ${OPENVDB_INCLUDE_DIRS}
   )
@@ -221,7 +236,7 @@ blender_add_lib(bf_io_usd "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_dependencies(bf_io_usd bf_rna)
 
 if(COMMAND target_precompile_headers)
-  target_precompile_headers(bf_io_usd PRIVATE intern/usd_precomp.h)
+  target_precompile_headers(bf_io_usd PRIVATE intern/usd_precomp.hh)
 endif()
 
 if(WITH_GTESTS)
@@ -230,7 +245,7 @@ if(WITH_GTESTS)
     tests/usd_export_test.cc
     tests/usd_stage_creation_test.cc
     tests/usd_usdz_export_test.cc
-    intern/usd_writer_material.h
+    intern/usd_writer_material.hh
   )
   if(USD_IMAGING_HEADERS)
     list(APPEND TEST_SRC tests/usd_imaging_test.cc)
@@ -241,9 +256,9 @@ if(WITH_GTESTS)
   set(TEST_INC
   )
   set(TEST_LIB
+    bf_blenloader_test_util
   )
-  include(GTestTesting)
-  blender_add_test_lib(bf_io_usd_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+  blender_add_test_suite_lib(io_usd "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
 endif()
 
 # In CMAKE version 3.21 and up, we can instead use the `NO_CACHE` option for

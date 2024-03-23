@@ -15,7 +15,7 @@
 #include "DNA_ID.h"
 #include "DNA_armature_types.h"
 #include "DNA_listBase.h"
-#include "DNA_session_uuid_types.h"
+#include "DNA_session_uid_types.h"
 #include "DNA_userdef_types.h" /* ThemeWireColor */
 #include "DNA_vec_types.h"
 #include "DNA_view2d_types.h"
@@ -57,9 +57,9 @@ typedef struct bMotionPath {
   /** The number of cached verts. */
   int length;
 
-  /** For drawing paths, the start frame number. */
+  /** For drawing paths, the start frame number. Inclusive.*/
   int start_frame;
-  /** For drawing paths, the end frame number. */
+  /** For drawing paths, the end frame number. Exclusive. */
   int end_frame;
 
   /** Optional custom color. */
@@ -86,6 +86,8 @@ typedef enum eMotionPath_Flag {
   MOTIONPATH_FLAG_CUSTOM = (1 << 2),
   /* Draw lines or only points */
   MOTIONPATH_FLAG_LINES = (1 << 3),
+  /* Bake to scene camera. */
+  MOTIONPATH_FLAG_BAKE_CAMERA = (1 << 4),
 } eMotionPath_Flag;
 
 /* Visualization General --------------------------- */
@@ -111,7 +113,7 @@ typedef struct bAnimVizSettings {
   short path_bakeflag;
   char _pad[4];
 
-  /** Start and end frames of path-calculation range. */
+  /** Start and end frames of path-calculation range. Both are inclusive.*/
   int path_sf, path_ef;
   /** Number of frames before/after current frame to show. */
   int path_bc, path_ac;
@@ -163,6 +165,8 @@ typedef enum eMotionPaths_BakeFlag {
   /** motion paths exist for AnimVizSettings instance - set when calc for first time,
    * and unset when clearing */
   MOTIONPATH_BAKE_HAS_PATHS = (1 << 2),
+  /* Bake the path in camera space. */
+  MOTIONPATH_BAKE_CAMERA_SPACE = (1 << 3),
 } eMotionPath_BakeFlag;
 
 /* runtime */
@@ -197,7 +201,7 @@ typedef struct bPoseChannel_BBoneSegmentBoundary {
 } bPoseChannel_BBoneSegmentBoundary;
 
 typedef struct bPoseChannel_Runtime {
-  SessionUUID session_uuid;
+  SessionUID session_uid;
 
   /* Cached dual quaternion for deformation. */
   struct DualQuat deform_dual_quat;
@@ -828,6 +832,9 @@ typedef enum eDopeSheet_FilterFlag2 {
   ADS_FILTER_NOHAIR = (1 << 3),
   ADS_FILTER_NOPOINTCLOUD = (1 << 4),
   ADS_FILTER_NOVOLUME = (1 << 5),
+
+  /** Include working drivers with variables using their fallback values into Only Show Errors. */
+  ADS_FILTER_DRIVER_FALLBACK_AS_ERROR = (1 << 6),
 } eDopeSheet_FilterFlag2;
 
 /* DopeSheet general flags */

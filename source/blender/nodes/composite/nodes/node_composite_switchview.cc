@@ -6,8 +6,8 @@
  * \ingroup cmpnodes
  */
 
-#include "BKE_context.h"
-#include "BKE_lib_id.h"
+#include "BKE_context.hh"
+#include "BKE_lib_id.hh"
 
 #include "UI_interface.hh"
 #include "UI_resources.hh"

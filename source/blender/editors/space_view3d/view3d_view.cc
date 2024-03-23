@@ -16,14 +16,14 @@
 #include "BLI_rect.h"
 
 #include "BKE_action.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_gpencil_modifier_legacy.h"
 #include "BKE_idprop.h"
-#include "BKE_layer.h"
-#include "BKE_lib_id.h"
-#include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_layer.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_main.hh"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
 #include "BKE_report.h"
 #include "BKE_scene.h"
@@ -33,7 +33,7 @@
 #include "UI_resources.hh"
 
 #include "GPU_matrix.h"
-#include "GPU_select.h"
+#include "GPU_select.hh"
 #include "GPU_state.h"
 
 #include "WM_api.hh"
@@ -41,7 +41,7 @@
 #include "ED_object.hh"
 #include "ED_screen.hh"
 
-#include "DRW_engine.h"
+#include "DRW_engine.hh"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
@@ -479,8 +479,7 @@ void view3d_opengl_select_cache_end()
 struct DrawSelectLoopUserData {
   uint pass;
   uint hits;
-  GPUSelectResult *buffer;
-  uint buffer_len;
+  GPUSelectBuffer *buffer;
   const rcti *rect;
   eGPUSelectMode gpu_select_mode;
 };
@@ -490,8 +489,7 @@ static bool drw_select_loop_pass(eDRWSelectStage stage, void *user_data)
   bool continue_pass = false;
   DrawSelectLoopUserData *data = static_cast<DrawSelectLoopUserData *>(user_data);
   if (stage == DRW_SELECT_PASS_PRE) {
-    GPU_select_begin_next(
-        data->buffer, data->buffer_len, data->rect, data->gpu_select_mode, data->hits);
+    GPU_select_begin_next(data->buffer, data->rect, data->gpu_select_mode, data->hits);
     /* always run POST after PRE. */
     continue_pass = true;
   }
@@ -544,8 +542,7 @@ static bool drw_select_filter_object_mode_lock_for_weight_paint(Object *ob, void
 }
 
 int view3d_opengl_select_ex(ViewContext *vc,
-                            GPUSelectResult *buffer,
-                            uint buffer_len,
+                            GPUSelectBuffer *buffer,
                             const rcti *input,
                             eV3DSelectMode select_mode,
                             eV3DSelectObjectFilter select_filter,
@@ -610,7 +607,7 @@ int view3d_opengl_select_ex(ViewContext *vc,
   /* Re-use cache (rect must be smaller than the cached)
    * other context is assumed to be unchanged */
   if (GPU_select_is_cached()) {
-    GPU_select_begin_next(buffer, buffer_len, &rect, gpu_select_mode, 0);
+    GPU_select_begin_next(buffer, &rect, gpu_select_mode, 0);
     GPU_select_cache_load_id();
     hits = GPU_select_end();
     goto finally;
@@ -691,7 +688,6 @@ int view3d_opengl_select_ex(ViewContext *vc,
     drw_select_loop_user_data.pass = 0;
     drw_select_loop_user_data.hits = 0;
     drw_select_loop_user_data.buffer = buffer;
-    drw_select_loop_user_data.buffer_len = buffer_len;
     drw_select_loop_user_data.rect = &rect;
     drw_select_loop_user_data.gpu_select_mode = gpu_select_mode;
 
@@ -721,7 +717,6 @@ int view3d_opengl_select_ex(ViewContext *vc,
     drw_select_loop_user_data.pass = 0;
     drw_select_loop_user_data.hits = 0;
     drw_select_loop_user_data.buffer = buffer;
-    drw_select_loop_user_data.buffer_len = buffer_len;
     drw_select_loop_user_data.rect = &rect;
     drw_select_loop_user_data.gpu_select_mode = gpu_select_mode;
 
@@ -755,38 +750,36 @@ int view3d_opengl_select_ex(ViewContext *vc,
   UI_Theme_Restore(&theme_state);
 
 finally:
-
-  if (hits < 0) {
-    printf("Too many objects in select buffer\n"); /* XXX make error message */
-  }
-
   return hits;
 }
 
 int view3d_opengl_select(ViewContext *vc,
-                         GPUSelectResult *buffer,
-                         uint buffer_len,
+                         GPUSelectBuffer *buffer,
                          const rcti *input,
                          eV3DSelectMode select_mode,
                          eV3DSelectObjectFilter select_filter)
 {
-  return view3d_opengl_select_ex(vc, buffer, buffer_len, input, select_mode, select_filter, false);
+  return view3d_opengl_select_ex(vc, buffer, input, select_mode, select_filter, false);
 }
 
 int view3d_opengl_select_with_id_filter(ViewContext *vc,
-                                        GPUSelectResult *buffer,
-                                        const uint buffer_len,
+                                        GPUSelectBuffer *buffer,
                                         const rcti *input,
                                         eV3DSelectMode select_mode,
                                         eV3DSelectObjectFilter select_filter,
                                         uint select_id)
 {
-  int hits = view3d_opengl_select(vc, buffer, buffer_len, input, select_mode, select_filter);
+  const int64_t start = buffer->storage.size();
+  int hits = view3d_opengl_select(vc, buffer, input, select_mode, select_filter);
 
   /* Selection sometimes uses -1 for an invalid selection ID, remove these as they
    * interfere with detection of actual number of hits in the selection. */
   if (hits > 0) {
-    hits = GPU_select_buffer_remove_by_id(buffer, hits, select_id);
+    hits = GPU_select_buffer_remove_by_id(buffer->storage.as_mutable_span().slice(start, hits),
+                                          select_id);
+
+    /* Trim buffer to the exact size in case selections were removed. */
+    buffer->storage.resize(start + hits);
   }
   return hits;
 }
@@ -810,7 +803,7 @@ static uint free_localview_bit(Main *bmain)
         if (sl->spacetype == SPACE_VIEW3D) {
           View3D *v3d = reinterpret_cast<View3D *>(sl);
           if (v3d->localvd) {
-            local_view_bits |= v3d->local_view_uuid;
+            local_view_bits |= v3d->local_view_uid;
           }
         }
       }
@@ -866,7 +859,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
         base->local_view_bits &= ~local_view_bit;
       }
       FOREACH_BASE_IN_EDIT_MODE_BEGIN (scene, view_layer, v3d, base_iter) {
-        BKE_object_minmax(base_iter->object, min, max, false);
+        BKE_object_minmax(base_iter->object, min, max);
         base_iter->local_view_bits |= local_view_bit;
         ok = true;
       }
@@ -876,7 +869,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
       BKE_view_layer_synced_ensure(scene, view_layer);
       LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
         if (BASE_SELECTED(v3d, base)) {
-          BKE_object_minmax(base->object, min, max, false);
+          BKE_object_minmax(base->object, min, max);
           base->local_view_bits |= local_view_bit;
           ok = true;
         }
@@ -896,7 +889,7 @@ static bool view3d_localview_init(const Depsgraph *depsgraph,
 
   v3d->localvd = static_cast<View3D *>(MEM_mallocN(sizeof(View3D), "localview"));
   *v3d->localvd = blender::dna::shallow_copy(*v3d);
-  v3d->local_view_uuid = local_view_bit;
+  v3d->local_view_uid = local_view_bit;
 
   LISTBASE_FOREACH (ARegion *, region, &area->regionbase) {
     if (region->regiontype == RGN_TYPE_WINDOW) {
@@ -971,15 +964,15 @@ static void view3d_localview_exit(const Depsgraph *depsgraph,
   }
   BKE_view_layer_synced_ensure(scene, view_layer);
   LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
-    if (base->local_view_bits & v3d->local_view_uuid) {
-      base->local_view_bits &= ~v3d->local_view_uuid;
+    if (base->local_view_bits & v3d->local_view_uid) {
+      base->local_view_bits &= ~v3d->local_view_uid;
     }
   }
 
   Object *camera_old = v3d->camera;
   Object *camera_new = v3d->localvd->camera;
 
-  v3d->local_view_uuid = 0;
+  v3d->local_view_uid = 0;
   v3d->camera = v3d->localvd->camera;
 
   MEM_freeN(v3d->localvd);
@@ -1103,7 +1096,7 @@ static int localview_remove_from_exec(bContext *C, wmOperator *op)
   BKE_view_layer_synced_ensure(scene, view_layer);
   LISTBASE_FOREACH (Base *, base, BKE_view_layer_object_bases_get(view_layer)) {
     if (BASE_SELECTED(v3d, base)) {
-      base->local_view_bits &= ~v3d->local_view_uuid;
+      base->local_view_bits &= ~v3d->local_view_uid;
       ED_object_base_select(base, BA_DESELECT);
 
       if (base == view_layer->basact) {
@@ -1154,7 +1147,7 @@ void VIEW3D_OT_localview_remove_from(wmOperatorType *ot)
 /** \name Local Collections
  * \{ */
 
-static uint free_localcollection_bit(Main *bmain, ushort local_collections_uuid, bool *r_reset)
+static uint free_localcollection_bit(Main *bmain, ushort local_collections_uid, bool *r_reset)
 {
   ushort local_view_bits = 0;
 
@@ -1165,7 +1158,7 @@ static uint free_localcollection_bit(Main *bmain, ushort local_collections_uuid,
         if (sl->spacetype == SPACE_VIEW3D) {
           View3D *v3d = reinterpret_cast<View3D *>(sl);
           if (v3d->flag & V3D_LOCAL_COLLECTIONS) {
-            local_view_bits |= v3d->local_collections_uuid;
+            local_view_bits |= v3d->local_collections_uid;
           }
         }
       }
@@ -1173,8 +1166,8 @@ static uint free_localcollection_bit(Main *bmain, ushort local_collections_uuid,
   }
 
   /* First try to keep the old uuid. */
-  if (local_collections_uuid && ((local_collections_uuid & local_view_bits) == 0)) {
-    return local_collections_uuid;
+  if (local_collections_uid && ((local_collections_uid & local_view_bits) == 0)) {
+    return local_collections_uid;
   }
 
   /* Otherwise get the first free available. */
@@ -1222,13 +1215,13 @@ bool ED_view3d_local_collections_set(Main *bmain, View3D *v3d)
 
   bool reset = false;
   v3d->flag &= ~V3D_LOCAL_COLLECTIONS;
-  uint local_view_bit = free_localcollection_bit(bmain, v3d->local_collections_uuid, &reset);
+  uint local_view_bit = free_localcollection_bit(bmain, v3d->local_collections_uid, &reset);
 
   if (local_view_bit == 0) {
     return false;
   }
 
-  v3d->local_collections_uuid = local_view_bit;
+  v3d->local_collections_uid = local_view_bit;
   v3d->flag |= V3D_LOCAL_COLLECTIONS;
 
   if (reset) {
@@ -1250,9 +1243,9 @@ void ED_view3d_local_collections_reset(bContext *C, const bool reset_all)
       LISTBASE_FOREACH (SpaceLink *, sl, &area->spacedata) {
         if (sl->spacetype == SPACE_VIEW3D) {
           View3D *v3d = reinterpret_cast<View3D *>(sl);
-          if (v3d->local_collections_uuid) {
+          if (v3d->local_collections_uid) {
             if (v3d->flag & V3D_LOCAL_COLLECTIONS) {
-              local_view_bit &= ~v3d->local_collections_uuid;
+              local_view_bit &= ~v3d->local_collections_uid;
             }
             else {
               do_reset = true;
@@ -1269,7 +1262,7 @@ void ED_view3d_local_collections_reset(bContext *C, const bool reset_all)
   else if (reset_all && (do_reset || (local_view_bit != ~(0)))) {
     view3d_local_collections_reset(bmain, ~(0));
     View3D v3d = {};
-    v3d.local_collections_uuid = ~(0);
+    v3d.local_collections_uid = ~(0);
     BKE_layer_collection_local_sync(CTX_data_scene(C), CTX_data_view_layer(C), &v3d);
     DEG_id_tag_update(&CTX_data_scene(C)->id, ID_RECALC_BASE_FLAGS);
   }

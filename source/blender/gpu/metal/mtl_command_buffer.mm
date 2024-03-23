@@ -53,15 +53,13 @@ id<MTLCommandBuffer> MTLCommandBufferManager::ensure_begin()
     BLI_assert(MTLCommandBufferManager::num_active_cmd_bufs <
                GHOST_ContextCGL::max_command_buffer_count);
 
-    if (@available(macos 11.0, *)) {
-      if (G.debug & G_DEBUG_GPU) {
-        /* Debug: Enable Advanced Errors for GPU work execution. */
-        MTLCommandBufferDescriptor *desc = [[MTLCommandBufferDescriptor alloc] init];
-        desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
-        desc.retainedReferences = YES;
-        BLI_assert(context_.queue != nil);
-        active_command_buffer_ = [context_.queue commandBufferWithDescriptor:desc];
-      }
+    if (G.debug & G_DEBUG_GPU) {
+      /* Debug: Enable Advanced Errors for GPU work execution. */
+      MTLCommandBufferDescriptor *desc = [[MTLCommandBufferDescriptor alloc] init];
+      desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
+      desc.retainedReferences = YES;
+      BLI_assert(context_.queue != nil);
+      active_command_buffer_ = [context_.queue commandBufferWithDescriptor:desc];
     }
 
     /* Ensure command buffer is created if debug command buffer unavailable. */
@@ -140,7 +138,7 @@ bool MTLCommandBufferManager::submit(bool wait)
     MTL_LOG_WARNING(
         "Maximum number of command buffers in flight. Host will wait until GPU work has "
         "completed. Consider increasing GHOST_ContextCGL::max_command_buffer_count or reducing "
-        "work fragmentation to better utilise system hardware. Command buffers are flushed upon "
+        "work fragmentation to better utilize system hardware. Command buffers are flushed upon "
         "GPUContext switches, this is the most common cause of excessive command buffer "
         "generation.");
   }
@@ -151,14 +149,12 @@ bool MTLCommandBufferManager::submit(bool wait)
 
     /* Command buffer execution debugging can return an error message if
      * execution has failed or encountered GPU-side errors. */
-    if (@available(macos 11.0, *)) {
-      if (G.debug & G_DEBUG_GPU) {
+    if (G.debug & G_DEBUG_GPU) {
 
-        NSError *error = [active_command_buffer_ error];
-        if (error != nil) {
-          NSLog(@"%@", error);
-          BLI_assert(false);
-        }
+      NSError *error = [active_command_buffer_ error];
+      if (error != nil) {
+        NSLog(@"%@", error);
+        BLI_assert(false);
       }
     }
   }
@@ -286,7 +282,7 @@ bool MTLCommandBufferManager::end_active_command_encoder()
 }
 
 id<MTLRenderCommandEncoder> MTLCommandBufferManager::ensure_begin_render_command_encoder(
-    MTLFrameBuffer *ctx_framebuffer, bool force_begin, bool *new_pass)
+    MTLFrameBuffer *ctx_framebuffer, bool force_begin, bool *r_new_pass)
 {
   /* Ensure valid frame-buffer. */
   BLI_assert(ctx_framebuffer != nullptr);
@@ -356,11 +352,11 @@ id<MTLRenderCommandEncoder> MTLCommandBufferManager::ensure_begin_render_command
     render_pass_state_.reset_state();
 
     /* Return true as new pass started. */
-    *new_pass = true;
+    *r_new_pass = true;
   }
   else {
     /* No new pass. */
-    *new_pass = false;
+    *r_new_pass = false;
   }
 
   BLI_assert(active_render_command_encoder_ != nil);
@@ -578,78 +574,80 @@ bool MTLCommandBufferManager::insert_memory_barrier(eGPUBarrier barrier_bits,
                                                     eGPUStageBarrierBits before_stages,
                                                     eGPUStageBarrierBits after_stages)
 {
-  /* Only supporting Metal on 10.14 onward anyway - Check required for warnings. */
-  if (@available(macOS 10.14, *)) {
-
-    /* Apple Silicon does not support memory barriers for RenderCommandEncoder's.
-     * We do not currently need these due to implicit API guarantees.
-     * NOTE(Metal): MTLFence/MTLEvent may be required to synchronize work if
-     * untracked resources are ever used. */
-    if ([context_.device hasUnifiedMemory] &&
-        (active_command_encoder_type_ != MTL_COMPUTE_COMMAND_ENCODER))
-    {
-      return false;
+  /* Apple Silicon does not support memory barriers for RenderCommandEncoder's.
+   * We do not currently need these due to implicit API guarantees. However, render->render
+   * resource dependencies are only evaluated at RenderCommandEncoder boundaries due to work
+   * execution on TBDR architecture.
+   *
+   * NOTE: Render barriers are therefore inherently expensive. Where possible, opt for local
+   * synchronization using raster order groups, or, prefer compute to avoid subsequent passes
+   * re-loading pass attachments which are not needed. */
+  const bool is_tile_based_arch = (GPU_platform_architecture() == GPU_ARCHITECTURE_TBDR);
+  if (is_tile_based_arch && (active_command_encoder_type_ != MTL_COMPUTE_COMMAND_ENCODER)) {
+    if (active_command_encoder_type_ == MTL_RENDER_COMMAND_ENCODER) {
+      end_active_command_encoder();
+      return true;
     }
+    return false;
+  }
 
-    /* Resolve scope. */
-    MTLBarrierScope scope = 0;
-    if (barrier_bits & GPU_BARRIER_SHADER_IMAGE_ACCESS || barrier_bits & GPU_BARRIER_TEXTURE_FETCH)
-    {
-      bool is_compute = (active_command_encoder_type_ != MTL_RENDER_COMMAND_ENCODER);
-      scope |= (is_compute ? 0 : MTLBarrierScopeRenderTargets) | MTLBarrierScopeTextures;
-    }
-    if (barrier_bits & GPU_BARRIER_SHADER_STORAGE ||
-        barrier_bits & GPU_BARRIER_VERTEX_ATTRIB_ARRAY ||
-        barrier_bits & GPU_BARRIER_ELEMENT_ARRAY || barrier_bits & GPU_BARRIER_UNIFORM ||
-        barrier_bits & GPU_BARRIER_BUFFER_UPDATE)
-    {
-      scope = scope | MTLBarrierScopeBuffers;
-    }
+  /* Resolve scope. */
+  MTLBarrierScope scope = 0;
+  if (barrier_bits & GPU_BARRIER_SHADER_IMAGE_ACCESS || barrier_bits & GPU_BARRIER_TEXTURE_FETCH) {
+    bool is_compute = (active_command_encoder_type_ != MTL_RENDER_COMMAND_ENCODER);
+    scope |= (is_compute ? 0 : MTLBarrierScopeRenderTargets) | MTLBarrierScopeTextures;
+  }
+  if (barrier_bits & GPU_BARRIER_SHADER_STORAGE ||
+      barrier_bits & GPU_BARRIER_VERTEX_ATTRIB_ARRAY || barrier_bits & GPU_BARRIER_ELEMENT_ARRAY ||
+      barrier_bits & GPU_BARRIER_UNIFORM || barrier_bits & GPU_BARRIER_BUFFER_UPDATE)
+  {
+    scope = scope | MTLBarrierScopeBuffers;
+  }
 
-    if (scope != 0) {
-      /* Issue barrier based on encoder. */
-      switch (active_command_encoder_type_) {
-        case MTL_NO_COMMAND_ENCODER:
-        case MTL_BLIT_COMMAND_ENCODER: {
-          /* No barrier to be inserted. */
-          return false;
+  if (scope != 0) {
+    /* Issue barrier based on encoder. */
+    switch (active_command_encoder_type_) {
+      case MTL_NO_COMMAND_ENCODER:
+      case MTL_BLIT_COMMAND_ENCODER: {
+        /* No barrier to be inserted. */
+        return false;
+      }
+
+      /* Rendering. */
+      case MTL_RENDER_COMMAND_ENCODER: {
+        /* Currently flagging both stages -- can use bits above to filter on stage type --
+         * though full barrier is safe for now. */
+        MTLRenderStages before_stage_flags = 0;
+        MTLRenderStages after_stage_flags = 0;
+        if (before_stages & GPU_BARRIER_STAGE_VERTEX &&
+            !(before_stages & GPU_BARRIER_STAGE_FRAGMENT))
+        {
+          before_stage_flags = before_stage_flags | MTLRenderStageVertex;
+        }
+        if (before_stages & GPU_BARRIER_STAGE_FRAGMENT) {
+          before_stage_flags = before_stage_flags | MTLRenderStageFragment;
+        }
+        if (after_stages & GPU_BARRIER_STAGE_VERTEX) {
+          after_stage_flags = after_stage_flags | MTLRenderStageVertex;
+        }
+        if (after_stages & GPU_BARRIER_STAGE_FRAGMENT) {
+          after_stage_flags = MTLRenderStageFragment;
         }
 
-        /* Rendering. */
-        case MTL_RENDER_COMMAND_ENCODER: {
-          /* Currently flagging both stages -- can use bits above to filter on stage type --
-           * though full barrier is safe for now. */
-          MTLRenderStages before_stage_flags = 0;
-          MTLRenderStages after_stage_flags = 0;
-          if (before_stages & GPU_BARRIER_STAGE_VERTEX &&
-              !(before_stages & GPU_BARRIER_STAGE_FRAGMENT)) {
-            before_stage_flags = before_stage_flags | MTLRenderStageVertex;
-          }
-          if (before_stages & GPU_BARRIER_STAGE_FRAGMENT) {
-            before_stage_flags = before_stage_flags | MTLRenderStageFragment;
-          }
-          if (after_stages & GPU_BARRIER_STAGE_VERTEX) {
-            after_stage_flags = after_stage_flags | MTLRenderStageVertex;
-          }
-          if (after_stages & GPU_BARRIER_STAGE_FRAGMENT) {
-            after_stage_flags = MTLRenderStageFragment;
-          }
+        id<MTLRenderCommandEncoder> rec = this->get_active_render_command_encoder();
+        BLI_assert(rec != nil);
+        [rec memoryBarrierWithScope:scope
+                        afterStages:after_stage_flags
+                       beforeStages:before_stage_flags];
+        return true;
+      }
 
-          id<MTLRenderCommandEncoder> rec = this->get_active_render_command_encoder();
-          BLI_assert(rec != nil);
-          [rec memoryBarrierWithScope:scope
-                          afterStages:after_stage_flags
-                         beforeStages:before_stage_flags];
-          return true;
-        }
-
-        /* Compute. */
-        case MTL_COMPUTE_COMMAND_ENCODER: {
-          id<MTLComputeCommandEncoder> rec = this->get_active_compute_command_encoder();
-          BLI_assert(rec != nil);
-          [rec memoryBarrierWithScope:scope];
-          return true;
-        }
+      /* Compute. */
+      case MTL_COMPUTE_COMMAND_ENCODER: {
+        id<MTLComputeCommandEncoder> rec = this->get_active_compute_command_encoder();
+        BLI_assert(rec != nil);
+        [rec memoryBarrierWithScope:scope];
+        return true;
       }
     }
   }
@@ -1086,4 +1084,4 @@ void MTLComputeState::bind_pso(id<MTLComputePipelineState> pso)
 
 /** \} */
 
-}  // blender::gpu
+}  // namespace blender::gpu

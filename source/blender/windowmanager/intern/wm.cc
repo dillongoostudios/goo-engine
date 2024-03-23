@@ -28,13 +28,13 @@
 
 #include "BLT_translation.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
-#include "BKE_idtype.h"
-#include "BKE_lib_id.h"
-#include "BKE_lib_query.h"
-#include "BKE_main.h"
+#include "BKE_idtype.hh"
+#include "BKE_lib_id.hh"
+#include "BKE_lib_query.hh"
+#include "BKE_main.hh"
 #include "BKE_report.h"
 #include "BKE_screen.hh"
 #include "BKE_workspace.h"
@@ -44,13 +44,13 @@
 #include "WM_types.hh"
 #include "wm.hh"
 #include "wm_draw.hh"
-#include "wm_event_system.h"
+#include "wm_event_system.hh"
 #include "wm_window.hh"
 #ifdef WITH_XR_OPENXR
-#  include "wm_xr.h"
+#  include "wm_xr.hh"
 #endif
 
-#include "BKE_undo_system.h"
+#include "BKE_undo_system.hh"
 #include "ED_screen.hh"
 
 #ifdef WITH_PYTHON
@@ -384,6 +384,22 @@ void WM_operator_stack_clear(wmWindowManager *wm)
 
 void WM_operator_handlers_clear(wmWindowManager *wm, wmOperatorType *ot)
 {
+  LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
+    bScreen *screen = WM_window_get_active_screen(win);
+    LISTBASE_FOREACH (ScrArea *, area, &screen->areabase) {
+      switch (area->spacetype) {
+        case SPACE_FILE: {
+          SpaceFile *sfile = static_cast<SpaceFile *>(area->spacedata.first);
+          if (sfile->op && sfile->op->type == ot) {
+            /* Freed as part of the handler. */
+            sfile->op = nullptr;
+          }
+          break;
+        }
+      }
+    }
+  }
+
   LISTBASE_FOREACH (wmWindow *, win, &wm->windows) {
     ListBase *lb[2] = {&win->handlers, &win->modalhandlers};
     for (int i = 0; i < ARRAY_SIZE(lb); i++) {

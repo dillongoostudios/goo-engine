@@ -6,7 +6,6 @@ set(INC
   .
   intern
   ../blenkernel
-  ../../../intern/clog
 )
 
 set(INC_SYS
@@ -16,9 +15,13 @@ set(SRC
   intern/asset_catalog.cc
   intern/asset_catalog_path.cc
   intern/asset_catalog_tree.cc
-  intern/asset_essentials_library.cc
   intern/asset_identifier.cc
   intern/asset_library.cc
+  intern/asset_library_all.cc
+  intern/asset_library_essentials.cc
+  intern/asset_library_from_preferences.cc
+  intern/asset_library_on_disk.cc
+  intern/asset_library_runtime.cc
   intern/asset_library_service.cc
   intern/asset_representation.cc
   intern/asset_storage.cc
@@ -31,17 +34,21 @@ set(SRC
   AS_asset_library.hh
   AS_asset_representation.hh
   AS_essentials_library.hh
+  intern/asset_library_all.hh
+  intern/asset_library_essentials.hh
+  intern/asset_library_from_preferences.hh
+  intern/asset_library_on_disk.hh
+  intern/asset_library_runtime.hh
   intern/asset_library_service.hh
   intern/asset_storage.hh
   intern/utils.hh
-
-  AS_asset_library.h
 )
 
 set(LIB
   bf_blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::dna
+  PRIVATE bf::intern::clog
   PRIVATE bf::intern::guardedalloc
 )
 
@@ -58,12 +65,14 @@ if(WITH_GTESTS)
     tests/asset_library_service_test.cc
     tests/asset_library_test.cc
     tests/asset_representation_test.cc
-
+  )
+  set(TEST_COMMON_SRC
     tests/asset_library_test_common.hh
   )
   set(TEST_LIB
     bf_asset_system
   )
-  include(GTestTesting)
-  blender_add_test_lib(bf_asset_system_tests "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+  blender_add_test_suite_lib(asset_system
+    "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}" "${TEST_COMMON_SRC}"
+  )
 endif()

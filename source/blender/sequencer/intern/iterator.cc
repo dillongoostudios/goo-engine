@@ -1,5 +1,5 @@
 /* SPDX-FileCopyrightText: 2001-2002 NaN Holding BV. All rights reserved.
- * SPDX-FileCopyrightText: 2003-2009 Blender Authors
+ * SPDX-FileCopyrightText: 2003-2024 Blender Authors
  * SPDX-FileCopyrightText: 2005-2006 Peter Schlaile <peter [at] schlaile [dot] de>
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
@@ -21,6 +21,7 @@
 
 #include "BKE_scene.h"
 
+#include "SEQ_effects.hh"
 #include "SEQ_iterator.hh"
 #include "SEQ_relations.hh"
 #include "SEQ_render.hh"
@@ -92,10 +93,27 @@ static void query_all_strips_recursive(ListBase *seqbase, VectorSet<Sequence *> 
   }
 }
 
+static void query_all_meta_strips_recursive(ListBase *seqbase, VectorSet<Sequence *> &strips)
+{
+  LISTBASE_FOREACH (Sequence *, seq, seqbase) {
+    if (seq->type == SEQ_TYPE_META) {
+      query_all_meta_strips_recursive(&seq->seqbase, strips);
+      strips.add(seq);
+    }
+  }
+}
+
 VectorSet<Sequence *> SEQ_query_all_strips_recursive(ListBase *seqbase)
 {
   VectorSet<Sequence *> strips;
   query_all_strips_recursive(seqbase, strips);
+  return strips;
+}
+
+VectorSet<Sequence *> SEQ_query_all_meta_strips_recursive(ListBase *seqbase)
+{
+  VectorSet<Sequence *> strips;
+  query_all_meta_strips_recursive(seqbase, strips);
   return strips;
 }
 
@@ -161,8 +179,8 @@ static bool must_render_strip(VectorSet<Sequence *> &strips, Sequence *strip)
     }
   }
 
-  /* All effects are rendered (with respect to conditions above). */
-  if ((strip->type & SEQ_TYPE_EFFECT) != 0) {
+  /* All non-generator effects are rendered (with respect to conditions above). */
+  if ((strip->type & SEQ_TYPE_EFFECT) != 0 && SEQ_effect_get_num_inputs(strip->type) != 0) {
     return true;
   }
 

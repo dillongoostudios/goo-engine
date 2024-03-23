@@ -111,6 +111,19 @@ static const char *get_egl_error_message_string(EGLint error)
   }
 }
 
+static void egl_print_error(const char *message, const EGLint error)
+{
+  const char *code = get_egl_error_enum_string(error);
+  const char *msg = get_egl_error_message_string(error);
+
+  fprintf(stderr,
+          "%sEGL Error (0x%04X): %s: %s\n",
+          message,
+          uint(error),
+          code ? code : "<Unknown>",
+          msg ? msg : "<Unknown>");
+}
+
 static bool egl_chk(bool result,
                     const char *file = nullptr,
                     int line = 0,
@@ -132,11 +145,7 @@ static bool egl_chk(bool result,
             code ? code : "<Unknown>",
             msg ? msg : "<Unknown>");
 #else
-    fprintf(stderr,
-            "EGL Error (0x%04X): %s: %s\n",
-            uint(error),
-            code ? code : "<Unknown>",
-            msg ? msg : "<Unknown>");
+    egl_print_error("", error);
     (void)(file);
     (void)(line);
     (void)(text);
@@ -147,7 +156,7 @@ static bool egl_chk(bool result,
 }
 
 #ifndef NDEBUG
-#  define EGL_CHK(x) egl_chk((x), __FILE__, __LINE__, #  x)
+#  define EGL_CHK(x) egl_chk((x), __FILE__, __LINE__, #x)
 #else
 #  define EGL_CHK(x) egl_chk(x)
 #endif
@@ -343,32 +352,43 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
     goto error;
   }
 
-  if (!EGL_CHK(::eglInitialize(m_display, &egl_major, &egl_minor)) ||
-      (egl_major == 0 && egl_minor == 0))
   {
-    /* We failed to create a regular render window, retry and see if we can create a headless
-     * render context. */
-    ::eglTerminate(m_display);
+    const EGLBoolean init_display_result = ::eglInitialize(m_display, &egl_major, &egl_minor);
+    const EGLint init_display_error = (init_display_result) ? 0 : eglGetError();
 
-    const char *egl_extension_st = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
-    assert(egl_extension_st != nullptr);
-    assert(strstr(egl_extension_st, "EGL_MESA_platform_surfaceless") != nullptr);
-    if (egl_extension_st == nullptr ||
-        strstr(egl_extension_st, "EGL_MESA_platform_surfaceless") == nullptr)
-    {
-      goto error;
+    if (!init_display_result || (egl_major == 0 && egl_minor == 0)) {
+      /* We failed to create a regular render window, retry and see if we can create a headless
+       * render context. */
+      ::eglTerminate(m_display);
+
+      const char *egl_extension_st = eglQueryString(EGL_NO_DISPLAY, EGL_EXTENSIONS);
+      assert(egl_extension_st != nullptr);
+      assert(egl_extension_st == nullptr ||
+             strstr(egl_extension_st, "EGL_MESA_platform_surfaceless") != nullptr);
+      if (egl_extension_st == nullptr ||
+          strstr(egl_extension_st, "EGL_MESA_platform_surfaceless") == nullptr)
+      {
+        egl_print_error("Failed to create display GPU context: ", init_display_error);
+        fprintf(
+            stderr,
+            "Failed to create headless GPU context: No EGL_MESA_platform_surfaceless extension");
+        goto error;
+      }
+
+      m_display = eglGetPlatformDisplayEXT(
+          EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, nullptr);
+
+      const EGLBoolean headless_result = ::eglInitialize(m_display, &egl_major, &egl_minor);
+      const EGLint init_headless_error = (headless_result) ? 0 : eglGetError();
+
+      if (!headless_result) {
+        egl_print_error("Failed to create display GPU context: ", init_display_error);
+        egl_print_error("Failed to create headless GPU context: ", init_headless_error);
+        goto error;
+      }
     }
-
-    m_display = eglGetPlatformDisplayEXT(
-        EGL_PLATFORM_SURFACELESS_MESA, EGL_DEFAULT_DISPLAY, nullptr);
-
-    if (!EGL_CHK(::eglInitialize(m_display, &egl_major, &egl_minor))) {
-      goto error;
-    }
-    /* Because the first eglInitialize will print an error to the terminal, print a "success"
-     * message here to let the user know that we successfully recovered from the error. */
-    fprintf(stderr, "\nManaged to successfully fallback to surfaceless EGL rendering!\n\n");
   }
+
 #ifdef WITH_GHOST_DEBUG
   fprintf(stderr, "EGL Version %d.%d\n", egl_major, egl_minor);
 #endif
@@ -436,11 +456,6 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
   attrib_list.push_back(EGL_BLUE_SIZE);
   attrib_list.push_back(8);
 
-#ifdef GHOST_OPENGL_ALPHA
-  attrib_list.push_back(EGL_ALPHA_SIZE);
-  attrib_list.push_back(8);
-#endif
-
   if (m_nativeWindow == 0) {
     /* Off-screen surface. */
     attrib_list.push_back(EGL_SURFACE_TYPE);
@@ -479,7 +494,8 @@ GHOST_TSuccess GHOST_ContextEGL::initializeDrawingContext()
   attrib_list.clear();
 
   if (epoxy_egl_version(m_display) >= 15 ||
-      epoxy_has_egl_extension(m_display, "KHR_create_context")) {
+      epoxy_has_egl_extension(m_display, "KHR_create_context"))
+  {
     if (m_api == EGL_OPENGL_API || m_api == EGL_OPENGL_ES_API) {
       if (m_contextMajorVersion != 0) {
         attrib_list.push_back(EGL_CONTEXT_MAJOR_VERSION_KHR);

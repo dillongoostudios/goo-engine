@@ -12,7 +12,7 @@
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h"
+#include "rna_internal.hh"
 
 #include "DNA_action_types.h"
 #include "DNA_armature_types.h"
@@ -59,19 +59,21 @@ const EnumPropertyItem rna_enum_color_sets_items[] = {
 
 #ifdef RNA_RUNTIME
 
+#  include <fmt/format.h>
+
 #  include "BLI_ghash.h"
 #  include "BLI_string_utils.hh"
 
 #  include "BIK_api.h"
 #  include "BKE_action.h"
-#  include "BKE_armature.h"
+#  include "BKE_armature.hh"
 
 #  include "DNA_userdef_types.h"
 
 #  include "MEM_guardedalloc.h"
 
 #  include "BKE_constraint.h"
-#  include "BKE_context.h"
+#  include "BKE_context.hh"
 #  include "BKE_global.h"
 #  include "BKE_idprop.h"
 
@@ -112,18 +114,18 @@ static void rna_Pose_IK_update(Main * /*bmain*/, Scene * /*scene*/, PointerRNA *
   BIK_clear_data(ob->pose);
 }
 
-static char *rna_Pose_path(const PointerRNA * /*ptr*/)
+static std::optional<std::string> rna_Pose_path(const PointerRNA * /*ptr*/)
 {
-  return BLI_strdup("pose");
+  return "pose";
 }
 
-static char *rna_PoseBone_path(const PointerRNA *ptr)
+static std::optional<std::string> rna_PoseBone_path(const PointerRNA *ptr)
 {
   const bPoseChannel *pchan = static_cast<const bPoseChannel *>(ptr->data);
   char name_esc[sizeof(pchan->name) * 2];
 
   BLI_str_escape(name_esc, pchan->name, sizeof(name_esc));
-  return BLI_sprintfN("pose.bones[\"%s\"]", name_esc);
+  return fmt::format("pose.bones[\"{}\"]", name_esc);
 }
 
 /* shared for actions groups and bone groups */
@@ -497,7 +499,7 @@ bool rna_PoseChannel_constraints_override_apply(Main *bmain,
   return true;
 }
 
-static int rna_PoseChannel_proxy_editable(PointerRNA * /*ptr*/, const char ** /*r_info*/)
+static int rna_PoseChannel_proxy_editable(const PointerRNA * /*ptr*/, const char ** /*r_info*/)
 {
 #  if 0
   Object *ob = (Object *)ptr->owner_id;
@@ -513,7 +515,7 @@ static int rna_PoseChannel_proxy_editable(PointerRNA * /*ptr*/, const char ** /*
   return PROP_EDITABLE;
 }
 
-static int rna_PoseChannel_location_editable(PointerRNA *ptr, int index)
+static int rna_PoseChannel_location_editable(const PointerRNA *ptr, int index)
 {
   bPoseChannel *pchan = (bPoseChannel *)ptr->data;
 
@@ -532,7 +534,7 @@ static int rna_PoseChannel_location_editable(PointerRNA *ptr, int index)
   }
 }
 
-static int rna_PoseChannel_scale_editable(PointerRNA *ptr, int index)
+static int rna_PoseChannel_scale_editable(const PointerRNA *ptr, int index)
 {
   bPoseChannel *pchan = (bPoseChannel *)ptr->data;
 
@@ -551,7 +553,7 @@ static int rna_PoseChannel_scale_editable(PointerRNA *ptr, int index)
   }
 }
 
-static int rna_PoseChannel_rotation_euler_editable(PointerRNA *ptr, int index)
+static int rna_PoseChannel_rotation_euler_editable(const PointerRNA *ptr, int index)
 {
   bPoseChannel *pchan = (bPoseChannel *)ptr->data;
 
@@ -570,7 +572,7 @@ static int rna_PoseChannel_rotation_euler_editable(PointerRNA *ptr, int index)
   }
 }
 
-static int rna_PoseChannel_rotation_4d_editable(PointerRNA *ptr, int index)
+static int rna_PoseChannel_rotation_4d_editable(const PointerRNA *ptr, int index)
 {
   bPoseChannel *pchan = (bPoseChannel *)ptr->data;
 
@@ -967,6 +969,7 @@ static void rna_def_pose_channel(BlenderRNA *brna)
   prop = RNA_def_property(srna, "is_in_ik_chain", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_funcs(prop, "rna_PoseChannel_has_ik_get", nullptr);
   RNA_def_property_clear_flag(prop, PROP_EDITABLE);
+  RNA_def_property_override_flag(prop, PROPOVERRIDE_NO_COMPARISON);
   RNA_def_property_ui_text(prop, "Has IK", "Is part of an IK chain");
   RNA_def_property_update(prop, NC_OBJECT | ND_POSE, "rna_Pose_IK_update");
 

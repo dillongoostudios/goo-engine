@@ -11,14 +11,14 @@
 #include "DNA_ID.h"
 #include "DNA_userdef_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BLI_utildefines.h"
 
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 #include "RNA_enum_types.hh"
 
-#include "rna_internal.h" /* own include */
+#include "rna_internal.hh" /* own include */
 
 const EnumPropertyItem rna_enum_context_mode_items[] = {
     {CTX_MODE_EDIT_MESH, "EDIT_MESH", 0, "Mesh Edit", ""},

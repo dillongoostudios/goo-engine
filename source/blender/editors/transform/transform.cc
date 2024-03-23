@@ -19,9 +19,9 @@
 #include "BLI_math_vector.h"
 #include "BLI_rect.h"
 
-#include "BKE_context.h"
-#include "BKE_editmesh.h"
-#include "BKE_layer.h"
+#include "BKE_context.hh"
+#include "BKE_editmesh.hh"
+#include "BKE_layer.hh"
 #include "BKE_mask.h"
 #include "BKE_scene.h"
 
@@ -49,7 +49,7 @@
 
 #include "RNA_access.hh"
 
-#include "BLF_api.h"
+#include "BLF_api.hh"
 #include "BLT_translation.h"
 
 #include "transform.hh"
@@ -528,7 +528,7 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
   ED_area_status_text(t->area, nullptr);
 
   if (t->spacetype == SPACE_VIEW3D) {
-    /* if autokeying is enabled, send notifiers that keyframes were added */
+    /* If auto-keying is enabled, send notifiers that keyframes were added. */
     if (blender::animrig::is_autokey_on(t->scene)) {
       WM_main_add_notifier(NC_ANIMATION | ND_KEYFRAME | NA_EDITED, nullptr);
     }
@@ -539,7 +539,8 @@ static void viewRedrawPost(bContext *C, TransInfo *t)
                                          UVCALC_TRANSFORM_CORRECT;
 
     if ((t->data_type == &TransConvertType_Mesh) &&
-        (t->settings->uvcalc_flag & uvcalc_correct_flag)) {
+        (t->settings->uvcalc_flag & uvcalc_correct_flag))
+    {
       WM_event_add_notifier(C, NC_GEOM | ND_DATA, nullptr);
     }
 
@@ -557,11 +558,8 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
     if (value == TFM_MODAL_EDIT_SNAP_SOURCE_OFF) {
       return true;
     }
-    else if (!ELEM(value,
-                   TFM_MODAL_CANCEL,
-                   TFM_MODAL_CONFIRM,
-                   TFM_MODAL_ADD_SNAP,
-                   TFM_MODAL_REMOVE_SNAP))
+    if (!ELEM(
+            value, TFM_MODAL_CANCEL, TFM_MODAL_CONFIRM, TFM_MODAL_ADD_SNAP, TFM_MODAL_REMOVE_SNAP))
     {
       return false;
     }
@@ -707,8 +705,21 @@ static bool transform_modal_item_poll(const wmOperator *op, int value)
         /* More modes can be added over time if this feature proves useful for them. */
         return false;
       }
+      if (t->options & CTX_CAMERA) {
+        /* Not supported. */
+        return false;
+      }
       break;
     }
+    case TFM_MODAL_PASSTHROUGH_NAVIGATE:
+      if (ELEM(t->mode, TFM_EDGE_SLIDE, TFM_VERT_SLIDE)) {
+        /* Returning `false` will not prevent the navigation from working, it will just not display
+         * the shortcut in the header.
+         * Return `false` here to prevent this modal item from affecting the state with
+         * #T_ALT_TRANSFORM used by the Edge and Vert Slide operators. */
+        return false;
+      }
+      return t->vod != nullptr;
   }
   return true;
 }
@@ -763,6 +774,7 @@ wmKeyMap *transform_modal_keymap(wmKeyConfig *keyconf)
       {TFM_MODAL_AUTOCONSTRAINT, "AUTOCONSTRAIN", 0, "Automatic Constraint", ""},
       {TFM_MODAL_AUTOCONSTRAINTPLANE, "AUTOCONSTRAINPLANE", 0, "Automatic Constraint Plane", ""},
       {TFM_MODAL_PRECISION, "PRECISION", 0, "Precision Mode", ""},
+      {TFM_MODAL_PASSTHROUGH_NAVIGATE, "PASSTHROUGH_NAVIGATE", 0, "Navigate", ""},
       {0, nullptr, 0, nullptr, nullptr},
   };
 
@@ -878,30 +890,30 @@ static bool transform_event_modal_constraint(TransInfo *t, short modal_type)
   /* Initialize */
   switch (modal_type) {
     case TFM_MODAL_AXIS_X:
-      msg_2d = TIP_("along X");
-      msg_3d = TIP_("along %s X");
+      msg_2d = IFACE_("along X");
+      msg_3d = IFACE_("along %s X");
       constraint_new = CON_AXIS0;
       break;
     case TFM_MODAL_AXIS_Y:
-      msg_2d = TIP_("along Y");
-      msg_3d = TIP_("along %s Y");
+      msg_2d = IFACE_("along Y");
+      msg_3d = IFACE_("along %s Y");
       constraint_new = CON_AXIS1;
       break;
     case TFM_MODAL_AXIS_Z:
-      msg_2d = TIP_("along Z");
-      msg_3d = TIP_("along %s Z");
+      msg_2d = IFACE_("along Z");
+      msg_3d = IFACE_("along %s Z");
       constraint_new = CON_AXIS2;
       break;
     case TFM_MODAL_PLANE_X:
-      msg_3d = TIP_("locking %s X");
+      msg_3d = IFACE_("locking %s X");
       constraint_new = CON_AXIS1 | CON_AXIS2;
       break;
     case TFM_MODAL_PLANE_Y:
-      msg_3d = TIP_("locking %s Y");
+      msg_3d = IFACE_("locking %s Y");
       constraint_new = CON_AXIS0 | CON_AXIS2;
       break;
     case TFM_MODAL_PLANE_Z:
-      msg_3d = TIP_("locking %s Z");
+      msg_3d = IFACE_("locking %s Z");
       constraint_new = CON_AXIS0 | CON_AXIS1;
       break;
     default:
@@ -1245,7 +1257,7 @@ int transformEvent(TransInfo *t, const wmEvent *event)
             if (t->options & CTX_CAMERA) {
               /* Exception for switching to dolly, or trackball, in camera view. */
               if (t->mode == TFM_TRANSLATION) {
-                setLocalConstraint(t, (CON_AXIS2), TIP_("along local Z"));
+                setLocalConstraint(t, (CON_AXIS2), IFACE_("along local Z"));
               }
               else if (t->mode == TFM_ROTATION) {
                 restoreTransObjects(t);
@@ -1491,7 +1503,20 @@ static void drawTransformView(const bContext * /*C*/, ARegion *region, void *arg
   GPU_line_width(1.0f);
 
   drawConstraint(t);
-  drawPropCircle(t);
+
+  switch (t->spacetype) {
+    case SPACE_GRAPH:
+    case SPACE_ACTION:
+      /* Different visualization because the proportional editing in these editors only looks at
+       * the x-axis. */
+      drawPropRange(t);
+      break;
+
+    default:
+      drawPropCircle(t);
+      break;
+  }
+
   drawSnapping(t);
 
   if (region == t->region && t->mode_info && t->mode_info->draw_fn) {
@@ -1499,8 +1524,10 @@ static void drawTransformView(const bContext * /*C*/, ARegion *region, void *arg
   }
 }
 
-/* just draw a little warning message in the top-right corner of the viewport
- * to warn that autokeying is enabled */
+/**
+ * Just draw a little warning message in the top-right corner of the viewport
+ * to warn that auto-keying is enabled.
+ */
 static void drawAutoKeyWarning(TransInfo *t, ARegion *region)
 {
   const char *printable = IFACE_("Auto Keying On");
@@ -1552,7 +1579,7 @@ static void drawAutoKeyWarning(TransInfo *t, ARegion *region)
   uchar color[3];
   UI_GetThemeColorShade3ubv(TH_TEXT_HI, -50, color);
   BLF_color3ubv(font_id, color);
-  BLF_draw_default(xco, yco, 0.0f, printable, BLF_DRAW_STR_DUMMY_MAX);
+  BLF_draw_default_shadowed(xco, yco, 0.0f, printable, BLF_DRAW_STR_DUMMY_MAX);
 
   /* autokey recording icon... */
   GPU_blend(GPU_BLEND_ALPHA);
@@ -1584,7 +1611,7 @@ static void drawTransformPixel(const bContext * /*C*/, ARegion *region, void *ar
      *   for objects that will be auto-keyframed (no point otherwise),
      *   AND only for the active region (as showing all is too overwhelming)
      */
-    if ((U.autokey_flag & AUTOKEY_FLAG_NOWARNING) == 0) {
+    if ((U.keying_flag & AUTOKEY_FLAG_NOWARNING) == 0) {
       if (region == t->region) {
         if (t->options & (CTX_OBJECT | CTX_POSE_BONE)) {
           if (ob && blender::animrig::autokeyframe_cfra_can_key(scene, &ob->id)) {

@@ -131,6 +131,9 @@ static int get_index(const PlyElement &element, StringRef property)
 static const char *parse_row_ascii(PlyReadBuffer &file, Vector<float> &r_values)
 {
   Span<char> line = file.read_line();
+  if (line.is_empty()) {
+    return "Could not read row of ascii property";
+  }
 
   /* Parse whole line as floats. */
   const char *p = line.data();
@@ -550,7 +553,7 @@ static const char *load_tristrips_element(PlyReadBuffer &file,
       int a = strip[i - 2], b = strip[i - 1], c = strip[i];
       /* Flip odd triangles. */
       if ((i - start) & 1) {
-        SWAP(int, a, b);
+        std::swap(a, b);
       }
       /* Add triangle if it's not degenerate. */
       if (a != b && a != c && b != c) {

@@ -17,9 +17,13 @@
 
 #include "CLG_log.h"
 
-#include "AS_asset_catalog_tree.hh"
 #include "AS_asset_library.hh"
 #include "AS_essentials_library.hh"
+#include "asset_library_all.hh"
+#include "asset_library_essentials.hh"
+#include "asset_library_from_preferences.hh"
+#include "asset_library_on_disk.hh"
+#include "asset_library_runtime.hh"
 #include "asset_library_service.hh"
 #include "utils.hh"
 
@@ -30,9 +34,9 @@
  * TODO Currently disabled because UI data depends on asset library data, so we have to make sure
  * it's freed in the right order (UI first). Pre-load handlers don't give us this order.
  * Should be addressed with a proper ownership model for the asset system:
- * https://wiki.blender.org/wiki/Source/Architecture/Asset_System/Back_End#Ownership_Model
+ * https://developer.blender.org/docs/features/asset_system/backend/#ownership-model
  */
-//#define WITH_DESTROY_VIA_LOAD_HANDLER
+// #define WITH_DESTROY_VIA_LOAD_HANDLER
 
 static CLG_LogRef LOG = {"asset_system.asset_library_service"};
 
@@ -70,10 +74,7 @@ AssetLibrary *AssetLibraryService::get_asset_library(
         return nullptr;
       }
 
-      AssetLibrary *library = get_asset_library_on_disk_builtin(type, root_path);
-      library->import_method_ = ASSET_IMPORT_APPEND_REUSE;
-
-      return library;
+      return get_asset_library_on_disk_builtin(type, root_path);
     }
     case ASSET_LIBRARY_LOCAL: {
       /* For the "Current File" library  we get the asset library root path based on main. */
@@ -121,23 +122,31 @@ AssetLibrary *AssetLibraryService::get_asset_library_on_disk(eAssetLibraryType l
 
   std::string normalized_root_path = utils::normalize_directory_path(root_path);
 
-  std::unique_ptr<AssetLibrary> *lib_uptr_ptr = on_disk_libraries_.lookup_ptr(
+  std::unique_ptr<OnDiskAssetLibrary> *lib_uptr_ptr = on_disk_libraries_.lookup_ptr(
       {library_type, normalized_root_path});
   if (lib_uptr_ptr != nullptr) {
     CLOG_INFO(&LOG, 2, "get \"%s\" (cached)", normalized_root_path.c_str());
     AssetLibrary *lib = lib_uptr_ptr->get();
-    lib->refresh();
+    lib->refresh_catalogs();
     return lib;
   }
 
-  std::unique_ptr lib_uptr = std::make_unique<AssetLibrary>(
-      library_type, name, normalized_root_path);
+  std::unique_ptr<OnDiskAssetLibrary> lib_uptr;
+  switch (library_type) {
+    case ASSET_LIBRARY_CUSTOM:
+      lib_uptr = std::make_unique<PreferencesOnDiskAssetLibrary>(name, normalized_root_path);
+      break;
+    case ASSET_LIBRARY_ESSENTIALS:
+      lib_uptr = std::make_unique<EssentialsAssetLibrary>();
+      break;
+    default:
+      lib_uptr = std::make_unique<OnDiskAssetLibrary>(library_type, name, normalized_root_path);
+      break;
+  }
+
   AssetLibrary *lib = lib_uptr.get();
 
-  lib->on_blend_save_handler_register();
   lib->load_catalogs();
-  /* Reload catalogs on refresh. */
-  lib->on_refresh_ = [](AssetLibrary &self) { self.catalog_service->reload_catalogs(); };
 
   on_disk_libraries_.add_new({library_type, normalized_root_path}, std::move(lib_uptr));
   CLOG_INFO(&LOG, 2, "get \"%s\" (loaded)", normalized_root_path.c_str());
@@ -166,39 +175,21 @@ AssetLibrary *AssetLibraryService::get_asset_library_current_file()
 {
   if (current_file_library_) {
     CLOG_INFO(&LOG, 2, "get current file lib (cached)");
-    current_file_library_->refresh();
+    current_file_library_->refresh_catalogs();
   }
   else {
     CLOG_INFO(&LOG, 2, "get current file lib (loaded)");
-    current_file_library_ = std::make_unique<AssetLibrary>(ASSET_LIBRARY_LOCAL);
-    current_file_library_->on_blend_save_handler_register();
+    current_file_library_ = std::make_unique<RuntimeAssetLibrary>();
   }
 
   AssetLibrary *lib = current_file_library_.get();
   return lib;
 }
 
-static void rebuild_all_library_ex(AssetLibrary &all_library, const bool reload_catalogs)
-{
-  /* Start with empty catalog storage. */
-  all_library.catalog_service = std::make_unique<AssetCatalogService>(
-      AssetCatalogService::read_only_tag());
-
-  AssetLibrary::foreach_loaded(
-      [&](AssetLibrary &nested) {
-        if (reload_catalogs) {
-          nested.catalog_service->reload_catalogs();
-        }
-        all_library.catalog_service->add_from_existing(*nested.catalog_service);
-      },
-      false);
-  all_library.catalog_service->rebuild_tree();
-}
-
 void AssetLibraryService::rebuild_all_library()
 {
   if (all_library_) {
-    rebuild_all_library_ex(*all_library_, false);
+    all_library_->rebuild(false);
   }
 }
 
@@ -217,19 +208,15 @@ AssetLibrary *AssetLibraryService::get_asset_library_all(const Main *bmain)
 
   if (all_library_) {
     CLOG_INFO(&LOG, 2, "get all lib (cached)");
-    all_library_->refresh();
+    all_library_->refresh_catalogs();
     return all_library_.get();
   }
 
   CLOG_INFO(&LOG, 2, "get all lib (loaded)");
-  all_library_ = std::make_unique<AssetLibrary>(ASSET_LIBRARY_ALL);
+  all_library_ = std::make_unique<AllAssetLibrary>();
 
   /* Don't reload catalogs on this initial read, they've just been loaded above. */
-  rebuild_all_library_ex(*all_library_, /*reload_catlogs=*/false);
-
-  all_library_->on_refresh_ = [](AssetLibrary &all_library) {
-    rebuild_all_library_ex(all_library, /*reload_catalogs=*/true);
-  };
+  all_library_->rebuild(/*reload_catalogs=*/false);
 
   return all_library_.get();
 }
@@ -247,7 +234,7 @@ bUserAssetLibrary *AssetLibraryService::find_custom_preferences_asset_library_fr
 AssetLibrary *AssetLibraryService::find_loaded_on_disk_asset_library_from_name(
     StringRef name) const
 {
-  for (const std::unique_ptr<AssetLibrary> &library : on_disk_libraries_.values()) {
+  for (const std::unique_ptr<OnDiskAssetLibrary> &library : on_disk_libraries_.values()) {
     if (library->name_ == name) {
       return library.get();
     }
@@ -309,7 +296,8 @@ int64_t AssetLibraryService::rfind_blendfile_extension(StringRef path)
     }
 
     if ((blendfile_extension_pos == StringRef::not_found) ||
-        (blendfile_extension_pos < iter_ext_pos)) {
+        (blendfile_extension_pos < iter_ext_pos))
+    {
       blendfile_extension_pos = iter_ext_pos;
     }
   }

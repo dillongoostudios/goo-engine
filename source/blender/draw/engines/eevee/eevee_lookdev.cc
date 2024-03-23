@@ -5,7 +5,7 @@
 /** \file
  * \ingroup draw_engine
  */
-#include "DRW_render.h"
+#include "DRW_render.hh"
 
 #include "BKE_camera.h"
 #include "BKE_studiolight.h"
@@ -21,7 +21,7 @@
 
 #include "ED_screen.hh"
 
-#include "GPU_material.h"
+#include "GPU_material.hh"
 
 #include "UI_resources.hh"
 

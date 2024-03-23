@@ -7,7 +7,8 @@
 #include "BKE_instances.hh"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_wrapper.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
+#include "BKE_object_types.hh"
 
 #include "DNA_collection_types.h"
 #include "DNA_layer_types.h"
@@ -30,15 +31,15 @@ GeometrySet object_get_evaluated_geometry_set(const Object &object)
 {
   if (object.type == OB_MESH && object.mode == OB_MODE_EDIT) {
     GeometrySet geometry_set;
-    if (object.runtime.geometry_set_eval != nullptr) {
+    if (object.runtime->geometry_set_eval != nullptr) {
       /* `geometry_set_eval` only contains non-mesh components, see `editbmesh_build_data`. */
-      geometry_set = *object.runtime.geometry_set_eval;
+      geometry_set = *object.runtime->geometry_set_eval;
     }
     add_final_mesh_as_geometry_component(object, geometry_set);
     return geometry_set;
   }
-  if (object.runtime.geometry_set_eval != nullptr) {
-    GeometrySet geometry_set = *object.runtime.geometry_set_eval;
+  if (object.runtime->geometry_set_eval != nullptr) {
+    GeometrySet geometry_set = *object.runtime->geometry_set_eval;
     /* Ensure that subdivision is performed on the CPU. */
     if (geometry_set.has_mesh()) {
       add_final_mesh_as_geometry_component(object, geometry_set);
@@ -102,7 +103,10 @@ void Instances::ensure_geometry_instances()
   new_references.reserve(references_.size());
   for (const InstanceReference &reference : references_) {
     switch (reference.type()) {
-      case InstanceReference::Type::None:
+      case InstanceReference::Type::None: {
+        new_references.append(InstanceReference(GeometrySet{}));
+        break;
+      }
       case InstanceReference::Type::GeometrySet: {
         /* Those references can stay as their were. */
         new_references.append(reference);
@@ -111,7 +115,11 @@ void Instances::ensure_geometry_instances()
       case InstanceReference::Type::Object: {
         /* Create a new reference that contains the geometry set of the object. We may want to
          * treat e.g. lamps and similar object types separately here. */
-        const Object &object = reference.object();
+        Object &object = reference.object();
+        if (ELEM(object.type, OB_LAMP, OB_CAMERA, OB_SPEAKER, OB_ARMATURE, OB_GPENCIL_LEGACY)) {
+          new_references.append(InstanceReference(object));
+          break;
+        }
         GeometrySet object_geometry_set = object_get_evaluated_geometry_set(object);
         if (object_geometry_set.has_instances()) {
           object_geometry_set.get_instances_for_write()->ensure_geometry_instances();

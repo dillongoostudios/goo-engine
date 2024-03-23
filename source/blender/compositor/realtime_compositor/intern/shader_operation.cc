@@ -14,7 +14,7 @@
 #include "DNA_customdata_types.h"
 
 #include "GPU_context.h"
-#include "GPU_material.h"
+#include "GPU_material.hh"
 #include "GPU_shader.h"
 #include "GPU_texture.h"
 #include "GPU_uniform_buffer.h"
@@ -38,10 +38,13 @@ namespace blender::realtime_compositor {
 
 using namespace nodes::derived_node_tree_types;
 
-ShaderOperation::ShaderOperation(Context &context, ShaderCompileUnit &compile_unit)
-    : Operation(context), compile_unit_(compile_unit)
+ShaderOperation::ShaderOperation(Context &context,
+                                 ShaderCompileUnit &compile_unit,
+                                 const Schedule &schedule)
+    : Operation(context), schedule_(schedule), compile_unit_(compile_unit)
 {
-  material_ = GPU_material_from_callbacks(&construct_material, &generate_code, this);
+  material_ = GPU_material_from_callbacks(
+      GPU_MAT_COMPOSITOR, &construct_material, &generate_code, this);
   GPU_material_status_set(material_, GPU_MAT_QUEUED);
   GPU_material_compile(material_);
 }
@@ -267,21 +270,6 @@ void ShaderOperation::declare_operation_input(DInputSocket input_socket,
   inputs_to_linked_outputs_map_.add_new(input_identifier, output_socket);
 }
 
-static DOutputSocket find_preview_output_socket(const DNode &node)
-{
-  if (!is_node_preview_needed(node)) {
-    return DOutputSocket();
-  }
-
-  for (const bNodeSocket *output : node->output_sockets()) {
-    if (output->is_logically_linked()) {
-      return DOutputSocket(node.context(), output);
-    }
-  }
-
-  return DOutputSocket();
-}
-
 void ShaderOperation::populate_results_for_node(DNode node, GPUMaterial *material)
 {
   const DOutputSocket preview_output = find_preview_output_socket(node);
@@ -289,10 +277,11 @@ void ShaderOperation::populate_results_for_node(DNode node, GPUMaterial *materia
   for (const bNodeSocket *output : node->output_sockets()) {
     const DOutputSocket doutput{node.context(), output};
 
-    /* If any of the nodes linked to the output are not part of the shader operation, then an
-     * output result needs to be populated for it. */
+    /* If any of the nodes linked to the output are not part of the shader operation but are part
+     * of the execution schedule, then an output result needs to be populated for it. */
     const bool is_operation_output = is_output_linked_to_node_conditioned(
-        doutput, [&](DNode node) { return !compile_unit_.contains(node); });
+        doutput,
+        [&](DNode node) { return schedule_.contains(node) && !compile_unit_.contains(node); });
 
     /* If the output is used as the node preview, then an output result needs to be populated for
      * it, and we additionally keep track of that output to later compute the previews from. */
@@ -331,7 +320,7 @@ void ShaderOperation::populate_operation_result(DOutputSocket output_socket, GPU
   std::string output_identifier = "output" + std::to_string(output_id);
 
   const ResultType result_type = get_node_socket_result_type(output_socket.bsocket());
-  const Result result = Result(result_type, texture_pool());
+  const Result result = context().create_result(result_type);
   populate_result(output_identifier, result);
 
   /* Map the output socket to the identifier of the newly populated result. */
@@ -400,24 +389,6 @@ void ShaderOperation::generate_code(void *thunk,
   shader_create_info.compute_source_generated += "}\n";
 }
 
-static eGPUTextureFormat texture_format_from_result_type(ResultType type)
-{
-  switch (type) {
-    case ResultType::Float:
-      return GPU_R16F;
-    case ResultType::Vector:
-      return GPU_RGBA16F;
-    case ResultType::Color:
-      return GPU_RGBA16F;
-    default:
-      /* Other types are internal and needn't be handled by operations. */
-      break;
-  }
-
-  BLI_assert_unreachable();
-  return GPU_RGBA16F;
-}
-
 /* Texture storers in the shader always take a vec4 as an argument, so encode each type in a vec4
  * appropriately. */
 static const char *glsl_store_expression_from_result_type(ResultType type)
@@ -470,11 +441,11 @@ void ShaderOperation::generate_code_for_outputs(ShaderCreateInfo &shader_create_
 
     /* Add a write-only image for this output where its values will be written. */
     shader_create_info.image(0,
-                             texture_format_from_result_type(result.type()),
+                             result.get_texture_format(),
                              Qualifier::WRITE,
                              ImageType::FLOAT_2D,
                              output_identifier,
-                             Frequency::BATCH);
+                             Frequency::PASS);
 
     /* Add a case for the index of this output followed by a break statement. */
     std::stringstream case_code;
@@ -563,7 +534,7 @@ void ShaderOperation::generate_code_for_inputs(GPUMaterial *material,
 
   /* Add a texture sampler for each of the inputs with the same name as the attribute. */
   LISTBASE_FOREACH (GPUMaterialAttribute *, attribute, &attributes) {
-    shader_create_info.sampler(0, ImageType::FLOAT_2D, attribute->name, Frequency::BATCH);
+    shader_create_info.sampler(0, ImageType::FLOAT_2D, attribute->name, Frequency::PASS);
   }
 
   /* Declare a struct called var_attrs that includes an appropriately typed member for each of the

@@ -23,6 +23,7 @@
 #endif
 
 #include "io_cache.hh"
+#include "io_drop_import_file.hh"
 #include "io_gpencil.hh"
 #include "io_obj.hh"
 #include "io_ply_ops.hh"
@@ -30,22 +31,27 @@
 
 void ED_operatortypes_io()
 {
+  using namespace blender;
 #ifdef WITH_COLLADA
   /* Collada operators: */
   WM_operatortype_append(WM_OT_collada_export);
   WM_operatortype_append(WM_OT_collada_import);
+  ed::io::collada_file_handler_add();
 #endif
 #ifdef WITH_ALEMBIC
   WM_operatortype_append(WM_OT_alembic_import);
   WM_operatortype_append(WM_OT_alembic_export);
+  ed::io::alembic_file_handler_add();
 #endif
 #ifdef WITH_USD
   WM_operatortype_append(WM_OT_usd_import);
   WM_operatortype_append(WM_OT_usd_export);
+  ed::io::usd_file_handler_add();
 #endif
 
 #ifdef WITH_IO_GPENCIL
   WM_operatortype_append(WM_OT_gpencil_import_svg);
+  ed::io::gpencil_file_handler_add();
 #  ifdef WITH_PUGIXML
   WM_operatortype_append(WM_OT_gpencil_export_svg);
 #  endif
@@ -63,14 +69,20 @@ void ED_operatortypes_io()
 #ifdef WITH_IO_WAVEFRONT_OBJ
   WM_operatortype_append(WM_OT_obj_export);
   WM_operatortype_append(WM_OT_obj_import);
+  ed::io::obj_file_handler_add();
 #endif
 
 #ifdef WITH_IO_PLY
   WM_operatortype_append(WM_OT_ply_export);
   WM_operatortype_append(WM_OT_ply_import);
+  ed::io::ply_file_handler_add();
 #endif
 
 #ifdef WITH_IO_STL
   WM_operatortype_append(WM_OT_stl_import);
+  WM_operatortype_append(WM_OT_stl_export);
+  ed::io::stl_file_handler_add();
 #endif
+  WM_operatortype_append(WM_OT_drop_import_file);
+  ED_dropbox_drop_import_file();
 }

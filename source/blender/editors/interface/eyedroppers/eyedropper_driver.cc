@@ -18,7 +18,7 @@
 #include "DNA_screen_types.h"
 
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 
 #include "DEG_depsgraph.hh"
 #include "DEG_depsgraph_build.hh"
@@ -54,8 +54,7 @@ static bool driverdropper_init(bContext *C, wmOperator *op)
   uiBut *but = UI_context_active_but_prop_get(C, &ddr->ptr, &ddr->prop, &ddr->index);
 
   if ((ddr->ptr.data == nullptr) || (ddr->prop == nullptr) ||
-      (RNA_property_editable(&ddr->ptr, ddr->prop) == false) ||
-      (RNA_property_animateable(&ddr->ptr, ddr->prop) == false) || (but->flag & UI_BUT_DRIVEN))
+      (RNA_property_driver_editable(&ddr->ptr, ddr->prop) == false) || (but->flag & UI_BUT_DRIVEN))
   {
     MEM_freeN(ddr);
     return false;
@@ -91,19 +90,20 @@ static void driverdropper_sample(bContext *C, wmOperator *op, const wmEvent *eve
   PropertyRNA *target_prop = but->rnaprop;
   const int target_index = but->rnaindex;
 
-  char *target_path = RNA_path_from_ID_to_property(target_ptr, target_prop);
+  const std::optional<std::string> target_path = RNA_path_from_ID_to_property(target_ptr,
+                                                                              target_prop);
 
   /* Get paths for the destination. */
-  char *dst_path = RNA_path_from_ID_to_property(&ddr->ptr, ddr->prop);
+  const std::optional<std::string> dst_path = RNA_path_from_ID_to_property(&ddr->ptr, ddr->prop);
 
   /* Now create driver(s) */
   if (target_path && dst_path) {
     int success = ANIM_add_driver_with_target(op->reports,
                                               ddr->ptr.owner_id,
-                                              dst_path,
+                                              dst_path->c_str(),
                                               ddr->index,
                                               target_ptr->owner_id,
-                                              target_path,
+                                              target_path->c_str(),
                                               target_index,
                                               flag,
                                               DRIVER_TYPE_PYTHON,
@@ -116,14 +116,6 @@ static void driverdropper_sample(bContext *C, wmOperator *op, const wmEvent *eve
       DEG_id_tag_update(ddr->ptr.owner_id, ID_RECALC_TRANSFORM | ID_RECALC_GEOMETRY);
       WM_event_add_notifier(C, NC_ANIMATION | ND_FCURVES_ORDER, nullptr); /* XXX */
     }
-  }
-
-  /* cleanup */
-  if (target_path) {
-    MEM_freeN(target_path);
-  }
-  if (dst_path) {
-    MEM_freeN(dst_path);
   }
 }
 

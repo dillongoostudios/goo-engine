@@ -88,16 +88,12 @@ class SceneKeyingSetsPanel:
         SceneKeyingSetsPanel._draw_keyframing_setting(
             context, layout, ks, ksp, iface_("Needed"),
             "use_insertkey_override_needed", "use_insertkey_needed",
-            userpref_fallback="use_keyframe_insert_needed",
+            userpref_fallback="use_auto_keyframe_insert_needed",
         )
         SceneKeyingSetsPanel._draw_keyframing_setting(
             context, layout, ks, ksp, iface_("Visual"),
             "use_insertkey_override_visual", "use_insertkey_visual",
             userpref_fallback="use_visual_keying",
-        )
-        SceneKeyingSetsPanel._draw_keyframing_setting(
-            context, layout, ks, ksp, iface_("XYZ to RGB"),
-            "use_insertkey_override_xyz_to_rgb", "use_insertkey_xyz_to_rgb",
         )
 
     @staticmethod
