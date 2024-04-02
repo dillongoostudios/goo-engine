@@ -383,7 +383,9 @@ enum {
   MA_BS_HASHED = 3,
 };
 
-#define MA_SHADOW_ID (1 << 0)
+enum {
+  MA_SHADOW_ID = (1 << 0)
+};
 
 /** #Material::displacement_method */
 enum {
