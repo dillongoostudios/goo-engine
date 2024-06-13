@@ -104,7 +104,7 @@ const UserDef U_default = {
     .user_menus = {NULL},
 
     .keyconfigstr = "Blender",
-    .undosteps = 32,
+    .undosteps = 256,
     .undomemory = 0,
     .gp_manhattandist = 1,
     .gp_euclideandist = 2,
