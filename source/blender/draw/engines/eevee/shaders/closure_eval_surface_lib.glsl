@@ -461,8 +461,8 @@ void calc_shader_info(vec3 position,
     half_light += vec4(light.data.l_color * light.data.l_diff * radiance, 0.0);
   }
 
-  shadows = (1 - (shadow_accum / max(light_accum, 1)));
-  self_shadows = (1 - (self_shadow_accum / max(light_accum, 1)));
+  shadows = (1.0 - (shadow_accum / max(light_accum, 1.0)));
+  self_shadows = (1.0 - (self_shadow_accum / max(light_accum, 1.0)));
   ambient = vec4(probe_evaluate_world_diff(n_n), 1.0);
 }
 
