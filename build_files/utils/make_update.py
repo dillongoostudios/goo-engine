@@ -57,6 +57,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--git-command", default="git")
     parser.add_argument("--use-linux-libraries", action="store_true")
     parser.add_argument("--architecture", type=str, choices=("x86_64", "amd64", "arm64",))
+    parser.add_argument("--windows-vc-version", type=str, choices=("vc15", "vc17"), default="vc17", help="Visual C++ version for Windows precompiled libraries (default: vc17 for VS2022)")
+    parser.add_argument("--addons-repo-name", default="blender-addons", help="Name of the addons repository (e.g., blender-addons or custom-fork-name)")
+    parser.add_argument("--addons-contrib-repo-name", default="blender-addons-contrib", help="Name of the addons_contrib repository (e.g., blender-addons-contrib or custom-fork-name)")
     return parser.parse_args()
 
 
@@ -82,8 +85,25 @@ def get_effective_architecture(args: argparse.Namespace) -> str:
 def svn_update(args: argparse.Namespace, release_version: Optional[str]) -> None:
     svn_non_interactive = [args.svn_command, '--non-interactive']
 
-    lib_dirpath = os.path.join(get_blender_git_root(), '..', 'lib')
+    # Get the base SVN URL for libraries from make_utils
+    # This URL is expected to point to the 'lib' directory for the given version/branch.
+    # e.g., https://svn.blender.org/svnroot/bf-blender/tags/blender-4.1-release/lib/
     svn_url = make_utils.svn_libraries_base_url(release_version, args.svn_branch)
+
+    # Correct svn_url if args.svn_branch is a tag and make_utils incorrectly prepended "branches/"
+    if args.svn_branch and args.svn_branch.startswith("tags/"):
+        # Define the expected correct base and the faulty segment
+        correct_base_url_prefix = "https://svn.blender.org/svnroot/bf-blender/"
+        faulty_path_segment_in_url = "/branches/" + args.svn_branch # e.g., /branches/tags/blender-4.1-release
+        correct_path_segment_for_tag = "/" + args.svn_branch      # e.g., /tags/blender-4.1-release
+
+        if faulty_path_segment_in_url in svn_url:
+            print(f"---- DEBUG make_update.py: Correcting SVN URL for tag-based lib ----")
+            print(f"---- Original svn_url: {svn_url}")
+            svn_url = svn_url.replace(faulty_path_segment_in_url, correct_path_segment_for_tag)
+            print(f"---- Corrected svn_url: {svn_url}")
+
+    lib_dirpath = os.path.join(get_blender_git_root(), '..', 'lib')
 
     # Checkout precompiled libraries
     architecture = get_effective_architecture(args)
@@ -98,7 +118,10 @@ def svn_update(args: argparse.Namespace, release_version: Optional[str]) -> None
         # Windows checkout is usually handled by bat scripts since python3 to run
         # this script is bundled as part of the precompiled libraries. However it
         # is used by the buildbot.
-        lib_platform = "win64_vc15"
+        if args.windows_vc_version == "vc15":
+            lib_platform = "win64_vc15"  # For VS2017
+        else:  # vc17 (default)
+            lib_platform = "win64_vc17"  # For VS2022
     elif args.use_linux_libraries:
         lib_platform = "linux_x86_64_glibc_228"
     else:
@@ -299,14 +322,14 @@ def external_script_copy_old_submodule_over(args: argparse.Namespace, directory_
 
 
 def external_script_initialize_if_needed(args: argparse.Namespace,
-                                         repo_name: str,
+                                         actual_repo_name: str,
                                          directory_name: str) -> None:
     """Initialize checkout of an external repository scripts directory"""
 
     blender_git_root = Path(get_blender_git_root())
     blender_dot_git = blender_git_root / ".git"
     scripts_dir = blender_git_root / "scripts"
-    external_dir = scripts_dir / directory_name
+    external_dir: Path = scripts_dir / directory_name
 
     if external_dir.exists():
         return
@@ -318,20 +341,57 @@ def external_script_initialize_if_needed(args: argparse.Namespace,
         external_script_copy_old_submodule_over(args, directory_name)
         return
 
-    origin_name = "upstream" if use_upstream_workflow(args) else "origin"
-    blender_url = make_utils.git_get_remote_url(args.git_command, origin_name)
-    external_url = resolve_external_url(blender_url, repo_name)
+    # Determine the primary remote of the main Blender repository and its URL.
+    # This remote's URL will be used as the base to resolve the external script's repository URL.
+    main_blender_repo_primary_remote_name = "upstream" if use_upstream_workflow(args) else "origin"
+    main_blender_repo_url = make_utils.git_get_remote_url(args.git_command, main_blender_repo_primary_remote_name)
+
+    # Special handling for 'addons_contrib' if using the default name, to always point to official GitHub.
+    if directory_name == "addons_contrib" and actual_repo_name == "blender-addons-contrib":
+        print(f"Forcing 'scripts/{directory_name}' to use official GitHub repository: blender/{actual_repo_name}")
+        external_repo_url_to_clone = f"https://github.com/blender/{actual_repo_name}"
+        # When using a forced official URL, typically name the remote 'upstream'.
+        remote_name_for_clone = "upstream"
+    else:
+        # Default URL resolution:
+        # URL for the external script's repository, derived from the main Blender repo's URL and the actual_repo_name.
+        external_repo_url_to_clone = resolve_external_url(main_blender_repo_url, actual_repo_name)
+        remote_name_for_clone = main_blender_repo_primary_remote_name
 
     # When running `make update` from a freshly cloned fork check whether the fork of the submodule is
-    # available, If not, switch to the submodule relative to the main blender repository.
-    if origin_name == "origin" and not make_utils.git_is_remote_repository(args.git_command, external_url):
-        external_url = resolve_external_url("https://projects.blender.org/blender/blender", repo_name)
+    # available. If not, switch to the submodule relative to the main blender repository.
+    # This fallback is triggered if:
+    # 1. The main Blender repo's primary remote is 'origin' (i.e., likely a fork, and not using 'upstream' as primary).
+    # 2. The derived URL for the external script's repository (e.g., user_fork/actual_repo_name) is not found.
+    if main_blender_repo_primary_remote_name == "origin" and \
+       not (directory_name == "addons_contrib" and actual_repo_name == "blender-addons-contrib") and \
+       not make_utils.git_is_remote_repository(args.git_command, external_repo_url_to_clone):
+        standard_official_repo_name = ""
+        if directory_name == "addons":
+            standard_official_repo_name = "blender-addons"
+        elif directory_name == "addons_contrib":
+            standard_official_repo_name = "blender-addons-contrib"
+            # This case implies actual_repo_name was something other than "blender-addons-contrib"
+            # (e.g. a custom fork name that wasn't found).
 
-    call((args.git_command, "clone", "--origin", origin_name, external_url, str(external_dir)))
+        if standard_official_repo_name:
+            print(f"Forked repository {external_repo_url_to_clone} (derived from your 'origin' remote and repo name '{actual_repo_name}') not found.")
+            print(f"Falling back to official Blender repository for {directory_name}: {standard_official_repo_name}.")
+            if directory_name == "addons_contrib" and standard_official_repo_name == "blender-addons-contrib":
+                external_repo_url_to_clone = "https://github.com/blender/blender-addons-contrib"
+            else:
+                official_blender_base_url = "https://projects.blender.org/blender/blender"
+                external_repo_url_to_clone = resolve_external_url(official_blender_base_url, standard_official_repo_name)
+            # When cloning the official repo as a fallback, name the remote 'upstream' in the sub-repo.
+            # This helps 'external_script_add_origin_if_needed' to correctly set up 'origin' for the user's fork later.
+            remote_name_for_clone = "upstream"
+        else:
+            sys.stderr.write(f"Warning: Could not determine standard repo name for {directory_name} during fallback. Will attempt to clone {external_repo_url_to_clone} as is.\n")
+    call((args.git_command, "clone", "--origin", remote_name_for_clone, external_repo_url_to_clone, str(external_dir)))
 
 
 def external_script_add_origin_if_needed(args: argparse.Namespace,
-                                         repo_name: str,
+                                         actual_repo_name: str,
                                          directory_name: str) -> None:
     """
     Add remote called 'origin' if there is a fork of the external repository available
@@ -349,7 +409,7 @@ def external_script_add_origin_if_needed(args: argparse.Namespace,
     external_dir = scripts_dir / directory_name
 
     origin_blender_url = make_utils.git_get_remote_url(args.git_command, "origin")
-    origin_external_url = resolve_external_url(origin_blender_url, repo_name)
+    origin_external_url = resolve_external_url(origin_blender_url, actual_repo_name)
 
     try:
         os.chdir(external_dir)
@@ -391,15 +451,15 @@ def external_script_add_origin_if_needed(args: argparse.Namespace,
 
 
 def external_scripts_update(args: argparse.Namespace,
-                            repo_name: str,
+                            actual_repo_name: str,
                             directory_name: str,
                             branch: Optional[str]) -> str:
     """Update a single external checkout with the given name in the scripts folder"""
 
-    external_script_initialize_if_needed(args, repo_name, directory_name)
-    external_script_add_origin_if_needed(args, repo_name, directory_name)
+    external_script_initialize_if_needed(args, actual_repo_name, directory_name)
+    external_script_add_origin_if_needed(args, actual_repo_name, directory_name)
 
-    print(f"Updating scripts/{directory_name} ...")
+    print(f"Updating scripts/{directory_name} (from repository '{actual_repo_name}')...")
 
     cwd = os.getcwd()
 
@@ -469,8 +529,12 @@ def scripts_submodules_update(args: argparse.Namespace, branch: Optional[str]) -
     """Update working trees of addons and addons_contrib within the scripts/ directory"""
     msg = ""
 
-    msg += external_scripts_update(args, "blender-addons", "addons", branch)
-    msg += external_scripts_update(args, "blender-addons-contrib", "addons_contrib", branch)
+    # Use the repository names provided by arguments or their defaults.
+    addons_repo_name = args.addons_repo_name
+    addons_contrib_repo_name = args.addons_contrib_repo_name
+
+    msg += external_scripts_update(args, addons_repo_name, "addons", branch)
+    msg += external_scripts_update(args, addons_contrib_repo_name, "addons_contrib", branch)
 
     return msg
 
@@ -486,6 +550,24 @@ def submodules_update(args: argparse.Namespace, branch: Optional[str]) -> str:
 
 if __name__ == "__main__":
     args = parse_arguments()
+    # ---- ADD DEBUG PRINT ----
+    print("---- DEBUG make_update.py: Raw sys.argv ----")
+    print(sys.argv)
+    print("---- DEBUG make_update.py: Parsed arguments ----")
+    print(f"args.no_libraries: {args.no_libraries}")
+    print(f"args.no_blender: {args.no_blender}")
+    print(f"args.no_submodules: {args.no_submodules}")
+    print(f"args.use_tests: {args.use_tests}")
+    print(f"args.svn_command: {args.svn_command}")
+    print(f"args.svn_branch: {args.svn_branch}") # This is the crucial one
+    print(f"args.git_command: {args.git_command}")
+    print(f"args.use_linux_libraries: {args.use_linux_libraries}")
+    print(f"args.architecture: {args.architecture}")
+    print(f"args.windows_vc_version: {args.windows_vc_version}")
+    print(f"args.addons_repo_name: {args.addons_repo_name}")
+    print(f"args.addons_contrib_repo_name: {args.addons_contrib_repo_name}")
+    print("---- /DEBUG ----")
+    # ---- END DEBUG PRINT ----
     blender_skip_msg = ""
     submodules_skip_msg = ""
 

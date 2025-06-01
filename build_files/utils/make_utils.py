@@ -159,14 +159,25 @@ def git_branch_release_version(branch: str, tag: Optional[str]) -> Optional[str]
     return release_version
 
 
-def svn_libraries_base_url(release_version: Optional[str], branch: Optional[str] = None) -> str:
-    if release_version:
-        svn_branch = "tags/blender-" + release_version + "-release"
-    elif branch:
-        svn_branch = "branches/" + branch
+def svn_libraries_base_url(release_version: Optional[str], branch_override: Optional[str] = None) -> str:
+    # Determine the final segment of the SVN path (e.g., "trunk", "tags/blender-4.1-release", "branches/my-feature")
+    final_branch_segment = ""
+    if branch_override:
+        # If a specific branch/tag path is provided, use it directly.
+        # Assumes branch_override is a full path like "tags/..." or "branches/..." or "trunk".
+        if branch_override.startswith("tags/") or branch_override.startswith("branches/") or branch_override == "trunk":
+            final_branch_segment = branch_override
+        else:
+            # If it's a simple name, assume it's a feature branch under "branches/".
+            # This might need refinement if simple names can also be tags not following the full path.
+            final_branch_segment = "branches/" + branch_override
+    elif release_version:
+        # If no override, but a release version is known, construct the tag path.
+        final_branch_segment = "tags/blender-" + release_version + "-release"
     else:
-        svn_branch = "trunk"
-    return "https://svn.blender.org/svnroot/bf-blender/" + svn_branch + "/lib/"
+        # Default to trunk if no override and no release version.
+        final_branch_segment = "trunk"
+    return "https://svn.blender.org/svnroot/bf-blender/" + final_branch_segment + "/lib/"
 
 
 def command_missing(command: str) -> bool:
