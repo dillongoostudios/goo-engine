@@ -19,6 +19,8 @@
 #include "util/task.h"
 #include "util/texture.h"
 #include "util/unique_ptr.h"
+#include <cmath>
+
 
 #ifdef WITH_OSL
 #  include <OSL/oslexec.h>
@@ -28,19 +30,14 @@ CCL_NAMESPACE_BEGIN
 
 namespace {
 
-/* Some helpers to silence warning in templated function. */
-bool isfinite(uchar /*value*/)
-{
-  return true;
-}
-bool isfinite(half /*value*/)
-{
-  return true;
-}
-bool isfinite(uint16_t /*value*/)
-{
-  return true;
-}
+// Do NOT add 'using std::isfinite;' here!
+
+// Only keep the overloads that are needed and the template for integrals.
+bool isfinite(half /*value*/) { return true; }
+inline bool isfinite(float value) { return std::isfinite(value); }
+inline bool isfinite(double value) { return std::isfinite(value); }
+template<typename T>
+inline std::enable_if_t<std::is_integral_v<T>, bool> isfinite(T) { return true; }
 
 const char *name_from_type(ImageDataType type)
 {
