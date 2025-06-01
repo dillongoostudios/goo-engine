@@ -6,6 +6,8 @@
 #include "util/algorithm.h"
 #include "util/foreach.h"
 #include "util/set.h"
+#include <chrono>   // Add this line at the top of the file
+#include <thread>   // Add this line for std::this_thread::sleep_until
 
 CCL_NAMESPACE_BEGIN
 
@@ -19,7 +21,9 @@ Profiler::~Profiler()
 void Profiler::run()
 {
   uint64_t updates = 0;
-  auto start_time = std::chrono::system_clock::now();
+  using clock = std::chrono::system_clock;
+  using ms = std::chrono::milliseconds;
+  auto start_time = clock::now();
   while (!do_stop_worker) {
     thread_scoped_lock lock(mutex);
     foreach (ProfilingState *state, states) {
@@ -43,12 +47,9 @@ void Profiler::run()
     }
     lock.unlock();
 
-    /* Relative waits always overshoot a bit, so just waiting 1ms every
-     * time would cause the sampling to drift over time.
-     * By keeping track of the absolute time, the wait times correct themselves -
-     * if one wait overshoots a lot, the next one will be shorter to compensate. */
     updates++;
-    std::this_thread::sleep_until(start_time + updates * std::chrono::milliseconds(1));
+    auto next_time = start_time + ms(static_cast<uint64_t>(updates));
+    std::this_thread::sleep_until(next_time);
   }
 }
 
