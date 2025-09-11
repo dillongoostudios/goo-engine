@@ -26,7 +26,7 @@ CCL_NAMESPACE_BEGIN
 bool device_optix_init()
 {
 #ifdef WITH_OPTIX
-  if (g_optixFunctionTable.optixDeviceContextCreate != NULL) {
+  if (OPTIX_FUNCTION_TABLE_SYMBOL.optixDeviceContextCreate != nullptr) {
     /* Already initialized function table. */
     return true;
   }
