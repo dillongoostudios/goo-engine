@@ -5,7 +5,7 @@ Light group key management for Goo Engine (EEVEE)
 """
 
 import bpy
-from bpy.types import Panel,  Material, Light, PropertyGroup, UIList, UI_UL_list, Operator, ShaderNodeShaderInfo, ShaderNodeTree
+from bpy.types import Panel,  Material, Light, PropertyGroup, UIList, Operator, ShaderNodeShaderInfo, ShaderNodeTree
 from bpy.props import StringProperty, CollectionProperty, IntProperty, PointerProperty, EnumProperty, BoolProperty
 from bpy.utils import register_classes_factory
 from bpy.app.handlers import persistent
@@ -173,7 +173,7 @@ class MAT_UL_LightGroupList(UIList):
         flt_flags = []
         flt_order = []
 
-        helper_funcs = UI_UL_list
+        helper_funcs = bpy.types.UI_UL_list
 
         if self.filter_name:
             flt_flags = helper_funcs.filter_items_by_name(self.filter_name, self.bitflag_filter_item, keys, "name")
