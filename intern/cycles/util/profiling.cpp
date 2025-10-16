@@ -7,6 +7,8 @@
 #include "util/foreach.h"
 #include "util/set.h"
 
+#include <chrono>
+
 CCL_NAMESPACE_BEGIN
 
 Profiler::Profiler() : do_stop_worker(true), worker(NULL) {}
