@@ -635,9 +635,12 @@ bool ImageManager::file_load_image(Image *img, int texture_limit)
     if (is_rgba) {
       for (size_t i = 0; i < num_pixels; i += 4) {
         StorageType *pixel = &pixels[i * 4];
-        if (!isfinite(pixel[0]) || !isfinite(pixel[1]) || !isfinite(pixel[2]) ||
-            !isfinite(pixel[3]))
+        if (!std::isfinite(static_cast<float>(pixel[0])) ||
+            !std::isfinite(static_cast<float>(pixel[1])) ||
+            !std::isfinite(static_cast<float>(pixel[2])) ||
+            !std::isfinite(static_cast<float>(pixel[3])))
         {
+
           pixel[0] = 0;
           pixel[1] = 0;
           pixel[2] = 0;
@@ -646,9 +649,11 @@ bool ImageManager::file_load_image(Image *img, int texture_limit)
       }
     }
     else {
+      // Patch build issue MSVS22
       for (size_t i = 0; i < num_pixels; ++i) {
         StorageType *pixel = &pixels[i];
-        if (!isfinite(pixel[0])) {
+        if (!std::isfinite(static_cast<float>(pixel[0]))) {
+         
           pixel[0] = 0;
         }
       }
