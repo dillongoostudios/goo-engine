@@ -1,0 +1,33 @@
+name: Build Goo Engine Windows
+on: [workflow_dispatch] # Permite rodar manualmente
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout Goo Engine
+        uses: actions/checkout@v3
+
+      - name: Instalar Dependências (SVN e CMake)
+        run: |
+          choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
+          choco install subversion
+
+      - name: Baixar Bibliotecas Pré-compiladas (Lib)
+        run: |
+          # O Blender/Goo Engine precisa de bibliotecas externas imensas
+          mkdir ../lib
+          svn checkout https://blender.org ../lib/win64_vc15
+
+      - name: Configurar e Compilar
+        run: |
+          mkdir build
+          cd build
+          cmake .. -G "Visual Studio 17 2022" -A x64
+          cmake --build . --config Release --target install
+
+      - name: Upload do Resultado
+        uses: actions/upload-artifact@v3
+        with:
+          name: Goo-Engine-Windows
+          path: build/bin/Release/
