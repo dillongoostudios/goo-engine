@@ -37,7 +37,13 @@ void node_eevee_specular(float4 diffuse,
 
   float alpha = (1.0f - transp) * weight;
 
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  ClosureSubsurface diffuse_data;
+  /* Flag subsurface as disabled. */
+  diffuse_data.sss_radius.b = -1.0f;
+#else
   ClosureDiffuse diffuse_data;
+#endif
   diffuse_data.weight = alpha;
   diffuse_data.color = diffuse.rgb;
   diffuse_data.N = N;

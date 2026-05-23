@@ -755,6 +755,7 @@ std::string GLShader::fragment_interface_declare(const ShaderCreateInfo &info) c
       ss << "flat in vec4 gpu_pos[3];\n";
       ss << "smooth in vec3 gpu_BaryCoord;\n";
       ss << "noperspective in vec3 gpu_BaryCoordNoPersp;\n";
+      ss << "#define gpu_position_at_vertex(v) gpu_pos[v]\n";
     }
     else if (epoxy_has_gl_extension("GL_AMD_shader_explicit_vertex_parameter")) {
       /* NOTE(fclem): This won't work with geometry shader. Hopefully, we don't need geometry
@@ -1045,6 +1046,7 @@ static StringRefNull glsl_patch_vertex_get()
 
     /* Vulkan GLSL compatibility. */
     ss << "#define gpu_InstanceIndex (gl_InstanceID + gpu_BaseInstance)\n";
+    ss << "#define gpu_EmitVertex EmitVertex\n";
 
     /* Array compatibility. */
     ss << "#define gpu_Array(_type) _type[]\n";
@@ -1074,6 +1076,8 @@ static StringRefNull glsl_patch_geometry_get()
       ss << "#extension GL_AMD_shader_explicit_vertex_parameter: enable\n";
     }
 
+    ss << "#define gpu_EmitVertex EmitVertex\n";
+    
     /* Array compatibility. */
     ss << "#define gpu_Array(_type) _type[]\n";
 

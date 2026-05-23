@@ -150,8 +150,12 @@ bool intersect_view(Pyramid pyramid)
   for (int p = 0; p < 6; ++p) {
     bool is_any_vertex_on_positive_side = false;
     for (int v = 0; v < 5; ++v) {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+      float test = dot(drw_view_culling.frustum_planes.planes[p], float4(pyramid.corners[v], 1.0f));
+#else
       float test = dot(drw_view_culling().frustum_planes.planes[p],
                        float4(pyramid.corners[v], 1.0f));
+#endif
       if (test > 0.0f) {
         is_any_vertex_on_positive_side = true;
         break;
@@ -197,7 +201,11 @@ bool intersect_view(Box box)
   for (int p = 0; p < 6; ++p) {
     bool is_any_vertex_on_positive_side = false;
     for (int v = 0; v < 8; ++v) {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+      float test = dot(drw_view_culling.frustum_planes.planes[p], float4(box.corners[v], 1.0f));
+#else
       float test = dot(drw_view_culling().frustum_planes.planes[p], float4(box.corners[v], 1.0f));
+#endif
       if (test > 0.0f) {
         is_any_vertex_on_positive_side = true;
         break;
@@ -219,8 +227,13 @@ bool intersect_view(Box box)
   for (int p = 0; p < 6; ++p) {
     bool is_any_vertex_on_positive_side = false;
     for (int v = 0; v < 8; ++v) {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+      float test = dot(i_box.planes[p],
+                       float4(drw_view_culling.frustum_corners.corners[v].xyz, 1.0f));
+#else
       float test = dot(i_box.planes[p],
                        float4(drw_view_culling().frustum_corners.corners[v].xyz, 1.0f));
+#endif
       if (test > 0.0f) {
         is_any_vertex_on_positive_side = true;
         break;
@@ -265,8 +278,13 @@ bool intersect_view(IsectBox i_box)
   for (int p = 0; p < 6; ++p) {
     bool is_any_vertex_on_positive_side = false;
     for (int v = 0; v < 8; ++v) {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+      float test = dot(i_box.planes[p],
+                       float4(drw_view_culling.frustum_corners.corners[v].xyz, 1.0f));
+#else
       float test = dot(i_box.planes[p],
                        float4(drw_view_culling().frustum_corners.corners[v].xyz, 1.0f));
+#endif
       if (test > 0.0f) {
         is_any_vertex_on_positive_side = true;
         break;
@@ -287,8 +305,13 @@ bool intersect_view(Sphere sphere)
   bool intersects = true;
 
   for (int p = 0; p < 6 && intersects; ++p) {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    float dist_to_plane = dot(drw_view_culling.frustum_planes.planes[p],
+                              float4(sphere.center, 1.0f));
+#else
     float dist_to_plane = dot(drw_view_culling().frustum_planes.planes[p],
                               float4(sphere.center, 1.0f));
+#endif
     if (dist_to_plane < -sphere.radius) {
       intersects = false;
     }

@@ -12,7 +12,7 @@
 #include "GPU_material.hh"
 
 #define MAX_FUNCTION_NAME 64
-#define MAX_PARAMETER 36
+#define MAX_PARAMETER 38
 
 struct GSet;
 

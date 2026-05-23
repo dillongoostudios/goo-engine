@@ -453,6 +453,11 @@ static void build_edit_selection_indices(const PointCloud &pointcloud, gpu::Inde
   index_mask_to_ibo(mask, ibo);
 }
 
+int DRW_pointcloud_material_count_get(const PointCloud *pointcloud)
+{
+  return max_ii(1, pointcloud->totcol);
+}
+
 void DRW_pointcloud_batch_cache_create_requested(Object *ob)
 {
   PointCloud &pointcloud = DRW_object_get_data_for_drawing<PointCloud>(*ob);

@@ -37,6 +37,15 @@ enum eDRWLevelOfDetail {
   DRW_LOD_MAX, /* Max number of level of detail */
 };
 
+/**
+ * Use this one for rendering full-screen passes. For 3D objects use #DRW_cache_quad_get().
+ */
+blender::gpu::Batch *DRW_cache_fullscreen_quad_get();
+/* Just a regular quad with 4 vertices. */
+blender::gpu::Batch *DRW_cache_quad_get();
+
+blender::gpu::Batch *DRW_cache_sphere_get(eDRWLevelOfDetail level_of_detail);
+
 /* Common Object */
 
 blender::gpu::Batch *DRW_cache_object_all_edges_get(Object *ob);
@@ -45,7 +54,15 @@ blender::gpu::Batch *DRW_cache_object_surface_get(Object *ob);
 blender::gpu::Batch *DRW_cache_object_loose_edges_get(Object *ob);
 blender::Span<blender::gpu::Batch *> DRW_cache_object_surface_material_get(
     Object *ob, blender::Span<const GPUMaterial *> materials);
+blender::gpu::Batch **GOO_cache_object_surface_material_get(Object *ob,
+                                                            GPUMaterial **gpumat_array,
+                                                            uint gpumat_array_len);
 blender::gpu::Batch *DRW_cache_object_face_wireframe_get(const Scene *scene, Object *ob);
+
+/**
+ * Returns the vertbuf used by shaded surface batch.
+ */
+blender::gpu::VertBuf *GOO_cache_object_pos_vertbuf_get(Object *ob);
 
 /* Meshes */
 
@@ -60,6 +77,9 @@ blender::gpu::Batch *DRW_cache_mesh_surface_edges_get(Object *ob);
  */
 blender::Span<blender::gpu::Batch *> DRW_cache_mesh_surface_shaded_get(
     Object *ob, blender::Span<const GPUMaterial *> materials);
+blender::gpu::Batch **GOO_cache_mesh_surface_shaded_get(Object *ob,
+                                                        GPUMaterial **gpumat_array,
+                                                        uint gpumat_array_len);
 /**
  * Return list of batches with length equal to `max(1, totcol)`.
  */

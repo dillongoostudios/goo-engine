@@ -55,6 +55,7 @@ void BKE_object_material_from_eval_data(Main *bmain, Object *ob_orig, const ID *
 Material *BKE_material_add(Main *bmain, const char *name);
 Material *BKE_gpencil_material_add(Main *bmain, const char *name);
 void BKE_gpencil_material_attr_init(Material *ma);
+bool BKE_material_use_custom_holdout(struct Material* ma);
 void BKE_material_make_node_previews_dirty(Material *ma);
 
 /* UNUSED */

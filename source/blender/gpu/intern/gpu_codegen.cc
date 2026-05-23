@@ -293,6 +293,10 @@ class GPUCodegen {
     create_info = new GPUCodegenCreateInfo("codegen");
     output.create_info = reinterpret_cast<GPUShaderCreateInfo *>(
         static_cast<ShaderCreateInfo *>(create_info));
+
+    if (GPU_material_flag_get(mat_, GPU_MATFLAG_OBJECT_INFO) && GPU_material_gooengine_get(mat_)) {
+      create_info->additional_info("draw_object_infos_goo");
+    }
   }
 
   ~GPUCodegen()
@@ -399,6 +403,24 @@ void GPUCodegen::generate_attribs()
 void GPUCodegen::generate_resources()
 {
   GPUCodegenCreateInfo &info = *create_info;
+
+  /* Ref. #98190: Defines are optimizations for old compilers.
+   * Might become unnecessary with EEVEE-Next. */
+  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_COAT)) {
+    info.define("PRINCIPLED_COAT");
+  }
+  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_METALLIC)) {
+    info.define("PRINCIPLED_METALLIC");
+  }
+  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_DIELECTRIC)) {
+    info.define("PRINCIPLED_DIELECTRIC");
+  }
+  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_GLASS)) {
+    info.define("PRINCIPLED_GLASS");
+  }
+  if (GPU_material_flag_get(&mat, GPU_MATFLAG_PRINCIPLED_ANY)) {
+    info.define("PRINCIPLED_ANY");
+  }
 
   std::stringstream ss;
 

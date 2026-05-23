@@ -264,6 +264,7 @@ void normalize_m3(float R[3][3]) ATTR_NONNULL();
 void normalize_m3_m3(float R[3][3], const float M[3][3]) ATTR_NONNULL();
 void normalize_m4_ex(float R[4][4], float r_scale[3]) ATTR_NONNULL();
 void normalize_m4(float R[4][4]) ATTR_NONNULL();
+void normalize_m4_m4_ex(float rmat[4][4], const float mat[4][4], float r_scale[3]) ATTR_NONNULL();
 void normalize_m4_m4(float rmat[4][4], const float mat[4][4]) ATTR_NONNULL();
 
 /**

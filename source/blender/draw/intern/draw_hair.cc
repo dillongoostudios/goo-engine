@@ -131,6 +131,88 @@ void DRW_hair_duplimat_get(const blender::draw::ObjectRef &ob_ref,
 
 namespace blender::draw {
 
+DRWShadingGroup *DRW_shgroup_hair_create_sub(const ObjectRef &ob_ref,
+                                             ParticleSystem *psys,
+                                             ModifierData *md,
+                                             DRWShadingGroup *shgrp_parent,
+                                             GPUMaterial *gpu_material)
+{
+  const DRWContext *draw_ctx = DRW_context_get();
+  Scene *scene = draw_ctx->scene;
+  CurvesModule &module = *drw_get().data->curves_module;
+  CurvesInfosBuf &curves_infos = module.ubo_pool.alloc();
+  float dupli_mat[4][4];
+
+  Object *object = ob_ref.object;
+
+  int subdiv = scene->r.hair_subdiv;
+  int thickness_res = (scene->r.hair_type == SCE_HAIR_SHAPE_STRAND) ? 1 : 2;
+
+  ParticleHairCache *hair_cache = drw_hair_particle_cache_get(
+      object, psys, md, gpu_material, subdiv, thickness_res);
+
+  DRWShadingGroup *shgrp = DRW_shgroup_create_sub(shgrp_parent);
+
+  /* TODO: optimize this. Only bind the ones #GPUMaterial needs. */
+  for (int i = 0; i < hair_cache->num_uv_layers; i++) {
+    for (int n = 0; n < MAX_LAYER_NAME_CT && hair_cache->uv_layer_names[i][n][0] != '\0'; n++) {
+      DRW_shgroup_uniform_texture(shgrp, hair_cache->uv_layer_names[i][n], hair_cache->uv_tex[i]);
+    }
+  }
+  for (int i = 0; i < hair_cache->num_col_layers; i++) {
+    for (int n = 0; n < MAX_LAYER_NAME_CT && hair_cache->col_layer_names[i][n][0] != '\0'; n++) {
+      DRW_shgroup_uniform_texture(
+          shgrp, hair_cache->col_layer_names[i][n], hair_cache->col_tex[i]);
+    }
+  }
+
+  /* Fix issue with certain driver not drawing anything if there is nothing bound to
+   * "ac", "au", "u" or "c". */
+  if (hair_cache->num_uv_layers == 0) {
+    DRW_shgroup_buffer_texture(shgrp, "u", module.dummy_vbo);
+    DRW_shgroup_buffer_texture(shgrp, "au", module.dummy_vbo);
+    DRW_shgroup_buffer_texture(shgrp, "a", module.dummy_vbo);
+  }
+  if (hair_cache->num_col_layers == 0) {
+    DRW_shgroup_buffer_texture(shgrp, "c", module.dummy_vbo);
+    DRW_shgroup_buffer_texture(shgrp, "ac", module.dummy_vbo);
+  }
+
+  DRW_hair_duplimat_get(ob_ref, psys, md, dupli_mat);
+
+  /* Get hair shape parameters. */
+  ParticleSettings *part = psys->part;
+  float hair_rad_shape = part->shape;
+  float hair_rad_root = part->rad_root * part->rad_scale * 0.5f;
+  float hair_rad_tip = part->rad_tip * part->rad_scale * 0.5f;
+  bool hair_close_tip = (part->shape_flag & PART_SHAPE_CLOSE_TIP) != 0;
+
+  DRW_shgroup_buffer_texture(shgrp, "hairPointBuffer", hair_cache->final[subdiv].proc_buf);
+  if (hair_cache->proc_length_buf) {
+    DRW_shgroup_buffer_texture(shgrp, "l", hair_cache->proc_length_buf);
+  }
+
+  DRW_shgroup_uniform_block(shgrp, "drw_curves", curves_infos);
+  DRW_shgroup_uniform_int(shgrp, "hairStrandsRes", &hair_cache->final[subdiv].strands_res, 1);
+  DRW_shgroup_uniform_int_copy(shgrp, "hairThicknessRes", thickness_res);
+  DRW_shgroup_uniform_float_copy(shgrp, "hairRadShape", hair_rad_shape);
+  DRW_shgroup_uniform_mat4_copy(shgrp, "hairDupliMatrix", dupli_mat);
+  DRW_shgroup_uniform_float_copy(shgrp, "hairRadRoot", hair_rad_root);
+  DRW_shgroup_uniform_float_copy(shgrp, "hairRadTip", hair_rad_tip);
+  DRW_shgroup_uniform_bool_copy(shgrp, "hairCloseTip", hair_close_tip);
+  if (gpu_material) {
+    /* NOTE: This needs to happen before the drawcall to allow correct attribute extraction.
+     * (see #101896) */
+    DRW_shgroup_add_material_resources(shgrp, gpu_material);
+  }
+  /* TODO(fclem): Until we have a better way to cull the hair and render with orco, bypass
+   * culling test. */
+  blender::gpu::Batch *geom = hair_cache->final[subdiv].proc_hairs[thickness_res - 1];
+  DRW_shgroup_call_no_cull(shgrp, geom, object);
+
+  return shgrp;
+}
+
 static ParticleHairCache *hair_particle_cache_get(Object *object,
                                                   ParticleSystem *psys,
                                                   ModifierData *md,

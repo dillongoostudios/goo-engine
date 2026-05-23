@@ -16,7 +16,41 @@
 #include "DNA_object_enums.h"
 #include "DNA_object_types.h"
 
+#include "BLI_math_matrix.h"
+#include "BLI_string.h"
+
+#include "BKE_context.hh"
+#include "BKE_layer.hh"
+#include "BKE_material.hh"
+
+#include "DNA_light_types.h"
+#include "DNA_material_types.h"
+#include "DNA_world_types.h"
+
+#include "GPU_framebuffer.hh"
 #include "GPU_material.hh"
+#include "GPU_primitive.hh"
+#include "GPU_storage_buffer.hh"
+#include "GPU_uniform_buffer.hh"
+#include "GPU_drawlist.hh"
+
+#include "draw_cache.hh"
+#include "draw_common_c.hh"
+
+#include "draw_instance_data.hh"
+#include "draw_state.hh"
+// #include "draw_view_data.hh"
+
+// #include "RE_engine.h"
+
+/* Uncomment to track unused resource bindings. */
+// #define DRW_UNUSED_RESOURCE_TRACKING
+
+#ifdef DRW_UNUSED_RESOURCE_TRACKING
+#  define DRW_DEBUG_FILE_LINE_ARGS , const char *file, int line
+#else
+#  define DRW_DEBUG_FILE_LINE_ARGS
+#endif
 
 namespace blender::gpu {
 class Batch;
@@ -34,6 +68,8 @@ struct GPUUniformBuf;
 struct Mesh;
 struct Object;
 struct ParticleSystem;
+struct RenderEngineType;
+struct bContext;
 struct rcti;
 struct RegionView3D;
 struct RenderEngine;
@@ -58,6 +94,13 @@ class TextureFromPool;
 struct ObjectRef;
 class Manager;
 }  // namespace blender::draw
+
+typedef struct DRWCallBuffer DRWCallBuffer;
+typedef struct DRWPass DRWPass;
+typedef struct DRWShaderLibrary DRWShaderLibrary;
+typedef struct DRWShadingGroup DRWShadingGroup;
+typedef struct DRWUniform DRWUniform;
+typedef struct DRWView DRWView;
 
 /* TODO: Put it somewhere else? */
 struct BoundSphere {
@@ -123,7 +166,92 @@ struct DrawEngine {
   };
 };
 
+/* Textures */
+enum DRWTextureFlag {
+  DRW_TEX_FILTER = (1 << 0),
+  DRW_TEX_WRAP = (1 << 1),
+  DRW_TEX_COMPARE = (1 << 2),
+  DRW_TEX_MIPMAP = (1 << 3),
+};
+
+/**
+ * Textures from `DRW_texture_pool_query_*` have the options
+ * #DRW_TEX_FILTER for color float textures, and no options
+ * for depth textures and integer textures.
+ */
+GPUTexture *DRW_texture_pool_query_2d(int w,
+                                      int h,
+                                      eGPUTextureFormat format,
+                                      int id);
+
+GPUTexture *DRW_texture_create_2d(
+    int w, int h, eGPUTextureFormat format, DRWTextureFlag flags, const float *fpixels);
+GPUTexture *DRW_texture_create_2d_array(
+    int w, int h, int d, eGPUTextureFormat format, DRWTextureFlag flags, const float *fpixels);
+
+void DRW_texture_ensure_fullscreen_2d(GPUTexture **tex,
+                                      eGPUTextureFormat format,
+                                      DRWTextureFlag flags);
+void DRW_texture_ensure_2d(
+    GPUTexture **tex, int w, int h, eGPUTextureFormat format, DRWTextureFlag flags);
+
+/* Explicit parameter variants. */
+GPUTexture *DRW_texture_pool_query_2d_ex(
+    int w, int h, eGPUTextureFormat format, eGPUTextureUsage usage, int id);
+
+GPUTexture *DRW_texture_create_2d_ex(int w,
+                                     int h,
+                                     eGPUTextureFormat format,
+                                     eGPUTextureUsage usage_flags,
+                                     DRWTextureFlag flags,
+                                     const float *fpixels);
+GPUTexture *DRW_texture_create_2d_array_ex(int w,
+                                           int h,
+                                           int d,
+                                           eGPUTextureFormat format,
+                                           eGPUTextureUsage usage_flags,
+                                           DRWTextureFlag flags,
+                                           const float *fpixels);
+GPUTexture *DRW_texture_create_3d_ex(int w,
+                                     int h,
+                                     int d,
+                                     eGPUTextureFormat format,
+                                     eGPUTextureUsage usage_flags,
+                                     DRWTextureFlag flags,
+                                     const float *fpixels);
+GPUTexture *DRW_texture_create_cube_ex(int w,
+                                       eGPUTextureFormat format,
+                                       eGPUTextureUsage usage_flags,
+                                       DRWTextureFlag flags,
+                                       const float *fpixels);
+GPUTexture *DRW_texture_create_cube_array_ex(int w,
+                                             int d,
+                                             eGPUTextureFormat format,
+                                             eGPUTextureUsage usage_flags,
+                                             DRWTextureFlag flags,
+                                             const float *fpixels);
+
+void DRW_texture_ensure_fullscreen_2d_ex(GPUTexture **tex,
+                                         eGPUTextureFormat format,
+                                         eGPUTextureUsage usage,
+                                         DRWTextureFlag flags);
+void DRW_texture_ensure_2d_ex(GPUTexture **tex,
+                              int w,
+                              int h,
+                              eGPUTextureFormat format,
+                              eGPUTextureUsage usage,
+                              DRWTextureFlag flags);
+void DRW_texture_free(GPUTexture *tex);
+#define DRW_TEXTURE_FREE_SAFE(tex) \
+  do { \
+    if (tex != nullptr) { \
+      DRW_texture_free(tex); \
+      tex = nullptr; \
+    } \
+  } while (0)
+
 /* Shaders */
+GPUShader *DRW_shader_create_from_info_name(const char *info_name);
 /** IMPORTANT: Modify the currently bound context. */
 void DRW_shader_init();
 void DRW_shader_exit();
@@ -148,6 +276,367 @@ GPUMaterial *DRW_shader_from_material(
     GPUMaterialPassReplacementCallbackFn pass_replacement_cb = nullptr);
 void DRW_shader_queue_optimize_material(GPUMaterial *mat);
 
+DRWShaderLibrary *DRW_shader_library_create();
+
+/**
+ * \warning Each library must be added after all its dependencies.
+ */
+void DRW_shader_library_add_file(DRWShaderLibrary *lib,
+                                 const char *lib_code,
+                                 const char *lib_name);
+#define DRW_SHADER_LIB_ADD(lib, lib_name) \
+  DRW_shader_library_add_file(lib, datatoc_##lib_name##_glsl, STRINGIFY(lib_name) ".glsl")
+
+#define DRW_SHADER_LIB_ADD_SHARED(lib, lib_name) \
+  DRW_shader_library_add_file(lib, datatoc_##lib_name##_hh, STRINGIFY(lib_name) ".hh")
+
+/**
+ * \return an allocN'ed string containing the shader code with its dependencies prepended.
+ * Caller must free the string with #MEM_freeN after use.
+ */
+char *DRW_shader_library_create_shader_string(const DRWShaderLibrary *lib,
+                                              const char *shader_code);
+
+void DRW_shader_library_free(DRWShaderLibrary *lib);
+#define DRW_SHADER_LIB_FREE_SAFE(lib) \
+  do { \
+    if (lib != nullptr) { \
+      DRW_shader_library_free(lib); \
+      lib = nullptr; \
+    } \
+  } while (0)
+
+/* Batches */
+
+enum eDRWAttrType {
+  DRW_ATTR_INT,
+  DRW_ATTR_FLOAT,
+};
+struct DRWInstanceAttrFormat {
+  char name[32];
+  eDRWAttrType type;
+  int components;
+};
+
+GPUVertFormat *DRW_shgroup_instance_format_array(const DRWInstanceAttrFormat attrs[],
+                                                 int arraysize);
+#define DRW_shgroup_instance_format(format, ...) \
+  do { \
+    if (format == nullptr) { \
+      DRWInstanceAttrFormat drw_format[] = __VA_ARGS__; \
+      format = DRW_shgroup_instance_format_array( \
+          drw_format, (sizeof(drw_format) / sizeof(DRWInstanceAttrFormat))); \
+    } \
+  } while (0)
+
+DRWShadingGroup *DRW_shgroup_create(GPUShader *shader, DRWPass *pass);
+DRWShadingGroup *DRW_shgroup_create_sub(DRWShadingGroup *shgroup);
+DRWShadingGroup *DRW_shgroup_material_create(GPUMaterial *material, DRWPass *pass);
+
+void DRW_shgroup_add_material_resources(DRWShadingGroup *grp, GPUMaterial *material);
+
+/**
+ * Return final visibility.
+ */
+typedef bool(DRWCallVisibilityFn)(bool vis_in, void *user_data);
+
+void DRW_shgroup_call_ex(DRWShadingGroup *shgroup,
+                         const Object *ob,
+                         const float (*obmat)[4],
+                         blender::gpu::Batch *geom,
+                         bool bypass_culling,
+                         void *user_data);
+
+/**
+ * If ob is nullptr, unit model-matrix is assumed and culling is bypassed.
+ */
+#define DRW_shgroup_call(shgroup, geom, ob) \
+  DRW_shgroup_call_ex(shgroup, ob, nullptr, geom, false, nullptr)
+
+/* TODO(fclem): remove this when we have #DRWView */
+/* user_data is used by #DRWCallVisibilityFn defined in #DRWView. */
+#define DRW_shgroup_call_with_callback(shgroup, geom, ob, user_data) \
+  DRW_shgroup_call_ex(shgroup, ob, nullptr, geom, false, user_data)
+
+/**
+ * Same as #DRW_shgroup_call but bypass culling even if ob is not nullptr.
+ */
+#define DRW_shgroup_call_no_cull(shgroup, geom, ob) \
+  DRW_shgroup_call_ex(shgroup, ob, nullptr, geom, true, nullptr)
+
+/**
+ * \note No need for a barrier. \a indirect_buf is internally synchronized.
+ */
+void DRW_shgroup_call_procedural_triangles(DRWShadingGroup *sh, const Object *ob, uint tri_count);
+/**
+ * \warning Only use with Shaders that have `IN_PLACE_INSTANCES` defined.
+ * TODO: Should be removed.
+ */
+void DRW_shgroup_call_instances(DRWShadingGroup *shgroup,
+                                const Object *ob,
+                                blender::gpu::Batch *geom,
+                                uint count);
+
+void DRW_shgroup_call_sculpt_with_materials(DRWShadingGroup **shgroups,
+                                            GPUMaterial **gpumats,
+                                            int num_shgroups,
+                                            const Object *ob);
+
+DRWCallBuffer *DRW_shgroup_call_buffer_instance(DRWShadingGroup *shgroup,
+                                                GPUVertFormat *format,
+                                                blender::gpu::Batch *geom);
+
+void DRW_buffer_add_entry_array(DRWCallBuffer *callbuf, const void *attr[], uint attr_len);
+
+#define DRW_buffer_add_entry(buffer, ...) \
+  do { \
+    const void *array[] = {__VA_ARGS__}; \
+    DRW_buffer_add_entry_array(buffer, array, (sizeof(array) / sizeof(*array))); \
+  } while (0)
+
+/**
+ * State is added to #Pass.state while drawing.
+ * Use to temporarily enable draw options.
+ */
+void DRW_shgroup_state_enable(DRWShadingGroup *shgroup, DRWState state);
+void DRW_shgroup_state_disable(DRWShadingGroup *shgroup, DRWState state);
+
+/**
+ * TODO: remove this function. Obsolete version. mask is actually reference value.
+ */
+void DRW_shgroup_stencil_mask(DRWShadingGroup *shgroup, uint mask);
+
+void DRW_shgroup_uniform_texture_ex(DRWShadingGroup *shgroup,
+                                    const char *name,
+                                    const GPUTexture *tex,
+                                    GPUSamplerState sampler_state);
+void DRW_shgroup_uniform_texture_ref_ex(DRWShadingGroup *shgroup,
+                                        const char *name,
+                                        GPUTexture **tex,
+                                        GPUSamplerState sampler_state);
+void DRW_shgroup_uniform_texture(DRWShadingGroup *shgroup,
+                                 const char *name,
+                                 const GPUTexture *tex);
+void DRW_shgroup_uniform_texture_ref(DRWShadingGroup *shgroup, const char *name, GPUTexture **tex);
+void DRW_shgroup_uniform_block_ex(DRWShadingGroup *shgroup,
+                                  const char *name,
+                                  const GPUUniformBuf *ubo DRW_DEBUG_FILE_LINE_ARGS);
+void DRW_shgroup_uniform_block_ref_ex(DRWShadingGroup *shgroup,
+                                      const char *name,
+                                      GPUUniformBuf **ubo DRW_DEBUG_FILE_LINE_ARGS);
+void DRW_shgroup_storage_block_ex(DRWShadingGroup *shgroup,
+                                  const char *name,
+                                  const GPUStorageBuf *ssbo DRW_DEBUG_FILE_LINE_ARGS);
+void DRW_shgroup_storage_block_ref_ex(DRWShadingGroup *shgroup,
+                                      const char *name,
+                                      GPUStorageBuf **ssbo DRW_DEBUG_FILE_LINE_ARGS);
+void DRW_shgroup_uniform_float(DRWShadingGroup *shgroup,
+                               const char *name,
+                               const float *value,
+                               int arraysize);
+void DRW_shgroup_uniform_vec2(DRWShadingGroup *shgroup,
+                              const char *name,
+                              const float *value,
+                              int arraysize);
+void DRW_shgroup_uniform_vec3(DRWShadingGroup *shgroup,
+                              const char *name,
+                              const float *value,
+                              int arraysize);
+void DRW_shgroup_uniform_vec4(DRWShadingGroup *shgroup,
+                              const char *name,
+                              const float *value,
+                              int arraysize);
+void DRW_shgroup_uniform_bool(DRWShadingGroup *shgroup,
+                              const char *name,
+                              const int *value,
+                              int arraysize);
+void DRW_shgroup_uniform_int(DRWShadingGroup *shgroup,
+                             const char *name,
+                             const int *value,
+                             int arraysize);
+void DRW_shgroup_uniform_ivec2(DRWShadingGroup *shgroup,
+                               const char *name,
+                               const int *value,
+                               int arraysize);
+void DRW_shgroup_uniform_ivec3(DRWShadingGroup *shgroup,
+                               const char *name,
+                               const int *value,
+                               int arraysize);
+void DRW_shgroup_uniform_ivec4(DRWShadingGroup *shgroup,
+                               const char *name,
+                               const int *value,
+                               int arraysize);
+void DRW_shgroup_uniform_mat3(DRWShadingGroup *shgroup, const char *name, const float (*value)[3]);
+void DRW_shgroup_uniform_mat4(DRWShadingGroup *shgroup, const char *name, const float (*value)[4]);
+void DRW_shgroup_uniform_image(DRWShadingGroup *shgroup, const char *name, const GPUTexture *tex);
+void DRW_shgroup_uniform_image_ref(DRWShadingGroup *shgroup, const char *name, GPUTexture **tex);
+
+/* Store value instead of referencing it. */
+
+void DRW_shgroup_uniform_int_copy(DRWShadingGroup *shgroup, const char *name, int value);
+void DRW_shgroup_uniform_ivec2_copy(DRWShadingGroup *shgroup, const char *name, const int *value);
+void DRW_shgroup_uniform_ivec3_copy(DRWShadingGroup *shgroup, const char *name, const int *value);
+void DRW_shgroup_uniform_ivec4_copy(DRWShadingGroup *shgroup, const char *name, const int *value);
+void DRW_shgroup_uniform_bool_copy(DRWShadingGroup *shgroup, const char *name, bool value);
+void DRW_shgroup_uniform_float_copy(DRWShadingGroup *shgroup, const char *name, float value);
+void DRW_shgroup_uniform_vec2_copy(DRWShadingGroup *shgroup, const char *name, const float *value);
+void DRW_shgroup_uniform_vec3_copy(DRWShadingGroup *shgroup, const char *name, const float *value);
+void DRW_shgroup_uniform_vec4_copy(DRWShadingGroup *shgroup, const char *name, const float *value);
+void DRW_shgroup_uniform_mat4_copy(DRWShadingGroup *shgroup,
+                                   const char *name,
+                                   const float (*value)[4]);
+void DRW_shgroup_vertex_buffer_ex(DRWShadingGroup *shgroup,
+                                  const char *name,
+                                  blender::gpu::VertBuf *vertex_buffer DRW_DEBUG_FILE_LINE_ARGS);
+void DRW_shgroup_vertex_buffer_ref_ex(DRWShadingGroup *shgroup,
+                                      const char *name,
+                                      blender::gpu::VertBuf **vertex_buffer
+                                          DRW_DEBUG_FILE_LINE_ARGS);
+void DRW_shgroup_buffer_texture(DRWShadingGroup *shgroup,
+                                const char *name,
+                                blender::gpu::VertBuf *vertex_buffer);
+
+#ifdef DRW_UNUSED_RESOURCE_TRACKING
+#  define DRW_shgroup_vertex_buffer(shgroup, name, vert) \
+    DRW_shgroup_vertex_buffer_ex(shgroup, name, vert, __FILE__, __LINE__)
+#  define DRW_shgroup_vertex_buffer_ref(shgroup, name, vert) \
+    DRW_shgroup_vertex_buffer_ref_ex(shgroup, name, vert, __FILE__, __LINE__)
+#  define DRW_shgroup_uniform_block(shgroup, name, ubo) \
+    DRW_shgroup_uniform_block_ex(shgroup, name, ubo, __FILE__, __LINE__)
+#  define DRW_shgroup_uniform_block_ref(shgroup, name, ubo) \
+    DRW_shgroup_uniform_block_ref_ex(shgroup, name, ubo, __FILE__, __LINE__)
+#  define DRW_shgroup_storage_block(shgroup, name, ssbo) \
+    DRW_shgroup_storage_block_ex(shgroup, name, ssbo, __FILE__, __LINE__)
+#  define DRW_shgroup_storage_block_ref(shgroup, name, ssbo) \
+    DRW_shgroup_storage_block_ref_ex(shgroup, name, ssbo, __FILE__, __LINE__)
+#else
+#  define DRW_shgroup_vertex_buffer(shgroup, name, vert) \
+    DRW_shgroup_vertex_buffer_ex(shgroup, name, vert)
+#  define DRW_shgroup_vertex_buffer_ref(shgroup, name, vert) \
+    DRW_shgroup_vertex_buffer_ref_ex(shgroup, name, vert)
+#  define DRW_shgroup_uniform_block(shgroup, name, ubo) \
+    DRW_shgroup_uniform_block_ex(shgroup, name, ubo)
+#  define DRW_shgroup_uniform_block_ref(shgroup, name, ubo) \
+    DRW_shgroup_uniform_block_ref_ex(shgroup, name, ubo)
+#  define DRW_shgroup_storage_block(shgroup, name, ssbo) \
+    DRW_shgroup_storage_block_ex(shgroup, name, ssbo)
+#  define DRW_shgroup_storage_block_ref(shgroup, name, ssbo) \
+    DRW_shgroup_storage_block_ref_ex(shgroup, name, ssbo)
+#endif
+
+bool DRW_shgroup_is_empty(DRWShadingGroup *shgroup);
+
+/* Passes. */
+
+DRWPass *DRW_pass_create(const char *name, DRWState state);
+/**
+ * Create an instance of the original pass that will execute the same drawcalls but with its own
+ * #DRWState.
+ */
+DRWPass *DRW_pass_create_instance(const char *name, DRWPass *original, DRWState state);
+/**
+ * Link two passes so that they are both rendered if the first one is being drawn.
+ */
+void DRW_pass_link(DRWPass *first, DRWPass *second);
+/**
+ * Sort Shading groups by decreasing Z of their first draw call.
+ * This is useful for order dependent effect such as alpha-blending.
+ */
+void DRW_pass_sort_shgroup_z(DRWPass *pass);
+
+bool DRW_pass_is_empty(DRWPass *pass);
+
+#define DRW_PASS_CREATE(pass, state) (pass = DRW_pass_create(#pass, state))
+#define DRW_PASS_INSTANCE_CREATE(pass, original, state) \
+  (pass = DRW_pass_create_instance(#pass, (original), state))
+
+/* Views. */
+
+/**
+ * Create a view with culling.
+ */
+DRWView *DRW_view_create(const float viewmat[4][4],
+                         const float winmat[4][4],
+                         const float (*culling_viewmat)[4],
+                         const float (*culling_winmat)[4],
+                         DRWCallVisibilityFn *visibility_fn);
+/**
+ * Create a view with culling done by another view.
+ */
+DRWView *DRW_view_create_sub(const DRWView *parent_view,
+                             const float viewmat[4][4],
+                             const float winmat[4][4]);
+
+/**
+ * Update matrices of a view created with #DRW_view_create.
+ */
+void DRW_view_update(DRWView *view,
+                     const float viewmat[4][4],
+                     const float winmat[4][4],
+                     const float (*culling_viewmat)[4],
+                     const float (*culling_winmat)[4]);
+/**
+ * Update matrices of a view created with #DRW_view_create_sub.
+ */
+void DRW_view_update_sub(DRWView *view, const float viewmat[4][4], const float winmat[4][4]);
+
+/**
+ * \return default view if it is a viewport render.
+ */
+const DRWView *DRW_view_default_get();
+/**
+ * MUST only be called once per render and only in render mode. Sets default view.
+ */
+void DRW_view_default_set(const DRWView *view);
+/**
+ * \warning Only use in render AND only if you are going to set view_default again.
+ */
+void DRW_view_reset();
+/**
+ * Set active view for rendering.
+ */
+void DRW_view_set_active(const DRWView *view);
+
+/**
+ * This only works if DRWPasses have been tagged with DRW_STATE_CLIP_PLANES,
+ * and if the shaders have support for it (see usage of gl_ClipDistance).
+ * \note planes must be in world space.
+ */
+void DRW_view_clip_planes_set(DRWView *view, float (*planes)[4], int plane_len);
+
+/* For all getters, if view is nullptr, default view is assumed. */
+
+void DRW_view_winmat_get(const DRWView *view, float mat[4][4], bool inverse);
+void DRW_view_viewmat_get(const DRWView *view, float mat[4][4], bool inverse);
+void DRW_view_persmat_get(const DRWView *view, float mat[4][4], bool inverse);
+
+/**
+ * \return world space frustum sides as planes.
+ * See #draw_frustum_culling_planes_calc() for the plane order.
+ */
+std::array<blender::float4, 6> DRW_view_frustum_planes_get(const DRWView *view);
+
+/**
+ * These are in view-space, so negative if in perspective.
+ * Extract near and far clip distance from the projection matrix.
+ */
+float DRW_view_near_distance_get(const DRWView *view);
+float DRW_view_far_distance_get(const DRWView *view);
+bool DRW_view_is_persp_get(const DRWView *view);
+
+/* Culling, return true if object is inside view frustum. */
+
+/**
+ * \return True if the given BoundSphere intersect the current view frustum.
+ * bsphere must be in world space.
+ */
+bool DRW_culling_sphere_test(const DRWView *view, const BoundSphere *bsphere);
+/**
+ * \return True if the given BoundBox intersect the current view frustum.
+ * bbox must be in world space.
+ */
+bool DRW_culling_box_test(const DRWView *view, const BoundBox *bbox);
+
 /* Viewport. */
 
 /* Returns a TextureFromPool stored in the given view data for the pass identified by the given
@@ -169,8 +658,27 @@ void DRW_render_object_iter(
     Depsgraph *depsgraph,
     std::function<void(blender::draw::ObjectRef &, RenderEngine *, Depsgraph *)>);
 
+/**
+ * Must run after all instance datas have been added.
+ */
+void DRW_render_instance_buffer_finish();
+/**
+ * \warning Changing frame might free the #ViewLayerEngineData.
+ */
 void DRW_render_set_time(RenderEngine *engine, Depsgraph *depsgraph, int frame, float subframe);
+/**
+ * \warning only use for custom pipeline. 99% of the time, you don't want to use this.
+ */
+void DRW_render_viewport_size_set(const int size[2]);
 
+/**
+ * Assume a valid GL context is bound (and that the gl_context_mutex has been acquired).
+ * This function only setup DST and execute the given function.
+ * \warning similar to DRW_render_to_image you cannot use default lists (`dfbl` & `dtxl`).
+ */
+void DRW_custom_pipeline(Depsgraph *depsgraph,
+                         void (*callback)(void *user_data),
+                         void *user_data);
 /**
  * Assume a valid GL context is bound (and that the gl_context_mutex has been acquired).
  * This function only setup DST and execute the given function.
@@ -185,6 +693,19 @@ void DRW_custom_pipeline_end(DRWContext &draw_ctx);
  */
 void DRW_cache_restart();
 
+/* ViewLayers */
+
+void **DRW_view_layer_engine_data_ensure_ex(ViewLayer *view_layer,
+                                            void (*callback)(void *storage));
+void **DRW_view_layer_engine_data_ensure(void (*callback)(void *storage));
+
+/* DrawData */
+
+DrawData *DRW_drawdata_get(ID *id);
+DrawData *DRW_drawdata_ensure(ID *id,
+                              size_t size,
+                              DrawDataInitCb init_cb,
+                              DrawDataFreeCb free_cb);
 /* Settings. */
 
 bool DRW_object_is_renderable(const Object *ob);
@@ -206,6 +727,23 @@ bool DRW_object_use_hide_faces(const Object *ob);
 bool DRW_object_is_visible_psys_in_active_context(const Object *object,
                                                   const ParticleSystem *psys);
 
+Object *DRW_object_get_dupli_parent(const Object *ob);
+DupliObject *DRW_object_get_dupli(const Object *ob);
+
+/* Draw commands */
+
+void DRW_draw_pass(DRWPass *pass);
+
+/**
+ * Reset state to not interfere with other UI draw-call.
+ */
+void DRW_state_reset_ex(DRWState state);
+void DRW_state_reset();
+
+/* Selection. */
+
+void DRW_select_load_id(uint id);
+
 /**
  * Convenient accessor for object data, that also automatically returns
  * the base or tessellated mesh depending if GPU subdivision is enabled.
@@ -223,6 +761,11 @@ template<> Mesh &DRW_object_get_data_for_drawing(const Object &object);
 /** \name Draw Context
  * \{ */
 
+#define MAX_CLIP_PLANES 6 /* GL_MAX_CLIP_PLANES is at least 6 */
+#define DRW_DRAWLIST_LEN 256
+
+typedef uint32_t DRWResourceHandle;
+
 struct DRWContext {
  private:
   /** Render State: No persistent data between draw calls. */
@@ -235,6 +778,31 @@ struct DRWContext {
   DRWData *data = nullptr;
   /** Active view data structure for one of the 2 stereo view. */
   DRWViewData *view_data_active = nullptr;
+
+  /** Dupli object that corresponds to the current object. */
+  DupliObject *dupli_source = nullptr;
+  /** Object that created the dupli-list the current object is part of. */
+  Object *dupli_parent = nullptr;
+
+  /* State of the object being evaluated if already allocated. */
+  DRWResourceHandle ob_handle;
+  /** True if current drw_get().ob_state has its matching DRWObjectInfos init. */
+  bool ob_state_obinfo_init;
+  /** Handle of current object resource in object resource arrays (DRWObjectMatrices/Infos). */
+  DRWResourceHandle resource_handle;
+  /** Handle of next DRWPass to be allocated. */
+  DRWResourceHandle pass_handle;
+
+  /** TODO(@fclem): try to remove usage of this. */
+  DRWInstanceData *object_instance_data[MAX_INSTANCE_DATA_SIZE];
+
+  /* Rendering state */
+  GPUShader *shader;
+  blender::gpu::Batch *batch;
+
+  /* Managed by `DRW_state_set`, `DRW_state_reset` */
+  DRWState state;
+  DRWState state_lock;
 
   /* Optional associated viewport. Can be nullptr. */
   GPUViewport *viewport = nullptr;
@@ -286,8 +854,19 @@ struct DRWContext {
   /* Convenience pointer to text_store owned by the viewport */
   DRWTextStore **text_store_p = nullptr;
 
+  bool buffer_finish_called; /* Avoid bad usage of DRW_render_instance_buffer_finish */
+
+  DRWView *view_default = nullptr;
+  DRWView *view_active = nullptr;
+  DRWView *view_previous = nullptr;
+  uint primary_view_num;
+
+  uint select_id;
+
   /* Contains list of objects that needs to be extracted from other objects. */
   GSet *delayed_extraction = nullptr;
+
+  GPUDrawList *draw_list = nullptr;
 
   /* TODO(fclem): Public. */
 
@@ -433,3 +1012,9 @@ struct DRWContext {
 /** \} */
 
 const DRWContext *DRW_context_get();
+
+bool DRW_state_draw_support();
+/**
+ * Whether we should render the background
+ */
+bool DRW_state_draw_background();

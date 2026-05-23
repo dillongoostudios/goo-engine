@@ -111,11 +111,19 @@ float3 drw_normal_world_to_object(float3 N)
 
 float3 drw_normal_object_to_view(float3 lN)
 {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  return (to_float3x3(drw_view.viewmat) * (drw_normat() * lN));
+#else
   return (to_float3x3(drw_view().viewmat) * (drw_normat() * lN));
+#endif
 }
 float3 drw_normal_view_to_object(float3 vN)
 {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  return (drw_norinv() * (to_float3x3(drw_view.viewinv) * vN));
+#else
   return (drw_norinv() * (to_float3x3(drw_view().viewinv) * vN));
+#endif
 }
 
 /** \} */
@@ -137,16 +145,28 @@ float3 drw_point_world_to_object(float3 P)
 
 float3 drw_point_object_to_view(float3 lP)
 {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  return (drw_view.viewmat * (drw_modelmat() * vec4(lP, 1.0f))).xyz;
+#else
   return (drw_view().viewmat * (drw_modelmat() * float4(lP, 1.0f))).xyz;
+#endif
 }
 float3 drw_point_view_to_object(float3 vP)
 {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  return (drw_modelinv() * (drw_view.viewinv * vec4(vP, 1.0f))).xyz;
+#else
   return (drw_modelinv() * (drw_view().viewinv * float4(vP, 1.0f))).xyz;
+#endif
 }
 
 float4 drw_point_object_to_homogenous(float3 lP)
 {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  return (drw_view.winmat * (drw_view.viewmat * (drw_modelmat() * vec4(lP, 1.0f))));
+#else
   return (drw_view().winmat * (drw_view().viewmat * (drw_modelmat() * float4(lP, 1.0f))));
+#endif
 }
 float3 drw_point_object_to_ndc(float3 lP)
 {

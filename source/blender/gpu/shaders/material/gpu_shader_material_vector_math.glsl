@@ -4,10 +4,23 @@
 
 #include "gpu_shader_math_vector_lib.glsl"
 
+float len_sqred(vec2 a)
+{
+  return dot(a, a);
+}
+float len_sqred(vec3 a)
+{
+  return dot(a, a);
+}
+float len_sqred(vec4 a)
+{
+  return dot(a, a);
+}
+
 float3 vector_math_safe_normalize(float3 a)
 {
   /* Match the safe normalize function in Cycles by defaulting to vec3(0.0f) */
-  float length_sqr = length_squared(a);
+  float length_sqr = len_sqred(a);
   return (length_sqr > 1e-35f) ? a * inversesqrt(length_sqr) : float3(0.0f);
 }
 

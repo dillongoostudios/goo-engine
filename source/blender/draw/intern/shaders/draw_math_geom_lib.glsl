@@ -8,7 +8,12 @@
  * This should ultimately be rewritten inside a gpu_shader lib with higher quality standard.
  */
 
+#include "common_math_lib.glsl"
 #include "gpu_shader_math_vector_lib.glsl"
+
+/* WORKAROUND: to guard against double include in EEVEE. */
+#ifndef DRAW_MATH_GEOM_LIB_GLSL
+#define DRAW_MATH_GEOM_LIB_GLSL
 
 /* ---------------------------------------------------------------------- */
 /** \name Math intersection & projection functions.
@@ -186,4 +191,36 @@ void make_orthonormal_basis(float3 N, out float3 T, out float3 B)
   B = cross(N, T);
 }
 
+/* ---- Encode / Decode Normal buffer data ---- */
+/* From http://aras-p.info/texts/CompactNormalStorage.html
+ * Using Method #4: Sphere-map Transform */
+vec2 normal_encode(vec3 n, vec3 view)
+{
+  float p = sqrt(n.z * 8.0f + 8.0f);
+  return n.xy / p + 0.5f;
+}
+
+vec3 normal_decode(vec2 enc, vec3 view)
+{
+  vec2 fenc = enc * 4.0f - 2.0f;
+  float f = dot(fenc, fenc);
+  float g = sqrt(1.0f - f / 4.0f);
+  vec3 n;
+  n.xy = fenc * g;
+  n.z = 1 - f / 2;
+  return n;
+}
+
+vec3 tangent_to_world(vec3 vector, vec3 N, vec3 T, vec3 B)
+{
+  return T * vector.x + B * vector.y + N * vector.z;
+}
+
+vec3 world_to_tangent(vec3 vector, vec3 N, vec3 T, vec3 B)
+{
+  return vec3(dot(T, vector), dot(B, vector), dot(N, vector));
+}
+
 /** \} */
+
+#endif /* DRAW_MATH_GEOM_LIB_GLSL */

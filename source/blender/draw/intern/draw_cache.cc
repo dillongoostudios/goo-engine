@@ -62,6 +62,275 @@ using blender::Span;
 #define VCLASS_EMPTY_AXES_SHADOW (1 << 13)
 #define VCLASS_EMPTY_SIZE (1 << 14)
 
+/* Sphere shape resolution */
+/* Low */
+#define DRW_SPHERE_SHAPE_LATITUDE_LOW 32
+#define DRW_SPHERE_SHAPE_LONGITUDE_LOW 24
+/* Medium */
+#define DRW_SPHERE_SHAPE_LATITUDE_MEDIUM 64
+#define DRW_SPHERE_SHAPE_LONGITUDE_MEDIUM 48
+/* High */
+#define DRW_SPHERE_SHAPE_LATITUDE_HIGH 80
+#define DRW_SPHERE_SHAPE_LONGITUDE_HIGH 60
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Internal Types
+ * \{ */
+
+struct Vert {
+  float pos[3];
+  int v_class;
+
+  /** Allows creating a pointer to `Vert` in a single expression. */
+  operator const void *() const
+  {
+    return this;
+  }
+};
+
+struct VertShaded {
+  float pos[3];
+  int v_class;
+  float nor[3];
+
+  operator const void *() const
+  {
+    return this;
+  }
+};
+
+/* Batch's only (freed as an array). */
+static struct DRWShapeCache {
+  blender::gpu::Batch *drw_procedural_verts;
+  blender::gpu::Batch *drw_procedural_lines;
+  blender::gpu::Batch *drw_procedural_tris;
+  blender::gpu::Batch *drw_procedural_tri_strips;
+  blender::gpu::Batch *drw_cursor;
+  blender::gpu::Batch *drw_cursor_only_circle;
+  blender::gpu::Batch *drw_fullscreen_quad;
+  blender::gpu::Batch *drw_quad;
+  blender::gpu::Batch *drw_quad_wires;
+  blender::gpu::Batch *drw_grid;
+  blender::gpu::Batch *drw_plain_axes;
+  blender::gpu::Batch *drw_single_arrow;
+  blender::gpu::Batch *drw_cube;
+  blender::gpu::Batch *drw_circle;
+  blender::gpu::Batch *drw_normal_arrow;
+  blender::gpu::Batch *drw_empty_cube;
+  blender::gpu::Batch *drw_empty_sphere;
+  blender::gpu::Batch *drw_empty_cylinder;
+  blender::gpu::Batch *drw_empty_capsule_body;
+  blender::gpu::Batch *drw_empty_capsule_cap;
+  blender::gpu::Batch *drw_empty_cone;
+  blender::gpu::Batch *drw_field_wind;
+  blender::gpu::Batch *drw_field_force;
+  blender::gpu::Batch *drw_field_vortex;
+  blender::gpu::Batch *drw_field_curve;
+  blender::gpu::Batch *drw_field_tube_limit;
+  blender::gpu::Batch *drw_field_cone_limit;
+  blender::gpu::Batch *drw_field_sphere_limit;
+  blender::gpu::Batch *drw_ground_line;
+  blender::gpu::Batch *drw_light_icon_inner_lines;
+  blender::gpu::Batch *drw_light_icon_outer_lines;
+  blender::gpu::Batch *drw_light_icon_sun_rays;
+  blender::gpu::Batch *drw_light_point_lines;
+  blender::gpu::Batch *drw_light_sun_lines;
+  blender::gpu::Batch *drw_light_spot_lines;
+  blender::gpu::Batch *drw_light_spot_volume;
+  blender::gpu::Batch *drw_light_area_disk_lines;
+  blender::gpu::Batch *drw_light_area_square_lines;
+  blender::gpu::Batch *drw_speaker;
+  blender::gpu::Batch *drw_lightprobe_cube;
+  blender::gpu::Batch *drw_lightprobe_planar;
+  blender::gpu::Batch *drw_lightprobe_grid;
+  blender::gpu::Batch *drw_bone_octahedral;
+  blender::gpu::Batch *drw_bone_octahedral_wire;
+  blender::gpu::Batch *drw_bone_box;
+  blender::gpu::Batch *drw_bone_box_wire;
+  blender::gpu::Batch *drw_bone_envelope;
+  blender::gpu::Batch *drw_bone_envelope_outline;
+  blender::gpu::Batch *drw_bone_point;
+  blender::gpu::Batch *drw_bone_point_wire;
+  blender::gpu::Batch *drw_bone_stick;
+  blender::gpu::Batch *drw_bone_arrows;
+  blender::gpu::Batch *drw_bone_dof_sphere;
+  blender::gpu::Batch *drw_bone_dof_lines;
+  blender::gpu::Batch *drw_camera_frame;
+  blender::gpu::Batch *drw_camera_tria;
+  blender::gpu::Batch *drw_camera_tria_wire;
+  blender::gpu::Batch *drw_camera_distances;
+  blender::gpu::Batch *drw_camera_volume;
+  blender::gpu::Batch *drw_camera_volume_wire;
+  blender::gpu::Batch *drw_particle_cross;
+  blender::gpu::Batch *drw_particle_circle;
+  blender::gpu::Batch *drw_particle_axis;
+  blender::gpu::Batch *drw_gpencil_dummy_quad;
+  blender::gpu::Batch *drw_sphere_lod[DRW_LOD_MAX];
+} SHC = {nullptr};
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Procedural Batches
+ * \{ */
+
+blender::gpu::Batch *drw_cache_procedural_triangles_get()
+{
+  if (!SHC.drw_procedural_tris) {
+    /* TODO(fclem): get rid of this dummy VBO. */
+    GPUVertFormat format = {0};
+    GPU_vertformat_attr_add(&format, "dummy", GPU_COMP_F32, 1, GPU_FETCH_FLOAT);
+    blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+    GPU_vertbuf_data_alloc(*vbo, 1);
+
+    SHC.drw_procedural_tris = GPU_batch_create_ex(GPU_PRIM_TRIS, vbo, nullptr, GPU_BATCH_OWNS_VBO);
+  }
+  return SHC.drw_procedural_tris;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Helper functions
+ * \{ */
+
+static GPUVertFormat extra_vert_format()
+{
+  GPUVertFormat format = {0};
+  GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+  GPU_vertformat_attr_add(&format, "vclass", GPU_COMP_I32, 1, GPU_FETCH_INT);
+  return format;
+}
+
+/** \} */
+
+/* Quads */
+
+blender::gpu::Batch *DRW_cache_fullscreen_quad_get()
+{
+  if (!SHC.drw_fullscreen_quad) {
+    /* Use a triangle instead of a real quad */
+    /* https://www.slideshare.net/DevCentralAMD/vertex-shader-tricks-bill-bilodeau - slide 14 */
+    const float pos[3][2] = {{-1.0f, -1.0f}, {3.0f, -1.0f}, {-1.0f, 3.0f}};
+    const float uvs[3][2] = {{0.0f, 0.0f}, {2.0f, 0.0f}, {0.0f, 2.0f}};
+
+    /* Position Only 2D format */
+    static GPUVertFormat format = {0};
+    static struct {
+      uint pos, uvs;
+    } attr_id;
+    if (format.attr_len == 0) {
+      attr_id.pos = GPU_vertformat_attr_add(&format, "pos", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      attr_id.uvs = GPU_vertformat_attr_add(&format, "uvs", GPU_COMP_F32, 2, GPU_FETCH_FLOAT);
+      GPU_vertformat_alias_add(&format, "texCoord");
+      GPU_vertformat_alias_add(&format, "orco"); /* Fix driver bug (see #70004) */
+    }
+
+    blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+    GPU_vertbuf_data_alloc(*vbo, 3);
+
+    for (int i = 0; i < 3; i++) {
+      GPU_vertbuf_attr_set(vbo, attr_id.pos, i, pos[i]);
+      GPU_vertbuf_attr_set(vbo, attr_id.uvs, i, uvs[i]);
+    }
+
+    SHC.drw_fullscreen_quad = GPU_batch_create_ex(GPU_PRIM_TRIS, vbo, nullptr, GPU_BATCH_OWNS_VBO);
+  }
+  return SHC.drw_fullscreen_quad;
+}
+
+blender::gpu::Batch *DRW_cache_quad_get()
+{
+  if (!SHC.drw_quad) {
+    GPUVertFormat format = extra_vert_format();
+
+    blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+    GPU_vertbuf_data_alloc(*vbo, 4);
+
+    int v = 0;
+    int flag = VCLASS_EMPTY_SCALED;
+    const float p[4][2] = {{-1.0f, 1.0f}, {1.0f, 1.0f}, {-1.0f, -1.0f}, {1.0f, -1.0f}};
+    for (int a = 0; a < 4; a++) {
+      GPU_vertbuf_vert_set(vbo, v++, Vert{{p[a][0], p[a][1], 0.0f}, flag});
+    }
+
+    SHC.drw_quad = GPU_batch_create_ex(GPU_PRIM_TRI_STRIP, vbo, nullptr, GPU_BATCH_OWNS_VBO);
+  }
+  return SHC.drw_quad;
+}
+
+/* Sphere */
+static void sphere_lat_lon_vert(blender::gpu::VertBuf *vbo, int *v_ofs, float lat, float lon)
+{
+  float x = sinf(lat) * cosf(lon);
+  float y = cosf(lat);
+  float z = sinf(lat) * sinf(lon);
+  GPU_vertbuf_vert_set(vbo, *v_ofs, VertShaded{{x, y, z}, VCLASS_EMPTY_SCALED, {x, y, z}});
+  (*v_ofs)++;
+}
+
+blender::gpu::Batch *DRW_cache_sphere_get(const eDRWLevelOfDetail level_of_detail)
+{
+  BLI_assert(level_of_detail >= DRW_LOD_LOW && level_of_detail < DRW_LOD_MAX);
+
+  if (!SHC.drw_sphere_lod[level_of_detail]) {
+    int lat_res;
+    int lon_res;
+
+    switch (level_of_detail) {
+      case DRW_LOD_LOW:
+        lat_res = DRW_SPHERE_SHAPE_LATITUDE_LOW;
+        lon_res = DRW_SPHERE_SHAPE_LONGITUDE_LOW;
+        break;
+      case DRW_LOD_MEDIUM:
+        lat_res = DRW_SPHERE_SHAPE_LATITUDE_MEDIUM;
+        lon_res = DRW_SPHERE_SHAPE_LONGITUDE_MEDIUM;
+        break;
+      case DRW_LOD_HIGH:
+        lat_res = DRW_SPHERE_SHAPE_LATITUDE_HIGH;
+        lon_res = DRW_SPHERE_SHAPE_LONGITUDE_HIGH;
+        break;
+      default:
+        return nullptr;
+    }
+
+    GPUVertFormat format = extra_vert_format();
+    GPU_vertformat_attr_add(&format, "nor", GPU_COMP_F32, 3, GPU_FETCH_FLOAT);
+
+    blender::gpu::VertBuf *vbo = GPU_vertbuf_create_with_format(format);
+    int v_len = (lat_res - 1) * lon_res * 6;
+    GPU_vertbuf_data_alloc(*vbo, v_len);
+
+    const float lon_inc = 2 * M_PI / lon_res;
+    const float lat_inc = M_PI / lat_res;
+    float lon, lat;
+
+    int v = 0;
+    lon = 0.0f;
+    for (int i = 0; i < lon_res; i++, lon += lon_inc) {
+      lat = 0.0f;
+      for (int j = 0; j < lat_res; j++, lat += lat_inc) {
+        if (j != lat_res - 1) { /* Pole */
+          sphere_lat_lon_vert(vbo, &v, lat + lat_inc, lon + lon_inc);
+          sphere_lat_lon_vert(vbo, &v, lat + lat_inc, lon);
+          sphere_lat_lon_vert(vbo, &v, lat, lon);
+        }
+        if (j != 0) { /* Pole */
+          sphere_lat_lon_vert(vbo, &v, lat, lon + lon_inc);
+          sphere_lat_lon_vert(vbo, &v, lat + lat_inc, lon + lon_inc);
+          sphere_lat_lon_vert(vbo, &v, lat, lon);
+        }
+      }
+    }
+
+    SHC.drw_sphere_lod[level_of_detail] = GPU_batch_create_ex(
+        GPU_PRIM_TRIS, vbo, nullptr, GPU_BATCH_OWNS_VBO);
+  }
+  return SHC.drw_sphere_lod[level_of_detail];
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -186,6 +455,33 @@ Span<blender::gpu::Batch *> DRW_cache_object_surface_material_get(
   }
 }
 
+blender::gpu::Batch **GOO_cache_object_surface_material_get(Object *ob,
+                                                            GPUMaterial **gpumat_array,
+                                                            uint gpumat_array_len)
+{
+  switch (ob->type) {
+    case OB_MESH:
+      return GOO_cache_mesh_surface_shaded_get(ob, gpumat_array, gpumat_array_len);
+    default:
+      return nullptr;
+  }
+}
+
+blender::gpu::VertBuf *GOO_cache_object_pos_vertbuf_get(Object *ob)
+{
+  using namespace blender::draw;
+  Mesh *mesh = BKE_object_get_evaluated_mesh_no_subsurf_unchecked(ob);
+  short type = (mesh != nullptr) ? short(OB_MESH) : ob->type;
+
+  switch (type) {
+    case OB_MESH:
+      return DRW_mesh_batch_cache_pos_vertbuf_get(
+          *static_cast<Mesh *>((mesh != nullptr) ? mesh : ob->data));
+    default:
+      return nullptr;
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -242,6 +538,16 @@ Span<blender::gpu::Batch *> DRW_cache_mesh_surface_shaded_get(
   BLI_assert(ob->type == OB_MESH);
   return DRW_mesh_batch_cache_get_surface_shaded(
       *ob, DRW_object_get_data_for_drawing<Mesh>(*ob), materials);
+}
+
+blender::gpu::Batch **GOO_cache_mesh_surface_shaded_get(Object *ob,
+                                                        GPUMaterial **gpumat_array,
+                                                        uint gpumat_array_len)
+{
+  using namespace blender::draw;
+  BLI_assert(ob->type == OB_MESH);
+  return GOO_mesh_batch_cache_get_surface_shaded(
+      *ob, *static_cast<Mesh *>(ob->data), gpumat_array, gpumat_array_len);
 }
 
 Span<blender::gpu::Batch *> DRW_cache_mesh_surface_texpaint_get(Object *ob)

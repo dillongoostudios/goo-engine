@@ -101,7 +101,7 @@ bool gpencil_is_stroke_vertex()
  * Returns value of gl_Position.
  *
  * To declare in vertex shader.
- * in ivec4 ma, ma1, ma2, ma3;
+ * in int2 ma, ma1, ma2, ma3;
  * in float4 pos, pos1, pos2, pos3, uv1, uv2, col1, col2, fcol1;
  *
  * All of these attributes are quad loaded the same way
@@ -214,7 +214,11 @@ float4 gpencil_vertex(float4 viewport_res,
     }
     T = safe_normalize(T);
 
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    float3 B = cross(T, drw_view.viewinv[2].xyz);
+#else
     float3 B = cross(T, drw_view().viewinv[2].xyz);
+#endif
     out_N = normalize(cross(B, T));
 
     float4 ndc_adj = drw_point_world_to_homogenous(wpos_adj);
@@ -259,7 +263,11 @@ float4 gpencil_vertex(float4 viewport_res,
         x_axis = float2(1.0f, 0.0f);
       }
       else { /* GP_STROKE_ALIGNMENT_OBJECT */
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+        float4 ndc_x = drw_point_world_to_homogenous(wpos1 + ModelMatrix[0].xyz);
+#else
         float4 ndc_x = drw_point_world_to_homogenous(wpos1 + drw_modelmat()[0].xyz);
+#endif
         float2 ss_x = gpencil_project_to_screenspace(ndc_x, viewport_res);
         x_axis = safe_normalize(ss_x - ss1);
       }
@@ -329,7 +337,11 @@ float4 gpencil_vertex(float4 viewport_res,
     out_color = (use_curr) ? col1 : col2;
   }
   else {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    out_P = transform_point(ModelMatrix, pos1.xyz);
+#else
     out_P = transform_point(drw_modelmat(), pos1.xyz);
+#endif
     out_ndc = drw_point_world_to_homogenous(out_P);
     out_uv = uv1.xy;
     out_thickness.x = 1e18f;
@@ -339,9 +351,17 @@ float4 gpencil_vertex(float4 viewport_res,
     out_sspos = float4(0.0f);
 
     /* Flat normal following camera and object bounds. */
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    float3 V = drw_world_incident_vector(ModelMatrix[3].xyz);
+#else
     float3 V = drw_world_incident_vector(drw_modelmat()[3].xyz);
+#endif
     float3 N = drw_normal_world_to_object(V);
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    N *= OrcoMul;
+#else
     N *= drw_object_infos().orco_mul;
+#endif
     N = drw_normal_world_to_object(N);
     out_N = safe_normalize(N);
 

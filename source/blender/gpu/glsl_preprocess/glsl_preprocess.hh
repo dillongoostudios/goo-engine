@@ -13,6 +13,7 @@
 #include <regex>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace blender::gpu::shader {
@@ -157,6 +158,11 @@ class Preprocessor {
   };
 
   std::vector<SharedVar> shared_vars_;
+  std::unordered_set<std::string> static_strings_;
+  std::unordered_set<std::string> gpu_builtins_;
+  /* Note: Could be a set, but for now the order matters. */
+  std::vector<std::string> dependencies_;
+  std::stringstream gpu_functions_;
 
   metadata::Source metadata;
 
@@ -183,6 +189,23 @@ class Preprocessor {
       return CPP;
     }
     return UNKNOWN;
+  }
+
+  /* Compile-time hashing function which converts string to a 64bit hash. */
+  constexpr static uint64_t hash(const char *name)
+  {
+    uint64_t hash = 2166136261u;
+    while (*name) {
+      hash = hash * 16777619u;
+      hash = hash ^ *name;
+      ++name;
+    }
+    return hash;
+  }
+
+  static uint64_t hash(const std::string &name)
+  {
+    return hash(name.c_str());
   }
 
   /* Takes a whole source file and output processed source. */
@@ -239,7 +262,9 @@ class Preprocessor {
     str = argument_decorator_macro_injection(str);
     str = array_constructor_macro_injection(str);
     r_metadata = metadata;
-    return line_directive_prefix(filename) + str + threadgroup_variables_suffix();
+    return line_directive_prefix(filename) + str + threadgroup_variables_suffix() +
+           "//__blender_metadata_sta\n" + gpu_functions_.str() + static_strings_suffix() +
+           gpu_builtins_suffix(filename) + dependency_suffix() + "//__blender_metadata_end\n";
   }
 
   /* Variant use for python shaders. */
@@ -445,6 +470,7 @@ class Preprocessor {
         /* Skip info files. They are only for IDE linting. */
         return;
       }
+      dependencies_.emplace_back(dependency_name);
       metadata.dependencies.emplace_back(dependency_name);
     });
   }
@@ -812,6 +838,18 @@ class Preprocessor {
     return std::regex_replace(str, regex, "");
   }
 
+  std::string dependency_suffix()
+  {
+    if (dependencies_.empty()) {
+      return "";
+    }
+    std::stringstream suffix;
+    for (const std::string &filename : dependencies_) {
+      suffix << "// " << std::to_string(hash("dependency")) << " " << filename << "\n";
+    }
+    return suffix.str();
+  }
+
   void threadgroup_variables_parsing(const std::string &str)
   {
     std::regex regex(R"(shared\s+(\w+)\s+(\w+)([^;]*);)");
@@ -827,6 +865,7 @@ class Preprocessor {
     regex_global_search(str, regex_func, [&](const std::smatch &match) {
       std::string name = match[1].str();
       std::string args = match[2].str();
+      gpu_functions_ << "// " << hash("function") << " " << name;
 
       FunctionFormat fn;
       fn.name = name;
@@ -838,9 +877,11 @@ class Preprocessor {
         if (qualifier.empty() || qualifier == "const") {
           qualifier = "in";
         }
+        gpu_functions_ << ' ' << hash(qualifier) << ' ' << hash(type);
         fn.arguments.emplace_back(
             ArgumentFormat{metadata::Qualifier(hash(qualifier)), metadata::Type(hash(type))});
       });
+      gpu_functions_ << "\n";
       metadata.functions.emplace_back(fn);
     });
   }
@@ -878,6 +919,26 @@ class Preprocessor {
         metadata.builtins.emplace_back(Builtin(hash(token)));
       }
     }
+  }
+
+  std::string gpu_builtins_suffix(const std::string &filename)
+  {
+    if (gpu_builtins_.empty()) {
+      return "";
+    }
+
+    const bool skip_drw_debug = filename.find("common_debug_draw_lib.glsl") != std::string::npos ||
+                                filename.find("draw_debug_draw_display_vert.glsl") !=
+                                    std::string::npos;
+
+    std::stringstream suffix;
+    for (const std::string &str_var : gpu_builtins_) {
+      if (str_var == "drw_debug_" && skip_drw_debug) {
+        continue;
+      }
+      suffix << "// " << hash("builtin") << " " << hash(str_var) << "\n";
+    }
+    return suffix.str();
   }
 
   template<typename ReportErrorF>
@@ -984,6 +1045,19 @@ class Preprocessor {
       str = std::regex_replace(str, regex, std::to_string(hash_string(str_var)) + 'u');
     }
     return str;
+  }
+
+  std::string static_strings_suffix()
+  {
+    if (static_strings_.empty()) {
+      return "";
+    }
+    std::stringstream suffix;
+    for (const std::string &str_var : static_strings_) {
+      std::string no_quote = str_var.substr(1, str_var.size() - 2);
+      suffix << "// " << hash("string") << " " << hash_string(str_var) << " " << no_quote << "\n";
+    }
+    return suffix.str();
   }
 
   std::string enum_macro_injection(std::string str)

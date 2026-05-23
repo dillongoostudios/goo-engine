@@ -125,20 +125,36 @@ void main()
   drw_view_id = gl_LocalInvocationID.x;
 
   /* Invalid views are disabled. */
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  if (all(equal(drw_view.viewinv[2].xyz, vec3(0.0f)))) {
+    /* Views with negative radius are treated as disabled. */
+    view_culling_buf[drw_view_id].bound_sphere = vec4(-1.0f);
+    return;
+  }
+#else
   if (all(equal(drw_view().viewinv[2].xyz, float3(0.0f)))) {
     /* Views with negative radius are treated as disabled. */
     view_culling_buf[drw_view_id].bound_sphere = float4(-1.0f);
     return;
   }
+#endif
 
   /* Read frustom_corners from device memory, update, and write back. */
   FrustumCorners frustum_corners = view_culling_buf[drw_view_id].frustum_corners;
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  frustum_boundbox_calc(drw_view.winmat, drw_view.viewinv, frustum_corners);
+#else
   frustum_boundbox_calc(drw_view().winmat, drw_view().viewinv, frustum_corners);
+#endif
   view_culling_buf[drw_view_id].frustum_corners = frustum_corners;
 
   /* Read frustum_planes from device memory, update, and write back. */
   FrustumPlanes frustum_planes = view_culling_buf[drw_view_id].frustum_planes;
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  frustum_culling_planes_calc(drw_view.winmat, drw_view.viewmat, frustum_planes);
+#else
   frustum_culling_planes_calc(drw_view().winmat, drw_view().viewmat, frustum_planes);
+#endif
 
   view_culling_buf[drw_view_id].frustum_planes = frustum_planes;
   view_culling_buf[drw_view_id].bound_sphere = frustum_culling_sphere_calc(frustum_corners);

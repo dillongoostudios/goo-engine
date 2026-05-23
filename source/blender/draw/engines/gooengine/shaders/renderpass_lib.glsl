@@ -1,0 +1,38 @@
+/* SPDX-FileCopyrightText: 2020-2022 Blender Authors
+ *
+ * SPDX-License-Identifier: GPL-2.0-or-later */
+
+#pragma once
+
+#define EEVEE_AOV_HASH_COLOR_TYPE_MASK 1u
+
+/* ---------------------------------------------------------------------- */
+/** \name Functions
+ * \{ */
+
+float3 render_pass_diffuse_mask(float3 diffuse_light)
+{
+  return renderPassDiffuse ? (renderPassDiffuseLight ? diffuse_light : float3(1.0f)) : float3(0.0f);
+}
+
+float3 render_pass_glossy_mask(float3 specular_light)
+{
+  return renderPassGlossy ? (renderPassGlossyLight ? specular_light : float3(1.0f)) : float3(0.0f);
+}
+
+float3 render_pass_emission_mask(float3 emission_light)
+{
+  return renderPassEmit ? emission_light : float3(0.0f);
+}
+
+bool render_pass_aov_is_color()
+{
+  return (renderPassAOVActive & EEVEE_AOV_HASH_COLOR_TYPE_MASK) != 0u;
+}
+
+uint render_pass_aov_hash()
+{
+  return renderPassAOVActive & ~EEVEE_AOV_HASH_COLOR_TYPE_MASK;
+}
+
+/** \} */

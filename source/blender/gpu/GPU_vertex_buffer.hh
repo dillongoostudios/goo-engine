@@ -103,6 +103,8 @@ class VertBuf {
 
   virtual void wrap_handle(uint64_t handle) = 0;
 
+  VertBuf *duplicate();
+
   /* Size of the data allocated. */
   size_t size_alloc_get() const
   {
@@ -151,6 +153,7 @@ class VertBuf {
   virtual void resize_data() = 0;
   virtual void release_data() = 0;
   virtual void upload_data() = 0;
+  virtual void duplicate_data(VertBuf *dst) = 0;
 };
 
 }  // namespace blender::gpu
@@ -189,6 +192,8 @@ blender::gpu::VertBuf *GPU_vertbuf_create_on_device(const GPUVertFormat &format,
 
 #define GPU_vertbuf_init_with_format(verts, format) \
   GPU_vertbuf_init_with_format_ex(verts, format, GPU_USAGE_STATIC)
+
+blender::gpu::VertBuf *GPU_vertbuf_duplicate(blender::gpu::VertBuf *verts);
 
 /**
  * Create a new allocation, discarding any existing data.

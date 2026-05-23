@@ -18,6 +18,29 @@
 #include "draw_defines.hh"
 #include "gpu_shader_create_info.hh"
 
+GPU_SHADER_CREATE_INFO(draw_object_infos_goo)
+TYPEDEF_SOURCE("draw_shader_shared.hh")
+DEFINE("OBINFO_LIB")
+DEFINE_VALUE("OrcoAdd", "(drw_infos[resource_id].orco_add)")
+DEFINE_VALUE("OrcoMul", "(drw_infos[resource_id].orco_mul)")
+DEFINE_VALUE("ObjectFlag", "(drw_infos[resource_id].flag)")
+DEFINE_VALUE("ObjectInd", "(drw_infos[resource_id].index)")
+DEFINE_VALUE("ObjectRand", "(drw_infos[resource_id].random)")
+DEFINE_VALUE("ObjectColor", "(drw_infos[resource_id].ob_color)")
+UNIFORM_BUF_FREQ(DRW_OBJ_INFOS_UBO_SLOT, ObjectInfos, drw_infos[DRW_RESOURCE_CHUNK_LEN], BATCH)
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(draw_volume_infos_goo)
+TYPEDEF_SOURCE("draw_shader_shared.hh")
+DEFINE("VOLUME_INFO_LIB")
+UNIFORM_BUF_FREQ(DRW_OBJ_DATA_INFO_UBO_SLOT, VolumeInfos, drw_volume, BATCH)
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(draw_curves_infos_goo)
+TYPEDEF_SOURCE("draw_shader_shared.hh")
+UNIFORM_BUF_FREQ(DRW_OBJ_DATA_INFO_UBO_SLOT, CurvesInfos, drw_curves, BATCH)
+GPU_SHADER_CREATE_END()
+
 GPU_SHADER_CREATE_INFO(draw_volume_infos)
 TYPEDEF_SOURCE("draw_shader_shared.hh")
 DEFINE("VOLUME_INFO_LIB")
@@ -59,6 +82,23 @@ GPU_SHADER_CREATE_INFO(draw_mesh)
 ADDITIONAL_INFO(draw_modelmat)
 GPU_SHADER_CREATE_END()
 
+GPU_SHADER_CREATE_INFO(draw_hair_goo)
+DEFINE("HAIR_SHADER")
+DEFINE("DRW_HAIR_INFO")
+SAMPLER(15, FloatBuffer, hairPointBuffer)
+/* TODO(@fclem): Pack these into one UBO. */
+PUSH_CONSTANT(int, hairStrandsRes)
+PUSH_CONSTANT(int, hairThicknessRes)
+PUSH_CONSTANT(float, hairRadRoot)
+PUSH_CONSTANT(float, hairRadTip)
+PUSH_CONSTANT(float, hairRadShape)
+PUSH_CONSTANT(bool, hairCloseTip)
+PUSH_CONSTANT(int, hairStrandOffset)
+PUSH_CONSTANT(float4x4, hairDupliMatrix)
+ADDITIONAL_INFO(draw_modelmat_goo)
+ADDITIONAL_INFO(draw_resource_id_goo)
+GPU_SHADER_CREATE_END()
+
 GPU_SHADER_CREATE_INFO(draw_hair)
 DEFINE("HAIR_SHADER")
 DEFINE("DRW_HAIR_INFO")
@@ -87,6 +127,16 @@ PUSH_CONSTANT(int, hairStrandOffset)
  * This matrix convert to the instance "world space". */
 PUSH_CONSTANT(float4x4, hairDupliMatrix)
 GPU_SHADER_CREATE_END()
+ 
+#ifndef GPU_SHADER /* Conflicts with define for C++ shader test. */
+GPU_SHADER_CREATE_INFO(draw_pointcloud_goo)
+SAMPLER_FREQ(0, FloatBuffer, ptcloud_pos_rad_tx, BATCH)
+DEFINE("POINTCLOUD_SHADER")
+DEFINE("DRW_POINTCLOUD_INFO")
+ADDITIONAL_INFO(draw_modelmat_instanced_attr_goo)
+ADDITIONAL_INFO(draw_resource_id_uniform_goo)
+GPU_SHADER_CREATE_END()
+#endif
 
 GPU_SHADER_CREATE_INFO(draw_pointcloud)
 SAMPLER_FREQ(0, samplerBuffer, ptcloud_pos_rad_tx, BATCH)

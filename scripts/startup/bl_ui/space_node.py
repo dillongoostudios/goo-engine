@@ -765,6 +765,7 @@ class NODE_PT_texture_mapping(Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_WORKBENCH',
     }
 

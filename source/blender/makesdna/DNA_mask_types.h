@@ -29,6 +29,11 @@ typedef struct Mask {
 
   ID id;
   struct AnimData *adt;
+  /**
+   * Engines draw data, must be immediately after AnimData. See IdDdtTemplate and
+   * DRW_drawdatalist_from_id to understand this requirement.
+   */
+  DrawDataList drawdata;
   /** Mask layers. */
   ListBase masklayers;
   /** Index of active mask layer (-1 == None). */

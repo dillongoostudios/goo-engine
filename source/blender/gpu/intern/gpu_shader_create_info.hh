@@ -162,6 +162,7 @@
 #  define BUILTINS(builtin) .builtins(builtin)
 
 #  define VERTEX_SOURCE(filename) .vertex_source(filename)
+#  define GEOMETRY_SOURCE(filename) .geometry_source(filename)
 #  define FRAGMENT_SOURCE(filename) .fragment_source(filename)
 #  define COMPUTE_SOURCE(filename) .compute_source(filename)
 
@@ -1118,6 +1119,12 @@ struct ShaderCreateInfo {
   Self &vertex_source(StringRefNull filename)
   {
     vertex_source_ = filename;
+    return *(Self *)this;
+  }
+
+  Self &geometry_source(StringRefNull filename)
+  {
+    geometry_source_ = filename;
     return *(Self *)this;
   }
 

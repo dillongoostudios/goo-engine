@@ -1316,6 +1316,7 @@ void to_loc_rot_scale(float4x4 mat,
   to_rot_scale(to_float3x3(mat), r_rotation, r_scale, allow_negative_scale);
 }
 
+#ifndef COMMON_MATH_LIB_GLSL
 float3 transform_point(float3x3 mat, float3 point)
 {
   return mat * point;
@@ -1348,6 +1349,7 @@ float3 project_point(float4x4 mat, float3 point)
   /* Absolute value to not flip the frustum upside down behind the camera. */
   return tmp.xyz / abs(tmp.w);
 }
+#endif
 
 float4x4 interpolate_fast(float4x4 a, float4x4 b, float t)
 {

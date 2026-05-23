@@ -32,7 +32,7 @@ typedef enum eViewLayerEEVEEPassType {
   EEVEE_RENDER_PASS_ENVIRONMENT = (1 << 11),
   EEVEE_RENDER_PASS_SHADOW = (1 << 12),
   EEVEE_RENDER_PASS_AO = (1 << 13),
-  EEVEE_RENDER_PASS_UNUSED_14 = (1 << 14), /* EEVEE_RENDER_PASS_BLOOM */
+  EEVEE_RENDER_PASS_BLOOM = (1 << 14),
   EEVEE_RENDER_PASS_AOV = (1 << 15),
   /*
    * TODO(@jbakker): Clean up conflicting bits after EEVEE has been removed.
@@ -98,6 +98,13 @@ typedef struct Base {
   unsigned short local_collections_bits;
   char _pad1[2];
 } Base;
+
+typedef struct ViewLayerEngineData {
+  struct ViewLayerEngineData *next, *prev;
+  struct DrawEngine *engine_type;
+  void *storage;
+  void (*free)(void *storage);
+} ViewLayerEngineData;
 
 typedef struct LayerCollection {
   struct LayerCollection *next, *prev;
@@ -192,6 +199,8 @@ typedef struct ViewLayer {
   ViewLayerLightgroup *active_lightgroup;
 
   /* Runtime data */
+  /** ViewLayerEngineData. */
+  ListBase drawdata;
   struct Base **object_bases_array;
   struct GHash *object_bases_hash;
 } ViewLayer;

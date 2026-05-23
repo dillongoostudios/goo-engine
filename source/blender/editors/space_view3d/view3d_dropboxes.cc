@@ -15,6 +15,7 @@
 #include "BKE_lib_id.hh"
 #include "BKE_library.hh"
 #include "BKE_object.hh"
+#include "BKE_scene.hh"
 
 #include "BLI_math_matrix.h"
 #include "BLI_math_rotation.h"

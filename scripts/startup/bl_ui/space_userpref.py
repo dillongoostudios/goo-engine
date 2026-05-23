@@ -1819,6 +1819,7 @@ class USERPREF_PT_saveload_blend(SaveLoadPanel, CenterAlignMixIn, Panel):
 
         col = layout.column(heading="Text Files")
         col.prop(paths, "use_tabs_as_spaces")
+        col.prop(paths, "save_version_warning")
 
 
 class USERPREF_PT_saveload_file_browser(SaveLoadPanel, CenterAlignMixIn, Panel):
@@ -1878,6 +1879,7 @@ class USERPREF_PT_input_mouse(InputPanel, CenterAlignMixIn, Panel):
             subrow.active = inputs.use_mouse_emulate_3_button
 
         flow.prop(inputs, "use_mouse_continuous")
+        flow.prop(inputs, "use_accumulative_trackball")
         flow.prop(inputs, "use_drag_immediately")
         flow.prop(inputs, "mouse_double_click_time", text="Double Click Speed")
         flow.prop(inputs, "drag_threshold_mouse")
@@ -2912,6 +2914,8 @@ class USERPREF_PT_experimental_debugging(ExperimentalPanel, Panel):
                 ({"property": "use_asset_indexing"}, None),
                 ({"property": "use_viewport_debug"}, None),
                 ({"property": "use_eevee_debug"}, None),
+                ({"property": "disable_material_icon"}, None),
+                ({"property": "disable_search_on_keypress"}, None),
                 ({"property": "use_extensions_debug"}, ("/blender/blender/issues/119521", "#119521")),
             ),
         )

@@ -55,6 +55,7 @@ class VKVertexBuffer : public VertBuf {
   void resize_data() override;
   void release_data() override;
   void upload_data() override;
+  void duplicate_data(VertBuf *dst) override;
 
  private:
   void allocate();

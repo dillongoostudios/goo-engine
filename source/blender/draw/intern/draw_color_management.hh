@@ -17,3 +17,8 @@ namespace blender::draw::color_management {
 void viewport_color_management_set(GPUViewport &viewport, DRWContext &draw_ctx);
 
 }  // namespace blender::draw::color_management
+
+/**
+ * Draw texture to frame-buffer without any color transforms.
+ */
+void DRW_transform_none(GPUTexture *tex);

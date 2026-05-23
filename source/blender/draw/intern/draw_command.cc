@@ -11,6 +11,7 @@
 #include "GPU_compute.hh"
 #include "GPU_debug.hh"
 
+#include "draw_context_private.hh"
 #include "draw_command.hh"
 #include "draw_pass.hh"
 #include "draw_shader.hh"
@@ -290,12 +291,22 @@ void ClearMulti::execute() const
 
 void StateSet::execute(RecordingState &recording_state) const
 {
+  /**
+   * Does not support locked state for the moment and never should.
+   * Better implement a less hacky selection!
+   */
+  BLI_assert(drw_get().state_lock == 0);
+
   bool state_changed = assign_if_different(recording_state.pipeline_state, new_state);
   bool clip_changed = assign_if_different(recording_state.clip_plane_count, clip_plane_count);
 
   if (!state_changed && !clip_changed) {
     return;
   }
+
+  /* Keep old API working. Keep the state tracking in sync. */
+  /* TODO(fclem): Move at the end of a pass. */
+  drw_get().state = new_state;
 
   GPU_state_set(to_write_mask(new_state),
                 to_blend(new_state),

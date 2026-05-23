@@ -375,6 +375,7 @@ template uint2 ceil_to_multiple<uint2>(uint2, uint2);
 template uint3 ceil_to_multiple<uint3>(uint3, uint3);
 template uint4 ceil_to_multiple<uint4>(uint4, uint4);
 
+#ifndef COMMON_MATH_LIB_GLSL
 template<typename VecT> VecT divide_ceil(VecT a, VecT b)
 {
   return (a + b - VecT(1)) / b;
@@ -385,6 +386,7 @@ template int4 divide_ceil<int4>(int4, int4);
 template uint2 divide_ceil<uint2>(uint2, uint2);
 template uint3 divide_ceil<uint3>(uint3, uint3);
 template uint4 divide_ceil<uint4>(uint4, uint4);
+#endif
 
 template<typename VecT> void min_max(VecT vector, inout VecT min_v, inout VecT max_v)
 {
@@ -395,6 +397,7 @@ template void min_max<float2>(float2, inout float2, inout float2);
 template void min_max<float3>(float3, inout float3, inout float3);
 template void min_max<float4>(float4, inout float4, inout float4);
 
+#ifndef GPU_SHADER_MATH_COMMON_UTILS_GLSL
 template<typename VecT> VecT safe_divide(VecT a, VecT b)
 {
   return select(VecT(0), a / b, notEqual(b, VecT(0)));
@@ -416,6 +419,7 @@ float4 safe_divide(float4 a, float b)
 {
   return (b != 0.0f) ? (a / b) : float4(0);
 }
+#endif
 
 template<typename VecT> float length_manhattan(VecT a)
 {
@@ -441,6 +445,7 @@ template float distance_manhattan<float2>(float2, float2);
 template float distance_manhattan<float3>(float3, float3);
 template float distance_manhattan<float4>(float4, float4);
 
+#ifndef COMMON_MATH_LIB_GLSL
 template<typename VecT> float distance_squared(VecT a, VecT b)
 {
   return length_squared(a - b);
@@ -448,6 +453,7 @@ template<typename VecT> float distance_squared(VecT a, VecT b)
 template float distance_squared<float2>(float2, float2);
 template float distance_squared<float3>(float3, float3);
 template float distance_squared<float4>(float4, float4);
+#endif
 
 float3 project(float3 p, float3 v_proj)
 {
@@ -491,6 +497,7 @@ template float2 safe_normalize_and_get_length<float2>(float2, out float);
 template float3 safe_normalize_and_get_length<float3>(float3, out float);
 template float4 safe_normalize_and_get_length<float4>(float4, out float);
 
+#ifndef COMMON_MATH_LIB_GLSL
 template<typename VecT> VecT safe_normalize(VecT vector)
 {
   float unused_length = 0.0f;
@@ -507,6 +514,7 @@ template<typename VecT> VecT safe_rcp(VecT a)
 template float2 safe_rcp<float2>(float2);
 template float3 safe_rcp<float3>(float3);
 template float4 safe_rcp<float4>(float4);
+#endif
 
 float2 fallback_pow(float2 a, float b, float2 fallback)
 {

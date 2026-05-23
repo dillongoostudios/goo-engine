@@ -12,6 +12,8 @@ struct ARegion;
 struct DRWData;
 struct DRWInstanceDataList;
 struct Depsgraph;
+struct DrawDataList;
+struct GHash;
 struct GPUMaterial;
 struct GPUOffScreen;
 struct GPUVertFormat;
@@ -123,6 +125,13 @@ bool DRW_gpencil_engine_needed_viewport(Depsgraph *depsgraph, View3D *v3d);
  */
 void DRW_render_gpencil(RenderEngine *engine, Depsgraph *depsgraph);
 
+/**
+ * This is here because #GPUViewport needs it.
+ */
+DRWInstanceDataList *DRW_instance_data_list_create();
+void DRW_instance_data_list_free(DRWInstanceDataList *idatalist);
+void DRW_uniform_attrs_pool_free(GHash *table);
+
 void DRW_render_context_enable(Render *render);
 void DRW_render_context_disable(Render *render);
 
@@ -179,6 +188,13 @@ void DRW_blender_gpu_render_context_disable(void *re_gpu_context);
 
 void DRW_deferred_shader_remove(GPUMaterial *mat);
 void DRW_deferred_shader_optimize_remove(GPUMaterial *mat);
+
+/**
+ * Get DrawData from the given ID-block. In order for this to work, we assume that
+ * the DrawData pointer is stored in the  in the same fashion as in #IdDdtTemplate.
+ */
+DrawDataList *DRW_drawdatalist_from_id(ID *id);
+void DRW_drawdata_free(ID *id);
 
 DRWData *DRW_viewport_data_create();
 void DRW_viewport_data_free(DRWData *drw_data);

@@ -78,9 +78,15 @@ VertOut vertex_main(GreasePencilStrokeData vert_in)
     vert_out.final_thickness = vert_in.stroke_thickness;
   }
   else {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+    float size = (ProjectionMatrixGoo[3][3] == 0.0f) ?
+                     (vert_in.stroke_thickness / (vert_out.gpu_position.z * defaultpixsize)) :
+                     (vert_in.stroke_thickness / defaultpixsize);
+#else
     float size = (ProjectionMatrix[3][3] == 0.0f) ?
                      (vert_in.stroke_thickness / (vert_out.gpu_position.z * defaultpixsize)) :
                      (vert_in.stroke_thickness / defaultpixsize);
+#endif
     vert_out.final_thickness = max(size * gpencil_stroke_data.objscale, 1.0f);
   }
   return vert_out;

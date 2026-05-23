@@ -18,6 +18,7 @@
 #include "draw_context_private.hh"
 
 #include "engines/compositor/compositor_engine.h"
+#include "engines/gooengine/eevee_engine.h"
 #include "engines/eevee/eevee_engine.h"
 #include "engines/external/external_engine.h"
 #include "engines/gpencil/gpencil_engine.hh"
@@ -67,6 +68,7 @@ struct DRWViewData {
   blender::int2 texture_list_size = {0, 0};
 
   /* Engines running for this viewport. nullptr if not enabled. */
+  blender::gooengine::Engine gooengine;
   blender::eevee::Engine eevee;
   blender::workbench::Engine workbench;
   blender::draw::external::Engine external;
@@ -101,6 +103,7 @@ struct DRWViewData {
     /* IMPORTANT: Order here defines the draw order. */
 
     /* Render engines. Output to the render result frame-buffer. Mutually exclusive. */
+    callback(gooengine);
     callback(eevee);
     callback(workbench);
     callback(external);

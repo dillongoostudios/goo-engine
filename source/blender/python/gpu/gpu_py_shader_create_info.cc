@@ -242,7 +242,7 @@ static bool pygpu_interface_info_get_args(BPyGPUStageInterfaceInfo *self,
   }
 
 #ifdef USE_GPU_PY_REFERENCES
-  PyList_Append(self->references, py_name);
+  PyList_Append(self->references, (PyObject *)py_name);
 #endif
 
   *r_type = (Type)pygpu_type.value_found;
@@ -434,7 +434,7 @@ static void pygpu_interface_info__tp_dealloc(PyObject *self)
   }
 #endif
 
-  Py_TYPE(self)->tp_free(self);
+  Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 PyDoc_STRVAR(
@@ -1351,7 +1351,7 @@ static void pygpu_shader_info__tp_dealloc(PyObject *self)
 
 #endif
 
-  Py_TYPE(self)->tp_free(self);
+  Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 PyDoc_STRVAR(

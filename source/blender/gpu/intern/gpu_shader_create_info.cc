@@ -472,6 +472,17 @@ void gpu_shader_create_info_init()
 /* Declare, register and construct the infos. */
 #include "gpu_shader_create_info_list.hh"
 
+  /* WORKAROUND: Replace draw_mesh info with the legacy one for systems that have problems with UBO
+   * indexing. */
+  if (GPU_type_matches_ex(GPU_DEVICE_INTEL | GPU_DEVICE_INTEL_UHD,
+                          GPU_OS_ANY,
+                          GPU_DRIVER_ANY,
+                          GPU_BACKEND_OPENGL) ||
+      GPU_crappy_amd_driver())
+  {
+    draw_modelmat_goo = draw_modelmat_legacy_goo;
+  }
+
   /* WORKAROUND: Replace the use of gpu_BaseInstance by an instance attribute. */
   if (GPU_shader_draw_parameters_support() == false) {
     draw_resource_id = draw_resource_id_fallback;

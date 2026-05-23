@@ -19,6 +19,7 @@
 
 #include "vk_batch.hh"
 #include "vk_context.hh"
+#include "vk_drawlist.hh"
 #include "vk_fence.hh"
 #include "vk_framebuffer.hh"
 #include "vk_ghost_api.hh"
@@ -509,6 +510,11 @@ Context *VKBackend::context_alloc(void *ghost_window, void *ghost_context)
 Batch *VKBackend::batch_alloc()
 {
   return new VKBatch();
+}
+
+DrawList *VKBackend::drawlist_alloc(int list_length)
+{
+  return new VKDrawList(list_length);
 }
 
 Fence *VKBackend::fence_alloc()

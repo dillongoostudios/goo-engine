@@ -100,6 +100,14 @@ static void rna_def_lightprobe(BlenderRNA *brna)
       prop, "Clip Start", "Probe clip start, below which objects will not appear in reflections");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
 
+  prop = RNA_def_property(srna, "clip_end", PROP_FLOAT, PROP_DISTANCE);
+  RNA_def_property_float_sdna(prop, nullptr, "clipend");
+  RNA_def_property_range(prop, 1e-6f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 10, 3);
+  RNA_def_property_ui_text(
+      prop, "Clip End", "Probe clip end, beyond which objects will not appear in reflections");
+  RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
+
   prop = RNA_def_property(srna, "show_clip", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", LIGHTPROBE_FLAG_SHOW_CLIP_DIST);
   RNA_def_property_ui_text(prop, "Clipping", "Show the clipping distances in the 3D view");
@@ -116,13 +124,17 @@ static void rna_def_lightprobe(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Influence Distance", "Influence distance of the probe");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, nullptr);
 
-#  if 1 /* Deprecated: Remove in Blender 4.5 */
+  prop = RNA_def_property(srna, "falloff", PROP_FLOAT, PROP_FACTOR);
+  RNA_def_property_range(prop, 0.0f, 1.0f);
+  RNA_def_property_ui_text(prop, "Falloff", "Control how fast the probe influence decreases");
+  RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, nullptr);
+
   prop = RNA_def_property(srna, "visibility_buffer_bias", PROP_FLOAT, PROP_NONE);
   RNA_def_property_float_sdna(prop, nullptr, "vis_bias");
   RNA_def_property_range(prop, 0.001f, 9999.0f);
   RNA_def_property_ui_range(prop, 0.001f, 5.0f, 1.0, 3);
   RNA_def_property_ui_text(
-      prop, "Visibility Bias", "Bias for reducing self shadowing (Deprecated)");
+      prop, "Visibility Bias", "Bias for reducing self shadowing");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, nullptr);
 
   prop = RNA_def_property(srna, "visibility_bleed_bias", PROP_FLOAT, PROP_FACTOR);
@@ -130,14 +142,22 @@ static void rna_def_lightprobe(BlenderRNA *brna)
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(prop,
                            "Visibility Bleed Bias",
-                           "Bias for reducing light-bleed on variance shadow maps (Deprecated)");
+                           "Bias for reducing light-bleed on variance shadow maps");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, nullptr);
 
   prop = RNA_def_property(srna, "visibility_blur", PROP_FLOAT, PROP_FACTOR);
   RNA_def_property_float_sdna(prop, nullptr, "vis_blur");
   RNA_def_property_range(prop, 0.0f, 1.0f);
   RNA_def_property_ui_text(
-      prop, "Visibility Blur", "Filter size of the visibility blur (Deprecated)");
+      prop, "Visibility Blur", "Filter size of the visibility blur");
+  RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
+
+  prop = RNA_def_property(srna, "intensity", PROP_FLOAT, PROP_NONE);
+  RNA_def_property_float_sdna(prop, nullptr, "intensity");
+  RNA_def_property_range(prop, 0.0f, FLT_MAX);
+  RNA_def_property_ui_range(prop, 0.0f, 3.0f, 1.0, 3);
+  RNA_def_property_ui_text(
+      prop, "Intensity", "Modify the intensity of the lighting captured by this probe");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
 
   prop = RNA_def_property(srna, "visibility_collection", PROP_POINTER, PROP_NONE);
@@ -146,15 +166,14 @@ static void rna_def_lightprobe(BlenderRNA *brna)
   RNA_def_property_flag(prop, PROP_EDITABLE);
   RNA_def_property_override_flag(prop, PROPOVERRIDE_OVERRIDABLE_LIBRARY);
   RNA_def_property_ui_text(
-      prop, "Visibility Collection", "Restrict objects visible for this probe (Deprecated)");
+      prop, "Visibility Collection", "Restrict objects visible for this probe");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
 
   prop = RNA_def_property(srna, "invert_visibility_collection", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", LIGHTPROBE_FLAG_INVERT_GROUP);
   RNA_def_property_flag(prop, PROP_EDITABLE);
-  RNA_def_property_ui_text(prop, "Invert Collection", "Invert visibility collection (Deprecated)");
+  RNA_def_property_ui_text(prop, "Invert Collection", "Invert visibility collection");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
-#  endif
 
   /* Data preview */
   prop = RNA_def_property(srna, "show_data", PROP_BOOLEAN, PROP_NONE);
@@ -220,14 +239,6 @@ static void rna_def_lightprobe_sphere(BlenderRNA *brna)
   RNA_def_property_ui_text(prop, "Falloff", "Control how fast the probe influence decreases");
   RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, nullptr);
 
-  prop = RNA_def_property(srna, "clip_end", PROP_FLOAT, PROP_DISTANCE);
-  RNA_def_property_float_sdna(prop, nullptr, "clipend");
-  RNA_def_property_range(prop, 1e-6f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.001f, FLT_MAX, 10, 3);
-  RNA_def_property_ui_text(
-      prop, "Clip End", "Probe clip end, beyond which objects will not appear in reflections");
-  RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
-
   /* Custom parallax */
   prop = RNA_def_property(srna, "use_custom_parallax", PROP_BOOLEAN, PROP_NONE);
   RNA_def_property_boolean_sdna(prop, nullptr, "flag", LIGHTPROBE_FLAG_CUSTOM_PARALLAX);
@@ -262,14 +273,6 @@ static void rna_def_lightprobe_volume(BlenderRNA *brna)
   RNA_def_struct_ui_text(
       srna, "Volume Probe", "Light probe that captures low frequency lighting inside a volume");
   RNA_def_struct_ui_icon(srna, ICON_LIGHTPROBE_VOLUME);
-
-  prop = RNA_def_property(srna, "intensity", PROP_FLOAT, PROP_NONE);
-  RNA_def_property_float_sdna(prop, nullptr, "intensity");
-  RNA_def_property_range(prop, 0.0f, FLT_MAX);
-  RNA_def_property_ui_range(prop, 0.0f, 3.0f, 1.0, 3);
-  RNA_def_property_ui_text(
-      prop, "Intensity", "Modify the intensity of the lighting captured by this probe");
-  RNA_def_property_update(prop, NC_MATERIAL | ND_SHADING, "rna_LightProbe_recalc");
 
   /* Irradiance grid */
   prop = RNA_def_property(srna, "resolution_x", PROP_INT, PROP_NONE);

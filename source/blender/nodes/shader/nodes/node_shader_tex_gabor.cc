@@ -220,5 +220,5 @@ void register_node_type_sh_tex_gabor()
   ntype.updatefunc = file_ns::node_shader_update_tex_gabor;
   ntype.build_multi_function = file_ns::build_multi_function;
 
-  node_register_type(ntype);
+  blender::bke::node_register_type(ntype);
 }

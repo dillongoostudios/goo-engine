@@ -1946,12 +1946,24 @@ typedef struct SceneEEVEE {
   int gi_diffuse_bounces;
   int gi_cubemap_resolution;
   int gi_visibility_resolution;
+  float gi_irradiance_smoothing;
   float gi_glossy_clamp;
+  float gi_filter_quality;
   int gi_irradiance_pool_size;
-  char _pad0[4];
+
+  float gi_cubemap_draw_size;
+  float gi_irradiance_draw_size;
 
   int taa_samples;
   int taa_render_samples;
+  int sss_samples;
+  float sss_jitter_threshold;
+  
+  float ssr_quality;
+  float ssr_max_roughness;
+  float ssr_thickness;
+  float ssr_border_fade;
+  float ssr_firefly_fac;
 
   float volumetric_start;
   float volumetric_end;
@@ -1963,6 +1975,8 @@ typedef struct SceneEEVEE {
   int volumetric_ray_depth;
 
   float gtao_distance;
+  float gtao_factor;
+  float gtao_quality;
   float gtao_thickness;
   float gtao_focus;
   int gtao_resolution;
@@ -1974,12 +1988,20 @@ typedef struct SceneEEVEE {
   float fast_gi_thickness_near;
   float fast_gi_thickness_far;
   char fast_gi_method;
-  char _pad1[3];
+  char _pad0[3];
 
   float bokeh_overblur;
   float bokeh_max_size;
   float bokeh_threshold;
   float bokeh_neighbor_max;
+  float bokeh_denoise_fac;
+
+  float bloom_color[3];
+  float bloom_threshold;
+  float bloom_knee;
+  float bloom_intensity;
+  float bloom_radius;
+  float bloom_clamp;
 
   int motion_blur_samples DNA_DEPRECATED;
   int motion_blur_max;
@@ -1989,7 +2011,9 @@ typedef struct SceneEEVEE {
   float motion_blur_depth_scale;
 
   /* Only keep for versioning. */
-  int shadow_cube_size_deprecated DNA_DEPRECATED;
+  int shadow_method DNA_DEPRECATED;
+  int shadow_cube_size;
+  int shadow_cascade_size;
   int shadow_pool_size;
   int shadow_ray_count;
   int shadow_step_count;
@@ -2002,7 +2026,14 @@ typedef struct SceneEEVEE {
 
   int ray_tracing_method;
 
+  char _pad1[4];
+
   struct RaytraceEEVEE ray_tracing_options;
+
+  struct LightCache *light_cache DNA_DEPRECATED;
+  struct LightCache *light_cache_data;
+  /* Need a 128 byte string for some translations of some messages. */
+  char light_cache_info[128];
 
   float overscan;
   float light_threshold;
@@ -2056,6 +2087,11 @@ typedef struct Scene {
   ID id;
   /** Animation data (must be immediately after id for utilities to use it). */
   struct AnimData *adt;
+  /**
+   * Engines draw data, must be immediately after AnimData. See IdDdtTemplate and
+   * DRW_drawdatalist_from_id to understand this requirement.
+   */
+  DrawDataList drawdata;
 
   struct Object *camera;
   struct World *world;
@@ -2927,34 +2963,35 @@ enum {
 /** #SceneEEVEE::flag */
 enum {
   // SCE_EEVEE_VOLUMETRIC_ENABLED = (1 << 0), /* Unused */
-  // SCE_EEVEE_VOLUMETRIC_LIGHTS = (1 << 1), /* Unused. */
+  SCE_EEVEE_VOLUMETRIC_LIGHTS = (1 << 1),
   SCE_EEVEE_VOLUMETRIC_SHADOWS = (1 << 2),
   //  SCE_EEVEE_VOLUMETRIC_COLORED    = (1 << 3), /* Unused */
   SCE_EEVEE_GTAO_ENABLED = (1 << 4),
-  // SCE_EEVEE_GTAO_BENT_NORMALS = (1 << 5), /* Unused. */
-  // SCE_EEVEE_GTAO_BOUNCE = (1 << 6), /* Unused. */
+  SCE_EEVEE_GTAO_BENT_NORMALS = (1 << 5),
+  SCE_EEVEE_GTAO_BOUNCE = (1 << 6),
   // SCE_EEVEE_DOF_ENABLED = (1 << 7), /* Moved to camera->dof.flag */
-  // SCE_EEVEE_BLOOM_ENABLED = (1 << 8), /* Unused */
+  SCE_EEVEE_BLOOM_ENABLED = (1 << 8),
   SCE_EEVEE_MOTION_BLUR_ENABLED_DEPRECATED = (1 << 9), /* Moved to scene->r.mode */
-  // SCE_EEVEE_SHADOW_HIGH_BITDEPTH = (1 << 10), /* Unused. */
+  SCE_EEVEE_SHADOW_HIGH_BITDEPTH = (1 << 10),
   SCE_EEVEE_TAA_REPROJECTION = (1 << 11),
   // SCE_EEVEE_SSS_ENABLED = (1 << 12), /* Unused */
   // SCE_EEVEE_SSS_SEPARATE_ALBEDO = (1 << 13), /* Unused */
   SCE_EEVEE_SSR_ENABLED = (1 << 14),
-  // SCE_EEVEE_SSR_REFRACTION = (1 << 15), /* Unused. */
-  // SCE_EEVEE_SSR_HALF_RESOLUTION = (1 << 16), /* Unused. */
-  // SCE_EEVEE_SHOW_IRRADIANCE = (1 << 17), /* Unused. */
-  // SCE_EEVEE_SHOW_CUBEMAPS = (1 << 18), /* Unused. */
+  SCE_EEVEE_SSR_REFRACTION = (1 << 15),
+  SCE_EEVEE_SSR_HALF_RESOLUTION = (1 << 16),
+  SCE_EEVEE_SHOW_IRRADIANCE = (1 << 17),
+  SCE_EEVEE_SHOW_CUBEMAPS = (1 << 18),
   SCE_EEVEE_GI_AUTOBAKE = (1 << 19),
-  // SCE_EEVEE_SHADOW_SOFT = (1 << 20), /* Unused. */
+  SCE_EEVEE_SHADOW_SOFT = (1 << 20),
   SCE_EEVEE_OVERSCAN = (1 << 21),
-  // SCE_EEVEE_DOF_HQ_SLIGHT_FOCUS = (1 << 22), /* Unused. */
+  SCE_EEVEE_DOF_HQ_SLIGHT_FOCUS = (1 << 22),
   SCE_EEVEE_DOF_JITTER = (1 << 23),
   SCE_EEVEE_SHADOW_ENABLED = (1 << 24),
   SCE_EEVEE_RAYTRACE_OPTIONS_SPLIT = (1 << 25),
   SCE_EEVEE_SHADOW_JITTERED_VIEWPORT = (1 << 26),
   SCE_EEVEE_VOLUME_CUSTOM_RANGE = (1 << 27),
   SCE_EEVEE_FAST_GI_ENABLED = (1 << 28),
+  SCE_EEVEE_SHADOW_ID_HIGH_BITDEPTH = (1 << 29),
 };
 
 typedef enum RaytraceEEVEE_Flag {
@@ -2979,6 +3016,13 @@ typedef enum FastGI_Method {
   FAST_GI_FULL = 0,
   FAST_GI_AO_ONLY = 1,
 } FastGI_Method;
+
+/** #SceneEEVEE::shadow_method */
+enum {
+  SHADOW_ESM = 1,
+  /* SHADOW_VSM = 2, */        /* UNUSED */
+  /* SHADOW_METHOD_MAX = 3, */ /* UNUSED */
+};
 
 /** #SceneDisplay->render_aa and #SceneDisplay->viewport_aa */
 enum {

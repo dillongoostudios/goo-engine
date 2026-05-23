@@ -1749,6 +1749,15 @@ void normalize_m4(float R[4][4])
   }
 }
 
+void normalize_m4_m4_ex(float rmat[4][4], const float mat[4][4], float r_scale[3])
+{
+  int i;
+  for (i = 0; i < 3; i++) {
+    r_scale[i] = normalize_v3_v3(rmat[i], mat[i]);
+    rmat[i][3] = (r_scale[i] != 0.0f) ? (mat[i][3] / r_scale[i]) : mat[i][3];
+  }
+  copy_v4_v4(rmat[3], mat[3]);
+}
 void normalize_m4_m4(float rmat[4][4], const float mat[4][4])
 {
   int i;

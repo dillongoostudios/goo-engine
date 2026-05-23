@@ -59,6 +59,8 @@
 
 #include "MEM_guardedalloc.h"
 
+#include "draw_context_private.hh"
+#include "draw_texture_pool.hh"
 #include "BKE_global.hh"
 
 #include "BLI_math_base.h"

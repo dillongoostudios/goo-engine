@@ -34,6 +34,8 @@ struct PointCloud;
 struct Volume;
 struct GreasePencil;
 
+#include "BKE_mesh.h"
+
 enum eMeshBatchDirtyMode : int8_t;
 
 namespace blender::draw {
@@ -107,6 +109,8 @@ void DRW_vertbuf_create_wiredata(gpu::VertBuf *vbo, int vert_len);
 
 void DRW_curve_batch_cache_create_requested(Object *ob, const Scene *scene);
 
+int DRW_curve_material_count_get(const Curve *cu);
+
 blender::gpu::Batch *DRW_curve_batch_cache_get_wire_edge(Curve *cu);
 blender::gpu::Batch *DRW_curve_batch_cache_get_wire_edge_viewer_attribute(Curve *cu);
 blender::gpu::Batch *DRW_curve_batch_cache_get_normal_edge(Curve *cu);
@@ -131,6 +135,8 @@ blender::gpu::Batch *DRW_lattice_batch_cache_get_edit_verts(Lattice *lt);
 /** \name Curves
  * \{ */
 
+int DRW_curves_material_count_get(const Curves *curves);
+
 /**
  * Provide GPU access to a specific evaluated attribute on curves.
  *
@@ -154,6 +160,8 @@ void DRW_curves_batch_cache_create_requested(Object *ob);
 /** \name PointCloud
  * \{ */
 
+int DRW_pointcloud_material_count_get(const PointCloud *pointcloud);
+
 gpu::VertBuf *DRW_pointcloud_position_and_radius_buffer_get(Object *ob);
 
 gpu::VertBuf **DRW_pointcloud_evaluated_attribute(PointCloud *pointcloud, const char *name);
@@ -167,6 +175,8 @@ void DRW_pointcloud_batch_cache_create_requested(Object *ob);
 /* -------------------------------------------------------------------- */
 /** \name Volume
  * \{ */
+
+int DRW_volume_material_count_get(const Volume *volume);
 
 blender::gpu::Batch *DRW_volume_batch_cache_get_wireframes_face(Volume *volume);
 blender::gpu::Batch *DRW_volume_batch_cache_get_selection_surface(Volume *volume);
@@ -196,6 +206,10 @@ blender::gpu::Batch *DRW_mesh_batch_cache_get_surface_edges(Mesh &mesh);
 Span<gpu::Batch *> DRW_mesh_batch_cache_get_surface_shaded(Object &object,
                                                            Mesh &mesh,
                                                            Span<const GPUMaterial *> materials);
+blender::gpu::Batch **GOO_mesh_batch_cache_get_surface_shaded(Object &object,
+                                                              Mesh &mesh,
+                                                              GPUMaterial **gpumat_array,
+                                                              uint gpumat_array_len);
 
 Span<gpu::Batch *> DRW_mesh_batch_cache_get_surface_texpaint(Object &object, Mesh &mesh);
 blender::gpu::Batch *DRW_mesh_batch_cache_get_surface_texpaint_single(Object &object, Mesh &mesh);
@@ -278,6 +292,8 @@ blender::gpu::Batch *DRW_mesh_batch_cache_get_edit_mesh_analysis(Mesh &mesh);
 /* -------------------------------------------------------------------- */
 /** \name For Direct Data Access
  * \{ */
+
+gpu::VertBuf *DRW_mesh_batch_cache_pos_vertbuf_get(Mesh &mesh);
 
 /* Edit mesh bit-flags (is this the right place?). */
 enum {

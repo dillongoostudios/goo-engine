@@ -42,7 +42,12 @@ void main()
                                            bounds._inner_sphere_radius);
 
     for (drw_view_id = 0u; drw_view_id < uint(view_len); drw_view_id++) {
+
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+      if (drw_view_culling.bound_sphere.w == -1.0f) {
+#else
       if (drw_view_culling().bound_sphere.w == -1.0f) {
+#endif
         /* View disabled. */
         mask_visibility_bit(drw_view_id);
       }
@@ -62,7 +67,11 @@ void main()
   else {
     /* Culling is disabled, but we need to mask the bits for disabled views. */
     for (drw_view_id = 0u; drw_view_id < uint(view_len); drw_view_id++) {
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+      if (drw_view_culling.bound_sphere.w == -1.0f) {
+#else
       if (drw_view_culling().bound_sphere.w == -1.0f) {
+#endif
         /* View disabled. */
         mask_visibility_bit(drw_view_id);
       }

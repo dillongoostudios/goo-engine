@@ -27,7 +27,11 @@ float3x3 pointcloud_get_facing_matrix(float3 p)
 {
   float3x3 facing_mat;
   facing_mat[2] = drw_world_incident_vector(p);
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  facing_mat[1] = normalize(cross(drw_view.viewinv[0].xyz, facing_mat[2]));
+#else
   facing_mat[1] = normalize(cross(drw_view().viewinv[0].xyz, facing_mat[2]));
+#endif
   facing_mat[0] = cross(facing_mat[1], facing_mat[2]);
   return facing_mat;
 }
@@ -38,7 +42,11 @@ void pointcloud_get_pos_and_radius(out float3 outpos, out float outradius)
   int id = pointcloud_get_point_id();
   float4 pos_rad = texelFetch(ptcloud_pos_rad_tx, id);
   outpos = drw_point_object_to_world(pos_rad.xyz);
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  outradius = dot(abs(to_float3x3(ModelMatrix) * pos_rad.www), vec3(1.0f / 3.0f));
+#else
   outradius = dot(abs(to_float3x3(drw_modelmat()) * pos_rad.www), float3(1.0f / 3.0f));
+#endif
 }
 
 /* Return world position and normal. */

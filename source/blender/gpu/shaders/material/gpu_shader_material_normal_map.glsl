@@ -11,7 +11,16 @@ void node_normal_map(float4 tangent, float strength, float3 texnormal, out float
   }
   tangent *= (FrontFacing ? 1.0f : -1.0f);
   float3 B = tangent.w * cross(g_data.Ni, tangent.xyz);
+
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+#  ifdef OBINFO_NEW
+  B *= (floatBitsToUint(ObjectFlag) & OBJECT_NEGATIVE_SCALE) != 0 ? -1.0f : 1.0f;
+#  else
+  B *= sign(ObjectFlag);
+#  endif
+#else
   B *= (drw_object_infos().flag & OBJECT_NEGATIVE_SCALE) != 0 ? -1.0f : 1.0f;
+#endif
 
   /* Apply strength here instead of in node_normal_map_mix for tangent space. */
   texnormal.xy *= strength;

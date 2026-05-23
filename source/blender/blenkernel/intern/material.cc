@@ -928,6 +928,14 @@ int BKE_object_material_ensure(Main *bmain, Object *ob, Material *material)
   return index;
 }
 
+bool BKE_material_use_custom_holdout(Material* ma)
+{
+  if (ma == NULL || ma->blend_method == MA_BM_SOLID) {
+    return false;
+  }
+  return true;
+}
+
 Material *BKE_gpencil_material(Object *ob, short act)
 {
   Material *ma = BKE_object_material_get(ob, act);

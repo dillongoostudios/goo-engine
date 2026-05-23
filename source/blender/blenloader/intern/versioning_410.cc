@@ -869,23 +869,23 @@ void blo_do_versions_410(FileData *fd, Library * /*lib*/, Main *bmain)
     FOREACH_NODETREE_END;
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 5)) {
-    /* Unify Material::blend_shadow and Cycles.use_transparent_shadows into the
-     * Material::blend_flag. */
-    bool is_eevee = all_scenes_use(bmain,
-                                   {RE_engine_id_BLENDER_EEVEE, RE_engine_id_BLENDER_EEVEE_NEXT});
-    LISTBASE_FOREACH (Material *, material, &bmain->materials) {
-      bool transparent_shadows = true;
-      if (is_eevee) {
-        transparent_shadows = material->blend_shadow != MA_BS_SOLID;
-      }
-      else if (IDProperty *cmat = version_cycles_properties_from_ID(&material->id)) {
-        transparent_shadows = version_cycles_property_boolean(
-            cmat, "use_transparent_shadow", true);
-      }
-      SET_FLAG_FROM_TEST(material->blend_flag, transparent_shadows, MA_BL_TRANSPARENT_SHADOW);
-    }
-  }
+  // if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 5)) {
+  //   /* Unify Material::blend_shadow and Cycles.use_transparent_shadows into the
+  //    * Material::blend_flag. */
+  //   bool is_eevee = all_scenes_use(bmain,
+  //                                  {RE_engine_id_BLENDER_EEVEE, RE_engine_id_BLENDER_EEVEE_NEXT});
+  //   LISTBASE_FOREACH (Material *, material, &bmain->materials) {
+  //     bool transparent_shadows = true;
+  //     if (is_eevee) {
+  //       transparent_shadows = material->blend_shadow != MA_BS_SOLID;
+  //     }
+  //     else if (IDProperty *cmat = version_cycles_properties_from_ID(&material->id)) {
+  //       transparent_shadows = version_cycles_property_boolean(
+  //           cmat, "use_transparent_shadow", true);
+  //     }
+  //     SET_FLAG_FROM_TEST(material->blend_flag, transparent_shadows, MA_BL_TRANSPARENT_SHADOW);
+  //   }
+  // }
 
   if (!MAIN_VERSION_FILE_ATLEAST(bmain, 401, 5)) {
     /** NOTE: This versioning code didn't update the subversion number. */

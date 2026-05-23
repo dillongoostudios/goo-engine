@@ -69,6 +69,7 @@ class MATERIAL_PT_preview(MaterialButtonsPanel, Panel):
 class MATERIAL_PT_custom_props(MaterialButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -81,6 +82,7 @@ class EEVEE_MATERIAL_PT_context_material(MaterialButtonsPanel, Panel):
     bl_context = "material"
     bl_options = {'HIDE_HEADER'}
     COMPAT_ENGINES = {
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -166,7 +168,7 @@ def panel_node_draw(layout, ntree, _output_type, input_name):
 class EEVEE_MATERIAL_PT_surface(MaterialButtonsPanel, Panel):
     bl_label = "Surface"
     bl_context = "material"
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
     def draw(self, context):
         layout = self.layout
@@ -190,7 +192,7 @@ class EEVEE_MATERIAL_PT_volume(MaterialButtonsPanel, Panel):
     bl_translation_context = i18n_contexts.id_id
     bl_context = "material"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -212,7 +214,7 @@ class EEVEE_MATERIAL_PT_displacement(MaterialButtonsPanel, Panel):
     bl_label = "Displacement"
     bl_context = "material"
     bl_options = {'DEFAULT_CLOSED'}
-    COMPAT_ENGINES = {'BLENDER_EEVEE_NEXT'}
+    COMPAT_ENGINES = {'BLENDER_EEVEE', 'BLENDER_EEVEE_NEXT'}
 
     @classmethod
     def poll(cls, context):
@@ -289,8 +291,32 @@ def draw_material_surface_settings(layout, mat, is_eevee=True):
         col.prop(mat, "use_thickness_from_shadow", text="From Shadow")
 
 
+def draw_goo_material_surface_settings(layout, mat):
+    layout.use_property_split = True
+    layout.use_property_decorate = False
+
+    layout.prop(mat, "use_backface_culling")
+    layout.prop(mat, "blend_method")
+    layout.prop(mat, "shadow_method")
+
+    layout.prop(mat, "check_shadow_id")
+
+    row = layout.row()
+    row.active = ((mat.blend_method == 'CLIP') or (mat.shadow_method == 'CLIP'))
+    row.prop(mat, "alpha_threshold")
+
+    if mat.blend_method not in {'OPAQUE', 'CLIP', 'HASHED'}:
+        layout.prop(mat, "show_transparent_back")
+
+    layout.prop(mat, "use_screen_refraction")
+    layout.prop(mat, "refraction_depth")
+    layout.prop(mat, "use_sss_translucency")
+    layout.prop(mat, "pass_index")
+
+
 def draw_material_volume_settings(layout, mat, is_eevee=True):
     layout.prop(mat, "volume_intersection_method", text="Intersection" if is_eevee else "Volume Intersection")
+
 
 
 def draw_material_settings(self, context):
@@ -300,8 +326,13 @@ def draw_material_settings(self, context):
 
     mat = context.material
 
-    draw_material_surface_settings(layout, mat, False)
-    draw_material_volume_settings(layout, mat, False)
+    if context.scene.render.engine == "BLENDER_EEVEE":
+        draw_goo_material_surface_settings(layout, mat)
+        
+    else:
+        draw_material_surface_settings(layout, mat, False)
+        draw_material_volume_settings(layout, mat, False)
+
 
 
 # TODO: used by `./scripts/addons_core/hydra_storm/ui.py`, move to `EEVEE_NEXT_MATERIAL_PT_settings`.
@@ -434,6 +465,7 @@ class MATERIAL_PT_lineart(MaterialButtonsPanel, Panel):
 class MATERIAL_PT_animation(MaterialButtonsPanel, Panel, PropertiesAnimationMixin):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }

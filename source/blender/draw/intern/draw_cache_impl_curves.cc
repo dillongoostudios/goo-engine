@@ -894,7 +894,6 @@ static void request_attribute(Curves &curves, const char *name)
   }
   const bke::AttrDomain domain = meta_data->domain;
   const eCustomDataType type = meta_data->data_type;
-
   drw_attributes_add_request(&attributes, name, type, domain);
 
   drw_attributes_merge(&final_cache.attr_used, &attributes, cache.render_mutex);
@@ -1016,6 +1015,11 @@ void DRW_curves_batch_cache_free_old(Curves *curves, int ctime)
   if (do_discard) {
     discard_attributes(cache->eval_cache);
   }
+}
+
+int DRW_curves_material_count_get(const Curves *curves)
+{
+  return max_ii(1, curves->totcol);
 }
 
 gpu::Batch *DRW_curves_batch_cache_get_edit_points(Curves *curves)

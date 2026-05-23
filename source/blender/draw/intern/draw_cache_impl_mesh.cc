@@ -317,6 +317,148 @@ static DRW_MeshCDMask mesh_cd_calc_used_gpu_layers(const Object &object,
   return cd_used;
 }
 
+static DRW_MeshCDMask GOO_mesh_cd_calc_used_gpu_layers(const Object &object,
+                                                   const Mesh &mesh,
+                                                   const GPUMaterial *const *gpumat_array,
+                                                   int gpumat_array_len,
+                                                   DRW_Attributes *attributes)
+{
+  const Mesh &me_final = editmesh_final_or_this(object, mesh);
+  const CustomData &cd_ldata = mesh_cd_ldata_get_from_mesh(me_final);
+  const CustomData &cd_pdata = mesh_cd_pdata_get_from_mesh(me_final);
+  const CustomData &cd_vdata = mesh_cd_vdata_get_from_mesh(me_final);
+  const CustomData &cd_edata = mesh_cd_edata_get_from_mesh(me_final);
+
+  /* See: DM_vertex_attributes_from_gpu for similar logic */
+  DRW_MeshCDMask cd_used;
+  mesh_cd_layers_type_clear(&cd_used);
+
+  const StringRefNull default_color_name = me_final.default_color_attribute ?
+                                               me_final.default_color_attribute :
+                                               "";
+
+  for (int i = 0; i < gpumat_array_len; i++) {
+    const GPUMaterial *gpumat = gpumat_array[i];
+    if (gpumat == nullptr) {
+      continue;
+    }
+    ListBase gpu_attrs = GPU_material_attributes(gpumat);
+    LISTBASE_FOREACH (GPUMaterialAttribute *, gpu_attr, &gpu_attrs) {
+      const char *name = gpu_attr->name;
+      eCustomDataType type = static_cast<eCustomDataType>(gpu_attr->type);
+      int layer = -1;
+      std::optional<bke::AttrDomain> domain;
+
+      if (gpu_attr->is_default_color) {
+        name = default_color_name.c_str();
+      }
+
+      if (type == CD_AUTO_FROM_NAME) {
+        /* We need to deduce what exact layer is used.
+         *
+         * We do it based on the specified name.
+         */
+        if (name[0] != '\0') {
+          layer = CustomData_get_named_layer(&cd_ldata, CD_PROP_FLOAT2, name);
+          type = CD_MTFACE;
+
+#if 0 /* Tangents are always from UVs - this will never happen. */
+          if (layer == -1) {
+            layer = CustomData_get_named_layer(cd_ldata, CD_TANGENT, name);
+            type = CD_TANGENT;
+          }
+#endif
+          if (layer == -1) {
+            /* Try to match a generic attribute, we use the first attribute domain with a
+             * matching name. */
+            if (drw_custom_data_match_attribute(cd_vdata, name, &layer, &type)) {
+              domain = bke::AttrDomain::Point;
+            }
+            else if (drw_custom_data_match_attribute(cd_ldata, name, &layer, &type)) {
+              domain = bke::AttrDomain::Corner;
+            }
+            else if (drw_custom_data_match_attribute(cd_pdata, name, &layer, &type)) {
+              domain = bke::AttrDomain::Face;
+            }
+            else if (drw_custom_data_match_attribute(cd_edata, name, &layer, &type)) {
+              domain = bke::AttrDomain::Edge;
+            }
+            else {
+              layer = -1;
+            }
+          }
+
+          if (layer == -1) {
+            continue;
+          }
+        }
+        else {
+          /* Fall back to the UV layer, which matches old behavior. */
+          type = CD_MTFACE;
+        }
+      }
+
+      switch (type) {
+        case CD_MTFACE: {
+          if (layer == -1) {
+            layer = (name[0] != '\0') ?
+                        CustomData_get_named_layer(&cd_ldata, CD_PROP_FLOAT2, name) :
+                        CustomData_get_render_layer(&cd_ldata, CD_PROP_FLOAT2);
+          }
+          if (layer != -1 && !CustomData_layer_is_anonymous(&cd_ldata, CD_PROP_FLOAT2, layer)) {
+            cd_used.uv |= (1 << layer);
+          }
+          break;
+        }
+        case CD_TANGENT: {
+          if (layer == -1) {
+            layer = (name[0] != '\0') ?
+                        CustomData_get_named_layer(&cd_ldata, CD_PROP_FLOAT2, name) :
+                        CustomData_get_render_layer(&cd_ldata, CD_PROP_FLOAT2);
+
+            /* Only fallback to orco (below) when we have no UV layers, see: #56545 */
+            if (layer == -1 && name[0] != '\0') {
+              layer = CustomData_get_render_layer(&cd_ldata, CD_PROP_FLOAT2);
+            }
+          }
+          if (layer != -1) {
+            cd_used.tan |= (1 << layer);
+          }
+          else {
+            /* no UV layers at all => requesting orco */
+            cd_used.tan_orco = 1;
+            cd_used.orco = 1;
+          }
+          break;
+        }
+
+        case CD_ORCO: {
+          cd_used.orco = 1;
+          break;
+        }
+        case CD_PROP_BYTE_COLOR:
+        case CD_PROP_COLOR:
+        case CD_PROP_QUATERNION:
+        case CD_PROP_FLOAT3:
+        case CD_PROP_BOOL:
+        case CD_PROP_INT8:
+        case CD_PROP_INT32:
+        case CD_PROP_INT32_2D:
+        case CD_PROP_FLOAT:
+        case CD_PROP_FLOAT2: {
+          if (layer != -1 && domain.has_value()) {
+            drw_attributes_add_request(attributes, name, type, *domain);
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+  return cd_used;
+}
+
 /** \} */
 
 /* ---------------------------------------------------------------------- */
@@ -796,6 +938,27 @@ void DRW_mesh_get_attributes(const Object &object,
   }
 }
 
+void GOO_mesh_get_attributes(const Object &object,
+                             const Mesh &mesh,
+                             const GPUMaterial *const *gpumat_array,
+                             int gpumat_array_len,
+                             DRW_Attributes *r_attrs,
+                             DRW_MeshCDMask *r_cd_needed)
+{
+  DRW_Attributes attrs_needed;
+  drw_attributes_clear(&attrs_needed);
+  DRW_MeshCDMask cd_needed = GOO_mesh_cd_calc_used_gpu_layers(
+      object, mesh, gpumat_array, gpumat_array_len, &attrs_needed);
+
+  if (r_attrs) {
+    *r_attrs = attrs_needed;
+  }
+
+  if (r_cd_needed) {
+    *r_cd_needed = cd_needed;
+  }
+}
+
 Span<gpu::Batch *> DRW_mesh_batch_cache_get_surface_shaded(
     Object &object, Mesh &mesh, const Span<const GPUMaterial *> materials)
 {
@@ -810,6 +973,25 @@ Span<gpu::Batch *> DRW_mesh_batch_cache_get_surface_shaded(
   drw_attributes_merge(&cache.attr_needed, &attrs_needed, mesh.runtime->render_mutex);
   mesh_batch_cache_request_surface_batches(cache);
   return cache.surface_per_mat;
+}
+
+gpu::Batch **GOO_mesh_batch_cache_get_surface_shaded(Object &object,
+                                                     Mesh &mesh,
+                                                     GPUMaterial **gpumat_array,
+                                                     uint gpumat_array_len)
+{
+  MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
+  DRW_Attributes attrs_needed;
+  drw_attributes_clear(&attrs_needed);
+  DRW_MeshCDMask cd_needed = GOO_mesh_cd_calc_used_gpu_layers(
+      object, mesh, gpumat_array, gpumat_array_len, &attrs_needed);
+
+  BLI_assert(gpumat_array_len == cache.mat_len);
+
+  mesh_cd_layers_type_merge(&cache.cd_needed, cd_needed);
+  drw_attributes_merge(&cache.attr_needed, &attrs_needed, mesh.runtime->render_mutex);
+  mesh_batch_cache_request_surface_batches(cache);
+  return cache.surface_per_mat.data();
 }
 
 Span<gpu::Batch *> DRW_mesh_batch_cache_get_surface_texpaint(Object &object, Mesh &mesh)
@@ -873,6 +1055,23 @@ gpu::Batch *DRW_mesh_batch_cache_get_surface_viewer_attribute(Mesh &mesh)
   DRW_batch_request(&cache.batch.surface_viewer_attribute);
 
   return cache.batch.surface_viewer_attribute;
+}
+
+/** \} */
+
+/* ---------------------------------------------------------------------- */
+/** \name Edit Mode API
+ * \{ */
+
+gpu::VertBuf *DRW_mesh_batch_cache_pos_vertbuf_get(Mesh &mesh)
+{
+  MeshBatchCache &cache = *mesh_batch_cache_get(mesh);
+  /* Request surface to trigger the vbo filling. Otherwise it may do nothing. */
+  mesh_batch_cache_request_surface_batches(cache);
+  blender::gpu::VertBuf *pos = cache.final.buff.vbos.lookup(VBOType::Position).get();
+
+  DRW_vbo_request(nullptr, &pos);
+  return pos;
 }
 
 /** \} */

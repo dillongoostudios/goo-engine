@@ -16,6 +16,7 @@
 #include "BLI_math_matrix.hh"
 #include "BLI_string.h"
 #include "BLI_utildefines.h"
+#include "BLI_math_base.h"
 
 #include "DNA_scene_types.h"
 #include "DNA_volume_types.h"
@@ -345,6 +346,11 @@ DRWVolumeGrid *DRW_volume_batch_cache_get_grid(Volume *volume,
   VolumeBatchCache *cache = volume_batch_cache_get(volume);
   DRWVolumeGrid *grid = volume_grid_cache_get(volume, volume_grid, cache);
   return (grid->texture != nullptr) ? grid : nullptr;
+}
+
+int DRW_volume_material_count_get(const Volume *volume)
+{
+  return max_ii(1, volume->totcol);
 }
 
 }  // namespace blender::draw

@@ -24,6 +24,7 @@ class DATA_PT_context_volume(DataButtonsPanel, Panel):
     bl_options = {'HIDE_HEADER'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -45,6 +46,7 @@ class DATA_PT_volume_file(DataButtonsPanel, Panel):
     bl_label = "OpenVDB File"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -94,6 +96,7 @@ class DATA_PT_volume_grids(DataButtonsPanel, Panel):
     bl_label = "Grids"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -111,6 +114,7 @@ class DATA_PT_volume_render(DataButtonsPanel, Panel):
     bl_label = "Render"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -147,6 +151,7 @@ class DATA_PT_volume_viewport_display(DataButtonsPanel, Panel):
     bl_label = "Viewport Display"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -175,6 +180,7 @@ class DATA_PT_volume_viewport_display_slicing(DataButtonsPanel, Panel):
     bl_parent_id = "DATA_PT_volume_viewport_display"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -205,6 +211,7 @@ class DATA_PT_volume_viewport_display_slicing(DataButtonsPanel, Panel):
 class DATA_PT_volume_animation(DataButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -214,6 +221,7 @@ class DATA_PT_volume_animation(DataButtonsPanel, PropertiesAnimationMixin, Prope
 class DATA_PT_custom_props_volume(DataButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }

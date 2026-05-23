@@ -24,6 +24,7 @@ class DATA_PT_context_speaker(DataButtonsPanel, Panel):
     bl_options = {'HIDE_HEADER'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -45,6 +46,7 @@ class DATA_PT_speaker(DataButtonsPanel, Panel):
     bl_label = "Sound"
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -71,6 +73,7 @@ class DATA_PT_distance(DataButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -99,6 +102,7 @@ class DATA_PT_cone(DataButtonsPanel, Panel):
     bl_options = {'DEFAULT_CLOSED'}
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -125,6 +129,7 @@ class DATA_PT_cone(DataButtonsPanel, Panel):
 class DATA_PT_speaker_animation(DataButtonsPanel, PropertiesAnimationMixin, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }
@@ -134,6 +139,7 @@ class DATA_PT_speaker_animation(DataButtonsPanel, PropertiesAnimationMixin, Prop
 class DATA_PT_custom_props_speaker(DataButtonsPanel, PropertyPanel, Panel):
     COMPAT_ENGINES = {
         'BLENDER_RENDER',
+        'BLENDER_EEVEE',
         'BLENDER_EEVEE_NEXT',
         'BLENDER_WORKBENCH',
     }

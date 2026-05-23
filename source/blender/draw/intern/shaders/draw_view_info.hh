@@ -26,6 +26,11 @@
  * This is used to fetch per object data in drw_matrices and other object indexed buffers.
  * \{ */
 
+/* Standard way. Use gpu_InstanceIndex to index the object data. */
+GPU_SHADER_CREATE_INFO(draw_resource_id_goo)
+DEFINE("DYNAMIC_RESOURCE_ID")
+GPU_SHADER_CREATE_END()
+
 /**
  * Used if the resource index needs to be passed to the fragment shader.
  * IMPORTANT: Vertex shader need to write `drw_ResourceID_iface.resource_index` in main().
@@ -46,6 +51,12 @@ GPU_SHADER_CREATE_END()
 GPU_SHADER_CREATE_INFO(draw_resource_with_custom_id)
 DEFINE("WITH_CUSTOM_IDS")
 STORAGE_BUF(DRW_RESOURCE_ID_SLOT, read, uint2, resource_id_buf[])
+GPU_SHADER_CREATE_END()
+
+/* Variation used when drawing multiple instances for one object. */
+GPU_SHADER_CREATE_INFO(draw_resource_id_uniform_goo)
+DEFINE("UNIFORM_RESOURCE_ID")
+PUSH_CONSTANT(int, drw_ResourceID)
 GPU_SHADER_CREATE_END()
 
 /**
@@ -101,6 +112,37 @@ UNIFORM_BUF(DRW_VIEW_CULLING_UBO_SLOT, ViewCullingData, drw_view_culling_buf[DRW
 DEFINE("DRW_VIEW_CULLING_INFO")
 TYPEDEF_SOURCE("draw_shader_shared.hh")
 GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(draw_view_goo)
+UNIFORM_BUF_FREQ(DRW_VIEW_UBO_SLOT, ViewMatrices, drw_view_[DRW_VIEW_LEN], PASS)
+DEFINE("DRAW_VIEW_CREATE_INFO")
+DEFINE_VALUE("drw_view", "drw_view_[drw_view_id]")
+TYPEDEF_SOURCE("draw_shader_shared.hh")
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(draw_modelmat_goo)
+UNIFORM_BUF_FREQ(DRW_OBJ_MAT_UBO_SLOT, ObjectMatrices, drw_matrices[DRW_RESOURCE_CHUNK_LEN], BATCH)
+DEFINE_VALUE("ModelMatrix", "(drw_matrices[resource_id].model)")
+DEFINE_VALUE("ModelMatrixInverse", "(drw_matrices[resource_id].model_inverse)")
+ADDITIONAL_INFO(draw_view_goo)
+GPU_SHADER_CREATE_END()
+
+#ifndef GPU_SHADER /* Conflicts with define for C++ shader test. */
+
+GPU_SHADER_CREATE_INFO(draw_modelmat_legacy_goo)
+DEFINE("DRW_LEGACY_MODEL_MATRIX")
+PUSH_CONSTANT(float4x4, ModelMatrix)
+PUSH_CONSTANT(float4x4, ModelMatrixInverse)
+ADDITIONAL_INFO(draw_view_goo)
+GPU_SHADER_CREATE_END()
+
+GPU_SHADER_CREATE_INFO(draw_modelmat_instanced_attr_goo)
+PUSH_CONSTANT(float4x4, ModelMatrix)
+PUSH_CONSTANT(float4x4, ModelMatrixInverse)
+ADDITIONAL_INFO(draw_view_goo)
+GPU_SHADER_CREATE_END()
+
+#endif
 
 /** \} */
 

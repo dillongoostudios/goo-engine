@@ -10,6 +10,7 @@ void node_subsurface_scattering(float4 color,
                                 float anisotropy,
                                 float3 N,
                                 float weight,
+                                const float do_sss,
                                 out Closure result)
 {
   color = max(color, float4(0.0f));
@@ -23,5 +24,11 @@ void node_subsurface_scattering(float4 color,
   sss_data.N = N;
   sss_data.sss_radius = max(radius * scale, float3(0.0f));
 
+#ifdef GPU_SHADER_EEVEE_LEGACY_DEFINES
+  if (do_sss == 0.0f) {
+    /* Flag as disabled. */
+    sss_data.sss_radius.b = -1.0f;
+  }
+#endif
   result = closure_eval(sss_data);
 }

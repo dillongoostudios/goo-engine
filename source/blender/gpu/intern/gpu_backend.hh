@@ -19,6 +19,7 @@ namespace blender::gpu {
 class Context;
 
 class Batch;
+class DrawList;
 class Fence;
 class FrameBuffer;
 class IndexBuf;
@@ -48,6 +49,7 @@ class GPUBackend {
   virtual Context *context_alloc(void *ghost_window, void *ghost_context) = 0;
 
   virtual Batch *batch_alloc() = 0;
+  virtual DrawList *drawlist_alloc(int list_length) = 0;
   virtual Fence *fence_alloc() = 0;
   virtual FrameBuffer *framebuffer_alloc(const char *name) = 0;
   virtual IndexBuf *indexbuf_alloc() = 0;
