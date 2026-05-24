@@ -199,8 +199,8 @@ int EEVEE_depth_of_field_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst, 
     effects->dof_hq_slight_focus = (scene_eval->eevee.flag & SCE_EEVEE_DOF_HQ_SLIGHT_FOCUS) != 0;
 
     /* Retrieve Near and Far distance */
-    effects->dof_coc_near_dist = -cam->clip_start;
-    effects->dof_coc_far_dist = -cam->clip_end;
+    effects->dof_coc_params[2] = -cam->clip_start;
+    effects->dof_coc_params[3] = -cam->clip_end;
 
     /* Parameters */
     bool is_ortho = cam->type == CAM_ORTHO;
@@ -353,16 +353,16 @@ static void dof_bokeh_pass_init(Instance *inst,
     return;
   }
 
-  const int res[2] = {DOF_BOKEH_LUT_SIZE, DOF_BOKEH_LUT_SIZE};
+  const int2 res = {DOF_BOKEH_LUT_SIZE, DOF_BOKEH_LUT_SIZE};
 
-  DRW_PASS_CREATE(inst->goo_data->dof_bokeh, DRW_STATE_WRITE_COLOR);
-
-  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_BOKEH);
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_bokeh);
-  DRW_shgroup_uniform_float_copy(grp, "bokehSides", fx->dof_bokeh_blades);
-  DRW_shgroup_uniform_float_copy(grp, "bokehRotation", fx->dof_bokeh_rotation);
-  DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
-  DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+  blender::draw::PassSimple &pass = inst->goo_data->dof_bokeh;
+  pass.init();
+  pass.state_set(DRW_STATE_WRITE_COLOR);
+  pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_BOKEH));
+  pass.push_constant("bokehSides", fx->dof_bokeh_blades);
+  pass.push_constant("bokehRotation", fx->dof_bokeh_rotation);
+  pass.push_constant("bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
   fx->dof_bokeh_gather_lut_tx = DRW_texture_pool_query_2d_ex(
@@ -391,17 +391,17 @@ static void dof_setup_pass_init(Instance *inst,
   DefaultTextureList *dtxl = draw_ctx->viewport_texture_list_get();
 
   const float2 fullres = draw_ctx->viewport_size_get();
-  const int res[2] = {int(divide_ceil_u(fullres[0], 2)), int(divide_ceil_u(fullres[1], 2))};
+  const int2 res = {int(divide_ceil_u(fullres[0], 2)), int(divide_ceil_u(fullres[1], 2))};
 
-  DRW_PASS_CREATE(inst->goo_data->dof_setup, DRW_STATE_WRITE_COLOR);
-
-  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SETUP);
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_setup);
-  DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &fx->source_buffer, NO_FILTERING);
-  DRW_shgroup_uniform_texture_ref_ex(grp, "depthBuffer", &dtxl->depth, NO_FILTERING);
-  DRW_shgroup_uniform_vec4_copy(grp, "cocParams", fx->dof_coc_params);
-  DRW_shgroup_uniform_float_copy(grp, "bokehMaxSize", fx->dof_bokeh_max_size);
-  DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+  blender::draw::PassSimple &pass = inst->goo_data->dof_setup;   
+  pass.init();
+  pass.state_set(DRW_STATE_WRITE_COLOR);
+  pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_SETUP));
+  pass.bind_texture("colorBuffer", &fx->source_buffer, NO_FILTERING);
+  pass.bind_texture("depthBuffer", &dtxl->depth, NO_FILTERING);
+  pass.push_constant("cocParams", fx->dof_coc_params);
+  pass.push_constant("bokehMaxSize", fx->dof_bokeh_max_size);
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
   fx->dof_half_res_color_tx = DRW_texture_pool_query_2d_ex(
@@ -425,16 +425,15 @@ static void dof_flatten_tiles_pass_init(Instance *inst,
 {
   const DRWContext *draw_ctx = DRW_context_get();
   const float2 fullres = draw_ctx->viewport_size_get();
-  const int res[2] = {int(divide_ceil_u(fullres[0], DOF_TILE_DIVISOR)),
+  const int2 res = {int(divide_ceil_u(fullres[0], DOF_TILE_DIVISOR)),
                       int(divide_ceil_u(fullres[1], DOF_TILE_DIVISOR))};
 
-  DRW_PASS_CREATE(inst->goo_data->dof_flatten_tiles, DRW_STATE_WRITE_COLOR);
-
-  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_FLATTEN_TILES);
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_flatten_tiles);
-  DRW_shgroup_uniform_texture_ref_ex(
-      grp, "halfResCocBuffer", &fx->dof_half_res_coc_tx, NO_FILTERING);
-  DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+  blender::draw::PassSimple &pass = inst->goo_data->dof_flatten_tiles;   
+  pass.init();
+  pass.state_set(DRW_STATE_WRITE_COLOR);
+  pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_FLATTEN_TILES));
+  pass.bind_texture("halfResCocBuffer", &fx->dof_half_res_coc_tx, NO_FILTERING);
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
   fx->dof_coc_tiles_fg_tx = DRW_texture_pool_query_2d_ex(
@@ -460,28 +459,27 @@ static void dof_dilate_tiles_pass_init(Instance *inst,
 {
   const DRWContext *draw_ctx = DRW_context_get();
   const float2 fullres = draw_ctx->viewport_size_get();
-  const int res[2] = {int(divide_ceil_u(fullres[0], DOF_TILE_DIVISOR)),
+  const int2 res = {int(divide_ceil_u(fullres[0], DOF_TILE_DIVISOR)),
                       int(divide_ceil_u(fullres[1], DOF_TILE_DIVISOR))};
-
-  DRW_PASS_CREATE(inst->goo_data->dof_dilate_tiles_minmax, DRW_STATE_WRITE_COLOR);
-  DRW_PASS_CREATE(inst->goo_data->dof_dilate_tiles_minabs, DRW_STATE_WRITE_COLOR);
 
   GPUShader *sh;
   for (int pass = 0; pass < 2; pass++) {
-    DRWPass *drw_pass = (pass == 0) ? inst->goo_data->dof_dilate_tiles_minmax : inst->goo_data->dof_dilate_tiles_minabs;
+    blender::draw::PassSimple &drw_pass = (pass == 0) ? inst->goo_data->dof_dilate_tiles_minmax : inst->goo_data->dof_dilate_tiles_minabs;
     if (pass == 0) {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_DILATE_TILES_MINMAX);
     }
     else {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_DILATE_TILES_MINABS);
     }
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, drw_pass);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesFgBuffer", &fx->dof_coc_tiles_fg_tx);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesBgBuffer", &fx->dof_coc_tiles_bg_tx);
-    DRW_shgroup_uniform_bool(grp, "dilateSlightFocus", &fx->dof_dilate_slight_focus, 1);
-    DRW_shgroup_uniform_int(grp, "ringCount", &fx->dof_dilate_ring_count, 1);
-    DRW_shgroup_uniform_int(grp, "ringWidthMultiplier", &fx->dof_dilate_ring_width_multiplier, 1);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    drw_pass.init();
+    drw_pass.state_set(DRW_STATE_WRITE_COLOR);
+    drw_pass.shader_set(sh);
+    drw_pass.bind_texture("cocTilesFgBuffer", &fx->dof_coc_tiles_fg_tx);
+    drw_pass.bind_texture("cocTilesBgBuffer", &fx->dof_coc_tiles_bg_tx);
+    drw_pass.push_constant("dilateSlightFocus", &fx->dof_dilate_slight_focus);
+    drw_pass.push_constant("ringCount", &fx->dof_dilate_ring_count);
+    drw_pass.push_constant("ringWidthMultiplier", &fx->dof_dilate_ring_width_multiplier);
+    drw_pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
   eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
   fx->dof_coc_dilated_tiles_fg_tx = DRW_texture_pool_query_2d_ex(
@@ -500,8 +498,11 @@ static void dof_dilate_tiles_pass_init(Instance *inst,
 static void dof_dilate_tiles_pass_draw(Instance *inst,
                                        EEVEE_EffectsInfo *fx)
 {
+  blender::draw::View &drw_view = blender::draw::View::default_get();
+  blender::draw::Manager *manager = DRW_manager_get();
+
   for (int pass = 0; pass < 2; pass++) {
-    DRWPass *drw_pass = (pass == 0) ? inst->goo_data->dof_dilate_tiles_minmax : inst->goo_data->dof_dilate_tiles_minabs;
+    blender::draw::PassSimple &drw_pass = (pass == 0) ? inst->goo_data->dof_dilate_tiles_minmax : inst->goo_data->dof_dilate_tiles_minabs;
 
     /* Error introduced by gather center jittering. */
     const float error_multiplier = 1.0f + 1.0f / (DOF_GATHER_RING_COUNT + 0.5f);
@@ -526,7 +527,7 @@ static void dof_dilate_tiles_pass_draw(Instance *inst,
       fx->dof_dilate_ring_width_multiplier = multiplier;
 
       GPU_framebuffer_bind(inst->goo_data->dof_dilate_tiles_fb);
-      DRW_draw_pass(drw_pass);
+      manager->submit(drw_pass, drw_view);
 
       std::swap(inst->goo_data->dof_dilate_tiles_fb, inst->goo_data->dof_flatten_tiles_fb);
       std::swap(fx->dof_coc_dilated_tiles_bg_tx, fx->dof_coc_tiles_bg_tx);
@@ -558,26 +559,24 @@ static void dof_reduce_pass_init(Instance *inst,
   /* This ensure the mipmaps are aligned for the needed 4 mip levels.
    * Starts at 2 because already at half resolution. */
   int multiple = 2 << (mip_count - 1);
-  const int res[2] = {
+  const int2 res = {
       (multiple * int(divide_ceil_u(fullres[0], multiple))) / 2,
       (multiple * int(divide_ceil_u(fullres[1], multiple))) / 2,
   };
 
-  const int quater_res[2] = {int(divide_ceil_u(fullres[0], 4)), int(divide_ceil_u(fullres[1], 4))};
+  const int2 quater_res = {int(divide_ceil_u(fullres[0], 4)), int(divide_ceil_u(fullres[1], 4))};
 
   /* TODO(fclem): Make this dependent of the quality of the gather pass. */
   fx->dof_scatter_coc_threshold = 4.0f;
 
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_downsample, DRW_STATE_WRITE_COLOR);
-
-    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_DOWNSAMPLE);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_downsample);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "cocBuffer", &fx->dof_reduce_input_coc_tx, NO_FILTERING);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_downsample;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_DOWNSAMPLE));
+    pass.bind_texture("colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &fx->dof_reduce_input_coc_tx, NO_FILTERING);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
     fx->dof_downsample_tx = DRW_texture_pool_query_2d_ex(
@@ -591,23 +590,19 @@ static void dof_reduce_pass_init(Instance *inst,
   }
 
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_reduce_copy, DRW_STATE_WRITE_COLOR);
-
-    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_REDUCE_COPY);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_reduce_copy);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "cocBuffer", &fx->dof_reduce_input_coc_tx, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "downsampledBuffer", &fx->dof_downsample_tx, NO_FILTERING);
-    DRW_shgroup_uniform_float_copy(grp, "scatterColorThreshold", fx->dof_scatter_color_threshold);
-    DRW_shgroup_uniform_float_copy(
-        grp, "scatterColorNeighborMax", fx->dof_scatter_neighbor_max_color);
-    DRW_shgroup_uniform_float_copy(grp, "scatterCocThreshold", fx->dof_scatter_coc_threshold);
-    DRW_shgroup_uniform_float_copy(grp, "colorNeighborClamping", fx->dof_denoise_factor);
-    DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropy", fx->dof_bokeh_aniso);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_reduce_copy;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_REDUCE_COPY));
+    pass.bind_texture("colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &fx->dof_reduce_input_coc_tx, NO_FILTERING);
+    pass.bind_texture("downsampledBuffer", &fx->dof_downsample_tx, NO_FILTERING);
+    pass.push_constant("scatterColorThreshold", fx->dof_scatter_color_threshold);
+    pass.push_constant("scatterColorNeighborMax", fx->dof_scatter_neighbor_max_color);
+    pass.push_constant("scatterCocThreshold", fx->dof_scatter_coc_threshold);
+    pass.push_constant("colorNeighborClamping", fx->dof_denoise_factor);
+    pass.push_constant("bokehAnisotropy", fx->dof_bokeh_aniso);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
     fx->dof_scatter_src_tx = DRW_texture_pool_query_2d_ex(
@@ -615,15 +610,13 @@ static void dof_reduce_pass_init(Instance *inst,
   }
 
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_reduce, DRW_STATE_WRITE_COLOR);
-
-    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_REDUCE);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_reduce);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "cocBuffer", &fx->dof_reduce_input_coc_tx, NO_FILTERING);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    blender::draw::PassSimple &dof_reduce_ = inst->goo_data->dof_reduce;
+    dof_reduce_.init();
+    dof_reduce_.state_set(DRW_STATE_WRITE_COLOR);
+    dof_reduce_.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_REDUCE));
+    dof_reduce_.bind_texture("colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
+    dof_reduce_.bind_texture("cocBuffer", &fx->dof_reduce_input_coc_tx, NO_FILTERING);
+    dof_reduce_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
 
   if (inst->goo_data->dof_reduced_color) {
@@ -672,29 +665,28 @@ static void dof_gather_pass_init(Instance *inst,
 {
   const DRWContext *draw_ctx = DRW_context_get();
   const float2 fullres = draw_ctx->viewport_size_get();
-  const int res[2] = {int(divide_ceil_u(fullres[0], 2)), int(divide_ceil_u(fullres[1], 2))};
-  int input_size[2];
+  const int2 res = {int(divide_ceil_u(fullres[0], 2)), int(divide_ceil_u(fullres[1], 2))};
+  int2 input_size;
   GPU_texture_get_mipmap_size(inst->goo_data->dof_reduced_color, 0, input_size);
-  const float uv_correction_fac[2] = {res[0] / float(input_size[0]),
+  const float2 uv_correction_fac = {res[0] / float(input_size[0]),
                                       res[1] / float(input_size[1])};
-  const float output_texel_size[2] = {1.0f / res[0], 1.0f / res[1]};
+  const float2 output_texel_size = {1.0f / res[0], 1.0f / res[1]};
   const bool use_bokeh_tx = (fx->dof_bokeh_gather_lut_tx != nullptr);
 
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_gather_fg_holefill, DRW_STATE_WRITE_COLOR);
-
-    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_HOLEFILL);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_gather_fg_holefill);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &inst->goo_data->dof_reduced_color, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesFgBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesBgBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_vec2_copy(grp, "gatherInputUvCorrection", uv_correction_fac);
-    DRW_shgroup_uniform_vec2_copy(grp, "gatherOutputTexelSize", output_texel_size);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_gather_fg_holefill;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_HOLEFILL));
+    pass.bind_texture("colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
+    pass.bind_texture("colorBuffer", &inst->goo_data->dof_reduced_color, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
+    pass.bind_texture("cocTilesFgBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
+    pass.bind_texture("cocTilesBgBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
+    pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+    pass.push_constant("gatherInputUvCorrection", uv_correction_fac);
+    pass.push_constant("gatherOutputTexelSize", output_texel_size);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     /* Reuse textures from the setup pass. */
     /* NOTE: We could use the texture pool do that for us but it does not track usage and it might
@@ -712,8 +704,6 @@ static void dof_gather_pass_init(Instance *inst,
                                   });
   }
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_gather_fg, DRW_STATE_WRITE_COLOR);
-
     GPUShader *sh;
     if (use_bokeh_tx) {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_FG_BOKEH);
@@ -722,25 +712,29 @@ static void dof_gather_pass_init(Instance *inst,
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_FG);
     }
 
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_gather_fg);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &inst->goo_data->dof_reduced_color, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesFgBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesBgBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_vec2_copy(grp, "gatherInputUvCorrection", uv_correction_fac);
-    DRW_shgroup_uniform_vec2_copy(grp, "gatherOutputTexelSize", output_texel_size);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_gather_fg;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(sh);
+    pass.bind_texture("colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
+    pass.bind_texture("colorBuffer", &inst->goo_data->dof_reduced_color, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
+    pass.bind_texture("cocTilesFgBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
+    pass.bind_texture("cocTilesBgBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
+    pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+    pass.push_constant("gatherInputUvCorrection", uv_correction_fac);
+    pass.push_constant("gatherOutputTexelSize", output_texel_size);
+
     if (use_bokeh_tx) {
       /* Negate to flip bokeh shape. Mimics optical phenomenon. */
       negate_v2(fx->dof_bokeh_aniso);
-      DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropy", fx->dof_bokeh_aniso);
-      DRW_shgroup_uniform_texture_ref(grp, "bokehLut", &fx->dof_bokeh_gather_lut_tx);
+      pass.push_constant("bokehAnisotropy", fx->dof_bokeh_aniso);
+      pass.bind_texture("bokehLut", &fx->dof_bokeh_gather_lut_tx);
       /* Restore. */
       negate_v2(fx->dof_bokeh_aniso);
     }
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
     fx->dof_fg_color_tx = DRW_texture_pool_query_2d_ex(
         UNPACK2(res), COLOR_FORMAT, usage, 0);
@@ -762,8 +756,6 @@ static void dof_gather_pass_init(Instance *inst,
                                   });
   }
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_gather_bg, DRW_STATE_WRITE_COLOR);
-
     GPUShader *sh;
     if (use_bokeh_tx) {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_BG_BOKEH);
@@ -772,21 +764,23 @@ static void dof_gather_pass_init(Instance *inst,
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_BG);
     }
 
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_gather_bg);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &inst->goo_data->dof_reduced_color, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesFgBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
-    DRW_shgroup_uniform_texture_ref(grp, "cocTilesBgBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_vec2_copy(grp, "gatherInputUvCorrection", uv_correction_fac);
-    DRW_shgroup_uniform_vec2_copy(grp, "gatherOutputTexelSize", output_texel_size);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_gather_bg;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(sh);
+    pass.bind_texture("colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
+    pass.bind_texture("colorBuffer", &inst->goo_data->dof_reduced_color, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
+    pass.bind_texture("cocTilesFgBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
+    pass.bind_texture("cocTilesBgBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
+    pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+    pass.push_constant("gatherInputUvCorrection", uv_correction_fac);
+    pass.push_constant("gatherOutputTexelSize", output_texel_size);
     if (use_bokeh_tx) {
-      DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropy", fx->dof_bokeh_aniso);
-      DRW_shgroup_uniform_texture_ref(grp, "bokehLut", &fx->dof_bokeh_gather_lut_tx);
+      pass.push_constant("bokehAnisotropy", fx->dof_bokeh_aniso);
+      pass.bind_texture("bokehLut", &fx->dof_bokeh_gather_lut_tx);
     }
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
     fx->dof_bg_color_tx = DRW_texture_pool_query_2d_ex(
@@ -816,15 +810,13 @@ static void dof_gather_pass_init(Instance *inst,
 static void dof_filter_pass_init(Instance *inst,
                                  EEVEE_EffectsInfo *fx)
 {
-  DRW_PASS_CREATE(inst->goo_data->dof_filter, DRW_STATE_WRITE_COLOR);
-
-  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_FILTER);
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_filter);
-  DRW_shgroup_uniform_texture_ref_ex(
-      grp, "colorBuffer", &fx->dof_fg_holefill_color_tx, NO_FILTERING);
-  DRW_shgroup_uniform_texture_ref_ex(
-      grp, "weightBuffer", &fx->dof_fg_holefill_weight_tx, NO_FILTERING);
-  DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+  blender::draw::PassSimple &pass = inst->goo_data->dof_filter;
+  pass.init();
+  pass.state_set(DRW_STATE_WRITE_COLOR);
+  pass.shader_set(inst->shaders.static_shader_get(DEPTH_OF_FIELD_FILTER));
+  pass.bind_texture("colorBuffer", &fx->dof_fg_holefill_color_tx, NO_FILTERING);
+  pass.bind_texture("weightBuffer", &fx->dof_fg_holefill_weight_tx, NO_FILTERING);
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
   GPU_framebuffer_ensure_config(&inst->goo_data->dof_filter_fg_fb,
                                 {
@@ -848,17 +840,15 @@ static void dof_filter_pass_init(Instance *inst,
 static void dof_scatter_pass_init(Instance *inst,
                                   EEVEE_EffectsInfo *fx)
 {
-  int input_size[2], target_size[2];
+  int2 input_size, target_size;
   GPU_texture_get_mipmap_size(fx->dof_half_res_color_tx, 0, input_size);
   GPU_texture_get_mipmap_size(fx->dof_bg_color_tx, 0, target_size);
   /* Draw a sprite for every four half-res pixels. */
   int sprite_count = (input_size[0] / 2) * (input_size[1] / 2);
-  const float target_texel_size[2] = {1.0f / target_size[0], 1.0f / target_size[1]};
+  const float2 target_texel_size = {1.0f / target_size[0], 1.0f / target_size[1]};
   const bool use_bokeh_tx = (fx->dof_bokeh_gather_lut_tx != nullptr);
 
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_scatter_fg, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
-
     GPUShader *sh;
     if (use_bokeh_tx) {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_FG_BOKEH);
@@ -866,23 +856,25 @@ static void dof_scatter_pass_init(Instance *inst,
     else {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_FG);
     }
-
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_scatter_fg);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &fx->dof_scatter_src_tx, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref(grp, "occlusionBuffer", &fx->dof_fg_occlusion_tx);
-    DRW_shgroup_uniform_vec2_copy(grp, "targetTexelSize", target_texel_size);
-    DRW_shgroup_uniform_int_copy(grp, "spritePerRow", input_size[0] / 2);
-    DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropy", fx->dof_bokeh_aniso);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_scatter_fg;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
+    pass.shader_set(sh);
+    pass.bind_texture("colorBuffer", &fx->dof_scatter_src_tx, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
+    pass.bind_texture("occlusionBuffer", &fx->dof_fg_occlusion_tx);
+    pass.push_constant("targetTexelSize", target_texel_size);
+    pass.push_constant("spritePerRow", input_size[0] / 2);
+    pass.push_constant("bokehAnisotropy", fx->dof_bokeh_aniso);
     if (use_bokeh_tx) {
       /* Negate to flip bokeh shape. Mimics optical phenomenon. */
       negate_v2(fx->dof_bokeh_aniso_inv);
-      DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
-      DRW_shgroup_uniform_texture_ref(grp, "bokehLut", &fx->dof_bokeh_scatter_lut_tx);
+      pass.push_constant("bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
+      pass.bind_texture("bokehLut", &fx->dof_bokeh_scatter_lut_tx);
       /* Restore. */
       negate_v2(fx->dof_bokeh_aniso_inv);
     }
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, sprite_count);
+    pass.draw_procedural(GPU_PRIM_TRIS, sprite_count, 3);
 
     GPU_framebuffer_ensure_config(&inst->goo_data->dof_scatter_fg_fb,
                                   {
@@ -891,8 +883,6 @@ static void dof_scatter_pass_init(Instance *inst,
                                   });
   }
   {
-    DRW_PASS_CREATE(inst->goo_data->dof_scatter_bg, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
-
     GPUShader *sh;
     if (use_bokeh_tx) {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_BG_BOKEH);
@@ -900,19 +890,21 @@ static void dof_scatter_pass_init(Instance *inst,
     else {
       sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_BG);
     }
-
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_scatter_bg);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &fx->dof_scatter_src_tx, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
-    DRW_shgroup_uniform_texture_ref(grp, "occlusionBuffer", &fx->dof_bg_occlusion_tx);
-    DRW_shgroup_uniform_vec2_copy(grp, "targetTexelSize", target_texel_size);
-    DRW_shgroup_uniform_int_copy(grp, "spritePerRow", input_size[0] / 2);
-    DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropy", fx->dof_bokeh_aniso);
+    blender::draw::PassSimple &pass = inst->goo_data->dof_scatter_bg;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
+    pass.shader_set(sh);
+    pass.bind_texture("colorBuffer", &fx->dof_scatter_src_tx, NO_FILTERING);
+    pass.bind_texture("cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
+    pass.bind_texture("occlusionBuffer", &fx->dof_bg_occlusion_tx);
+    pass.push_constant("targetTexelSize", target_texel_size);
+    pass.push_constant("spritePerRow", input_size[0] / 2);
+    pass.push_constant("bokehAnisotropy", fx->dof_bokeh_aniso);
     if (use_bokeh_tx) {
-      DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
-      DRW_shgroup_uniform_texture_ref(grp, "bokehLut", &fx->dof_bokeh_scatter_lut_tx);
+      pass.push_constant("bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
+      pass.bind_texture("bokehLut", &fx->dof_bokeh_scatter_lut_tx);
     }
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, sprite_count);
+    pass.draw_procedural(GPU_PRIM_TRIS, sprite_count, 3);
 
     GPU_framebuffer_ensure_config(&inst->goo_data->dof_scatter_bg_fb,
                                   {
@@ -933,8 +925,6 @@ static void dof_recombine_pass_init(Instance *inst,
   DefaultTextureList *dtxl = draw_ctx->viewport_texture_list_get();
   const bool use_bokeh_tx = (fx->dof_bokeh_gather_lut_tx != nullptr);
 
-  DRW_PASS_CREATE(inst->goo_data->dof_resolve, DRW_STATE_WRITE_COLOR);
-
   GPUShader *sh;
   if (fx->dof_hq_slight_focus) {
     sh = (use_bokeh_tx) ? inst->shaders.static_shader_get(DEPTH_OF_FIELD_RESOLVE_HQ_BOKEH) :
@@ -945,25 +935,28 @@ static void dof_recombine_pass_init(Instance *inst,
                                                 inst->shaders.static_shader_get(DEPTH_OF_FIELD_RESOLVE_LQ);
   }
   
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_resolve);
-  DRW_shgroup_uniform_texture_ref_ex(grp, "fullResColorBuffer", &fx->source_buffer, NO_FILTERING);
-  DRW_shgroup_uniform_texture_ref_ex(grp, "fullResDepthBuffer", &dtxl->depth, NO_FILTERING);
-  DRW_shgroup_uniform_texture_ref(grp, "bgColorBuffer", &fx->dof_bg_color_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "bgWeightBuffer", &fx->dof_bg_weight_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "bgTileBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "fgColorBuffer", &fx->dof_fg_color_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "fgWeightBuffer", &fx->dof_fg_weight_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "holefillColorBuffer", &fx->dof_fg_holefill_color_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "holefillWeightBuffer", &fx->dof_fg_holefill_weight_tx);
-  DRW_shgroup_uniform_texture_ref(grp, "fgTileBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
-  DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-  DRW_shgroup_uniform_vec4_copy(grp, "cocParams", fx->dof_coc_params);
-  DRW_shgroup_uniform_float_copy(grp, "bokehMaxSize", fx->dof_bokeh_max_size);
+  blender::draw::PassSimple &pass = inst->goo_data->dof_resolve;
+  pass.init();
+  pass.state_set(DRW_STATE_WRITE_COLOR);
+  pass.shader_set(sh);
+  pass.bind_texture("fullResColorBuffer", &fx->source_buffer, NO_FILTERING);
+  pass.bind_texture("fullResDepthBuffer", &dtxl->depth, NO_FILTERING);
+  pass.bind_texture("bgColorBuffer", &fx->dof_bg_color_tx);
+  pass.bind_texture("bgWeightBuffer", &fx->dof_bg_weight_tx);
+  pass.bind_texture("bgTileBuffer", &fx->dof_coc_dilated_tiles_bg_tx);
+  pass.bind_texture("fgColorBuffer", &fx->dof_fg_color_tx);
+  pass.bind_texture("fgWeightBuffer", &fx->dof_fg_weight_tx);
+  pass.bind_texture("holefillColorBuffer", &fx->dof_fg_holefill_color_tx);
+  pass.bind_texture("holefillWeightBuffer", &fx->dof_fg_holefill_weight_tx);
+  pass.bind_texture("fgTileBuffer", &fx->dof_coc_dilated_tiles_fg_tx);
+  pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+  pass.push_constant("cocParams", fx->dof_coc_params);
+  pass.push_constant("bokehMaxSize", fx->dof_bokeh_max_size);
   if (use_bokeh_tx) {
-    DRW_shgroup_uniform_vec2_copy(grp, "bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
-    DRW_shgroup_uniform_texture_ref(grp, "bokehLut", &fx->dof_bokeh_resolve_lut_tx);
+    pass.push_constant("bokehAnisotropyInv", fx->dof_bokeh_aniso_inv);
+    pass.bind_texture("bokehLut", &fx->dof_bokeh_resolve_lut_tx);
   }
-  DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+  pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 }
 
 void EEVEE_depth_of_field_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
@@ -990,17 +983,21 @@ void EEVEE_depth_of_field_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance 
 
 auto dof_recursive_reduce(void *instance, int /*level*/)
 {
+  blender::draw::View &drw_view = blender::draw::View::default_get();
+  blender::draw::Manager *manager = DRW_manager_get();
   Instance *inst = static_cast<Instance *>(instance);
   EEVEE_EffectsInfo *fx = inst->goo_data->effects;
 
   fx->dof_reduce_input_color_tx = inst->goo_data->dof_reduced_color;
   fx->dof_reduce_input_coc_tx = inst->goo_data->dof_reduced_coc;
 
-  DRW_draw_pass(inst->goo_data->dof_reduce);
+  manager->submit(inst->goo_data->dof_reduce, drw_view);
 }
 
 void EEVEE_depth_of_field_draw(Instance *inst)
 {
+  blender::draw::View &drw_view = blender::draw::View::default_get();
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects; /* TODO(fclem): Because of silly SWAP_BUFFERS. */
   EEVEE_EffectsInfo *fx = effects;
 
@@ -1009,14 +1006,14 @@ void EEVEE_depth_of_field_draw(Instance *inst)
 
     if (fx->dof_bokeh_gather_lut_tx != nullptr) {
       GPU_framebuffer_bind(inst->goo_data->dof_bokeh_fb);
-      DRW_draw_pass(inst->goo_data->dof_bokeh);
+      manager->submit(inst->goo_data->dof_bokeh, drw_view);
     }
 
     GPU_framebuffer_bind(inst->goo_data->dof_setup_fb);
-    DRW_draw_pass(inst->goo_data->dof_setup);
+    manager->submit(inst->goo_data->dof_setup, drw_view);
 
     GPU_framebuffer_bind(inst->goo_data->dof_flatten_tiles_fb);
-    DRW_draw_pass(inst->goo_data->dof_flatten_tiles);
+    manager->submit(inst->goo_data->dof_flatten_tiles, drw_view);
 
     dof_dilate_tiles_pass_draw(inst, fx);
 
@@ -1025,11 +1022,11 @@ void EEVEE_depth_of_field_draw(Instance *inst)
 
     /* First step is just a copy. */
     GPU_framebuffer_bind(inst->goo_data->dof_downsample_fb);
-    DRW_draw_pass(inst->goo_data->dof_downsample);
+    manager->submit(inst->goo_data->dof_downsample, drw_view);
 
     /* First step is just a copy. */
     GPU_framebuffer_bind(inst->goo_data->dof_reduce_copy_fb);
-    DRW_draw_pass(inst->goo_data->dof_reduce_copy);
+    manager->submit(inst->goo_data->dof_reduce_copy, drw_view);
 
     GPU_framebuffer_recursive_downsample(
         inst->goo_data->dof_reduce_fb, fx->dof_reduce_steps, dof_recursive_reduce, inst);
@@ -1037,37 +1034,37 @@ void EEVEE_depth_of_field_draw(Instance *inst)
     {
       /* Foreground convolution. */
       GPU_framebuffer_bind(inst->goo_data->dof_gather_fg_fb);
-      DRW_draw_pass(inst->goo_data->dof_gather_fg);
+      manager->submit(inst->goo_data->dof_gather_fg, drw_view);
 
       GPU_framebuffer_bind(inst->goo_data->dof_filter_fg_fb);
-      DRW_draw_pass(inst->goo_data->dof_filter);
+      manager->submit(inst->goo_data->dof_filter, drw_view);
 
       GPU_framebuffer_bind(inst->goo_data->dof_scatter_fg_fb);
-      DRW_draw_pass(inst->goo_data->dof_scatter_fg);
+      manager->submit(inst->goo_data->dof_scatter_fg, drw_view);
     }
 
     {
       /* Background convolution. */
       GPU_framebuffer_bind(inst->goo_data->dof_gather_bg_fb);
-      DRW_draw_pass(inst->goo_data->dof_gather_bg);
+      manager->submit(inst->goo_data->dof_gather_bg, drw_view);
 
       GPU_framebuffer_bind(inst->goo_data->dof_filter_bg_fb);
-      DRW_draw_pass(inst->goo_data->dof_filter);
+      manager->submit(inst->goo_data->dof_filter, drw_view);
 
       GPU_framebuffer_bind(inst->goo_data->dof_scatter_bg_fb);
-      DRW_draw_pass(inst->goo_data->dof_scatter_bg);
+      manager->submit(inst->goo_data->dof_scatter_bg, drw_view);
     }
 
     {
       /* Hole-fill convolution. */
       GPU_framebuffer_bind(inst->goo_data->dof_gather_fg_holefill_fb);
-      DRW_draw_pass(inst->goo_data->dof_gather_fg_holefill);
+      manager->submit(inst->goo_data->dof_gather_fg_holefill, drw_view);
 
       /* NOTE: do not filter the hole-fill pass as we use it as out filter input buffer. */
     }
 
     GPU_framebuffer_bind(fx->target_buffer);
-    DRW_draw_pass(inst->goo_data->dof_resolve);
+    manager->submit(inst->goo_data->dof_resolve, drw_view);
 
     SWAP_BUFFERS();
   }
