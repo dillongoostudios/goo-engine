@@ -37,18 +37,18 @@ void EEVEE_mist_output_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
   /* Mist settings. */
   if (scene && scene->world) {
-    g_data->mist_start = scene->world->miststa;
-    g_data->mist_inv_dist = (scene->world->mistdist > 0.0f) ? 1.0f / scene->world->mistdist : 0.0f;
+    g_data->mist_data[0] = scene->world->miststa;
+    g_data->mist_data[1] = (scene->world->mistdist > 0.0f) ? 1.0f / scene->world->mistdist : 0.0f;
 
     switch (scene->world->mistype) {
       case WO_MIST_QUADRATIC:
-        g_data->mist_falloff = 2.0f;
+        g_data->mist_data[2] = 2.0f;
         break;
       case WO_MIST_LINEAR:
-        g_data->mist_falloff = 1.0f;
+        g_data->mist_data[2] = 1.0f;
         break;
       case WO_MIST_INVERSE_QUADRATIC:
-        g_data->mist_falloff = 0.5f;
+        g_data->mist_data[2] = 0.5f;
         break;
     }
   }
@@ -56,27 +56,29 @@ void EEVEE_mist_output_init(EEVEE_ViewLayerData *sldata, Instance *inst)
     float near = DRW_view_near_distance_get(nullptr);
     float far = DRW_view_far_distance_get(nullptr);
     /* Fallback */
-    g_data->mist_start = near;
-    g_data->mist_inv_dist = 1.0f / fabsf(far - near);
-    g_data->mist_falloff = 1.0f;
+    g_data->mist_data[0] = near;
+    g_data->mist_data[1] = 1.0f / fabsf(far - near);
+    g_data->mist_data[2] = 1.0f;
   }
 
   /* XXX ??!! WHY? If not it does not match cycles. */
-  g_data->mist_falloff *= 0.5f;
+  g_data->mist_data[2] *= 0.5f;
 
   /* Create Pass and shgroup. */
-  DRW_PASS_CREATE(inst->goo_data->mist_accum_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
-  DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MIST),
-                                            inst->goo_data->mist_accum_ps);
-  DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &dtxl->depth);
-  DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-  DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-  DRW_shgroup_uniform_vec3(grp, "mistSettings", &g_data->mist_start, 1);
-  DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);
+  blender::draw::PassSimple &mist_accum_ps_ = inst->goo_data->mist_accum_ps;
+  mist_accum_ps_.init();
+  mist_accum_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
+  mist_accum_ps_.shader_set(inst->shaders.static_shader_get(EFFECT_MIST));
+  mist_accum_ps_.bind_texture("depthBuffer", &dtxl->depth);
+  mist_accum_ps_.bind_ubo("common_block", sldata->common_ubo);
+  mist_accum_ps_.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+  mist_accum_ps_.push_constant("mistSettings", &g_data->mist_data);
+  mist_accum_ps_.draw(DRW_cache_fullscreen_quad_get());
 }
 
 void EEVEE_mist_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if (inst->goo_data->mist_accum_fb != nullptr) {
@@ -88,7 +90,7 @@ void EEVEE_mist_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instance *in
       GPU_framebuffer_clear_color(inst->goo_data->mist_accum_fb, clear);
     }
 
-    DRW_draw_pass(inst->goo_data->mist_accum_ps);
+    manager->submit(inst->goo_data->mist_accum_ps);
 
     /* Restore */
     GPU_framebuffer_bind(inst->goo_data->main_fb);

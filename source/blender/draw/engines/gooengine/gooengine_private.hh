@@ -791,7 +791,7 @@ struct EEVEE_PrivateData {
   Object *cam_original_ob;
 
   /* Mist Settings */
-  float mist_start, mist_inv_dist, mist_falloff;
+  float3 mist_data;
 
   /* Color Management */
   bool use_color_render_settings;
@@ -863,7 +863,7 @@ struct GOOENGINE_Data {
   DRWPass *ao_horizon_search;
   DRWPass *ao_horizon_debug;
   DRWPass *ao_accum_ps;
-  DRWPass *mist_accum_ps;
+  PassSimple mist_accum_ps = {"mist_accum_ps"};
   DRWPass *motion_blur;
   PassSimple bloom_blit = {"bloom_blit"};
   PassSimple bloom_downsample_first = {"bloom_downsample_first"};
