@@ -36,6 +36,12 @@ struct GPUFrameBuffer;
 struct Object;
 struct RenderLayer;
 
+using blender::draw::Framebuffer;
+using blender::draw::PassSimple;
+using blender::draw::ResourceHandle;
+using blender::draw::Texture;
+using blender::draw::View;
+
 /* Special value chosen to not be altered by depth of field sample count. */
 #define TAA_MAX_SAMPLE 10000926
 
@@ -581,14 +587,14 @@ struct EEVEE_EffectsInfo {
   DRWView *lookdev_view;
   /* Bloom */
   int bloom_iteration_len;
-  float source_texel_size[2];
-  float blit_texel_size[2];
+  float2 source_texel_size;
+  float2 blit_texel_size;
   float downsamp_texel_size[MAX_BLOOM_STEP][2];
-  float bloom_color[3];
+  float3 bloom_color;
   float bloom_clamp;
   float bloom_sample_scale;
-  float bloom_curve_threshold[4];
-  float unf_source_texel_size[2];
+  float4 bloom_curve_threshold;
+  float2 unf_source_texel_size;
   GPUTexture *bloom_blit; /* Textures from pool */
   GPUTexture *bloom_downsample[MAX_BLOOM_STEP];
   GPUTexture *bloom_upsample[MAX_BLOOM_STEP - 1];
@@ -856,12 +862,12 @@ struct GOOENGINE_Data {
   DRWPass *ao_accum_ps;
   DRWPass *mist_accum_ps;
   DRWPass *motion_blur;
-  DRWPass *bloom_blit;
-  DRWPass *bloom_downsample_first;
-  DRWPass *bloom_downsample;
-  DRWPass *bloom_upsample;
-  DRWPass *bloom_resolve;
-  DRWPass *bloom_accum_ps;
+  PassSimple bloom_blit = {"bloom_blit"};
+  PassSimple bloom_downsample_first = {"bloom_downsample_first"};
+  PassSimple bloom_downsample = {"bloom_downsample"};
+  PassSimple bloom_upsample = {"bloom_upsample"};
+  PassSimple bloom_resolve = {"bloom_resolve"};
+  PassSimple bloom_accum_ps = {"bloom_accum_ps"};
   DRWPass *dof_setup;
   DRWPass *dof_flatten_tiles;
   DRWPass *dof_dilate_tiles_minmax;
@@ -1009,7 +1015,7 @@ struct GOOENGINE_Data {
   GPUTexture *spec_light_accum;
   GPUTexture *aov_surface_accum[MAX_AOVS];
   GPUTexture *emit_accum;
-  GPUTexture *bloom_accum;
+  Texture bloom_accum = {"bloom_accum"};
   GPUTexture *ssr_accum;
   GPUTexture *shadow_accum;
   GPUTexture *transparent_accum;

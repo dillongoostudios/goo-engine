@@ -128,39 +128,9 @@ int EEVEE_bloom_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
   return 0;
 }
 
-static DRWShadingGroup *eevee_create_bloom_pass(const char *name,
-                                                EEVEE_EffectsInfo *effects,
-                                                GPUShader *sh,
-                                                DRWPass **pass,
-                                                bool upsample,
-                                                bool resolve,
-                                                bool resolve_add_base)
-{
-  blender::gpu::Batch *quad = DRW_cache_fullscreen_quad_get();
-
-  *pass = DRW_pass_create(name, DRW_STATE_WRITE_COLOR);
-
-  DRWShadingGroup *grp = DRW_shgroup_create(sh, *pass);
-  DRW_shgroup_call(grp, quad, nullptr);
-  DRW_shgroup_uniform_texture_ref(grp, "sourceBuffer", &effects->unf_source_buffer);
-  DRW_shgroup_uniform_vec2(grp, "sourceBufferTexelSize", effects->unf_source_texel_size, 1);
-  if (upsample) {
-    DRW_shgroup_uniform_texture_ref(grp, "baseBuffer", &effects->unf_base_buffer);
-    DRW_shgroup_uniform_float(grp, "sampleScale", &effects->bloom_sample_scale, 1);
-  }
-  if (resolve) {
-    DRW_shgroup_uniform_vec3(grp, "bloomColor", effects->bloom_color, 1);
-    DRW_shgroup_uniform_bool_copy(grp, "bloomAddBase", resolve_add_base);
-  }
-
-  return grp;
-}
-
 void EEVEE_bloom_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
-
-  inst->goo_data->bloom_accum_ps = nullptr;
 
   if ((effects->enabled_effects & EFFECT_BLOOM) != 0) {
     /**
@@ -193,46 +163,64 @@ void EEVEE_bloom_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
      *                          Color Downsampled [1/N] ─────────────────────────┘
      * </pre>
      */
-    DRWShadingGroup *grp;
-    eevee_create_bloom_pass("Bloom Downsample First",
-                            effects,
-                            inst->shaders.static_shader_get(BLOOM_DOWNSAMPLE_HQ),
-                            &inst->goo_data->bloom_downsample_first,
-                            false,
-                            false,
-                            false);
-    eevee_create_bloom_pass("Bloom Downsample",
-                            effects,
-                            inst->shaders.static_shader_get(BLOOM_DOWNSAMPLE),
-                            &inst->goo_data->bloom_downsample,
-                            false,
-                            false,
-                            false);
-    eevee_create_bloom_pass("Bloom Upsample",
-                            effects,
-                            inst->shaders.static_shader_get(BLOOM_UPSAMPLE_HQ),
-                            &inst->goo_data->bloom_upsample,
-                            true,
-                            false,
-                            false);
 
-    grp = eevee_create_bloom_pass("Bloom Blit",
-                                  effects,
-                                  inst->shaders.static_shader_get(BLOOM_BLIT_HQ),
-                                  &inst->goo_data->bloom_blit,
-                                  false,
-                                  false,
-                                  false);
-    DRW_shgroup_uniform_vec4(grp, "curveThreshold", effects->bloom_curve_threshold, 1);
-    DRW_shgroup_uniform_float(grp, "clampIntensity", &effects->bloom_clamp, 1);
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->bloom_downsample_first;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(BLOOM_DOWNSAMPLE_HQ));
+      pass.bind_texture("sourceBuffer", &effects->unf_source_buffer);
+      pass.push_constant("sourceBufferTexelSize", &effects->unf_source_texel_size);
+      pass.draw(DRW_cache_fullscreen_quad_get());
+    }
+    
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->bloom_downsample;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(BLOOM_DOWNSAMPLE));
+      pass.bind_texture("sourceBuffer", &effects->unf_source_buffer);
+      pass.push_constant("sourceBufferTexelSize", &effects->unf_source_texel_size);
+      pass.draw(DRW_cache_fullscreen_quad_get());
+    }
 
-    grp = eevee_create_bloom_pass("Bloom Resolve",
-                                  effects,
-                                  inst->shaders.static_shader_get(BLOOM_RESOLVE_HQ),
-                                  &inst->goo_data->bloom_resolve,
-                                  true,
-                                  true,
-                                  true);
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->bloom_upsample;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(BLOOM_UPSAMPLE_HQ));
+      pass.bind_texture("sourceBuffer", &effects->unf_source_buffer);
+      pass.push_constant("sourceBufferTexelSize", &effects->unf_source_texel_size);
+      pass.bind_texture("baseBuffer", &effects->unf_base_buffer);
+      pass.push_constant("sampleScale", &effects->bloom_sample_scale);
+      pass.draw(DRW_cache_fullscreen_quad_get());
+    }    
+
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->bloom_blit;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(BLOOM_BLIT_HQ));
+      pass.bind_texture("sourceBuffer", &effects->unf_source_buffer);
+      pass.push_constant("sourceBufferTexelSize", &effects->unf_source_texel_size);
+      pass.push_constant("curveThreshold", effects->bloom_curve_threshold);
+      pass.push_constant("clampIntensity", &effects->bloom_clamp);
+      pass.draw(DRW_cache_fullscreen_quad_get());
+    }
+
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->bloom_resolve;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(BLOOM_RESOLVE_HQ));
+      pass.bind_texture("sourceBuffer", &effects->unf_source_buffer);
+      pass.push_constant("sourceBufferTexelSize", &effects->unf_source_texel_size);
+      pass.bind_texture("baseBuffer", &effects->unf_base_buffer);
+      pass.push_constant("sampleScale", &effects->bloom_sample_scale);
+      pass.push_constant("bloomColor", effects->bloom_color);
+      pass.push_constant("bloomAddBase", true);
+      pass.draw(DRW_cache_fullscreen_quad_get());
+    }
   }
 }
 
@@ -242,6 +230,7 @@ void EEVEE_bloom_draw(Instance *inst)
 
   /* Bloom */
   if ((effects->enabled_effects & EFFECT_BLOOM) != 0) {
+    blender::draw::Manager *manager = DRW_manager_get();
     GPUTexture *last;
 
     /* Extract bright pixels */
@@ -249,14 +238,14 @@ void EEVEE_bloom_draw(Instance *inst)
     effects->unf_source_buffer = effects->source_buffer;
 
     GPU_framebuffer_bind(inst->goo_data->bloom_blit_fb);
-    DRW_draw_pass(inst->goo_data->bloom_blit);
+    manager->submit(inst->goo_data->bloom_blit);
 
     /* Downsample */
     copy_v2_v2(effects->unf_source_texel_size, effects->blit_texel_size);
     effects->unf_source_buffer = effects->bloom_blit;
 
     GPU_framebuffer_bind(inst->goo_data->bloom_down_fb[0]);
-    DRW_draw_pass(inst->goo_data->bloom_downsample_first);
+    manager->submit(inst->goo_data->bloom_downsample_first);
 
     last = effects->bloom_downsample[0];
 
@@ -265,7 +254,7 @@ void EEVEE_bloom_draw(Instance *inst)
       effects->unf_source_buffer = last;
 
       GPU_framebuffer_bind(inst->goo_data->bloom_down_fb[i]);
-      DRW_draw_pass(inst->goo_data->bloom_downsample);
+      manager->submit(inst->goo_data->bloom_downsample);
 
       /* Used in next loop */
       last = effects->bloom_downsample[i];
@@ -278,7 +267,7 @@ void EEVEE_bloom_draw(Instance *inst)
       effects->unf_base_buffer = effects->bloom_downsample[i];
 
       GPU_framebuffer_bind(inst->goo_data->bloom_accum_fb[i]);
-      DRW_draw_pass(inst->goo_data->bloom_upsample);
+      manager->submit(inst->goo_data->bloom_upsample);
 
       last = effects->bloom_upsample[i];
     }
@@ -289,7 +278,7 @@ void EEVEE_bloom_draw(Instance *inst)
     effects->unf_base_buffer = effects->source_buffer;
 
     GPU_framebuffer_bind(effects->target_buffer);
-    DRW_draw_pass(inst->goo_data->bloom_resolve);
+    manager->submit(inst->goo_data->bloom_resolve);
     SWAP_BUFFERS();
   }
 }
@@ -306,22 +295,28 @@ void EEVEE_bloom_output_init(EEVEE_ViewLayerData * /*sldata*/,
   GPU_framebuffer_ensure_config(&inst->goo_data->bloom_pass_accum_fb,
                                 {GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(inst->goo_data->bloom_accum)});
 
-  /* Create Pass and shgroup. */
-  eevee_create_bloom_pass("Bloom Accumulate",
-                          effects,
-                          inst->shaders.static_shader_get(BLOOM_RESOLVE_HQ),
-                          &inst->goo_data->bloom_accum_ps,
-                          true,
-                          true,
-                          false);
+  /* Create Pass. */
+  blender::draw::PassSimple &pass = inst->goo_data->bloom_accum_ps;
+  pass.init();
+  pass.state_set(DRW_STATE_WRITE_COLOR);
+  pass.shader_set(inst->shaders.static_shader_get(BLOOM_RESOLVE_HQ));
+  pass.bind_texture("sourceBuffer", &effects->unf_source_buffer);
+  pass.push_constant("sourceBufferTexelSize", &effects->unf_source_texel_size);
+  pass.bind_texture("baseBuffer", &effects->unf_base_buffer);
+  pass.push_constant("sampleScale", &effects->bloom_sample_scale);
+  pass.push_constant("bloomColor", effects->bloom_color);
+  pass.push_constant("bloomAddBase", false);
+  pass.draw(DRW_cache_fullscreen_quad_get());
 }
 
 void EEVEE_bloom_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
 
   if (inst->goo_data->g_data->render_passes & EEVEE_RENDER_PASS_BLOOM) {
+    blender::draw::Manager *manager = DRW_manager_get();
+    
     GPU_framebuffer_bind(inst->goo_data->bloom_pass_accum_fb);
-    DRW_draw_pass(inst->goo_data->bloom_accum_ps);
+    manager->submit(inst->goo_data->bloom_accum_ps);
 
     /* Restore */
     GPU_framebuffer_bind(inst->goo_data->main_fb);
