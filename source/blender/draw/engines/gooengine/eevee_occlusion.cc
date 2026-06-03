@@ -118,7 +118,7 @@ void EEVEE_occlusion_output_init(EEVEE_ViewLayerData *sldata, Instance *inst, ui
   /* Accumulation pass */
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD;
   DRW_PASS_CREATE(inst->goo_data->ao_accum_ps, state);
-  DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_effect_ambient_occlusion_debug_sh_get(),
+  DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(AMBIENT_OCCLUSION_DEBUG),
                                             inst->goo_data->ao_accum_ps);
   DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
   DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &inst->goo_data->maxzbuffer);
@@ -150,7 +150,7 @@ void EEVEE_occlusion_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
      *   lobe present in the shader using the correct normal.
      */
     DRW_PASS_CREATE(inst->goo_data->ao_horizon_search, DRW_STATE_WRITE_COLOR);
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_effect_ambient_occlusion_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(AMBIENT_OCCLUSION),
                                               inst->goo_data->ao_horizon_search);
     DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
     DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &inst->goo_data->maxzbuffer);
@@ -160,7 +160,7 @@ void EEVEE_occlusion_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
     if (G.debug_value == 6) {
       DRW_PASS_CREATE(inst->goo_data->ao_horizon_debug, DRW_STATE_WRITE_COLOR);
-      grp = DRW_shgroup_create(EEVEE_shaders_effect_ambient_occlusion_debug_sh_get(),
+      grp = DRW_shgroup_create(inst->shaders.static_shader_get(AMBIENT_OCCLUSION),
                                inst->goo_data->ao_horizon_debug);
       DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
       DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &inst->goo_data->maxzbuffer);

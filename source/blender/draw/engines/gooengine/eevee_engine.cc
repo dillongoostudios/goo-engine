@@ -31,6 +31,7 @@
 #include "IMB_imbuf.hh"
 
 #include "eevee_private.hh"
+#include "gooengine_shadermod.hh"
 
 #include "draw_handle.hh"
 
@@ -209,6 +210,13 @@ void Instance::init(const int2 &output_res,
   EEVEE_materials_init(sldata, this);
   EEVEE_shadows_init(sldata);
   EEVEE_lightprobes_init(sldata, this);
+
+  shaders_are_ready_ = shaders.static_shaders_are_ready(true);
+  if (!shaders_are_ready_) {
+    skip_render_ = true;
+    return;
+  }
+
 }
 
 

@@ -97,7 +97,6 @@ class Manager;
 
 typedef struct DRWCallBuffer DRWCallBuffer;
 typedef struct DRWPass DRWPass;
-typedef struct DRWShaderLibrary DRWShaderLibrary;
 typedef struct DRWShadingGroup DRWShadingGroup;
 typedef struct DRWUniform DRWUniform;
 typedef struct DRWView DRWView;
@@ -250,8 +249,6 @@ void DRW_texture_free(GPUTexture *tex);
     } \
   } while (0)
 
-/* Shaders */
-GPUShader *DRW_shader_create_from_info_name(const char *info_name);
 /** IMPORTANT: Modify the currently bound context. */
 void DRW_shader_init();
 void DRW_shader_exit();
@@ -275,36 +272,6 @@ GPUMaterial *DRW_shader_from_material(
     void *thunk,
     GPUMaterialPassReplacementCallbackFn pass_replacement_cb = nullptr);
 void DRW_shader_queue_optimize_material(GPUMaterial *mat);
-
-DRWShaderLibrary *DRW_shader_library_create();
-
-/**
- * \warning Each library must be added after all its dependencies.
- */
-void DRW_shader_library_add_file(DRWShaderLibrary *lib,
-                                 const char *lib_code,
-                                 const char *lib_name);
-#define DRW_SHADER_LIB_ADD(lib, lib_name) \
-  DRW_shader_library_add_file(lib, datatoc_##lib_name##_glsl, STRINGIFY(lib_name) ".glsl")
-
-#define DRW_SHADER_LIB_ADD_SHARED(lib, lib_name) \
-  DRW_shader_library_add_file(lib, datatoc_##lib_name##_hh, STRINGIFY(lib_name) ".hh")
-
-/**
- * \return an allocN'ed string containing the shader code with its dependencies prepended.
- * Caller must free the string with #MEM_freeN after use.
- */
-char *DRW_shader_library_create_shader_string(const DRWShaderLibrary *lib,
-                                              const char *shader_code);
-
-void DRW_shader_library_free(DRWShaderLibrary *lib);
-#define DRW_SHADER_LIB_FREE_SAFE(lib) \
-  do { \
-    if (lib != nullptr) { \
-      DRW_shader_library_free(lib); \
-      lib = nullptr; \
-    } \
-  } while (0)
 
 /* Batches */
 

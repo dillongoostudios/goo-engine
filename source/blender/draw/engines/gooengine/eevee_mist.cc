@@ -66,7 +66,7 @@ void EEVEE_mist_output_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
   /* Create Pass and shgroup. */
   DRW_PASS_CREATE(inst->goo_data->mist_accum_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
-  DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_effect_mist_sh_get(),
+  DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MIST),
                                             inst->goo_data->mist_accum_ps);
   DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &dtxl->depth);
   DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);

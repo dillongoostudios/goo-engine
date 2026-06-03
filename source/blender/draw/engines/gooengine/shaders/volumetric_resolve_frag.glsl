@@ -5,6 +5,7 @@
 /* Based on Frosbite Unified Volumetric.
  * https://www.ea.com/frostbite/news/physically-based-unified-volumetric-rendering-in-frostbite */
 
+#include "gooengine_nodetree_lib.glsl"
 #include "volumetric_lib.glsl"
 
 /* Step 4 : Apply final integration on top of the scene color. */

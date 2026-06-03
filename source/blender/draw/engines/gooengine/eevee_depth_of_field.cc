@@ -357,7 +357,7 @@ static void dof_bokeh_pass_init(Instance *inst,
 
   DRW_PASS_CREATE(inst->goo_data->dof_bokeh, DRW_STATE_WRITE_COLOR);
 
-  GPUShader *sh = EEVEE_shaders_depth_of_field_bokeh_get();
+  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_BOKEH);
   DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_bokeh);
   DRW_shgroup_uniform_float_copy(grp, "bokehSides", fx->dof_bokeh_blades);
   DRW_shgroup_uniform_float_copy(grp, "bokehRotation", fx->dof_bokeh_rotation);
@@ -395,7 +395,7 @@ static void dof_setup_pass_init(Instance *inst,
 
   DRW_PASS_CREATE(inst->goo_data->dof_setup, DRW_STATE_WRITE_COLOR);
 
-  GPUShader *sh = EEVEE_shaders_depth_of_field_setup_get();
+  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SETUP);
   DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_setup);
   DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &fx->source_buffer, NO_FILTERING);
   DRW_shgroup_uniform_texture_ref_ex(grp, "depthBuffer", &dtxl->depth, NO_FILTERING);
@@ -430,7 +430,7 @@ static void dof_flatten_tiles_pass_init(Instance *inst,
 
   DRW_PASS_CREATE(inst->goo_data->dof_flatten_tiles, DRW_STATE_WRITE_COLOR);
 
-  GPUShader *sh = EEVEE_shaders_depth_of_field_flatten_tiles_get();
+  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_FLATTEN_TILES);
   DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_flatten_tiles);
   DRW_shgroup_uniform_texture_ref_ex(
       grp, "halfResCocBuffer", &fx->dof_half_res_coc_tx, NO_FILTERING);
@@ -466,9 +466,15 @@ static void dof_dilate_tiles_pass_init(Instance *inst,
   DRW_PASS_CREATE(inst->goo_data->dof_dilate_tiles_minmax, DRW_STATE_WRITE_COLOR);
   DRW_PASS_CREATE(inst->goo_data->dof_dilate_tiles_minabs, DRW_STATE_WRITE_COLOR);
 
+  GPUShader *sh;
   for (int pass = 0; pass < 2; pass++) {
     DRWPass *drw_pass = (pass == 0) ? inst->goo_data->dof_dilate_tiles_minmax : inst->goo_data->dof_dilate_tiles_minabs;
-    GPUShader *sh = EEVEE_shaders_depth_of_field_dilate_tiles_get(pass);
+    if (pass == 0) {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_DILATE_TILES_MINMAX);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_DILATE_TILES_MINABS);
+    }
     DRWShadingGroup *grp = DRW_shgroup_create(sh, drw_pass);
     DRW_shgroup_uniform_texture_ref(grp, "cocTilesFgBuffer", &fx->dof_coc_tiles_fg_tx);
     DRW_shgroup_uniform_texture_ref(grp, "cocTilesBgBuffer", &fx->dof_coc_tiles_bg_tx);
@@ -565,7 +571,7 @@ static void dof_reduce_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_downsample, DRW_STATE_WRITE_COLOR);
 
-    GPUShader *sh = EEVEE_shaders_depth_of_field_downsample_get();
+    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_DOWNSAMPLE);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_downsample);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
@@ -587,8 +593,7 @@ static void dof_reduce_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_reduce_copy, DRW_STATE_WRITE_COLOR);
 
-    const bool is_copy_pass = true;
-    GPUShader *sh = EEVEE_shaders_depth_of_field_reduce_get(is_copy_pass);
+    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_REDUCE_COPY);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_reduce_copy);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
@@ -612,8 +617,7 @@ static void dof_reduce_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_reduce, DRW_STATE_WRITE_COLOR);
 
-    const bool is_copy_pass = false;
-    GPUShader *sh = EEVEE_shaders_depth_of_field_reduce_get(is_copy_pass);
+    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_REDUCE);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_reduce);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "colorBuffer", &fx->dof_reduce_input_color_tx, NO_FILTERING);
@@ -679,7 +683,7 @@ static void dof_gather_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_gather_fg_holefill, DRW_STATE_WRITE_COLOR);
 
-    GPUShader *sh = EEVEE_shaders_depth_of_field_gather_get(DOF_GATHER_HOLEFILL, false);
+    GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_HOLEFILL);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_gather_fg_holefill);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
@@ -710,7 +714,14 @@ static void dof_gather_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_gather_fg, DRW_STATE_WRITE_COLOR);
 
-    GPUShader *sh = EEVEE_shaders_depth_of_field_gather_get(DOF_GATHER_FOREGROUND, use_bokeh_tx);
+    GPUShader *sh;
+    if (use_bokeh_tx) {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_FG_BOKEH);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_FG);
+    }
+
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_gather_fg);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
@@ -753,7 +764,14 @@ static void dof_gather_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_gather_bg, DRW_STATE_WRITE_COLOR);
 
-    GPUShader *sh = EEVEE_shaders_depth_of_field_gather_get(DOF_GATHER_BACKGROUND, use_bokeh_tx);
+    GPUShader *sh;
+    if (use_bokeh_tx) {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_BG_BOKEH);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_GATHER_BG);
+    }
+
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_gather_bg);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "colorBufferBilinear", &inst->goo_data->dof_reduced_color, WITH_FILTERING);
@@ -800,7 +818,7 @@ static void dof_filter_pass_init(Instance *inst,
 {
   DRW_PASS_CREATE(inst->goo_data->dof_filter, DRW_STATE_WRITE_COLOR);
 
-  GPUShader *sh = EEVEE_shaders_depth_of_field_filter_get();
+  GPUShader *sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_FILTER);
   DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_filter);
   DRW_shgroup_uniform_texture_ref_ex(
       grp, "colorBuffer", &fx->dof_fg_holefill_color_tx, NO_FILTERING);
@@ -841,8 +859,14 @@ static void dof_scatter_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_scatter_fg, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
 
-    const bool is_foreground = true;
-    GPUShader *sh = EEVEE_shaders_depth_of_field_scatter_get(is_foreground, use_bokeh_tx);
+    GPUShader *sh;
+    if (use_bokeh_tx) {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_FG_BOKEH);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_FG);
+    }
+
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_scatter_fg);
     DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &fx->dof_scatter_src_tx, NO_FILTERING);
     DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
@@ -869,8 +893,14 @@ static void dof_scatter_pass_init(Instance *inst,
   {
     DRW_PASS_CREATE(inst->goo_data->dof_scatter_bg, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
 
-    const bool is_foreground = false;
-    GPUShader *sh = EEVEE_shaders_depth_of_field_scatter_get(is_foreground, use_bokeh_tx);
+    GPUShader *sh;
+    if (use_bokeh_tx) {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_BG_BOKEH);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(DEPTH_OF_FIELD_SCATTER_BG);
+    }
+
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_scatter_bg);
     DRW_shgroup_uniform_texture_ref_ex(grp, "colorBuffer", &fx->dof_scatter_src_tx, NO_FILTERING);
     DRW_shgroup_uniform_texture_ref_ex(grp, "cocBuffer", &inst->goo_data->dof_reduced_coc, NO_FILTERING);
@@ -905,7 +935,16 @@ static void dof_recombine_pass_init(Instance *inst,
 
   DRW_PASS_CREATE(inst->goo_data->dof_resolve, DRW_STATE_WRITE_COLOR);
 
-  GPUShader *sh = EEVEE_shaders_depth_of_field_resolve_get(use_bokeh_tx, fx->dof_hq_slight_focus);
+  GPUShader *sh;
+  if (fx->dof_hq_slight_focus) {
+    sh = (use_bokeh_tx) ? inst->shaders.static_shader_get(DEPTH_OF_FIELD_RESOLVE_HQ_BOKEH) :
+                                                inst->shaders.static_shader_get(DEPTH_OF_FIELD_RESOLVE_HQ);
+  }
+  else {
+    sh = (use_bokeh_tx) ? inst->shaders.static_shader_get(DEPTH_OF_FIELD_RESOLVE_LQ_BOKEH) :
+                                                inst->shaders.static_shader_get(DEPTH_OF_FIELD_RESOLVE_LQ);
+  }
+  
   DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->dof_resolve);
   DRW_shgroup_uniform_texture_ref_ex(grp, "fullResColorBuffer", &fx->source_buffer, NO_FILTERING);
   DRW_shgroup_uniform_texture_ref_ex(grp, "fullResDepthBuffer", &dtxl->depth, NO_FILTERING);

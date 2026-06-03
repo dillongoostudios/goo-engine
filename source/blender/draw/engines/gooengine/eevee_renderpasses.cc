@@ -224,7 +224,7 @@ void EEVEE_renderpasses_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst
                                       EEVEE_RENDERPASSES_WITH_POST_PROCESSING) > 0;
   if (needs_post_processing) {
     DRW_PASS_CREATE(inst->goo_data->renderpass_pass, DRW_STATE_WRITE_COLOR);
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_renderpasses_post_process_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(RENDERPASSES_POST_PROCESS),
                                               inst->goo_data->renderpass_pass);
     DRW_shgroup_uniform_texture_ref(grp, "inputBuffer", &g_data->renderpass_input);
     DRW_shgroup_uniform_texture_ref(grp, "inputColorBuffer", &g_data->renderpass_col_input);

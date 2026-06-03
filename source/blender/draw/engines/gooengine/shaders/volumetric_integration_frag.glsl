@@ -8,6 +8,7 @@
 /* Step 3 : Integrate for each froxel the final amount of light
  * scattered back to the viewer and the amount of transmittance. */
 
+#include "gooengine_nodetree_lib.glsl"
 #include "volumetric_lib.glsl"
 
 /* Globals when using OPTI */

@@ -61,6 +61,7 @@ static void eevee_lookdev_hdri_preview_init(Instance *inst, EEVEE_ViewLayerData 
 
   {
     Material *ma = EEVEE_material_default_diffuse_get();
+    printf("GET LOOK DEV MAT 1 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
     GPUShader *sh = GPU_material_get_shader(gpumat);
 
@@ -73,6 +74,8 @@ static void eevee_lookdev_hdri_preview_init(Instance *inst, EEVEE_ViewLayerData 
   }
   {
     Material *ma = EEVEE_material_default_glossy_get();
+    
+    printf("GET LOOK DEV MAT 2 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
     GPUShader *sh = GPU_material_get_shader(gpumat);
 
@@ -169,8 +172,8 @@ void EEVEE_lookdev_cache_init(Instance *inst,
       return;
     }
 
-    GPUShader *shader = probe_render ? EEVEE_shaders_studiolight_probe_sh_get() :
-                                       EEVEE_shaders_studiolight_background_sh_get();
+    GPUShader *shader = probe_render ? inst->shaders.static_shader_get(STUDIOLIGHT_PROBE) :
+                                       inst->shaders.static_shader_get(STUDIOLIGHT_BACKGROUND);
 
     const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
     int cube_res = scene_eval->eevee.gi_cubemap_resolution;

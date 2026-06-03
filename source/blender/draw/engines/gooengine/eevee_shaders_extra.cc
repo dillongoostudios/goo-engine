@@ -24,9 +24,9 @@ namespace blender::gooengine {
 
 void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
                                              GPUCodegenOutput *codegen_,
-                                             char *vert,
-                                             char *geom,
-                                             char *frag,
+                                             const char *vert,
+                                             const char *geom,
+                                             const char *frag,
                                              const char *vert_info_name,
                                              const char *geom_info_name,
                                              const char *frag_info_name,
@@ -43,6 +43,31 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
 
   GPUCodegenOutput &codegen = *codegen_;
   ShaderCreateInfo &info = *reinterpret_cast<ShaderCreateInfo *>(codegen.create_info);
+  printf("\n");
+  if (!(vert == nullptr)) {
+    printf(vert);
+  }
+  printf("\n");
+  if (!(vert_info_name == nullptr)) {
+    printf(vert_info_name);
+  }
+  printf("\n");
+  if (!(geom == nullptr)) {
+    printf(geom);
+  }
+  printf("\n");
+  if (!(geom_info_name == nullptr)) {
+    printf(geom_info_name);
+  }
+  printf("\n");
+  if (!(frag == nullptr)) {
+    printf(frag);
+  }
+  printf("\n");
+  if (!(frag_info_name == nullptr)) {
+    printf(frag_info_name);
+  }
+  printf("\n");
 
   /* Append stage-specific create info. */
   if (vert_info_name) {
@@ -144,6 +169,7 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
   std::stringstream vert_gen, frag_gen, geom_gen;
 
   if (do_fragment_attrib_load) {
+    printf("do frag\n");
     frag_gen << attr_load.str();
   }
   else {
@@ -151,14 +177,14 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
   }
 
   {
-    vert_gen << vert;
+    // vert_gen << vert;
     info.vertex_source_generated = vert_gen.str();
     /* Everything is in generated source. */
-    info.vertex_source(is_volume ? "eevee_empty_volume.glsl" : "eevee_empty.glsl");
+    info.vertex_source(vert);
   }
 
   {
-    frag_gen << frag;
+    // frag_gen << frag;
     frag_gen << codegen.material_functions;
     frag_gen << "Closure nodetree_exec()\n";
     frag_gen << "{\n";
@@ -179,17 +205,21 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
       frag_gen << "}\n\n";
     }
 
+    
     info.fragment_source_generated = frag_gen.str();
+
+    // std::cout << "FRAG SOURCE " << info.fragment_source_generated
+    //           << "\n\n\n\n";
     /* Everything is in generated source. */
-    info.fragment_source(is_volume ? "eevee_empty_volume.glsl" : "eevee_empty.glsl");
+    info.fragment_source(frag);
   }
 
   if (geom) {
-    geom_gen << geom;
+    // geom_gen << geom;
     info.geometry_source_generated = geom_gen.str();
     info.geometry_layout(PrimitiveIn::TRIANGLES, PrimitiveOut::TRIANGLE_STRIP, 3);
     /* Everything is in generated source. */
-    info.geometry_source("eevee_empty.glsl");
+    info.geometry_source(geom);
   }
 
   if (defines) {

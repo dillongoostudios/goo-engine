@@ -246,8 +246,6 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
   EEVEE_PrivateData *g_data = inst->goo_data->g_data;
 
   if (!e_data.util_tex) {
-    EEVEE_shaders_material_shaders_init();
-
     eevee_init_util_texture();
     eevee_init_noise_texture();
   }
@@ -369,6 +367,7 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
       Scene *scene = draw_ctx->scene;
       World *wo = scene->world;
       if (wo && wo->use_nodes) {
+        printf("GET WORLD MAT \n");
         EEVEE_material_get(inst, scene, nullptr, wo, VAR_WORLD_BACKGROUND);
       }
     }
@@ -402,6 +401,7 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
       World *world = (scene->world) ? scene->world : EEVEE_world_default_get();
 
       const int options = VAR_WORLD_BACKGROUND;
+      printf("GET WROLD MAT 2 \n");
       GPUMaterial *gpumat = EEVEE_material_get(inst, scene, nullptr, world, options);
 
       grp = DRW_shgroup_material_create(gpumat, inst->goo_data->background_ps);
@@ -488,7 +488,7 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   }
   {
     DRW_PASS_CREATE(inst->goo_data->update_noise_pass, DRW_STATE_WRITE_COLOR);
-    GPUShader *sh = EEVEE_shaders_update_noise_sh_get();
+    GPUShader *sh = inst->shaders.static_shader_get(UPDATE_NOISE);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->update_noise_pass);
     DRW_shgroup_uniform_texture(grp, "blueNoise", e_data.noise_tex);
     DRW_shgroup_uniform_vec3(grp, "offsets", e_data.noise_offsets, 1);
@@ -515,6 +515,7 @@ BLI_INLINE void material_shadow(Instance *inst,
     int mat_options = VAR_MAT_MESH | VAR_MAT_DEPTH;
     SET_FLAG_FROM_TEST(mat_options, use_shadow_shader, VAR_MAT_HASH);
     SET_FLAG_FROM_TEST(mat_options, is_hair, VAR_MAT_HAIR);
+    printf("GET SHADOW MAT \n");
     GPUMaterial *gpumat = (use_shadow_shader) ?
                               EEVEE_material_get(inst, scene, ma, nullptr, mat_options) :
                               EEVEE_material_default_get(scene, ma, mat_options);
@@ -588,6 +589,7 @@ static EeveeMaterialCache material_opaque(Instance *inst,
     SET_FLAG_FROM_TEST(mat_options, use_ssrefract, VAR_MAT_REFRACT);
     SET_FLAG_FROM_TEST(mat_options, use_depth_shader, VAR_MAT_HASH);
     SET_FLAG_FROM_TEST(mat_options, is_hair, VAR_MAT_HAIR);
+    printf("GET DEPTH PS MAT \n");
     GPUMaterial *gpumat = (use_depth_shader) ?
                               EEVEE_material_get(inst, scene, ma, nullptr, mat_options) :
                               EEVEE_material_default_get(scene, ma, mat_options);
@@ -632,6 +634,7 @@ static EeveeMaterialCache material_opaque(Instance *inst,
     int mat_options = VAR_MAT_MESH;
     SET_FLAG_FROM_TEST(mat_options, use_ssrefract, VAR_MAT_REFRACT);
     SET_FLAG_FROM_TEST(mat_options, is_hair, VAR_MAT_HAIR);
+    printf("GET REG MATT 1 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
     const bool use_sss = GPU_material_flag_get(gpumat, GPU_MATFLAG_SUBSURFACE);
 
@@ -717,6 +720,7 @@ static EeveeMaterialCache material_transparent(Instance *inst,
   if (use_prepass) {
     /* Depth prepass */
     int mat_options = VAR_MAT_MESH | VAR_MAT_DEPTH;
+    printf("GET REG PREP 1 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
     GPUShader *sh = GPU_material_get_shader(gpumat);
 
@@ -739,6 +743,7 @@ static EeveeMaterialCache material_transparent(Instance *inst,
     int ssr_id = -1; /* TODO: transparent SSR. */
     int mat_options = VAR_MAT_MESH | VAR_MAT_BLEND;
     SET_FLAG_FROM_TEST(mat_options, use_ssrefract, VAR_MAT_REFRACT);
+    printf("GET SHADING MT 1 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
 
     DRWShadingGroup *grp = DRW_shgroup_create(GPU_material_get_shader(gpumat),
@@ -1235,7 +1240,7 @@ void EEVEE_material_transparent_output_init(Instance *inst)
       /* This pass Accumulate 1 sample of the transparent pass into the transparent
        * accumulation buffer. */
       DRW_PASS_CREATE(inst->goo_data->transparent_accum_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
-      DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_renderpasses_accumulate_sh_get(),
+      DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(RENDERPASSES_ACCUMULATE),
                                                 inst->goo_data->transparent_accum_ps);
       DRW_shgroup_uniform_texture(grp, "inputBuffer", inst->goo_data->transparent_color_tmp);
       DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);

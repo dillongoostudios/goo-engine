@@ -138,6 +138,7 @@ GPU_SHADER_CREATE_END()
 /* EEVEE_shaders_volumes_integration_sh_get */
 GPU_SHADER_CREATE_INFO(eevee_legacy_volumes_integration_common)
 DEFINE("STANDALONE")
+DEFINE("VOLUMETRICS")
 ADDITIONAL_INFO(eevee_legacy_common_lib)
 ADDITIONAL_INFO(draw_view_goo)
 ADDITIONAL_INFO(eevee_legacy_volumetric_lib)

@@ -387,7 +387,13 @@ void EEVEE_temporal_sampling_cache_init(EEVEE_ViewLayerData *sldata, Instance *i
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if (effects->enabled_effects & EFFECT_TAA) {
-    GPUShader *sh = EEVEE_shaders_taa_resolve_sh_get(effects->enabled_effects);
+    GPUShader *sh;
+    if (effects->enabled_effects & EFFECT_TAA_REPROJECT) {
+      sh = inst->shaders.static_shader_get(TAA_RESOLVE_REPROJECTION);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(TAA_RESOLVE_RESOLVE_BASIC);
+    }
 
     DRW_PASS_CREATE(inst->goo_data->taa_resolve, DRW_STATE_WRITE_COLOR);
     DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->taa_resolve);

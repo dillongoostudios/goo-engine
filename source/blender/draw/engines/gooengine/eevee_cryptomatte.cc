@@ -225,7 +225,15 @@ static DRWShadingGroup *eevee_cryptomatte_shading_group_create(
     layer_offset++;
   }
 
-  DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_cryptomatte_sh_get(is_hair),
+  GPUShader *sh;
+  if (is_hair) {
+    sh = inst->shaders.static_shader_get(CRYPTOMATTE_HAIR);
+  }
+  else {
+    sh = inst->shaders.static_shader_get(CRYPTOMATTE_MESH);
+  }
+
+  DRWShadingGroup *grp = DRW_shgroup_create(sh,
                                             inst->goo_data->cryptomatte_ps);
   DRW_shgroup_uniform_vec4_copy(grp, "cryptohash", cryptohash);
   DRW_shgroup_uniform_block(grp, "shadow_block", sldata->shadow_ubo);

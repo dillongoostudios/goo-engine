@@ -150,8 +150,6 @@ void EEVEE_lightprobes_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
   inst->info[0] = '\0';
 
-  EEVEE_shaders_material_shaders_init();
-
   memset(inst->goo_data->g_data->bake_views, 0, sizeof(inst->goo_data->g_data->bake_views));
   memset(inst->goo_data->g_data->cube_views, 0, sizeof(inst->goo_data->g_data->cube_views));
   memset(inst->goo_data->g_data->world_views, 0, sizeof(inst->goo_data->g_data->world_views));
@@ -220,7 +218,7 @@ void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
   {
     DRW_PASS_CREATE(inst->goo_data->probe_glossy_compute, DRW_STATE_WRITE_COLOR);
 
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_filter_glossy_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_FILTER_GLOSSY),
                                               inst->goo_data->probe_glossy_compute);
 
     DRW_shgroup_uniform_float(grp, "intensityFac", &pinfo->intensity_fac, 1);
@@ -243,7 +241,7 @@ void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
 
   {
     DRW_PASS_CREATE(inst->goo_data->probe_diffuse_compute, DRW_STATE_WRITE_COLOR);
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_filter_diffuse_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_FILTER_DIFFUSE),
                                               inst->goo_data->probe_diffuse_compute);
 #ifdef IRRADIANCE_SH_L2
     DRW_shgroup_uniform_int(grp, "probeSize", &pinfo->shres, 1);
@@ -263,7 +261,7 @@ void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
 
   {
     DRW_PASS_CREATE(inst->goo_data->probe_visibility_compute, DRW_STATE_WRITE_COLOR);
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_filter_visibility_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_FILTER_VISIBILITY),
                                               inst->goo_data->probe_visibility_compute);
     DRW_shgroup_uniform_int(grp, "outputSize", &pinfo->shres, 1);
     DRW_shgroup_uniform_float(grp, "visibilityRange", &pinfo->visibility_range, 1);
@@ -283,7 +281,7 @@ void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
   {
     DRW_PASS_CREATE(inst->goo_data->probe_grid_fill, DRW_STATE_WRITE_COLOR);
 
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_grid_fill_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_GRID_FILL),
                                               inst->goo_data->probe_grid_fill);
 
     DRW_shgroup_uniform_texture_ref(grp, "irradianceGrid", &light_cache->grid_tx.tex);
@@ -316,6 +314,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
       World *world = (scene->world) ? scene->world : EEVEE_world_default_get();
 
       const int options = VAR_WORLD_BACKGROUND | VAR_WORLD_PROBE;
+      printf("GET LPROBE MAT \n");
       GPUMaterial *gpumat = EEVEE_material_get(inst, scene, nullptr, world, options);
 
       grp = DRW_shgroup_material_create(gpumat, inst->goo_data->probe_background);
@@ -343,7 +342,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
       /* Cube Display */
       if (scene_eval->eevee.flag & SCE_EEVEE_SHOW_CUBEMAPS && lcache->cube_len > 1) {
         int cube_len = lcache->cube_len - 1; /* don't count the world. */
-        DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_cube_display_sh_get(),
+        DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_CUBE_DISPLAY),
                                                   inst->goo_data->probe_display);
 
         DRW_shgroup_uniform_texture_ref(grp, "probeCubes", &lcache->cube_tx.tex);
@@ -363,7 +362,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
       if (scene_eval->eevee.flag & SCE_EEVEE_SHOW_IRRADIANCE) {
         EEVEE_LightGrid *egrid = lcache->grid_data + 1;
         for (int p = 1; p < lcache->grid_len; p++, egrid++) {
-          DRWShadingGroup *shgrp = DRW_shgroup_create(EEVEE_shaders_probe_grid_display_sh_get(),
+          DRWShadingGroup *shgrp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_GRID_DISPLAY),
                                                       inst->goo_data->probe_display);
 
           DRW_shgroup_uniform_int(shgrp, "offset", &egrid->offset, 1);
@@ -395,7 +394,7 @@ void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
                                       {"probe_mat", DRW_ATTR_FLOAT, 16},
                                   });
 
-      DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_planar_display_sh_get(),
+      DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_PLANAR_DISPLAY),
                                                 inst->goo_data->probe_display);
       DRW_shgroup_uniform_texture_ref(grp, "probePlanars", &inst->goo_data->planar_pool);
       DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
@@ -745,7 +744,7 @@ void EEVEE_lightprobes_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst)
   if (pinfo->num_planar > 0) {
     DRW_PASS_CREATE(inst->goo_data->probe_planar_downsample_ps, DRW_STATE_WRITE_COLOR);
 
-    DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_probe_planar_downsample_sh_get(),
+    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(PROBE_PLANAR_DOWNSAMPLE),
                                               inst->goo_data->probe_planar_downsample_ps);
 
     DRW_shgroup_uniform_texture_ref(grp, "source", &inst->goo_data->planar_pool);

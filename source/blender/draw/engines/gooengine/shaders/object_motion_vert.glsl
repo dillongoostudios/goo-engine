@@ -27,9 +27,9 @@ void main()
                               thick_time);
 
   int id = hair_get_base_id();
-  float3 pos = texelFetch(hairPointBuffer, id).point_position;
-  float3 prv = texelFetch(prvBuffer, id).point_position;
-  float3 nxt = texelFetch(nxtBuffer, id).point_position;
+  float3 pos = texelFetch(hairPointBuffer, id).xyz;
+  float3 prv = texelFetch(prvBuffer, id).xyz;
+  float3 nxt = texelFetch(nxtBuffer, id).xyz;
 #endif
   prevWorldPos = (prevModelMatrix * float4(useDeform ? prv : pos, 1.0f)).xyz;
   currWorldPos = (currModelMatrix * float4(pos, 1.0f)).xyz;

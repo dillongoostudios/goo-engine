@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "goo_common_view_lib.glsl"
+#include "gooengine_nodetree_lib.glsl"
 
 #ifdef MESH_SHADER
 /* TODO: tight slices. */

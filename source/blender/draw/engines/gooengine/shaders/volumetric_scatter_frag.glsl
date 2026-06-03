@@ -8,6 +8,7 @@
 /* Step 2 : Evaluate all light scattering for each froxels.
  * Also do the temporal reprojection to fight aliasing artifacts. */
 
+#include "gooengine_nodetree_lib.glsl"
 #include "volumetric_lib.glsl"
 
 void main()

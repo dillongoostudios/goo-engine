@@ -21,8 +21,6 @@
 
 namespace blender::gooengine {
 
-static const bool use_highres = true;
-
 int EEVEE_bloom_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
@@ -196,24 +194,23 @@ void EEVEE_bloom_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
      * </pre>
      */
     DRWShadingGroup *grp;
-    const bool use_antiflicker = true;
     eevee_create_bloom_pass("Bloom Downsample First",
                             effects,
-                            EEVEE_shaders_bloom_downsample_get(use_antiflicker),
+                            inst->shaders.static_shader_get(BLOOM_DOWNSAMPLE_HQ),
                             &inst->goo_data->bloom_downsample_first,
                             false,
                             false,
                             false);
     eevee_create_bloom_pass("Bloom Downsample",
                             effects,
-                            EEVEE_shaders_bloom_downsample_get(false),
+                            inst->shaders.static_shader_get(BLOOM_DOWNSAMPLE),
                             &inst->goo_data->bloom_downsample,
                             false,
                             false,
                             false);
     eevee_create_bloom_pass("Bloom Upsample",
                             effects,
-                            EEVEE_shaders_bloom_upsample_get(use_highres),
+                            inst->shaders.static_shader_get(BLOOM_UPSAMPLE_HQ),
                             &inst->goo_data->bloom_upsample,
                             true,
                             false,
@@ -221,7 +218,7 @@ void EEVEE_bloom_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 
     grp = eevee_create_bloom_pass("Bloom Blit",
                                   effects,
-                                  EEVEE_shaders_bloom_blit_get(use_antiflicker),
+                                  inst->shaders.static_shader_get(BLOOM_BLIT_HQ),
                                   &inst->goo_data->bloom_blit,
                                   false,
                                   false,
@@ -231,7 +228,7 @@ void EEVEE_bloom_cache_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 
     grp = eevee_create_bloom_pass("Bloom Resolve",
                                   effects,
-                                  EEVEE_shaders_bloom_resolve_get(use_highres),
+                                  inst->shaders.static_shader_get(BLOOM_RESOLVE_HQ),
                                   &inst->goo_data->bloom_resolve,
                                   true,
                                   true,
@@ -312,7 +309,7 @@ void EEVEE_bloom_output_init(EEVEE_ViewLayerData * /*sldata*/,
   /* Create Pass and shgroup. */
   eevee_create_bloom_pass("Bloom Accumulate",
                           effects,
-                          EEVEE_shaders_bloom_resolve_get(use_highres),
+                          inst->shaders.static_shader_get(BLOOM_RESOLVE_HQ),
                           &inst->goo_data->bloom_accum_ps,
                           true,
                           true,

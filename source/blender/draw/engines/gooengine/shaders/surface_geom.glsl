@@ -2,7 +2,7 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "goo_common_view_lib.glsl"
+#include "gooengine_nodetree_lib.glsl"
 #include "surface_lib.glsl"
 
 layout(triangles) in;

@@ -14,6 +14,8 @@
 #include "draw_manager.hh"
 #include "draw_pass.hh"
 
+#include "gooengine_shadermod.hh"
+
 #include "BLI_bitmap.h"
 
 #include "DNA_lightprobe_types.h"
@@ -1068,6 +1070,7 @@ struct Instance : public DrawEngine {
   std::string info_ = "";
 
  public:
+  ShaderModule &shaders;
 
   /** Input data. */
   Depsgraph *depsgraph;
@@ -1092,7 +1095,8 @@ struct Instance : public DrawEngine {
   // void release_resources();
 
  public:
-  Instance(){
+  Instance()
+      : shaders(*ShaderModule::module_get()){
     goo_data = new blender::gooengine::GOOENGINE_Data();
   };
   ~Instance(){};
@@ -1252,75 +1256,6 @@ void EEVEE_random_rotation_m4(int sample_ofs, float scale, float r_mat[4][4]);
 
 /* `eevee_shaders.cc` */
 
-void EEVEE_shaders_material_shaders_init();
-DRWShaderLibrary *EEVEE_shader_lib_get();
-GPUShader *EEVEE_shaders_bloom_blit_get(bool high_quality);
-GPUShader *EEVEE_shaders_bloom_downsample_get(bool high_quality);
-GPUShader *EEVEE_shaders_bloom_upsample_get(bool high_quality);
-GPUShader *EEVEE_shaders_bloom_resolve_get(bool high_quality);
-GPUShader *EEVEE_shaders_depth_of_field_bokeh_get();
-GPUShader *EEVEE_shaders_depth_of_field_setup_get();
-GPUShader *EEVEE_shaders_depth_of_field_flatten_tiles_get();
-GPUShader *EEVEE_shaders_depth_of_field_dilate_tiles_get(bool pass);
-GPUShader *EEVEE_shaders_depth_of_field_downsample_get();
-GPUShader *EEVEE_shaders_depth_of_field_reduce_get(bool is_copy_pass);
-GPUShader *EEVEE_shaders_depth_of_field_gather_get(EEVEE_DofGatherPass pass, bool bokeh_tx);
-GPUShader *EEVEE_shaders_depth_of_field_filter_get();
-GPUShader *EEVEE_shaders_depth_of_field_scatter_get(bool is_foreground, bool bokeh_tx);
-GPUShader *EEVEE_shaders_depth_of_field_resolve_get(bool use_bokeh_tx, bool use_hq_gather);
-GPUShader *EEVEE_shaders_effect_color_copy_sh_get();
-GPUShader *EEVEE_shaders_effect_downsample_sh_get();
-GPUShader *EEVEE_shaders_effect_downsample_cube_sh_get();
-GPUShader *EEVEE_shaders_effect_minz_downlevel_sh_get();
-GPUShader *EEVEE_shaders_effect_maxz_downlevel_sh_get();
-GPUShader *EEVEE_shaders_effect_minz_downdepth_sh_get();
-GPUShader *EEVEE_shaders_effect_maxz_downdepth_sh_get();
-GPUShader *EEVEE_shaders_effect_minz_downdepth_layer_sh_get();
-GPUShader *EEVEE_shaders_effect_maxz_downdepth_layer_sh_get();
-GPUShader *EEVEE_shaders_effect_maxz_copydepth_layer_sh_get();
-GPUShader *EEVEE_shaders_effect_minz_copydepth_sh_get();
-GPUShader *EEVEE_shaders_effect_maxz_copydepth_sh_get();
-GPUShader *EEVEE_shaders_effect_mist_sh_get();
-GPUShader *EEVEE_shaders_effect_motion_blur_sh_get();
-GPUShader *EEVEE_shaders_effect_motion_blur_object_sh_get();
-GPUShader *EEVEE_shaders_effect_motion_blur_hair_sh_get();
-GPUShader *EEVEE_shaders_effect_motion_blur_velocity_tiles_sh_get();
-GPUShader *EEVEE_shaders_effect_motion_blur_velocity_tiles_expand_sh_get();
-GPUShader *EEVEE_shaders_effect_ambient_occlusion_sh_get();
-GPUShader *EEVEE_shaders_effect_ambient_occlusion_debug_sh_get();
-GPUShader *EEVEE_shaders_effect_reflection_trace_sh_get();
-GPUShader *EEVEE_shaders_effect_reflection_resolve_sh_get();
-GPUShader *EEVEE_shaders_effect_reflection_resolve_probe_sh_get();
-GPUShader *EEVEE_shaders_effect_reflection_resolve_refl_sh_get();
-GPUShader *EEVEE_shaders_renderpasses_accumulate_sh_get();
-GPUShader *EEVEE_shaders_renderpasses_post_process_sh_get();
-GPUShader *EEVEE_shaders_cryptomatte_sh_get(bool is_hair);
-GPUShader *EEVEE_shaders_shadow_sh_get();
-GPUShader *EEVEE_shaders_shadow_accum_sh_get();
-GPUShader *EEVEE_shaders_subsurface_first_pass_sh_get();
-GPUShader *EEVEE_shaders_subsurface_second_pass_sh_get();
-GPUShader *EEVEE_shaders_subsurface_translucency_sh_get();
-GPUShader *EEVEE_shaders_volumes_clear_sh_get();
-GPUShader *EEVEE_shaders_volumes_scatter_sh_get();
-GPUShader *EEVEE_shaders_volumes_scatter_with_lights_sh_get();
-GPUShader *EEVEE_shaders_volumes_integration_sh_get();
-GPUShader *EEVEE_shaders_volumes_resolve_sh_get(bool accum);
-GPUShader *EEVEE_shaders_volumes_accum_sh_get();
-GPUShader *EEVEE_shaders_ggx_lut_sh_get();
-GPUShader *EEVEE_shaders_ggx_refraction_lut_sh_get();
-GPUShader *EEVEE_shaders_probe_filter_glossy_sh_get();
-GPUShader *EEVEE_shaders_probe_filter_diffuse_sh_get();
-GPUShader *EEVEE_shaders_probe_filter_visibility_sh_get();
-GPUShader *EEVEE_shaders_probe_grid_fill_sh_get();
-GPUShader *EEVEE_shaders_probe_planar_downsample_sh_get();
-GPUShader *EEVEE_shaders_studiolight_probe_sh_get();
-GPUShader *EEVEE_shaders_studiolight_background_sh_get();
-GPUShader *EEVEE_shaders_probe_cube_display_sh_get();
-GPUShader *EEVEE_shaders_probe_grid_display_sh_get();
-GPUShader *EEVEE_shaders_probe_planar_display_sh_get();
-GPUShader *EEVEE_shaders_update_noise_sh_get();
-GPUShader *EEVEE_shaders_velocity_resolve_sh_get();
-GPUShader *EEVEE_shaders_taa_resolve_sh_get(EEVEE_EffectsFlag enabled_effects);
 /**
  * Configure a default node-tree with the given material.
  */
@@ -1343,9 +1278,9 @@ void EEVEE_shaders_free();
 
 void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
                                              GPUCodegenOutput *codegen_,
-                                             char *vert,
-                                             char *geom,
-                                             char *frag,
+                                             const char *vert,
+                                             const char *geom,
+                                             const char *frag,
                                              const char *vert_info_name,
                                              const char *geom_info_name,
                                              const char *frag_info_name,
@@ -1661,10 +1596,6 @@ void EEVEE_lookdev_cache_init(Instance *inst,
                               EEVEE_LightProbesInfo *pinfo,
                               DRWShadingGroup **r_shgrp);
 void EEVEE_lookdev_draw(Instance *inst);
-
-/** `eevee_lut_gen.cc` */
-float *EEVEE_lut_update_ggx_brdf(int lut_size);
-float *EEVEE_lut_update_ggx_btdf(int lut_size, int lut_depth);
 
 /* Shadow Matrix */
 static const float texcomat[4][4] = {

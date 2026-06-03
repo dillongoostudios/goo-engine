@@ -48,6 +48,7 @@ struct Closure {
 /* Prototype */
 Closure nodetree_exec();
 float4 closure_to_rgba(Closure cl);
+void attrib_load();
 
 /* Goo-engine node internals */
 void calc_shader_info(float3 position, float3 normal, int4 light_groups, int4 light_group_shadows, out float4 half_light, out float shadows, out float self_shadows, out float4 ambient, out float half_lambert);

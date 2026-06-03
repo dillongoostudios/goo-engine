@@ -246,14 +246,14 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
   if (effects->enabled_effects & EFFECT_RADIANCE_BUFFER) {
     DRW_PASS_CREATE(inst->goo_data->color_copy_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(EEVEE_shaders_effect_color_copy_sh_get(), inst->goo_data->color_copy_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_COLOR_COPY), inst->goo_data->color_copy_ps);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "source", &e_data.color_src, GPUSamplerState::default_sampler());
     DRW_shgroup_uniform_float(grp, "fireflyFactor", &sldata->common_data.ssr_firefly_fac, 1);
     DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
 
     DRW_PASS_CREATE(inst->goo_data->color_downsample_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(EEVEE_shaders_effect_downsample_sh_get(), inst->goo_data->color_downsample_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_DOWNSAMPLE), inst->goo_data->color_downsample_ps);
     const GPUSamplerState sampler_state = {GPU_SAMPLER_FILTERING_LINEAR};
     DRW_shgroup_uniform_texture_ex(grp, "source", inst->goo_data->filtered_radiance, sampler_state);
     DRW_shgroup_uniform_vec2(grp, "texelSize", e_data.texel_size, 1);
@@ -262,7 +262,7 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
   {
     DRW_PASS_CREATE(inst->goo_data->color_downsample_cube_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(EEVEE_shaders_effect_downsample_cube_sh_get(),
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_DOWNSAMPLE_CUBE),
                              inst->goo_data->color_downsample_cube_ps);
     DRW_shgroup_uniform_texture_ref(grp, "source", &e_data.color_src);
     DRW_shgroup_uniform_float(grp, "texelSize", e_data.texel_size, 1);
@@ -273,7 +273,7 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   {
     /* Perform min/max down-sample. */
     DRW_PASS_CREATE(inst->goo_data->maxz_downlevel_ps, downsample_write);
-    grp = DRW_shgroup_create(EEVEE_shaders_effect_maxz_downlevel_sh_get(), inst->goo_data->maxz_downlevel_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MAXZ_DOWNLEVEL), inst->goo_data->maxz_downlevel_ps);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "depthBuffer", &inst->goo_data->maxzbuffer, GPUSamplerState::default_sampler());
     DRW_shgroup_uniform_vec2(grp, "texelSize", e_data.texel_size, 1);
@@ -281,13 +281,13 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
     /* Copy depth buffer to top level of HiZ */
     DRW_PASS_CREATE(inst->goo_data->maxz_copydepth_ps, downsample_write);
-    grp = DRW_shgroup_create(EEVEE_shaders_effect_maxz_copydepth_sh_get(), inst->goo_data->maxz_copydepth_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MAXZ_COPYDEPTH), inst->goo_data->maxz_copydepth_ps);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "depthBuffer", &e_data.depth_src, GPUSamplerState::default_sampler());
     DRW_shgroup_call(grp, quad, nullptr);
 
     DRW_PASS_CREATE(inst->goo_data->maxz_copydepth_layer_ps, downsample_write);
-    grp = DRW_shgroup_create(EEVEE_shaders_effect_maxz_copydepth_layer_sh_get(),
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MAXZ_COPYDEPTH_LAYER),
                              inst->goo_data->maxz_copydepth_layer_ps);
     DRW_shgroup_uniform_texture_ref_ex(
         grp, "depthBuffer", &e_data.depth_src, GPUSamplerState::default_sampler());
@@ -300,7 +300,7 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
     /* This pass compute camera motions to the non moving objects. */
     DRW_PASS_CREATE(inst->goo_data->velocity_resolve, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(EEVEE_shaders_velocity_resolve_sh_get(), inst->goo_data->velocity_resolve);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(VELOCITY_RESOLVE), inst->goo_data->velocity_resolve);
     DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &e_data.depth_src);
     DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
     DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);

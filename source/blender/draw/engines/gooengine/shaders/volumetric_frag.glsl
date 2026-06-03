@@ -5,6 +5,8 @@
 /* Based on Frosbite Unified Volumetric.
  * https://www.ea.com/frostbite/news/physically-based-unified-volumetric-rendering-in-frostbite */
 
+#include "gooengine_nodetree_lib.glsl"
+#include "closure_eval_volume_lib.glsl"
 #include "volumetric_lib.glsl"
 
 /* Store volumetric properties into the froxel textures. */

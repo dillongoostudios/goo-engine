@@ -247,6 +247,7 @@ void EEVEE_volumes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   if (wo != nullptr && wo->use_nodes && wo->nodetree &&
       !LOOK_DEV_STUDIO_LIGHT_ENABLED(draw_ctx->v3d))
   {
+    printf("GET VOL 1 \n");
     GPUMaterial *mat = EEVEE_material_get(inst, scene, nullptr, wo, VAR_MAT_VOLUME);
 
     if (mat && GPU_material_has_volume_output(mat)) {
@@ -274,7 +275,7 @@ void EEVEE_volumes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
   if (grp == nullptr) {
     /* If no world or volume material is present just clear the buffer with this drawcall */
-    grp = DRW_shgroup_create(EEVEE_shaders_volumes_clear_sh_get(), inst->goo_data->volumetric_world_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(VOLUMES_CLEAR), inst->goo_data->volumetric_world_ps);
     DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
     DRW_shgroup_uniform_block(grp, "grid_block", sldata->grid_ubo);
     DRW_shgroup_uniform_block(grp, "probe_block", sldata->probe_ubo);
@@ -313,6 +314,7 @@ void EEVEE_volumes_cache_object_add(EEVEE_ViewLayerData *sldata,
   }
 
   int mat_options = VAR_MAT_VOLUME | VAR_MAT_MESH;
+  printf("GET VOL 2 \n");
   GPUMaterial *mat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
 
   /* If shader failed to compile or is currently compiling. */
@@ -363,8 +365,8 @@ void EEVEE_volumes_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst)
     GPUShader *sh;
 
     DRW_PASS_CREATE(inst->goo_data->volumetric_scatter_ps, DRW_STATE_WRITE_COLOR);
-    sh = (common_data->vol_use_lights) ? EEVEE_shaders_volumes_scatter_with_lights_sh_get() :
-                                         EEVEE_shaders_volumes_scatter_sh_get();
+    sh = (common_data->vol_use_lights) ? inst->shaders.static_shader_get(VOLUMES_SCATTER_WITH_LIGHTS) :
+                                         inst->shaders.static_shader_get(VOLUMES_SCATTER);
     grp = DRW_shgroup_create(sh, inst->goo_data->volumetric_scatter_ps);
     DRW_shgroup_uniform_texture_ref(grp, "irradianceGrid", &lcache->grid_tx.tex);
     DRW_shgroup_uniform_texture_ref(grp, "shadowCubeTexture", &sldata->shadow_cube_pool);
@@ -386,7 +388,13 @@ void EEVEE_volumes_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst)
     DRW_shgroup_call_procedural_triangles(grp, nullptr, common_data->vol_tex_size[2]);
 
     DRW_PASS_CREATE(inst->goo_data->volumetric_integration_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(EEVEE_shaders_volumes_integration_sh_get(),
+    if (USE_VOLUME_OPTI) {
+      sh = inst->shaders.static_shader_get(VOLUMES_INTEGRATION_OPTI);
+    }
+    else {
+      sh = inst->shaders.static_shader_get(VOLUMES_INTEGRATION);
+    }
+    grp = DRW_shgroup_create(sh,
                              inst->goo_data->volumetric_integration_ps);
     DRW_shgroup_uniform_texture_ref(grp, "volumeScattering", &inst->goo_data->volume_scatter);
     DRW_shgroup_uniform_texture_ref(grp, "volumeExtinction", &inst->goo_data->volume_transmit);
@@ -402,7 +410,7 @@ void EEVEE_volumes_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst)
         grp, nullptr, USE_VOLUME_OPTI ? 1 : common_data->vol_tex_size[2]);
 
     DRW_PASS_CREATE(inst->goo_data->volumetric_resolve_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_CUSTOM);
-    grp = DRW_shgroup_create(EEVEE_shaders_volumes_resolve_sh_get(false),
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(VOLUMES_RESOLVE),
                              inst->goo_data->volumetric_resolve_ps);
     DRW_shgroup_uniform_texture_ref(grp, "inScattering", &inst->goo_data->volume_scatter);
     DRW_shgroup_uniform_texture_ref(grp, "inTransmittance", &inst->goo_data->volume_transmit);
@@ -623,7 +631,7 @@ void EEVEE_volumes_output_init(EEVEE_ViewLayerData *sldata, Instance *inst, uint
   DRW_PASS_CREATE(inst->goo_data->volumetric_accum_ps, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD_FULL);
   DRWShadingGroup *grp = nullptr;
   if ((effects->enabled_effects & EFFECT_VOLUMETRIC) != 0) {
-    grp = DRW_shgroup_create(EEVEE_shaders_volumes_resolve_sh_get(true), inst->goo_data->volumetric_accum_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(VOLUMES_RESOLVE_ACCUM), inst->goo_data->volumetric_accum_ps);
     DRW_shgroup_uniform_texture_ref(grp, "inScattering", &inst->goo_data->volume_scatter);
     DRW_shgroup_uniform_texture_ref(grp, "inTransmittance", &inst->goo_data->volume_transmit);
     DRW_shgroup_uniform_texture_ref(grp, "inSceneDepth", &e_data.depth_src);
@@ -633,7 +641,7 @@ void EEVEE_volumes_output_init(EEVEE_ViewLayerData *sldata, Instance *inst, uint
   else {
     /* There is no volumetrics in the scene. Use a shader to fill the accum textures with a default
      * value. */
-    grp = DRW_shgroup_create(EEVEE_shaders_volumes_accum_sh_get(), inst->goo_data->volumetric_accum_ps);
+    grp = DRW_shgroup_create(inst->shaders.static_shader_get(VOLUMES_ACCUM), inst->goo_data->volumetric_accum_ps);
   }
   DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);
 }

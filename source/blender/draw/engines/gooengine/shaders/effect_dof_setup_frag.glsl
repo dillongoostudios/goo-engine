@@ -44,8 +44,8 @@ void main()
    * This enables an optimization in the resolve pass. */
   constexpr float4 threshold = float4(layer_threshold + layer_offset);
   cocs = abs(cocs);
-  bfloat4 defocus = greaterThan(cocs, threshold);
-  bfloat4 focus = lessThanEqual(cocs, float4(0.5f));
+  bool4 defocus = greaterThan(cocs, threshold);
+  bool4 focus = lessThanEqual(cocs, float4(0.5f));
   if (any(defocus) && any(focus)) {
     /* For the same reason as in the flatten pass. This is a case we cannot optimize for. */
     cocs = select(cocs, float4(DOF_TILE_MIXED), focus);

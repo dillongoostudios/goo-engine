@@ -11,9 +11,9 @@
 
 #include "effect_dof_lib.glsl"
 
-float bokeh_shape(floatatat2 center)
+float bokeh_shape(float2 center)
 {
-  floatatat2 co = gl_FragCoord.xy - center;
+  float2 co = gl_FragCoord.xy - center;
 
 #ifdef DOF_BOKEH_TEXTURE
   co *= bokehAnisotropyInv;
@@ -33,7 +33,7 @@ float bokeh_shape(floatatat2 center)
 void main(void)
 {
   DEFINE_DOF_QUAD_OFFSETS
-  floatatat4 shapes;
+  float4 shapes;
   for (int i = 0; i < 4; i++) {
     shapes[i] = bokeh_shape(spritepos + quad_offsets[i]);
   }
@@ -49,8 +49,8 @@ void main(void)
 
   if (!no_scatter_occlusion) {
     /* Works because target is the same size as occlusionBuffer. */
-    floatatat2 uv = gl_FragCoord.xfloatloatloat2(textureSize(occlusionBuffer, 0).xy);
-    floatatat2 occlusion_data = texture(occlusionBuffer, uv).rg;
+    float2 uv = gl_FragCoord.xy / float2(textureSize(occlusionBuffer, 0).xy);
+    float2 occlusion_data = texture(occlusionBuffer, uv).rg;
     /* Fix tilling artifacts. (Slide 90) */
     constexpr float correction_fac = 1.0f - DOF_FAST_GATHER_COC_ERROR;
     /* Occlude the sprite with geometry from the same field
@@ -69,6 +69,6 @@ void main(void)
   FragColor.a = 0.0f;
 
 #ifdef DOF_DEBUG_SCATTER_PERF
-  FragColor.rgb = avg(FragColor.rgb) * floatatat3(1.0f, 0.0f, 0.0f);
+  FragColor.rgb = avg(FragColor.rgb) * float3(1.0f, 0.0f, 0.0f);
 #endif
 }

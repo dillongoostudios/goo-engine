@@ -116,8 +116,8 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *ins
   LightCache *lcache = inst->goo_data->g_data->light_cache;
 
   if ((effects->enabled_effects & EFFECT_SSR) != 0) {
-    GPUShader *trace_shader = EEVEE_shaders_effect_reflection_trace_sh_get();
-    GPUShader *resolve_shader = EEVEE_shaders_effect_reflection_resolve_sh_get();
+    GPUShader *trace_shader = inst->shaders.static_shader_get(EFFECT_REFLECTION_TRACE);
+    GPUShader *resolve_shader = inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE);
 
     int hitbuf_size[3];
     GPU_texture_get_mipmap_size(effects->ssr_hit_output, 0, hitbuf_size);
@@ -161,13 +161,13 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *ins
       for (int i = 0; i < 2; i++) {
         if (i == 0) {
           /* Prepare Reflection Probes resolve pass. */
-          GPUShader *resolve_shader_probe = EEVEE_shaders_effect_reflection_resolve_probe_sh_get();
+          GPUShader *resolve_shader_probe = inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE_PROBE);
           DRW_PASS_CREATE(inst->goo_data->ssr_resolve_probe, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
           grp = DRW_shgroup_create(resolve_shader_probe, inst->goo_data->ssr_resolve_probe);
         }
         else if (i == 1) {
           /* Prepare SSR resolve pass. */
-          GPUShader *resolve_shader_refl = EEVEE_shaders_effect_reflection_resolve_refl_sh_get();
+          GPUShader *resolve_shader_refl = inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE_REFL);
           DRW_PASS_CREATE(inst->goo_data->ssr_resolve_refl, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
           grp = DRW_shgroup_create(resolve_shader_refl, inst->goo_data->ssr_resolve_refl);
         }

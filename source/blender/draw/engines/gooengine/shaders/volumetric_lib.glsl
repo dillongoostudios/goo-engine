@@ -5,7 +5,7 @@
 #pragma once
 
 #include "lights_lib.glsl"
-#include "lightprobe_lib.glsl"
+// #include "lightprobe_lib.glsl"
 #include "irradiance_lib.glsl"
 
 /* Based on Frosbite Unified Volumetric.
