@@ -18,7 +18,7 @@
 #include "draw_context_private.hh"
 
 #include "engines/compositor/compositor_engine.h"
-#include "engines/gooengine/eevee_engine.h"
+#include "engines/gooengine/gooengine_engine.h"
 #include "engines/eevee/eevee_engine.h"
 #include "engines/external/external_engine.h"
 #include "engines/gpencil/gpencil_engine.hh"

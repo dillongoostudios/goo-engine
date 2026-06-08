@@ -32,7 +32,7 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "eevee_lightcache.h"
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #include "WM_api.hh"
 #include "WM_types.hh"
@@ -441,7 +441,7 @@ static bool eevee_lightprobes_culling_test(Object *ob)
   return true;
 }
 
-void EEVEE_lightprobes_cache_add(EEVEE_ViewLayerData *sldata, Instance *inst, Object *ob)
+void GOOENGINE_sync_probe(EEVEE_ViewLayerData *sldata, Instance *inst, Object *ob)
 {
   EEVEE_LightProbesInfo *pinfo = sldata->probes;
   LightProbe *probe = (LightProbe *)ob->data;

@@ -30,14 +30,14 @@
 
 #include "IMB_imbuf.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 #include "gooengine_shadermod.hh"
 
 #include "draw_handle.hh"
 
 #include "draw_view_data.hh"
 
-#include "eevee_engine.h" /* own include */
+#include "gooengine_engine.h" /* own include */
 
 namespace blender::gooengine {
 
@@ -256,47 +256,84 @@ void Instance::begin_sync()
 void Instance::object_sync(blender::draw::ObjectRef &ob_ref, blender::draw::Manager &manager)
 {
   printf("\n       OBJECT SYNC \n");
-  EEVEE_ViewLayerData *sldata = EEVEE_view_layer_data_ensure();
-
+  
+  if (skip_render_) {
+    return;
+  }
+  
   Object *ob = ob_ref.object;
-
-  const DRWContext *draw_ctx = DRW_context_get();
+  const bool is_renderable_type = ELEM(ob->type,
+                                       OB_CURVES,
+                                       OB_GREASE_PENCIL,
+                                       OB_MESH,
+                                       OB_POINTCLOUD,
+                                       OB_VOLUME,
+                                       OB_LAMP,
+                                       OB_LIGHTPROBE);
   const int ob_visibility = DRW_object_visibility_in_active_context(ob);
+  const bool partsys_is_visible = (ob_visibility & OB_VISIBLE_PARTICLES) != 0 &&
+                                  (ob->type == OB_MESH);
+  const bool object_is_visible = DRW_object_is_renderable(ob) &&
+                                 (ob_visibility & OB_VISIBLE_SELF) != 0;
+
+  if (!is_renderable_type || (!partsys_is_visible && !object_is_visible)) {
+    return;
+  }
+
+  // ObjectHandle &ob_handle = sync.sync_object(ob_ref);
+
+
+
+
+  
+  EEVEE_ViewLayerData *sldata = EEVEE_view_layer_data_ensure();
+  const DRWContext *draw_ctx = DRW_context_get();
   bool cast_shadow = false;
 
-  if (ob_visibility & OB_VISIBLE_PARTICLES) {
-    EEVEE_particle_hair_cache_populate(
+  eevee_id_update(this, &ob->id);
+
+  if (partsys_is_visible) {
+    GOOENGINE_sync_hair(
         this, sldata, ob, &cast_shadow);
   }
 
-  if (DRW_object_is_renderable(ob) && (ob_visibility & OB_VISIBLE_SELF)) {
-
-    eevee_id_update(this, &ob->id);
-
-    if (ob->type == OB_MESH) {
-      EEVEE_materials_cache_populate(this, sldata, ob, &cast_shadow);
-    }
-    else if (ob->type == OB_CURVES) {
-      EEVEE_object_curves_cache_populate(
-          this, sldata, ob, &cast_shadow);
-    }
-    else if (ob->type == OB_VOLUME) {
-      EEVEE_volumes_cache_object_add(
-          sldata, this, draw_ctx->scene, ob);
-    }
-    else if (!USE_SCENE_LIGHT(draw_ctx->v3d)) {
-      /* do not add any scene light sources to the cache */
-    }
-    else if (ob->type == OB_LIGHTPROBE) {
-      if ((ob->base_flag & BASE_FROM_DUPLI) != 0) {
-        /* TODO: Special case for dupli objects because we cannot save the object pointer. */
-      }
-      else {
-        EEVEE_lightprobes_cache_add(sldata, this, ob);
-      }
-    }
-    else if (ob->type == OB_LAMP) {
-      EEVEE_lights_cache_add(sldata, ob);
+  if (object_is_visible) {
+    switch (ob->type) {
+      case OB_LAMP:
+        if (!USE_SCENE_LIGHT(draw_ctx->v3d)) {
+          /* do not add any scene light sources to the cache */
+        }
+        else {
+          GOOENGINE_sync_light(sldata, ob);
+        }
+        break;
+      case OB_MESH:
+        GOOENGINE_sync_mesh(this, sldata, ob, &cast_shadow);
+        break;
+      case OB_POINTCLOUD:
+        // sync.sync_pointcloud(ob, ob_handle, ob_ref);
+        break;
+      case OB_VOLUME:
+        GOOENGINE_sync_volume(
+            sldata, this, draw_ctx->scene, ob);
+        break;
+      case OB_CURVES:
+        GOOENGINE_sync_curves(
+            this, sldata, ob, &cast_shadow);
+        break;
+      case OB_LIGHTPROBE:
+        if (!USE_SCENE_LIGHT(draw_ctx->v3d)) {
+          /* do not add any scene light sources to the cache */
+        }
+        else {
+          // if ((ob->base_flag & BASE_FROM_DUPLI) != 0) {
+          //   /* TODO: Special case for dupli objects because we cannot save the object pointer. */
+          // }
+          GOOENGINE_sync_probe(sldata, this, ob);
+        }
+        break;
+      default:
+        break;
     }
   }
 
@@ -356,6 +393,25 @@ void Instance::end_sync()
   }
 
   g_data->depsgraph_last_update_ = DEG_get_update_count(draw_ctx->depsgraph);
+}
+
+
+void Instance::render_sync()
+{
+  manager->begin_sync();
+
+  begin_sync();
+
+  DRW_render_object_iter(
+      render, depsgraph, [this](blender::draw::ObjectRef &ob_ref, RenderEngine *, Depsgraph *) {
+        this->object_sync(ob_ref, *this->manager);
+      });
+
+  // velocity.geometry_steps_fill();
+
+  end_sync();
+
+  manager->end_sync();
 }
 
 // void Instance::acquire_resources()

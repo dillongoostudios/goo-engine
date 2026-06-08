@@ -25,7 +25,7 @@
 #include "GPU_vertex_buffer.hh"
 
 #include "eevee_lightcache.h"
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 

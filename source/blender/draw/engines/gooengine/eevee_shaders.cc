@@ -27,8 +27,8 @@
 
 #include "NOD_shader.h"
 
-#include "eevee_engine.h"
-#include "eevee_private.hh"
+#include "gooengine_engine.h"
+#include "gooengine_private.hh"
 
 #include "BKE_node_legacy_types.hh"
 

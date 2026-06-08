@@ -11,7 +11,7 @@
 
 #include "BKE_object.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #include "BLI_rand.h" /* needs to be after for some reason. */
 #include "BLI_math_geom.h"

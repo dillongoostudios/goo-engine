@@ -35,7 +35,7 @@
 #include "IMB_imbuf_types.hh"
 
 #include "draw_common.hh"
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 
@@ -210,7 +210,7 @@ void EEVEE_render_cache(Instance *inst, blender::draw::ObjectRef &ob_ref)
 
   const int ob_visibility = DRW_object_visibility_in_active_context(ob);
   if (ob_visibility & OB_VISIBLE_PARTICLES) {
-    EEVEE_particle_hair_cache_populate(
+    GOOENGINE_sync_hair(
         inst, sldata, ob_ref, &cast_shadow);
     if (do_cryptomatte) {
       EEVEE_cryptomatte_particle_hair_cache_populate(inst, sldata, ob_ref);
@@ -219,13 +219,13 @@ void EEVEE_render_cache(Instance *inst, blender::draw::ObjectRef &ob_ref)
 
   if (ob_visibility & OB_VISIBLE_SELF) {
     if (ob->type == OB_MESH) {
-      EEVEE_materials_cache_populate(inst, sldata, ob_ref, &cast_shadow);
+      GOOENGINE_sync_mesh(inst, sldata, ob_ref, &cast_shadow);
       if (do_cryptomatte) {
         EEVEE_cryptomatte_cache_populate(inst, sldata, ob_ref);
       }
     }
     else if (ob->type == OB_CURVES) {
-      EEVEE_object_curves_cache_populate(
+      GOOENGINE_sync_curves(
           inst, sldata, ob_ref, &cast_shadow);
       if (do_cryptomatte) {
         EEVEE_cryptomatte_object_curves_cache_populate(inst, sldata, ob_ref);
@@ -233,13 +233,13 @@ void EEVEE_render_cache(Instance *inst, blender::draw::ObjectRef &ob_ref)
     }
     else if (ob->type == OB_VOLUME) {
       Scene *scene = DEG_get_evaluated_scene(inst->depsgraph);
-      EEVEE_volumes_cache_object_add(sldata, inst, scene, ob_ref);
+      GOOENGINE_sync_volume(sldata, inst, scene, ob_ref);
     }
     else if (ob->type == OB_LIGHTPROBE) {
-      EEVEE_lightprobes_cache_add(sldata, inst, ob);
+      GOOENGINE_sync_probe(sldata, inst, ob);
     }
     else if (ob->type == OB_LAMP) {
-      EEVEE_lights_cache_add(sldata, ob);
+      GOOENGINE_sync_light(sldata, ob);
     }
   }
 

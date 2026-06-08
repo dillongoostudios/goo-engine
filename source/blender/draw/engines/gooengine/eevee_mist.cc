@@ -17,7 +17,7 @@
 
 #include "BLI_string_utils.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 

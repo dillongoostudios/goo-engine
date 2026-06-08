@@ -35,7 +35,7 @@
 #include "draw_common.hh"
 #include "GPU_batch.hh"
 #include "GPU_texture.hh"
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 

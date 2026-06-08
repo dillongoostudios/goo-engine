@@ -33,8 +33,8 @@
 #include "DEG_depsgraph_query.hh"
 
 #include "../eevee/eevee_lut.hh"
-#include "eevee_engine.h"
-#include "eevee_private.hh"
+#include "gooengine_engine.h"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 
@@ -832,7 +832,7 @@ BLI_INLINE EeveeMaterialCache eevee_material_cache_get(
     output_array[i] = matcache[i].member; \
   }
 
-void EEVEE_materials_cache_populate(Instance *inst,
+void GOOENGINE_sync_mesh(Instance *inst,
                                     EEVEE_ViewLayerData *sldata,
                                     const blender::draw::ObjectRef &ob_ref,
                                     bool *cast_shadow)
@@ -923,12 +923,12 @@ void EEVEE_materials_cache_populate(Instance *inst,
 
     /* Volumetrics */
     if (use_volume_material) {
-      EEVEE_volumes_cache_object_add(sldata, inst, scene, ob_ref);
+      GOOENGINE_sync_volume(sldata, inst, scene, ob_ref);
     }
   }
 }
 
-void EEVEE_particle_hair_cache_populate(Instance *inst,
+void GOOENGINE_sync_hair(Instance *inst,
                                         EEVEE_ViewLayerData *sldata,
                                         const blender::draw::ObjectRef &ob_ref,
                                         bool *cast_shadow)
@@ -974,7 +974,7 @@ void EEVEE_particle_hair_cache_populate(Instance *inst,
   }
 }
 
-void EEVEE_object_curves_cache_populate(Instance *inst,
+void GOOENGINE_sync_curves(Instance *inst,
                                         EEVEE_ViewLayerData *sldata,
                                         const blender::draw::ObjectRef &ob_ref,
                                         bool *cast_shadow)

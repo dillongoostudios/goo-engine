@@ -27,7 +27,7 @@
 #include "UI_resources.hh"
 
 #include "eevee_lightcache.h"
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #include "draw_common_c.hh"
 

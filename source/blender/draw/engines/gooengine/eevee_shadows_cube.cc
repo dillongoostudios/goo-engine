@@ -6,7 +6,7 @@
  * \ingroup EEVEE
  */
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #include "BLI_math_rotation.h"
 #include "BLI_math_geom.h"

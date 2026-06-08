@@ -18,7 +18,7 @@
 #include "GPU_material.hh"
 #include "GPU_texture.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 

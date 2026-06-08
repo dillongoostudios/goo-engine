@@ -18,7 +18,7 @@
 #include "BLI_rand.h"
 #include "BLI_string_utils.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #define DO_FILE_OUTPUT 0
 

@@ -1121,11 +1121,14 @@ struct Instance : public DrawEngine {
 
   static void update_passes(RenderEngine *engine, Scene *scene, ViewLayer *view_layer);
 
+  /* Render. */
+
+  void render_sync();
   void render_frame(RenderEngine *engine, RenderLayer *render_layer, const char *view_name, const rcti *rect);
+  void store_metadata(RenderResult *render_result);
   void draw_viewport();
   void draw_viewport_image_render();
 
-  void store_metadata(RenderResult *render_result);
   void begin_sync() final;
   void object_sync(blender::draw::ObjectRef &ob_ref, blender::draw::Manager &manager) final;
   void end_sync() final;
@@ -1163,15 +1166,15 @@ GPUTexture *EEVEE_materials_get_util_tex(); /* XXX */
 void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
                           Instance *inst);
 void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_materials_cache_populate(Instance *inst,
+void GOOENGINE_sync_mesh(Instance *inst,
                                     EEVEE_ViewLayerData *sldata,
                                     const blender::draw::ObjectRef &ob_ref,
                                     bool *cast_shadow);
-void EEVEE_particle_hair_cache_populate(Instance *inst,
+void GOOENGINE_sync_hair(Instance *inst,
                                         EEVEE_ViewLayerData *sldata,
                                         const blender::draw::ObjectRef &ob_ref,
                                         bool *cast_shadow);
-void EEVEE_object_curves_cache_populate(Instance *inst,
+void GOOENGINE_sync_curves(Instance *inst,
                                         EEVEE_ViewLayerData *sldata,
                                         const blender::draw::ObjectRef &ob_ref,
                                         bool *cast_shadow);
@@ -1200,7 +1203,7 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
  */
 void eevee_light_matrix_get(const EEVEE_Light *evli, float r_mat[4][4]);
 void EEVEE_lights_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_lights_cache_add(EEVEE_ViewLayerData *sldata, Object *ob);
+void GOOENGINE_sync_light(EEVEE_ViewLayerData *sldata, Object *ob);
 void EEVEE_lights_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst);
 
 /* `eevee_shadows.cc` */
@@ -1296,7 +1299,7 @@ GPUShader *eevee_shaders_sh_create_helper(const char *name,
 bool EEVEE_lightprobes_obj_visibility_cb(bool vis_in, void *user_data);
 void EEVEE_lightprobes_init(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_lightprobes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_lightprobes_cache_add(EEVEE_ViewLayerData *sldata, Instance *inst, Object *ob);
+void GOOENGINE_sync_probe(EEVEE_ViewLayerData *sldata, Instance *inst, Object *ob);
 void EEVEE_lightprobes_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_lightprobes_refresh(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_lightprobes_refresh_planar(EEVEE_ViewLayerData *sldata, Instance *inst);
@@ -1534,7 +1537,7 @@ void EEVEE_temporal_sampling_draw(Instance *inst);
 void EEVEE_volumes_init(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_volumes_set_jitter(EEVEE_ViewLayerData *sldata, uint current_sample);
 void EEVEE_volumes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_cache_object_add(EEVEE_ViewLayerData *sldata,
+void GOOENGINE_sync_volume(EEVEE_ViewLayerData *sldata,
                                     Instance *inst,
                                     Scene *scene,
                                     const blender::draw::ObjectRef &ob_ref);

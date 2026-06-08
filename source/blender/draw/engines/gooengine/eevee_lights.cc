@@ -14,7 +14,7 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 
@@ -222,7 +222,7 @@ void EEVEE_lights_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   EEVEE_shadows_cache_init(sldata, inst);
 }
 
-void EEVEE_lights_cache_add(EEVEE_ViewLayerData *sldata, Object *ob)
+void GOOENGINE_sync_light(EEVEE_ViewLayerData *sldata, Object *ob)
 {
   EEVEE_LightsInfo *linfo = sldata->lights;
   const Light *la = (Light *)ob->data;

@@ -17,7 +17,7 @@
 
 #include "BKE_global.hh" /* for G.debug_value */
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #include "GPU_capabilities.hh"
 #include "GPU_platform.hh"

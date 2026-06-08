@@ -16,7 +16,7 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #define SH_CASTER_ALLOC_CHUNK 32
 

@@ -102,7 +102,7 @@ set(SRC
   engines/gooengine/eevee_data.cc
   engines/gooengine/eevee_depth_of_field.cc
   engines/gooengine/eevee_effects.cc
-  engines/gooengine/eevee_engine.cc
+  engines/gooengine/gooengine_engine.cc
   engines/gooengine/eevee_lightcache.cc
   engines/gooengine/eevee_lightprobes.cc
   engines/gooengine/eevee_lights.cc
@@ -221,10 +221,10 @@ set(SRC
   intern/draw_view_data.hh
   intern/mesh_extractors/extract_mesh.hh
   engines/compositor/compositor_engine.h
-  engines/gooengine/eevee_engine.h
+  engines/gooengine/gooengine_engine.h
   engines/gooengine/eevee_lightcache.h
   engines/gooengine/gooengine_shadermod.hh
-  engines/gooengine/eevee_private.hh
+  engines/gooengine/gooengine_private.hh
   engines/eevee/eevee_ambient_occlusion.hh
   engines/eevee/eevee_camera.hh
   engines/eevee/eevee_cryptomatte.hh

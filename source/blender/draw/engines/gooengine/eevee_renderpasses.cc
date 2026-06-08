@@ -20,7 +20,7 @@
 
 #include "DEG_depsgraph_query.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 

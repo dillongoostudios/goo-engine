@@ -36,7 +36,7 @@
 #include "GPU_context.hh"
 #include "GPU_material.hh"
 #include "GPU_texture.hh"
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 namespace blender::gooengine {
 
@@ -288,7 +288,7 @@ void EEVEE_volumes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   }
 }
 
-void EEVEE_volumes_cache_object_add(EEVEE_ViewLayerData *sldata,
+void GOOENGINE_sync_volume(EEVEE_ViewLayerData *sldata,
                                     Instance *inst,
                                     Scene *scene,
                                     const blender::draw::ObjectRef &ob_ref)

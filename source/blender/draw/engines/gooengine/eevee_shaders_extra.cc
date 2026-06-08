@@ -14,7 +14,7 @@
 
 #include "gpu_shader_create_info.hh"
 
-#include "eevee_private.hh"
+#include "gooengine_private.hh"
 
 #include <sstream>
 
