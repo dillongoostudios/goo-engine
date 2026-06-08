@@ -152,9 +152,24 @@ void EEVEE_subsurface_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   /* Screen Space SubSurface Scattering overview.
    * TODO */
   DRWState state = DRW_STATE_WRITE_COLOR | DRW_STATE_STENCIL_EQUAL;
-  DRW_PASS_CREATE(inst->goo_data->sss_blur_ps, state);
-  DRW_PASS_CREATE(inst->goo_data->sss_resolve_ps, state | DRW_STATE_BLEND_ADD);
-  DRW_PASS_CREATE(inst->goo_data->sss_translucency_ps, state | DRW_STATE_BLEND_ADD);
+
+  {
+    blender::draw::PassSimple &pass = inst->goo_data->sss_blur_ps;
+    pass.init();
+    pass.state_set(state);
+  }
+
+  {
+    blender::draw::PassSimple &pass = inst->goo_data->sss_resolve_ps;
+    pass.init();
+    pass.state_set(state | DRW_STATE_BLEND_ADD);
+  }
+
+  {
+    blender::draw::PassSimple &pass = inst->goo_data->sss_translucency_ps;
+    pass.init();
+    pass.state_set(state | DRW_STATE_BLEND_ADD);
+  }
 }
 
 void EEVEE_subsurface_add_pass(EEVEE_ViewLayerData *sldata,
@@ -190,48 +205,52 @@ void EEVEE_subsurface_add_pass(EEVEE_ViewLayerData *sldata,
 
   {
     GPUSamplerState state = GPUSamplerState::default_sampler();
-
-    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(SUBSURFACE_FIRST_PASS),
-                                              inst->goo_data->sss_blur_ps);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", depth_src);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "sssIrradiance", &effects->sss_irradiance, state);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "sssRadius", &effects->sss_radius, state);
-    DRW_shgroup_uniform_block(grp, "sssProfile", sss_profile);
-    DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-    DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-    DRW_shgroup_stencil_mask(grp, sss_id);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
-
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(SUBSURFACE_SECOND_PASS), inst->goo_data->sss_resolve_ps);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", depth_src);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "sssIrradiance", &effects->sss_blur, state);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "sssAlbedo", &effects->sss_albedo, state);
-    DRW_shgroup_uniform_texture_ref_ex(grp, "sssRadius", &effects->sss_radius, state);
-    DRW_shgroup_uniform_block(grp, "sssProfile", sss_profile);
-    DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-    DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-    DRW_shgroup_stencil_mask(grp, sss_id);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->sss_blur_ps;
+      pass.shader_set(inst->shaders.static_shader_get(SUBSURFACE_FIRST_PASS));
+      pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+      pass.bind_texture("depthBuffer", depth_src);
+      pass.bind_texture("sssIrradiance", &effects->sss_irradiance, state);
+      pass.bind_texture("sssRadius", &effects->sss_radius, state);
+      pass.bind_ubo("sssProfile", sss_profile);
+      pass.bind_ubo("common_block", sldata->common_ubo);
+      pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+      pass.state_stencil(0xFF, sss_id, 0xFF);
+      pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+    }
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->sss_resolve_ps;
+      pass.shader_set(inst->shaders.static_shader_get(SUBSURFACE_SECOND_PASS));
+      pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+      pass.bind_texture("depthBuffer", depth_src);
+      pass.bind_texture("sssIrradiance", &effects->sss_blur, state);
+      pass.bind_texture("sssAlbedo", &effects->sss_albedo, state);
+      pass.bind_texture("sssRadius", &effects->sss_radius, state);
+      pass.bind_ubo("sssProfile", sss_profile);
+      pass.bind_ubo("common_block", sldata->common_ubo);
+      pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+      pass.state_stencil(0xFF, sss_id, 0xFF);
+      pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+      
+    }
   }
 
   if (ma->blend_flag & MA_BL_TRANSLUCENCY) {
-    DRWShadingGroup *grp = DRW_shgroup_create(inst->shaders.static_shader_get(SUBSURFACE_TRANSLUCENCY),
-                                              inst->goo_data->sss_translucency_ps);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_texture(grp, "sssTexProfile", sss_tex_profile);
-    DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", depth_src);
-    DRW_shgroup_uniform_texture_ref(grp, "sssRadius", &effects->sss_radius);
-    DRW_shgroup_uniform_texture_ref(grp, "sssShadowCubes", &sldata->shadow_cube_pool);
-    DRW_shgroup_uniform_texture_ref(grp, "sssShadowCascades", &sldata->shadow_cascade_pool);
-    DRW_shgroup_uniform_block(grp, "sssProfile", sss_profile);
-    DRW_shgroup_uniform_block(grp, "light_block", sldata->light_ubo);
-    DRW_shgroup_uniform_block(grp, "shadow_block", sldata->shadow_ubo);
-    DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-    DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-    DRW_shgroup_stencil_mask(grp, sss_id);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    blender::draw::PassSimple &pass = inst->goo_data->sss_translucency_ps;
+    pass.shader_set(inst->shaders.static_shader_get(SUBSURFACE_TRANSLUCENCY));
+    pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+    pass.bind_texture("sssTexProfile", sss_tex_profile);
+    pass.bind_texture("depthBuffer", depth_src);
+    pass.bind_texture("sssRadius", &effects->sss_radius);
+    pass.bind_texture("sssShadowCubes", &sldata->shadow_cube_pool);
+    pass.bind_texture("sssShadowCascades", &sldata->shadow_cascade_pool);
+    pass.bind_ubo("sssProfile", sss_profile);
+    pass.bind_ubo("light_block", sldata->light_ubo);
+    pass.bind_ubo("shadow_block", sldata->shadow_ubo);
+    pass.bind_ubo("common_block", sldata->common_ubo);
+    pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+    pass.state_stencil(0xFF, sss_id, 0xFF);
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   }
 }
 
@@ -271,6 +290,7 @@ void EEVEE_subsurface_data_render(EEVEE_ViewLayerData * /*sldata*/, Instance *in
 
 void EEVEE_subsurface_compute(EEVEE_ViewLayerData *sldata, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if ((effects->enabled_effects & EFFECT_SSS) != 0) {
@@ -285,29 +305,29 @@ void EEVEE_subsurface_compute(EEVEE_ViewLayerData *sldata, Instance *inst)
       GPU_framebuffer_blit(inst->goo_data->main_fb, 0, inst->goo_data->sss_blur_fb, 0, GPU_STENCIL_BIT);
     }
 
-    if (!DRW_pass_is_empty(inst->goo_data->sss_translucency_ps)) {
-      /* We sample the shadow-maps using normal sampler. We need to disable Comparison mode.
-       * TODO(fclem): avoid this by using sampler objects. */
-      GPU_texture_compare_mode(sldata->shadow_cube_pool, false);
-      GPU_texture_compare_mode(sldata->shadow_cascade_pool, false);
+    // if (!DRW_pass_is_empty(inst->goo_data->sss_translucency_ps)) {
+    /* We sample the shadow-maps using normal sampler. We need to disable Comparison mode.
+      * TODO(fclem): avoid this by using sampler objects. */
+    GPU_texture_compare_mode(sldata->shadow_cube_pool, false);
+    GPU_texture_compare_mode(sldata->shadow_cascade_pool, false);
 
-      GPU_framebuffer_bind(inst->goo_data->sss_translucency_fb);
-      DRW_draw_pass(inst->goo_data->sss_translucency_ps);
+    GPU_framebuffer_bind(inst->goo_data->sss_translucency_fb);
+    manager->submit(inst->goo_data->sss_translucency_ps);
 
-      /* Reset original state. */
-      GPU_texture_compare_mode(sldata->shadow_cube_pool, true);
-      GPU_texture_compare_mode(sldata->shadow_cascade_pool, true);
-    }
+    /* Reset original state. */
+    GPU_texture_compare_mode(sldata->shadow_cube_pool, true);
+    GPU_texture_compare_mode(sldata->shadow_cascade_pool, true);
+    // }
 
     /* 1. horizontal pass */
     GPU_framebuffer_bind(inst->goo_data->sss_blur_fb);
     GPU_framebuffer_clear_color(inst->goo_data->sss_blur_fb, clear);
-    DRW_draw_pass(inst->goo_data->sss_blur_ps);
+    manager->submit(inst->goo_data->sss_blur_ps);
 
     /* 2. vertical pass + Resolve */
     GPU_framebuffer_texture_attach(inst->goo_data->sss_resolve_fb, inst->goo_data->color, 0, 0);
     GPU_framebuffer_bind(inst->goo_data->sss_resolve_fb);
-    DRW_draw_pass(inst->goo_data->sss_resolve_ps);
+    manager->submit(inst->goo_data->sss_resolve_ps);
 
     GPU_framebuffer_bind(inst->goo_data->main_fb);
   }
@@ -315,6 +335,7 @@ void EEVEE_subsurface_compute(EEVEE_ViewLayerData *sldata, Instance *inst)
 
 void EEVEE_subsurface_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if (((effects->enabled_effects & EFFECT_SSS) != 0) && (inst->goo_data->sss_accum_fb != nullptr)) {
@@ -323,7 +344,7 @@ void EEVEE_subsurface_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instan
 
     /* Only do vertical pass + Resolve */
     GPU_framebuffer_bind(inst->goo_data->sss_accum_fb);
-    DRW_draw_pass(inst->goo_data->sss_resolve_ps);
+    manager->submit(inst->goo_data->sss_resolve_ps);
 
     /* Restore */
     GPU_framebuffer_bind(inst->goo_data->main_fb);

@@ -112,14 +112,13 @@ int EEVEE_screen_raytrace_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 
 void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
   LightCache *lcache = inst->goo_data->g_data->light_cache;
 
   if ((effects->enabled_effects & EFFECT_SSR) != 0) {
-    GPUShader *trace_shader = inst->shaders.static_shader_get(EFFECT_REFLECTION_TRACE);
-    GPUShader *resolve_shader = inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE);
-
-    int hitbuf_size[3];
+    
+    int3 hitbuf_size;
     GPU_texture_get_mipmap_size(effects->ssr_hit_output, 0, hitbuf_size);
 
     /**
@@ -136,97 +135,110 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *ins
      *   mipmap for each ray using its PDF. (filtered importance sampling)
      *   We then evaluate the lighting from the probes and mix the results together.
      */
-    DRW_PASS_CREATE(inst->goo_data->ssr_raytrace, DRW_STATE_WRITE_COLOR);
-    DRWShadingGroup *grp = DRW_shgroup_create(trace_shader, inst->goo_data->ssr_raytrace);
-    DRW_shgroup_uniform_texture_ref(grp, "normalBuffer", &effects->ssr_normal_input);
-    DRW_shgroup_uniform_texture_ref(grp, "specroughBuffer", &effects->ssr_specrough_input);
-    DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &inst->goo_data->maxzbuffer);
-    DRW_shgroup_uniform_texture_ref(grp, "planarDepth", &inst->goo_data->planar_depth);
-    DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-    DRW_shgroup_uniform_block(grp, "grid_block", sldata->grid_ubo);
-    DRW_shgroup_uniform_block(grp, "probe_block", sldata->probe_ubo);
-    DRW_shgroup_uniform_block(grp, "planar_block", sldata->planar_ubo);
-    DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-    DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-    DRW_shgroup_uniform_vec2_copy(
-        grp, "targetSize", blender::float2{float(hitbuf_size[0]), float(hitbuf_size[1])});
-    DRW_shgroup_uniform_float_copy(
-        grp, "randomScale", effects->reflection_trace_full ? 0.0f : 0.5f);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    blender::draw::PassSimple &pass = inst->goo_data->ssr_raytrace;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(inst->shaders.static_shader_get(EFFECT_REFLECTION_TRACE));
+
+    pass.bind_texture("normalBuffer", &effects->ssr_normal_input);
+    pass.bind_texture("specroughBuffer", &effects->ssr_specrough_input);
+    pass.bind_texture("maxzBuffer", &inst->goo_data->maxzbuffer);
+    pass.bind_texture("planarDepth", &inst->goo_data->planar_depth);
+    pass.bind_texture("probeCubes", &lcache->cube_tx.tex);
+    pass.bind_texture("irradianceGrid", &lcache->grid_tx.tex);
+    pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
+    pass.bind_texture("probePlanars", &inst->goo_data->planar_pool);
+    
+    pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+    pass.bind_ubo("grid_block", sldata->grid_ubo);
+    pass.bind_ubo("probe_block", sldata->probe_ubo);
+    pass.bind_ubo("planar_block", sldata->planar_ubo);
+    pass.bind_ubo("common_block", sldata->common_ubo);
+    pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+    pass.push_constant("targetSize", float2{float(hitbuf_size[0]), float(hitbuf_size[1])});
+    pass.push_constant("randomScale", effects->reflection_trace_full ? 0.0f : 0.5f);
+
+    pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
 
     GPUSamplerState no_filter = GPUSamplerState::default_sampler();
 
     if (effects->use_split_ssr_pass) {
       /* Prepare passes for split reflections resolve variant. */
       for (int i = 0; i < 2; i++) {
-        if (i == 0) {
-          /* Prepare Reflection Probes resolve pass. */
-          GPUShader *resolve_shader_probe = inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE_PROBE);
-          DRW_PASS_CREATE(inst->goo_data->ssr_resolve_probe, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
-          grp = DRW_shgroup_create(resolve_shader_probe, inst->goo_data->ssr_resolve_probe);
-        }
-        else if (i == 1) {
-          /* Prepare SSR resolve pass. */
-          GPUShader *resolve_shader_refl = inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE_REFL);
-          DRW_PASS_CREATE(inst->goo_data->ssr_resolve_refl, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
-          grp = DRW_shgroup_create(resolve_shader_refl, inst->goo_data->ssr_resolve_refl);
-        }
+        /* Prepare Reflection Probes resolve pass. */
+        /* Prepare SSR resolve pass. */
+        blender::draw::PassSimple &pass = (i == 0) ? inst->goo_data->ssr_resolve_probe : inst->goo_data->ssr_resolve_refl;
+        pass.init();
+        pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
 
-        DRW_shgroup_uniform_texture_ref(grp, "normalBuffer", &effects->ssr_normal_input);
-        DRW_shgroup_uniform_texture_ref(grp, "specroughBuffer", &effects->ssr_specrough_input);
-        DRW_shgroup_uniform_texture_ref(grp, "probeCubes", &lcache->cube_tx.tex);
-        DRW_shgroup_uniform_texture_ref(grp, "probePlanars", &inst->goo_data->planar_pool);
-        DRW_shgroup_uniform_texture_ref(grp, "planarDepth", &inst->goo_data->planar_depth);
-        DRW_shgroup_uniform_texture_ref_ex(grp, "hitBuffer", &effects->ssr_hit_output, no_filter);
-        DRW_shgroup_uniform_texture_ref_ex(grp, "hitDepth", &effects->ssr_hit_depth, no_filter);
-        DRW_shgroup_uniform_texture_ref(grp, "colorBuffer", &inst->goo_data->filtered_radiance);
-        DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &inst->goo_data->maxzbuffer);
-        DRW_shgroup_uniform_texture_ref(grp, "shadowCubeTexture", &sldata->shadow_cube_pool);
-        DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
-        DRW_shgroup_uniform_texture_ref(grp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
-        DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
-        DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-        DRW_shgroup_uniform_block(grp, "light_block", sldata->light_ubo);
-        DRW_shgroup_uniform_block(grp, "shadow_block", sldata->shadow_ubo);
-        DRW_shgroup_uniform_block(grp, "grid_block", sldata->grid_ubo);
-        DRW_shgroup_uniform_block(grp, "probe_block", sldata->probe_ubo);
-        DRW_shgroup_uniform_block(grp, "planar_block", sldata->planar_ubo);
-        DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-        DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-        DRW_shgroup_uniform_int(grp, "samplePoolOffset", &effects->taa_current_sample, 1);
-        DRW_shgroup_uniform_texture_ref(grp, "horizonBuffer", &effects->gtao_horizons);
-        DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+        if (i == 0) {
+          pass.shader_set(inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE_PROBE));
+        }
+        else {
+          pass.shader_set(inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE_REFL));
+        }
+        
+        pass.bind_texture("normalBuffer", &effects->ssr_normal_input);
+        pass.bind_texture("specroughBuffer", &effects->ssr_specrough_input);
+        pass.bind_texture("probeCubes", &lcache->cube_tx.tex);
+        pass.bind_texture("probePlanars", &inst->goo_data->planar_pool);
+        pass.bind_texture("planarDepth", &inst->goo_data->planar_depth);
+        pass.bind_texture("hitBuffer", &effects->ssr_hit_output, no_filter);
+        pass.bind_texture("hitDepth", &effects->ssr_hit_depth, no_filter);
+        pass.bind_texture("colorBuffer", &inst->goo_data->filtered_radiance);
+        pass.bind_texture("maxzBuffer", &inst->goo_data->maxzbuffer);
+        pass.bind_texture("shadowCubeTexture", &sldata->shadow_cube_pool);
+        pass.bind_texture("shadowCascadeTexture", &sldata->shadow_cascade_pool);
+        pass.bind_texture("shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+        pass.bind_texture("shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
+
+        pass.bind_texture("irradianceGrid", &lcache->grid_tx.tex);
+        pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+        pass.bind_ubo("light_block", sldata->light_ubo);
+        pass.bind_ubo("shadow_block", sldata->shadow_ubo);
+        pass.bind_ubo("grid_block", sldata->grid_ubo);
+        pass.bind_ubo("probe_block", sldata->probe_ubo);
+        pass.bind_ubo("planar_block", sldata->planar_ubo);
+        pass.bind_ubo("common_block", sldata->common_ubo);
+        pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+        pass.push_constant("samplePoolOffset", &effects->taa_current_sample);
+        pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
+        
+        pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
       }
     }
     else {
       /* Prepare standard reflections resolve pass. */
-      DRW_PASS_CREATE(inst->goo_data->ssr_resolve, DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
-      grp = DRW_shgroup_create(resolve_shader, inst->goo_data->ssr_resolve);
+      blender::draw::PassSimple &pass = inst->goo_data->ssr_resolve;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_BLEND_ADD);
+      pass.shader_set(inst->shaders.static_shader_get(EFFECT_REFLECTION_RESOLVE));
 
-      DRW_shgroup_uniform_texture_ref(grp, "normalBuffer", &effects->ssr_normal_input);
-      DRW_shgroup_uniform_texture_ref(grp, "specroughBuffer", &effects->ssr_specrough_input);
-      DRW_shgroup_uniform_texture_ref(grp, "probeCubes", &lcache->cube_tx.tex);
-      DRW_shgroup_uniform_texture_ref(grp, "probePlanars", &inst->goo_data->planar_pool);
-      DRW_shgroup_uniform_texture_ref(grp, "planarDepth", &inst->goo_data->planar_depth);
-      DRW_shgroup_uniform_texture_ref_ex(grp, "hitBuffer", &effects->ssr_hit_output, no_filter);
-      DRW_shgroup_uniform_texture_ref_ex(grp, "hitDepth", &effects->ssr_hit_depth, no_filter);
-      DRW_shgroup_uniform_texture_ref(grp, "colorBuffer", &inst->goo_data->filtered_radiance);
-      DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &inst->goo_data->maxzbuffer);
-      DRW_shgroup_uniform_texture_ref(grp, "shadowCubeTexture", &sldata->shadow_cube_pool);
-      DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
-      DRW_shgroup_uniform_texture_ref(grp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
-      DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
-      DRW_shgroup_uniform_texture(grp, "utilTex", EEVEE_materials_get_util_tex());
-      DRW_shgroup_uniform_block(grp, "light_block", sldata->light_ubo);
-      DRW_shgroup_uniform_block(grp, "shadow_block", sldata->shadow_ubo);
-      DRW_shgroup_uniform_block(grp, "grid_block", sldata->grid_ubo);
-      DRW_shgroup_uniform_block(grp, "probe_block", sldata->probe_ubo);
-      DRW_shgroup_uniform_block(grp, "planar_block", sldata->planar_ubo);
-      DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-      DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-      DRW_shgroup_uniform_int(grp, "samplePoolOffset", &effects->taa_current_sample, 1);
-      DRW_shgroup_uniform_texture_ref(grp, "horizonBuffer", &effects->gtao_horizons);
-      DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+      pass.bind_texture("normalBuffer", &effects->ssr_normal_input);
+      pass.bind_texture("specroughBuffer", &effects->ssr_specrough_input);
+      pass.bind_texture("probeCubes", &lcache->cube_tx.tex);
+      pass.bind_texture("probePlanars", &inst->goo_data->planar_pool);
+      pass.bind_texture("planarDepth", &inst->goo_data->planar_depth);
+      pass.bind_texture("hitBuffer", &effects->ssr_hit_output, no_filter);
+      pass.bind_texture("hitDepth", &effects->ssr_hit_depth, no_filter);
+      pass.bind_texture("colorBuffer", &inst->goo_data->filtered_radiance);
+      pass.bind_texture("maxzBuffer", &inst->goo_data->maxzbuffer);
+      pass.bind_texture("shadowCubeTexture", &sldata->shadow_cube_pool);
+      pass.bind_texture("shadowCascadeTexture", &sldata->shadow_cascade_pool);
+      pass.bind_texture("shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+      pass.bind_texture("shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
+      pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
+      pass.bind_ubo("light_block", sldata->light_ubo);
+      pass.bind_ubo("shadow_block", sldata->shadow_ubo);
+      pass.bind_ubo("grid_block", sldata->grid_ubo);
+      pass.bind_ubo("probe_block", sldata->probe_ubo);
+      pass.bind_ubo("planar_block", sldata->planar_ubo);
+      pass.bind_ubo("common_block", sldata->common_ubo);
+      pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
+      pass.push_constant("samplePoolOffset", &effects->taa_current_sample);
+      pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
+      
+      pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
     }
   }
 }
@@ -245,12 +257,13 @@ void EEVEE_refraction_compute(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 
 void EEVEE_reflection_compute(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if (((effects->enabled_effects & EFFECT_SSR) != 0) && inst->goo_data->g_data->valid_double_buffer) {
     /* Ray-trace. */
     GPU_framebuffer_bind(inst->goo_data->screen_tracing_fb);
-    DRW_draw_pass(inst->goo_data->ssr_raytrace);
+    manager->submit(inst->goo_data->ssr_raytrace);
 
     EEVEE_effects_downsample_radiance_buffer(inst, inst->goo_data->color_double_buffer);
 
@@ -258,11 +271,11 @@ void EEVEE_reflection_compute(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 
     if (effects->use_split_ssr_pass) {
       /* Trace reflections for probes and SSR independently */
-      DRW_draw_pass(inst->goo_data->ssr_resolve_probe);
-      DRW_draw_pass(inst->goo_data->ssr_resolve_refl);
+      manager->submit(inst->goo_data->ssr_resolve_probe);
+      manager->submit(inst->goo_data->ssr_resolve_refl);
     }
     else {
-      DRW_draw_pass(inst->goo_data->ssr_resolve);
+      manager->submit(inst->goo_data->ssr_resolve);
     }
 
     /* Restore */
@@ -285,6 +298,7 @@ void EEVEE_reflection_output_init(EEVEE_ViewLayerData * /*sldata*/,
 
 void EEVEE_reflection_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if (inst->goo_data->g_data->valid_double_buffer) {
@@ -292,16 +306,16 @@ void EEVEE_reflection_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, Instan
 
     /* Clear texture. */
     if (effects->taa_current_sample == 1) {
-      const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+      const float4 clear = {0.0f, 0.0f, 0.0f, 0.0f};
       GPU_framebuffer_clear_color(inst->goo_data->ssr_accum_fb, clear);
     }
 
     if (effects->use_split_ssr_pass) {
-      DRW_draw_pass(inst->goo_data->ssr_resolve_probe);
-      DRW_draw_pass(inst->goo_data->ssr_resolve_refl);
+      manager->submit(inst->goo_data->ssr_resolve_probe);
+      manager->submit(inst->goo_data->ssr_resolve_refl);
     }
     else {
-      DRW_draw_pass(inst->goo_data->ssr_resolve);
+      manager->submit(inst->goo_data->ssr_resolve);
     }
   }
 }
