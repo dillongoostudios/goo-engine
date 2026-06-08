@@ -937,9 +937,9 @@ struct GOOENGINE_Data {
   DRWPass *material_sss_cull_ps;
   DRWPass *transparent_pass;
   DRWPass *background_ps;
-  DRWPass *update_noise_pass;
   DRWPass *lookdev_glossy_pass;
   DRWPass *lookdev_diffuse_pass;
+  PassSimple update_noise_pass = {"update_noise_pass"};
   DRWPass *renderpass_pass;
 
   /* Effects */

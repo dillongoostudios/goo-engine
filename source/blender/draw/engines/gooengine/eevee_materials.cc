@@ -45,7 +45,7 @@ static struct {
   GPUTexture *util_tex;
   GPUTexture *noise_tex;
 
-  float noise_offsets[3];
+  float3 noise_offsets;
 } e_data = {nullptr}; /* Engine data */
 
 struct EeveeMaterialCache {
@@ -230,13 +230,14 @@ static void eevee_init_util_texture()
 
 void EEVEE_update_noise(Instance *inst, const double offsets[3])
 {
+  blender::draw::Manager *manager = DRW_manager_get();
 
   e_data.noise_offsets[0] = offsets[0];
   e_data.noise_offsets[1] = offsets[1];
   e_data.noise_offsets[2] = offsets[2];
 
   GPU_framebuffer_bind(inst->goo_data->update_noise_fb);
-  DRW_draw_pass(inst->goo_data->update_noise_pass);
+  manager->submit(inst->goo_data->update_noise_pass);
 }
 
 void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
@@ -487,12 +488,13 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
     DRW_PASS_CREATE(inst->goo_data->transparent_pass, state);
   }
   {
-    DRW_PASS_CREATE(inst->goo_data->update_noise_pass, DRW_STATE_WRITE_COLOR);
-    GPUShader *sh = inst->shaders.static_shader_get(UPDATE_NOISE);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->update_noise_pass);
-    DRW_shgroup_uniform_texture(grp, "blueNoise", e_data.noise_tex);
-    DRW_shgroup_uniform_vec3(grp, "offsets", e_data.noise_offsets, 1);
-    DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);
+    blender::draw::PassSimple &pass = inst->goo_data->update_noise_pass;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(inst->shaders.static_shader_get(UPDATE_NOISE));
+    pass.bind_texture("blueNoise", e_data.noise_tex);
+    pass.push_constant("offsets", &e_data.noise_offsets);
+    pass.draw(DRW_cache_fullscreen_quad_get());
   }
 }
 
