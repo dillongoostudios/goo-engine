@@ -901,8 +901,6 @@ struct GOOENGINE_Data {
   DRWPass *velocity_tiles_x;
   DRWPass *velocity_tiles;
   DRWPass *velocity_tiles_expand[2];
-  DRWPass *taa_resolve;
-  DRWPass *alpha_checker;
   PassSimple ssr_raytrace = {"ssr_raytrace"};
   PassSimple ssr_resolve = {"ssr_resolve"};
   PassSimple ssr_resolve_probe = {"ssr_resolve_probe"};
@@ -910,6 +908,7 @@ struct GOOENGINE_Data {
   PassSimple sss_blur_ps = {"sss_blur_ps"};
   PassSimple sss_resolve_ps = {"sss_resolve_ps"};
   PassSimple sss_translucency_ps = {"sss_translucency_ps"};
+  PassSimple taa_resolve = {"taa_resolve"};
 
   /* HiZ */
   PassSimple maxz_downlevel_ps = {"maxz_downlevel_ps"};

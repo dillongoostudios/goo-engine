@@ -387,32 +387,30 @@ void EEVEE_temporal_sampling_cache_init(EEVEE_ViewLayerData *sldata, Instance *i
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   if (effects->enabled_effects & EFFECT_TAA) {
-    GPUShader *sh;
+
+    blender::draw::PassSimple &pass = inst->goo_data->taa_resolve;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
     if (effects->enabled_effects & EFFECT_TAA_REPROJECT) {
-      sh = inst->shaders.static_shader_get(TAA_RESOLVE_REPROJECTION);
+      pass.shader_set(inst->shaders.static_shader_get(TAA_RESOLVE_REPROJECTION));
     }
     else {
-      sh = inst->shaders.static_shader_get(TAA_RESOLVE_RESOLVE_BASIC);
+      pass.shader_set(inst->shaders.static_shader_get(TAA_RESOLVE_RESOLVE_BASIC));
     }
-
-    DRW_PASS_CREATE(inst->goo_data->taa_resolve, DRW_STATE_WRITE_COLOR);
-    DRWShadingGroup *grp = DRW_shgroup_create(sh, inst->goo_data->taa_resolve);
-
-    DRW_shgroup_uniform_texture_ref(grp, "colorHistoryBuffer", &inst->goo_data->taa_history);
-    DRW_shgroup_uniform_texture_ref(grp, "colorBuffer", &effects->source_buffer);
-    DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-    DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-
+    pass.bind_texture("colorHistoryBuffer", &inst->goo_data->taa_history);
+    pass.bind_texture("colorBuffer", &effects->source_buffer);
+    pass.bind_ubo("common_block", sldata->common_ubo);
+    pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
     if (effects->enabled_effects & EFFECT_TAA_REPROJECT) {
       const DRWContext *draw_ctx = DRW_context_get();
       DefaultTextureList *dtxl = draw_ctx->viewport_texture_list_get();
-      DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &dtxl->depth);
-      DRW_shgroup_uniform_mat4(grp, "prevViewProjectionMatrix", effects->prev_drw_persmat);
+      pass.bind_texture("depthBuffer", &dtxl->depth);
+      pass.push_constant("prevViewProjectionMatrix", float4x4(effects->prev_drw_persmat));
     }
     else {
-      DRW_shgroup_uniform_float(grp, "alpha", &effects->taa_alpha, 1);
+      pass.push_constant("alpha", &effects->taa_alpha);
     }
-    DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);
+    pass.draw(DRW_cache_fullscreen_quad_get());
   }
 }
 
@@ -420,6 +418,7 @@ void EEVEE_temporal_sampling_draw(Instance *inst)
 {
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
   const DRWContext *draw_ctx = DRW_context_get();
+  blender::draw::Manager *manager = DRW_manager_get();
 
   if ((effects->enabled_effects & (EFFECT_TAA | EFFECT_TAA_REPROJECT)) != 0) {
     if ((effects->enabled_effects & EFFECT_TAA) != 0 && effects->taa_current_sample != 1) {
@@ -432,7 +431,7 @@ void EEVEE_temporal_sampling_draw(Instance *inst)
       }
 
       GPU_framebuffer_bind(effects->target_buffer);
-      DRW_draw_pass(inst->goo_data->taa_resolve);
+      manager->submit(inst->goo_data->taa_resolve);
 
       /* Restore the depth from sample 1. */
       GPU_framebuffer_blit(inst->goo_data->double_buffer_depth_fb, 0, inst->goo_data->main_fb, 0, GPU_DEPTH_BIT);
@@ -451,7 +450,7 @@ void EEVEE_temporal_sampling_draw(Instance *inst)
           inst->goo_data->g_data->valid_taa_history)
       {
         GPU_framebuffer_bind(effects->target_buffer);
-        DRW_draw_pass(inst->goo_data->taa_resolve);
+        manager->submit(inst->goo_data->taa_resolve);
         SWAP_BUFFERS_TAA();
       }
       else {
