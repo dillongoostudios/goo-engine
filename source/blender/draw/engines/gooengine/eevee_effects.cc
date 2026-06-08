@@ -28,7 +28,7 @@ static struct {
 
   int depth_src_layer;
   /* Size can be vec3. But we only use 2 components in the shader. */
-  float texel_size[2];
+  float2 texel_size;
 } e_data = {nullptr}; /* Engine data */
 
 #define SETUP_BUFFER(tex, fb, fb_color) \
@@ -270,29 +270,35 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
     DRW_shgroup_call_instances(grp, nullptr, quad, 6);
   }
 
+  /* Perform min/max down-sample. */
   {
-    /* Perform min/max down-sample. */
-    DRW_PASS_CREATE(inst->goo_data->maxz_downlevel_ps, downsample_write);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MAXZ_DOWNLEVEL), inst->goo_data->maxz_downlevel_ps);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "depthBuffer", &inst->goo_data->maxzbuffer, GPUSamplerState::default_sampler());
-    DRW_shgroup_uniform_vec2(grp, "texelSize", e_data.texel_size, 1);
-    DRW_shgroup_call(grp, quad, nullptr);
+    blender::draw::PassSimple &pass = inst->goo_data->maxz_downlevel_ps;
+    pass.init();
+    pass.state_set(downsample_write);
+    pass.shader_set(inst->shaders.static_shader_get(EFFECT_MAXZ_DOWNLEVEL));
+    pass.bind_texture("depthBuffer", &inst->goo_data->maxzbuffer, GPUSamplerState::default_sampler());
+    pass.push_constant("texelSize", &e_data.texel_size);
+    pass.draw(quad);
+  }
 
+  {
     /* Copy depth buffer to top level of HiZ */
-    DRW_PASS_CREATE(inst->goo_data->maxz_copydepth_ps, downsample_write);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MAXZ_COPYDEPTH), inst->goo_data->maxz_copydepth_ps);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "depthBuffer", &e_data.depth_src, GPUSamplerState::default_sampler());
-    DRW_shgroup_call(grp, quad, nullptr);
+    blender::draw::PassSimple &pass = inst->goo_data->maxz_copydepth_ps;
+    pass.init();
+    pass.state_set(downsample_write);
+    pass.shader_set(inst->shaders.static_shader_get(EFFECT_MAXZ_COPYDEPTH));
+    pass.bind_texture("depthBuffer", &e_data.depth_src, GPUSamplerState::default_sampler());
+    pass.draw(quad);
+  }
 
-    DRW_PASS_CREATE(inst->goo_data->maxz_copydepth_layer_ps, downsample_write);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_MAXZ_COPYDEPTH_LAYER),
-                             inst->goo_data->maxz_copydepth_layer_ps);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "depthBuffer", &e_data.depth_src, GPUSamplerState::default_sampler());
-    DRW_shgroup_uniform_int(grp, "depthLayer", &e_data.depth_src_layer, 1);
-    DRW_shgroup_call(grp, quad, nullptr);
+  {
+    blender::draw::PassSimple &pass = inst->goo_data->maxz_copydepth_layer_ps;
+    pass.init();
+    pass.state_set(downsample_write);
+    pass.shader_set(inst->shaders.static_shader_get(EFFECT_MAXZ_COPYDEPTH_LAYER));
+    pass.bind_texture("depthBuffer", &e_data.depth_src, GPUSamplerState::default_sampler());
+    pass.push_constant("depthLayer", &e_data.depth_src_layer);
+    pass.draw(quad);
   }
 
   if ((effects->enabled_effects & EFFECT_VELOCITY_BUFFER) != 0) {
@@ -347,12 +353,14 @@ static void min_downsample_cb(Instance *inst, int /*level*/)
 
 auto max_downsample_cb(void *instance, int level)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   Instance *inst = static_cast<Instance *>(instance);
+  
   int texture_size[3];
   GPU_texture_get_mipmap_size(inst->goo_data->maxzbuffer, level - 1, texture_size);
   e_data.texel_size[0] = 1.0f / texture_size[0];
   e_data.texel_size[1] = 1.0f / texture_size[1];
-  DRW_draw_pass(inst->goo_data->maxz_downlevel_ps);
+  manager->submit(inst->goo_data->maxz_downlevel_ps);
 }
 
 auto simple_downsample_cube_cb(void *instance, int level)
@@ -365,16 +373,18 @@ auto simple_downsample_cube_cb(void *instance, int level)
 
 void EEVEE_create_minmax_buffer(Instance *inst, GPUTexture *depth_src, int layer)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
+
   e_data.depth_src = depth_src;
   e_data.depth_src_layer = layer;
 
   /* Copy depth buffer to max texture top level */
   GPU_framebuffer_bind(inst->goo_data->maxzbuffer_fb);
   if (layer >= 0) {
-    DRW_draw_pass(inst->goo_data->maxz_copydepth_layer_ps);
+    manager->submit(inst->goo_data->maxz_copydepth_layer_ps);
   }
   else {
-    DRW_draw_pass(inst->goo_data->maxz_copydepth_ps);
+    manager->submit(inst->goo_data->maxz_copydepth_ps);
   }
   /* Create lower levels */
   GPU_framebuffer_recursive_downsample(

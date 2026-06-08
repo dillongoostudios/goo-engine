@@ -912,9 +912,9 @@ struct GOOENGINE_Data {
   PassSimple sss_translucency_ps = {"sss_translucency_ps"};
 
   /* HiZ */
-  DRWPass *maxz_downlevel_ps;
-  DRWPass *maxz_copydepth_ps;
-  DRWPass *maxz_copydepth_layer_ps;
+  PassSimple maxz_downlevel_ps = {"maxz_downlevel_ps"};
+  PassSimple maxz_copydepth_ps = {"maxz_copydepth_ps"};
+  PassSimple maxz_copydepth_layer_ps = {"maxz_copydepth_layer_ps"};
 
   /* Render-pass Accumulation. */
   DRWPass *material_accum_ps;
