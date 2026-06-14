@@ -68,6 +68,136 @@ GPUTexture *EEVEE_materials_get_util_tex()
   return e_data.util_tex;
 }
 
+void GOOENGINE_material_bind_resources(PassSimple &pass,
+                                   GPUMaterial *gpumat,
+                                   EEVEE_ViewLayerData *sldata,
+                                   Instance *inst,
+                                   const int *ssr_id,
+                                   const float *refract_depth,
+                                   const float alpha_clip_threshold,
+                                   bool use_ssrefraction,
+                                   bool use_alpha_blend)
+{
+
+  bool use_diffuse = GPU_material_flag_get(gpumat, GPU_MATFLAG_DIFFUSE);
+  bool use_glossy = GPU_material_flag_get(gpumat, GPU_MATFLAG_GLOSSY);
+  bool use_refract = GPU_material_flag_get(gpumat, GPU_MATFLAG_REFRACT);
+  bool use_ao = GPU_material_flag_get(gpumat, GPU_MATFLAG_AO);
+
+#ifdef __APPLE__
+  /* NOTE: Some implementation do not optimize out the unused samplers. */
+  use_diffuse = use_glossy = use_refract = use_ao = true;
+#endif
+  LightCache *lcache = inst->goo_data->g_data->light_cache;
+  EEVEE_EffectsInfo *effects = inst->goo_data->effects;
+  EEVEE_PrivateData *pd = inst->goo_data->g_data;
+
+  pass.bind_ubo("probe_block", sldata->probe_ubo);
+  pass.bind_ubo("grid_block", sldata->grid_ubo);
+  pass.bind_ubo("planar_block", sldata->planar_ubo);
+  pass.bind_ubo("light_block", sldata->light_ubo);
+  pass.bind_ubo("shadow_block", sldata->shadow_ubo);
+  pass.bind_ubo("common_block", sldata->common_ubo);
+  pass.bind_ubo("renderpass_block", &pd->renderpass_ubo);
+
+  pass.push_constant("alphaClipThreshold", alpha_clip_threshold);
+
+  pass.push_constant("outputSssId", 1);
+  pass.bind_texture("utilTex", e_data.util_tex);
+  if (use_diffuse || use_glossy || use_refract) {
+    pass.bind_texture("shadowCubeTexture", &sldata->shadow_cube_pool);
+    pass.bind_texture("shadowCascadeTexture", &sldata->shadow_cascade_pool);
+    pass.bind_texture("shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+    pass.bind_texture("shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
+  }
+  if (use_diffuse || use_glossy || use_refract || use_ao) {
+    pass.bind_texture("maxzBuffer", &inst->goo_data->maxzbuffer);
+  }
+  if ((use_diffuse || use_glossy) && !use_ssrefraction) {
+    pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
+  }
+  if (use_diffuse) {
+    pass.bind_texture("irradianceGrid", &lcache->grid_tx.tex);
+  }
+  if (use_glossy || use_refract) {
+    pass.bind_texture("probeCubes", &lcache->cube_tx.tex);
+  }
+  if (use_glossy) {
+    pass.bind_texture("probePlanars", &inst->goo_data->planar_pool);
+    pass.push_constant("outputSsrId", ssr_id ? *ssr_id : 0);
+  }
+  else {
+    pass.push_constant("outputSsrId", 1);
+  }
+  if (use_refract) {
+    pass.push_constant("refractionDepth", (refract_depth) ? *refract_depth : 0.0f);
+    if (use_ssrefraction) {
+      pass.bind_texture("refractColorBuffer", &inst->goo_data->filtered_radiance);
+    }
+  }
+  if (use_alpha_blend) {
+    pass.bind_texture("inScattering", &effects->volume_scatter);
+    pass.bind_texture("inTransmittance", &effects->volume_transmit);
+  }
+}
+
+void GOOENGINE_add_material_resources(PassSimple &pass, GPUMaterial *material)
+{
+  ListBase textures = GPU_material_textures(material);
+
+  /* Bind all textures needed by the material. */
+  LISTBASE_FOREACH (GPUMaterialTexture *, tex, &textures) {
+    if (tex->ima) {
+      const bool use_tile_mapping = tex->tiled_mapping_name[0];
+      ImageUser *iuser = tex->iuser_available ? &tex->iuser : nullptr;
+      ImageGPUTextures gputex = BKE_image_get_gpu_material_texture(
+          tex->ima, iuser, use_tile_mapping);
+
+      pass.bind_texture(tex->sampler_name, gputex.texture, tex->sampler_state);
+      if (gputex.tile_mapping) {
+        pass.bind_texture(tex->tiled_mapping_name, gputex.tile_mapping, tex->sampler_state);
+      }
+    }
+    else if (tex->colorband) {
+      /* Color Ramp */
+      pass.bind_texture(tex->sampler_name, *tex->colorband);
+    }
+    else if (tex->sky) {
+      /* Sky */
+      pass.bind_texture(tex->sampler_name, *tex->sky, tex->sampler_state);
+    }
+  }
+
+  GPUUniformBuf *ubo = GPU_material_uniform_buffer_get(material);
+  if (ubo != nullptr) {
+    pass.bind_ubo(GPU_UBO_BLOCK_NAME, ubo);
+  }
+
+  // TODO CODY Figure out how to fix these objerct/layer attributes
+  // const GPUUniformAttrList *uattrs = GPU_material_uniform_attributes(material);
+  // if (uattrs != nullptr) {
+  //   int loc = GPU_shader_get_ubo_binding(grp->shader, GPU_ATTRIBUTE_UBO_BLOCK_NAME);
+  //   drw_shgroup_uniform_create_ex(
+  //       grp, loc, DRW_UNIFORM_BLOCK_OBATTRS, uattrs, GPUSamplerState::default_sampler(), 0, 1);
+  //   pass.push_constant("alphaClipThreshold", alpha_clip_threshold);
+  //   grp->uniform_attrs = uattrs;
+  // }
+
+  // if (GPU_material_layer_attributes(material) != nullptr) {
+  //   int loc = GPU_shader_get_ubo_binding(grp->shader, GPU_LAYER_ATTRIBUTE_UBO_BLOCK_NAME);
+  //   drw_shgroup_uniform_create_ex(
+  //     grp, loc, DRW_UNIFORM_BLOCK_VLATTRS, nullptr, GPUSamplerState::default_sampler(), 0, 1);
+  //   pass.push_constant("alphaClipThreshold", alpha_clip_threshold);
+  // }
+
+  int light_groups[4];
+  GPU_material_light_group_bits_get(material, light_groups);
+  pass.push_constant("light_groups_in", light_groups);
+
+  GPU_material_light_group_shadow_bits_get(material, light_groups);
+  pass.push_constant("light_group_shadows_in", light_groups);
+}
+
 void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
                                    GPUMaterial *gpumat,
                                    EEVEE_ViewLayerData *sldata,

@@ -587,7 +587,6 @@ struct EEVEE_EffectsInfo {
   int sphere_size;
   eDRWLevelOfDetail sphere_lod;
   int anchor[2];
-  DRWView *lookdev_view;
   /* Bloom */
   int bloom_iteration_len;
   float2 source_texel_size;
@@ -937,9 +936,9 @@ struct GOOENGINE_Data {
   DRWPass *material_sss_cull_ps;
   DRWPass *transparent_pass;
   DRWPass *background_ps;
-  DRWPass *lookdev_glossy_pass;
-  DRWPass *lookdev_diffuse_pass;
   PassSimple update_noise_pass = {"update_noise_pass"};
+  PassSimple lookdev_glossy_pass = {"lookdev_glossy_pass"};
+  PassSimple lookdev_diffuse_pass = {"lookdev_diffuse_pass"};
   DRWPass *renderpass_pass;
 
   /* Effects */
@@ -1057,6 +1056,8 @@ struct GOOENGINE_Data {
 
   /* Effects */
   EEVEE_EffectsInfo *effects;
+  
+  View lookdev_view = {"Lookdev.View"};
 
   EEVEE_PrivateData *g_data;
 
@@ -1204,6 +1205,17 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
                                    const float alpha_clip_threshold,
                                    bool use_ssrefraction,
                                    bool use_alpha_blend);
+void GOOENGINE_material_bind_resources(PassSimple &pass,
+                                       GPUMaterial *gpumat,
+                                       EEVEE_ViewLayerData *sldata,
+                                       Instance *inst,
+                                       const int *ssr_id,
+                                       const float *refract_depth,
+                                       const float alpha_clip_threshold,
+                                       bool use_ssrefraction,
+                                       bool use_alpha_blend);
+void GOOENGINE_add_material_resources(PassSimple &pass, GPUMaterial *material);
+
 /* `eevee_lights.cc` */
 
 /**

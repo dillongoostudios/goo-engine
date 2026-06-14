@@ -50,7 +50,7 @@ static void eevee_lookdev_hdri_preview_init(Instance *inst, EEVEE_ViewLayerData 
 {
   const DRWContext *draw_ctx = DRW_context_get();
   Scene *scene = draw_ctx->scene;
-  DRWShadingGroup *grp;
+  blender::draw::Manager *manager = DRW_manager_get();
 
   const EEVEE_EffectsInfo *effects = inst->goo_data->effects;
   blender::gpu::Batch *sphere = DRW_cache_sphere_get(effects->sphere_lod);
@@ -63,28 +63,30 @@ static void eevee_lookdev_hdri_preview_init(Instance *inst, EEVEE_ViewLayerData 
     Material *ma = EEVEE_material_default_diffuse_get();
     printf("GET LOOK DEV MAT 1 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
-    GPUShader *sh = GPU_material_get_shader(gpumat);
 
-    DRW_PASS_CREATE(inst->goo_data->lookdev_diffuse_pass, state);
-    grp = DRW_shgroup_create(sh, inst->goo_data->lookdev_diffuse_pass);
-    EEVEE_material_bind_resources(
-        grp, gpumat, sldata, inst, nullptr, nullptr, -1.0f, false, false);
-    DRW_shgroup_add_material_resources(grp, gpumat);
-    DRW_shgroup_call(grp, sphere, nullptr);
+    blender::draw::PassSimple &pass = inst->goo_data->lookdev_diffuse_pass;
+    pass.init();
+    pass.state_set(state);
+    pass.material_set(*manager, gpumat);
+    GOOENGINE_material_bind_resources(
+        pass, gpumat, sldata, inst, nullptr, nullptr, -1.0f, false, false);
+    GOOENGINE_add_material_resources(pass, gpumat);
+    pass.draw(sphere);
   }
   {
     Material *ma = EEVEE_material_default_glossy_get();
     
     printf("GET LOOK DEV MAT 2 \n");
     GPUMaterial *gpumat = EEVEE_material_get(inst, scene, ma, nullptr, mat_options);
-    GPUShader *sh = GPU_material_get_shader(gpumat);
 
-    DRW_PASS_CREATE(inst->goo_data->lookdev_glossy_pass, state);
-    grp = DRW_shgroup_create(sh, inst->goo_data->lookdev_glossy_pass);
-    EEVEE_material_bind_resources(
-        grp, gpumat, sldata, inst, nullptr, nullptr, -1.0f, false, false);
-    DRW_shgroup_add_material_resources(grp, gpumat);
-    DRW_shgroup_call(grp, sphere, nullptr);
+    blender::draw::PassSimple &pass = inst->goo_data->lookdev_glossy_pass;
+    pass.init();
+    pass.state_set(state);
+    pass.material_set(*manager, gpumat);
+    GOOENGINE_material_bind_resources(
+        pass, gpumat, sldata, inst, nullptr, nullptr, -1.0f, false, false);
+    GOOENGINE_add_material_resources(pass, gpumat);
+    pass.draw(sphere);
   }
 }
 
@@ -157,8 +159,6 @@ void EEVEE_lookdev_cache_init(Instance *inst,
   const Scene *scene = draw_ctx->scene;
 
   const bool probe_render = pinfo != nullptr;
-
-  effects->lookdev_view = nullptr;
 
   if (eevee_hdri_preview_overlay_enabled(v3d)) {
     eevee_lookdev_hdri_preview_init(inst, sldata);
@@ -299,10 +299,12 @@ void EEVEE_lookdev_draw(Instance *inst)
 {
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
   EEVEE_ViewLayerData *sldata = EEVEE_view_layer_data_ensure();
+  blender::draw::Manager *manager = DRW_manager_get();
+  blender::draw::View &drw_view = blender::draw::View::default_get();
 
   const DRWContext *draw_ctx = DRW_context_get();
 
-  if (inst->goo_data->lookdev_diffuse_pass && eevee_hdri_preview_overlay_enabled(draw_ctx->v3d)) {
+  if (!inst->goo_data->lookdev_diffuse_pass.is_empty() && eevee_hdri_preview_overlay_enabled(draw_ctx->v3d)) {
     /* Config renderer. */
     EEVEE_CommonUniformBuffer *common = &sldata->common_data;
     common->la_num_light = 0;
@@ -322,22 +324,90 @@ void EEVEE_lookdev_draw(Instance *inst)
 
     eevee_lookdev_apply_taa(effects, effects->sphere_size, winmat);
 
-    /* "Remove" view matrix location. Leaving only rotation. */
-    DRW_view_viewmat_get(nullptr, viewmat, false);
-    zero_v3(viewmat[3]);
+    // /* "Remove" view matrix location. Leaving only rotation. */
+    // DRW_view_viewmat_get(nullptr, viewmat, false);
+    // zero_v3(viewmat[3]);
 
-    if (effects->lookdev_view) {
-      /* When rendering just update the view. This avoids recomputing the culling. */
-      DRW_view_update_sub(effects->lookdev_view, viewmat, winmat);
-    }
-    else {
-      /* Using default view bypasses the culling. */
-      const DRWView *default_view = DRW_view_default_get();
-      effects->lookdev_view = DRW_view_create_sub(default_view, viewmat, winmat);
-    }
+    // float4x4 V = blender::draw::View::default_get().viewmat();
+    // float R[4][4];
+    // axis_angle_to_mat4_single(R, 'Z', -studiolight_rot_z);
+    // mul_m4_m4m4(R, V.ptr(), R);
+    // swap_v3_v3(R[2], R[1]);
+    // negate_v3(R[2]);
 
-    DRW_view_set_active(effects->lookdev_view);
 
+
+
+    // const float viewport_scale = calc_viewport_scale();
+    // const int2 extent = int2(calc_sphere_extent(viewport_scale));
+
+    // float sphere_distance = cam.data_get().clip_near;
+    // int2 display_extent = inst_.film.display_extent_get();
+    // float pixel_radius = ShadowModule::screen_pixel_radius(
+    //     cam.data_get().wininv, cam.is_perspective(), display_extent);
+
+    // if (cam.is_perspective()) {
+    //   pixel_radius *= sphere_distance;
+    // }
+
+    // this->sphere_radius_ = (extent.x / 2) * pixel_radius;
+    // this->sphere_position_ = cam.position() -
+    //                         cam.forward() * (sphere_distance + this->sphere_radius_);
+
+    // float4x4 model_m4 = float4x4(float3x3(cam.data_get().viewmat));
+    // model_m4.location() = this->sphere_position_;
+    // model_m4 = math::scale(model_m4, float3(this->sphere_radius_));
+
+
+
+    float radius = 1.0f;
+
+    const float4x4 win_m4 = blender::math::projection::orthographic_infinite(
+        -radius, radius, -radius, radius, 1.0f);
+    const float4x4 vmat = drw_view.viewmat();
+    float R[4][4];
+
+    R[0][0] = vmat[0][0];
+    R[0][1] = vmat[0][1];
+    R[0][2] = vmat[0][2];
+    R[0][3] = vmat[0][3];
+    R[1][0] = vmat[1][0];
+    R[1][1] = vmat[1][1];
+    R[1][2] = vmat[1][2];
+    R[1][3] = vmat[1][3];
+    R[2][0] = vmat[2][0];
+    R[2][1] = vmat[2][1];
+    R[2][2] = vmat[2][2];
+    R[2][3] = vmat[2][3];
+    R[3][0] = vmat[3][0];
+    R[3][1] = vmat[3][1];
+    R[3][2] = 0.0f;
+    R[3][3] = vmat[3][3];
+
+    R[0][0] = 1.0f;
+    R[0][1] = 0.0f;
+    R[0][2] = 0.0f;
+    R[0][3] = 0.0f;
+    R[1][0] = 0.0f;
+    R[1][1] = 1.0f;
+    R[1][2] = -1.0f;
+    R[1][3] = -5.0f;
+    R[2][0] = 0.0f;
+    R[2][1] = 1.0f;
+    R[2][2] = 1.0f;
+    R[2][3] = 0.0f;
+    R[3][0] = 0.0f;
+    R[3][1] = 0.0f;
+    R[3][2] = 0.0f;
+    R[3][3] = 1.0f;
+        
+    printf("\n\n\n\n %f, %f, %f, %f          %f, %f, %f, %f    \n", R[0][0], R[0][1], R[0][2], R[0][3], win_m4[0][0], win_m4[0][1], win_m4[0][2], win_m4[0][3]);
+    printf(" %f, %f, %f, %f          %f, %f, %f, %f    \n", R[1][0], R[1][1], R[1][2], R[1][3], win_m4[1][0], win_m4[1][1], win_m4[1][2], win_m4[1][3]);
+    printf(" %f, %f, %f, %f          %f, %f, %f, %f    \n", R[2][0], R[2][1], R[2][2], R[2][3], win_m4[2][0], win_m4[2][1], win_m4[2][2], win_m4[2][3]);
+    printf(" %f, %f, %f, %f          %f, %f, %f, %f    \n", R[3][0], R[3][1], R[3][2], R[3][3], win_m4[3][0], win_m4[3][1], win_m4[3][2], win_m4[3][3]);
+    inst->goo_data->lookdev_view.sync(float4x4(R), win_m4);
+    printf(" ITS SUNCED \n\n\n");
+    
     /* Find the right frame-buffers to render to. */
     GPUFrameBuffer *fb = (effects->target_buffer == inst->goo_data->effect_color_fb) ? inst->goo_data->main_fb :
                                                                             inst->goo_data->effect_fb;
@@ -354,7 +424,7 @@ void EEVEE_lookdev_draw(Instance *inst)
                                  effects->sphere_size,
                                  effects->sphere_size);
 
-    DRW_draw_pass(inst->goo_data->lookdev_diffuse_pass);
+    manager->submit(inst->goo_data->lookdev_diffuse_pass);
 
     offset[0] = (effects->sphere_size + sphere_margin) +
                 (sphere_margin + effects->sphere_size + sphere_margin);
@@ -364,7 +434,7 @@ void EEVEE_lookdev_draw(Instance *inst)
                                  effects->sphere_size,
                                  effects->sphere_size);
 
-    DRW_draw_pass(inst->goo_data->lookdev_glossy_pass);
+    manager->submit(inst->goo_data->lookdev_glossy_pass);
 
     GPU_framebuffer_viewport_reset(fb);
 
