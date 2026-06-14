@@ -232,6 +232,7 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
 
 void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
   DRWState downsample_write = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_ALWAYS;
   DRWShadingGroup *grp;
@@ -245,29 +246,37 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   blender::gpu::Batch *quad = DRW_cache_fullscreen_quad_get();
 
   if (effects->enabled_effects & EFFECT_RADIANCE_BUFFER) {
-    DRW_PASS_CREATE(inst->goo_data->color_copy_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_COLOR_COPY), inst->goo_data->color_copy_ps);
-    DRW_shgroup_uniform_texture_ref_ex(
-        grp, "source", &e_data.color_src, GPUSamplerState::default_sampler());
-    DRW_shgroup_uniform_float(grp, "fireflyFactor", &sldata->common_data.ssr_firefly_fac, 1);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    {
+      blender::draw::PassSimple &pass = inst->goo_data->color_copy_ps;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(EFFECT_COLOR_COPY));
+      pass.bind_texture("source", &e_data.color_src, GPUSamplerState::default_sampler());
+      pass.push_constant("fireflyFactor", &sldata->common_data.ssr_firefly_fac);
+      pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+    }
 
-    DRW_PASS_CREATE(inst->goo_data->color_downsample_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_DOWNSAMPLE), inst->goo_data->color_downsample_ps);
-    const GPUSamplerState sampler_state = {GPU_SAMPLER_FILTERING_LINEAR};
-    DRW_shgroup_uniform_texture_ex(grp, "source", inst->goo_data->filtered_radiance, sampler_state);
-    DRW_shgroup_uniform_vec2(grp, "texelSize", e_data.texel_size, 1);
-    DRW_shgroup_call_procedural_triangles(grp, nullptr, 1);
+    {
+      const GPUSamplerState sampler_state = {GPU_SAMPLER_FILTERING_LINEAR};
+      blender::draw::PassSimple &pass = inst->goo_data->color_downsample_ps;
+      pass.init();
+      pass.state_set(DRW_STATE_WRITE_COLOR);
+      pass.shader_set(inst->shaders.static_shader_get(EFFECT_DOWNSAMPLE));
+      pass.bind_texture("source", inst->goo_data->filtered_radiance, sampler_state);
+      pass.push_constant("texelSize", &e_data.texel_size);
+      pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
+    }
   }
 
   {
-    DRW_PASS_CREATE(inst->goo_data->color_downsample_cube_ps, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(EFFECT_DOWNSAMPLE_CUBE),
-                             inst->goo_data->color_downsample_cube_ps);
-    DRW_shgroup_uniform_texture_ref(grp, "source", &e_data.color_src);
-    DRW_shgroup_uniform_float(grp, "texelSize", e_data.texel_size, 1);
-    DRW_shgroup_uniform_int_copy(grp, "Layer", 0);
-    DRW_shgroup_call_instances(grp, nullptr, quad, 6);
+    blender::draw::PassSimple &pass = inst->goo_data->color_downsample_cube_ps;
+    pass.init();
+    pass.state_set(DRW_STATE_WRITE_COLOR);
+    pass.shader_set(inst->shaders.static_shader_get(EFFECT_DOWNSAMPLE_CUBE));
+    pass.bind_texture("source", &e_data.color_src);
+    pass.push_constant("texelSize", &e_data.texel_size);
+    pass.push_constant("Layer", 0);
+    pass.draw(quad, 6);
   }
 
   /* Perform min/max down-sample. */
@@ -366,9 +375,11 @@ auto max_downsample_cb(void *instance, int level)
 auto simple_downsample_cube_cb(void *instance, int level)
 {
   Instance *inst = static_cast<Instance *>(instance);
+  blender::draw::Manager *manager = DRW_manager_get();
+
   e_data.texel_size[0] = float(1 << level) / float(GPU_texture_width(e_data.color_src));
   e_data.texel_size[1] = e_data.texel_size[0];
-  DRW_draw_pass(inst->goo_data->color_downsample_cube_ps);
+  manager->submit(inst->goo_data->color_downsample_cube_ps);
 }
 
 void EEVEE_create_minmax_buffer(Instance *inst, GPUTexture *depth_src, int layer)
@@ -404,19 +415,24 @@ void EEVEE_create_minmax_buffer(Instance *inst, GPUTexture *depth_src, int layer
 auto downsample_radiance_cb(void *instance, int level)
 {
   Instance *inst = static_cast<Instance *>(instance);
+  blender::draw::Manager *manager = DRW_manager_get();
+
   int texture_size[3];
   GPU_texture_get_mipmap_size(inst->goo_data->filtered_radiance, level - 1, texture_size);
+  
   e_data.texel_size[0] = 1.0f / texture_size[0];
   e_data.texel_size[1] = 1.0f / texture_size[1];
-  DRW_draw_pass(inst->goo_data->color_downsample_ps);
+  manager->submit(inst->goo_data->color_downsample_ps);
 }
 
 void EEVEE_effects_downsample_radiance_buffer(Instance *inst, GPUTexture *texture_src)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
+
   e_data.color_src = texture_src;
 
   GPU_framebuffer_bind(inst->goo_data->radiance_filtered_fb);
-  DRW_draw_pass(inst->goo_data->color_copy_ps);
+  manager->submit(inst->goo_data->color_copy_ps);
 
   GPU_framebuffer_recursive_downsample(
       inst->goo_data->radiance_filtered_fb, MAX_SCREEN_BUFFERS_LOD_LEVEL, downsample_radiance_cb, inst);
@@ -424,12 +440,13 @@ void EEVEE_effects_downsample_radiance_buffer(Instance *inst, GPUTexture *textur
 
 void EEVEE_effects_radiance_copy(EEVEE_ViewLayerData */*sldata*/, Instance *inst)
 {
+  blender::draw::Manager *manager = DRW_manager_get();
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
 
   /* Copy color buffer to texture */
   if ((effects->enabled_effects & EFFECT_REFRACT) != 0) {
     GPU_framebuffer_bind(inst->goo_data->radiance_filtered_fb);
-    DRW_draw_pass(inst->goo_data->color_copy_ps);
+    manager->submit(inst->goo_data->color_copy_ps);
 
     /* Restore */
     GPU_framebuffer_bind(inst->goo_data->main_fb);

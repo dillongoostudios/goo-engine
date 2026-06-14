@@ -892,9 +892,6 @@ struct GOOENGINE_Data {
   DRWPass *volumetric_integration_ps;
   DRWPass *volumetric_resolve_ps;
   DRWPass *volumetric_accum_ps;
-  DRWPass *color_copy_ps;
-  DRWPass *color_downsample_ps;
-  DRWPass *color_downsample_cube_ps;
   DRWPass *velocity_object;
   DRWPass *velocity_hair;
   DRWPass *velocity_resolve;
@@ -909,6 +906,9 @@ struct GOOENGINE_Data {
   PassSimple sss_resolve_ps = {"sss_resolve_ps"};
   PassSimple sss_translucency_ps = {"sss_translucency_ps"};
   PassSimple taa_resolve = {"taa_resolve"};
+  PassSimple color_copy_ps = {"color_copy_ps"};
+  PassSimple color_downsample_ps = {"color_downsample_ps"};
+  PassSimple color_downsample_cube_ps = {"color_downsample_cube_ps"};
 
   /* HiZ */
   PassSimple maxz_downlevel_ps = {"maxz_downlevel_ps"};
