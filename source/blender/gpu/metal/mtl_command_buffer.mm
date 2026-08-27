@@ -12,6 +12,8 @@
 
 #include "intern/GHOST_ContextCGL.hh"
 
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 
 using namespace blender;
@@ -860,6 +862,23 @@ void MTLRenderPassState::bind_fragment_sampler(MTLSamplerBinding &sampler_bindin
      * the samplers array is always up to date. */
     ctx.samplers_.mtl_sampler[slot] = sampler_state;
     ctx.samplers_.mtl_sampler_flags[slot] = sampler_binding.state;
+
+    /* ISS-011 session12 measurement (GOO_SAMPLER_DIAG): EEVEE materials bind samplers via argument
+     * buffers (>16 samplers), so the per-material shadow sample reads its compare sampler from here,
+     * NOT from the DRW global texture_bind path. Log every CUSTOM sampler (compare/icon) reaching a
+     * fragment slot, with the active shader name, to confirm whether the LessEqual COMPARE sampler
+     * actually reaches the lighting/material shader's shadow slot at draw time.
+     * type: PARAMETERS=0 CUSTOM=1 INTERNAL=2 ; custom_type: COMPARE=0 ICON=1. */
+    if (getenv("GOO_SAMPLER_DIAG") != nullptr &&
+        sampler_binding.state.state.type == GPU_SAMPLER_STATE_TYPE_CUSTOM)
+    {
+      fprintf(stderr,
+              "[GOOFRAGSAMP] shader=%s slot=%u custom_type=%d use_argbuf=%d\n",
+              shader_interface->get_name(),
+              slot,
+              int(sampler_binding.state.state.custom_type),
+              int(use_argument_buffer_for_samplers));
+    }
   }
 }
 

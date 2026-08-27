@@ -225,7 +225,11 @@ void raytrace_resolve(ClosureInputGlossy cl_in,
       int sample_id = sample_pool * resolve_samples_count + i;
       vec2 texture_size = vec2(textureSize(hitBuffer, 0));
       vec2 sample_texel = texture_size * uvcoordsvar.xy * ssrUvScale;
-      vec2 sample_uv = (sample_texel + unpack_sample(resolve_sample_offsets[sample_id])) /
+      /* Fix K (ISS-012, C04): unpack_sample() returns ivec2 on both backends; Metal/MSL forbids
+       * the implicit ivec2->vec2 conversion when adding to sample_texel (vec2). Explicit vec2()
+       * cast is valid on every backend. Without this the eevee_legacy_effect_reflection_resolve
+       * shader fails to compile -> getter returns null -> DRW_shgroup_create(null) -> crash. */
+      vec2 sample_uv = (sample_texel + vec2(unpack_sample(resolve_sample_offsets[sample_id]))) /
                        texture_size;
 
       resolve_reflection_sample(

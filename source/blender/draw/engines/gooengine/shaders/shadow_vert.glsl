@@ -35,6 +35,10 @@ void main()
   vec3 world_pos = point_object_to_world(pos);
 #endif
 
+  /* GOOENG_SHADOW_VERT_ZCLIP: ProjectionMatrix * ViewMatrix * world_pos → gl_Position.
+   * Point Light 6.4u from Cube top (face[5]=-Z): expected gl_Position.z ≈ +6.34, .w ≈ 6.42.
+   * mtl_shader_generator then injects: out.z = (z+w)/2 → stored depth ≈ 0.994.
+   * If stored ≈ 0.006 → gl_Position.z was ≈ -6.34 (SIGN ERROR — check ProjectionMatrix[2][2]). */
   gl_Position = point_world_to_ndc(world_pos);
 #ifdef MESH_SHADER
   worldPosition = world_pos;

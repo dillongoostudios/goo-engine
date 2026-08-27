@@ -178,12 +178,21 @@ uniform mat4 ModelMatrixInverse;
  * NOTE: This is only valid because we are only using the mat3 of the ViewMatrixInverse.
  * ViewMatrix * transpose(ModelMatrixInverse)
  */
-#define NormalMatrix transpose(mat3(ModelMatrixInverse))
-#define NormalMatrixInverse transpose(mat3(ModelMatrix))
+/* Metal (C04): mat3(mat4) implicit constructor is not allowed when the argument is a uniform in
+ * constant address space. Explicitly extract the upper-left 3x3 via column xyz swizzles.
+ * Implemented as an inline function to avoid the glsl_preprocess macro linter false-positive
+ * that matches the macro name pattern "mat3_from_mat4(m)" as a matrix constructor call. */
+mat3 goo_mat3_from_mat4(mat4 m)
+{
+  return mat3(m[0].xyz, m[1].xyz, m[2].xyz);
+}
+
+#define NormalMatrix transpose(goo_mat3_from_mat4(ModelMatrixInverse))
+#define NormalMatrixInverse transpose(goo_mat3_from_mat4(ModelMatrix))
 
 #define normal_object_to_world(n) (NormalMatrix * n)
-#define normal_world_to_view(n) (mat3(ViewMatrix) * n)
-#define normal_view_to_world(n) (mat3(ViewMatrixInverse) * n)
+#define normal_world_to_view(n) (goo_mat3_from_mat4(ViewMatrix) * n)
+#define normal_view_to_world(n) (goo_mat3_from_mat4(ViewMatrixInverse) * n)
 
 #define point_object_to_world(p) ((ModelMatrix * vec4(p, 1.0)).xyz)
 #define point_world_to_object(p) ((ModelMatrixInverse * vec4(p, 1.0)).xyz)

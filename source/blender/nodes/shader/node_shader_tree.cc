@@ -891,6 +891,10 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
           case SH_NODE_OUTPUT_LIGHT:
           case SH_NODE_OUTPUT_WORLD:
           case SH_NODE_OUTPUT_MATERIAL:
+          /* ISS-002: Set Depth は第1スイッチ(794)とtag(742)で出力ノード群と同扱いだが、
+           * この第2スイッチに欠落していた。release ビルドでは default の BLI_assert が無効化され
+           * tonode/tosock が未初期化のまま node_add_link に渡りクラッシュ(WuWa 眼マテリアル)。 */
+          case SH_NODE_SET_DEPTH:
           case SH_NODE_ADD_SHADER: {
             tonode = nodes_copy[node->runtime->tmp_flag];
             tosock = ntree_shader_node_output_get(tonode, 0);

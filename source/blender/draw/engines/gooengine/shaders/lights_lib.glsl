@@ -12,6 +12,51 @@
 #include "ltc_lib.glsl"
 
 /* ---------------------------------------------------------------------- */
+/** \name GPU printf definitions (GooEngine Metal debug, session6 2026-06-01)
+ *
+ * gooengine's datatoc path does NOT run glsl_preprocess, so the USE_PRINTF builtin
+ * metadata that normally auto-prepends gpu_shader_print_lib.glsl is never generated.
+ * A bare gpu_print_buf reference does NOT trigger the dependency analysis to prepend it
+ * either (confirmed: build emits `undeclared print_header/print_data`, not `redeclared`).
+ * So we define the print helpers here directly. They are pulled into the dynamic material
+ * frag because lights_lib is concatenated into e_data.surface_lit_frag (eevee_shaders.cc).
+ * Guarded by GPU_SHADER_PRINTF_MAX_CAPACITY so they compile ONLY when additional_info(
+ * "gpu_print") attached the gpu_print_buf SSBO + this DEFINE_VALUE (printf enabled).
+ * Definitions mirror source/blender/gpu/shaders/common/gpu_shader_print_lib.glsl verbatim.
+ * GOO_NEED_PRINTF_DEFS is set ONLY by the dynamic-material codegen path
+ * (eevee_shaders_extra.cc), which does not prepend gpu_shader_print_lib.glsl. Static
+ * create-info shaders that include lights_lib DO get print_lib prepended, so they must not
+ * see these definitions (would be redeclared) — hence the dedicated guard rather than
+ * GPU_SHADER_PRINTF_MAX_CAPACITY (which is present in both cases).
+ * \{ */
+#if defined(GPU_METAL) && defined(GOO_NEED_PRINTF_DEFS)
+uint print_data(uint offset, uint data)
+{
+  if (offset < GPU_SHADER_PRINTF_MAX_CAPACITY) {
+    gpu_print_buf[offset] = data;
+  }
+  return offset + 1u;
+}
+
+uint print_data(uint offset, int data)
+{
+  return print_data(offset, uint(data));
+}
+
+uint print_data(uint offset, float data)
+{
+  return print_data(offset, floatBitsToUint(data));
+}
+
+uint print_header(const uint data_len, uint format_hash)
+{
+  uint offset = atomicAdd(gpu_print_buf[0], 1u + data_len) + 1u;
+  return print_data(offset, format_hash);
+}
+#endif
+/** \} */
+
+/* ---------------------------------------------------------------------- */
 /** \name Structure
  * \{ */
 
@@ -170,6 +215,11 @@ vec4 sample_cascade(sampler2DArray tex, vec2 co, float cascade_id)
   Gather samples and manually compare against the resource_id, then interpolate the results.
 */
 #ifdef USE_SHADOW_ID
+/* ISS-011 diagnostic (C11). 0=production bilinear, 1=nearest texelFetch,
+ * 2=force return 1.0 (HARNESS SANITY: must drive top-face acne 59.66 -> ~0 if this function is the
+ * live code path; if acne stays 59.66 the #define is not reaching the shader). */
+#define GOO_IDDIAG 0
+
 float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
 {
   uvec4 id_kernel = textureGather(TEX_ID, coord);
@@ -181,6 +231,16 @@ float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
   }
 
   ivec3 tex_size = textureSize(TEX_ID, 0);
+
+#if GOO_IDDIAG == 2
+  /* Sanity: full self-shadow suppression. result = min(1.0 + depth, 1.0) = 1.0 -> top face lit. */
+  return match ? 1.0 : 0.0;
+#elif GOO_IDDIAG == 1
+  /* Nearest-texel id match: no bilinear, no gather-order / Y-flip / 0.50195 dependence. */
+  ivec2 t = ivec2(coord.xy * vec2(tex_size.xy));
+  uint id_n = texelFetch(TEX_ID, ivec3(t, int(coord.z)), 0).r;
+  return match ? float(id_n == uint(resource_id)) : float(id_n != uint(resource_id));
+#else
   // WHY THE FLYING FUCK DO WE NEED AN EXTRA 0.00195?
   vec2 fra = fract((coord.xy * vec2(tex_size.xy)) + vec2(0.50195, 0.50195));
 
@@ -189,6 +249,7 @@ float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
     mix(matches.x, matches.y, fra.x),
     fra.y
   );
+#endif
 }
 #else
 float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match) {
@@ -197,40 +258,86 @@ float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match) {
 #endif
 
 
+/* ISS-011 pipeline-validation diagnostic: 1 = force fully-lit (no shadow). session8 proved this
+ * function is live and that returning 1.0 makes the render byte-match the shadow-OFF GT. If the
+ * top-face acne stays 59.66 with this set, the lights_lib edit is NOT reaching this render
+ * (datatoc not regenerated / wrong shader variant / cache). Set back to 0 for normal shadows. */
+#define GOO_CUBEDIAG_RET1 0
+/* session11 決定的実験: compare 参照(coord_f.w=dist)が sample_compare に効いているかの切り分け。
+ * 0=通常, 1=参照を 0.0 に強制 (LessEqual なら 0<=stored 常真→全面lit=0.00 期待),
+ * 2=参照を 1.0 に強制 (1<=stored は far のみ→ほぼ全面shadow 期待).
+ * mode1 が 0.00 になれば compare は効いている(=アクネは bias 問題)。
+ * mode1 が 59.66 のまま不変なら参照が無視されている(=オーバーロード/バインドのバグ)。
+ * session11 実測: mode1=59.66(不変) → 参照無視を確定。通常運用は 0。
+ * session12 再実験(Build047, datatoc厳密再生成): mode1=59.66 不変を再確認＝dist 不感は本物。0 に戻す。 */
+#define GOO_CUBEDIAG 0
+
 float sample_cube_shadow(int shadow_id, vec3 P, bool match_shadow_id)
 {
+#if GOO_CUBEDIAG_RET1
+  return 1.0;
+#endif
   int data_id = int(sd(shadow_id).sh_data_index);
   vec3 cubevec = transform_point(scube(data_id).shadowmat, P);
   float dist = max(sd(shadow_id).sh_near, max_v3(abs(cubevec)) - sd(shadow_id).sh_bias);
   dist = buffer_depth(true, dist, sd(shadow_id).sh_far, sd(shadow_id).sh_near);
-  
-  /* Metal: buffer_depth outputs OpenGL depth range.
-   * Adjust to Metal depth range [0, 1] by transforming from [-1, 1] -> [0, 1].
-   * GPU projection matrices should already handle this, but buffer_depth uses
-   * raw perspective formula. */
-#ifdef GPU_METAL
-  /* Clamp to [0, 1] to prevent comparison issues */
-  dist = clamp(dist, 0.0, 1.0);
-#endif
-  
+  /* buffer_depth returns [0, 1] matching Metal shadow map depth (mtl_shader_generator
+   * converts OpenGL NDC Z to Metal [0,1] automatically). No extra transform needed. */
+
   /* Manual Shadow Cube Layer indexing. */
   /* TODO: Shadow Cube Array. */
   float face = cubeFaceIndexEEVEE(cubevec);
   vec2 coord = cubeFaceCoordEEVEE(cubevec, face, shadowCubeTexture);
   /* `tex_id == data_id` for cube shadow-map. */
   float tex_id = float(data_id);
+  /* GOOENG_CUBE_LOOKUP: coord=(u,v), layer=tex_id*6+face, ref=dist(0.994 expected).
+   * texture() returns stored shadow depth compared against dist.
+   * If result ≈ 0.001-0.006 → shadow map stores near-zero (rendering broken, not lookup).
+   * Normal: stored ≈ 0.994 → test passes → lit. Broken: stored ≈ 0.006 → always in shadow. */
   vec4 coord_f = vec4(coord, tex_id * 6.0 + face, dist);
 
+#if GOO_CUBEDIAG == 1
+  coord_f.w = 0.0;
+#elif GOO_CUBEDIAG == 2
+  coord_f.w = 1.0;
+#endif
+
+  /* NOTE (ISS-011, session13): Fix I (Metal manual texelFetch compare) was reverted here. The CPU
+   * shadow-map dump is uniform [0.991,1.0] yet the shader samples <=0.5 over ~60% of the top face —
+   * even for a hardcoded known-good texel — so the root cause is a sample/readback discrepancy, not
+   * the compare path. Resolving it needs Xcode GPU Frame Capture (see DEBUG_JOURNAL session13b).
+   * Baseline restored until that is settled. */
 #ifdef USE_SHADOW_ID
   return min(sample_ID_texture(shadowCubeIDTexture, coord_f.xyz, match_shadow_id) + texture(shadowCubeTexture, coord_f), 1.0);
 #else
   return texture(shadowCubeTexture, coord_f);
 #endif
 }
-/* Uncomment to debug shadow depth values - will show depth as grayscale */
 
+/* Fix P (ISS-017): RETIRED 2026-07-08 — superseded by Fix S (shadow-ID restore).
+ * Fix P was a receiver-side slope-scaled bias (K=12, grazing up to 40x) compensating what looked
+ * like a "Metal-specific compare-side defect" (over-shadow 0.0091 that no occluder offset could
+ * cure). Fix S revealed the real cause: the material shadow pass never wrote the R16UI shadow-ID
+ * pool (Fix L removed the writer as "vestigial"), so sample_ID_texture's same-object self-shadow
+ * suppression — live on GL/Windows — was dead on Metal. With the ID write restored, measured
+ * Fix P OFF vs ON (8-scene two-sided parity + castonly, DEBUG_JOURNAL 2026-07-08):
+ *   - OFF: over 0.00004 / leak 0.00003 (both at floor)   <- ships
+ *   - ON (K=12): over 0.00003 / leak 0.00008 (K pushes legitimate shadow out = leak)
+ *   - castonly Mac/Win ratio 1.018, lost 0.5% (Fix P's known 32% cast peter-pan is gone)
+ * The function and its bias_scale plumbing are kept (callers pass N, L) so a receiver-side
+ * scale remains one edit away if a future scene needs it; it must stay 1.0 for Windows parity. */
+float shadow_slope_bias_scale(vec3 N, vec3 L)
+{
+  return 1.0;
+}
 
-float sample_cascade_shadow(int shadow_id, vec3 P, bool match_shadow_id)
+/* ISS-017 per-cascade bias falloff: REVERTED 2026-06-27. Hypothesis (apply over-shadow bias only in
+ * near cascades to fix the character self-acne while leaving the far-cascade long cast bias-free) was
+ * FALSIFIED by castonly measurement: the severed cast floor is in the SAME near cascades as the
+ * character, so a near/far cascade split does not separate self-acne from cast (cast ratio stayed
+ * 0.682). See DEBUG_JOURNAL 2026-06-27. */
+
+float sample_cascade_shadow(int shadow_id, vec3 P, bool match_shadow_id, float bias_scale)
 {
   int data_id = int(sd(shadow_id).sh_data_index);
   float tex_id = scascade(data_id).sh_tex_index;
@@ -246,15 +353,28 @@ float sample_cascade_shadow(int shadow_id, vec3 P, bool match_shadow_id)
   vec4 coord, shpos;
   float compare_z;
   
-  /* Main cascade. */
+  /* Main cascade.
+   * shadowmat = texcomat * projmat_opengl * viewmat.
+   * texcomat maps OpenGL NDC Z [-1,1] to [0,1], matching mtl_shader_generator's
+   * automatic conversion. shpos.z == stored shadow_map_depth for an exact self-comparison.
+   *
+   * ===== ISS-017 Xcode anchor (Cmd+F "sample_cascade_shadow") — TARGET UPDATED 2026-06-27 =====
+   * What to measure: the ADDITIVE error  Delta = shpos.z - STORED  at a wrongly-dark FRONT-LIT
+   * fragment. NOT [0.5,1] compression (C09 double-transform is REFUTED — the depth algebra,
+   * format, sampler, winding and offset are all GL-symmetric; bias AND uv-registration are
+   * exhaustively ruled out; see DEBUG_JOURNAL 2026-06-27).
+   * STEP-BY-STEP in the pixel debugger (this MaterialOpaque draw):
+   *   1. Pick a front-lit body/leg/boot fragment that is wrongly dark (N.L ~= 1, NOT grazing).
+   *   2. Read here:  shpos.z  (raw projected depth, bias-independent),  coord.xy  (uv),  and the
+   *      layer  tex_id + float(cascade).  (compare_z = shpos.z - tiny base bias; use shpos.z.)
+   *   3. Open "ISS017_CASCADE >>> CascadeDraw" -> Depth Attachment -> Texture Viewer, go to that
+   *      coord.xy on that layer, read STORED (the quantized 16-bit Depth16Unorm texel).
+   *   4. Delta = shpos.z - STORED. Expected bug signature: a CONSTANT POSITIVE Delta (~1e-3 norm,
+   *      ~tens of 16-bit ULPs) so shpos.z > STORED and the LessEqual test fails -> over-shadow.
+   * Then chase Delta's source (storage rounding direction / PCF / (z+w)/2 float path), and fix it
+   * AT SOURCE — do not add bias (proven to sever the cast). See KNOWN_ISSUES ISS-017. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
-  compare_z = shpos.z - sd(shadow_id).sh_bias;
-  
-  /* Metal: Ensure comparison depth is in [0, 1] range */
-#ifdef GPU_METAL
-  compare_z = clamp(compare_z, 0.0, 1.0);
-#endif
-  
+  compare_z = shpos.z - sd(shadow_id).sh_bias * bias_scale;
   coord = vec4(shpos.xy, tex_id + float(cascade), compare_z);
 
 #ifdef USE_SHADOW_ID
@@ -267,13 +387,7 @@ float sample_cascade_shadow(int shadow_id, vec3 P, bool match_shadow_id)
   cascade = min(3, cascade + 1);
   /* Second cascade. */
   shpos = scascade(data_id).shadowmat[cascade] * vec4(P, 1.0);
-  compare_z = shpos.z - sd(shadow_id).sh_bias;
-  
-  /* Metal: Ensure comparison depth is in [0, 1] range */
-#ifdef GPU_METAL
-  compare_z = clamp(compare_z, 0.0, 1.0);
-#endif
-  
+  compare_z = shpos.z - sd(shadow_id).sh_bias * bias_scale;
   coord = vec4(shpos.xy, tex_id + float(cascade), compare_z);
 #ifdef USE_SHADOW_ID
   id_sample = sample_ID_texture(shadowCascadeIDTexture, coord.xyz, match_shadow_id);
@@ -318,13 +432,11 @@ float spot_attenuation(LightData ld, vec3 l_vector)
 float light_attenuation(LightData ld, vec4 l_vector, ivec4 light_groups)
 {
   float vis = 1.0;
-#if !defined(VOLUME_LIGHTING) // && !defined(STEP_RESOLVE)
-  if (
-       (ld.light_group_bits.x & light_groups.x) == 0
-    && (ld.light_group_bits.y & light_groups.y) == 0
-    && (ld.light_group_bits.z & light_groups.z) == 0
-    && (ld.light_group_bits.w & light_groups.w) == 0
-  ) {
+#if !defined(VOLUME_LIGHTING)
+  if ((ld.light_group_bits.x & light_groups.x) == 0 &&
+      (ld.light_group_bits.y & light_groups.y) == 0 &&
+      (ld.light_group_bits.z & light_groups.z) == 0 &&
+      (ld.light_group_bits.w & light_groups.w) == 0) {
     return 0.0;
   }
 #endif
@@ -344,7 +456,7 @@ float light_attenuation(LightData ld, vec4 l_vector, ivec4 light_groups)
   return vis;
 }
 
-float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows)
+float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows, float bias_scale)
 {
 #if !defined(VOLUMETRICS) || defined(VOLUME_SHADOW)
   if (ld.l_shadowid >= 0.0 && vis > 0.001 && !(
@@ -354,7 +466,7 @@ float light_shadowing(LightData ld, vec3 P, float vis, ivec4 light_group_shadows
      && (ld.light_group_bits.w & light_group_shadows.w) == 0)
   ) {
     if (ld.l_type == SUN) {
-      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, true);
+      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, true, bias_scale);
     }
     else {
       vis *= sample_cube_shadow(int(ld.l_shadowid), P, true);
@@ -408,10 +520,10 @@ float light_contact_shadows(LightData ld, vec3 P, vec3 vP, vec3 vNg, float rand_
 }
 #endif /* !VOLUMETRICS */
 
-float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups, ivec4 light_group_shadows)
+float light_visibility(LightData ld, vec3 P, vec4 l_vector, ivec4 light_groups, ivec4 light_group_shadows, float bias_scale)
 {
   float l_atten = light_attenuation(ld, l_vector, light_groups);
-  return light_shadowing(ld, P, l_atten, light_group_shadows);
+  return light_shadowing(ld, P, l_atten, light_group_shadows, bias_scale);
 }
 
 bool is_sphere_light(float type)

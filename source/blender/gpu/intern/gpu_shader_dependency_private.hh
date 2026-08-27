@@ -46,6 +46,19 @@ struct PrintfFormat {
 
 const PrintfFormat &gpu_shader_dependency_get_printf_format(uint32_t format_hash);
 
+/* Returns true if a printf format is registered for the given hash. */
+bool gpu_shader_dependency_has_printf_format(uint32_t format_hash);
+
+/**
+ * Register a printf format string under a precomputed hash, parsing it into the same
+ * argument blocks that the GLSL preprocessor produces. Needed for shader sources that are
+ * NOT in the build-time datatoc source lists (e.g. GooEngine's private draw-engine libs),
+ * whose printf formats are therefore never auto-registered in #gpu_shader_dependency_init.
+ * No-op if a format is already registered for that hash. \a format uses raw escapes
+ * (e.g. literal "\\n"), matching the form stored by the preprocessor.
+ */
+void gpu_shader_dependency_register_printf_format(uint32_t format_hash, const char *format);
+
 Vector<StringRefNull> gpu_shader_dependency_get_resolved_source(StringRefNull source_name);
 StringRefNull gpu_shader_dependency_get_source(StringRefNull source_name);
 

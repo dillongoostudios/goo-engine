@@ -106,6 +106,31 @@ void GPU_debug_capture_end()
   }
 }
 
+bool GPU_debug_capture_begin_force(const char *title)
+{
+  /* Deliberately NOT gated on G_DEBUG_GPU: lets goo-engine capture the F12 render without
+   * --debug-gpu (which would enable GPU printf and crash the custom engine on Metal). The
+   * backend's debug_capture_begin still no-ops unless the capture tool is enabled. */
+  Context *ctx = Context::get();
+  if (ctx && !ctx->debug_is_capturing) {
+    ctx->debug_is_capturing = ctx->debug_capture_begin(title);
+    /* Call GPU_finish to ensure all desired GPU commands occur within the capture boundary. */
+    GPU_finish();
+  }
+  return ctx ? ctx->debug_is_capturing : false;
+}
+
+void GPU_debug_capture_end_force()
+{
+  Context *ctx = Context::get();
+  if (ctx && ctx->debug_is_capturing) {
+    /* Call GPU_finish to ensure all desired GPU commands occur within the capture boundary. */
+    GPU_finish();
+    ctx->debug_capture_end();
+    ctx->debug_is_capturing = false;
+  }
+}
+
 void *GPU_debug_capture_scope_create(const char *name)
 {
   /* GPU Frame capture is only enabled when --debug-gpu is specified. */

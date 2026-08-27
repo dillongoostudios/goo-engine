@@ -354,25 +354,31 @@ static void eevee_shadow_cascade_setup(EEVEE_LightsInfo *linfo,
       add_v2_v2(projmat[3], jitter_ofs);
     }
 
-#ifdef __APPLE__
-    /* Metal: Adjust projection matrix for depth range [0, 1] instead of [-1, 1].
-     * z_metal = (z_opengl + 1) / 2 = z_opengl * 0.5 + 0.5
-     * CRITICAL: This must come BEFORE shadowmat calculation so that both
-     * shadow map rendering and shadow sampling use the same depth range. */
-    projmat[2][2] *= 0.5f;
-    projmat[3][2] = projmat[3][2] * 0.5f + 0.5f;
-#endif
-
-    /* Calculate shadow matrix for sampling. */
+    /* Calculate shadow matrix for sampling.
+     * NOTE: Do NOT pre-adjust projmat for Metal depth range [0,1].
+     * mtl_shader_generator automatically inserts z=(z+w)/2 into every vertex shader,
+     * converting OpenGL NDC [-1,1] to Metal NDC [0,1]. Pre-adjusting projmat would
+     * cause a double-transform, compressing shadow depths into [0.5, 1.0].
+     * Use standard texcomat (maps OpenGL NDC Z to [0,1]) — it matches Metal's
+     * automatic conversion so compare_z == shadow_map_depth for self-comparison. */
     float viewprojmat[4][4];
     mul_m4_m4m4(viewprojmat, projmat, viewmat);
-#ifdef __APPLE__
-    /* Metal: Use texcomat_metal which doesn't apply Z transform since
-     * projmat already produces Z in [0, 1] range after above adjustment. */
-    mul_m4_m4m4(csm_data->shadowmat[c], texcomat_metal, viewprojmat);
-#else
     mul_m4_m4m4(csm_data->shadowmat[c], texcomat, viewprojmat);
-#endif
+
+    /* ISS-017 diagnostic (env GOO_UVX/GOO_UVY, in texels): shift the SAMPLE uv to test whether the
+     * Metal cascade over-shadow is a sampling-REGISTRATION error (sub-texel / Y-flip shift) rather
+     * than a depth-bias deficiency. A registration fix reduces over-shadow WITHOUT severing the cast
+     * because it corrects sample POSITION, not depth (bias has been exhaustively proven cast-fatal).
+     * shadowmat maps world P -> (uv in [0,1], layer, depth); shifting the xy translation shifts uv. */
+    {
+      const char *ux = getenv("GOO_UVX");
+      const char *uy = getenv("GOO_UVY");
+      if (ux || uy) {
+        float inv_texel = 1.0f / float(linfo->shadow_cascade_size);
+        if (ux) csm_data->shadowmat[c][3][0] += float(atof(ux)) * inv_texel;
+        if (uy) csm_data->shadowmat[c][3][1] += float(atof(uy)) * inv_texel;
+      }
+    }
 
 #ifdef DEBUG_CSM
     DRW_debug_m4_as_bbox(viewprojmat, true, dbg_col);
@@ -383,6 +389,28 @@ static void eevee_shadow_cascade_setup(EEVEE_LightsInfo *linfo,
   shdw_data->bias = csm_render->original_bias * 0.05f / fabsf(sh_far - sh_near);
   shdw_data->near = sh_near;
   shdw_data->far = sh_far;
+
+  /* ISS-017 Delta measurement (env GOO_DUMP_CASCADE): the Xcode shader debugger optimizes
+   * shpos/compare_z away, so dump the cascade shadowmat + near/far/bias CPU-side to compute the exact
+   * compare_z for a captured worldPosition. Match the capture by near/far. Non-shipping CPU diagnostic.
+   * shpos = M*[P,1]; shpos.z (compare_z pre-bias) = m[0][2]Px+m[1][2]Py+m[2][2]Pz+m[3][2]. */
+  if (getenv("GOO_DUMP_CASCADE")) {
+    int did = int(shdw_data->type_data_id);
+    fprintf(stderr,
+            "[GOO_CASCADE] did=%d near=%.5f far=%.5f bias=%.6f tex_id=%d ccount=%d\n",
+            did, sh_near, sh_far, shdw_data->bias, int(csm_data->tex_id), cascade_count);
+    for (int c = 0; c < cascade_count; c++) {
+      float(*m)[4] = csm_data->shadowmat[c];
+      fprintf(stderr,
+              "[GOO_CASCADE] did=%d c=%d row0=[%.6f %.6f %.6f %.6f] row1=[%.6f %.6f %.6f %.6f] "
+              "row2=[%.6f %.6f %.6f %.6f] row3=[%.6f %.6f %.6f %.6f]\n",
+              did, c,
+              m[0][0], m[1][0], m[2][0], m[3][0],
+              m[0][1], m[1][1], m[2][1], m[3][1],
+              m[0][2], m[1][2], m[2][2], m[3][2],
+              m[0][3], m[1][3], m[2][3], m[3][3]);
+    }
+  }
 }
 
 static void eevee_ensure_cascade_views(EEVEE_ShadowCascadeRender *csm_render,
@@ -439,5 +467,79 @@ void EEVEE_shadows_draw_cascades(EEVEE_ViewLayerData *sldata,
     GPU_framebuffer_bind(sldata->shadow_fb);
     GPU_framebuffer_clear_depth(sldata->shadow_fb, 1.0f);
     DRW_draw_pass(psl->shadow_pass);
+  }
+
+  /* ISS-017 Delta measurement (env GOO_DUMP_CASCADE_TEX): read back the STORED cascade depth so the
+   * additive error Delta = analytic_compare_z(P) - stored(uv) can be measured offline for KNOWN
+   * surface points (e.g. the iss017_cascade_min scene), to decide interpolation-acne (gradient-
+   * dependent) vs a uniform structural offset. Read-only, non-perturbing. Dumps once per cascade
+   * LIGHT (suffix _<cascade_index>) so multi-sun scenes (ISS-018: Sun + Sun.002) expose every
+   * light's matrix/near/far; split_start/split_end are included to replicate the shader's cascade
+   * selection (sample_cascade_shadow weights) CPU-side. The unsuffixed legacy pair is still written
+   * at index 0 (analyze_cascade_delta.py compat — its parser ignores the added keys).
+   * Pair with GOO_DUMP_CASCADE (matrix in stderr). Mirrors the cube dump (eevee_shadows_cube.cc). */
+  if (getenv("GOO_DUMP_CASCADE_TEX") != nullptr) {
+    const int res = linfo->shadow_cascade_size;
+    const int layers = max_ii(linfo->num_cascade_layer, 1);
+    float *data = static_cast<float *>(
+        GPU_texture_read(sldata->shadow_cascade_pool, GPU_DATA_FLOAT, 0));
+    if (data != nullptr) {
+      char pathb[2][64], patht[2][64];
+      const int npath = (cascade_index == 0) ? 2 : 1;
+      snprintf(pathb[0], sizeof(pathb[0]), "/tmp/goo_cascade_dump_%d.bin", cascade_index);
+      snprintf(patht[0], sizeof(patht[0]), "/tmp/goo_cascade_dump_%d.txt", cascade_index);
+      snprintf(pathb[1], sizeof(pathb[1]), "/tmp/goo_cascade_dump.bin");
+      snprintf(patht[1], sizeof(patht[1]), "/tmp/goo_cascade_dump.txt");
+      for (int p = 0; p < npath; p++) {
+        FILE *fb = fopen(pathb[p], "wb");
+        if (fb) {
+          fwrite(data, sizeof(float), size_t(res) * res * layers, fb);
+          fclose(fb);
+        }
+        FILE *fm = fopen(patht[p], "w");
+        if (fm) {
+          fprintf(fm, "res %d\nlayers %d\nnear %.9g\nfar %.9g\nbias %.9g\ntex_id %d\nccount %d\n",
+                  res, layers, shdw_data->near, shdw_data->far, shdw_data->bias,
+                  int(csm_data->tex_id), csm_render->cascade_count);
+          fprintf(fm, "did %d\n", int(shdw_data->type_data_id));
+          fprintf(fm, "split_start %.9g %.9g %.9g %.9g\n",
+                  csm_data->split_start[0], csm_data->split_start[1],
+                  csm_data->split_start[2], csm_data->split_start[3]);
+          fprintf(fm, "split_end %.9g %.9g %.9g %.9g\n",
+                  csm_data->split_end[0], csm_data->split_end[1],
+                  csm_data->split_end[2], csm_data->split_end[3]);
+          for (int c = 0; c < csm_render->cascade_count; c++) {
+            float(*m)[4] = csm_data->shadowmat[c];
+            for (int row = 0; row < 4; row++) {
+              fprintf(fm, "shadowmat %d %.9g %.9g %.9g %.9g\n",
+                      c, m[0][row], m[1][row], m[2][row], m[3][row]);
+            }
+          }
+          fclose(fm);
+        }
+      }
+      MEM_freeN(data);
+      printf("[GOO_DUMP_CASCADE_TEX] wrote /tmp/goo_cascade_dump_%d.bin (res=%d layers=%d)\n",
+             cascade_index, res, layers);
+      fflush(stdout);
+    }
+    /* ISS-017: verify the ID pool is now populated (was dormant). Read distinct resource_ids. */
+    uint32_t *ids = static_cast<uint32_t *>(
+        GPU_texture_read(sldata->shadow_cascade_id_pool, GPU_DATA_UINT, 0));
+    if (ids != nullptr) {
+      size_t n = size_t(res) * res * max_ii(linfo->num_cascade_layer, 1);
+      uint32_t mn = 0xffffffffu, mx = 0;
+      int nonzero = 0;
+      for (size_t i = 0; i < n; i++) {
+        uint32_t v = ids[i];
+        if (v != 0) nonzero++;
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+      }
+      printf("[GOO_DUMP_CASCADE_ID] id_pool min=%u max=%u nonzero=%d/%zu (%.1f%%)\n",
+             mn, mx, nonzero, n, 100.0 * nonzero / double(n));
+      fflush(stdout);
+      MEM_freeN(ids);
+    }
   }
 }

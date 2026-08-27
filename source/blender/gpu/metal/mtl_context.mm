@@ -28,6 +28,7 @@
 #include "GPU_uniform_buffer.hh"
 #include "GPU_vertex_buffer.hh"
 #include "intern/gpu_matrix_private.hh"
+#include "intern/gpu_shader_create_info.hh"
 
 #include "BLI_time.h"
 
@@ -50,7 +51,13 @@ using namespace blender::gpu;
 
 /* Debug option to bind null buffer for missing SSBOs. NOTE: This is unsafe if replacing a
  * write-enabled SSBO and should only be used for debugging to identify binding-related issues. */
-#define DEBUG_BIND_NULL_BUFFER_FOR_MISSING_SSBO 0
+/* ISS-011: set to 1 so that running with --debug-gpu (required for Xcode debug-group labels and
+ * frame capture) does not abort on the goo-engine viewport draw. Under --debug-gpu the GPU printf
+ * SSBO (gpu_print_buf, slot 13) gets injected into GPU_material_compile but the custom engine's
+ * draw path leaves it unbound on the first frames (printf_begin races shader compile) -> nil bind
+ * -> Metal validation abort. Binding a dummy buffer here makes --debug-gpu usable for ISS-011
+ * debugging. printf output becomes garbage, which we do not use. */
+#define DEBUG_BIND_NULL_BUFFER_FOR_MISSING_SSBO 1
 
 /* Error or warning depending on debug flag. */
 #if DEBUG_BIND_NULL_BUFFER_FOR_MISSING_UBO == 1
@@ -1338,12 +1345,28 @@ bool MTLContext::ensure_buffer_bindings(
 
     if (ssbo.buffer_index >= 0 && ssbo.location >= 0) {
       /* Explicit lookup location for SSBO in bind table. */
-      const uint32_t ssbo_location = ssbo.location;
+      uint32_t ssbo_location = ssbo.location;
       /* buffer(N) index of where to bind the SSBO. */
       const uint32_t buffer_index = ssbo.buffer_index;
       id<MTLBuffer> ssbo_buffer = nil;
       size_t ssbo_size = 0;
       UNUSED_VARS_NDEBUG(ssbo_size);
+
+#if GPU_SHADER_PRINTF_ENABLE
+      /* The printf readback buffer is bound by the GPU context at the fixed reserved slot
+       * GPU_SHADER_PRINTF_SLOT (see GPU_shader_bind). However, materials compiled with
+       * auto_resource_location place gpu_print_buf at an arbitrary auto-assigned location: the
+       * Metal shader generator derives SSBO locations from its own sequential counter and ignores
+       * the create-info slot when auto location is enabled (mtl_shader_generator.mm). Redirect the
+       * bind-table lookup to the reserved slot for this buffer so the readback buffer actually
+       * reaches the shader (otherwise printf output never lands -- nothing bound at its location). */
+      {
+        const char *ssbo_name = shader_interface->get_name_at_offset(ssbo.name_offset);
+        if (ssbo_name != nullptr && strcmp(ssbo_name, "gpu_print_buf") == 0) {
+          ssbo_location = GPU_SHADER_PRINTF_SLOT;
+        }
+      }
+#endif
 
       if (this->pipeline_state.ssbo_bindings[ssbo_location].bound) {
 
@@ -2187,6 +2210,24 @@ void MTLContext::ensure_depth_stencil_state(MTLPrimitiveType prim_type)
         case MTLPrimitiveTypePoint:
           doBias = this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_points;
           break;
+      }
+      /* ISS-018b DIAGNOSTIC (temporary, env GOO_DBIAS_DIAG): is the shadow polygon-offset state
+       * actually reaching the cascade encoder? Log every depth-target triangle draw's doBias + the
+       * enable flag + values. If doBias is never true during shadow rendering -> the SHADOW_OFFSET
+       * DRWState is not propagating to depth_bias_enabled_for_tris (C++ state bug). REVERT after. */
+      if ((prim_type == MTLPrimitiveTypeTriangle || prim_type == MTLPrimitiveTypeTriangleStrip) &&
+          getenv("GOO_DBIAS_DIAG") != nullptr)
+      {
+        static int goo_dbias_n = 0;
+        if (goo_dbias_n++ < 60) {
+          fprintf(stderr,
+                  "[GOOENG_DBIAS] tri draw #%d: doBias=%d enabled_for_tris=%d bias=%.3f slope=%.3f\n",
+                  goo_dbias_n,
+                  (int)doBias,
+                  (int)this->pipeline_state.depth_stencil_state.depth_bias_enabled_for_tris,
+                  this->pipeline_state.depth_stencil_state.depth_bias,
+                  this->pipeline_state.depth_stencil_state.depth_slope_scale);
+        }
       }
       [rec setDepthBias:(doBias) ? this->pipeline_state.depth_stencil_state.depth_bias : 0
              slopeScale:(doBias) ? this->pipeline_state.depth_stencil_state.depth_slope_scale : 0

@@ -9,6 +9,9 @@
 #include "BLI_math_base.h"
 #include "BLI_math_bits.h"
 
+#include <cstdio>
+#include <cstdlib>
+
 #include "GPU_framebuffer.hh"
 
 #include "mtl_context.hh"
@@ -422,8 +425,29 @@ void MTLStateManager::set_shadow_bias(const bool enable)
   if (enable) {
     ds_state.depth_bias_enabled_for_lines = true;
     ds_state.depth_bias_enabled_for_tris = true;
-    ds_state.depth_bias = 2.0f;
-    ds_state.depth_slope_scale = 1.0f;
+    /* Fix G (2026-04-28): glPolygonOffset(2,1) -> setDepthBias(bias=1, slopeScale=2), matching GL's
+     * gl_state.cc:325 occluder-side shadow offset exactly.
+     * Fix R (occluder-side global N=200) was FALSIFIED and REVERTED (2026-06-16): direct castonly
+     * measurement showed Windows cast == Mac no-offset (iris_castonly_compare ratio 1.000), i.e. GL's
+     * offset is effectively negligible for the cast (1-texel span vs huge cast margin). Scaling N up
+     * to mask Metal's grazing over-shadow severs the cast (N=200/slope=400 -> ratio 0.370, 63% lost)
+     * and can NEVER match Windows. A single occluder N cannot satisfy both full-cast and over-shadow.
+     * The grazing self-shadow is handled cast-safe on the receiver side (lights_lib Fix P K=12). The
+     * true Metal over-shadow root (depth storage/sample precision, ISS-011 lineage) remains an Xcode
+     * task; do NOT re-attempt occluder global-N (see DEBUG_JOURNAL 2026-06-16). */
+    ds_state.depth_bias = 1.0f;        /* GL units  = 1.0 */
+    ds_state.depth_slope_scale = 2.0f; /* GL factor = 2.0 */
+    /* GOO_BIAS / GOO_SLOPE: data-driven override of the constant (units) and slope (factor) terms
+     * without rebuilding, for cast-vs-acne sweeps. Non-shipping diagnostics. */
+    if (const char *bv = getenv("GOO_BIAS"))  { ds_state.depth_bias = (float)atof(bv); }
+    if (const char *sv = getenv("GOO_SLOPE")) { ds_state.depth_slope_scale = (float)atof(sv); }
+    /* ISS-011 session7 measurement toggle: GOO_NO_SHADOW_OFFSET forces zero polygon offset
+     * so the shadow dump captures the offset-free stored depth. Diffing against the normal
+     * dump yields the exact applied offset per texel (non-perturbing measurement). */
+    if (getenv("GOO_NO_SHADOW_OFFSET") != nullptr) {
+      ds_state.depth_bias = 0.0f;
+      ds_state.depth_slope_scale = 0.0f;
+    }
   }
   else {
     ds_state.depth_bias_enabled_for_lines = false;
@@ -648,6 +672,28 @@ void MTLStateManager::texture_bind(Texture *tex_, GPUSamplerState sampler_type, 
      * texture itself such as min/max mip levels. */
     MTLSamplerState sampler = mtl_tex->get_sampler_state();
     sampler.state = sampler_type;
+
+    /* ISS-011 session12 measurement (GOO_SAMPLER_DIAG): for depth-format textures, log the
+     * requested sampler state (what DRW asked to bind) vs the texture's internal sampler state
+     * (set to COMPARE via GPU_texture_compare_mode). session11 confirmed the generated MSL emits
+     * sample_compare correctly, so if COMPARE never reaches this bind point the LessEqual compare
+     * sampler is silently lost and sample_compare degrades to a plain depth fetch on Apple Metal.
+     * type: PARAMETERS=0 CUSTOM=1 INTERNAL=2 ; custom_type: COMPARE=0 ICON=1. */
+    if (getenv("GOO_SAMPLER_DIAG") != nullptr &&
+        (mtl_tex->format_flag_get() & GPU_FORMAT_DEPTH))
+    {
+      GPUSamplerState internal = mtl_tex->get_sampler_state().state;
+      fprintf(stderr,
+              "[GOOSAMP] unit=%d fmt=%d name=%s requested(type=%d custom=%d) internal(type=%d "
+              "custom=%d)\n",
+              unit,
+              int(mtl_tex->format_get()),
+              mtl_tex->get_name(),
+              int(sampler_type.type),
+              int(sampler_type.custom_type),
+              int(internal.type),
+              int(internal.custom_type));
+    }
 
     ctx->sampler_bind(sampler, unit);
   }

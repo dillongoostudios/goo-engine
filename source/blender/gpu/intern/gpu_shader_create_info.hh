@@ -25,8 +25,10 @@
 #  include <iostream>
 #endif
 
-/* Force enable `printf` support in release build. */
-#define GPU_FORCE_ENABLE_SHADER_PRINTF 0
+/* Force enable `printf` support in release build.
+ * goo-engine Metal port: enabled so shader debug values reach stdout without Xcode
+ * (Release build is used to avoid ISS-007). Pipe stdout to a file for Claude Code. */
+#define GPU_FORCE_ENABLE_SHADER_PRINTF 1
 
 #if !defined(NDEBUG) || GPU_FORCE_ENABLE_SHADER_PRINTF
 #  define GPU_SHADER_PRINTF_ENABLE 1

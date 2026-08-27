@@ -1098,9 +1098,10 @@ void eevee_id_update(void *vedata, ID *id);
 /* `eevee_materials.cc` */
 
 GPUTexture *EEVEE_materials_get_util_tex(); /* XXX */
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
 GPUTexture *EEVEE_materials_get_dummy_2d_array();
 GPUTexture *EEVEE_materials_get_dummy_cube_array();
+GPUTexture *EEVEE_materials_get_dummy_2d();
 GPUTexture *EEVEE_materials_get_dummy_3d();
 #endif
 
@@ -1629,16 +1630,8 @@ static const float texcomat[4][4] = {
     {0.5f, 0.5f, 0.5f, 1.0f},
 };
 
-#ifdef __APPLE__
-/* Metal: When using Metal-adjusted projmat (Z already in [0,1]), texcomat should NOT
- * apply Z scale/offset, otherwise it's double-converted. */
-static const float texcomat_metal[4][4] = {
-    {0.5f, 0.0f, 0.0f, 0.0f},
-    {0.0f, 0.5f, 0.0f, 0.0f},
-    {0.0f, 0.0f, 1.0f, 0.0f}, /* Z: identity */
-    {0.5f, 0.5f, 0.0f, 1.0f}, /* Z offset: 0 */
-};
-#endif
+/* texcomat_metal removed: the Metal projmat pre-adjustment was incorrect (ISS-003).
+ * mtl_shader_generator converts Z automatically; use standard texcomat instead. */
 
 /* Cube-map Matrices */
 static const float cubefacemat[6][4][4] = {

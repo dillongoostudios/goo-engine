@@ -10,6 +10,8 @@
  * Render functions for final render outputs.
  */
 
+#include <cstdlib>
+
 #include "DRW_engine.hh"
 #include "DRW_render.hh"
 
@@ -21,6 +23,9 @@
 
 #include "BLI_rand.h"
 #include "BLI_rect.h"
+#include "BLI_string.h"
+
+#include "GPU_debug.hh"
 
 #include "DEG_depsgraph_query.hh"
 
@@ -608,8 +613,40 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     EEVEE_lightprobes_refresh(sldata, vedata);
     EEVEE_lightprobes_refresh_planar(sldata, vedata);
 
+    /* ISS-011 programmatic GPU capture: the F12 final render draws to an offscreen FBO and never
+     * presents to the drawable, so Xcode's "Capture GPU Frame" button (which captures the next
+     * *presented* frame) only ever grabs the viewport window, never this render. Wrapping the
+     * shadow+material region in GPU_debug_capture_begin/end captures the render's command buffers
+     * directly (by device, independent of present) and opens it in Xcode automatically.
+     * Requires Blender launched with --debug-gpu AND env GOO_GPU_CAPTURE set. Only sample 0 is
+     * captured so the trace stays small; search "ISS011_XCODE" inside it. */
+    const bool goo_iss011_capture = (render_samples == 0) && (getenv("GOO_GPU_CAPTURE") != nullptr);
+    if (goo_iss011_capture) {
+      GPU_debug_capture_begin_force("ISS011_XCODE");
+    }
+
     /* Refresh Shadows */
-    EEVEE_shadows_draw(sldata, vedata, stl->effects->taa_view);
+    /* Debug label: Xcode Frame Debugger → search "GOOENG:F12:ShadowDraw" to find this encoder.
+     * Within it, each cube face has "GOOENG:ShadowCube cube[N] face[J]=±X/Y/Z layer[L]".
+     * Check Render Command Encoder → Depth Bias: slopeScale should be 2.0 (OpenGL parity).
+     * Currently mtl_state.mm:426 sets slopeScale=1.0 — this is the H2 hypothesis. */
+    {
+      /* ISS-011 Xcode anchor: search "ISS011_XCODE" in the Metal debugger to jump to the
+       * shadow-cube render. This group's Depth render target IS shadowCubePool (512x512x6 depth
+       * array). Open its Depth Attachment → Texture Viewer → pick a layer to read the *stored*
+       * depth, to compare against what the material shader samples. The tag is emitted on EVERY
+       * sample (Xcode may capture any TAA sample, not just sample 1) — the sample index is kept so
+       * you can still tell them apart. */
+      char dbg_shadow[160];
+      SNPRINTF(dbg_shadow,
+               "ISS011_XCODE >>> ShadowCubeDraw smp[%u/%u] (renders shadowCubePool depth — "
+               "inspect STORED depth here) <<<",
+               render_samples + 1,
+               tot_sample);
+      GPU_debug_group_begin(dbg_shadow);
+      EEVEE_shadows_draw(sldata, vedata, stl->effects->taa_view);
+      GPU_debug_group_end();
+    }
 
     /* Set matrices. */
     DRW_view_set_active(stl->effects->taa_view);
@@ -622,7 +659,18 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     GPU_framebuffer_bind(fbl->main_fb);
     GPU_framebuffer_clear_color_depth_stencil(fbl->main_fb, clear_col, clear_depth, clear_stencil);
     /* Depth pre-pass. */
+    /* ISS-013 Xcode anchor: search "ISS013_PREPASS" in the Metal debugger. This draws psl->depth_ps
+     * into main_fb, whose color2 attachment is ssr_specrough_input (RGBA16F). The prepass shader
+     * eevee_legacy_material_prepass_frag_opaque declares FRAGMENT_OUT(2, VEC2, out_normal): a 2-comp
+     * output to a 4-comp RGBA16F target. Metal rejects the PSO ("not enough components"), so on
+     * Metal this draw is SKIPPED and may not appear inside the group. To confirm the attachment
+     * formats regardless, open the sibling "ISS011_XCODE >>> MaterialOpaque" encoder (same main_fb,
+     * but its outputs match so it succeeds) → Render Command Encoder → read color0..5 pixelFormats:
+     * expect color1=RG16(ssrNormals), color2=RGBA16F(ssrData/specrough). That asymmetry vs the
+     * prepass out_normal@location2 is ISS-013. See KNOWN_ISSUES ISS-013. */
+    GPU_debug_group_begin("ISS013_PREPASS >>> depth_ps into main_fb (color2=ssr_specrough RGBA16F) <<<");
     DRW_draw_pass(psl->depth_ps);
+    GPU_debug_group_end();
     /* Create minmax texture */
     EEVEE_create_minmax_buffer(vedata, dtxl->depth, -1);
     EEVEE_occlusion_compute(sldata, vedata);
@@ -630,7 +678,47 @@ void EEVEE_render_draw(EEVEE_Data *vedata, RenderEngine *engine, RenderLayer *rl
     /* Shading pass */
     eevee_render_draw_background(vedata);
     GPU_framebuffer_bind(fbl->main_fb);
-    DRW_draw_pass(psl->material_ps);
+    /* ISS-011 Xcode anchor: search "ISS011_XCODE" to land on the sample-1 MaterialOpaque draw. This
+     * draw SAMPLES shadowCubeTexture (the same 512x512x6 depth array rendered above) inside
+     * sample_cube_shadow(). In Bound Resources find that depth array and read what the shader sees,
+     * then compare it to the STORED depth from the ShadowCubeDraw group: session13 found the CPU
+     * readback (uniform ~0.99) disagrees with the shader read (<=0.5 over ~60% of the top face).
+     * Emitted on EVERY sample (Xcode may capture any TAA sample); sample index kept for clarity. */
+    {
+      /* ISS-017 (Sun cascade over-shadow) — TARGET UPDATED 2026-06-27. This same MaterialOpaque draw
+       * samples shadowCascadeTexture inside sample_cascade_shadow(). DO NOT test the C09 double-
+       * transform / [0.5,1] compression — it is REFUTED (algebra/format/sampler/winding/offset all
+       * GL-symmetric; bias AND uv-registration exhaustively ruled out; DEBUG_JOURNAL 2026-06-27).
+       * Pixel-debug a wrongly-dark FRONT-LIT body/leg fragment (N.L~=1, not grazing); Cmd+F
+       * "sample_cascade_shadow" and follow its anchor: read shpos.z + coord.xy + layer, then read the
+       * STORED 16-bit texel in "ISS017_CASCADE >>> CascadeDraw" Depth Attachment at that uv/layer.
+       * Measure the ADDITIVE Delta = shpos.z - STORED (expected: a small CONSTANT POSITIVE value that
+       * makes the LessEqual self-comparison fail). IDENTITY FIRST — in Bound Resources confirm
+       * shadowCascadeTexture is the 1024²xN depth array (NOT utilTex / a colour target). KNOWN_ISSUES ISS-017.
+       *
+       * ISS-018 (Phoebe boots blue-darkened by overhead Sun.002): search "ISS018" to land here, then
+       * pixel-debug a DARK boot fragment. session(2026-06-15) proved the boot self-shadow DOES respond
+       * to receiver bias (forcing shadow_slope_bias_scale()=100 fully lit the boots = Windows parity),
+       * but the nl-gated formula returns ~1 there although it is mathematically >=5 for any valid
+       * normal -> the normal fed to bias is DEGENERATE (zero/NaN). In the pixel debugger inspect, in
+       * calc_shader_info(): the incoming `normal` (worldNormal), `n_n`, cl_common.N and cl_common.Ng,
+       * and dFdx/dFdy(position). Find which is zero/NaN for the boot material and why (NPR custom
+       * normal? flat/degenerate position derivatives? Metal dFdx in this draw?). */
+      char dbg_mat[300];
+      SNPRINTF(dbg_mat,
+               "ISS011_XCODE / ISS017_CASCADE / ISS018 >>> MaterialOpaque smp[%u/%u] (samples "
+               "shadowCubeTexture 512x512x6 AND shadowCascadeTexture 1024xN; ISS018: pixel-debug a "
+               "DARK boot frag -> inspect normal/n_n/cl_common.N/Ng for degenerate (zero/NaN)) <<<",
+               render_samples + 1,
+               tot_sample);
+      GPU_debug_group_begin(dbg_mat);
+      DRW_draw_pass(psl->material_ps);
+      GPU_debug_group_end();
+    }
+    /* ISS-011: close the programmatic capture started before the shadow draw (sample 0 only). */
+    if (goo_iss011_capture) {
+      GPU_debug_capture_end();
+    }
     EEVEE_subsurface_data_render(sldata, vedata);
     /* Effects pre-transparency */
     EEVEE_subsurface_compute(sldata, vedata);

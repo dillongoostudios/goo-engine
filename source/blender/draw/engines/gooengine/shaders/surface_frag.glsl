@@ -80,6 +80,13 @@ void main()
 
   Closure cl = nodetree_exec();
 
+/* D8L2: CONFIRMED (Build 021) — surface_frag.glsl IS the active shader (cube turned red). */
+#if 0
+  cl.radiance = vec3(1.0, 0.0, 0.0);
+  cl.holdout = 0.0;
+  cl.transmittance = vec3(0.0);
+#endif
+
 #ifdef WORLD_BACKGROUND
   if (!renderPassEnvironment) {
     cl.holdout += 1.0 - backgroundAlpha;
@@ -124,7 +131,9 @@ void main()
   outTransmittance = vec4(cl.transmittance, transmit) * holdout;
 #else
   outRadiance = vec4(cl.radiance, holdout);
-  ssrNormals = normal_encode(normalize(mat3(ViewMatrix) * out_ssr_N), vec3(0.0));
+  /* Metal (C04): mat3(mat4) implicit constructor not available in MSL constant address space.
+   * Explicitly extract the upper-left 3x3 columns. */
+  ssrNormals = normal_encode(normalize(mat3(ViewMatrix[0].xyz, ViewMatrix[1].xyz, ViewMatrix[2].xyz) * out_ssr_N), vec3(0.0));
   ssrData = vec4(out_ssr_color, out_ssr_roughness);
   sssIrradiance = out_sss_radiance;
   sssRadius = out_sss_radius;

@@ -289,7 +289,11 @@ float sdf_op_union_columns(float a, float b, float r, float n)
     // At this point, we have turned 45 degrees and moved at a point on the
     // diagonal that we want to place the columns on.
     // Now, repeat the domain along this direction and place a circle.
-    p_mod1(p.y, columnradius * 2.0);
+    /* ISS-016: MSL forbids binding a non-const reference to a vector element.
+     * Copy p.y to a temp, pass by inout, write back. Identical behavior on GL. */
+    float _py = p.y;
+    p_mod1(_py, columnradius * 2.0);
+    p.y = _py;
     float result = length(p) - columnradius;
     result = min(result, p.x);
     result = min(result, a);
@@ -316,7 +320,10 @@ float sdf_op_diff_columns(float a, float b, float r, float n)
     if (sdf_safe_mod(n, 2.0) == 1.0) {
       p.y += columnradius;
     }
-    p_mod1(p.y, columnradius * 2.0);
+    /* ISS-016: MSL no inout-to-vector-element. */
+    float _py = p.y;
+    p_mod1(_py, columnradius * 2.0);
+    p.y = _py;
 
     float result = -length(p) + columnradius;
     result = max(result, p.x);
@@ -471,7 +478,11 @@ float sdf_op_reflect(inout vec3 p, vec3 plane_normal, float offset)
 
 vec2 sdf_op_mirror(inout vec3 p, vec3 dist)
 {
-  return p_mod_grid2(p.xy, dist.xy);
+  /* ISS-016: MSL no inout-to-swizzle. */
+  vec2 _pxy = p.xy;
+  vec2 _r = p_mod_grid2(_pxy, dist.xy);
+  p.xy = _pxy;
+  return _r;
 }
 
 float sdf_op_polar(inout vec2 p, float repetitions)

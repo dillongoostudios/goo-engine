@@ -62,9 +62,73 @@
   closure_##t2##_##subroutine(in_##t2##_2, eval_##t2##_2, cl_common, sub_data, out_##t2##_2); \
   closure_##t3##_##subroutine(in_##t3##_3, eval_##t3##_3, cl_common, sub_data, out_##t3##_3);
 
+/* Fix E: Shared function body for CLOSURE_EVAL_FUNCTION_DECLARE (Metal and non-Metal).
+ * Extracted to avoid duplication between the #ifdef GPU_METAL variants below.
+ * glsl_preprocess argument_decorator cannot match ## token-pasted types so it cannot
+ * auto-inject _out_sta/_out_end markers into CLOSURE_EVAL_FUNCTION_DECLARE's parameter list.
+ * We provide a Metal-specific signature with explicit markers instead. */
+#define CLOSURE_EVAL_FUNCTION_BODY(t0, t1, t2, t3) \
+  { \
+    CLOSURE_EVAL_DECLARE(t0, t1, t2, t3); \
+\
+    /* Starts at 1 because 0 is world cube-map. */ \
+    for (int i = 1; cl_common.specular_accum > 0.0 && i < prbNumRenderCube && i < MAX_PROBE; \
+         i++) { \
+      ClosureCubemapData cube = closure_cubemap_eval_init(i, cl_common); \
+      if (cube.attenuation > 1e-8) { \
+        CLOSURE_META_SUBROUTINE_DATA(cubemap_eval, cube, t0, t1, t2, t3); \
+      } \
+    } \
+\
+    /* Starts at 1 because 0 is world irradiance. */ \
+    for (int i = 1; cl_common.diffuse_accum > 0.0 && i < prbNumRenderGrid && i < MAX_GRID; i++) \
+    { \
+      ClosureGridData grid = closure_grid_eval_init(i, cl_common); \
+      if (grid.attenuation > 1e-8) { \
+        CLOSURE_META_SUBROUTINE_DATA(grid_eval, grid, t0, t1, t2, t3); \
+      } \
+    } \
+\
+    CLOSURE_META_SUBROUTINE(indirect_end, t0, t1, t2, t3); \
+\
+    ClosurePlanarData planar = closure_planar_eval_init(cl_common); \
+    if (planar.attenuation > 1e-8) { \
+      CLOSURE_META_SUBROUTINE_DATA(planar_eval, planar, t0, t1, t2, t3); \
+    } \
+\
+    for (int i = 0; i < laNumLight && i < MAX_LIGHT; i++) { \
+      ClosureLightData light = closure_light_eval_init(cl_common, i); \
+      if (light.vis > 1e-8) { \
+        CLOSURE_META_SUBROUTINE_DATA(light_eval, light, t0, t1, t2, t3); \
+      } \
+    } \
+\
+    CLOSURE_META_SUBROUTINE(eval_end, t0, t1, t2, t3); \
+  }
+
 #ifndef DEPTH_SHADER
 /* Inputs are inout so that callers can get the final inputs used for evaluation. */
-#  define CLOSURE_EVAL_FUNCTION_DECLARE(name, t0, t1, t2, t3) \
+#  ifdef GPU_METAL
+/* Fix E (Metal): argument_decorator regex cannot match ## token-pasted types such as
+ * ClosureOutput##t0, so it cannot auto-insert _out_sta/_out_end reference markers.
+ * Add them explicitly here so that out/inout params become MSL thread references
+ * (thread T (&x)) rather than pass-by-value (thread T x). Without this, the caller's
+ * out_Diffuse_0 / out_Glossy_1 etc. are never written back after the eval function
+ * returns, leaving them at their zero-initialized state. */
+#    define CLOSURE_EVAL_FUNCTION_DECLARE(name, t0, t1, t2, t3) \
+    void closure_##name##_eval(ClosureInputCommon in_common, \
+                               inout ClosureInput##t0 _inout_sta in_##t0##_0 _inout_end, \
+                               inout ClosureInput##t1 _inout_sta in_##t1##_1 _inout_end, \
+                               inout ClosureInput##t2 _inout_sta in_##t2##_2 _inout_end, \
+                               inout ClosureInput##t3 _inout_sta in_##t3##_3 _inout_end, \
+                               out ClosureOutput##t0 _out_sta out_##t0##_0 _out_end, \
+                               out ClosureOutput##t1 _out_sta out_##t1##_1 _out_end, \
+                               out ClosureOutput##t2 _out_sta out_##t2##_2 _out_end, \
+                               out ClosureOutput##t3 _out_sta out_##t3##_3 _out_end) \
+    CLOSURE_EVAL_FUNCTION_BODY(t0, t1, t2, t3)
+#  else
+/* Standard GLSL: out/inout qualifiers provide pass-by-reference natively. */
+#    define CLOSURE_EVAL_FUNCTION_DECLARE(name, t0, t1, t2, t3) \
     void closure_##name##_eval(ClosureInputCommon in_common, \
                                inout ClosureInput##t0 in_##t0##_0, \
                                inout ClosureInput##t1 in_##t1##_1, \
@@ -74,43 +138,8 @@
                                out ClosureOutput##t1 out_##t1##_1, \
                                out ClosureOutput##t2 out_##t2##_2, \
                                out ClosureOutput##t3 out_##t3##_3) \
-    { \
-      CLOSURE_EVAL_DECLARE(t0, t1, t2, t3); \
-\
-      /* Starts at 1 because 0 is world cube-map. */ \
-      for (int i = 1; cl_common.specular_accum > 0.0 && i < prbNumRenderCube && i < MAX_PROBE; \
-           i++) { \
-        ClosureCubemapData cube = closure_cubemap_eval_init(i, cl_common); \
-        if (cube.attenuation > 1e-8) { \
-          CLOSURE_META_SUBROUTINE_DATA(cubemap_eval, cube, t0, t1, t2, t3); \
-        } \
-      } \
-\
-      /* Starts at 1 because 0 is world irradiance. */ \
-      for (int i = 1; cl_common.diffuse_accum > 0.0 && i < prbNumRenderGrid && i < MAX_GRID; i++) \
-      { \
-        ClosureGridData grid = closure_grid_eval_init(i, cl_common); \
-        if (grid.attenuation > 1e-8) { \
-          CLOSURE_META_SUBROUTINE_DATA(grid_eval, grid, t0, t1, t2, t3); \
-        } \
-      } \
-\
-      CLOSURE_META_SUBROUTINE(indirect_end, t0, t1, t2, t3); \
-\
-      ClosurePlanarData planar = closure_planar_eval_init(cl_common); \
-      if (planar.attenuation > 1e-8) { \
-        CLOSURE_META_SUBROUTINE_DATA(planar_eval, planar, t0, t1, t2, t3); \
-      } \
-\
-      for (int i = 0; i < laNumLight && i < MAX_LIGHT; i++) { \
-        ClosureLightData light = closure_light_eval_init(cl_common, i); \
-        if (light.vis > 1e-8) { \
-          CLOSURE_META_SUBROUTINE_DATA(light_eval, light, t0, t1, t2, t3); \
-        } \
-      } \
-\
-      CLOSURE_META_SUBROUTINE(eval_end, t0, t1, t2, t3); \
-    }
+    CLOSURE_EVAL_FUNCTION_BODY(t0, t1, t2, t3)
+#  endif
 
 #else
 /* Inputs are inout so that callers can get the final inputs used for evaluation. */
@@ -297,7 +326,11 @@ ClosureLightData closure_light_eval_init(ClosureEvalCommon cl_common, int light_
   light.L.xyz = light.data.l_position - cl_common.P;
   light.L.w = length(light.L.xyz);
 
-  light.vis = light_visibility(light.data, cl_common.P, light.L, cl_common.light_groups, cl_common.light_group_shadows);
+  /* Fix P (ISS-017): grazing-angle slope bias scale for the sun cascade self-shadow. */
+  vec3 bias_L = (light.data.l_type == SUN) ? -light.data.l_forward : light.L.xyz;
+  float bias_scale = shadow_slope_bias_scale(cl_common.N, bias_L);
+
+  light.vis = light_visibility(light.data, cl_common.P, light.L, cl_common.light_groups, cl_common.light_group_shadows, bias_scale);
   light.contact_shadow = light_contact_shadows(
       light.data, cl_common.P, cl_common.vP, cl_common.vNg, cl_common.rand.x, light.vis, cl_common.light_group_shadows);
 

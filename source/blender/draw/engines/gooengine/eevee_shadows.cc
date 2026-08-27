@@ -13,6 +13,8 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "GPU_debug.hh"
+
 #include "eevee_private.hh"
 
 #define SH_CASTER_ALLOC_CHUNK 32
@@ -112,7 +114,11 @@ void EEVEE_shadows_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
   {
     DRWState state = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_SHADOW_OFFSET | DRW_STATE_WRITE_COLOR;
-    DRW_PASS_CREATE(psl->shadow_pass, state);
+    /* Named pass: label becomes the Metal render encoder label in Xcode Frame Debugger.
+     * Search "GOOENG:ShadowPass" to find the encoder where DRW_STATE_SHADOW_OFFSET is active.
+     * Fix G (2026-04-28): depth_bias=1.0 slope_scale=2.0 (was 2.0/1.0) to match glPolygonOffset(2,1). */
+    psl->shadow_pass = DRW_pass_create(
+        "GOOENG:ShadowPass [SHADOW_OFFSET:bias=1.0 slopeScale=2.0 mtl_state.mm Fix-G]", state);
 
     stl->g_data->shadow_shgrp = DRW_shgroup_create(EEVEE_shaders_shadow_sh_get(),
                                                    psl->shadow_pass);
@@ -377,9 +383,22 @@ void EEVEE_shadows_draw(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata, DRWView
   }
 
   {
+    /* ISS-017 Xcode anchor: search "ISS017_CASCADE" in the Metal debugger to jump to the
+     * Sun cascade shadow render. The Depth render target of these draws IS shadowCascadePool
+     * (shadow_cascade_size² x num_cascade_layer depth array; default 1024x1024xN, DRW_TEX_COMPARE).
+     * Open its Depth Attachment -> Texture Viewer to read the *STORED* cascade depth at the same
+     * coord.xy/layer the MaterialOpaque fragment reports, and compute the additive error
+     * Delta = shpos.z - STORED (ISS-017 target 2026-06-27 — a constant positive Delta is the bug;
+     * [0.5,1]/C09 is refuted). Compare against what sample_cascade_shadow() reads in the
+     * "ISS017_CASCADE >>> MaterialOpaque" draw. IDENTITY FIRST: first confirm shadowCascadeTexture
+     * there is THIS 1024² depth array (not utilTex / a colour target) — a binding mismatch was the
+     * ISS-011 cube root cause (Fix J). */
+    GPU_debug_group_begin(
+        "ISS017_CASCADE >>> CascadeDraw (renders shadowCascadePool depth — inspect STORED depth) <<<");
     for (int cascade = 0; cascade < linfo->cascade_len; cascade++) {
       EEVEE_shadows_draw_cascades(sldata, vedata, view, cascade);
     }
+    GPU_debug_group_end();
   }
 
   DRW_view_set_active(view);
@@ -413,8 +432,10 @@ void EEVEE_shadow_output_init(EEVEE_ViewLayerData *sldata,
                                 {GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(txl->shadow_accum)});
 
   /* Create Pass and shgroup. */
-  DRW_PASS_CREATE(psl->shadow_accum_pass,
-                  DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_ALWAYS | DRW_STATE_BLEND_ADD_FULL);
+  /* Named pass: Metal encoder label for shadow accumulation pass. */
+  psl->shadow_accum_pass = DRW_pass_create(
+      "GOOENG:ShadowAccum [PCF accumulation — reads shadowCubeTexture]",
+      DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_ALWAYS | DRW_STATE_BLEND_ADD_FULL);
   DRWShadingGroup *grp = DRW_shgroup_create(EEVEE_shaders_shadow_accum_sh_get(),
                                             psl->shadow_accum_pass);
   DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &dtxl->depth);
@@ -443,19 +464,14 @@ void EEVEE_shadow_output_accumulate(EEVEE_ViewLayerData * /*sldata*/, EEVEE_Data
   if (fbl->shadow_accum_fb != nullptr) {
     GPU_framebuffer_bind(fbl->shadow_accum_fb);
 
-    /* Clear texture. */
-#ifdef __APPLE__
-    /* Metal: Always clear shadow accumulation buffer to prevent stale data
-     * when switching between viewports/workspaces. This fixes issue where
-     * shadow intensity changes unexpectedly due to TAA not resetting properly. */
-    const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    GPU_framebuffer_clear_color(fbl->shadow_accum_fb, clear);
-#else
+    /* Clear texture only on the first TAA sample (matching OpenGL behavior).
+     * Previously Metal cleared every frame (#ifdef __APPLE__), which was a workaround
+     * for ISS-003 (shadow double-transform). Now that ISS-003 is fixed, use the
+     * standard path: clear once per TAA sequence, allow accumulation across samples. */
     if (effects->taa_current_sample == 1) {
       const float clear[4] = {0.0f, 0.0f, 0.0f, 0.0f};
       GPU_framebuffer_clear_color(fbl->shadow_accum_fb, clear);
     }
-#endif
 
     DRW_draw_pass(psl->shadow_accum_pass);
 

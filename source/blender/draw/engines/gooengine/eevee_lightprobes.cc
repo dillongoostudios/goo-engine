@@ -257,6 +257,13 @@ void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
     DRW_shgroup_uniform_texture(grp, "probeHdr", rt_color);
     DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
     DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
+#ifdef WITH_METAL_BACKEND
+    /* Metal requires all declared samplers to be bound.
+     * eevee_legacy_probe_filter_diffuse includes eevee_legacy_irradiance_lib which declares
+     * irradianceGrid, but this shader does not use it directly. Bind a dummy to avoid validation
+     * errors. */
+    DRW_shgroup_uniform_texture(grp, "irradianceGrid", EEVEE_materials_get_dummy_2d_array());
+#endif
 
     blender::gpu::Batch *geom = DRW_cache_fullscreen_quad_get();
     DRW_shgroup_call(grp, geom, nullptr);

@@ -23,6 +23,7 @@
 #include "gpu_shader_dependency_private.hh"
 #include "gpu_shader_private.hh"
 
+#include <sstream>
 #include <string>
 
 extern "C" char datatoc_gpu_shader_colorspace_lib_glsl[];
@@ -298,7 +299,40 @@ static std::string preprocess_source(StringRefNull original)
     return original;
   }
   gpu::shader::Preprocessor processor;
-  return processor.process(original);
+  std::string result = processor.process(original);
+
+#if GPU_SHADER_PRINTF_ENABLE
+  /* Register printf format strings produced for this runtime-generated source so printf_end() can
+   * decode them. The preprocessor appends one metadata line per static string:
+   *   `// <hash("string")> <format_hash> <format_string...>`
+   * GooEngine's dynamic GPUMaterials are not in the datatoc source lists parsed at GPU init, so
+   * their printf formats would otherwise never reach g_formats and printf_end() would skip them.
+   * Registering here uses the exact runtime hash, avoiding any hard-coded hash. */
+  {
+    constexpr uint64_t string_token = gpu::shader::Preprocessor::hash("string");
+    std::stringstream ss(result);
+    std::string line;
+    while (std::getline(ss, line)) {
+      if (line.compare(0, 3, "// ") != 0) {
+        continue;
+      }
+      std::stringstream ls(line.substr(3));
+      uint64_t token = 0;
+      uint32_t format_hash = 0;
+      if (!(ls >> token) || token != string_token || !(ls >> format_hash)) {
+        continue;
+      }
+      std::string fmt;
+      std::getline(ls, fmt);
+      if (!fmt.empty() && fmt.front() == ' ') {
+        fmt.erase(0, 1);
+      }
+      gpu::shader::gpu_shader_dependency_register_printf_format(format_hash, fmt.c_str());
+    }
+  }
+#endif
+
+  return result;
 };
 
 GPUShader *GPU_shader_create_from_info_python(const GPUShaderCreateInfo *_info)

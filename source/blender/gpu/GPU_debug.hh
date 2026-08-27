@@ -86,6 +86,16 @@ void GPU_debug_capture_begin(const char *title);
 void GPU_debug_capture_end();
 
 /**
+ * Like GPU_debug_capture_begin/end but does NOT require Blender to be launched with --debug-gpu
+ * (G_DEBUG_GPU). Capture still only happens when the underlying tool is available
+ * (e.g. Metal: MTL_CAPTURE_ENABLED set by Xcode's "GPU Frame Capture" scheme option).
+ * Used by goo-engine ISS-011 to capture the F12 offline render without enabling GPU printf
+ * (which crashes the custom engine's draw path on Metal). \return true if a capture started.
+ */
+bool GPU_debug_capture_begin_force(const char *title);
+void GPU_debug_capture_end_force();
+
+/**
  * GPU debug frame capture scopes.
  *
  * Allows creation of a GPU frame capture scope that define a region within which an external GPU

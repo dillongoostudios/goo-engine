@@ -25,6 +25,9 @@
 
 #include <utility>
 
+/* ISS-017/018: NSWorkspace (AppKit) is needed to auto-open the captured .gputrace in Xcode. */
+#import <AppKit/AppKit.h>
+
 namespace blender::gpu::debug {
 
 CLG_LogRef LOG = {"gpu.debug.metal"};
@@ -59,6 +62,11 @@ void MTLContext::debug_group_end()
   }
 }
 
+/* ISS-017/018 Xcode auto-open: path of the .gputrace written by the current capture (if any),
+ * so debug_capture_end() can open it in Xcode after stopCapture finalises the file. nil when the
+ * capture goes straight to Xcode (developer-tools destination, i.e. launched from Xcode). */
+static NSString *g_goo_capture_trace_path = nil;
+
 bool MTLContext::debug_capture_begin(const char * /*title*/)
 {
   MTLCaptureManager *capture_manager = [MTLCaptureManager sharedCaptureManager];
@@ -68,9 +76,37 @@ bool MTLContext::debug_capture_begin(const char * /*title*/)
   }
   MTLCaptureDescriptor *capture_descriptor = [[MTLCaptureDescriptor alloc] init];
   capture_descriptor.captureObject = this->device;
+
+  /* "F12 だけで Xcode が開く" path (ISS-017/018 investigation). When NOT launched from Xcode the
+   * developer-tools destination is unavailable, so a normal terminal launch would silently capture
+   * nothing. If GOO_GPU_CAPTURE is set, instead write the trace to a unique .gputrace file and let
+   * debug_capture_end() hand it to the system (Xcode opens .gputrace). This makes the workflow:
+   *   METAL_CAPTURE_ENABLED=1 GOO_GPU_CAPTURE=1 Blender --debug-gpu <blend>
+   * then every F12 auto-writes a trace and pops it open in Xcode — no Xcode-launched scheme needed.
+   * When developer-tools IS available (launched from Xcode) we keep the default destination so the
+   * capture opens live in Xcode as before. */
+  g_goo_capture_trace_path = nil;
+  const bool want_autoopen = (getenv("GOO_GPU_CAPTURE") != nullptr);
+  const bool has_devtools = [capture_manager
+      supportsDestination:MTLCaptureDestinationDeveloperTools];
+  const bool has_tracefile = [capture_manager
+      supportsDestination:MTLCaptureDestinationGPUTraceDocument];
+  if (want_autoopen && !has_devtools && has_tracefile) {
+    NSString *path = [NSString stringWithFormat:@"%@/goo_capture_%d_%.0f.gputrace",
+                                                NSTemporaryDirectory(),
+                                                (int)getpid(),
+                                                [[NSDate date] timeIntervalSince1970]];
+    /* startCapture fails if the URL already exists; the pid+time stamp keeps it unique. */
+    capture_descriptor.destination = MTLCaptureDestinationGPUTraceDocument;
+    capture_descriptor.outputURL = [NSURL fileURLWithPath:path];
+    g_goo_capture_trace_path = [path retain];
+  }
+
   NSError *error;
   if (![capture_manager startCaptureWithDescriptor:capture_descriptor error:&error]) {
     NSLog(@"Failed to start Metal frame capture, error %@", error);
+    [g_goo_capture_trace_path release];
+    g_goo_capture_trace_path = nil;
     return false;
   }
   return true;
@@ -84,6 +120,16 @@ void MTLContext::debug_capture_end()
     return;
   }
   [capture_manager stopCapture];
+
+  /* If we captured to a .gputrace file (terminal launch), open it now — macOS routes .gputrace to
+   * Xcode, so the Metal debugger pops up automatically right after F12. */
+  if (g_goo_capture_trace_path != nil) {
+    NSURL *url = [NSURL fileURLWithPath:g_goo_capture_trace_path];
+    NSLog(@"[GOOENG] Metal capture written: %@ — opening in Xcode", g_goo_capture_trace_path);
+    [[NSWorkspace sharedWorkspace] openURL:url];
+    [g_goo_capture_trace_path release];
+    g_goo_capture_trace_path = nil;
+  }
 }
 
 void *MTLContext::debug_capture_scope_create(const char *name)

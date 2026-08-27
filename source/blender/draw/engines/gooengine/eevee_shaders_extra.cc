@@ -53,6 +53,23 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
     info.additional_info(frag_info_name);
   }
 
+#if GPU_SHADER_PRINTF_ENABLE
+  /* GooEngine Metal debug: enable GLSL printf() inside dynamic GPUMaterials.
+   * USE_PRINTF makes init_dependencies() (gpu_shader_dependency.cc:370) prepend
+   * gpu_shader_print_lib.glsl (the print_header()/print_data() definitions);
+   * additional_info("gpu_print") provides the gpu_print_buf SSBO. Dynamic materials bypass
+   * the static auto-injection in gpu_shader_create_info.cc:498-511, so we set both here.
+   * Active only when printf is enabled (Release: GPU_FORCE_ENABLE_SHADER_PRINTF=1). */
+  info.builtins(BuiltinBits::USE_PRINTF);
+  info.additional_info("gpu_print");
+  /* Dynamic GPUMaterials do NOT get gpu_shader_print_lib.glsl prepended (the codegen amend path
+   * only attaches the gpu_print SSBO, not the print_header()/print_data() definitions). So we
+   * supply those definitions ourselves from lights_lib.glsl, gated on this define. Static
+   * create-info shaders DO get print_lib prepended, so they must NOT see our definitions
+   * (otherwise: "class member cannot be redeclared"). Hence this define is set ONLY here. */
+  info.define("GOO_NEED_PRINTF_DEFS");
+#endif
+
   info.auto_resource_location(true);
 
   info.define("UNI_ATTR(a)", "a");

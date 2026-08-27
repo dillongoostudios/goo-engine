@@ -21,6 +21,7 @@
 #include "BKE_camera.h"
 #include "BKE_context.hh"
 
+#include "GPU_context.hh"
 #include "GPU_matrix.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -185,7 +186,10 @@ void DrawTexture::draw(GPUShader *shader, const pxr::GfVec4d &viewport, GPUTextu
   }
   int slot = GPU_shader_get_sampler_binding(shader, "image");
   GPU_texture_bind(tex, slot);
-  GPU_shader_uniform_1i(shader, "image", slot);
+  /* Metal: GPU_texture_bind already sets the binding; uniform_int for samplers is unsupported. */
+  if (GPU_backend_get_type() != GPU_BACKEND_METAL) {
+    GPU_shader_uniform_1i(shader, "image", slot);
+  }
 
   GPU_matrix_push();
   GPU_matrix_translate_2f(viewport[0], viewport[1]);

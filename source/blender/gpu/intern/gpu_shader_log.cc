@@ -361,6 +361,13 @@ void printf_end(Context *ctx)
   while (cursor < data_len + 1) {
     uint32_t format_hash = data[cursor++];
 
+    if (!shader::gpu_shader_dependency_has_printf_format(format_hash)) {
+      /* Unknown format hash: skip rather than dereference a missing Map entry (which would crash
+       * in release). Happens for printf formats from sources not parsed at GPU init (e.g. private
+       * draw-engine libs whose formats were not registered). */
+      break;
+    }
+
     const shader::PrintfFormat &format = shader::gpu_shader_dependency_get_printf_format(
         format_hash);
 

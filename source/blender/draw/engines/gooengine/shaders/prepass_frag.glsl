@@ -92,7 +92,8 @@ void main()
   }
 #endif
 
-  resource_id_out = resource_id;
+  /* ISS013_FIXL: out_normal now declared at location 1 (RG16 ssr_normal buffer) to match the
+   * gtao/SSR normalBuffer readers (.rg). resource_id_out removed (vestigial, never read). */
   /* GooEngine Fix: Output Normal to RG16 buffer (Loc 1).
    * Use viewNormal from vertex shader interface, which is always initialized.
    * g_data.N is only initialized when USE_ALPHA_HASH is defined. */
@@ -100,6 +101,11 @@ void main()
   /* viewNormal comes from surface_lib interface, already in view space. */
   vec3 N = normalize(viewNormal);
   out_normal = normal_encode(N, vec3(0.0));
+#else
+  /* Fix S (ISS-017/018): restore the upstream shadow-ID write (Fix L removed it as "vestigial" —
+   * wrong: sample_ID_texture reads this pool to suppress same-object self-shadow; live on GL).
+   * The shadow FB binds the R16UI id pool at attachment 1. Explicit uint() cast for MSL (C04). */
+  resource_id_out = uint(resource_id);
 #endif
 }
 

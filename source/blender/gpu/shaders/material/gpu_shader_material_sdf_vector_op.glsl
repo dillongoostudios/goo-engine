@@ -410,7 +410,11 @@ void node_sdf_vector_op_mirror(vec3 p,
 {
   p = axis_swizzle(p, axis);
   // pos.xy = sdf_op_mirror(p, p2);
-  pos.xy = p_mod_grid2(p.xy, p2.xy);
+  /* ISS-016: MSL no inout-to-swizzle. */
+  vec2 _pxy = p.xy;
+  vec2 _r = p_mod_grid2(_pxy, p2.xy);
+  p.xy = _pxy;
+  pos.xy = _r;
   pos.z = 0.0;
   p = axis_unswizzle(p, axis);
   pos = axis_unswizzle(pos, axis);
@@ -432,7 +436,10 @@ void node_sdf_vector_op_polar(vec3 p,
                               out float d)
 {
   p = axis_swizzle(p, axis);
-  d = sdf_op_polar(p.xy, v);
+  /* ISS-016: MSL no inout-to-swizzle. */
+  vec2 _pxy = p.xy;
+  d = sdf_op_polar(_pxy, v);
+  p.xy = _pxy;
   p = axis_unswizzle(p, axis);
   vout = p;
 }
@@ -575,8 +582,13 @@ void node_sdf_vector_op_octant(vec3 p,
   p = axis_swizzle(p, axis);
   float size = v;
   vec3 s = sgn(p);
-  p_mirror(p.x, size);
-  p_mirror(p.y, size);
+  /* ISS-016: MSL no inout-to-vector-element. */
+  float _px = p.x;
+  p_mirror(_px, size);
+  p.x = _px;
+  float _py = p.y;
+  p_mirror(_py, size);
+  p.y = _py;
   if (p.y > p.x) {
     p.xy = p.yx;
   }

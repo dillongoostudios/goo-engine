@@ -244,7 +244,7 @@ Closure closure_eval(ClosureSubsurface diffuse, ClosureReflection reflection)
     closure.radiance += out_Glossy_1.radiance * reflection.color * reflection.weight;
   }
   return closure;
-#endif
+#endif /* DO_SPLIT_CLOSURE_EVAL */
 }
 
 /* Specular BSDF */
@@ -385,13 +385,13 @@ vec4 closure_to_rgba(Closure closure)
   return vec4(closure.radiance, 1.0 - saturate(avg(closure.transmittance)));
 }
 
-float calc_self_shadows_only(LightData ld, vec3 P, vec4 l_vector)
+float calc_self_shadows_only(LightData ld, vec3 P, vec4 l_vector, float bias_scale)
 {
   // float vis = light_attenuation(ld, l_vector, lightGroups);
   float vis = 1.0;
   if (ld.l_shadowid >= 0.0 && vis > 0.001) {
     if (ld.l_type == SUN) {
-      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, false);
+      vis *= sample_cascade_shadow(int(ld.l_shadowid), P, false, bias_scale);
     }
     else {
       vis *= sample_cube_shadow(int(ld.l_shadowid), P, false);
@@ -459,7 +459,9 @@ void calc_shader_info(vec3 position,
           (ld.light_group_bits.w & light_group_shadows.w) == 0)) {
       float light_fac = max(ld.l_color.x, max(ld.l_color.y, ld.l_color.z)) * ld.l_diff;
       shadow_accum += (1.0 - light.vis * light.contact_shadow) * light_fac;
-      self_shadow_accum += (1.0 - calc_self_shadows_only(light.data, position, light.L)) * light_fac;
+      vec3 ss_bias_L = (ld.l_type == SUN) ? -ld.l_forward : vec3(light.L.xyz);
+      float ss_bias_scale = shadow_slope_bias_scale(n_n, ss_bias_L);
+      self_shadow_accum += (1.0 - calc_self_shadows_only(light.data, position, light.L, ss_bias_scale)) * light_fac;
       light_accum += light_fac;
     }
 

@@ -41,7 +41,7 @@ static struct {
   GPUTexture *util_tex;
   GPUTexture *noise_tex;
 
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
   /* Dummy textures for Metal. Metal requires textures to be bound and to match expected types.
    * These are used as fallbacks when actual textures are not yet initialized. */
   GPUTexture *dummy_cube_array; /* For probeCubes (cube array texture) */
@@ -75,7 +75,7 @@ GPUTexture *EEVEE_materials_get_util_tex()
   return e_data.util_tex;
 }
 
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
 GPUTexture *EEVEE_materials_get_dummy_2d_array()
 {
   return e_data.dummy_2d_array;
@@ -112,7 +112,7 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   bool use_refract = GPU_material_flag_get(gpumat, GPU_MATFLAG_REFRACT);
   bool use_ao = GPU_material_flag_get(gpumat, GPU_MATFLAG_AO);
 
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
   /* NOTE: Metal does not optimize out unused samplers, so all textures must be bound.
    * Force all conditions to true to ensure complete texture binding. */
   use_diffuse = use_glossy = use_refract = use_ao = true;
@@ -136,33 +136,27 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   DRW_shgroup_uniform_int_copy(shgrp, "outputSssId", 1);
   DRW_shgroup_uniform_texture(shgrp, "utilTex", e_data.util_tex);
   if (use_diffuse || use_glossy || use_refract) {
-#ifdef __APPLE__
-    /* On Metal, shadow pools may be NULL during lightbake. Use fallback textures. */
-    if (sldata->shadow_cube_pool != nullptr) {
-      DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeTexture", &sldata->shadow_cube_pool);
-    }
-    else {
-      DRW_shgroup_uniform_texture(shgrp, "shadowCubeTexture", e_data.util_tex);
-    }
-    if (sldata->shadow_cascade_pool != nullptr) {
-      DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
-    }
-    else {
-      DRW_shgroup_uniform_texture(shgrp, "shadowCascadeTexture", e_data.util_tex);
-    }
-    if (sldata->shadow_cube_id_pool != nullptr) {
-      DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
-    }
-    else {
-      DRW_shgroup_uniform_texture(shgrp, "shadowCubeIDTexture", e_data.dummy_uint_2d_array);
-    }
-    if (sldata->shadow_cascade_id_pool != nullptr) {
-      DRW_shgroup_uniform_texture_ref(
-          shgrp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
-    }
-    else {
-      DRW_shgroup_uniform_texture(shgrp, "shadowCascadeIDTexture", e_data.dummy_uint_2d_array);
-    }
+#ifdef WITH_METAL_BACKEND
+    /* Fix J (ISS-011/ISS-010, X3 confirmed session15b via Xcode GPU capture):
+     * Bind the shadow depth pools by REFERENCE, exactly like the GL path below.
+     * The previous `if (pool != nullptr) _ref else util_tex` fallback was broken: at material
+     * shgroup setup time the pools are still NULL (they are created later, in
+     * eevee_shadows.cc EEVEE_shadows_*_add), so the else branch ran and bound e_data.util_tex
+     * BY VALUE. A value binding is captured at setup and never updates, so shadowCubeTexture /
+     * shadowCascadeTexture stayed pointing at the utilTex LUT for the whole frame. The material
+     * fragment shader then sample_compare'd the LUT as if it were shadow depth -> garbage ->
+     * the trapezoid self-shadow acne. `_ref` defers the dereference to draw time, by which point
+     * the real pool exists. (Lightbake may leave the pool NULL even at draw time; if that
+     * crashes on Metal, handle it then per Fix J option B. See KNOWN_ISSUES ISS-011.) */
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeTexture", &sldata->shadow_cube_pool);
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
+    /* Fix S (ISS-017/018): the ID pools had the exact bug Fix J fixed for the depth pools above —
+     * at shgroup setup time the pools are still NULL, so the null-check fell through to a BY-VALUE
+     * dummy binding that never updates. sample_ID_texture then always read a 1x1 zero dummy and the
+     * same-object self-shadow suppression (live on GL/Windows) never fired. Bind unconditionally by
+     * reference like the GL path; same lightbake-NULL caveat as Fix J. */
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+    DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
 #else
     DRW_shgroup_uniform_texture_ref(shgrp, "shadowCubeTexture", &sldata->shadow_cube_pool);
     DRW_shgroup_uniform_texture_ref(shgrp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
@@ -172,25 +166,19 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   }
 
   if (use_diffuse || use_glossy || use_refract || use_ao) {
-#ifdef __APPLE__
-    if (&vedata->txl->maxzbuffer != nullptr) {
-      DRW_shgroup_uniform_texture_ref(shgrp, "maxzBuffer", &vedata->txl->maxzbuffer);
-    }
-    else {
-      DRW_shgroup_uniform_texture(shgrp, "maxzBuffer", e_data.util_tex);
-    }
-#else
+    /* Fix T cleanup: the Metal branch here tested `&txl->maxzbuffer != nullptr` — the ADDRESS
+     * of the member, which is always true — so the _ref call below already ran unconditionally
+     * on both backends. Dead else-branch (util_tex by value) removed. */
     DRW_shgroup_uniform_texture_ref(shgrp, "maxzBuffer", &vedata->txl->maxzbuffer);
-#endif
   }
 
   if ((use_diffuse || use_glossy)
-#ifndef __APPLE__
+#ifndef WITH_METAL_BACKEND
       && !use_ssrefraction
 #endif
   )
   {
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
     if (effects->gtao_horizons != nullptr) {
       DRW_shgroup_uniform_texture_ref(shgrp, "horizonBuffer", &effects->gtao_horizons);
     }
@@ -203,7 +191,7 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   }
 
   if (use_diffuse) {
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
     if (lcache->grid_tx.tex != nullptr) {
       DRW_shgroup_uniform_texture_ref(shgrp, "irradianceGrid", &lcache->grid_tx.tex);
     }
@@ -216,7 +204,7 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   }
 
   if (use_glossy || use_refract) {
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
     if (lcache->cube_tx.tex != nullptr) {
       DRW_shgroup_uniform_texture_ref(shgrp, "probeCubes", &lcache->cube_tx.tex);
     }
@@ -229,7 +217,7 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   }
 
   if (use_glossy) {
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
     if (vedata->txl->planar_pool != nullptr) {
       DRW_shgroup_uniform_texture_ref(shgrp, "probePlanars", &vedata->txl->planar_pool);
     }
@@ -257,7 +245,7 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
     DRW_shgroup_uniform_float_copy(
         shgrp, "refractionDepth", (refract_depth) ? *refract_depth : 0.0);
     if (use_ssrefraction) {
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
       if (vedata->txl->filtered_radiance != nullptr) {
         DRW_shgroup_uniform_texture_ref(
             shgrp, "refractColorBuffer", &vedata->txl->filtered_radiance);
@@ -272,32 +260,22 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
     }
   }
 
-#ifdef __APPLE__
-  /* Metal: ALL surface shaders include volumetric_lib and require inScattering/inTransmittance.
-   * Always bind actual texture or fallback dummy - never NULL pointer reference. */
-  {
-    /* Ensure dummy_3d exists for fallback. */
-    if (!e_data.dummy_3d) {
-      eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ;
-      e_data.dummy_3d = DRW_texture_create_3d_ex(1, 1, 1, GPU_RGBA8, usage, DRW_TEX_WRAP, nullptr);
-    }
-
-    GPUTexture *scatter_tex = effects->volume_scatter;
-    GPUTexture *transmit_tex = effects->volume_transmit;
-
-    /* Use dummy if actual is NULL. */
-    if (!scatter_tex) {
-      GPUTexture *vol_dummy = EEVEE_volumes_get_dummy_scatter();
-      scatter_tex = vol_dummy ? vol_dummy : e_data.dummy_3d;
-    }
-    if (!transmit_tex) {
-      GPUTexture *vol_dummy = EEVEE_volumes_get_dummy_transmit();
-      transmit_tex = vol_dummy ? vol_dummy : e_data.dummy_3d;
-    }
-
-    DRW_shgroup_uniform_texture(shgrp, "inScattering", scatter_tex);
-    DRW_shgroup_uniform_texture(shgrp, "inTransmittance", transmit_tex);
-  }
+#ifdef WITH_METAL_BACKEND
+  /* Metal: ALL surface shaders include volumetric_lib and declare inScattering/inTransmittance,
+   * so a binding must always be present (GL only binds for alpha-blend materials and tolerates
+   * a missing binding).
+   * Fix T (audit 2026-07-08, same NULL-at-setup class as Fix J / Fix S-2): bind by REFERENCE.
+   * effects->volume_scatter is rewritten every frame AFTER this setup runs: reset to the dummy
+   * in EEVEE_volumes_draw_init (cache_finish) and set to the real texture in
+   * EEVEE_volumes_compute (draw). The previous by-value bind therefore captured LAST frame's
+   * pointer, which after this frame's std::swap is the HISTORY texture (1-frame-stale fog),
+   * a dangling pointer on resize frames (textures freed/recreated in draw_init), or the dummy
+   * on the first frame — headless single-frame renders bound the dummy for ALL samples, so
+   * alpha-blend surfaces lost their fog entirely. _ref defers the dereference to draw time,
+   * by which point the value is always valid: the dummies are created unconditionally in
+   * EEVEE_volumes_init and draw_init always assigns one of dummy/real. */
+  DRW_shgroup_uniform_texture_ref(shgrp, "inScattering", &effects->volume_scatter);
+  DRW_shgroup_uniform_texture_ref(shgrp, "inTransmittance", &effects->volume_transmit);
 #else
   if (use_alpha_blend) {
     if (effects->volume_scatter != nullptr) {
@@ -427,7 +405,7 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
     eevee_init_util_texture();
     eevee_init_noise_texture();
 
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
     /* Create dummy textures with correct types for Metal fallbacks.
      * Metal requires all textures to be bound and to match the expected type. */
     eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ;
@@ -436,8 +414,11 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
           1, 1, 1, GPU_RGBA8, usage, DRW_TEX_FILTER, nullptr);
     }
     if (!e_data.dummy_uint_2d_array) {
+      /* GPU_RGBA8UI is an integer format; integer textures cannot use LINEAR filtering.
+       * gpu_texture.cc:625 asserts !(use_filter) || !(GPU_FORMAT_INTEGER).
+       * Use DRWTextureFlag(0) (NEAREST) to satisfy the GPU invariant. */
       e_data.dummy_uint_2d_array = DRW_texture_create_2d_array_ex(
-          1, 1, 1, GPU_RGBA8UI, usage, DRW_TEX_FILTER, nullptr);
+          1, 1, 1, GPU_RGBA8UI, usage, DRWTextureFlag(0), nullptr);
     }
     if (!e_data.dummy_cube_array) {
       e_data.dummy_cube_array = DRW_texture_create_cube_array_ex(
@@ -631,29 +612,35 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     DRW_shgroup_uniform_texture(grp, "utilTex", e_data.util_tex);
     DRW_shgroup_uniform_texture_ref(grp, "shadowCubeTexture", &sldata->shadow_cube_pool);
     DRW_shgroup_uniform_texture_ref(grp, "shadowCascadeTexture", &sldata->shadow_cascade_pool);
-#ifdef __APPLE__
+#ifdef WITH_METAL_BACKEND
     /* Metal requires all textures to be bound. */
     DRW_shgroup_uniform_texture_ref(grp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
     DRW_shgroup_uniform_texture_ref(
         grp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
 
-    GPUTexture *scatter_tex = stl->effects->volume_scatter;
-    GPUTexture *transmit_tex = stl->effects->volume_transmit;
-    if (!scatter_tex) {
-      GPUTexture *dummy = EEVEE_volumes_get_dummy_scatter();
-      scatter_tex = dummy ? dummy : e_data.dummy_3d;
-    }
-    if (!transmit_tex) {
-      GPUTexture *dummy = EEVEE_volumes_get_dummy_transmit();
-      transmit_tex = dummy ? dummy : e_data.dummy_3d;
-    }
-    DRW_shgroup_uniform_texture(grp, "inScattering", scatter_tex);
-    DRW_shgroup_uniform_texture(grp, "inTransmittance", transmit_tex);
+    /* Fix T (audit 2026-07-08): bind by reference, not value — see the surface-material
+     * volumetrics block above for the full rationale. The world background shgroup has the
+     * same NULL-at-setup / stale-pointer capture problem. */
+    DRW_shgroup_uniform_texture_ref(grp, "inScattering", &stl->effects->volume_scatter);
+    DRW_shgroup_uniform_texture_ref(grp, "inTransmittance", &stl->effects->volume_transmit);
 #endif
     DRW_shgroup_uniform_texture_ref(grp, "probePlanars", &vedata->txl->planar_pool);
     DRW_shgroup_uniform_texture_ref(grp, "probeCubes", &stl->g_data->light_cache->cube_tx.tex);
     DRW_shgroup_uniform_texture_ref(grp, "irradianceGrid", &stl->g_data->light_cache->grid_tx.tex);
     DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &vedata->txl->maxzbuffer);
+#ifdef WITH_METAL_BACKEND
+    /* Metal requires all declared samplers to be bound.
+     * eevee_legacy_studiolight_background inherits eevee_legacy_lightprobe_lib samplers
+     * which include horizonBuffer (FLOAT_2D) and planarDepth (DEPTH_2D_ARRAY).
+     * Bind actual textures or dummies to avoid Metal validation errors. */
+    {
+      GPUTexture *horizon_buf = stl->effects->gtao_horizons ?
+                                    stl->effects->gtao_horizons :
+                                    e_data.util_tex;
+      DRW_shgroup_uniform_texture(grp, "horizonBuffer", horizon_buf);
+    }
+    DRW_shgroup_uniform_texture(grp, "planarDepth", e_data.dummy_2d_array);
+#endif
     DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);
   }
 
@@ -675,7 +662,13 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
 
   {
     DRWState state_depth = DRW_STATE_WRITE_DEPTH | DRW_STATE_DEPTH_LESS_EQUAL;
+    /* DIAGNOSTIC: Changed DEPTH_EQUAL → DEPTH_LESS_EQUAL on Metal to isolate depth prepass
+     * precision mismatch. If objects appear, depth prepass/material pass depth values differ. */
+#ifdef WITH_METAL_BACKEND
+    DRWState state_shading = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_LESS_EQUAL | DRW_STATE_CLIP_PLANES;
+#else
     DRWState state_shading = DRW_STATE_WRITE_COLOR | DRW_STATE_DEPTH_EQUAL | DRW_STATE_CLIP_PLANES;
+#endif
     DRWState state_sss = DRW_STATE_WRITE_STENCIL | DRW_STATE_STENCIL_ALWAYS;
 
     EEVEE_PASS_CREATE(depth, state_depth);

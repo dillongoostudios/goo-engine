@@ -10,6 +10,13 @@
 
 #include "BLI_math_rotation.h"
 #include "BLI_math_geom.h"
+#include "BLI_string.h"
+
+#include "GPU_debug.hh"
+#include "GPU_texture.hh"
+
+#include <cstdio>
+#include <cstdlib>
 
 void EEVEE_shadows_cube_add(EEVEE_LightsInfo *linfo, EEVEE_Light *evli, Object *ob)
 {
@@ -140,15 +147,11 @@ static void eevee_ensure_cube_views(
 
   perspective_m4(winmat, -side, side, -side, side, near, far);
 
-#ifdef __APPLE__
-  /* Metal: Adjust projection matrix for depth range [0, 1] instead of [-1, 1].
-   * z_metal = (z_opengl + 1) / 2 = z_opengl * 0.5 + 0.5
-   * For perspective matrix: z_clip = winmat[2][2] * z + winmat[3][2]
-   * After Metal adjustment: z_clip_metal = z_clip * 0.5 + 0.5 */
-  winmat[2][2] *= 0.5f;
-  winmat[3][2] = winmat[3][2] * 0.5f + 0.5f;
-#endif
-
+  /* NOTE: Do NOT pre-adjust winmat for Metal depth range [0,1].
+   * mtl_shader_generator inserts z=(z+w)/2 automatically into the shadow vertex shader,
+   * converting OpenGL NDC [-1,1] to Metal NDC [0,1]. Pre-adjusting here causes a
+   * double-transform that compresses shadow depths to [0.5, 1.0], breaking comparisons.
+   * buffer_depth() already returns [0,1] values matching the Metal shadow map. */
   for (int i = 0; i < 6; i++) {
     float tmp[4][4];
     mul_m4_m4m4(tmp, cubefacemat[i], viewmat);
@@ -196,6 +199,9 @@ void EEVEE_shadows_draw_cubemap(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata,
   /* Render 6 faces separately: seems to be faster for the general case.
    * The only time it's more beneficial is when the CPU culling overhead
    * outweigh the instancing overhead. which is rarely the case. */
+  /* Face name lookup for Xcode debug labels. */
+  static const char *face_names[6] = {"+X", "-X", "+Y", "-Y", "+Z", "-Z"};
+
   for (int j = 0; j < 6; j++) {
     /* Optimization: Only render the needed faces. */
     /* Skip all but -Z face. */
@@ -212,14 +218,86 @@ void EEVEE_shadows_draw_cubemap(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata,
     // if (frustum_intersect(g_data->cube_views[j], main_view))
     //   continue;
 
-    DRW_view_set_active(g_data->cube_views[j]);
     int layer = cube_index * 6 + j;
+
+    /* Debug label visible in Xcode Metal Frame Debugger.
+     * HOW TO FIND: Filter Command Encoders by "GOOENG:ShadowCube:ZClipTest".
+     * Select face[5]=-Z layer[5] (the face where trapezoid acne appears).
+     *
+     * TEST B — z_clip sign error diagnosis:
+     *   1. Click the draw call → right panel "Bound Resources" → Vertex Function
+     *   2. Open Geometry Viewer (triangle icon in toolbar)
+     *   3. Click any vertex on the Cube top face
+     *   4. Check "gl_Position" (before injection) or "output._default_position_" (after):
+     *        gl_Position.z:
+     *          NORMAL  ≈ +6.34  → injection → out.z ≈ 6.38 → stored 0.993 ✓
+     *          BROKEN  ≈ -6.34  → injection → out.z ≈ 0.04 → stored 0.006 ← root cause
+     *   5. Depth Attachment → Texture Viewer → Slice=layer → verify stored depth:
+     *        Normal: ≈ 0.993-0.994 | Broken: ≈ 0.001-0.006
+     *   6. Bound Resources → "draw_view" UBO → ProjectionMatrix[2][2]:
+     *        Normal: ≈ -1.003 (negative)  |  Broken: ≈ +1.003 (positive = sign error)
+     *      ViewMatrix col[2] (3rd column, rows 0-2):
+     *        Normal: (0, 0, +1) for Neg-Z face  |  Broken: (0, 0, -1) */
+    /* ISS-011 Xcode anchor: this per-face group writes shadowCubePool layer[%d]. The face that
+     * carries the trapezoid acne is the -Z face (layer 5). Search "ISS011_SHADOWFACE" then open the
+     * Depth Attachment to read the STORED depth for that layer. */
+    char dbg_label[160];
+    SNPRINTF(dbg_label,
+             "ISS011_SHADOWFACE ShadowCube cube[%d] face[%d]=%s layer[%d] (=shadowCubePool render "
+             "target)",
+             cube_index,
+             j,
+             face_names[j],
+             layer);
+    GPU_debug_group_begin(dbg_label);
+
+    DRW_view_set_active(g_data->cube_views[j]);
     GPU_framebuffer_texture_layer_attach(sldata->shadow_fb, sldata->shadow_cube_pool, 0, layer, 0);
     GPU_framebuffer_texture_layer_attach(
         sldata->shadow_fb, sldata->shadow_cube_id_pool, 1, layer, 0);
     GPU_framebuffer_bind(sldata->shadow_fb);
     GPU_framebuffer_clear_depth(sldata->shadow_fb, 1.0f);
     DRW_draw_pass(psl->shadow_pass);
+
+    GPU_debug_group_end();
+  }
+
+  /* ISS-011 non-perturbing measurement (session7): read back stored shadow depths and
+   * compare to analytic window_z offline. Guarded by env GOO_DUMP_SHADOW so it is inert
+   * in normal runs. Read-only — does NOT touch the depth comparison knife-edge (unlike
+   * printf, which is a heisenbug here). Dumps the whole cube pool once for cube_index 0. */
+  if (cube_index == 0 && getenv("GOO_DUMP_SHADOW") != nullptr) {
+    const int res = linfo->shadow_cube_size;
+    const int total_layers = max_ii(linfo->num_cube_layer, 1) * 6;
+    const bool no_off = getenv("GOO_NO_SHADOW_OFFSET") != nullptr;
+    const char *bin_path = no_off ? "/tmp/goo_shadow_dump_nooff.bin" : "/tmp/goo_shadow_dump.bin";
+    float *data = static_cast<float *>(GPU_texture_read(sldata->shadow_cube_pool, GPU_DATA_FLOAT, 0));
+    if (data != nullptr) {
+      FILE *fb = fopen(bin_path, "wb");
+      if (fb) {
+        fwrite(data, sizeof(float), size_t(res) * res * total_layers, fb);
+        fclose(fb);
+      }
+      FILE *fm = fopen("/tmp/goo_shadow_dump.txt", "w");
+      if (fm) {
+        fprintf(fm, "res %d\nlayers %d\nnear %.9g\nfar %.9g\nbias %.9g\n",
+                res, total_layers, shdw_data->near, shdw_data->far, shdw_data->bias);
+        /* world->light matrix (already inverted in eevee_shadow_cube_data_update). */
+        for (int r = 0; r < 4; r++) {
+          fprintf(fm, "shadowmat %.9g %.9g %.9g %.9g\n",
+                  cube_data->shadowmat[r][0], cube_data->shadowmat[r][1],
+                  cube_data->shadowmat[r][2], cube_data->shadowmat[r][3]);
+        }
+        fprintf(fm, "light_pos %.9g %.9g %.9g\n",
+                cube_data->position[0], cube_data->position[1], cube_data->position[2]);
+        fclose(fm);
+      }
+      MEM_freeN(data);
+      printf("[GOO_DUMP_SHADOW] wrote /tmp/goo_shadow_dump.bin (res=%d layers=%d) "
+             "near=%.6g far=%.6g bias=%.6g\n",
+             res, total_layers, shdw_data->near, shdw_data->far, shdw_data->bias);
+      fflush(stdout);
+    }
   }
 
   BLI_BITMAP_SET(&linfo->sh_cube_update[0], cube_index, false);

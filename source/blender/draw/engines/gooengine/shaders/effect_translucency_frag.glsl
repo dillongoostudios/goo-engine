@@ -116,7 +116,10 @@ vec3 light_translucent(LightData ld, vec3 P, vec3 N, vec4 l_vector, vec2 rand, f
      * FIXME This is only correct if l_right is the same right vector used for shadow-map creation.
      * This won't work if the shadow matrix is rotated (soft shadows).
      * TODO: precompute. */
-    float unit_world_in_uv_space = length(mat3(scascade(data_id).shadowmat[int(id)]) * ld.l_right);
+    /* Fix W (ISS-022): `mat3(mat4)` truncation has no MSL equivalent (compile error on Metal).
+     * `to_float3x3()` is defined by both GL and MSL backend defines and is value-identical. */
+    float unit_world_in_uv_space = length(to_float3x3(scascade(data_id).shadowmat[int(id)]) *
+                                          ld.l_right);
     float dx_scale = 2.0 * ofs.x / unit_world_in_uv_space;
 
     d *= range;

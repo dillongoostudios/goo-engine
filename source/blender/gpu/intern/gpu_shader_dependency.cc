@@ -469,6 +469,30 @@ void gpu_shader_dependency_init()
       }
     }
   }
+
+  /* GooEngine Metal debug (session6, 2026-06-01): register printf formats from GooEngine's
+   * private draw-engine shader libs. Those libs are baked by datatoc (which DOES run the GLSL
+   * preprocessor, embedding the printf rewrite + format hash) but are NOT in the datatoc source
+   * lists parsed above, so their format hashes never land in g_formats and printf_end() would
+   * dereference a null Map entry. Registering here (at GPU init, before any frame) also makes
+   * gpu_shader_dependency_has_printf() true from the first frame so the printf SSBO is created
+   * and bound. The hash is computed with the same function the preprocessor uses
+   * (Preprocessor::hash_string of the *quoted* literal -- see static_strings_suffix), so it stays
+   * in sync automatically if the format string changes. Keep the two strings below identical
+   * (quoted vs unquoted) to the printf() in shaders/lights_lib.glsl. */
+  {
+    /* Keep these two strings byte-identical (unquoted vs quoted) to the printf() literal in
+     * shaders/lights_lib.glsl (sample_cube_shadow ISS-011 diagnostic). */
+    const char *goo_fmt =
+        "[ACNE] f=(%f,%f) distN=%f distB=%f stored=%f gap=%f vis=%f slope=%f face=%f\\n";
+    const char *goo_fmt_quoted =
+        "\"[ACNE] f=(%f,%f) distN=%f distB=%f stored=%f gap=%f vis=%f slope=%f face=%f\\n\"";
+    /* Replicate Preprocessor::hash_string (private): 64-bit FNV folded to 32 bits. The public
+     * Preprocessor::hash() is the same FNV used to produce the embedded format hash. */
+    const uint64_t h64 = shader::Preprocessor::hash(goo_fmt_quoted);
+    const uint32_t format_hash = uint32_t(h64 ^ (h64 >> 32));
+    shader::gpu_shader_dependency_register_printf_format(format_hash, goo_fmt);
+  }
 #endif
 
   if (GCaps.line_directive_workaround) {
@@ -526,6 +550,56 @@ bool gpu_shader_dependency_has_printf()
 const PrintfFormat &gpu_shader_dependency_get_printf_format(uint32_t format_hash)
 {
   return g_formats->lookup(format_hash);
+}
+
+bool gpu_shader_dependency_has_printf_format(uint32_t format_hash)
+{
+  return (g_formats != nullptr) && g_formats->contains(format_hash);
+}
+
+void gpu_shader_dependency_register_printf_format(uint32_t format_hash, const char *format_in)
+{
+  if (g_formats == nullptr || g_formats->contains(format_hash)) {
+    return;
+  }
+  /* Mirror of the format parsing in parse_string()'s add_format() lambda above, so the produced
+   * argument blocks match exactly what printf_end() expects to decode from the SSBO. */
+  std::string format = format_in;
+
+  PrintfFormat fmt;
+  fmt.format_str = format;
+
+  /* Escape characters replacement. Do the most common ones. */
+  format = std::regex_replace(format, std::regex(R"(\\n)"), "\n");
+  format = std::regex_replace(format, std::regex(R"(\\v)"), "\v");
+  format = std::regex_replace(format, std::regex(R"(\\t)"), "\t");
+  format = std::regex_replace(format, std::regex(R"(\\')"), "\'");
+  format = std::regex_replace(format, std::regex(R"(\\")"), "\"");
+  format = std::regex_replace(format, std::regex(R"(\\\\)"), "\\");
+
+  PrintfFormat::Block::ArgumentType type = PrintfFormat::Block::ArgumentType::NONE;
+  int64_t start = 0, end = 0;
+  while ((end = format.find_first_of('%', start + 1)) != -1) {
+    fmt.format_blocks.append({type, format.substr(start, end - start)});
+    switch (format[end + 1]) {
+      case 'x':
+      case 'u':
+        type = PrintfFormat::Block::ArgumentType::UINT;
+        break;
+      case 'd':
+        type = PrintfFormat::Block::ArgumentType::INT;
+        break;
+      case 'f':
+        type = PrintfFormat::Block::ArgumentType::FLOAT;
+        break;
+      default:
+        break;
+    }
+    start = end;
+  }
+  fmt.format_blocks.append({type, format.substr(start, format.size() - start)});
+
+  g_formats->add(format_hash, fmt);
 }
 
 BuiltinBits gpu_shader_dependency_get_builtins(const StringRefNull shader_source_name)
