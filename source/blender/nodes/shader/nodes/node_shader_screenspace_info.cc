@@ -7,12 +7,9 @@
  * \ingroup shdnodes
  *
  * Screenspace Info node (ported from Goo Engine, SH_NODE_SCREENSPACE_INFO).
- * Scene Depth samples EEVEE's depth buffer (hiz_tx) and matches Goo's output
- * (verified against Goo 4.4). Scene Color samples the previous-layer radiance
- * texture, which EEVEE-Next binds only for transparent Shader-to-RGB
- * materials (see `screenspace_info_eval` in eevee_nodetree_lib.bsl.hh); this
- * matches Goo, where Scene Color likewise only has values behind transparent
- * layers. Other pipelines return black.
+ * Raytraced Transmission enables current-sample scene-buffer reads for opaque,
+ * hybrid and forward surfaces. The engine supplies immutable snapshots, separate
+ * from native ray-tracing history and Shader-to-RGB resources.
  */
 
 #include "node_util.hh"
@@ -35,7 +32,12 @@ static int node_shader_gpu_screenspace_info(GPUMaterial *mat,
                                             GPUNodeStack *in,
                                             GPUNodeStack *out)
 {
-  GPU_material_flag_set(mat, GPU_MATFLAG_DIFFUSE);
+  if (out[0].hasoutput) {
+    GPU_material_flag_set(mat, GPU_MATFLAG_GOO_SCREENSPACE_COLOR);
+  }
+  if (out[1].hasoutput) {
+    GPU_material_flag_set(mat, GPU_MATFLAG_GOO_SCREENSPACE_DEPTH);
+  }
   /* Default the View Position input to the fragment's own view position (Goo's view_position_get),
    * so an unlinked node samples its own pixel; linked positions sample elsewhere (e.g. DepthRim). */
   if (!in[0].link) {

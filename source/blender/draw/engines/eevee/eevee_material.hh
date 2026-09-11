@@ -90,7 +90,8 @@ static inline void material_type_from_shader_uuid(uint64_t shader_uuid,
                                                   eMaterialThickness &thickness_type,
                                                   bool &transparent_shadows,
                                                   bool &use_shadow_id,
-                                                  bool &legacy_opaque)
+                                                  bool &legacy_opaque,
+                                                  bool &screen_refraction)
 {
   const uint64_t geometry_mask = ((1u << 4u) - 1u);
   const uint64_t pipeline_mask = ((1u << 4u) - 1u);
@@ -103,6 +104,7 @@ static inline void material_type_from_shader_uuid(uint64_t shader_uuid,
   transparent_shadows = (shader_uuid >> 10u) & 1u;
   use_shadow_id = (shader_uuid >> 11u) & 1u;
   legacy_opaque = (shader_uuid >> 12u) & 1u;
+  screen_refraction = (shader_uuid >> 13u) & 1u;
 }
 
 static inline uint64_t shader_uuid_from_material_type(
@@ -128,6 +130,7 @@ static inline uint64_t shader_uuid_from_material_type(
   uuid |= transparent_shadows << 10;
   uuid |= uint64_t(use_shadow_id) << 11;
   uuid |= uint64_t(legacy_opaque) << 12;
+  uuid |= uint64_t((blend_flags & MA_BL_SS_REFRACTION) != 0) << 13;
   return uuid;
 }
 

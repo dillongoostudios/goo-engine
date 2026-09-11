@@ -241,6 +241,8 @@
 #define GBUF_HEADER_TEX_SLOT 19
 /* Full 32-bit caster resource ID atlas, sharing the virtual-shadow physical page layout. */
 #define SHADOW_ATLAS_ID_TEX_SLOT 20
+#define GOO_SCENE_COLOR_TEX_SLOT 21
+#define GOO_SCENE_DEPTH_TEX_SLOT 22
 
 /* Images. */
 #define RBUFS_COLOR_SLOT 0
@@ -278,6 +280,7 @@
 #define VELOCITY_CAMERA_CURR_BUF 5
 #define VELOCITY_CAMERA_NEXT_BUF 6
 #define CLIP_PLANE_BUF 7
+#define GOO_SCREENSPACE_BUF_SLOT 8
 /* Only during subsurface scattering */
 #define SUBSURFACE_BUF_SLOT 4
 

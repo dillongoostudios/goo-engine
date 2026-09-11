@@ -33,7 +33,6 @@ void BackgroundPipeline::sync(GPUMaterial *gpumat,
                               const float background_opacity,
                               const float background_blur)
 {
-  Manager &manager = *inst_.manager;
   RenderBuffers &rbufs = inst_.render_buffers;
 
   clear_ps_.init();
@@ -50,12 +49,21 @@ void BackgroundPipeline::sync(GPUMaterial *gpumat,
   /* To allow opaque pass rendering over it. */
   clear_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
 
+  background_opacity_ = background_opacity;
+  background_blur_ = background_blur;
+  sync_world_pass(world_ps_, gpumat);
+}
+
+void BackgroundPipeline::sync_world_pass(PassSimple &world_ps_, GPUMaterial *gpumat)
+{
+  Manager &manager = *inst_.manager;
+  RenderBuffers &rbufs = inst_.render_buffers;
   world_ps_.init();
   world_ps_.state_set(DRW_STATE_WRITE_COLOR | DRW_STATE_CLIP_CONTROL_UNIT_RANGE |
                       DRW_STATE_DEPTH_EQUAL);
   world_ps_.material_set(manager, gpumat, false, inst_.anisotropic_filtering);
-  world_ps_.push_constant("world_opacity_fade", background_opacity);
-  world_ps_.push_constant("world_background_blur", square_f(background_blur));
+  world_ps_.push_constant("world_opacity_fade", background_opacity_);
+  world_ps_.push_constant("world_background_blur", square_f(background_blur_));
   SphereProbeData &world_data = *static_cast<SphereProbeData *>(&inst_.light_probes.world_sphere_);
   world_ps_.push_constant("world_coord_packed", reinterpret_cast<int4 *>(&world_data.atlas_coord));
   world_ps_.bind_texture("utility_tx", inst_.pipelines.utility_tx);
@@ -72,6 +80,17 @@ void BackgroundPipeline::sync(GPUMaterial *gpumat,
   world_ps_.draw_procedural(GPU_PRIM_TRIS, 1, 3);
   /* To allow opaque pass rendering over it. */
   world_ps_.barrier(GPU_BARRIER_SHADER_IMAGE_ACCESS);
+}
+
+void BackgroundPipeline::sync_scene_capture()
+{
+  sync_world_pass(scene_capture_ps_, inst_.world.scene_capture_material_get());
+}
+
+void BackgroundPipeline::render_scene_capture(View &view, Framebuffer &framebuffer)
+{
+  framebuffer.bind();
+  inst_.manager->submit(scene_capture_ps_, view);
 }
 
 void BackgroundPipeline::clear(View &view)
@@ -329,6 +348,9 @@ PassMain::Sub *Prepass::add(blender::Material *blender_mat,
 
   PassMain::Sub &sub = subs_[hide_from_raycast][double_sided][has_motion][write_id]->sub(
       GPU_material_get_name(gpumat));
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(sub, false);
+  }
   if (has_raycast) {
     /* NOTE: Bound per subpass since material textures could override these slots. */
     sub.bind_texture(RAYCAST_DEPTH_TEX_SLOT,
@@ -519,7 +541,11 @@ PassMain::Sub *ForwardPipeline::prepass_opaque_add(blender::Material *blender_ma
    * is no mix shader (could do better constant folding but that's expensive). */
 
   has_opaque_ = true;
-  return prepass_.add(blender_mat, gpumat, has_motion, true);
+  PassMain::Sub *pass = prepass_.add(blender_mat, gpumat, has_motion, true);
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(*pass);
+  }
+  return pass;
 }
 
 PassMain::Sub *ForwardPipeline::material_opaque_add(const Object *ob,
@@ -533,7 +559,11 @@ PassMain::Sub *ForwardPipeline::material_opaque_add(const Object *ob,
                   (ob->base_flag & BASE_HOLDOUT) || (ob->visibility_flag & OB_HOLDOUT);
   PassMain::Sub *pass = get_opaque_subpass(blender_mat, gpumat);
   has_opaque_ = true;
-  return &pass->sub(GPU_material_get_name(gpumat));
+  PassMain::Sub &sub = pass->sub(GPU_material_get_name(gpumat));
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(sub);
+  }
+  return &sub;
 }
 
 void ForwardPipeline::transparent_add(const Object *ob,
@@ -554,6 +584,7 @@ void ForwardPipeline::transparent_add(const Object *ob,
     material_state |= DRW_STATE_CULL_BACK;
   }
 
+  inst_.pipelines.goo_screenspace.register_material(blender_mat, gpumat, MAT_PIPE_FORWARD);
   has_transparent_ = true;
   has_colored_transparency_ |= GPU_material_flag_get(gpumat,
                                                      GPU_MATFLAG_TRANSPARENT_MAYBE_COLORED);
@@ -586,6 +617,9 @@ void ForwardPipeline::transparent_add(const Object *ob,
       pass->bind_texture(OBJECT_ID_TEX_SLOT, &inst_.render_buffers.object_id_tx);
       pass->bind_texture(PREPASS_NORMAL_TEX_SLOT, &inst_.render_buffers.prepass_normal_tx);
     }
+    if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+      inst_.pipelines.goo_screenspace.bind(*pass);
+    }
     r_prepass_subpass = pass;
   }
 
@@ -602,6 +636,9 @@ void ForwardPipeline::transparent_add(const Object *ob,
       pass->bind_texture(RAYCAST_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
       pass->bind_texture(OBJECT_ID_TEX_SLOT, &inst_.render_buffers.object_id_tx);
       pass->bind_texture(PREPASS_NORMAL_TEX_SLOT, &inst_.render_buffers.prepass_normal_tx);
+    }
+    if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+      inst_.pipelines.goo_screenspace.bind(*pass);
     }
     r_material_subpass = pass;
   }
@@ -1042,7 +1079,11 @@ PassMain::Sub *DeferredLayer::prepass_add(blender::Material *blender_mat,
                                           bool has_motion,
                                           bool hide_from_raycast)
 {
-  return prepass_.add(blender_mat, gpumat, has_motion, hide_from_raycast);
+  PassMain::Sub *pass = prepass_.add(blender_mat, gpumat, has_motion, hide_from_raycast);
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(*pass);
+  }
+  return pass;
 }
 
 PassMain::Sub *DeferredLayer::material_add(blender::Material *blender_mat, GPUMaterial *gpumat)
@@ -1059,6 +1100,9 @@ PassMain::Sub *DeferredLayer::material_add(blender::Material *blender_mat, GPUMa
 
   PassMain::Sub *pass = get_gbuffer_subpass(blender_mat, gpumat);
   PassMain::Sub *material_pass = &pass->sub(GPU_material_get_name(gpumat));
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(*material_pass);
+  }
   /* Set stencil for some deferred specialized shaders. */
   uint8_t material_stencil_bits = 0u;
   if (blender_mat->blend_flag & MA_BL_THICKNESS_FROM_SHADOW) {
@@ -1276,6 +1320,8 @@ void DeferredPipeline::render(View & /*main_view*/,
                                      rt_buffer_opaque_layer,
                                      feedback_tx);
   GPU_debug_group_end();
+
+  opaque_layer_.inst_.pipelines.goo_screenspace.capture_opaque(render_view, extent);
 
   GPU_debug_group_begin("Deferred.Refract");
   feedback_tx = refraction_layer_.render(render_view,
@@ -1565,7 +1611,11 @@ PassMain::Sub *DeferredProbePipeline::material_add(blender::Material *blender_ma
   opaque_layer_.closure_count_ = max_ii(opaque_layer_.closure_count_, count_bits_i(closure_bits));
 
   PassMain::Sub *pass = opaque_layer_.get_gbuffer_subpass(blender_mat, gpumat);
-  return &pass->sub(GPU_material_get_name(gpumat));
+  PassMain::Sub &sub = pass->sub(GPU_material_get_name(gpumat));
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(sub, false);
+  }
+  return &sub;
 }
 
 void DeferredProbePipeline::render(View &view,
@@ -1665,7 +1715,11 @@ PassMain::Sub *PlanarProbePipeline::material_add(blender::Material *blender_mat,
   closure_count_ = max_ii(closure_count_, count_bits_i(closure_bits));
 
   PassMain::Sub *pass = get_gbuffer_subpass(blender_mat, gpumat);
-  return &pass->sub(GPU_material_get_name(gpumat));
+  PassMain::Sub &sub = pass->sub(GPU_material_get_name(gpumat));
+  if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
+    inst_.pipelines.goo_screenspace.bind(sub, false);
+  }
+  return &sub;
 }
 
 void PlanarProbePipeline::render(View &view,

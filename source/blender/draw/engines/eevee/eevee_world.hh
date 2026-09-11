@@ -44,6 +44,8 @@ class World {
 
   /* Used to detect if world change. */
   blender::World *prev_original_world = nullptr;
+  blender::World *surface_world_ = nullptr;
+  bNodeTree *surface_tree_ = nullptr;
 
   /* Used when the scene doesn't have a world. */
   blender::World *default_world_ = nullptr;
@@ -65,6 +67,7 @@ class World {
 
   /* Setup and request the background shader. */
   void sync();
+  GPUMaterial *scene_capture_material_get();
 
   bool has_volume() const
   {

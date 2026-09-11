@@ -64,10 +64,15 @@ What Was Ported and How
   Set Depth, Curvature, Light Info, Hexagon Texture, Twirl, Water Ripples,
   and OKLab Color Ramp.
 - **Set Depth** rewritten for the reverse-Z depth convention of EEVEE-Next.
-- **Screenspace Info**: Scene Depth samples the EEVEE-Next depth buffer (hiz_tx); Scene
-  Color samples the previous-layer radiance texture for transparent Shader-to-RGB
-  materials (the same source screen-space refraction reads) — matching Goo, where Scene
-  Color likewise only has values behind transparent layers.
+- **Screenspace Info**: with scene Ray Tracing and material Raytraced Transmission enabled,
+  Scene Color/Depth use lazy, immutable current-sample camera snapshots. This also works for
+  opaque direct-color/emission and Shader-to-RGB materials, without fake transparency or
+  diffuse closures. Deferred/Hybrid sample after ordinary opaque geometry; Forward color
+  samples after opaque refraction and World, before volume resolve. The private deferred
+  World fill cannot write AOV/Environment passes. Both outputs honor linked View Position;
+  depth handles reverse-Z, color is filtered/mipmapped, and camera snapshots are never
+  exposed to probe/shadow/volume/world shaders. No consumers means no full-size snapshot,
+  copy, mip generation or extra World draw. Non-refraction Scene Depth keeps its Hi-Z path.
 - **Curvature** ported with the original 8-direction sampling algorithm, and screen-space
   depth sampling aligned with Goo's output.
 - **OKLab Color Ramp** aligned with Goo's render path (easing behavior and linear output).
@@ -80,11 +85,12 @@ What Was Ported and How
   Goo Shader Info outputs, not native EEVEE light linking or ordinary BSDF lighting.
   Shader Add menu regrouped into Goo categories.
 - **Legacy material semantics** restored through file versioning:
-  - `MA_LEGACY_OPAQUE` (legacy `blend_method == Opaque`) is tagged at load time, gated by
-    "material node tree uses a Goo node OR file version < 4.2" (file subversion 502.47,
-    with clear-and-recompute). This keeps Goo scenes force-opaque where intended while
-    not breaking transparent materials in files saved by official Blender (whose legacy
-    DNA fields are zero-filled and would otherwise be misread).
+  - `MA_LEGACY_OPAQUE` preserves opaque external coverage while Transparent BSDF weights
+    still participate in legacy internal alpha-reciprocal closure/emission recovery.
+    The 502.48 migration clears and recomputes the flag using legacy EEVEE provenance,
+    the Goo 4.4 DNA fingerprint or recursive Goo node groups, never the old SOLID value
+    alone. RNA reads report OPAQUE without side effects; explicitly changing blend/render
+    method exits compatibility mode. Native EEVEE-Next transparent cards remain modern.
   - Legacy **Shadow Mode = None** (`blend_shadow`) is honored at render time so shadow
     proxy workflows from Goo scenes keep working.
   - Files older than Blender 2.80 (whose SDNA lacks `Material::blend_shadow`) are
@@ -127,7 +133,7 @@ Known Boundaries and Their Handling
   value and later resolved. The engine defect is documented; callers must write geometry
   nodes modifier inputs as `inputs[identifier]["value"] = value` (never overwrite the
   `{value, type}` group), which avoids the code path entirely.
-- **File subversions 502.45-48** are used by this fork. If a future official 5.2.x LTS
+- **File subversions 502.45-49** are used by this fork. If a future official 5.2.x LTS
   release uses the same subversion numbers for its own versioning, files saved by this
   fork could skip those official versioning blocks.
 
@@ -168,3 +174,18 @@ collections are persistent ID properties; mask fields are derived caches resynch
 after load/import, undo/redo, and before render. This does not change 502.48's OPAQUE
 provenance migration. Lights beyond the Shader Info bridge's per-fragment record limit
 retain the pre-existing always-on overflow policy.
+
+Screen Space Info regression
+----------------------------
+
+`tests/python/goo_screenspace.py` builds an isolated split-background receiver fixture in a
+fresh Blender process. It requires `--output <new-directory>` after Blender's `--` separator.
+The bridge's `tests/01_节点移植验证/run_screenspace_matrix.py` orchestrates independent processes,
+strict non-black ROI oracles, reverse-Z depth, linked offsets, World/AOV, volume, runtime
+material/global toggles, resize, probes, legacy files and unchanged ordinary-pixel controls.
+Use host Python with NumPy and OpenEXR for the complete matrix. `--suite smoke` needs neither
+host image library and covers six direct-color/World cases. Diagnostic value 734 reports
+CPU snapshot submission counts; normal rendering performs no statistical GPU atomics.
+Screen Space Info is a camera-buffer effect, not physically correct transparent geometry:
+it cannot reveal off-screen surfaces, its own opaque-refraction layer, or later BLENDED
+surfaces. This fix does not add ordinary BSDF material Light Group filtering.

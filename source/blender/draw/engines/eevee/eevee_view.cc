@@ -144,6 +144,8 @@ void ShadingView::render()
 
   inst_.volume.draw_prepass(main_view_);
 
+  inst_.pipelines.goo_screenspace.begin_view();
+
   inst_.pipelines.deferred.render(main_view_,
                                   render_view_,
                                   prepass_fb_,
@@ -156,6 +158,8 @@ void ShadingView::render()
   inst_.pipelines.background.render(render_view_, combined_fb_);
 
   inst_.gbuffer.release();
+
+  inst_.pipelines.goo_screenspace.capture_forward(extent_);
 
   inst_.volume.draw_compute(main_view_, extent_);
 
@@ -178,6 +182,7 @@ void ShadingView::render()
   gpu::Texture *combined_final_tx = render_postfx(rbufs.combined_tx);
   inst_.film.accumulate(jitter_view_, combined_final_tx);
 
+  inst_.pipelines.goo_screenspace.end_view();
   rbufs.release();
   postfx_tx_.release();
 

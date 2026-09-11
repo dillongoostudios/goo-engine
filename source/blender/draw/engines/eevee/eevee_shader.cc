@@ -961,6 +961,7 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
   bool transparent_shadows;
   bool use_shadow_id;
   bool legacy_opaque;
+  bool screen_refraction;
   material_type_from_shader_uuid(shader_uuid,
                                  pipeline_type,
                                  geometry_type,
@@ -968,10 +969,39 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
                                  thickness_type,
                                  transparent_shadows,
                                  use_shadow_id,
-                                 legacy_opaque);
+                                 legacy_opaque,
+                                 screen_refraction);
 
   GPUCodegenOutput &codegen = *codegen_;
   ShaderCreateInfo &info = *reinterpret_cast<ShaderCreateInfo *>(codegen.create_info);
+
+  if (geometry_type == MAT_GEOM_WORLD && ((shader_uuid >> 14u) & 1u)) {
+    info.define("MAT_GOO_SCENE_CAPTURE");
+  }
+
+  const bool screen_surface = geometry_type_has_surface(geometry_type) &&
+                              ELEM(pipeline_type,
+                                   MAT_PIPE_DEFERRED,
+                                   MAT_PIPE_FORWARD,
+                                   MAT_PIPE_PREPASS_DEFERRED,
+                                   MAT_PIPE_PREPASS_DEFERRED_VELOCITY,
+                                   MAT_PIPE_PREPASS_FORWARD,
+                                   MAT_PIPE_PREPASS_FORWARD_VELOCITY,
+                                   MAT_PIPE_PREPASS_OVERLAP,
+                                   MAT_PIPE_PREPASS_PLANAR);
+  if (screen_surface && screen_refraction &&
+      GPU_material_flag_get(gpumat,
+                            GPU_MATFLAG_GOO_SCREENSPACE_COLOR | GPU_MATFLAG_GOO_SCREENSPACE_DEPTH))
+  {
+    info.additional_info("eevee_GooScreenSpace");
+    info.define("MAT_GOO_SCREENSPACE");
+    if (GPU_material_flag_get(gpumat, GPU_MATFLAG_GOO_SCREENSPACE_COLOR)) {
+      info.define("MAT_GOO_SCREENSPACE_COLOR");
+    }
+    if (GPU_material_flag_get(gpumat, GPU_MATFLAG_GOO_SCREENSPACE_DEPTH)) {
+      info.define("MAT_GOO_SCREENSPACE_DEPTH");
+    }
+  }
 
   /* WORKAROUND: Add new ob attr buffer. */
   if (GPU_material_uniform_attributes(gpumat) != nullptr) {
@@ -1540,8 +1570,6 @@ static GPUPass *pass_replacement_cb(void *void_thunk, GPUMaterial *mat)
 
   CallbackThunk *thunk = static_cast<CallbackThunk *>(void_thunk);
 
-  const blender::Material *blender_mat = GPU_material_get_material(mat);
-
   uint64_t shader_uuid = GPU_material_uuid_get(mat);
 
   eMaterialPipeline pipeline_type;
@@ -1551,6 +1579,7 @@ static GPUPass *pass_replacement_cb(void *void_thunk, GPUMaterial *mat)
   bool transparent_shadows;
   bool use_shadow_id;
   bool legacy_opaque;
+  bool screen_refraction;
   material_type_from_shader_uuid(shader_uuid,
                                  pipeline_type,
                                  geometry_type,
@@ -1558,7 +1587,8 @@ static GPUPass *pass_replacement_cb(void *void_thunk, GPUMaterial *mat)
                                  thickness_type,
                                  transparent_shadows,
                                  use_shadow_id,
-                                 legacy_opaque);
+                                 legacy_opaque,
+                                 screen_refraction);
 
   bool is_shadow_pass = pipeline_type == eMaterialPipeline::MAT_PIPE_SHADOW;
   bool is_prepass = ELEM(pipeline_type,
@@ -1573,7 +1603,7 @@ static GPUPass *pass_replacement_cb(void *void_thunk, GPUMaterial *mat)
                                  displacement_type != eMaterialDisplacement::MAT_DISPLACEMENT_BUMP;
   bool has_transparency = gpu_material_is_transparent(mat);
   bool has_shadow_transparency = has_transparency && transparent_shadows;
-  bool has_raytraced_transmission = blender_mat && (blender_mat->blend_flag & MA_BL_SS_REFRACTION);
+  bool has_raytraced_transmission = screen_refraction;
   bool has_raycast = GPU_material_flag_get(mat, GPU_MATFLAG_RAYCAST);
   /* Goo Set Depth writes a per-pixel gl_FragDepth, so its prepass must be compiled per-material
    * (with the Set Depth variant) and cannot reuse the default depth-only prepass. */
@@ -1658,9 +1688,11 @@ GPUMaterial *ShaderModule::material_shader_get(blender::Material *blender_mat,
 GPUMaterial *ShaderModule::world_shader_get(blender::World *blender_world,
                                             bNodeTree *nodetree,
                                             eMaterialPipeline pipeline_type,
-                                            bool deferred_compilation)
+                                            bool deferred_compilation,
+                                            bool scene_capture)
 {
   uint64_t shader_uuid = shader_uuid_from_material_type(pipeline_type, MAT_GEOM_WORLD);
+  shader_uuid |= uint64_t(scene_capture) << 14;
 
   CallbackThunk thunk = {this, nullptr};
 

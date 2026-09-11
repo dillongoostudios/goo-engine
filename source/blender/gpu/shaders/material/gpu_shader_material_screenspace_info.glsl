@@ -2,14 +2,8 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-/* Screenspace Info node (ported from Goo Engine, SH_NODE_SCREENSPACE_INFO).
- * Calls the EEVEE engine function `screenspace_info_eval` (in
- * eevee_nodetree_lib.bsl.hh). Scene Depth is sampled from the scene depth
- * buffer (hiz_tx). Scene Color samples the previous-layer radiance texture
- * (`previous_layer_radiance_tx`), which EEVEE-Next only binds for transparent
- * Shader-to-RGB materials (the same source screen-space refraction reads) --
- * matching Goo's capability, where Scene Color also only has values behind
- * transparent/refractive layers. Other pipelines return black. */
+/* Goo Screen Space Info reads engine-owned current-sample snapshots when Raytraced
+ * Transmission is enabled. It does not imply a transparent or refraction closure. */
 
 #include "gpu_shader_material_transform_utils.glsl"
 

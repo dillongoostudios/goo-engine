@@ -85,6 +85,9 @@ enum eGPUMaterialFlag {
   /* Goo Engine: material contains a Shader Info node; gates the per-fragment light-record
    * bridge loop in the forward/hybrid surface shaders. */
   GPU_MATFLAG_GOO_SHADER_INFO = (1 << 13),
+  /* Goo screen-buffer consumers, not physical diffuse/refraction closures. */
+  GPU_MATFLAG_GOO_SCREENSPACE_COLOR = (1 << 14),
+  GPU_MATFLAG_GOO_SCREENSPACE_DEPTH = (1 << 15),
 
   GPU_MATFLAG_VOLUME_SCATTER = (1 << 16),
   GPU_MATFLAG_VOLUME_ABSORPTION = (1 << 17),

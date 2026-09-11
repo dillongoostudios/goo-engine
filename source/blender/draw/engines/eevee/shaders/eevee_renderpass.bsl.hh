@@ -16,16 +16,20 @@ struct RenderPassOutput {
 
   void store_color(int2 texel, int id, float4 color)
   {
+#ifndef MAT_GOO_SCENE_CAPTURE
     if (id >= 0) {
       imageStoreFast(rp_color_img, int3(texel, id), color);
     }
+#endif
   }
 
   void store_value(int2 texel, int id, float value)
   {
+#ifndef MAT_GOO_SCENE_CAPTURE
     if (id >= 0) {
       imageStoreFast(rp_value_img, int3(texel, id), float4(value));
     }
+#endif
   }
 
   void clear_aovs([[resource_table]] const Uniform &uni, int2 texel)

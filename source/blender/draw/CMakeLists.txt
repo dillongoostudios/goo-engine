@@ -98,6 +98,7 @@ set(SRC
   engines/eevee/eevee_depth_of_field.cc
   engines/eevee/eevee_engine.cc
   engines/eevee/eevee_film.cc
+  engines/eevee/eevee_goo_screenspace.cc
   engines/eevee/eevee_hizbuffer.cc
   engines/eevee/eevee_instance.cc
   engines/eevee/eevee_light.cc
@@ -195,6 +196,7 @@ set(SRC
   engines/eevee/eevee_engine.h
   engines/eevee/eevee_film.hh
   engines/eevee/eevee_gbuffer.hh
+  engines/eevee/eevee_goo_screenspace.hh
   engines/eevee/eevee_hizbuffer.hh
   engines/eevee/eevee_instance.hh
   engines/eevee/eevee_light.hh
@@ -401,6 +403,7 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_geom_types_lib.bsl.hh
   engines/eevee/shaders/eevee_geom_volume.bsl.hh
   engines/eevee/shaders/eevee_geom_world.bsl.hh
+  engines/eevee/shaders/eevee_goo_screenspace.bsl.hh
   engines/eevee/shaders/eevee_hiz.bsl.hh
   engines/eevee/shaders/eevee_hiz_update.bsl.hh
   engines/eevee/shaders/eevee_fast_gi.bsl.hh
@@ -493,6 +496,7 @@ set(GLSL_SRC
   engines/eevee/eevee_defines.hh
   engines/eevee/eevee_depth_of_field_shared.hh
   engines/eevee/eevee_film_shared.hh
+  engines/eevee/eevee_goo_screenspace_shared.hh
   engines/eevee/eevee_hizbuffer_shared.hh
   engines/eevee/eevee_light_shared.hh
   engines/eevee/eevee_lightprobe_shared.hh

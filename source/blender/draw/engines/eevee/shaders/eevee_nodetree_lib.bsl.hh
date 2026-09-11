@@ -11,11 +11,13 @@
 #include "draw_model.bsl.hh"
 #include "draw_view.bsl.hh"
 #include "eevee_bxdf_lut_lib.bsl.hh"
+#include "eevee_goo_screenspace.bsl.hh"
 #include "eevee_hiz.bsl.hh"
 #include "eevee_nodetree_closures_lib.glsl"
 #include "eevee_pipeline.bsl.hh"
 #include "eevee_ray_trace_screen_lib.bsl.hh"
 #include "eevee_renderpass.bsl.hh"
+#include "eevee_reverse_z_lib.bsl.hh"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_uniform.bsl.hh"
 #include "eevee_utility_tx.bsl.hh"
@@ -416,38 +418,41 @@ void screenspace_info_eval([[maybe_unused]] float3 view_position,
                            float4 &scene_color,
                            float &scene_depth)
 {
-  /* clang-format off */ /* Multi-line macros would break line count. */
-  [[resource_table]] [[maybe_unused]] const eevee::HiZ &hiz = resource_table_get(eevee::HiZ);
-  [[resource_table]] [[maybe_unused]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
-  [[resource_table]] [[maybe_unused]] const draw::View &views = resource_table_get(draw::View);
-  /* clang-format on */
-
   scene_color = float4(0.0f, 0.0f, 0.0f, 1.0f);
   scene_depth = 0.0f;
 
-#if defined(GPU_FRAGMENT_SHADER) && !defined(MAT_DEPTH) && !defined(MAT_SHADOW) && \
-    !defined(MAT_GEOM_WORLD)
+#if defined(GPU_FRAGMENT_SHADER) && !defined(MAT_SHADOW) && !defined(MAT_GEOM_WORLD)
+  /* Both outputs use the linked position, not gl_FragCoord for color. */
+  [[resource_table]] const draw::View &views = resource_table_get(draw::View);
   const ViewMatrices view = views.get(0);
-  int2 texel = int2(gl_FragCoord.xy);
-  /* Goo `screenspace_info`: project the (Goo-convention, +Z-forward) view position to screen UV
-   * and sample the scene depth there -- matches get_uvs_from_view(viewPos * (1,1,-1)). The
-   * unlinked default (view_position_get) is this fragment's own position, so it samples its own
-   * pixel. */
   float2 uv = view.point_view_to_ndc(view_position * float3(1.0f, 1.0f, -1.0f)).xy * 0.5f + 0.5f;
-  float depth = textureLod(hiz.hiz_tx, uv * uni.uniform_buf.hiz.uv_scale, 0.0f).r;
-  /* Linear (view-space) distance to the scene surface behind that position. */
-  scene_depth = abs(view.depth_screen_to_view(depth));
-  /* Scene color = scene radiance behind this fragment. In EEVEE-Next this "previous layer
-   * radiance" is bound only for transparent Shader-to-RGB materials (the same source that
-   * screen-space refraction reads); other pipelines don't bind it (feedback-loop avoidance),
-   * so it stays black there. */
-#  if defined(MAT_SHADER_TO_RGBA) && defined(MAT_TRANSPARENT) && !defined(MAT_FIRST_LAYER)
-  {
-    /* clang-format off */
-    [[resource_table]] const eevee::PreviousLayerRadiance &prev_radiance = resource_table_get(eevee::PreviousLayerRadiance);
-    /* clang-format on */
-    scene_color = float4(texelFetch(prev_radiance.previous_layer_radiance_tx, texel, 0).xyz, 1.0f);
+  if (any(isnan(uv)) || any(isinf(uv))) {
+    return;
   }
+#  if defined(MAT_GOO_SCREENSPACE)
+  [[resource_table]] const eevee::GooScreenSpace &scene = resource_table_get(
+      eevee::GooScreenSpace);
+  float2 scene_uv = clamp(
+      uv, scene.data.extent_inv * 0.5f, float2(1.0f) - scene.data.extent_inv * 0.5f);
+#    if defined(MAT_GOO_SCREENSPACE_COLOR)
+  if (scene.data.color_valid != 0) {
+    scene_color = float4(texture(scene.color_tx, scene_uv).rgb, 1.0f);
+  }
+#    endif
+#    if defined(MAT_GOO_SCREENSPACE_DEPTH)
+  if (scene.data.depth_valid != 0) {
+    float depth = reverse_z::read(textureLod(scene.depth_tx, scene_uv, 0.0f).r);
+    scene_depth = abs(view.depth_screen_to_view(depth));
+    return;
+  }
+#    endif
+#  endif
+#  if !defined(MAT_DEPTH) && !defined(MAT_GEOM_VOLUME)
+  /* Preserve the existing non-refraction depth path; camera prepasses use only valid snapshots. */
+  [[resource_table]] const eevee::HiZ &hiz = resource_table_get(eevee::HiZ);
+  [[resource_table]] const eevee::Uniform &uni = resource_table_get(eevee::Uniform);
+  float depth = textureLod(hiz.hiz_tx, uv * uni.uniform_buf.hiz.uv_scale, 0.0f).r;
+  scene_depth = abs(view.depth_screen_to_view(depth));
 #  endif
 #endif
 }

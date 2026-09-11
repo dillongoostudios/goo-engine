@@ -17,6 +17,7 @@
 #include "DRW_render.hh"
 
 #include "eevee_defines.hh"
+#include "eevee_goo_screenspace.hh"
 #include "eevee_lut.hh"
 #include "eevee_material.hh"
 #include "eevee_raytrace.hh"
@@ -44,6 +45,10 @@ class BackgroundPipeline {
 
   PassSimple clear_ps_ = {"World.Background.Clear"};
   PassSimple world_ps_ = {"World.Background"};
+  PassSimple scene_capture_ps_ = {"World.GooSceneCapture"};
+  float background_opacity_ = 1.0f;
+  float background_blur_ = 0.0f;
+  void sync_world_pass(PassSimple &pass, GPUMaterial *gpumat);
 
  public:
   BackgroundPipeline(Instance &inst) : inst_(inst) {};
@@ -51,6 +56,8 @@ class BackgroundPipeline {
   void sync(GPUMaterial *gpumat, float background_opacity, float background_blur);
   void clear(View &view);
   void render(View &view, Framebuffer &combined_fb);
+  void sync_scene_capture();
+  void render_scene_capture(View &view, Framebuffer &framebuffer);
 };
 
 /** \} */
@@ -843,6 +850,7 @@ class UtilityTexture : public Texture {
 
 class PipelineModule {
  public:
+  GooScreenSpaceModule goo_screenspace;
   BackgroundPipeline background;
   WorldPipeline world;
   WorldVolumePipeline world_volume;
@@ -860,7 +868,8 @@ class PipelineModule {
   bool has_raycast = false;
 
   PipelineModule(Instance &inst, PipelineInfoData &data)
-      : background(inst),
+      : goo_screenspace(inst),
+        background(inst),
         world(inst),
         world_volume(inst),
         probe(inst),
@@ -874,6 +883,7 @@ class PipelineModule {
 
   void begin_sync()
   {
+    goo_screenspace.begin_sync();
     data.ray_type = RAY_TYPE_CAMERA;
     data.can_raycast = true;
     probe.begin_sync();
@@ -893,6 +903,7 @@ class PipelineModule {
     planar.end_sync();
     deferred.end_sync();
     forward.end_sync();
+    goo_screenspace.end_sync();
   }
 
   PassMain::Sub *material_add(Object *ob,
@@ -929,6 +940,7 @@ class PipelineModule {
       }
     }
 
+    goo_screenspace.register_material(blender_mat, gpumat, pipeline_type);
     switch (pipeline_type) {
       case MAT_PIPE_PREPASS_DEFERRED:
         return deferred.prepass_add(blender_mat, gpumat, false, hide_from_raycast);

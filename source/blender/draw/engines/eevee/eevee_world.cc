@@ -134,8 +134,16 @@ void World::sync()
                                              inst_.film.background_opacity_get();
   float background_blur = inst_.use_studio_light() ? lookdev_world_.background_blur_get() : 0.0;
 
+  surface_world_ = bl_world;
+  surface_tree_ = ntree;
   inst_.pipelines.background.sync(gpumat, opacity, background_blur);
   inst_.pipelines.world.sync(gpumat);
+}
+
+GPUMaterial *World::scene_capture_material_get()
+{
+  return inst_.shaders.world_shader_get(
+      surface_world_, surface_tree_, MAT_PIPE_DEFERRED, false, true);
 }
 
 void World::sync_volume(const WorldHandle &world_handle, bool wait_ready)

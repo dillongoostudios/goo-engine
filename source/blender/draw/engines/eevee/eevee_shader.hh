@@ -287,7 +287,8 @@ class ShaderModule {
   GPUMaterial *world_shader_get(blender::World *blender_world,
                                 bNodeTree *nodetree,
                                 eMaterialPipeline pipeline_type,
-                                bool deferred_compilation);
+                                bool deferred_compilation,
+                                bool scene_capture = false);
 
   void material_create_info_amend(GPUMaterial *mat, GPUCodegenOutput *codegen);
 
