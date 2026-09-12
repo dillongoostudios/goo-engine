@@ -908,6 +908,9 @@ bPoseChannel *BKE_pose_channel_ensure(bPose *pose, const char *name)
     return nullptr;
   }
 
+  BLI_assert_msg(
+      name[0] != '\0',
+      "Bones have to have a name, otherwise the function below will always return a nullptr");
   /* See if this channel exists */
   chan = BKE_pose_channel_find_name(pose, name);
   if (chan) {
@@ -2001,6 +2004,13 @@ void BKE_pose_blend_read_after_liblink(BlendLibReader *reader, Object *ob, bPose
      * pointer in those cases. */
     if (pchan.custom && pchan.custom->type == OB_ARMATURE) {
       pchan.custom = nullptr;
+    }
+
+    /* An unnamed pose channel can never be matched to a bone, and the bone it belonged to has
+     * been given a name by fix_empty_bone_names() on read. Rebuild so the stale channel is
+     * dropped and a channel for the renamed bone is created. See #162046. */
+    if (pchan.name[0] == '\0') {
+      rebuild = true;
     }
   }
 

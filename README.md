@@ -52,9 +52,23 @@ Blender 4.4.x and the legacy EEVEE render engine:
 - Studio website: https://www.dillongoo.com
 
 This port takes the Goo Engine v4.4-release feature set and re-implements it on top of
-official Blender 5.2.0 (EEVEE-Next render engine, BSL shader pipeline). This repository
+official Blender 5.2.1 (EEVEE-Next render engine, BSL shader pipeline). This repository
 is **not affiliated with the Blender Foundation or DillonGoo Studios**. All code remains
 under the GNU General Public License.
+
+Upstream Maintenance Baseline (2026-09-12)
+------------------------------------------
+
+The port incorporates the complete official Blender **v5.2.1** maintenance release
+(`9e2066aef7ef7e20c142ad7bd3303138a4304c93`), preserving the Goo additions on top of
+v5.2.0. The program patch version is 5.2.1; the fork file subversion remains
+**502.49**, so this update does not downgrade or reclassify existing Goo data.
+
+The declared release validation scope is the Windows full build, existing Goo
+regression matrices, and extracted-package checks. Dedicated upstream-fix and
+general-compatibility fixtures (stage D of the update plan) are explicitly
+**not run, at the user's request**. Do not interpret the maintenance merge as
+independent verification of every upstream fix, GPU driver or platform.
 
 What Was Ported and How
 -----------------------

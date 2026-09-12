@@ -5760,13 +5760,13 @@ static PyObject *pyrna_prop_collection_find(BPy_PropertyRNA *self, PyObject *key
     name_ptr = RNA_struct_name_get_alloc(&itemptr, name, sizeof(name), &name_len);
 
     if (name_ptr) {
-      if ((key_len == name_len) && memcmp(name_ptr, key, key_len) == 0) {
-        index = i;
-        break;
-      }
-
+      const bool found = (key_len == name_len) && (memcmp(name_ptr, key, key_len) == 0);
       if (name != name_ptr) {
         MEM_delete(name_ptr);
+      }
+      if (found) {
+        index = i;
+        break;
       }
     }
 
@@ -6085,7 +6085,8 @@ static PyObject *foreach_getset(BPy_PropertyRNA *self, PyObject *args, int set)
     buffer_is_compat = false;
     if (PyObject_CheckBuffer(seq)) {
       Py_buffer buf;
-      if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT) == -1) {
+      /* Writable, the buffer is filled in below. */
+      if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT | PyBUF_WRITABLE) == -1) {
         /* Request failed. A `PyExc_BufferError` will have been raised,
          * so clear it to silently fall back to accessing as a sequence. */
         PyErr_Clear();
@@ -6271,7 +6272,9 @@ static PyObject *pyprop_array_foreach_getset(BPy_PropertyArrayRNA *self,
   }
 
   Py_buffer buf;
-  if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT) == -1) {
+  /* Writable when reading into the buffer, `do_set` only reads from it. */
+  if (PyObject_GetBuffer(seq, &buf, PyBUF_ND | PyBUF_FORMAT | (do_set ? 0 : PyBUF_WRITABLE)) == -1)
+  {
     PyErr_Clear();
 
     switch (prop_type) {

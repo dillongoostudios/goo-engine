@@ -80,9 +80,11 @@ static int snap_distance_frame_threshold_get(const TransInfo *t)
 static VectorSet<Strip *> query_strip_sources_timeline(const Scene *scene)
 {
   const Editing *ed = seq::editing_get(scene);
-  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(seq::editing_get(scene));
+  const ListBaseT<SeqTimelineChannel> *channels = seq::channels_displayed_get(ed);
+  ListBaseT<Strip> *seqbase = seq::active_seqbase_get(ed);
 
   VectorSet<Strip *> strip_sources = seq::query_selected_strips(seqbase);
+  strip_sources.remove_if([&](Strip *strip) { return seq::transform_is_locked(channels, strip); });
 
   const Map retiming_selection = seq::retiming_selection_get(ed);
   /* Strips owned by retiming keys are technically not selected,
@@ -150,8 +152,9 @@ static VectorSet<Strip *> query_strip_targets_timeline(Scene *scene,
 
   VectorSet<Strip *> strip_targets;
   for (Strip &strip : *seqbase) {
-    if (!drag_and_drop && strip.flag & SEQ_SELECT) {
-      continue; /* Selected strips are being transformed, they shouldn't be a target. */
+    if (!drag_and_drop && strip.flag & SEQ_SELECT && !seq::transform_is_locked(channels, &strip)) {
+      /* Selected (and unlocked) strips are being transformed, they shouldn't be a target. */
+      continue;
     }
     if (seq::render_is_muted(channels, &strip) && (snap_flag & SEQ_SNAP_IGNORE_MUTED)) {
       continue;

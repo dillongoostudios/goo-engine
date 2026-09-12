@@ -634,8 +634,6 @@ static bool load_data_init_from_operator(seq::LoadData *load_data, bContext *C, 
 
     load_data->start_frame = std::trunc(mouse_view.x);
     load_data->channel = std::trunc(mouse_view.y);
-    load_data->image.length = DEFAULT_IMG_STRIP_LENGTH;
-    load_data->effect.length = load_data->image.length;
   }
   return true;
 }
@@ -1671,70 +1669,12 @@ void SEQUENCER_OT_sound_strip_add(wmOperatorType *ot)
 /** \name Add Image Strip
  * \{ */
 
-int sequencer_image_strip_get_minmax_frame(wmOperator *op,
-                                           int sfra,
-                                           int *r_minframe,
-                                           int *r_numdigits)
-{
-  int minframe = INT32_MAX, maxframe = INT32_MIN;
-  int numdigits = 0;
-
-  RNA_BEGIN (op->ptr, itemptr, "files") {
-    int frame;
-    std::string filename = RNA_string_get(&itemptr, "name");
-
-    if (!filename.empty()) {
-      if (BLI_path_frame_get(filename.c_str(), &frame, &numdigits)) {
-        minframe = min_ii(minframe, frame);
-        maxframe = max_ii(maxframe, frame);
-      }
-    }
-  }
-  RNA_END;
-
-  if (minframe == INT32_MAX) {
-    minframe = sfra;
-    maxframe = minframe + 1;
-  }
-
-  *r_minframe = minframe;
-  *r_numdigits = numdigits;
-
-  return maxframe - minframe + 1;
-}
-
-void sequencer_image_strip_reserve_frames(
-    wmOperator *op, StripElem *se, int len, int minframe, int numdigits)
-{
-  char *filename = nullptr;
-  RNA_BEGIN (op->ptr, itemptr, "files") {
-    filename = RNA_string_get_alloc(&itemptr, "name", nullptr, 0, nullptr);
-    break;
-  }
-  RNA_END;
-
-  if (filename) {
-    char ext[FILE_MAX];
-    char filename_stripped[FILE_MAX];
-    /* Strip the frame from filename and substitute with `#`. */
-    BLI_path_frame_strip(filename, ext, sizeof(ext));
-
-    for (int i = 0; i < len; i++, se++) {
-      STRNCPY(filename_stripped, filename);
-      BLI_path_frame(filename_stripped, sizeof(filename_stripped), minframe + i, numdigits);
-      SNPRINTF(se->filename, "%s%s", filename_stripped, ext);
-    }
-
-    MEM_delete(filename);
-  }
-}
-
-static void frame_filename_set(char *dst,
-                               size_t dst_len,
-                               const char *filename_stripped,
-                               const int frame,
-                               const int numdigits,
-                               const char *ext)
+void frame_filename_set(char *dst,
+                        size_t dst_len,
+                        const char *filename_stripped,
+                        const int frame,
+                        const int numdigits,
+                        const char *ext)
 {
   BLI_strncpy(dst, filename_stripped, dst_len);
   BLI_path_frame(dst, dst_len, frame, numdigits);

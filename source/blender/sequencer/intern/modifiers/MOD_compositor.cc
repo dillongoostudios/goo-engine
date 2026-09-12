@@ -51,7 +51,8 @@
 
 namespace blender::seq {
 
-void compositor_nodes_update_interface(Scene &sequencer_scene,
+void compositor_nodes_update_interface(Main &bmain,
+                                       Scene &sequencer_scene,
                                        SequencerCompositorModifierData &cmd)
 {
   if (!cmd.modifier.system_properties) {
@@ -60,7 +61,7 @@ void compositor_nodes_update_interface(Scene &sequencer_scene,
   }
   PointerRNA properties_ptr = RNA_pointer_create_discrete(
       &sequencer_scene.id, RNA_SequencerCompositorModifierProperties, &cmd);
-  RNA_ensure_and_sync_system_properties(properties_ptr, *cmd.modifier.system_properties);
+  RNA_ensure_and_sync_system_properties(bmain, properties_ptr, *cmd.modifier.system_properties);
 
   DEG_id_tag_update(&sequencer_scene.id, ID_RECALC_SEQUENCER_STRIPS);
 }
@@ -441,8 +442,10 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
   CompositorCache &com_cache = context.render_data.scene->ed->runtime->ensure_compositor_cache();
   CompositorModifierContext com_mod_context(context, com_cache.get_cache_manager(), modifier_data);
 
+  GpuContextState gpu_state = GpuContextState::Unsupported;
   if (com_mod_context.use_gpu()) {
-    com_mod_context.set_gpu_supported(render_begin_gpu(context.render_data));
+    gpu_state = render_begin_gpu(context.render_data);
+    com_mod_context.set_gpu_supported(gpu_state != GpuContextState::Unsupported);
   }
 
   com_cache.recreate_if_needed(
@@ -450,9 +453,7 @@ static void compositor_modifier_apply(ModifierApplyContext &context,
   com_mod_context.evaluate();
   com_mod_context.cache_manager().reset();
   com_mod_context.free_resources();
-  if (com_mod_context.use_gpu()) {
-    render_end_gpu(context.render_data);
-  }
+  render_end_gpu(context.render_data, gpu_state);
 
   context.result.translation += com_mod_context.get_result_translation();
 }
