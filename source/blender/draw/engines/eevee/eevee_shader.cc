@@ -1047,17 +1047,16 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
    * retaining the old Transparent BSDF weight for internal alpha-reciprocal energy recovery.
    * MAT_FORCE_OPAQUE remains the external/rasterization compatibility marker;
    * MAT_LEGACY_OPAQUE selects the separate closure accumulator. */
-  const bool legacy_surface_pipeline = ELEM(
-      pipeline_type,
-      MAT_PIPE_PREPASS_FORWARD_VELOCITY,
-      MAT_PIPE_PREPASS_DEFERRED_VELOCITY,
-      MAT_PIPE_PREPASS_OVERLAP,
-      MAT_PIPE_PREPASS_FORWARD,
-      MAT_PIPE_PREPASS_DEFERRED,
-      MAT_PIPE_PREPASS_PLANAR,
-      MAT_PIPE_SHADOW,
-      MAT_PIPE_DEFERRED,
-      MAT_PIPE_FORWARD);
+  const bool legacy_surface_pipeline = ELEM(pipeline_type,
+                                            MAT_PIPE_PREPASS_FORWARD_VELOCITY,
+                                            MAT_PIPE_PREPASS_DEFERRED_VELOCITY,
+                                            MAT_PIPE_PREPASS_OVERLAP,
+                                            MAT_PIPE_PREPASS_FORWARD,
+                                            MAT_PIPE_PREPASS_DEFERRED,
+                                            MAT_PIPE_PREPASS_PLANAR,
+                                            MAT_PIPE_SHADOW,
+                                            MAT_PIPE_DEFERRED,
+                                            MAT_PIPE_FORWARD);
   if (legacy_opaque && geometry_type_has_surface(geometry_type) && legacy_surface_pipeline) {
     info.define("MAT_LEGACY_OPAQUE");
     info.define("MAT_FORCE_OPAQUE");
@@ -1069,6 +1068,20 @@ void ShaderModule::material_create_info_amend(GPUMaterial *gpumat, GPUCodegenOut
       ELEM(pipeline_type, MAT_PIPE_FORWARD, MAT_PIPE_DEFERRED))
   {
     info.define("MAT_SHADOW_ID");
+  }
+
+  /* Dynamic receiver masks are draw data, not shader variants. Reserve before SlotAllocator. */
+  if (geometry_type_has_surface(geometry_type) &&
+      ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD, MAT_PIPE_CAPTURE))
+  {
+    if (pipeline_type == MAT_PIPE_CAPTURE) {
+      info.additional_info("eevee_GooCaptureGroups");
+    }
+    else {
+      info.additional_info("eevee_GooLightGroups");
+      info.additional_info("eevee_GooMaterialGroups");
+      info.additional_info("eevee_GooContact");
+    }
   }
 
   /* Goo Shader Info: only materials using the node run the per-fragment light-record bridge. */
@@ -1609,12 +1622,11 @@ static GPUPass *pass_replacement_cb(void *void_thunk, GPUMaterial *mat)
    * (with the Set Depth variant) and cannot reuse the default depth-only prepass. */
   bool has_set_depth = GPU_material_flag_get(mat, GPU_MATFLAG_SET_DEPTH);
 
-  bool can_use_default = !legacy_opaque &&
-                         ((is_shadow_pass &&
-                           (!has_vertex_displacement && !has_shadow_transparency)) ||
-                          (is_prepass &&
-                           (!has_vertex_displacement && !has_transparency &&
-                            !has_raytraced_transmission && !has_raycast && !has_set_depth)));
+  bool can_use_default =
+      !legacy_opaque &&
+      ((is_shadow_pass && (!has_vertex_displacement && !has_shadow_transparency)) ||
+       (is_prepass && (!has_vertex_displacement && !has_transparency &&
+                       !has_raytraced_transmission && !has_raycast && !has_set_depth)));
   if (can_use_default) {
     GPUMaterial *mat = thunk->shader_module->material_shader_get(thunk->default_mat,
                                                                  thunk->default_mat->nodetree,
@@ -1663,7 +1675,8 @@ GPUMaterial *ShaderModule::material_shader_get(blender::Material *blender_mat,
                                                         thickness_type,
                                                         blender_mat->blend_flag,
                                                         blender_mat->check_shadow_id != 0,
-                                                         (blender_mat->flag & MA_LEGACY_OPAQUE) != 0);
+                                                        (blender_mat->flag & MA_LEGACY_OPAQUE) !=
+                                                            0);
 
   bool is_default_material = default_mat == nullptr;
   BLI_assert(blender_mat != default_mat);

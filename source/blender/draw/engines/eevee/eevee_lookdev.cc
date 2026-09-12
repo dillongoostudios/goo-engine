@@ -305,6 +305,11 @@ void LookdevModule::init(const rcti *visible_rect)
     constexpr eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_WRITE |
                                        GPU_TEXTURE_USAGE_SHADER_READ;
     dummy_cryptomatte_tx_.ensure_2d(gpu::TextureFormat::SFLOAT_32_32_32_32, extent_dummy, usage);
+    /* Main-view pool textures have been released before the lookdev overlay is drawn.
+     * Reverse-Z background also prevents reference spheres from tracing unrelated scene depth. */
+    const float4 empty_depth(0.0f);
+    dummy_contact_depth_tx_.ensure_2d(
+        gpu::TextureFormat::SFLOAT_32, extent_dummy, GPU_TEXTURE_USAGE_SHADER_READ, empty_depth);
     dummy_aov_color_tx_.ensure_2d_array(
         gpu::TextureFormat::SFLOAT_16_16_16_16, extent_dummy, 1, usage);
     dummy_aov_value_tx_.ensure_2d_array(gpu::TextureFormat::SFLOAT_16, extent_dummy, 1, usage);
@@ -414,6 +419,8 @@ void LookdevModule::sync_pass(PassSimple &pass,
   pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
   pass.bind_resources(inst_.uniform_data);
   pass.bind_resources(inst_.lights);
+  inst_.materials.bind_light_groups(pass, mat);
+  pass.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &dummy_contact_depth_tx_);
   pass.bind_resources(inst_.shadows);
   pass.bind_resources(inst_.volume.result);
   pass.bind_resources(inst_.sampling);

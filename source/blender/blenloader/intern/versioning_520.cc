@@ -19,6 +19,7 @@
 #include "DNA_brush_types.h"
 #include "DNA_camera_types.h"
 #include "DNA_curve_types.h"
+#include "DNA_light_types.h"
 #include "DNA_mesh_types.h"
 #include "DNA_modifier_types.h"
 #include "DNA_node_tree_interface_types.h"
@@ -702,21 +703,27 @@ void do_versions_after_linking_520(FileData *fd, Main *bmain)
     }
   }
 
-  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 502, 49)) {
-    /* Material light-group bitfields were not present in older 5.2 port builds. Keep legacy
-     * Goo fields when they are available in the source DNA, otherwise initialize every material
-     * to the builtin default group so modern files retain ordinary all-default behavior. */
-    const bool has_material_light_groups =
-        DNA_struct_member_exists(fd->filesdna, "Material", "int", "light_group_bits[4]") &&
-        DNA_struct_member_exists(fd->filesdna, "Material", "int", "light_group_shadow_bits[4]");
-    if (!has_material_light_groups) {
-      for (Material &mat : bmain->materials) {
-        mat.light_group_bits[0] = mat.light_group_bits[1] = mat.light_group_bits[2] = 0;
-        mat.light_group_bits[3] = 1;
-        mat.light_group_shadow_bits[0] = mat.light_group_shadow_bits[1] =
-            mat.light_group_shadow_bits[2] = 0;
-        mat.light_group_shadow_bits[3] = 1;
-      }
+  /* Goo-only fields are absent from native files irrespective of Blender's subversion.
+   * Test source SDNA, not a fork subversion which upstream can also reach. Preserve authored
+   * Goo masks (including intentional empty masks), and support linked/headless data without
+   * relying on the Python UI load handler to initialize missing fields. */
+  if (!DNA_struct_member_exists(fd->filesdna, "Material", "int", "light_group_bits[4]")) {
+    for (Material &mat : bmain->materials) {
+      mat.light_group_bits[0] = mat.light_group_bits[1] = mat.light_group_bits[2] = 0;
+      mat.light_group_bits[3] = 1;
+    }
+  }
+  if (!DNA_struct_member_exists(fd->filesdna, "Material", "int", "light_group_shadow_bits[4]")) {
+    for (Material &mat : bmain->materials) {
+      mat.light_group_shadow_bits[0] = mat.light_group_shadow_bits[1] =
+          mat.light_group_shadow_bits[2] = 0;
+      mat.light_group_shadow_bits[3] = 1;
+    }
+  }
+  if (!DNA_struct_member_exists(fd->filesdna, "Light", "int", "light_group_bits[4]")) {
+    for (Light &light : bmain->lights) {
+      light.light_group_bits[0] = light.light_group_bits[1] = light.light_group_bits[2] = 0;
+      light.light_group_bits[3] = 1;
     }
   }
 
@@ -725,10 +732,10 @@ void do_versions_after_linking_520(FileData *fd, Main *bmain)
      * tree contained a Transparent BSDF. EEVEE-Next has no equivalent public mode, so retain an
      * internal provenance flag and let the material shader provide the compatibility behavior.
      *
-     * The deprecated DNA `blend_method` defaults to MA_BM_SOLID for modern files too. Therefore the
-     * flag must be recomputed from provenance rather than from blend_method alone, otherwise native
-     * EEVEE-Next alpha cards would be incorrectly made opaque. Clearing first also repairs files that
-     * were loaded by an earlier port build which set the flag too broadly. */
+     * The deprecated DNA `blend_method` defaults to MA_BM_SOLID for modern files too. Therefore
+     * the flag must be recomputed from provenance rather than from blend_method alone, otherwise
+     * native EEVEE-Next alpha cards would be incorrectly made opaque. Clearing first also repairs
+     * files that were loaded by an earlier port build which set the flag too broadly. */
     const bool legacy_eevee_era = bmain->versionfile < 402;
     /* Goo 4.4 kept the legacy EEVEE data model alive after official Blender had moved on.
      * Its files are version 4.4 (not < 4.2), and an OPAQUE material need not contain a Goo node,
@@ -740,7 +747,8 @@ void do_versions_after_linking_520(FileData *fd, Main *bmain)
         bmain->versionfile < 500 &&
         DNA_struct_member_exists(fd->filesdna, "Material", "char", "check_shadow_id") &&
         DNA_struct_member_exists(fd->filesdna, "Material", "int", "light_group_shadow_bits[4]") &&
-        DNA_struct_member_exists(fd->filesdna, "NodeShaderInfo", "int", "light_group_shadow_bits[4]");
+        DNA_struct_member_exists(
+            fd->filesdna, "NodeShaderInfo", "int", "light_group_shadow_bits[4]");
     for (Material &mat : bmain->materials) {
       /* `blend_method` is still the legacy DNA value at this point in the load sequence. The
        * 4.2 conversion that maps legacy modes to HASHED/BLEND runs in the earlier generation

@@ -20,6 +20,8 @@
 
 #include "draw_pass.hh"
 
+#include "eevee_defines.hh"
+#include "eevee_light_groups_shared.hh"
 #include "eevee_material_shared.hh"
 #include "eevee_shader.hh"
 #include "eevee_sync.hh"
@@ -270,7 +272,7 @@ struct MaterialKey {
                                              to_thickness_type(mat_->thickness_mode),
                                              mat_->blend_flag,
                                              mat_->check_shadow_id != 0,
-                                              (mat_->flag & MA_LEGACY_OPAQUE) != 0);
+                                             (mat_->flag & MA_LEGACY_OPAQUE) != 0);
     options = (options << 1) | (visibility_flags & OB_HIDE_CAMERA ? 0 : 1);
     options = (options << 1) | (visibility_flags & OB_HIDE_SHADOW ? 0 : 1);
     options = (options << 1) | (visibility_flags & OB_HIDE_PROBE_CUBEMAP ? 0 : 1);
@@ -390,6 +392,9 @@ class MaterialModule {
  private:
   Instance &inst_;
 
+  Map<std::pair<int4, int4>, uint> light_groups_map_;
+  StorageArrayBuffer<GooMaterialLightGroups, 16> light_groups_buf_{"Goo.MaterialGroups"};
+
   Map<MaterialKey, Material> material_map_;
   Map<ShaderKey, PassMain::Sub *> shader_map_;
 
@@ -408,6 +413,23 @@ class MaterialModule {
 
   void begin_sync();
   void end_sync();
+
+  uint light_groups_id(const blender::Material *material);
+  static bool has_custom_light_groups(const blender::Material *material);
+  template<typename Pass> void bind_resources(Pass &pass)
+  {
+    pass.bind_ssbo(GOO_LIGHT_GROUPS_BUF_SLOT, &light_groups_buf_);
+  }
+  template<typename Pass> void bind_capture_groups(Pass &pass, const blender::Material *material)
+  {
+    pass.push_constant("goo_capture_lighting", int4(material->light_group_bits));
+    pass.push_constant("goo_capture_shadows", int4(material->light_group_shadow_bits));
+  }
+  template<typename Pass> void bind_light_groups(Pass &pass, const blender::Material *material)
+  {
+    bind_resources(pass);
+    pass.push_constant("goo_material_groups_id", int(light_groups_id(material)));
+  }
 
   /**
    * Returned Material references are valid until the next call to this function or material_get().

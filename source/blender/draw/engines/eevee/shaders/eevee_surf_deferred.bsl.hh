@@ -19,6 +19,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
 #include "draw_view.bsl.hh"     /* IWYU pragma: export. For nodetree functions. */
 #include "eevee_cryptomatte.bsl.hh"
 #include "eevee_gbuffer_write.bsl.hh"
+#include "eevee_light_groups.bsl.hh"
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_sampling_lib.bsl.hh"
 #include "eevee_surf_common.bsl.hh"
@@ -185,6 +186,16 @@ void surf_deferred([[resource_table]] PipelineConstants &pipe,
   float3 gbuffer_dither = sampling.rng_3D_get(SAMPLING_GBUFFER_U);
   gbuffer::Packed gbuf = gbuffer::pack(
       gbuf_params, gbuf_data, g_data.Ng, g_data.N, thickness, use_object_id, use_shadow_id);
+
+  [[resource_table]] const GooMaterialGroups &material_groups = resource_table_get(
+      eevee::GooMaterialGroups);
+  const uint groups_id = uint(material_groups.goo_material_groups_id);
+  if (groups_id != 0u) {
+    gbuffer::Header header = gbuffer::Header::from_data(gbuf.header);
+    header.use_light_groups_set(true);
+    gbuf.header = header.raw();
+    srt.write_header_data(out_texel, 2, groups_id);
+  }
 
   /* Output header and first closure using frame-buffer attachment. */
   frag_out.gbuf_header = gbuf.header;

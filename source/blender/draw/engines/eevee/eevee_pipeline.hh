@@ -313,6 +313,7 @@ struct DeferredLayerBase {
   eClosureBits closure_bits_ = CLOSURE_NONE;
   /* Maximum closure count considering all material in this pass. */
   int closure_count_ = 0;
+  bool has_custom_light_groups_ = false;
   /* True if this is a planar probe deferred layer. To be set before sync. */
   bool is_probe_ = false;
 
@@ -341,6 +342,7 @@ struct DeferredLayerBase {
      * Since tracking these are not part of the closure bits and are rather common features,
      * always require one layer for it. */
     count += 1;
+    count += int(has_custom_light_groups_);
     return count;
   }
 
@@ -723,6 +725,13 @@ class PlanarProbePipeline : DeferredLayerBase {
         gpu::TextureFormat::SFLOAT_16_16_16_16, int2(1), GPU_TEXTURE_USAGE_SHADER_READ, data);
     is_probe_ = true;
   };
+
+  /* Forward-only materials may need a group layer in probe capture, even when the camera
+   * deferred pipeline has no custom materials. */
+  int header_layer_count() const
+  {
+    return DeferredLayerBase::header_layer_count();
+  }
 
   void begin_sync();
   void end_sync();

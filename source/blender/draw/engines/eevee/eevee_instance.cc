@@ -482,6 +482,8 @@ void Instance::end_sync()
   subsurface.end_sync();
   film.end_sync();
   cryptomatte.end_sync();
+  pipelines.has_raycast |= lights.has_contact_shadows;
+  pipelines.data.goo_contact_shadows = lights.has_contact_shadows;
   pipelines.end_sync();
   light_probes.end_sync();
   sphere_probes.end_sync();

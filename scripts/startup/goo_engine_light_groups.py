@@ -8,7 +8,8 @@ assign named light groups. Named groups are synced into the per-data-block ``lig
 bitfields (on Materials, Lights and Shader Info nodes) that the shader actually reads.
 
 Materials, lights, and Shader Info nodes participate in the same named light-group namespace.
-Material groups provide the default Shader Info mask; a Shader Info node with
+Material groups filter ordinary direct surface BSDF lighting and received shadows. They also
+provide the default Shader Info mask; a Shader Info node with
 ``use_own_light_groups`` enabled overrides that default with its own mask.
 """
 
@@ -60,8 +61,7 @@ def _set_array_if_changed(data, property_name, values):
 def map_bits(data, mapping):
     bits = [0, 0, 0, 0]
     # Materials and Shader Info nodes carry separate diffuse/shadow masks. Lights only carry
-    # their membership mask; the material/node shadow mask controls whether that group casts into
-    # the Shader Info result.
+    # their membership mask; material/node shadow masks control received shadows, not casters.
     has_shadow = isinstance(data, (Material, ShaderNodeShaderInfo))
     shadow_bits = [0, 0, 0, 0]
 
@@ -183,7 +183,7 @@ class LightGroup(PropertyGroup):
     viz_name: StringProperty(name="Name", get=get_name, set=set_name)
     ignore_shadow: BoolProperty(
         name="Ignore Shadows",
-        description="Ignore shadows cast from this light group",
+        description="Ignore received shadows from this light group, without changing shadow casting",
         default=False,
         options=set(),
         update=update_handler,

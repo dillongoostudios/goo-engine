@@ -17,6 +17,7 @@ FRAGMENT_SHADER_CREATE_INFO(eevee_nodetree)
 FRAGMENT_SHADER_CREATE_INFO(eevee_geom_iface_info)
 
 #include "draw_curves_lib.glsl" /* IWYU pragma: export. For nodetree functions. */
+#include "eevee_light_groups.bsl.hh"
 #include "eevee_lightprobe_shared.hh"
 #include "eevee_nodetree_frag_lib.glsl"
 #include "eevee_surf_common.bsl.hh"
@@ -92,6 +93,10 @@ void surf_capture([[resource_table]] SurfaceCapture &srt,
         srt.surfel_buf[surfel_id].radiance_direct.back.a = 0.0f;
         srt.surfel_buf[surfel_id].double_sided = srt.is_double_sided;
         srt.surfel_buf[surfel_id].receiver_light_set = receiver_light_set_get(object_infos);
+        [[resource_table]] const GooCaptureGroups &groups = resource_table_get(
+            eevee::GooCaptureGroups);
+        srt.surfel_buf[surfel_id].material_groups = GooMaterialLightGroups{
+            groups.goo_capture_lighting, groups.goo_capture_shadows};
 
         if (!srt.capture_info_buf.capture_emission) {
           srt.surfel_buf[surfel_id].radiance_direct.front.rgb = float3(0.0f);

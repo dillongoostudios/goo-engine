@@ -182,6 +182,8 @@ class LightModule {
   PassSimple debug_draw_ps_ = {"LightCulling.Debug"};
 
  public:
+  bool has_contact_shadows = false;
+
   LightModule(Instance &inst) : inst_(inst) {};
   ~LightModule();
 

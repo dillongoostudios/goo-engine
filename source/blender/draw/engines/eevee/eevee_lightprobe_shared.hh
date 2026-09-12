@@ -11,6 +11,7 @@
 #include "GPU_shader_shared_utils.hh"
 
 #include "eevee_camera_shared.hh"
+#include "eevee_light_groups_shared.hh"
 
 #ifndef GPU_SHADER
 namespace blender::eevee {
@@ -213,6 +214,8 @@ struct [[host_shared]] Surfel {
   int list_id;
   /** Index of this surfel inside the sorted list. Allow access to previous and next surfel id. */
   int index_in_sorted_list;
+  /** Full masks outlive per-sync material table indices during baking. */
+  struct GooMaterialLightGroups material_groups;
   /** Surface radiance: Emission + Direct Lighting. */
   struct SurfelRadiance radiance_direct;
   /** Surface radiance: Indirect Lighting. Double buffered to avoid race conditions. */

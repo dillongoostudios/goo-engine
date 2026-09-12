@@ -162,6 +162,7 @@ class LookdevModule {
 
   /* Dummy textures: required to reuse forward mesh shader and avoid another shader variation. */
   Texture dummy_cryptomatte_tx_;
+  Texture dummy_contact_depth_tx_{"Lookdev.ContactDepth"};
   Texture dummy_aov_color_tx_;
   Texture dummy_aov_value_tx_;
 

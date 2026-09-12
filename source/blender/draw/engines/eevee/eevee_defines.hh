@@ -243,6 +243,7 @@
 #define SHADOW_ATLAS_ID_TEX_SLOT 20
 #define GOO_SCENE_COLOR_TEX_SLOT 21
 #define GOO_SCENE_DEPTH_TEX_SLOT 22
+#define GOO_CONTACT_DEPTH_TEX_SLOT 23
 
 /* Images. */
 #define RBUFS_COLOR_SLOT 0
@@ -302,6 +303,8 @@
 #define SHADOW_RENDER_VIEW_BUF_SLOT 5
 /* Used by shadow-ID raster and sampling only when --debug-value 733 is active. */
 #define SHADOW_ID_DIAGNOSTIC_BUF_SLOT 8
+/* Slot 5 is free during surface lighting. Capture uses push constants instead of this table. */
+#define GOO_LIGHT_GROUPS_BUF_SLOT 5
 
 /* Only during pre-pass. */
 #define VELOCITY_OBJ_PREV_BUF_SLOT 0

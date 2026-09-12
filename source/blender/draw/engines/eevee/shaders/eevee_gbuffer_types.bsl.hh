@@ -383,6 +383,16 @@ struct Header {
     set_flag_from_test(this->header_, value, 1u << 30u);
   }
 
+  /* Optional third R32UI layer contains a material-mask table index, never an object ID. */
+  bool use_light_groups() const
+  {
+    return flag_test(this->header_, 1u << 29u);
+  }
+  void use_light_groups_set(bool value)
+  {
+    set_flag_from_test(this->header_, value, 1u << 29u);
+  }
+
   /**
    * Set the dedicated normal bit for the specified layer.
    * Expects `layer_id` to be in [0..2].

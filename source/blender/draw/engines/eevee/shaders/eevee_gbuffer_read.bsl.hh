@@ -114,6 +114,15 @@ struct Reader {
   [[sampler(GBUF_CLOSURE_TEX_SLOT)]] sampler2DArray gbuf_closure_tx;
   [[sampler(GBUF_NORMAL_TEX_SLOT)]] sampler2DArray gbuf_normal_tx;
 
+  uint read_light_groups_id(Header header, int2 texel) const
+  {
+    /* Default/unshaded pixels have no optional layer. Empty material masks use a real index. */
+    if (!header.use_light_groups()) {
+      return 0u;
+    }
+    return texelFetch(gbuf_header_tx, int3(texel, 2), 0).r;
+  }
+
   uint fetch_object_id(int2 texel) const
   {
     return texelFetch(gbuf_header_tx, int3(texel, 1), 0).r;

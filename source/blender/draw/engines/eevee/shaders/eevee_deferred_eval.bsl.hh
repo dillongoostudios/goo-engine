@@ -121,6 +121,7 @@ struct LightEval {
 [[fragment, early_fragment_tests]]
 void light_eval_frag([[resource_table]] LightEval &srt,
                      [[resource_table]] LightEvalIterator &lights,
+                     [[resource_table]] const GooLightGroups &groups,
                      [[resource_table]] const draw::View &views,
                      [[resource_table]] const draw::Infos &infos,
                      [[resource_table]] const Uniform &uni,
@@ -153,6 +154,7 @@ void light_eval_frag([[resource_table]] LightEval &srt,
   const float vPz = dot(view.forward(), P) - dot(view.forward(), view.position());
 
   light::EvalCtx<false> ctx;
+  ctx.material_groups = groups.get(reader.read_light_groups_id(gbuf.header, texel));
   ctx.shadow_id_filter = shadow_id_filter_disabled();
   /* Unroll light stack array assignments to avoid non-constant indexing. */
   for (uint i = 0u; i < 3; i++) [[unroll]] {
@@ -270,6 +272,7 @@ void light_eval_frag([[resource_table]] LightEval &srt,
  * being available. */
 [[fragment, early_fragment_tests]]
 void sphere_eval_frag([[resource_table]] LightEvalIterator &lights,
+                      [[resource_table]] const GooLightGroups &groups,
                       [[resource_table]] const draw::View &views,
                       [[resource_table]] const draw::Infos &infos,
                       [[resource_table]] const Sampling &sampling,
@@ -338,6 +341,7 @@ void sphere_eval_frag([[resource_table]] LightEvalIterator &lights,
   cl_transmit.type = CLOSURE_BSDF_TRANSLUCENT_ID;
 
   light::EvalCtx<false> ctx;
+  ctx.material_groups = groups.get(reader.read_light_groups_id(gbuf.header, texel));
   ctx.shadow_id_filter = shadow_id_filter_disabled();
   ctx.P = P;
   ctx.Ng = Ng;
@@ -387,6 +391,7 @@ struct PlanarProbeEval {
 [[fragment, early_fragment_tests]]
 void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
                       [[resource_table]] LightEvalIterator &lights,
+                      [[resource_table]] const GooLightGroups &groups,
                       [[resource_table]] const draw::View &views,
                       [[resource_table]] const draw::Infos &infos,
                       [[resource_table]] const LightprobeRenderData &lightprobes,
@@ -510,6 +515,7 @@ void planar_eval_frag([[resource_table]] PlanarProbeEval & /*srt*/,
   cl_transmit.type = CLOSURE_BSDF_TRANSLUCENT_ID;
 
   light::EvalCtx<false> ctx;
+  ctx.material_groups = groups.get(reader.read_light_groups_id(gbuf.header, texel));
   ctx.shadow_id_filter = shadow_id_filter_disabled();
   ctx.P = P;
   ctx.Ng = Ng;

@@ -80,9 +80,12 @@ What Was Ported and How
   with Material/Light DNA/RNA extensions; Shader Info inherits its material's diffuse and
   shadow masks unless **Use Own Light Groups** is enabled. Named groups, default-group and
   Ignore Shadows controls are available in Material Properties, including pinned materials.
-  Changes invalidate the material through RNA (also for shared nested node groups); no new
-  EEVEE pass resources or Shadow-ID changes are needed. The compatibility UI controls the
-  Goo Shader Info outputs, not native EEVEE light linking or ordinary BSDF lighting.
+  Ordinary surface BSDF direct lighting also obeys these material groups in Deferred,
+  Forward and Hybrid, including reflection, coat, SSS and transmission lobes. Full 128-bit
+  masks use OR membership; Ignore Shadows is receiver-only and gates VSM and legacy contact,
+  never caster visibility. Native light linking remains an independent eligibility gate.
+  A deduplicated GPU table and optional G-buffer group index carry per-material masks;
+  Shader Info own-mask overrides remain independent. Shadow-ID is not redesigned.
   Shader Add menu regrouped into Goo categories.
 - **Legacy material semantics** restored through file versioning:
   - `MA_LEGACY_OPAQUE` preserves opaque external coverage while Transparent BSDF weights
@@ -122,7 +125,8 @@ Known Boundaries and Their Handling
   applied to every soft-shadow tracing sample: ordinary surface lighting and Shader Info
   **Cast Shadows** ignore same-object casters, while Shader Info **Self Shadows** keeps
   only same-object casters. Transmission, translucent-thickness lighting, volumes,
-  surfels, probes and baking deliberately keep the unfiltered EEVEE behavior.
+  surfels, probes and baking deliberately keep identity filtering disabled (independent
+  of the material Light Groups controls described below).
 - **`blend_shadow` zero-value ambiguity (residual)**: a full fix via a dedicated
   `MA_LEGACY_NO_SHADOW` flag (file-level Goo fingerprint at load, flag read at render)
   has been designed but not implemented. Known corner case: appending a shadow-None
@@ -166,7 +170,7 @@ registration and operators, masks including signed bits/default-bit reservation,
 material/node overrides, shared groups, multi-slot materials, Sun/Point/Spot/Area,
 Cast/Self with Shadow-ID and Ignore Shadows, and save/reopen/append/link. Shader Info uses
 the Hybrid path for DITHERED and Forward for BLENDED; ordinary-material controls cover the
-unchanged native Deferred and Forward paths.
+default-group native Deferred and Forward paths.
 
 502.49 restores the original Material mask fields (default `{0, 0, 0, 1}`). Files with
 existing Goo DNA retain them; files without the fields receive the default. Named group
@@ -188,4 +192,46 @@ host image library and covers six direct-color/World cases. Diagnostic value 734
 CPU snapshot submission counts; normal rendering performs no statistical GPU atomics.
 Screen Space Info is a camera-buffer effect, not physically correct transparent geometry:
 it cannot reveal off-screen surfaces, its own opaque-refraction layer, or later BLENDED
-surfaces. This fix does not add ordinary BSDF material Light Group filtering.
+surfaces. Ordinary BSDF material groups were added subsequently; see the section below.
+
+Ordinary BSDF Material Light Groups
+----------------------------------
+
+The receiver lighting and shadow masks now apply to all direct surface lobes. Empty masks
+exclude real lamps; environment/extracted World Sun lighting remains native. Probe surface
+and surfel direct capture respect material masks, but accumulated indirect probe radiance
+is not filtered again. Transmission keeps Shadow-ID disabled and never receives legacy
+screen-space contact shadows; its real-light membership and received VSM mask still apply.
+Contact requires an opaque screen-depth occluder; transparent Forward casters do not create
+one. Native LTC, attenuation and VSM math, and Shader Info normalization are unchanged.
+
+Default index zero is the builtin `{0,0,0,1}` mask pair, not an all-lights sentinel.
+Custom pairs use an SSBO and optional G-buffer header layer 2/bit 29. Default pixels skip
+the extra layer/table fetch. Shadow-ID header bits 30/31 remain unchanged. Group edits
+update draw data, not shader variants. A source-SDNA check initializes missing Light and
+Material fields for native files (including linked data), regardless of file subversion,
+without UI handlers. Existing Goo masks, including intentional empty groups, are retained.
+No new DNA/RNA field or file subversion is introduced by this change.
+
+Permanent workers: `tests/python/goo_bsdf_light_groups.py` and
+`tests/python/goo_bsdf_light_groups_cases.py`. A single worker builds and validates an
+isolated scene, for example:
+
+```text
+blender -b --factory-startup --python-exit-code 1 --python tests/python/goo_bsdf_light_groups.py -- --output <new-directory> --method deferred --case groups
+```
+
+Cases include groups, slots, shadows, self, contact, high_bits, table_growth, linking,
+world, probe_plane, probe_sphere, volume_probe, default and modern_alpha. `--method forward|hybrid` selects other
+paths. `--native-save` creates native-file oracles; `--load` and `--link` verify missing-DNA
+migration without Python handlers. The companion bridge runner
+`goo_to_eevee52_bridge/tests/02_灯光组验证/run_bsdf_matrix.py` runs the complete strict
+matrix in fresh processes and records script/binary/artifact SHA-256 and exit codes.
+The older Shader Info/UI suite remains a separate regression, not a substitute for the
+ordinary BSDF suite. Planar reflection tests use SCREEN tracing and a camera-hidden
+target, so neither a black PROBE fallback nor a screen-visible substitute can pass.
+
+Resource bindings are explicit on every consuming pass, including disabled contact
+branches and lookdev. Planar captures size their optional header from their own materials.
+Shadow image handles are resolved at submission because end-sync may resize the ID atlas;
+the two-pass ID/depth representation and tracing semantics are unchanged.

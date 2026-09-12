@@ -226,8 +226,10 @@ void ShadowPipeline::sync()
     pass.state_set(state);
     pass.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst_.pipelines.utility_tx);
     pass.bind_ssbo(SHADOW_RENDER_VIEW_BUF_SLOT, &inst_.shadows.render_view_buf_);
-    pass.bind_image(SHADOW_ATLAS_IMG_SLOT, inst_.shadows.atlas_tx_);
-    pass.bind_image(SHADOW_ATLAS_ID_IMG_SLOT, inst_.shadows.atlas_id_tx_);
+    /* The ID atlas may resize from its dummy during ShadowModule::end_sync(), after this
+     * draw list was recorded. Resolve both image handles at submission, not at sync time. */
+    pass.bind_image(SHADOW_ATLAS_IMG_SLOT, &inst_.shadows.atlas_tx_);
+    pass.bind_image(SHADOW_ATLAS_ID_IMG_SLOT, &inst_.shadows.atlas_id_tx_);
     pass.bind_ssbo(SHADOW_ID_DIAGNOSTIC_BUF_SLOT, &inst_.shadows.shadow_id_diagnostic_buf_);
     pass.bind_ssbo(SHADOW_RENDER_MAP_BUF_SLOT, &inst_.shadows.render_map_buf_);
     pass.bind_ssbo(SHADOW_PAGE_INFO_SLOT, &inst_.shadows.pages_infos_data_);
@@ -455,6 +457,8 @@ void ForwardPipeline::sync()
 
       opaque_ps_.bind_resources(inst_.uniform_data);
       opaque_ps_.bind_resources(inst_.lights);
+      opaque_ps_.bind_resources(inst_.materials);
+      opaque_ps_.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
       opaque_ps_.bind_resources(inst_.shadows);
       opaque_ps_.bind_resources(inst_.volume.result);
       opaque_ps_.bind_resources(inst_.sampling);
@@ -497,6 +501,8 @@ void ForwardPipeline::sync()
 
     sub.bind_resources(inst_.uniform_data);
     sub.bind_resources(inst_.lights);
+    sub.bind_resources(inst_.materials);
+    sub.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
     sub.bind_resources(inst_.shadows);
     sub.bind_resources(inst_.volume.result);
     sub.bind_resources(inst_.sampling);
@@ -640,6 +646,8 @@ void ForwardPipeline::transparent_add(const Object *ob,
     if (GooScreenSpaceModule::uses_material(blender_mat, gpumat)) {
       inst_.pipelines.goo_screenspace.bind(*pass);
     }
+    inst_.materials.bind_light_groups(*pass, blender_mat);
+    pass->bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
     r_material_subpass = pass;
   }
 }
@@ -776,6 +784,9 @@ void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
   /* Storage Buffer. */
   /* Textures. */
   gbuffer_ps_.bind_texture(RBUFS_UTILITY_TEX_SLOT, inst.pipelines.utility_tx);
+  /* Declared by all surface material variants. Bind even when a material does not trace
+   * contact shadows: Vulkan descriptor tracking must never see a previous pass's freed texture. */
+  gbuffer_ps_.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst.render_buffers.raycast_depth_tx);
 
   gbuffer_ps_.bind_resources(inst.uniform_data);
   gbuffer_ps_.bind_resources(inst.sampling);
@@ -821,6 +832,7 @@ void DeferredLayerBase::gbuffer_pass_sync(Instance &inst)
   }
 
   closure_bits_ = CLOSURE_NONE;
+  has_custom_light_groups_ = false;
   closure_count_ = 0;
   radiance_behind_tx_ = nullptr;
 }
@@ -1011,6 +1023,8 @@ void DeferredLayer::end_sync(bool is_first_pass,
           sub.bind_resources(inst_.uniform_data);
           sub.bind_resources(inst_.gbuffer);
           sub.bind_resources(inst_.lights);
+          sub.bind_resources(inst_.materials);
+          sub.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
           sub.bind_resources(inst_.shadows);
           sub.bind_resources(inst_.sampling);
           sub.bind_resources(inst_.hiz_buffer.front);
@@ -1096,6 +1110,7 @@ PassMain::Sub *DeferredLayer::material_add(blender::Material *blender_mat, GPUMa
     closure_bits |= CLOSURE_EMISSION;
   }
   closure_bits_ |= closure_bits;
+  has_custom_light_groups_ |= MaterialModule::has_custom_light_groups(blender_mat);
   closure_count_ = max_ii(closure_count_, count_bits_i(closure_bits));
 
   PassMain::Sub *pass = get_gbuffer_subpass(blender_mat, gpumat);
@@ -1581,6 +1596,8 @@ void DeferredProbePipeline::end_sync()
     pass.bind_resources(inst_.uniform_data);
     pass.bind_resources(inst_.gbuffer);
     pass.bind_resources(inst_.lights);
+    pass.bind_resources(inst_.materials);
+    pass.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
     pass.bind_resources(inst_.shadows);
     pass.bind_resources(inst_.sampling);
     pass.bind_resources(inst_.hiz_buffer.front);
@@ -1608,6 +1625,7 @@ PassMain::Sub *DeferredProbePipeline::material_add(blender::Material *blender_ma
     closure_bits |= CLOSURE_EMISSION;
   }
   opaque_layer_.closure_bits_ |= closure_bits;
+  opaque_layer_.has_custom_light_groups_ |= MaterialModule::has_custom_light_groups(blender_mat);
   opaque_layer_.closure_count_ = max_ii(opaque_layer_.closure_count_, count_bits_i(closure_bits));
 
   PassMain::Sub *pass = opaque_layer_.get_gbuffer_subpass(blender_mat, gpumat);
@@ -1669,6 +1687,7 @@ void PlanarProbePipeline::begin_sync()
   this->gbuffer_pass_sync(inst_);
 
   closure_bits_ = CLOSURE_NONE;
+  has_custom_light_groups_ = false;
   closure_count_ = 0;
 }
 
@@ -1684,6 +1703,8 @@ void PlanarProbePipeline::end_sync()
     pass.bind_resources(inst_.uniform_data);
     pass.bind_resources(inst_.gbuffer);
     pass.bind_resources(inst_.lights);
+    pass.bind_resources(inst_.materials);
+    pass.bind_texture(GOO_CONTACT_DEPTH_TEX_SLOT, &inst_.render_buffers.raycast_depth_tx);
     pass.bind_resources(inst_.shadows);
     pass.bind_resources(inst_.sampling);
     pass.bind_resources(inst_.hiz_buffer.front);
@@ -1712,6 +1733,7 @@ PassMain::Sub *PlanarProbePipeline::material_add(blender::Material *blender_mat,
     closure_bits |= CLOSURE_EMISSION;
   }
   closure_bits_ |= closure_bits;
+  has_custom_light_groups_ |= MaterialModule::has_custom_light_groups(blender_mat);
   closure_count_ = max_ii(closure_count_, count_bits_i(closure_bits));
 
   PassMain::Sub *pass = get_gbuffer_subpass(blender_mat, gpumat);

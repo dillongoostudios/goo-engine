@@ -380,8 +380,10 @@ def worker(args):
             light('Key', 'SUN', named=False)
             a = render('ordinary')
             if hasattr(ma, 'light_groups'):
-                groups(ma)
-                check('ordinary_unchanged', np.array_equal(render('ordinary_empty_groups'), a))
+                # Native/default regression only. Empty groups now intentionally suppress
+                # ordinary BSDF direct light; goo_bsdf_light_groups.py verifies that separately.
+                groups(ma, default=True)
+                check('ordinary_default_unchanged', np.array_equal(render('ordinary_default_groups'), a))
             # Modern alpha card uses real transparent closure weights, not legacy OPAQUE.
             nt = ma.node_tree; out = nt.nodes.get('Material Output')
             trans = nt.nodes.new('ShaderNodeBsdfTransparent'); mix = nt.nodes.new('ShaderNodeMixShader')

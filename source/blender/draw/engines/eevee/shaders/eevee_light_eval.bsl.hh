@@ -5,6 +5,8 @@
 #pragma once
 
 #include "eevee_bxdf_types.bsl.hh"
+#include "eevee_goo_contact.bsl.hh"
+#include "eevee_light_groups.bsl.hh"
 #include "eevee_light_iter.bsl.hh"
 #include "eevee_light_lib.bsl.hh"
 #include "eevee_shadow.bsl.hh"
@@ -40,6 +42,7 @@ namespace eevee {
 struct LightEvalData {
   [[resource_table]] srt_t<ShadowRenderData> shadow_data;
   [[resource_table]] srt_t<UtilityTexture> utility_tx;
+  [[resource_table]] srt_t<GooContact> contact;
 
   [[compilation_constant]] int light_closure_eval_count_reflect;
   [[compilation_constant]] int light_closure_eval_count_transmit;
@@ -100,6 +103,7 @@ template<bool is_transmission> struct EvalCtx {
   float terminator_normal_offset;
   float terminator_geometry_offset;
   ShadowIdFilter shadow_id_filter;
+  GooMaterialLightGroups material_groups;
 
   void light_eval_single([[resource_table]] LightEvalData &srt,
                          LightData light,
@@ -108,7 +112,10 @@ template<bool is_transmission> struct EvalCtx {
     [[resource_table]] ShadowRenderData &srd = srt.shadow_data;
     [[resource_table]] Uniform &uni = srd.uniforms;
 
-    if (!light_linking_affects_receiver(light.light_set_membership, receiver_light_set)) {
+    if (!light_linking_affects_receiver(light.light_set_membership, receiver_light_set) ||
+        (light.use_material_light_groups &&
+         !goo_groups_intersect(light.light_group_bits, material_groups.lighting)))
+    {
       return;
     }
 
@@ -140,7 +147,10 @@ template<bool is_transmission> struct EvalCtx {
     }
 
     float shadow = 1.0f;
-    if (light.tilemap_index != LIGHT_NO_SHADOW) {
+    const bool receive_shadow = !light.use_material_light_groups ||
+                                goo_groups_intersect(light.light_group_bits,
+                                                     material_groups.shadows);
+    if (receive_shadow && light.tilemap_index != LIGHT_NO_SHADOW) {
       shadow = shadow_eval(srd,
                            light,
                            is_directional,
@@ -157,6 +167,21 @@ template<bool is_transmission> struct EvalCtx {
                            ray_count,
                            ray_step_count);
     }
+
+#ifdef GPU_FRAGMENT_SHADER
+    /* Legacy contact only affects reflection lobes, not translucent/refraction transmission.
+     * Probe and surfel evaluation must never sample main-camera contact depth. */
+    if (!is_transmission && receive_shadow && light.tilemap_index != LIGHT_NO_SHADOW &&
+        shadow > 0.0f && light.contact_dist > 0.0f && uni.pipeline_buf.goo_contact_shadows &&
+        uni.pipeline_buf.ray_type == RAY_TYPE_CAMERA && uni.pipeline_buf.can_raycast)
+    {
+      [[resource_table]] const GooContact &contact_data = srt.contact;
+      [[resource_table]] const draw::View &views = srd.views;
+      [[resource_table]] const Sampling &sampling = srd.sampling;
+      shadow *= goo_contact_shadow_trace(
+          contact_data.goo_contact_depth_tx, views.get(0), sampling, texel, light, P, Ng, lv.L);
+    }
+#endif
 
     if (is_translucent_with_thickness) {
       /* This makes the LTC compute the solid angle of the light (still with the cosine term
@@ -216,6 +241,7 @@ EvalCtx<true> init_from_reflect_ctx(EvalCtx<false> ctx)
   ctx_tr.texel = ctx.texel;
   ctx_tr.thickness = ctx.thickness;
   ctx_tr.receiver_light_set = ctx.receiver_light_set;
+  ctx_tr.material_groups = ctx.material_groups;
   ctx_tr.terminator_normal_offset = ctx.terminator_normal_offset;
   ctx_tr.terminator_geometry_offset = ctx.terminator_geometry_offset;
   /* Transmission never applies caster/receiver identity filtering. */

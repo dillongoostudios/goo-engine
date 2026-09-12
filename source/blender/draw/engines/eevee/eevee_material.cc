@@ -132,6 +132,9 @@ void MaterialModule::begin_sync()
   gpu_pass_next_update_ = next_update;
 
   texture_loading_queue_.clear();
+  light_groups_map_.clear();
+  /* Index zero is permanent default, not an uninitialized/disabled sentinel. */
+  light_groups_id(nullptr);
   material_map_.clear();
   shader_map_.clear();
 }
@@ -154,6 +157,7 @@ void MaterialModule::queue_texture_loading(GPUMaterial *material)
 
 void MaterialModule::end_sync()
 {
+  light_groups_buf_.push_update();
   if (texture_loading_queue_.is_empty()) {
     return;
   }
@@ -208,6 +212,23 @@ void MaterialModule::end_sync()
   }
   GPU_debug_group_end();
   texture_loading_queue_.clear();
+}
+
+uint MaterialModule::light_groups_id(const blender::Material *material)
+{
+  const int4 lighting = material ? int4(material->light_group_bits) : int4(0, 0, 0, 1);
+  const int4 shadows = material ? int4(material->light_group_shadow_bits) : int4(0, 0, 0, 1);
+  return light_groups_map_.lookup_or_add_cb({lighting, shadows}, [&]() {
+    const uint index = uint(light_groups_map_.size());
+    light_groups_buf_.get_or_resize(index) = {lighting, shadows};
+    return index;
+  });
+}
+
+bool MaterialModule::has_custom_light_groups(const blender::Material *material)
+{
+  return material && (int4(material->light_group_bits) != int4(0, 0, 0, 1) ||
+                      int4(material->light_group_shadow_bits) != int4(0, 0, 0, 1));
 }
 
 MaterialPass MaterialModule::material_pass_get(Object *ob,
@@ -301,6 +322,16 @@ MaterialPass MaterialModule::material_pass_get(Object *ob,
       matpass.sub_pass = &shader_sub->sub(GPU_material_get_name(matpass.gpumat));
       matpass.sub_pass->material_set(
           *inst_.manager, matpass.gpumat, true, inst_.anisotropic_filtering);
+      if (geometry_type_has_surface(geometry_type) &&
+          ELEM(pipeline_type, MAT_PIPE_DEFERRED, MAT_PIPE_FORWARD, MAT_PIPE_CAPTURE))
+      {
+        if (pipeline_type == MAT_PIPE_CAPTURE) {
+          bind_capture_groups(*matpass.sub_pass, blender_mat);
+        }
+        else {
+          bind_light_groups(*matpass.sub_pass, blender_mat);
+        }
+      }
     }
     else {
       matpass.sub_pass = nullptr;

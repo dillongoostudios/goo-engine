@@ -210,7 +210,12 @@ struct [[host_shared]] LightData {
   uint2 shadow_set_membership;
   /* Goo Engine: per-light light-group membership bitfield (matches Goo's LightData). */
   int4 light_group_bits;
-  /* Goo Engine: legacy contact shadows (screen-space), consumed by the Shader Info bridge.
+  /** Real light objects obey material groups; environment-extracted suns do not. */
+  bool32_t use_material_light_groups;
+  uint _goo_pad0;
+  uint _goo_pad1;
+  uint _goo_pad2;
+  /* Goo Engine: legacy contact shadows (screen-space), consumed by surfaces and Shader Info.
    * `contact_dist` is 0 when disabled. `contact_bias` is pre-scaled (la->contact_bias * 0.05)
    * like Goo's `eevee_contact_shadow_setup`. */
   float contact_dist;

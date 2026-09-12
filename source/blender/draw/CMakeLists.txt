@@ -411,6 +411,8 @@ set(GLSL_SRC
   engines/eevee/shaders/eevee_light_shape_display.bsl.hh
   engines/eevee/shaders/eevee_light_shadow_setup.bsl.hh
   engines/eevee/shaders/eevee_light_data.bsl.hh
+  engines/eevee/shaders/eevee_goo_contact.bsl.hh
+  engines/eevee/shaders/eevee_light_groups.bsl.hh
   engines/eevee/shaders/eevee_light_eval.bsl.hh
   engines/eevee/shaders/eevee_light_iter.bsl.hh
   engines/eevee/shaders/eevee_light_lib.bsl.hh
@@ -497,6 +499,7 @@ set(GLSL_SRC
   engines/eevee/eevee_depth_of_field_shared.hh
   engines/eevee/eevee_film_shared.hh
   engines/eevee/eevee_goo_screenspace_shared.hh
+  engines/eevee/eevee_light_groups_shared.hh
   engines/eevee/eevee_hizbuffer_shared.hh
   engines/eevee/eevee_light_shared.hh
   engines/eevee/eevee_lightprobe_shared.hh

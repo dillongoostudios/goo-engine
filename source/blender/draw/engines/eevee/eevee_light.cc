@@ -128,11 +128,15 @@ void Light::sync(ShadowModule &shadows,
     this->shadow_set_membership = uint64_to_uint2(~uint64_t(0));
   }
 
-  /* Goo Engine: copy per-light light-group bits for the Shader Info node's per-node light groups. */
-  this->light_group_bits = int4(
-      la->light_group_bits[0], la->light_group_bits[1], la->light_group_bits[2], la->light_group_bits[3]);
+  this->use_material_light_groups = true;
 
-  /* Goo Engine: legacy contact shadows, evaluated by the Shader Info bridge light loop.
+  /* Shared membership for ordinary surfaces and Shader Info receiver masks. */
+  this->light_group_bits = int4(la->light_group_bits[0],
+                                la->light_group_bits[1],
+                                la->light_group_bits[2],
+                                la->light_group_bits[3]);
+
+  /* Goo Engine: legacy contact shadows, shared by ordinary surfaces and Shader Info.
    * Same semantics as Goo's `eevee_contact_shadow_setup`. */
   this->contact_dist = (la->mode & LA_SHAD_CONTACT) ? la->contact_dist : 0.0f;
   this->contact_bias = 0.05f * la->contact_bias;
@@ -403,11 +407,14 @@ void LightModule::add_world_sun_light(const ObjectKey &key, bool use_diffuse, bo
   light.used = true;
   light.sync(inst_.shadows, float4x4::identity(), visibility_flag, &la, nullptr, light_threshold_);
 
+  /* Do not use zero group bits as an always-on convention: real zero-group lamps are excluded. */
+  light.use_material_light_groups = false;
   sun_lights_len_ += 1;
 }
 
 void LightModule::begin_sync()
 {
+  has_contact_shadows = false;
   if (assign_if_different(use_scene_lights_, inst_.use_scene_lights())) {
     if (inst_.is_viewport()) {
       /* Catch lookdev viewport properties updates. */
@@ -467,6 +474,7 @@ void LightModule::sync_light(const ObjectRef &ob_ref)
                ob_ref.light_linking(),
                light_threshold_);
   }
+  has_contact_shadows |= (la.mode & LA_SHADOW) && light.contact_dist > 0.0f;
   sun_lights_len_ += int(is_sun_light(light.type));
   local_lights_len_ += int(!is_sun_light(light.type));
 }

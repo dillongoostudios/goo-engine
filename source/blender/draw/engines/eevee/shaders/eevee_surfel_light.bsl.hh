@@ -49,6 +49,7 @@ void eval_light([[resource_table]] EvalLight & /*srt*/,
   ctx.texel = float2(0.0);
   ctx.thickness = Thickness::zero();
   ctx.receiver_light_set = surfel.receiver_light_set;
+  ctx.material_groups = surfel.material_groups;
   ctx.terminator_normal_offset = 0.0f;
   ctx.terminator_geometry_offset = 0.0f;
 
