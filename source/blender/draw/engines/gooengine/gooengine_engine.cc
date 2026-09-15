@@ -245,7 +245,6 @@ void Instance::begin_sync()
   EEVEE_lightprobes_cache_init(sldata, this);
   EEVEE_lights_cache_init(sldata, this);
   EEVEE_materials_cache_init(sldata, this);
-  EEVEE_motion_blur_cache_init(sldata, this);
   EEVEE_occlusion_cache_init(sldata, this);
   EEVEE_screen_raytrace_cache_init(sldata, this);
   EEVEE_subsurface_cache_init(sldata, this);
@@ -422,8 +421,6 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
   Depsgraph *depsgraph = draw_ctx->depsgraph;
   Scene *scene = DEG_get_evaluated_scene(depsgraph);
   EEVEE_ViewLayerData *sldata = EEVEE_view_layer_data_ensure();
-  const bool do_motion_blur = (scene->r.mode & R_MBLUR) != 0;
-  const bool do_motion_blur_fx = do_motion_blur && (scene->eevee.motion_blur_max > 0);
 
   if (!EEVEE_render_init(this, engine, depsgraph)) {
     return;
@@ -432,8 +429,8 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
 
   int initial_frame = scene->r.cfra;
   float initial_subframe = scene->r.subframe;
-  float shuttertime = (do_motion_blur) ? scene->r.motion_blur_shutter : 0.0f;
-  int time_steps_tot = (do_motion_blur) ? max_ii(1, scene->eevee.motion_blur_steps) : 1;
+  float shuttertime = 0.0f;
+  int time_steps_tot = 1;
   g_data->render_timesteps = time_steps_tot;
 
   EEVEE_render_modules_init(this, engine, depsgraph);
@@ -469,57 +466,8 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
     float time_next = time + time_step;
     time += time_step;
 
-    /* Previous motion step. */
-    if (do_motion_blur_fx) {
-      if (i == 0) {
-        EEVEE_motion_blur_step_set(this, MB_PREV);
-        DRW_render_set_time(engine, depsgraph, floorf(time_prev), fractf(time_prev));
-        EEVEE_render_modules_init(this, engine, depsgraph);
-        sldata = EEVEE_view_layer_data_ensure();
-
-        EEVEE_render_cache_init(sldata, this);
-
-        DRW_render_object_iter(this->render,
-                              this->depsgraph,
-                              [&](blender::draw::ObjectRef &ob_ref, RenderEngine *, Depsgraph *) {
-                                EEVEE_render_cache(this, ob_ref);
-                              });
-
-        EEVEE_motion_blur_cache_finish(this);
-        EEVEE_materials_cache_finish(sldata, this);
-        eevee_render_reset_passes(this);
-      }
-    }
-
-    /* Next motion step. */
-    if (do_motion_blur_fx) {
-      EEVEE_motion_blur_step_set(this, MB_NEXT);
-      DRW_render_set_time(engine, depsgraph, floorf(time_next), fractf(time_next));
-      EEVEE_render_modules_init(this, engine, depsgraph);
-      sldata = EEVEE_view_layer_data_ensure();
-
-      EEVEE_render_cache_init(sldata, this);
-
-      DRW_render_object_iter(this->render,
-                            this->depsgraph,
-                            [&](blender::draw::ObjectRef &ob_ref, RenderEngine *, Depsgraph *) {
-                              EEVEE_render_cache(this, ob_ref);
-                            });
-
-      EEVEE_motion_blur_cache_finish(this);
-      EEVEE_materials_cache_finish(sldata, this);
-      eevee_render_reset_passes(this);
-    }
-
     /* Current motion step. */
     {
-      if (do_motion_blur) {
-        EEVEE_motion_blur_step_set(this, MB_CURR);
-        DRW_render_set_time(engine, depsgraph, floorf(time_curr), fractf(time_curr));
-        EEVEE_render_modules_init(this, engine, depsgraph);
-        sldata = EEVEE_view_layer_data_ensure();
-      }
-
       EEVEE_render_cache_init(sldata, this);
 
       DRW_render_object_iter(this->render,
@@ -528,7 +476,6 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
                               EEVEE_render_cache(this, ob_ref);
                             });
 
-      EEVEE_motion_blur_cache_finish(this);
       EEVEE_materials_cache_finish(sldata, this);
       EEVEE_lights_cache_finish(sldata, this);
       EEVEE_lightprobes_cache_finish(sldata, this);
@@ -559,16 +506,7 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
       }
     }
 
-    if (do_motion_blur_fx) {
-      /* The previous step of next iteration N is exactly the next step of this iteration N - 1.
-       * So we just swap the resources to avoid too much re-evaluation.
-       * Note that this also clears the VBO references from the GPUBatches of deformed
-       * geometries. */
-      EEVEE_motion_blur_swap_data(this);
-    }
   }
-
-  EEVEE_motion_blur_data_free(&this->goo_data->effects->motion_blur);
 
   if (RE_engine_test_break(engine)) {
     return;

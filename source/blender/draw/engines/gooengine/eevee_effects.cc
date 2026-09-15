@@ -86,8 +86,6 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
   effects->hiz_size[1] = divide_ceil_u(size_fs[1], div) * div;
   
   effects->enabled_effects = EEVEE_EffectsFlag(0);
-  effects->enabled_effects |= (G.debug_value == 9) ? EFFECT_VELOCITY_BUFFER : EEVEE_EffectsFlag(0);
-  effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_motion_blur_init(sldata, inst));
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_bloom_init(sldata, inst));
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_depth_of_field_init(sldata, inst, camera));
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_temporal_sampling_init(sldata, inst));
@@ -181,28 +179,6 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
   }
   else {
     effects->ssr_normal_input = nullptr;
-  }
-
-  /**
-   * Motion vector buffer for correct TAA / motion blur.
-   */
-  if ((effects->enabled_effects & EFFECT_VELOCITY_BUFFER) != 0) {
-    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ | GPU_TEXTURE_USAGE_ATTACHMENT;
-    effects->velocity_tx = DRW_texture_pool_query_2d_ex(
-        size_fs[0], size_fs[1], GPU_RGBA16, usage, 0);
-
-    GPU_framebuffer_ensure_config(&inst->goo_data->velocity_fb,
-                                  {
-                                      GPU_ATTACHMENT_TEXTURE(dtxl->depth),
-                                      GPU_ATTACHMENT_TEXTURE(effects->velocity_tx),
-                                  });
-
-    GPU_framebuffer_ensure_config(
-        &inst->goo_data->velocity_resolve_fb,
-        {GPU_ATTACHMENT_NONE, GPU_ATTACHMENT_TEXTURE(effects->velocity_tx)});
-  }
-  else {
-    effects->velocity_tx = nullptr;
   }
 
   /**
@@ -309,21 +285,6 @@ void EEVEE_effects_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
     pass.draw(quad);
   }
 
-  if ((effects->enabled_effects & EFFECT_VELOCITY_BUFFER) != 0) {
-    EEVEE_MotionBlurData *mb_data = &effects->motion_blur;
-
-    /* This pass compute camera motions to the non moving objects. */
-    DRW_PASS_CREATE(inst->goo_data->velocity_resolve, DRW_STATE_WRITE_COLOR);
-    grp = DRW_shgroup_create(inst->shaders.static_shader_get(VELOCITY_RESOLVE), inst->goo_data->velocity_resolve);
-    DRW_shgroup_uniform_texture_ref(grp, "depthBuffer", &e_data.depth_src);
-    DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
-    DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
-
-    DRW_shgroup_uniform_mat4(grp, "prevViewProjMatrix", mb_data->camera[MB_PREV].persmat);
-    DRW_shgroup_uniform_mat4(grp, "currViewProjMatrixInv", mb_data->camera[MB_CURR].persinv);
-    DRW_shgroup_uniform_mat4(grp, "nextViewProjMatrix", mb_data->camera[MB_NEXT].persmat);
-    DRW_shgroup_call(grp, quad, nullptr);
-  }
 }
 
 void EEVEE_effects_draw_init(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)
@@ -463,25 +424,6 @@ void EEVEE_downsample_cube_buffer(Instance *inst, GPUTexture *texture_src, int l
   GPU_framebuffer_texture_detach(inst->goo_data->downsample_fb, texture_src);
 }
 
-static void EEVEE_velocity_resolve(Instance *inst)
-{
-  EEVEE_EffectsInfo *effects = inst->goo_data->effects;
-
-  if ((effects->enabled_effects & EFFECT_VELOCITY_BUFFER) != 0) {
-    const DRWContext *draw_ctx = DRW_context_get();
-    DefaultTextureList *dtxl = draw_ctx->viewport_texture_list_get();
-    e_data.depth_src = dtxl->depth;
-
-    GPU_framebuffer_bind(inst->goo_data->velocity_resolve_fb);
-    DRW_draw_pass(inst->goo_data->velocity_resolve);
-
-    if (inst->goo_data->velocity_object) {
-      GPU_framebuffer_bind(inst->goo_data->velocity_fb);
-      DRW_draw_pass(inst->goo_data->velocity_object);
-    }
-  }
-}
-
 void EEVEE_draw_effects(EEVEE_ViewLayerData *sldata, Instance *inst)
 {
   EEVEE_EffectsInfo *effects = inst->goo_data->effects;
@@ -495,8 +437,6 @@ void EEVEE_draw_effects(EEVEE_ViewLayerData *sldata, Instance *inst)
   effects->target_buffer = inst->goo_data->effect_color_fb; /* next target to render to */
 
   /* Post process stack (order matters) */
-  EEVEE_velocity_resolve(inst);
-  EEVEE_motion_blur_draw(inst);
   EEVEE_depth_of_field_draw(inst);
 
   /* NOTE: Lookdev drawing happens before TAA but after

@@ -206,16 +206,6 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
       return "eevee_legacy_minz_downlevel";
     case EFFECT_MIST:
       return "eevee_legacy_effect_mist_FIRST_PASS";
-    case EFFECT_MOTION_BLUR_BASE:
-      return "eevee_legacy_effect_motion_blur";
-    case EFFECT_MOTION_BLUR_HAIR:
-      return "eevee_legacy_effect_motion_blur_object_hair";
-    case EFFECT_MOTION_BLUR_OBJECT:
-      return "eevee_legacy_effect_motion_blur_object";
-    case EFFECT_MOTION_BLUR_VELOCITY_TILES:
-      return "eevee_legacy_effect_motion_blur_velocity_tiles_GATHER";
-    case EFFECT_MOTION_BLUR_VELOCITY_TILES_EXPAND:
-      return "eevee_legacy_effect_motion_blur_velocity_tiles_EXPANSION";
     case EFFECT_REFLECTION_RESOLVE:
       return "eevee_legacy_effect_reflection_resolve";
     case EFFECT_REFLECTION_RESOLVE_PROBE:
@@ -286,8 +276,6 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
     case TAA_RESOLVE_RESOLVE_BASIC:
       return "eevee_legacy_taa_resolve_basic";
 
-    case VELOCITY_RESOLVE:
-      return "eevee_legacy_velocity_resolve";
     case UPDATE_NOISE:
       return "eevee_legacy_update_noise";
 

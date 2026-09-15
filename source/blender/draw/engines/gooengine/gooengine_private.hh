@@ -376,83 +376,6 @@ enum {
 #define MB_NEXT 1
 #define MB_CURR 2
 
-struct EEVEE_MotionBlurData {
-  /**
-   * Maps #EEVEE_ObjectKey to #EEVEE_ObjectMotionData.
-   */
-  GHash *object;
-  /**
-   * Maps original #gpu::VertBuf to duplicated #gpu::VertBuf.
-   * There are two maps for #MB_PREV and #MB_NEXT.
-   * Only the values are owned.
-   */
-  GHash *position_vbo_cache[2];
-  /**
-   * Maps original #gpu::VertBuf to #EEVEE_HairMotionStepData.
-   * There are two maps for #MB_PREV and #MB_NEXT.
-   * Only the values are owned.
-   */
-  GHash *hair_motion_step_cache[2];
-
-  struct {
-    float viewmat[4][4];
-    float persmat[4][4];
-    float persinv[4][4];
-  } camera[3];
-  DRWShadingGroup *hair_grp;
-};
-
-struct EEVEE_ObjectKey {
-  /** Object or source object for duplis. */
-  /** WORKAROUND: The pointer is different for particle systems and do not point to the real
-   * object. (See #97380) */
-  void *ob;
-  /** Parent object for duplis */
-  Object *parent;
-  /** Dupli objects recursive unique identifier */
-  int id[8]; /* MAX_DUPLI_RECUR */
-};
-
-enum eEEVEEMotionData {
-  EEVEE_MOTION_DATA_MESH = 0,
-  EEVEE_MOTION_DATA_HAIR,
-};
-
-struct EEVEE_HairMotionStepData {
-  blender::gpu::VertBuf *hair_pos;
-  GPUTexture *hair_pos_tx;
-};
-
-struct EEVEE_HairMotionData {
-  /** Needs to be first to ensure casting. */
-  eEEVEEMotionData type;
-  int use_deform;
-  /** Allocator will alloc enough slot for all particle systems. Or 1 if it's a curves object. */
-  int psys_len;
-  struct {
-    /* The VBO's and textures are not owned. */
-    EEVEE_HairMotionStepData step_data[2]; /* Data for time = t +/- step. */
-  } psys[0];
-};
-
-struct EEVEE_GeometryMotionData {
-  /** Needs to be first to ensure casting. */
-  eEEVEEMotionData type;
-  /** To disable deform mb if vertcount mismatch. */
-  int use_deform;
-
-  /* The batch and VBOs are not owned. */
-  blender::gpu::Batch *batch;    /* Batch for time = t. */
-  blender::gpu::VertBuf *vbo[2]; /* VBO for time = t +/- step. */
-};
-
-struct EEVEE_ObjectMotionData {
-  float obmat[3][4][4];
-
-  EEVEE_GeometryMotionData *geometry_data;
-  EEVEE_HairMotionData *hair_data;
-};
-
 /* ************ EFFECTS DATA ************* */
 
 enum EEVEE_EffectsFlag {
@@ -529,13 +452,6 @@ struct EEVEE_EffectsInfo {
   int motion_blur_max;           /* Maximum distance in pixels a motion-blurred pixel can cover. */
   float motion_blur_near_far[2]; /* Camera near/far clip distances (positive). */
   bool cam_params_init;
-  /* TODO(fclem): Only used in render mode for now.
-   * This is because we are missing a per scene persistent place to hold this. */
-  EEVEE_MotionBlurData motion_blur;
-  /* Velocity Pass */
-  GPUTexture *velocity_tx; /* Texture from pool */
-  GPUTexture *velocity_tiles_x_tx;
-  GPUTexture *velocity_tiles_tx;
   /* Depth Of Field */
   float dof_jitter_radius;
   float dof_jitter_blades;
@@ -863,7 +779,6 @@ struct GOOENGINE_Data {
   DRWPass *ao_horizon_debug;
   DRWPass *ao_accum_ps;
   PassSimple mist_accum_ps = {"mist_accum_ps"};
-  DRWPass *motion_blur;
   PassSimple bloom_blit = {"bloom_blit"};
   PassSimple bloom_downsample_first = {"bloom_downsample_first"};
   PassSimple bloom_downsample = {"bloom_downsample"};
@@ -885,12 +800,6 @@ struct GOOENGINE_Data {
   PassSimple dof_scatter_bg = {"dof_scatter_bg"};
   PassSimple dof_filter = {"dof_filter"};
   PassSimple dof_resolve = {"dof_resolve"};
-  DRWPass *velocity_object;
-  DRWPass *velocity_hair;
-  DRWPass *velocity_resolve;
-  DRWPass *velocity_tiles_x;
-  DRWPass *velocity_tiles;
-  DRWPass *velocity_tiles_expand[2];
   PassSimple ssr_raytrace = {"ssr_raytrace"};
   PassSimple ssr_resolve = {"ssr_resolve"};
   PassSimple ssr_resolve_probe = {"ssr_resolve_probe"};
@@ -972,9 +881,6 @@ struct GOOENGINE_Data {
   GPUFrameBuffer *material_accum_fb;
   GPUFrameBuffer *renderpass_fb;
   GPUFrameBuffer *ao_accum_fb;
-  GPUFrameBuffer *velocity_resolve_fb;
-  GPUFrameBuffer *velocity_fb;
-  GPUFrameBuffer *velocity_tiles_fb[2];
 
   GPUFrameBuffer *update_noise_fb;
 
@@ -1137,19 +1043,10 @@ struct Instance : public DrawEngine {
 
 /* `eevee_data.cc` */
 
-void EEVEE_motion_blur_data_init(EEVEE_MotionBlurData *mb);
-void EEVEE_motion_blur_data_free(EEVEE_MotionBlurData *mb);
 void EEVEE_view_layer_data_free(void *storage);
-void EEVEE_motion_hair_step_free(EEVEE_HairMotionStepData *step_data);
 EEVEE_ViewLayerData *EEVEE_view_layer_data_ensure();
 EEVEE_ObjectEngineData *EEVEE_object_data_get(Object *ob);
 EEVEE_ObjectEngineData *EEVEE_object_data_ensure(Object *ob);
-EEVEE_ObjectMotionData *EEVEE_motion_blur_object_data_get(EEVEE_MotionBlurData *mb,
-                                                          const blender::draw::ObjectRef &ob_ref,
-                                                          bool is_psys);
-EEVEE_GeometryMotionData *EEVEE_motion_blur_geometry_data_get(EEVEE_ObjectMotionData *mb_data);
-EEVEE_HairMotionData *EEVEE_motion_blur_hair_data_get(EEVEE_ObjectMotionData *mb_data, Object *ob);
-EEVEE_HairMotionData *EEVEE_motion_blur_curves_data_get(EEVEE_ObjectMotionData *mb_data);
 EEVEE_LightProbeEngineData *EEVEE_lightprobe_data_get(Object *ob);
 EEVEE_LightProbeEngineData *EEVEE_lightprobe_data_ensure(Object *ob);
 EEVEE_LightEngineData *EEVEE_light_data_get(Object *ob);
@@ -1463,24 +1360,6 @@ void EEVEE_subsurface_add_pass(EEVEE_ViewLayerData *sldata,
 void EEVEE_subsurface_data_render(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_subsurface_compute(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_subsurface_output_accumulate(EEVEE_ViewLayerData *sldata, Instance *inst);
-
-/* `eevee_motion_blur.cc` */
-
-int EEVEE_motion_blur_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_motion_blur_step_set(Instance *inst, int step);
-void EEVEE_motion_blur_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_motion_blur_cache_populate(EEVEE_ViewLayerData *sldata, Instance *inst, const blender::draw::ObjectRef &ob_ref);
-void EEVEE_motion_blur_hair_cache_populate(EEVEE_ViewLayerData *sldata,
-                                           Instance *inst,
-                                           const blender::draw::ObjectRef &ob_ref,
-                                           ParticleSystem *psys,
-                                           ModifierData *md);
-void EEVEE_motion_blur_curves_cache_populate(EEVEE_ViewLayerData *sldata,
-                                             Instance *inst,
-                                             const blender::draw::ObjectRef &ob_ref);
-void EEVEE_motion_blur_swap_data(Instance *inst);
-void EEVEE_motion_blur_cache_finish(Instance *inst);
-void EEVEE_motion_blur_draw(Instance *inst);
 
 /* `eevee_mist.cc` */
 

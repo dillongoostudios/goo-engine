@@ -285,7 +285,7 @@ int EEVEE_temporal_sampling_init(EEVEE_ViewLayerData * /*sldata*/, Instance *ins
     float persmat[4][4];
 
     if (!draw_ctx->is_image_render() && (scene_eval->eevee.flag & SCE_EEVEE_TAA_REPROJECTION)) {
-      repro_flag = EFFECT_TAA_REPROJECT | EFFECT_VELOCITY_BUFFER | EFFECT_DEPTH_DOUBLE_BUFFER |
+      repro_flag = EFFECT_TAA_REPROJECT | EFFECT_DEPTH_DOUBLE_BUFFER |
                    EFFECT_DOUBLE_BUFFER | EFFECT_POST_BUFFER;
       effects->taa_reproject_sample = ((effects->taa_reproject_sample + 1) % 16);
     }

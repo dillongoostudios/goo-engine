@@ -167,7 +167,6 @@ void EEVEE_render_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   EEVEE_lightprobes_cache_init(sldata, inst);
   EEVEE_lights_cache_init(sldata, inst);
   EEVEE_materials_cache_init(sldata, inst);
-  EEVEE_motion_blur_cache_init(sldata, inst);
   EEVEE_occlusion_cache_init(sldata, inst);
   EEVEE_screen_raytrace_cache_init(sldata, inst);
   EEVEE_subsurface_cache_init(sldata, inst);

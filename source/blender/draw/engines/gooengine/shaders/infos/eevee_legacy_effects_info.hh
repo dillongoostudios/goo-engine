@@ -150,19 +150,6 @@ AUTO_RESOURCE_LOCATION()
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
-/* EEVEE_shaders_velocity_resolve_sh_get */
-GPU_SHADER_CREATE_INFO(eevee_legacy_velocity_resolve)
-SAMPLER(0, Depth2D, depthBuffer)
-PUSH_CONSTANT(float4x4, prevViewProjMatrix)
-PUSH_CONSTANT(float4x4, currViewProjMatrixInv)
-PUSH_CONSTANT(float4x4, nextViewProjMatrix)
-FRAGMENT_OUT(0, float4, outData)
-ADDITIONAL_INFO(gpu_fullscreen)
-FRAGMENT_SOURCE("effect_velocity_resolve_frag.glsl")
-AUTO_RESOURCE_LOCATION()
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
 /* EEVEE_shaders_effect_downsample_sh_get */
 
 GPU_SHADER_CREATE_INFO(eevee_legacy_downsample_shared)

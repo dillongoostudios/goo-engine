@@ -130,7 +130,6 @@
 #include "eevee_legacy_effects_info.hh"
 #include "eevee_legacy_lightprobe_info.hh"
 #include "eevee_legacy_material_info.hh"
-#include "eevee_legacy_motion_blur_info.hh"
 #include "eevee_legacy_shadow_info.hh"
 
 /* EEVEE engine. */

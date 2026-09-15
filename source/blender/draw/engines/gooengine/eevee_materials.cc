@@ -1049,8 +1049,6 @@ void GOOENGINE_sync_mesh(Instance *inst,
 
       }
 
-      /* Motion Blur Vectors. */
-      EEVEE_motion_blur_cache_populate(sldata, inst, ob_ref);
     }
 
   }
@@ -1096,7 +1094,6 @@ void GOOENGINE_sync_hair(Instance *inst,
           *cast_shadow = true;
         }
 
-        EEVEE_motion_blur_hair_cache_populate(sldata, inst, ob_ref, psys, md);
       }
     }
   }
@@ -1125,7 +1122,6 @@ void GOOENGINE_sync_curves(Instance *inst,
     *cast_shadow = true;
   }
 
-  EEVEE_motion_blur_curves_cache_populate(sldata, inst, ob_ref);
 }
 
 void EEVEE_materials_cache_finish(EEVEE_ViewLayerData * /*sldata*/, Instance *inst)

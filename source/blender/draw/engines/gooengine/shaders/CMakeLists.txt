@@ -26,7 +26,6 @@ set(SRC_GLSL_VERT
   lightprobe_cube_display_vert.glsl
   lightprobe_grid_display_vert.glsl
   lightprobe_planar_downsample_vert.glsl
-  object_motion_vert.glsl
   world_vert.glsl
 )
 
@@ -50,13 +49,10 @@ set(SRC_GLSL_FRAG
   effect_gtao_frag.glsl
   effect_minmaxz_frag.glsl
   effect_mist_frag.glsl
-  effect_motion_blur_frag.glsl
   effect_reflection_resolve_frag.glsl
   effect_reflection_trace_frag.glsl
   effect_subsurface_frag.glsl
   effect_translucency_frag.glsl
-  effect_velocity_resolve_frag.glsl
-  effect_velocity_tile_frag.glsl
   lightprobe_cube_display_frag.glsl
   lightprobe_filter_diffuse_frag.glsl
   lightprobe_filter_glossy_frag.glsl
@@ -64,7 +60,6 @@ set(SRC_GLSL_FRAG
   lightprobe_grid_display_frag.glsl
   lightprobe_planar_downsample_frag.glsl
   lookdev_world_frag.glsl
-  object_motion_frag.glsl
   prepass_frag.glsl
   renderpass_accumulate_frag.glsl
   renderpass_postprocess_frag.glsl

@@ -472,9 +472,6 @@ void EEVEE_renderpasses_draw_debug(Instance *inst)
     case 10:
       tx = effects->sss_albedo;
       break;
-    case 11:
-      tx = effects->velocity_tx;
-      break;
     default:
       break;
   }
@@ -522,9 +519,6 @@ void EEVEE_reset_viewport_data(Instance *inst)
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->material_accum_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->renderpass_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->ao_accum_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->velocity_resolve_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->velocity_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(*inst->goo_data->velocity_tiles_fb);
 
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->update_noise_fb);
 
