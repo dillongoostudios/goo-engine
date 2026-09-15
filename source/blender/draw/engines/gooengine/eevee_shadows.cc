@@ -13,9 +13,26 @@
 
 #include "DEG_depsgraph_query.hh"
 
+#include "GPU_context.hh"
+
 #include "eevee_private.hh"
 
 #define SH_CASTER_ALLOC_CHUNK 32
+
+#ifdef WITH_METAL_BACKEND
+/* Clear every layer of a freshly created shadow depth pool to 1.0 (far). */
+static void eevee_shadow_pool_clear_layers(GPUTexture *pool, int layers)
+{
+  GPUFrameBuffer *tmp_fb = GPU_framebuffer_create("shadow_clear_fb");
+  for (int i = 0; i < layers; i++) {
+    GPU_framebuffer_texture_layer_attach(tmp_fb, pool, 0, i, 0);
+    GPU_framebuffer_bind(tmp_fb);
+    GPU_framebuffer_clear_depth(tmp_fb, 1.0f);
+  }
+  GPU_framebuffer_free(tmp_fb);
+  GPU_framebuffer_restore();
+}
+#endif
 
 void eevee_contact_shadow_setup(const Light *la, EEVEE_Shadow *evsh)
 {
@@ -247,6 +264,13 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
                                                               shadow_id_pool_format,
                                                               static_cast<DRWTextureFlag>(0),
                                                               nullptr);
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      /* Metal leaves new texture storage undefined; clear every layer to "far" so layers that
+       * are not rendered this frame don't produce black shadow artifacts. */
+      eevee_shadow_pool_clear_layers(sldata->shadow_cube_pool, max_ii(1, linfo->num_cube_layer * 6));
+    }
+#endif
   }
 
   if (!sldata->shadow_cascade_pool) {
@@ -264,6 +288,12 @@ void EEVEE_shadows_update(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
                                                                  shadow_id_pool_format,
                                                                  static_cast<DRWTextureFlag>(0),
                                                                  nullptr);
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      eevee_shadow_pool_clear_layers(sldata->shadow_cascade_pool,
+                                     max_ii(1, linfo->num_cascade_layer));
+    }
+#endif
   }
 
   if (sldata->shadow_fb == nullptr) {

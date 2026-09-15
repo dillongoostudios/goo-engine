@@ -1120,6 +1120,33 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
       desc.inputPrimitiveTopology = pipeline_descriptor.vertex_descriptor.prim_topology_class;
     }
 
+    /* Reclaim the reserved-but-unused null-attribute-buffer slot for shaders that would otherwise
+     * overflow the Metal buffer bind table. `MTL_uniform_buffer_base_index` is
+     * `num_vert_buffers + 1`, reserving index `num_vert_buffers` for the null attribute buffer.
+     * That slot is only bound when the shader has attributes missing from the bound vertex format
+     * (`using_null_buffer`). When it is unused, a heavy material (many vertex attributes + UBOs +
+     * a sampler argument buffer) can push the sampler argument buffer to
+     * `[[buffer(MTL_MAX_BUFFER_BINDINGS)]]`, which is out of range and fails compilation
+     * (e.g. an NPR face material with num_vert_buffers=16 and 11 UBOs puts the sampler argument
+     * buffer at buffer(31)).
+     * Only when we are genuinely at/over the limit AND the null slot is free do we shift the
+     * uniform base down by one so the sampler argument buffer lands at the last valid index. This
+     * is safe because every buffer bind index (push constant, UBOs, SSBOs, sampler argument buffer)
+     * is expressed relative to `MTL_uniform_buffer_base_index` both in the generated MSL and in the
+     * runtime binding code (see #MTLContext::ensure_texture_bindings), so shifting the base moves
+     * declaration and binding together. Scoped to the offending shaders so every other PSO keeps
+     * its existing null-slot-reserving layout. Cannot recover overflows larger than one slot. */
+    if (!using_null_buffer && mtl_interface->uses_argument_buffer_for_samplers() &&
+        MTL_uniform_buffer_base_index > pipeline_descriptor.vertex_descriptor.num_vert_buffers)
+    {
+      const int v_rel = mtl_interface->get_argument_buffer_bind_index(ShaderStage::VERTEX);
+      const int f_rel = mtl_interface->get_argument_buffer_bind_index(ShaderStage::FRAGMENT);
+      const int worst_abs = MTL_uniform_buffer_base_index + max_ii(v_rel, f_rel);
+      if (worst_abs >= MTL_MAX_BUFFER_BINDINGS) {
+        MTL_uniform_buffer_base_index -= 1;
+      }
+    }
+
     /* Update constant value for 'MTL_uniform_buffer_base_index'. */
     [values setConstantValue:&MTL_uniform_buffer_base_index
                         type:MTLDataTypeInt
@@ -1137,6 +1164,29 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
     [values setConstantValue:&MTL_storage_buffer_base_index
                         type:MTLDataTypeInt
                     withName:@"MTL_storage_buffer_base_index"];
+
+    /* After the reclaim above, warn if a shader's sampler argument buffer still exceeds the
+     * buffer bind table (overflow of more than one slot, or the null-attribute slot was in use so
+     * it could not be reclaimed). Such a shader fails to compile and its objects will not render;
+     * it needs the material's vertex-attribute / UBO count reduced. */
+    if (mtl_interface->uses_argument_buffer_for_samplers()) {
+      const int arg_abs =
+          MTL_uniform_buffer_base_index +
+          max_ii(mtl_interface->get_argument_buffer_bind_index(ShaderStage::VERTEX),
+                 mtl_interface->get_argument_buffer_bind_index(ShaderStage::FRAGMENT));
+      if (arg_abs >= MTL_MAX_BUFFER_BINDINGS) {
+        MTL_LOG_WARNING(
+            "Shader '%s': sampler argument buffer index %d exceeds limit %d and could not be "
+            "reclaimed (num_vert_buffers=%d, total_ubos=%u, null_buffer=%d); shader will fail to "
+            "compile.",
+            this->name,
+            arg_abs,
+            MTL_MAX_BUFFER_BINDINGS,
+            pipeline_descriptor.vertex_descriptor.num_vert_buffers,
+            mtl_interface->get_total_uniform_blocks(),
+            (int)using_null_buffer);
+      }
+    }
 
     /* Transform feedback constant.
      * Ensure buffer is placed after existing buffers, including default buffers. */
@@ -1215,7 +1265,14 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
           NSNotFound);
 
       const char *errors_c_str = [[error localizedDescription] UTF8String];
-      const StringRefNull source = shd_builder_->glsl_fragment_source_.c_str();
+      /* NOTE: `shd_builder_` is deleted at the end of finalize(); it is null whenever
+       * bake_pipeline_state runs (draw-time PSO specialization). A benign compiler warning here
+       * (e.g. "Compilation succeeded with: constexpr if is a C++17 extension") returns a non-null
+       * `error`, so we must not dereference `shd_builder_` for the source text or we segfault.
+       * The GLSL source is unavailable at bake time; log without source context. */
+      const StringRefNull source = (shd_builder_ != nullptr) ?
+                                       StringRefNull(shd_builder_->glsl_vertex_source_) :
+                                       StringRefNull();
 
       MTLLogParser parser;
       print_log({source}, errors_c_str, "VertShader", has_error, &parser);
@@ -1237,7 +1294,11 @@ MTLRenderPipelineStateInstance *MTLShader::bake_pipeline_state(
             NSNotFound);
 
         const char *errors_c_str = [[error localizedDescription] UTF8String];
-        const StringRefNull source = shd_builder_->glsl_fragment_source_;
+        /* NOTE: see the vertex branch above, `shd_builder_` is null at bake time, so guard
+         * against dereferencing it for the source text. */
+        const StringRefNull source = (shd_builder_ != nullptr) ?
+                                         StringRefNull(shd_builder_->glsl_fragment_source_) :
+                                         StringRefNull();
 
         MTLLogParser parser;
         print_log({source}, errors_c_str, "FragShader", has_error, &parser);

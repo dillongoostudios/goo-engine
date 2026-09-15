@@ -422,8 +422,11 @@ void MTLStateManager::set_shadow_bias(const bool enable)
   if (enable) {
     ds_state.depth_bias_enabled_for_lines = true;
     ds_state.depth_bias_enabled_for_tris = true;
-    ds_state.depth_bias = 2.0f;
-    ds_state.depth_slope_scale = 1.0f;
+    /* Match the OpenGL backend's `glPolygonOffset(2.0f, 1.0f)` (see gl_state.cc): GL's
+     * `factor` is Metal's `slopeScale` and GL's `units` is Metal's `depthBias`. The previous
+     * values had the two swapped. */
+    ds_state.depth_bias = 1.0f;
+    ds_state.depth_slope_scale = 2.0f;
   }
   else {
     ds_state.depth_bias_enabled_for_lines = false;

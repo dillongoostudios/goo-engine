@@ -124,7 +124,9 @@ void main()
   outTransmittance = vec4(cl.transmittance, transmit) * holdout;
 #else
   outRadiance = vec4(cl.radiance, holdout);
-  ssrNormals = normal_encode(normalize(mat3(ViewMatrix) * out_ssr_N), vec3(0.0));
+  /* Metal: the mat3(mat4) truncating constructor is not available in MSL for a matrix in the
+   * constant address space. Explicitly extract the upper-left 3x3 columns. */
+  ssrNormals = normal_encode(normalize(mat3(ViewMatrix[0].xyz, ViewMatrix[1].xyz, ViewMatrix[2].xyz) * out_ssr_N), vec3(0.0));
   ssrData = vec4(out_ssr_color, out_ssr_roughness);
   sssIrradiance = out_sss_radiance;
   sssRadius = out_sss_radius;

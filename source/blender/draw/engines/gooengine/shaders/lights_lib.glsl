@@ -182,7 +182,8 @@ float sample_ID_texture(usampler2DArray TEX_ID, vec3 coord, bool match)
 
   ivec3 tex_size = textureSize(TEX_ID, 0);
   // WHY THE FLYING FUCK DO WE NEED AN EXTRA 0.00195?
-  vec2 fra = fract((coord.xy * tex_size.xy) + vec2(0.50195, 0.50195));
+  /* Explicit vec2(): MSL has no implicit ivec2 -> vec2 conversion. */
+  vec2 fra = fract((coord.xy * vec2(tex_size.xy)) + vec2(0.50195, 0.50195));
 
   return mix(
     mix(matches.w, matches.z, fra.x),
