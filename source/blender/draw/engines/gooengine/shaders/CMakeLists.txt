@@ -27,7 +27,6 @@ set(SRC_GLSL_VERT
   lightprobe_grid_display_vert.glsl
   lightprobe_planar_downsample_vert.glsl
   object_motion_vert.glsl
-  volumetric_vert.glsl
   world_vert.glsl
 )
 
@@ -73,10 +72,6 @@ set(SRC_GLSL_FRAG
   shadow_frag.glsl
   surface_frag.glsl
   update_noise_frag.glsl
-  volumetric_accum_frag.glsl
-  volumetric_integration_frag.glsl
-  volumetric_resolve_frag.glsl
-  volumetric_scatter_frag.glsl
 )
 
 set(SRC_GLSL_COMP
@@ -107,7 +102,6 @@ set(SRC_GLSL_LIB
   renderpass_lib.glsl
   ssr_lib.glsl
   surface_lib.glsl
-  volumetric_lib.glsl
 )
 
 # Compile shaders with shader code.

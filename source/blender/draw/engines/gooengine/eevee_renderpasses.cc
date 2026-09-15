@@ -139,19 +139,6 @@ void EEVEE_renderpasses_init(Instance *inst)
   EEVEE_cryptomatte_renderpasses_init(inst);
 }
 
-BLI_INLINE bool eevee_renderpasses_volumetric_active(const EEVEE_EffectsInfo *effects,
-                                                     const EEVEE_PrivateData *g_data)
-{
-  if (effects->enabled_effects & EFFECT_VOLUMETRIC) {
-    if (g_data->render_passes &
-        (EEVEE_RENDER_PASS_VOLUME_LIGHT | EEVEE_RENDERPASSES_USES_TRANSMITTANCE))
-    {
-      return true;
-    }
-  }
-  return false;
-}
-
 void EEVEE_renderpasses_output_init(EEVEE_ViewLayerData *sldata,
                                     Instance *inst,
                                     uint tot_samples)
@@ -190,10 +177,6 @@ void EEVEE_renderpasses_output_init(EEVEE_ViewLayerData *sldata,
         (effects->enabled_effects & EFFECT_BLOOM) != 0)
     {
       EEVEE_bloom_output_init(sldata, inst, tot_samples);
-    }
-
-    if (eevee_renderpasses_volumetric_active(effects, g_data)) {
-      EEVEE_volumes_output_init(sldata, inst, tot_samples);
     }
 
     /* We set a default texture as not all post processes uses the inputBuffer. */
@@ -261,13 +244,10 @@ void EEVEE_renderpasses_postprocess(EEVEE_ViewLayerData * /*sldata*/,
   g_data->renderpass_current_sample = current_sample;
   g_data->renderpass_type = renderpass_type;
   g_data->renderpass_postprocess = PASS_POST_UNDEFINED;
-  const bool volumetric_active = eevee_renderpasses_volumetric_active(effects, g_data);
-  eRenderPassPostProcessType default_color_pass_type =
-      volumetric_active ? PASS_POST_ACCUMULATED_TRANSMITTANCE_COLOR : PASS_POST_ACCUMULATED_COLOR;
-  g_data->renderpass_transmittance_input = volumetric_active ? inst->goo_data->volume_transmittance_accum :
-                                                               inst->goo_data->color;
+  eRenderPassPostProcessType default_color_pass_type = PASS_POST_ACCUMULATED_COLOR;
+  g_data->renderpass_transmittance_input = inst->goo_data->color;
 
-  if (!volumetric_active && renderpass_type == EEVEE_RENDER_PASS_VOLUME_LIGHT) {
+  if (renderpass_type == EEVEE_RENDER_PASS_VOLUME_LIGHT) {
     /* Early exit: Volumetric effect is off, but the volume light pass was requested. */
     static float clear_col[4] = {0.0f};
     GPU_framebuffer_bind(inst->goo_data->renderpass_fb);
@@ -395,9 +375,6 @@ void EEVEE_renderpasses_output_accumulate(EEVEE_ViewLayerData *sldata,
     }
     if ((render_pass & EEVEE_RENDERPASSES_MATERIAL) != 0) {
       EEVEE_material_output_accumulate(sldata, inst);
-    }
-    if (eevee_renderpasses_volumetric_active(effects, g_data)) {
-      EEVEE_volumes_output_accumulate(sldata, inst);
     }
     if ((render_pass & EEVEE_RENDER_PASS_CRYPTOMATTE) != 0) {
       EEVEE_cryptomatte_output_accumulate(sldata, inst);
@@ -540,10 +517,6 @@ void EEVEE_reset_viewport_data(Instance *inst)
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->dof_filter_bg_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->dof_scatter_fg_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->dof_scatter_bg_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->volumetric_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->volumetric_scat_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->volumetric_integ_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->volumetric_accum_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->screen_tracing_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->mist_accum_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->material_accum_fb);

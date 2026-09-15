@@ -2,14 +2,12 @@
  *
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
-#include "eevee_legacy_volume_info.hh"
 #include "gpu_shader_create_info.hh"
 
 /* For EEVEE Materials prepared in `eevee_shader_material_create_info_amend`,
  * differing permutations are generated based on material options.
  *
  * Sources, e.g.
- * -> datatoc_volumetric_vert_glsl
  * -> datatoc_world_vert_glsl
  * -> datatoc_surface_vert_glsl
  *
@@ -34,28 +32,6 @@ ADDITIONAL_INFO(draw_view_goo)
 GPU_SHADER_CREATE_END()
 
 /**** MATERIAL VERTEX SHADER PERMUTATIONS ****/
-
-/* -------------------------------------------------------------------- */
-/** \name Volumetric
- * \{ */
-
-GPU_SHADER_CREATE_INFO(eevee_legacy_material_volumetric_vert)
-ADDITIONAL_INFO(eevee_legacy_material_empty_base_volume)
-VERTEX_OUT(legacy_volume_vert_geom_iface)
-ADDITIONAL_INFO(draw_resource_id_varying)
-GPU_SHADER_CREATE_END()
-
-#ifdef WITH_METAL_BACKEND
-GPU_SHADER_CREATE_INFO(eevee_legacy_material_volumetric_vert_no_geom)
-ADDITIONAL_INFO(eevee_legacy_material_empty_base_volume)
-BUILTINS(BuiltinBits::LAYER)
-VERTEX_OUT(legacy_volume_vert_geom_iface)
-VERTEX_OUT(legacy_volume_geom_frag_iface)
-ADDITIONAL_INFO(draw_resource_id_varying)
-GPU_SHADER_CREATE_END()
-#endif
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name World Shader
@@ -105,42 +81,7 @@ ADDITIONAL_INFO(eevee_legacy_surface_lib_pointcloud)
 AUTO_RESOURCE_LOCATION()
 GPU_SHADER_CREATE_END()
 
-/**** MATERIAL GEOMETRY SHADER PERMUTATIONS ****/
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Volumetric
- * \{ */
-
-GPU_SHADER_CREATE_INFO(eevee_legacy_material_volumetric_geom)
-ADDITIONAL_INFO(eevee_legacy_common_lib)
-ADDITIONAL_INFO(draw_view_goo)
-GEOMETRY_OUT(legacy_volume_geom_frag_iface)
-GEOMETRY_LAYOUT(PrimitiveIn::TRIANGLES, PrimitiveOut::TRIANGLE_STRIP, 3)
-ADDITIONAL_INFO(draw_resource_id_varying)
-GPU_SHADER_CREATE_END()
-
-/** \} */
-
 /**** MATERIAL FRAGMENT SHADER PERMUTATIONS ****/
-
-/* -------------------------------------------------------------------- */
-/** \name Volumetric Shader
- * \{ */
-
-GPU_SHADER_CREATE_INFO(eevee_legacy_material_volumetric_frag)
-ADDITIONAL_INFO(eevee_legacy_common_lib)
-ADDITIONAL_INFO(draw_view_goo)
-ADDITIONAL_INFO(draw_resource_id_varying)
-ADDITIONAL_INFO(eevee_legacy_volumetric_lib)
-FRAGMENT_OUT(0, float4, volumeScattering)
-FRAGMENT_OUT(1, float4, volumeExtinction)
-FRAGMENT_OUT(2, float4, volumeEmissive)
-FRAGMENT_OUT(3, float4, volumePhase)
-GPU_SHADER_CREATE_END()
-
-/** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Pre-pass Shader
@@ -211,7 +152,6 @@ ADDITIONAL_INFO(eevee_legacy_common_lib)
 ADDITIONAL_INFO(eevee_legacy_common_utiltex_lib)
 ADDITIONAL_INFO(eevee_legacy_closure_eval_surface_lib)
 ADDITIONAL_INFO(eevee_legacy_renderpass_lib)
-ADDITIONAL_INFO(eevee_legacy_volumetric_lib)
 PUSH_CONSTANT(float, backgroundAlpha)
 GPU_SHADER_CREATE_END()
 

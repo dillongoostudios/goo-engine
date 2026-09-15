@@ -288,23 +288,6 @@ const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_
 
     case VELOCITY_RESOLVE:
       return "eevee_legacy_velocity_resolve";
-    case VOLUMES_ACCUM:
-      return "eevee_legacy_volumes_accum";
-    case VOLUMES_CLEAR:
-      return "eevee_legacy_volumes_clear";
-    case VOLUMES_INTEGRATION:
-      return "eevee_legacy_volumes_integration";
-    case VOLUMES_INTEGRATION_OPTI:
-      return "eevee_legacy_volumes_integration_OPTI";
-    case VOLUMES_RESOLVE:
-      return "eevee_legacy_volumes_resolve";
-    case VOLUMES_RESOLVE_ACCUM:
-      return "eevee_legacy_volumes_resolve_accum";
-    case VOLUMES_SCATTER:
-      return "eevee_legacy_volumes_scatter";
-    case VOLUMES_SCATTER_WITH_LIGHTS:
-      return "eevee_legacy_volumes_scatter_with_lights";
-
     case UPDATE_NOISE:
       return "eevee_legacy_update_noise";
 

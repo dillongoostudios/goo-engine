@@ -98,7 +98,6 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
    * taa_current_sample. (See #66811) */
   EEVEE_temporal_sampling_update_matrices(inst);
 
-  EEVEE_volumes_init(sldata, inst);
   EEVEE_subsurface_init(sldata, inst);
 
   /* Force normal buffer creation. */

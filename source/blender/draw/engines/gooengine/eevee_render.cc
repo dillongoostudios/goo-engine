@@ -172,7 +172,6 @@ void EEVEE_render_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   EEVEE_screen_raytrace_cache_init(sldata, inst);
   EEVEE_subsurface_cache_init(sldata, inst);
   EEVEE_temporal_sampling_cache_init(sldata, inst);
-  EEVEE_volumes_cache_init(sldata, inst);
   EEVEE_cryptomatte_cache_init(sldata, inst);
 }
 
@@ -230,10 +229,6 @@ void EEVEE_render_cache(Instance *inst, blender::draw::ObjectRef &ob_ref)
       if (do_cryptomatte) {
         EEVEE_cryptomatte_object_curves_cache_populate(inst, sldata, ob_ref);
       }
-    }
-    else if (ob->type == OB_VOLUME) {
-      Scene *scene = DEG_get_evaluated_scene(inst->depsgraph);
-      GOOENGINE_sync_volume(sldata, inst, scene, ob_ref);
     }
     else if (ob->type == OB_LIGHTPROBE) {
       GOOENGINE_sync_probe(sldata, inst, ob);
@@ -592,7 +587,6 @@ void EEVEE_render_draw(Instance *inst, RenderEngine *engine, RenderLayer *rl, co
     BLI_halton_3d(primes, offset, inst->goo_data->effects->taa_current_sample, r);
     EEVEE_update_noise(inst, r);
     EEVEE_temporal_sampling_matrices_calc(inst->goo_data->effects, r);
-    EEVEE_volumes_set_jitter(sldata, inst->goo_data->effects->taa_current_sample - 1);
     EEVEE_materials_init(sldata, inst);
 
     /* Refresh Probes
@@ -619,7 +613,6 @@ void EEVEE_render_draw(Instance *inst, RenderEngine *engine, RenderLayer *rl, co
     /* Create minmax texture */
     EEVEE_create_minmax_buffer(inst, dtxl->depth, -1);
     EEVEE_occlusion_compute(sldata, inst);
-    EEVEE_volumes_compute(sldata, inst);
     /* Shading pass */
     eevee_render_draw_background(inst);
     GPU_framebuffer_bind(inst->goo_data->main_fb);
@@ -635,7 +628,6 @@ void EEVEE_render_draw(Instance *inst, RenderEngine *engine, RenderLayer *rl, co
     /* Result NORMAL */
     eevee_render_result_normal(rl, viewname, rect, inst, sldata);
     /* Volumetrics Resolve Opaque */
-    EEVEE_volumes_resolve(sldata, inst);
     /* Subsurface output, Occlusion output, Mist output */
     EEVEE_renderpasses_output_accumulate(sldata, inst, false);
     /* Transparent */

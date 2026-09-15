@@ -250,7 +250,6 @@ void Instance::begin_sync()
   EEVEE_screen_raytrace_cache_init(sldata, this);
   EEVEE_subsurface_cache_init(sldata, this);
   EEVEE_temporal_sampling_cache_init(sldata, this);
-  EEVEE_volumes_cache_init(sldata, this);
 }
 
 void Instance::object_sync(blender::draw::ObjectRef &ob_ref, blender::draw::Manager &manager)
@@ -313,10 +312,6 @@ void Instance::object_sync(blender::draw::ObjectRef &ob_ref, blender::draw::Mana
       case OB_POINTCLOUD:
         // sync.sync_pointcloud(ob, ob_handle, ob_ref);
         break;
-      case OB_VOLUME:
-        GOOENGINE_sync_volume(
-            sldata, this, draw_ctx->scene, ob);
-        break;
       case OB_CURVES:
         GOOENGINE_sync_curves(
             this, sldata, ob, &cast_shadow);
@@ -350,7 +345,6 @@ void Instance::end_sync()
   const DRWContext *draw_ctx = DRW_context_get();
   const Scene *scene_eval = DEG_get_evaluated_scene(draw_ctx->depsgraph);
 
-  EEVEE_volumes_cache_finish(sldata, this);
   EEVEE_materials_cache_finish(sldata, this);
   EEVEE_lights_cache_finish(sldata, this);
   EEVEE_lightprobes_cache_finish(sldata, this);
@@ -358,7 +352,6 @@ void Instance::end_sync()
 
   EEVEE_subsurface_draw_init(sldata, this);
   EEVEE_effects_draw_init(sldata, this);
-  EEVEE_volumes_draw_init(sldata, this);
 
   uint tot_samples = scene_eval->eevee.taa_render_samples;
   uint vl_samples = draw_ctx->view_layer->samples;
@@ -536,7 +529,6 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
                             });
 
       EEVEE_motion_blur_cache_finish(this);
-      EEVEE_volumes_cache_finish(sldata, this);
       EEVEE_materials_cache_finish(sldata, this);
       EEVEE_lights_cache_finish(sldata, this);
       EEVEE_lightprobes_cache_finish(sldata, this);
@@ -544,7 +536,6 @@ void Instance::render_frame(RenderEngine *engine, RenderLayer *render_layer, con
 
       EEVEE_subsurface_draw_init(sldata, this);
       EEVEE_effects_draw_init(sldata, this);
-      EEVEE_volumes_draw_init(sldata, this);
     }
 
     /* Actual drawing. */
@@ -640,7 +631,6 @@ void Instance::draw(blender::draw::Manager &manager)
                                         this->goo_data->effects->taa_current_sample;
       BLI_halton_3d(primes, offset, samp, r);
       EEVEE_update_noise(this, r);
-      EEVEE_volumes_set_jitter(sldata, samp - 1);
       EEVEE_materials_init(sldata, this);
     }
     /* Copy previous persmat to UBO data */
@@ -696,7 +686,6 @@ void Instance::draw(blender::draw::Manager &manager)
     EEVEE_create_minmax_buffer(this, dtxl->depth, -1);
 
     EEVEE_occlusion_compute(sldata, this);
-    EEVEE_volumes_compute(sldata, this);
 
     /* Shading pass */
     if (DRW_state_draw_background()) {
@@ -720,9 +709,6 @@ void Instance::draw(blender::draw::Manager &manager)
 
     /* Streamlined version of EEVEE_refraction_compute to just copy the colour buffer */
     EEVEE_effects_radiance_copy(sldata, this);
-
-    /* Volumetrics Resolve Opaque */
-    EEVEE_volumes_resolve(sldata, this);
 
     /* Render-passes. */
     EEVEE_renderpasses_output_accumulate(sldata, this, false);

@@ -10,7 +10,6 @@
 #include "closure_eval_surface_lib.glsl"
 
 #include "surface_lib.glsl"
-#include "volumetric_lib.glsl"
 #include "renderpass_lib.glsl"
 
 #ifdef EEVEE_DISPLACEMENT_BUMP
@@ -111,15 +110,8 @@ void main()
 
 #ifdef USE_ALPHA_BLEND
   float2 uvs = gl_FragCoord.xy * volCoordScale.zw;
-  float3 vol_transmit, vol_scatter;
-  volumetric_resolve(uvs, gl_FragCoord.z, vol_transmit, vol_scatter);
 
-  /* Removes part of the volume scattering that have
-   * already been added to the destination pixels.
-   * Since we do that using the blending pipeline we need to account for material transmittance. */
-  vol_scatter -= vol_scatter * cl.transmittance;
-
-  cl.radiance = cl.radiance * holdout * vol_transmit + vol_scatter;
+  cl.radiance = cl.radiance * holdout;
   outRadiance = float4(cl.radiance, alpha * holdout);
   outTransmittance = float4(cl.transmittance, transmit) * holdout;
 #else

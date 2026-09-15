@@ -124,7 +124,6 @@ set(SRC
   engines/gooengine/eevee_shadows_cube.cc
   engines/gooengine/eevee_subsurface.cc
   engines/gooengine/eevee_temporal_sampling.cc
-  engines/gooengine/eevee_volumes.cc
   engines/eevee/eevee_ambient_occlusion.cc
   engines/eevee/eevee_camera.cc
   engines/eevee/eevee_cryptomatte.cc
@@ -437,14 +436,6 @@ set(GLSL_SRC
   engines/gooengine/shaders/surface_lib.glsl
   engines/gooengine/shaders/surface_vert.glsl
   engines/gooengine/shaders/update_noise_frag.glsl
-  engines/gooengine/shaders/volumetric_accum_frag.glsl
-  engines/gooengine/shaders/volumetric_frag.glsl
-  engines/gooengine/shaders/volumetric_geom.glsl
-  engines/gooengine/shaders/volumetric_integration_frag.glsl
-  engines/gooengine/shaders/volumetric_lib.glsl
-  engines/gooengine/shaders/volumetric_resolve_frag.glsl
-  engines/gooengine/shaders/volumetric_scatter_frag.glsl
-  engines/gooengine/shaders/volumetric_vert.glsl
   engines/gooengine/shaders/world_vert.glsl
   engines/gooengine/shaders/infos/engine_eevee_legacy_shared.hh
   engines/gooengine/engine_eevee_shared_defines.hh

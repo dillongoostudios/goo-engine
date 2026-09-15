@@ -992,7 +992,6 @@ static void eevee_lightbake_cache_create(blender::gooengine::Instance *inst, EEV
   EEVEE_effects_cache_init(sldata, inst);
   EEVEE_materials_cache_init(sldata, inst);
   EEVEE_subsurface_cache_init(sldata, inst);
-  EEVEE_volumes_cache_init(sldata, inst);
   EEVEE_lights_cache_init(sldata, inst);
   EEVEE_lightprobes_cache_init(sldata, inst);
 
@@ -1012,7 +1011,6 @@ static void eevee_lightbake_cache_create(blender::gooengine::Instance *inst, EEV
                           EEVEE_render_cache(inst, ob_ref);
                         });
 
-  EEVEE_volumes_cache_finish(sldata, inst);
   EEVEE_materials_cache_finish(sldata, inst);
   EEVEE_lights_cache_finish(sldata, inst);
   EEVEE_lightprobes_cache_finish(sldata, inst);
@@ -1023,7 +1021,6 @@ static void eevee_lightbake_cache_create(blender::gooengine::Instance *inst, EEV
 
   EEVEE_subsurface_draw_init(sldata, inst);
   EEVEE_effects_draw_init(sldata, inst);
-  EEVEE_volumes_draw_init(sldata, inst);
 
   inst->goo_data->color = nullptr;
 

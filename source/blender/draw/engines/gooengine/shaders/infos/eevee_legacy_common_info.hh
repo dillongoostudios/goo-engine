@@ -103,15 +103,6 @@ ADDITIONAL_INFO(draw_view_goo)
 PUSH_CONSTANT(int2, halfresOffset)
 GPU_SHADER_CREATE_END()
 
-/* Volumetric lib. */
-GPU_SHADER_CREATE_INFO(eevee_legacy_volumetric_lib)
-ADDITIONAL_INFO(eevee_legacy_lights_lib)
-ADDITIONAL_INFO(eevee_legacy_lightprobe_lib)
-ADDITIONAL_INFO(eevee_legacy_irradiance_lib)
-SAMPLER(13, Float3D, inScattering)
-SAMPLER(14, Float3D, inTransmittance)
-GPU_SHADER_CREATE_END()
-
 /* eevee_legacy_cryptomatte_lib. */
 GPU_SHADER_CREATE_INFO(eevee_legacy_cryptomatte_lib)
 ADDITIONAL_INFO(draw_curves_infos_goo)

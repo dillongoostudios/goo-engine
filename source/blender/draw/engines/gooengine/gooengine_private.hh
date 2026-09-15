@@ -885,12 +885,6 @@ struct GOOENGINE_Data {
   PassSimple dof_scatter_bg = {"dof_scatter_bg"};
   PassSimple dof_filter = {"dof_filter"};
   PassSimple dof_resolve = {"dof_resolve"};
-  DRWPass *volumetric_world_ps;
-  DRWPass *volumetric_objects_ps;
-  DRWPass *volumetric_scatter_ps;
-  DRWPass *volumetric_integration_ps;
-  DRWPass *volumetric_resolve_ps;
-  DRWPass *volumetric_accum_ps;
   DRWPass *velocity_object;
   DRWPass *velocity_hair;
   DRWPass *velocity_resolve;
@@ -973,10 +967,6 @@ struct GOOENGINE_Data {
   GPUFrameBuffer *dof_filter_bg_fb;
   GPUFrameBuffer *dof_scatter_fg_fb;
   GPUFrameBuffer *dof_scatter_bg_fb;
-  GPUFrameBuffer *volumetric_fb;
-  GPUFrameBuffer *volumetric_scat_fb;
-  GPUFrameBuffer *volumetric_integ_fb;
-  GPUFrameBuffer *volumetric_accum_fb;
   GPUFrameBuffer *screen_tracing_fb;
   GPUFrameBuffer *mist_accum_fb;
   GPUFrameBuffer *material_accum_fb;
@@ -1551,23 +1541,6 @@ void EEVEE_temporal_sampling_matrices_calc(EEVEE_EffectsInfo *effects, const dou
 void EEVEE_temporal_sampling_update_matrices(Instance *inst);
 void EEVEE_temporal_sampling_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
 void EEVEE_temporal_sampling_draw(Instance *inst);
-
-/* `eevee_volumes.cc` */
-
-void EEVEE_volumes_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_set_jitter(EEVEE_ViewLayerData *sldata, uint current_sample);
-void EEVEE_volumes_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void GOOENGINE_sync_volume(EEVEE_ViewLayerData *sldata,
-                                    Instance *inst,
-                                    Scene *scene,
-                                    const blender::draw::ObjectRef &ob_ref);
-void EEVEE_volumes_cache_finish(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_draw_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_compute(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_resolve(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_output_init(EEVEE_ViewLayerData *sldata, Instance *inst, uint tot_samples);
-void EEVEE_volumes_output_accumulate(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_volumes_free();
 
 /* `eevee_effects.cc` */
 

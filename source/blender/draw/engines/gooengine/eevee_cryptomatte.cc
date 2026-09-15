@@ -500,11 +500,6 @@ static void eevee_cryptomatte_postprocess_weights(Instance *inst)
 
   EEVEE_CryptomatteSample *accum_buffer = g_data->cryptomatte_accum_buffer;
   BLI_assert(accum_buffer);
-  float *volumetric_transmittance_buffer = nullptr;
-  if ((effects->enabled_effects & EFFECT_VOLUMETRIC) != 0) {
-    volumetric_transmittance_buffer = static_cast<float *>(
-        GPU_texture_read(inst->goo_data->volume_transmittance_accum, GPU_DATA_FLOAT, 0));
-  }
   const int num_samples = effects->taa_current_sample - 1;
 
   int accum_pixel_index = 0;
@@ -514,12 +509,6 @@ static void eevee_cryptomatte_postprocess_weights(Instance *inst)
        pixel_index++, accum_pixel_index += accum_pixel_stride)
   {
     float coverage = 1.0f;
-    if (volumetric_transmittance_buffer != nullptr) {
-      coverage = (volumetric_transmittance_buffer[pixel_index * 4] +
-                  volumetric_transmittance_buffer[pixel_index * 4 + 1] +
-                  volumetric_transmittance_buffer[pixel_index * 4 + 2]) /
-                 (3.0f * num_samples);
-    }
     for (int layer = 0; layer < num_cryptomatte_layers; layer++) {
       const int layer_offset = eevee_cryptomatte_layer_offset(view_layer, layer);
       /* Calculate the total weight of the sample. */
@@ -561,9 +550,6 @@ static void eevee_cryptomatte_postprocess_weights(Instance *inst)
     }
   }
 
-  if (volumetric_transmittance_buffer) {
-    MEM_freeN(volumetric_transmittance_buffer);
-  }
 }
 
 /* Extract cryptomatte layer from the cryptomatte_accum_buffer to render passes. */

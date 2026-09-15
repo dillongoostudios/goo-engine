@@ -1053,10 +1053,6 @@ void GOOENGINE_sync_mesh(Instance *inst,
       EEVEE_motion_blur_cache_populate(sldata, inst, ob_ref);
     }
 
-    /* Volumetrics */
-    if (use_volume_material) {
-      GOOENGINE_sync_volume(sldata, inst, scene, ob_ref);
-    }
   }
 }
 

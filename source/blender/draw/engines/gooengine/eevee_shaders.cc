@@ -229,10 +229,7 @@ static const char *eevee_get_vert_info(int options)
   const bool is_hair = (options & (VAR_MAT_HAIR)) != 0;
   const bool is_point_cloud = (options & (VAR_MAT_POINTCLOUD)) != 0;
 
-  if ((options & VAR_MAT_VOLUME) != 0) {
-    info_name = "eevee_legacy_material_volumetric_vert";
-  }
-  else if ((options & (VAR_WORLD_PROBE | VAR_WORLD_BACKGROUND)) != 0) {
+  if ((options & (VAR_WORLD_PROBE | VAR_WORLD_BACKGROUND)) != 0) {
     info_name = "eevee_legacy_material_world_vert";
   }
   else {
@@ -261,10 +258,6 @@ static const char *eevee_get_geom_info(int options)
     return nullptr;
   }
 
-  if ((options & VAR_MAT_VOLUME) != 0) {
-    info_name = "eevee_legacy_material_volumetric_geom";
-  }
-
   return info_name;
 }
 
@@ -277,12 +270,7 @@ static const char *eevee_get_frag_info(int options)
   const bool is_hair = (options & (VAR_MAT_HAIR)) != 0;
   const bool is_point_cloud = (options & (VAR_MAT_POINTCLOUD)) != 0;
 
-  if ((options & VAR_MAT_VOLUME) != 0) {
-    /* -- VOLUME FRAG -
-     * Select create info permutation for `volume_frag`. */
-    info_name = "eevee_legacy_material_volumetric_frag";
-  }
-  else if ((options & VAR_MAT_DEPTH) != 0) {
+  if ((options & VAR_MAT_DEPTH) != 0) {
     /* -- PREPASS FRAG -
      * Select create info permutation for `prepass_frag`. */
 
@@ -329,10 +317,7 @@ static const char *eevee_get_vert_source(int options)
 {
   const char *source_name = nullptr;
 
-  if ((options & VAR_MAT_VOLUME) != 0) {
-    source_name = "volumetric_vert.glsl";
-  }
-  else if ((options & (VAR_WORLD_PROBE | VAR_WORLD_BACKGROUND)) != 0) {
+  if ((options & (VAR_WORLD_PROBE | VAR_WORLD_BACKGROUND)) != 0) {
     source_name = "world_vert.glsl";
   }
   else {
@@ -353,10 +338,6 @@ static const char *eevee_get_geom_source(int options)
     return nullptr;
   }
 
-  if ((options & VAR_MAT_VOLUME) != 0) {
-    source_name = "volumetric_geom.glsl";
-  }
-
   return source_name;
 }
 
@@ -364,12 +345,7 @@ static const char *eevee_get_frag_source(int options)
 {
   const char *source_name = nullptr;
 
-  if ((options & VAR_MAT_VOLUME) != 0) {
-    /* -- VOLUME FRAG -
-     * Select create info permutation for `volume_frag`. */
-    source_name = "volumetric_frag.glsl";
-  }
-  else if ((options & VAR_MAT_DEPTH) != 0) {
+  if ((options & VAR_MAT_DEPTH) != 0) {
     /* -- PREPASS FRAG -
      * Select create info permutation for `prepass_frag`. */
     source_name = "prepass_frag.glsl";
