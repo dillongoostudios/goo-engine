@@ -167,7 +167,6 @@ void EEVEE_render_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst)
   EEVEE_lightprobes_cache_init(sldata, inst);
   EEVEE_lights_cache_init(sldata, inst);
   EEVEE_materials_cache_init(sldata, inst);
-  EEVEE_occlusion_cache_init(sldata, inst);
   EEVEE_screen_raytrace_cache_init(sldata, inst);
   EEVEE_subsurface_cache_init(sldata, inst);
   EEVEE_temporal_sampling_cache_init(sldata, inst);
@@ -611,7 +610,6 @@ void EEVEE_render_draw(Instance *inst, RenderEngine *engine, RenderLayer *rl, co
     DRW_draw_pass(inst->goo_data->depth_ps);
     /* Create minmax texture */
     EEVEE_create_minmax_buffer(inst, dtxl->depth, -1);
-    EEVEE_occlusion_compute(sldata, inst);
     /* Shading pass */
     eevee_render_draw_background(inst);
     GPU_framebuffer_bind(inst->goo_data->main_fb);

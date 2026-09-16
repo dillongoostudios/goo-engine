@@ -169,10 +169,6 @@ void EEVEE_renderpasses_output_init(EEVEE_ViewLayerData *sldata,
       EEVEE_shadow_output_init(sldata, inst, tot_samples);
     }
 
-    if ((g_data->render_passes & EEVEE_RENDER_PASS_AO) != 0) {
-      EEVEE_occlusion_output_init(sldata, inst, tot_samples);
-    }
-
     if ((g_data->render_passes & EEVEE_RENDER_PASS_BLOOM) != 0 &&
         (effects->enabled_effects & EFFECT_BLOOM) != 0)
     {
@@ -367,9 +363,6 @@ void EEVEE_renderpasses_output_accumulate(EEVEE_ViewLayerData *sldata,
     if ((render_pass & EEVEE_RENDER_PASS_MIST) != 0) {
       EEVEE_mist_output_accumulate(sldata, inst);
     }
-    if ((render_pass & EEVEE_RENDER_PASS_AO) != 0) {
-      EEVEE_occlusion_output_accumulate(sldata, inst);
-    }
     if ((render_pass & EEVEE_RENDER_PASS_SHADOW) != 0) {
       EEVEE_shadow_output_accumulate(sldata, inst);
     }
@@ -458,10 +451,10 @@ void EEVEE_renderpasses_draw_debug(Instance *inst)
       tx = inst->goo_data->color_double_buffer;
       break;
     case 6:
-      tx = effects->gtao_horizons_renderpass;
+      /* UNUSED */
       break;
     case 7:
-      tx = effects->gtao_horizons_renderpass;
+      /* UNUSED */
       break;
     case 8:
       tx = effects->sss_irradiance;
@@ -483,8 +476,6 @@ void EEVEE_renderpasses_draw_debug(Instance *inst)
 
 void EEVEE_reset_viewport_data(Instance *inst)
 {
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->gtao_fb);
-  GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->gtao_debug_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->downsample_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->maxzbuffer_fb);
   GPU_FRAMEBUFFER_FREE_SAFE(inst->goo_data->bloom_blit_fb);

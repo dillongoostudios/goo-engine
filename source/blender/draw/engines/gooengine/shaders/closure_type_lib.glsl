@@ -98,11 +98,6 @@ Closure closure_eval(ClosureSubsurface diffuse,
 Closure closure_add(inout Closure cl1, inout Closure cl2);
 Closure closure_mix(inout Closure cl1, inout Closure cl2, float fac);
 
-float ambient_occlusion_eval(float3 normal,
-                             float distance,
-                             const float inverted,
-                             const float sample_count);
-
 /* WORKAROUND: Included later with libraries. This is because we are mixing include systems. */
 float3 safe_normalize(float3 N);
 float fast_sqrt(float a);

@@ -7,7 +7,9 @@
 #include "common_utiltex_lib.glsl"
 #include "lights_lib.glsl"
 #include "lightprobe_lib.glsl"
-#include "ambient_occlusion_lib.glsl"
+#include "draw_math_geom_lib.glsl"
+#include "raytrace_lib.glsl"
+#include "surface_lib.glsl"
 #include "bsdf_common_lib.glsl"
 #include "closure_eval_lib.glsl"
 #include "renderpass_lib.glsl"
@@ -67,11 +69,7 @@ ClosureEvalGlossy closure_Glossy_eval_init(inout ClosureInputGlossy cl_in,
   ClosureEvalGlossy cl_eval;
   cl_eval.ltc_mat = texture(utilTex, float3(lut_uv, LTC_MAT_LAYER));
   cl_eval.probe_sampling_dir = specular_dominant_dir(cl_in.N, cl_common.V, sqr(cl_in.roughness));
-  cl_eval.spec_occlusion = specular_occlusion(cl_common.occlusion_data,
-                                              cl_common.V,
-                                              cl_common.N,
-                                              cl_in.roughness,
-                                              cl_eval.probe_sampling_dir);
+  cl_eval.spec_occlusion = 1.0f;
   cl_eval.raytrace_radiance = float3(0.0f);
 
 #ifdef STEP_RESOLVE /* SSR */

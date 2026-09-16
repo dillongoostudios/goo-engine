@@ -106,11 +106,6 @@ bool ShaderModule::static_shaders_are_ready(bool block_until_ready)
 const char *ShaderModule::static_shader_create_info_name_get(eShaderType shader_type)
 {
   switch (shader_type) {
-    case AMBIENT_OCCLUSION:
-      return "eevee_legacy_ambient_occlusion";
-    case AMBIENT_OCCLUSION_DEBUG:
-      return "eevee_legacy_ambient_occlusion_debug";
-      
     case BLOOM_BLIT:
       return "eevee_legacy_bloom_blit";
     case BLOOM_BLIT_HQ:

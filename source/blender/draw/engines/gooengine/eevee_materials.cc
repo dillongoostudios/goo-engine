@@ -113,9 +113,6 @@ void GOOENGINE_material_bind_resources(PassSimple &pass,
   if (use_diffuse || use_glossy || use_refract || use_ao) {
     pass.bind_texture("maxzBuffer", &inst->goo_data->maxzbuffer);
   }
-  if ((use_diffuse || use_glossy) && !use_ssrefraction) {
-    pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
-  }
   if (use_diffuse) {
     pass.bind_texture("irradianceGrid", &lcache->grid_tx.tex);
   }
@@ -242,9 +239,6 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   }
   if (use_diffuse || use_glossy || use_refract || use_ao) {
     DRW_shgroup_uniform_texture_ref(shgrp, "maxzBuffer", &inst->goo_data->maxzbuffer);
-  }
-  if ((use_diffuse || use_glossy) && !use_ssrefraction) {
-    DRW_shgroup_uniform_texture_ref(shgrp, "horizonBuffer", &effects->gtao_horizons);
   }
   if (use_diffuse) {
     DRW_shgroup_uniform_texture_ref(shgrp, "irradianceGrid", &lcache->grid_tx.tex);

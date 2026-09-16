@@ -110,7 +110,6 @@ set(SRC
   engines/gooengine/eevee_lut_gen.cc
   engines/gooengine/eevee_materials.cc
   engines/gooengine/eevee_mist.cc
-  engines/gooengine/eevee_occlusion.cc
   engines/gooengine/eevee_render.cc
   engines/gooengine/eevee_renderpasses.cc
   engines/gooengine/eevee_sampling.cc
@@ -350,7 +349,6 @@ set(LIB
 )
 
 set(GLSL_SRC
-  engines/gooengine/shaders/ambient_occlusion_lib.glsl
   engines/gooengine/shaders/background_vert.glsl
   engines/gooengine/shaders/bsdf_common_lib.glsl
   engines/gooengine/shaders/bsdf_lut_frag.glsl
@@ -386,7 +384,6 @@ set(GLSL_SRC
   engines/gooengine/shaders/effect_reflection_trace_frag.glsl
   engines/gooengine/shaders/effect_downsample_cube_frag.glsl
   engines/gooengine/shaders/effect_downsample_frag.glsl
-  engines/gooengine/shaders/effect_gtao_frag.glsl
   engines/gooengine/shaders/effect_minmaxz_frag.glsl
   engines/gooengine/shaders/effect_mist_frag.glsl
   engines/gooengine/shaders/effect_subsurface_frag.glsl

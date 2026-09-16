@@ -245,7 +245,6 @@ void Instance::begin_sync()
   EEVEE_lightprobes_cache_init(sldata, this);
   EEVEE_lights_cache_init(sldata, this);
   EEVEE_materials_cache_init(sldata, this);
-  EEVEE_occlusion_cache_init(sldata, this);
   EEVEE_screen_raytrace_cache_init(sldata, this);
   EEVEE_subsurface_cache_init(sldata, this);
   EEVEE_temporal_sampling_cache_init(sldata, this);
@@ -623,8 +622,6 @@ void Instance::draw(blender::draw::Manager &manager)
     /* Create minmax texture */
     EEVEE_create_minmax_buffer(this, dtxl->depth, -1);
 
-    EEVEE_occlusion_compute(sldata, this);
-
     /* Shading pass */
     if (DRW_state_draw_background()) {
       DRW_draw_pass(this->goo_data->background_ps);
@@ -635,7 +632,6 @@ void Instance::draw(blender::draw::Manager &manager)
     /* Effects pre-transparency */
     EEVEE_subsurface_compute(sldata, this);
     EEVEE_reflection_compute(sldata, this);
-    EEVEE_occlusion_draw_debug(sldata, this);
     if (this->goo_data->probe_display) {
       DRW_draw_pass(this->goo_data->probe_display);
     }

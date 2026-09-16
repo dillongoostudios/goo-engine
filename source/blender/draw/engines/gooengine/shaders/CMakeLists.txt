@@ -46,7 +46,6 @@ set(SRC_GLSL_FRAG
   effect_dof_setup_frag.glsl
   effect_downsample_cube_frag.glsl
   effect_downsample_frag.glsl
-  effect_gtao_frag.glsl
   effect_minmaxz_frag.glsl
   effect_mist_frag.glsl
   effect_reflection_resolve_frag.glsl
@@ -73,7 +72,6 @@ set(SRC_GLSL_COMP
 )
 
 set(SRC_GLSL_LIB
-  ambient_occlusion_lib.glsl
   bsdf_common_lib.glsl
   bsdf_sampling_lib.glsl
   closure_eval_diffuse_lib.glsl

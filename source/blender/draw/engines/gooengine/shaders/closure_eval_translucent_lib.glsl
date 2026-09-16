@@ -7,7 +7,9 @@
 #include "common_utiltex_lib.glsl"
 #include "lights_lib.glsl"
 #include "lightprobe_lib.glsl"
-#include "ambient_occlusion_lib.glsl"
+#include "draw_math_geom_lib.glsl"
+#include "raytrace_lib.glsl"
+#include "surface_lib.glsl"
 #include "closure_eval_lib.glsl"
 #include "renderpass_lib.glsl"
 

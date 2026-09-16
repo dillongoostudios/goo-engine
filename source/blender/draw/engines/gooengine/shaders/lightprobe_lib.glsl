@@ -9,7 +9,8 @@
 #include "goo_common_view_lib.glsl"
 #include "common_utiltex_lib.glsl"
 #include "common_uniforms_lib.glsl"
-#include "ambient_occlusion_lib.glsl"
+#include "raytrace_lib.glsl"
+#include "surface_lib.glsl"
 #include "irradiance_lib.glsl"
 
 /* ----------- Uniforms --------- */
@@ -214,22 +215,19 @@ void fallback_cubemap(float3 N,
   /* Specular probes */
   float3 spec_dir = specular_dominant_dir(N, V, roughnessSquared);
 
-  OcclusionData occlusion_data = occlusion_load(vP, 1.0f);
-  float final_ao = specular_occlusion(occlusion_data, V, N, roughness, spec_dir);
-
   /* Starts at 1 because 0 is world probe */
   for (int i = 1; i < MAX_PROBE && i < prbNumRenderCube && spec_accum.a < 0.999f; i++) {
     float fade = probe_attenuation_cube(i, P);
 
     if (fade > 0.0f) {
-      float3 spec = final_ao * probe_evaluate_cube(i, P, spec_dir, roughness);
+      float3 spec = probe_evaluate_cube(i, P, spec_dir, roughness);
       accumulate_light(spec, fade, spec_accum);
     }
   }
 
   /* World Specular */
   if (spec_accum.a < 0.999f) {
-    float3 spec = final_ao * probe_evaluate_world_spec(spec_dir, roughness);
+    float3 spec = probe_evaluate_world_spec(spec_dir, roughness);
     accumulate_light(spec, 1.0f, spec_accum);
   }
 }

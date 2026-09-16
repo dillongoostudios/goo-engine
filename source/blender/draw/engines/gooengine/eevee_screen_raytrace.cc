@@ -146,7 +146,6 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *ins
     pass.bind_texture("planarDepth", &inst->goo_data->planar_depth);
     pass.bind_texture("probeCubes", &lcache->cube_tx.tex);
     pass.bind_texture("irradianceGrid", &lcache->grid_tx.tex);
-    pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
     pass.bind_texture("probePlanars", &inst->goo_data->planar_pool);
     
     pass.bind_texture("utilTex", EEVEE_materials_get_util_tex());
@@ -202,7 +201,6 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *ins
         pass.bind_ubo("common_block", sldata->common_ubo);
         pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
         pass.push_constant("samplePoolOffset", &effects->taa_current_sample);
-        pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
         
         pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
       }
@@ -236,7 +234,6 @@ void EEVEE_screen_raytrace_cache_init(EEVEE_ViewLayerData *sldata, Instance *ins
       pass.bind_ubo("common_block", sldata->common_ubo);
       pass.bind_ubo("renderpass_block", sldata->renderpass_ubo.combined);
       pass.push_constant("samplePoolOffset", &effects->taa_current_sample);
-      pass.bind_texture("horizonBuffer", &effects->gtao_horizons);
       
       pass.draw_procedural(GPU_PRIM_TRIS, 1, 3);
     }

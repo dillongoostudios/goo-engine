@@ -214,8 +214,6 @@ struct ClosureInputCommon {
 #endif
 
 struct ClosureEvalCommon {
-  /** Result of SSAO. */
-  OcclusionData occlusion_data;
   /** View vector. */
   float3 V;
   /** Surface position. */
@@ -266,8 +264,6 @@ ClosureEvalCommon closure_Common_eval_init(ClosureInputCommon cl_in)
   cl_eval.vNg = transform_direction(ViewMatrixGoo, cl_eval.Ng);
   cl_eval.light_groups = cl_in.light_groups;
   cl_eval.light_group_shadows = cl_in.light_group_shadows;
-
-  cl_eval.occlusion_data = occlusion_load(cl_eval.vP, cl_in.occlusion);
 
   cl_eval.specular_accum = 1.0f;
   cl_eval.diffuse_accum = 1.0f;

@@ -30,10 +30,7 @@ using StaticShader = gpu::StaticShader;
 
 /* Keep alphabetical order and clean prefix. */
 enum eShaderType {
-  AMBIENT_OCCLUSION = 0,
-  AMBIENT_OCCLUSION_DEBUG,
-
-  BLOOM_BLIT,
+  BLOOM_BLIT = 0,
   BLOOM_BLIT_HQ,
   BLOOM_DOWNSAMPLE,
   BLOOM_DOWNSAMPLE_HQ,

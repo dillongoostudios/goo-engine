@@ -436,10 +436,6 @@ struct EEVEE_EffectsInfo {
   bool prev_is_navigating;
   float prev_drw_persmat[4][4]; /* Used for checking view validity and reprojection. */
   DRWView *taa_view;
-  /* Ambient Occlusion */
-  GPUTexture *gtao_horizons;            /* Textures from pool */
-  GPUTexture *gtao_horizons_renderpass; /* Texture when rendering render pass */
-  GPUTexture *gtao_horizons_debug;
   /* Motion Blur */
   float current_ndc_to_world[4][4];
   float current_world_to_ndc[4][4];
@@ -775,9 +771,6 @@ struct GOOENGINE_Data {
   DRWPass *probe_planar_downsample_ps;
 
   /* Effects */
-  DRWPass *ao_horizon_search;
-  DRWPass *ao_horizon_debug;
-  DRWPass *ao_accum_ps;
   PassSimple mist_accum_ps = {"mist_accum_ps"};
   PassSimple bloom_blit = {"bloom_blit"};
   PassSimple bloom_downsample_first = {"bloom_downsample_first"};
@@ -845,8 +838,6 @@ struct GOOENGINE_Data {
   DRWPass *renderpass_pass;
 
   /* Effects */
-  GPUFrameBuffer *gtao_fb;
-  GPUFrameBuffer *gtao_debug_fb;
   GPUFrameBuffer *downsample_fb;
   GPUFrameBuffer *maxzbuffer_fb;
   GPUFrameBuffer *bloom_blit_fb;
@@ -1320,18 +1311,6 @@ void EEVEE_cryptomatte_render_result(RenderLayer *rl,
                                      EEVEE_ViewLayerData *sldata);
 void EEVEE_cryptomatte_store_metadata(Instance *inst, RenderResult *render_result);
 void EEVEE_cryptomatte_free(Instance *inst);
-
-/* `eevee_occlusion.cc` */
-
-int EEVEE_occlusion_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_occlusion_output_init(EEVEE_ViewLayerData *sldata,
-                                 Instance *inst,
-                                 uint tot_samples);
-void EEVEE_occlusion_output_accumulate(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_occlusion_cache_init(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_occlusion_compute(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_occlusion_draw_debug(EEVEE_ViewLayerData *sldata, Instance *inst);
-void EEVEE_occlusion_free();
 
 /* `eevee_screen_raytrace.cc` */
 

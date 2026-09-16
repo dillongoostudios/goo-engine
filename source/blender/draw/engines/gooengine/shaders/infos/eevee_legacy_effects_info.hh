@@ -176,30 +176,6 @@ AUTO_RESOURCE_LOCATION()
 DO_STATIC_COMPILATION()
 GPU_SHADER_CREATE_END()
 
-/* EEVEE_shaders_effect_ambient_occlusion_sh_get */
-GPU_SHADER_CREATE_INFO(eevee_legacy_ambient_occlusion)
-ADDITIONAL_INFO(eevee_legacy_common_lib)
-ADDITIONAL_INFO(draw_view_goo)
-ADDITIONAL_INFO(eevee_legacy_common_utiltex_lib)
-ADDITIONAL_INFO(eevee_legacy_ambient_occlusion_lib)
-ADDITIONAL_INFO(gpu_fullscreen)
-SAMPLER(0, sampler2D, normalBuffer)
-PUSH_CONSTANT(float, fireflyFactor)
-FRAGMENT_OUT(0, float4, FragColor)
-FRAGMENT_SOURCE("effect_gtao_frag.glsl")
-AUTO_RESOURCE_LOCATION()
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
-/* EEVEE_shaders_effect_ambient_occlusion_debug_sh_get */
-GPU_SHADER_CREATE_INFO(eevee_legacy_ambient_occlusion_debug)
-DEFINE("DEBUG_AO")
-DEFINE("ENABLE_DEFERED_AO")
-ADDITIONAL_INFO(eevee_legacy_ambient_occlusion)
-AUTO_RESOURCE_LOCATION()
-DO_STATIC_COMPILATION()
-GPU_SHADER_CREATE_END()
-
 /* EEVEE_shaders_effect_reflection_trace_sh_get */
 GPU_SHADER_CREATE_INFO(eevee_legacy_effect_reflection_trace)
 ADDITIONAL_INFO(eevee_legacy_surface_lib_step_raytrace)

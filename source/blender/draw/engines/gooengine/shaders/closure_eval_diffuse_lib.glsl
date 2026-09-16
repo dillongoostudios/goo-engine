@@ -6,7 +6,9 @@
 
 #include "lights_lib.glsl"
 #include "lightprobe_lib.glsl"
-#include "ambient_occlusion_lib.glsl"
+#include "draw_math_geom_lib.glsl"
+#include "raytrace_lib.glsl"
+#include "surface_lib.glsl"
 #include "closure_eval_lib.glsl"
 #include "renderpass_lib.glsl"
 
@@ -43,12 +45,7 @@ ClosureEvalDiffuse closure_Diffuse_eval_init(inout ClosureInputDiffuse cl_in,
   cl_out.radiance = float3(0.0f);
 
   ClosureEvalDiffuse cl_eval;
-  cl_eval.ambient_occlusion = diffuse_occlusion(cl_common.occlusion_data,
-                                                cl_common.V,
-                                                cl_in.N,
-                                                cl_common.Ng,
-                                                cl_in.albedo,
-                                                cl_eval.probe_sampling_dir);
+  cl_eval.ambient_occlusion = 1.0f;
   return cl_eval;
 }
 

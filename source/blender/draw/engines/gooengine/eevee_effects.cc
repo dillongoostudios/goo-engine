@@ -89,7 +89,6 @@ void EEVEE_effects_init(EEVEE_ViewLayerData *sldata,
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_bloom_init(sldata, inst));
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_depth_of_field_init(sldata, inst, camera));
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_temporal_sampling_init(sldata, inst));
-  effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_occlusion_init(sldata, inst));
   effects->enabled_effects |= EEVEE_EffectsFlag(EEVEE_screen_raytrace_init(sldata, inst));
 
   /* Update matrices here because EEVEE_screen_raytrace_init can have reset the
