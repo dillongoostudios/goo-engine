@@ -16,6 +16,11 @@ namespace blender::gpu::render_graph {
 void VKRenderGraphLink::debug_print(std::ostream &ss,
                                     const VKResourceStateTracker &resources) const
 {
+  if (resource.handle == NO_RESOURCE_HANDLE) {
+    ss << "handle=UNTRACKED";
+    ss << ", vk_access=" << to_string_vk_access_flags(vk_access_flags);
+    return;
+  }
   const VKResourceStateTracker::Resource &tracked_resource = resources.resources_.lookup(
       resource.handle);
   ss << "handle=" << resource.handle;

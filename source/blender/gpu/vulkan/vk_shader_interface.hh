@@ -44,6 +44,12 @@ struct VKResourceBinding {
   VKDescriptorSet::Location location;
   VKImageViewArrayed arrayed = VKImageViewArrayed::DONT_CARE;
   VkAccessFlags access_mask = VK_ACCESS_NONE;
+  /**
+   * Declared type of a `SAMPLER` resource, kept so that a resource which turns out to be unbound
+   * at draw time can be replaced by a placeholder of a compatible type. Only meaningful when
+   * `bind_type == VKBindType::SAMPLER`.
+   */
+  shader::ImageType image_type = shader::ImageType::FLOAT_2D;
 };
 
 class VKShaderInterface : public ShaderInterface {

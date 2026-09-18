@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <limits>
 #include <mutex>
 
 #include "BLI_map.hh"
@@ -43,6 +44,16 @@ struct VKRenderGraphLink;
 class VKScheduler;
 
 using ResourceHandle = uint64_t;
+
+/**
+ * Handle for a resource that is not tracked by the render graph.
+ *
+ * `VKResourceStateTracker::create_resource_slot()` starts at 0 and increments, so 0 is a
+ * perfectly valid handle for the first resource that is ever added. Callers that receive this
+ * have to skip the resource instead of looking up handle 0, which would silently reference
+ * whichever resource was added first.
+ */
+inline constexpr ResourceHandle NO_RESOURCE_HANDLE = std::numeric_limits<ResourceHandle>::max();
 
 /**
  * ModificationStamp is used to track resource modifications.

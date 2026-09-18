@@ -10,6 +10,8 @@
 
 #include "GPU_vertex_buffer.hh"
 
+#include <mutex>
+
 #include "vk_buffer.hh"
 #include "vk_data_conversion.hh"
 
@@ -19,6 +21,25 @@ class VKVertexBuffer : public VertBuf {
   VKBuffer buffer_;
   /** When a vertex buffer is used as a UNIFORM_TEXEL_BUFFER the buffer requires a buffer view. */
   VkBufferView vk_buffer_view_ = VK_NULL_HANDLE;
+  /**
+   * Guards the lazy creation of `vk_buffer_view_`, which a drawing path can reach from several
+   * threads at once. Without it two threads would each create a view and leak one of them.
+   *
+   * A plain mutex rather than a `std::once_flag`: `release_data()` discards the view, so the
+   * creation is not a once-only operation, it is a "create it while the handle is null"
+   * operation. A `once_flag` would stay set after the view is discarded and the next
+   * `ensure_and_get_buffer_view()` would then return with a null view.
+   * The check inside the lock makes that reuse safe.
+   */
+  mutable std::mutex vk_buffer_view_mutex_;
+
+  /**
+   * Serializes `ensure_updated()`. The device-level dummy vertex buffers are shared between
+   * threads, and `upload_data()` mutates the allocation state, `data_uploaded_` and the dirty
+   * flags without synchronization of its own. Kept separate from `vk_buffer_view_mutex_` because
+   * the upload path may submit through the render graph, while view creation must not.
+   */
+  mutable std::mutex upload_mutex_;
 
   VertexFormatConverter vertex_format_converter;
   bool data_uploaded_ = false;
@@ -39,16 +60,16 @@ class VKVertexBuffer : public VertBuf {
     return buffer_.vk_handle();
   }
 
-  VkBufferView vk_buffer_view_get() const
-  {
-    BLI_assert(vk_buffer_view_ != VK_NULL_HANDLE);
-    return vk_buffer_view_;
-  }
+  /**
+   * Ensures the texel buffer view exists and returns it. Creation and read-back happen under a
+   * single lock scope: with separate calls, `release_data()` could acquire the mutex in between
+   * and the caller would be handed a null view.
+   */
+  VkBufferView ensure_and_get_buffer_view();
 
   void device_format_ensure();
   const GPUVertFormat &device_format_get() const;
   void ensure_updated();
-  void ensure_buffer_view();
 
  protected:
   void acquire_data() override;

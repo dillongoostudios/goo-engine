@@ -61,6 +61,18 @@ class VKImageView : NonCopyable {
     return vk_image_view_;
   }
 
+  /**
+   * Whether the view was created successfully.
+   *
+   * The creation fails when the source image is gone, which happens for a texture view whose
+   * source texture was freed by the draw manager. Callers that bind the view to a descriptor have
+   * to check this, because the driver dereferences the view and a null one crashes it.
+   */
+  bool is_valid() const
+  {
+    return vk_image_view_ != VK_NULL_HANDLE;
+  }
+
   VkFormat vk_format() const
   {
     return vk_format_;

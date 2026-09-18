@@ -964,8 +964,25 @@ std::string VKShader::fragment_interface_declare(const shader::ShaderCreateInfo 
   if (info.early_fragment_test_) {
     ss << "layout(early_fragment_tests) in;\n";
   }
-  const bool use_gl_frag_depth = info.depth_write_ != DepthWrite::UNCHANGED &&
-                                 info.fragment_source_.find("gl_FragDepth") != std::string::npos;
+  /* Vulkan has no implicit built-in fragment outputs, so `gl_FragDepth` has to be declared
+   * explicitly before the shader can write to it.
+   *
+   * The output can be written either by the shader source file itself, or by code generated at
+   * runtime. Goo Engine falls in the second category: its material code-gen emits the whole
+   * fragment stage through `fragment_source_generated` and leaves `fragment_source_` pointing at
+   * an empty stub file (`eevee_empty.glsl`). Checking only `fragment_source_` therefore can never
+   * succeed and produced an undeclared `gl_FragDepth` write, which fails to compile.
+   *
+   * Both sources are checked here. Note that `fragment_source_generated` is already filled in at
+   * this point: `GPUShader::compile` appends it to the stage sources after calling this function.
+   *
+   * Unlike OpenGL (`gl_shader.cc`, which declares the output unconditionally) the declaration is
+   * still gated on the source actually containing a write, so that materials which never use the
+   * Set Depth node do not get a declared-but-unwritten depth output. */
+  const bool uses_gl_frag_depth = info.fragment_source_.find("gl_FragDepth") >= 0 ||
+                                  info.fragment_source_generated.find("gl_FragDepth") !=
+                                      std::string::npos;
+  const bool use_gl_frag_depth = info.depth_write_ != DepthWrite::UNCHANGED && uses_gl_frag_depth;
   if (use_gl_frag_depth) {
     ss << "layout(" << to_string(info.depth_write_) << ") out float gl_FragDepth;\n";
   }

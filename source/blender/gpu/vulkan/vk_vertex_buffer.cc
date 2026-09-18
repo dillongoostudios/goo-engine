@@ -38,26 +38,38 @@ void VKVertexBuffer::bind_as_texture(uint binding)
 
 void VKVertexBuffer::ensure_updated()
 {
+  /* The dummy resources are shared device-level vertex buffers, which can be reached from
+   * several threads at once. `upload_data()` mutates `buffer_`, `data_uploaded_` and the dirty
+   * flags without any synchronization of its own, so the upload has to be serialized per buffer
+   * here. This mutex is independent from the view mutex: `upload_data()` never touches the
+   * buffer view, and neither lock is taken while holding the other. */
+  std::scoped_lock lock(upload_mutex_);
   upload_data();
 }
 
-void VKVertexBuffer::ensure_buffer_view()
+VkBufferView VKVertexBuffer::ensure_and_get_buffer_view()
 {
-  if (vk_buffer_view_ != VK_NULL_HANDLE) {
-    return;
+  /* Callers can reach this from several threads at once, so the creation has to be serialized.
+   * The handle is re-checked under the lock because `release_data()` can have discarded an
+   * earlier view, which is also why this is not a `std::call_once`: a cleared vertex buffer
+   * reacquires its data, and then needs a view again.
+   * Ensuring and reading the view share one lock scope: with separate calls, `release_data()`
+   * could acquire the mutex in between and the caller would be handed a null view. */
+  std::scoped_lock lock(vk_buffer_view_mutex_);
+  if (vk_buffer_view_ == VK_NULL_HANDLE) {
+    VkBufferViewCreateInfo buffer_view_info = {};
+    eGPUTextureFormat texture_format = to_texture_format(&format);
+
+    buffer_view_info.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
+    buffer_view_info.buffer = buffer_.vk_handle();
+    buffer_view_info.format = to_vk_format(texture_format);
+    buffer_view_info.range = buffer_.size_in_bytes();
+
+    const VKDevice &device = VKBackend::get().device;
+    vkCreateBufferView(device.vk_handle(), &buffer_view_info, nullptr, &vk_buffer_view_);
+    debug::object_label(vk_buffer_view_, "VertexBufferView");
   }
-
-  VkBufferViewCreateInfo buffer_view_info = {};
-  eGPUTextureFormat texture_format = to_texture_format(&format);
-
-  buffer_view_info.sType = VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO;
-  buffer_view_info.buffer = buffer_.vk_handle();
-  buffer_view_info.format = to_vk_format(texture_format);
-  buffer_view_info.range = buffer_.size_in_bytes();
-
-  const VKDevice &device = VKBackend::get().device;
-  vkCreateBufferView(device.vk_handle(), &buffer_view_info, nullptr, &vk_buffer_view_);
-  debug::object_label(vk_buffer_view_, "VertexBufferView");
+  return vk_buffer_view_;
 }
 
 void VKVertexBuffer::wrap_handle(uint64_t /*handle*/)
@@ -106,12 +118,24 @@ void VKVertexBuffer::resize_data()
 
 void VKVertexBuffer::release_data()
 {
-  if (vk_buffer_view_ != VK_NULL_HANDLE) {
-    VKDiscardPool::discard_pool_get().discard_buffer_view(vk_buffer_view_);
-    vk_buffer_view_ = VK_NULL_HANDLE;
+  /* Taking the lock here is what makes the discard safe against `ensure_and_get_buffer_view()`
+   * running on another thread: without it the view could be created after this discarded it, and
+   * the `vk_buffer_view_` just written would be leaked. */
+  {
+    std::scoped_lock lock(vk_buffer_view_mutex_);
+    if (vk_buffer_view_ != VK_NULL_HANDLE) {
+      VKDiscardPool::discard_pool_get().discard_buffer_view(vk_buffer_view_);
+      vk_buffer_view_ = VK_NULL_HANDLE;
+    }
   }
 
-  MEM_SAFE_FREE(data_);
+  /* Freeing `data_` under the upload lock: `upload_data()` reads and converts `data_` and can be
+   * running on another thread (the shared dummy buffers reach it concurrently), while this frees
+   * the memory it works on. */
+  {
+    std::scoped_lock lock(upload_mutex_);
+    MEM_SAFE_FREE(data_);
+  }
 }
 
 void VKVertexBuffer::upload_data_direct(const VKBuffer &host_buffer)

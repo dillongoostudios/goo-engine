@@ -47,6 +47,11 @@ class BindSpaceUniformBuffers {
 
   VKUniformBuffer *get(int binding) const
   {
+    /* See `BindSpaceTextures::get` for why a bounds check is required here: a shader can
+     * declare a uniform buffer that was not bound on the current drawing path. */
+    if (binding < 0 || binding >= int(bound_resources.size())) {
+      return nullptr;
+    }
     return bound_resources[binding];
   }
 
@@ -85,8 +90,13 @@ template<int Offset> class BindSpaceImages {
 
   VKTexture *get(int binding) const
   {
+    /* See `BindSpaceTextures::get` for why a bounds check is required here: a shader can
+     * declare an image that was not bound on the current drawing path. */
     if (binding >= Offset) {
       binding -= Offset;
+    }
+    if (binding < 0 || binding >= int(bound_resources.size())) {
+      return nullptr;
     }
     return bound_resources[binding];
   }
@@ -136,6 +146,12 @@ class BindSpaceStorageBuffers {
 
   const Elem &get(int binding) const
   {
+    /* See `BindSpaceTextures::get` for why a bounds check is required here: a shader can
+     * declare a storage buffer that was not bound on the current drawing path. */
+    if (binding < 0 || binding >= int(bound_resources.size())) {
+      static const Elem unused = {Type::Unused, nullptr, 0};
+      return unused;
+    }
     return bound_resources[binding];
   }
 
@@ -183,6 +199,15 @@ class BindSpaceTextures {
 
   const Elem &get(int binding) const
   {
+    /* A shader may declare a resource binding that is not actually bound on the
+     * current drawing path (unused samplers are not optimized out, and some
+     * engine code paths intentionally skip optional textures). Return a stable
+     * `Unused` element instead of reading out of bounds. Callers are expected to
+     * check `resource_type` before casting `resource`. */
+    if (binding < 0 || binding >= int(bound_resources.size())) {
+      static const Elem unused = {Type::Unused, nullptr, GPUSamplerState::default_sampler()};
+      return unused;
+    }
     return bound_resources[binding];
   }
 

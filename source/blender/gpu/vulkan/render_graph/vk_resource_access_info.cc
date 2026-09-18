@@ -64,6 +64,12 @@ void VKResourceAccessInfo::build_links(VKResourceStateTracker &resources,
                                                resources.get_buffer_and_increase_stamp(
                                                    buffer_access.vk_buffer) :
                                                resources.get_buffer(buffer_access.vk_buffer);
+    if (versioned_resource.handle == NO_RESOURCE_HANDLE) {
+      /* The resource is not tracked by the render graph, so there is no version to link and no
+       * barrier to schedule for it. Registering a link would name handle 0, which is a real
+       * resource. */
+      continue;
+    }
     if (writes_to_resource) {
       node_links.outputs.append(
           {versioned_resource, buffer_access.vk_access_flags, VK_IMAGE_LAYOUT_UNDEFINED});
@@ -83,6 +89,10 @@ void VKResourceAccessInfo::build_links(VKResourceStateTracker &resources,
                                                resources.get_image_and_increase_stamp(
                                                    image_access.vk_image) :
                                                resources.get_image(image_access.vk_image);
+    if (versioned_resource.handle == NO_RESOURCE_HANDLE) {
+      /* See the buffer loop above for why an untracked resource is not linked. */
+      continue;
+    }
     if (writes_to_resource) {
       node_links.outputs.append({versioned_resource,
                                  image_access.vk_access_flags,
