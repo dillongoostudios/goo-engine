@@ -99,7 +99,6 @@
 #include "RE_engine.h"
 #include "RE_pipeline.h"
 
-#include "engines/gooengine/eevee_lightcache.h"
 #include "engines/eevee/eevee_lightcache.hh"
 
 #include "render_intern.hh" /* own include */
@@ -1437,169 +1436,6 @@ enum {
   LIGHTCACHE_SUBSET_ACTIVE,
 };
 
-static void light_cache_bake_tag_cache(Scene *scene, wmOperator *op)
-{
-  if (scene->eevee.light_cache_data != nullptr) {
-    int subset = RNA_enum_get(op->ptr, "subset");
-    switch (subset) {
-      case LIGHTCACHE_SUBSET_ALL:
-        scene->eevee.light_cache_data->flag |= LIGHTCACHE_UPDATE_GRID | LIGHTCACHE_UPDATE_CUBE;
-        break;
-      case LIGHTCACHE_SUBSET_CUBE:
-        scene->eevee.light_cache_data->flag |= LIGHTCACHE_UPDATE_CUBE;
-        break;
-      case LIGHTCACHE_SUBSET_DIRTY:
-        /* Leave tag untouched. */
-        break;
-      default:
-        BLI_assert_unreachable();
-        break;
-    }
-  }
-}
-
-/** Catch escape key to cancel. */
-static wmOperatorStatus light_cache_bake_modal(bContext *C, wmOperator *op, const wmEvent *event)
-{
-  Scene *scene = (Scene *)op->customdata;
-
-  /* no running blender, remove handler and pass through */
-  if (0 == WM_jobs_test(CTX_wm_manager(C), scene, WM_JOB_TYPE_RENDER)) {
-    LightCache *lcache = scene->eevee.light_cache_data;
-    if (lcache && (lcache->flag & LIGHTCACHE_INVALID)) {
-      BKE_report(op->reports, RPT_ERROR, "Lightcache cannot allocate resources");
-      return OPERATOR_CANCELLED;
-    }
-    return OPERATOR_FINISHED | OPERATOR_PASS_THROUGH;
-  }
-
-  /* running render */
-  switch (event->type) {
-    case EVT_ESCKEY:
-      return OPERATOR_RUNNING_MODAL;
-  }
-  return OPERATOR_PASS_THROUGH;
-}
-
-static void light_cache_bake_cancel(bContext *C, wmOperator *op)
-{
-  wmWindowManager *wm = CTX_wm_manager(C);
-  Scene *scene = (Scene *)op->customdata;
-
-  /* kill on cancel, because job is using op->reports */
-  WM_jobs_kill_type(wm, scene, WM_JOB_TYPE_RENDER);
-}
-
-/* executes blocking render */
-static wmOperatorStatus light_cache_bake_exec(bContext *C, wmOperator *op)
-{
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-  Main *bmain = CTX_data_main(C);
-  Scene *scene = CTX_data_scene(C);
-
-  G.is_break = false;
-
-  /* TODO: abort if selected engine is not eevee. */
-  void *rj = EEVEE_lightbake_job_data_alloc(bmain, view_layer, scene, false, scene->r.cfra);
-
-  light_cache_bake_tag_cache(scene, op);
-
-  /* Not actually used. */
-  wmJobWorkerStatus worker_status = {};
-  /* Do the job. */
-  EEVEE_lightbake_job(rj, &worker_status);
-  /* Free baking data. Result is already stored in the scene data. */
-  EEVEE_lightbake_job_data_free(rj);
-
-  /* No redraw needed, we leave state as we entered it. */
-  ED_update_for_newframe(bmain, CTX_data_depsgraph_pointer(C));
-
-  WM_event_add_notifier(C, NC_SCENE | NA_EDITED, scene);
-
-  return OPERATOR_FINISHED;
-}
-
-wmOperatorStatus light_cache_bake_invoke(bContext *C, wmOperator *op, const wmEvent * /*event*/)
-{
-  wmWindowManager *wm = CTX_wm_manager(C);
-  wmWindow *win = CTX_wm_window(C);
-  ViewLayer *view_layer = CTX_data_view_layer(C);
-  Main *bmain = CTX_data_main(C);
-  Scene *scene = CTX_data_scene(C);
-  int delay = RNA_int_get(op->ptr, "delay");
-
-  wmJob *wm_job = EEVEE_lightbake_job_create(
-      wm, win, bmain, view_layer, scene, delay, scene->r.cfra);
-
-  if (!wm_job) {
-    return OPERATOR_CANCELLED;
-  }
-
-  /* add modal handler for ESC */
-  WM_event_add_modal_handler(C, op);
-
-  light_cache_bake_tag_cache(scene, op);
-
-  /* store actual owner of job, so modal operator could check for it,
-   * the reason of this is that active scene could change when rendering
-   * several layers from compositor #31800. */
-  op->customdata = scene;
-
-  WM_jobs_start(wm, wm_job);
-
-  WM_cursor_wait(false);
-
-  return OPERATOR_RUNNING_MODAL;
-}
-
-void SCENE_OT_light_cache_bake(wmOperatorType *ot)
-{
-  static const EnumPropertyItem light_cache_subset_items[] = {
-      {LIGHTCACHE_SUBSET_ALL,
-       "ALL",
-       0,
-       "All Light Probes",
-       "Bake both irradiance grids and reflection cubemaps"},
-      {LIGHTCACHE_SUBSET_DIRTY,
-       "DIRTY",
-       0,
-       "Dirty Only",
-       "Only bake light probes that are marked as dirty"},
-      {LIGHTCACHE_SUBSET_CUBE,
-       "CUBEMAPS",
-       0,
-       "Cubemaps Only",
-       "Try to only bake reflection cubemaps if irradiance grids are up to date"},
-      {0, nullptr, 0, nullptr, nullptr},
-  };
-
-  /* identifiers */
-  ot->name = "Bake Light Cache";
-  ot->idname = "SCENE_OT_light_cache_bake";
-  ot->description = "Bake the active view layer lighting";
-
-  /* api callbacks */
-  ot->invoke = light_cache_bake_invoke;
-  ot->modal = light_cache_bake_modal;
-  ot->cancel = light_cache_bake_cancel;
-  ot->exec = light_cache_bake_exec;
-
-  ot->prop = RNA_def_int(ot->srna,
-                         "delay",
-                         0,
-                         0,
-                         2000,
-                         "Delay",
-                         "Delay in millisecond before baking starts",
-                         0,
-                         2000);
-  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
-
-  ot->prop = RNA_def_enum(
-      ot->srna, "subset", light_cache_subset_items, 0, "Subset", "Subset of probes to update");
-  RNA_def_property_flag(ot->prop, PROP_SKIP_SAVE);
-}
-
 /* NOTE: New version destined to replace the old lightcache bake operator. */
 
 static blender::Vector<Object *> lightprobe_cache_irradiance_volume_subset_get(bContext *C,
@@ -1846,10 +1682,7 @@ static wmOperatorStatus light_cache_free_exec(bContext *C, wmOperator * /*op*/)
     return OPERATOR_CANCELLED;
   }
 
-  EEVEE_lightcache_free(scene->eevee.light_cache_data);
   scene->eevee.light_cache_data = nullptr;
-
-  EEVEE_lightcache_info_update(&scene->eevee);
 
   DEG_id_tag_update(&scene->id, ID_RECALC_SYNC_TO_EVAL);
 

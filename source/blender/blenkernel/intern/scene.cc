@@ -105,8 +105,6 @@
 
 #include "BLO_read_write.hh"
 
-#include "engines/gooengine/eevee_lightcache.h"
-
 #include "IMB_colormanagement.hh"
 #include "IMB_imbuf.hh"
 
@@ -445,11 +443,6 @@ static void scene_free_data(ID *id)
     BKE_libblock_free_data_py(&scene->master_collection->id);
     MEM_freeN(scene->master_collection);
     scene->master_collection = nullptr;
-  }
-
-  if (scene->eevee.light_cache_data) {
-    EEVEE_lightcache_free(scene->eevee.light_cache_data);
-    scene->eevee.light_cache_data = nullptr;
   }
 
   if (scene->display.shading.prop) {
@@ -1162,12 +1155,6 @@ static void scene_blend_write(BlendWriter *writer, ID *id, const void *id_addres
     BKE_collection_blend_write_nolib(writer, temp_collection);
   }
 
-  /* Eevee Light-cache */
-  if (sce->eevee.light_cache_data && !BLO_write_is_undo(writer)) {
-    BLO_write_struct(writer, LightCache, sce->eevee.light_cache_data);
-    EEVEE_lightcache_blend_write(writer, sce->eevee.light_cache_data);
-  }
-
   BKE_screen_view3d_shading_blend_write(writer, &sce->display.shading);
 
   /* Freed on `do_versions()`. */
@@ -1486,15 +1473,6 @@ static void scene_blend_read_data(BlendDataReader *reader, ID *id)
   if (BLO_read_data_is_undo(reader)) {
     /* If it's undo do nothing here, caches are handled by higher-level generic calling code. */
   }
-  else {
-    /* else try to read the cache from file. */
-    BLO_read_struct(reader, LightCache, &sce->eevee.light_cache_data);
-    if (sce->eevee.light_cache_data) {
-      EEVEE_lightcache_blend_read_data(reader, sce->eevee.light_cache_data);
-    }
-  }
-
-  EEVEE_lightcache_info_update(&sce->eevee);
 
   BKE_screen_view3d_shading_blend_read_data(reader, &sce->display.shading);
 
