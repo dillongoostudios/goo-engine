@@ -57,7 +57,7 @@ void main()
 
 #if (defined(GPU_INTEL) || defined(GPU_ATI)) && defined(GPU_OPENGL)
   /* Use color format instead of 24bit depth texture */
-  gl_FragColor = vec4(val);
+  fragColor = vec4(val);
 #endif
 
 #if !(defined(GPU_INTEL) && defined(GPU_OPENGL))
