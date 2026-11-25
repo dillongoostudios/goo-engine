@@ -26,6 +26,7 @@
 #include "DNA_view3d_types.h"
 #include "DNA_world_types.h"
 
+#include "GPU_context.hh"
 #include "GPU_material.hh"
 
 #include "DEG_depsgraph_query.hh"
@@ -40,6 +41,15 @@ static struct {
    * Packing enables us to same precious textures slots. */
   GPUTexture *util_tex;
   GPUTexture *noise_tex;
+
+#ifdef WITH_METAL_BACKEND
+  /* Metal requires every sampler declared by a shader to be bound, with a texture of the matching
+   * type, even when the shader never samples it. These stand in for samplers that the GL path
+   * leaves unbound (e.g. `irradianceGrid` in the probe filter, `probeCubes` in look-dev). */
+  GPUTexture *dummy_cube_array;
+  GPUTexture *dummy_2d_array;
+  GPUTexture *dummy_2d;
+#endif
 
   float noise_offsets[3];
 } e_data = {nullptr}; /* Engine data */
@@ -64,6 +74,23 @@ GPUTexture *EEVEE_materials_get_util_tex()
   return e_data.util_tex;
 }
 
+#ifdef WITH_METAL_BACKEND
+GPUTexture *EEVEE_materials_get_dummy_2d_array()
+{
+  return e_data.dummy_2d_array;
+}
+
+GPUTexture *EEVEE_materials_get_dummy_cube_array()
+{
+  return e_data.dummy_cube_array;
+}
+
+GPUTexture *EEVEE_materials_get_dummy_2d()
+{
+  return e_data.dummy_2d;
+}
+#endif
+
 void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
                                    GPUMaterial *gpumat,
                                    EEVEE_ViewLayerData *sldata,
@@ -78,6 +105,15 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   bool use_glossy = GPU_material_flag_get(gpumat, GPU_MATFLAG_GLOSSY);
   bool use_refract = GPU_material_flag_get(gpumat, GPU_MATFLAG_REFRACT);
   bool use_ao = GPU_material_flag_get(gpumat, GPU_MATFLAG_AO);
+
+#ifdef WITH_METAL_BACKEND
+  const bool is_metal = (GPU_backend_get_type() == GPU_BACKEND_METAL);
+  if (is_metal) {
+    /* Metal does not strip unused samplers from the shader interface and requires every declared
+     * sampler to be bound, so bind the complete set regardless of what the material uses. */
+    use_diffuse = use_glossy = use_refract = use_ao = true;
+  }
+#endif
 
 #ifdef __APPLE__
   /* NOTE: Some implementation do not optimize out the unused samplers. */
@@ -136,6 +172,22 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
     DRW_shgroup_uniform_texture_ref(shgrp, "inScattering", &effects->volume_scatter);
     DRW_shgroup_uniform_texture_ref(shgrp, "inTransmittance", &effects->volume_transmit);
   }
+
+#ifdef WITH_METAL_BACKEND
+  if (is_metal) {
+    /* Samplers the material shader declares but the GL path never binds (see above). Bound by
+     * reference: the targets are (re)allocated after this setup runs, and `volume_scatter` /
+     * `volume_transmit` are swapped every frame, so a by-value bind would go stale. */
+    DRW_shgroup_uniform_texture_ref(shgrp, "planarDepth", &vedata->txl->planar_depth);
+    if (use_ssrefraction) {
+      DRW_shgroup_uniform_texture_ref(shgrp, "horizonBuffer", &effects->gtao_horizons);
+    }
+    if (!use_alpha_blend) {
+      DRW_shgroup_uniform_texture_ref(shgrp, "inScattering", &effects->volume_scatter);
+      DRW_shgroup_uniform_texture_ref(shgrp, "inTransmittance", &effects->volume_transmit);
+    }
+  }
+#endif
 }
 
 static void eevee_init_noise_texture()
@@ -246,6 +298,22 @@ void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
 
     eevee_init_util_texture();
     eevee_init_noise_texture();
+
+#ifdef WITH_METAL_BACKEND
+    /* 1x1 placeholders for samplers Metal needs bound but the engine never fills. */
+    eGPUTextureUsage usage = GPU_TEXTURE_USAGE_SHADER_READ;
+    if (!e_data.dummy_2d_array) {
+      e_data.dummy_2d_array = DRW_texture_create_2d_array_ex(
+          1, 1, 1, GPU_RGBA8, usage, DRW_TEX_FILTER, nullptr);
+    }
+    if (!e_data.dummy_cube_array) {
+      e_data.dummy_cube_array = DRW_texture_create_cube_array_ex(
+          1, 1, GPU_RGBA8, usage, DRW_TEX_FILTER, nullptr);
+    }
+    if (!e_data.dummy_2d) {
+      e_data.dummy_2d = DRW_texture_create_2d_ex(1, 1, GPU_RGBA8, usage, DRW_TEX_FILTER, nullptr);
+    }
+#endif
   }
 
   if (draw_ctx->rv3d) {
@@ -431,6 +499,19 @@ void EEVEE_materials_cache_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     DRW_shgroup_uniform_texture_ref(grp, "probeCubes", &stl->g_data->light_cache->cube_tx.tex);
     DRW_shgroup_uniform_texture_ref(grp, "irradianceGrid", &stl->g_data->light_cache->grid_tx.tex);
     DRW_shgroup_uniform_texture_ref(grp, "maxzBuffer", &vedata->txl->maxzbuffer);
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      /* Samplers inherited from the light-probe / volumetric libs that the world shader never
+       * reads; Metal still needs them bound (see EEVEE_material_bind_resources). */
+      DRW_shgroup_uniform_texture_ref(grp, "shadowCubeIDTexture", &sldata->shadow_cube_id_pool);
+      DRW_shgroup_uniform_texture_ref(
+          grp, "shadowCascadeIDTexture", &sldata->shadow_cascade_id_pool);
+      DRW_shgroup_uniform_texture_ref(grp, "inScattering", &stl->effects->volume_scatter);
+      DRW_shgroup_uniform_texture_ref(grp, "inTransmittance", &stl->effects->volume_transmit);
+      DRW_shgroup_uniform_texture_ref(grp, "horizonBuffer", &stl->effects->gtao_horizons);
+      DRW_shgroup_uniform_texture_ref(grp, "planarDepth", &vedata->txl->planar_depth);
+    }
+#endif
     DRW_shgroup_call(grp, DRW_cache_fullscreen_quad_get(), nullptr);
   }
 
@@ -522,7 +603,7 @@ BLI_INLINE void material_shadow(EEVEE_Data *vedata,
                                    ELEM(ma->blend_shadow, MA_BS_CLIP, MA_BS_HASHED);
     float alpha_clip_threshold = (ma->blend_shadow == MA_BS_CLIP) ? ma->alpha_threshold : -1.0f;
 
-    int mat_options = VAR_MAT_MESH | VAR_MAT_DEPTH;
+    int mat_options = VAR_MAT_MESH | VAR_MAT_DEPTH | VAR_MAT_SHADOW;
     SET_FLAG_FROM_TEST(mat_options, use_shadow_shader, VAR_MAT_HASH);
     SET_FLAG_FROM_TEST(mat_options, is_hair, VAR_MAT_HAIR);
     GPUMaterial *gpumat = (use_shadow_shader) ?

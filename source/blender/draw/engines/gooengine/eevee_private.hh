@@ -149,6 +149,7 @@ enum {
   VAR_WORLD_VOLUME = (1 << 12),
   VAR_MAT_SHADOW_ID = (1 << 13),
   VAR_DEFAULT = (1 << 14),
+  VAR_MAT_SHADOW = (1 << 15),
 };
 
 /* Material shader cache keys */
@@ -1097,6 +1098,12 @@ void eevee_id_update(void *vedata, ID *id);
 /* `eevee_materials.cc` */
 
 GPUTexture *EEVEE_materials_get_util_tex(); /* XXX */
+#ifdef WITH_METAL_BACKEND
+GPUTexture *EEVEE_materials_get_dummy_2d_array();
+GPUTexture *EEVEE_materials_get_dummy_cube_array();
+GPUTexture *EEVEE_materials_get_dummy_2d();
+#endif
+
 void EEVEE_materials_init(EEVEE_ViewLayerData *sldata,
                           EEVEE_Data *vedata,
                           EEVEE_StorageList *stl,

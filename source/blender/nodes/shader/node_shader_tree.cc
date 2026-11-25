@@ -891,6 +891,10 @@ static void ntree_shader_weight_tree_invert(bNodeTree *ntree, bNode *output_node
           case SH_NODE_OUTPUT_LIGHT:
           case SH_NODE_OUTPUT_WORLD:
           case SH_NODE_OUTPUT_MATERIAL:
+          /* Set Depth is treated like the output nodes by the tag pass and the first switch
+           * above but was missing here. In release builds the `default` BLI_assert is compiled
+           * out, so `tonode`/`tosock` stayed uninitialized and node_add_link() crashed. */
+          case SH_NODE_SET_DEPTH:
           case SH_NODE_ADD_SHADER: {
             tonode = nodes_copy[node->runtime->tmp_flag];
             tosock = ntree_shader_node_output_get(tonode, 0);

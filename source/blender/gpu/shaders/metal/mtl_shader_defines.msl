@@ -299,7 +299,14 @@ struct _mtl_sampler {
   }
   NON_ARRAY_FN DataVec sample_lod(FltCoord coord, level lod, IntDeriv offset = {0}) const
   {
-    return texture->sample(*samp, coord, lod, offset);
+    /* Metal's texturecube::sample does not accept an offset parameter.
+     * Cube == 1 indicates a cube texture (samplerCube / depthCube). */
+    if constexpr (Cube == 1) {
+      return texture->sample(*samp, coord, lod);
+    }
+    else {
+      return texture->sample(*samp, coord, lod, offset);
+    }
   }
   NON_ARRAY_FN DataVec gather(FltCoord coord) const
   {
@@ -328,7 +335,14 @@ struct _mtl_sampler {
   }
   ARRAY_FN DataVec sample_lod(FltCoord coord, level lod, IntDeriv offset = {0}) const
   {
-    return texture->sample(*samp, uv_mask(coord), layer_mask(coord), lod, offset);
+    /* Metal's texturecube_array::sample does not accept an offset parameter.
+     * Cube == 1 indicates a cube array texture (samplerCubeArray). */
+    if constexpr (Cube == 1) {
+      return texture->sample(*samp, uv_mask(coord), layer_mask(coord), lod);
+    }
+    else {
+      return texture->sample(*samp, uv_mask(coord), layer_mask(coord), lod, offset);
+    }
   }
   ARRAY_FN DataVec gather(FltCoord coord) const
   {
@@ -613,6 +627,26 @@ SAMPLER_FN DataVec texelFetch(SamplerT texture, IntCoord coord, int lod)
 SAMPLER_FN DataVec texelFetchOffset(SamplerT texture, IntCoord coord, int lod, IntDeriv offset)
 {
   return texture.fetch(coord, level(lod), offset);
+}
+
+/* Specialized texture() for GLSL shadow comparison samplers.
+ *
+ * In GLSL, texture(sampler2DArrayShadow, vec4) performs depth comparison:
+ *   coord.xy = UV, coord.z = array layer, coord.w = comparison depth value
+ * Returns T (float — 0.0 or 1.0, or PCF-filtered value).
+ *
+ * The generic SAMPLER_FN texture() cannot handle this because:
+ *   - SamplerT::FltCoord for depth2d_array is float3 (not float4)
+ *   - depth comparison requires sample_compare(), not sample()
+ *
+ * Matches _mtl_sampler<T, A, TextureT, is_depth=true, Dim=2, Cube=0, Array=1> with float4 coord.
+ * TextureT is left as a free parameter so MSL template deduction can resolve depth2d_array<T,A>.
+ * This overload is more specialized than SAMPLER_FN texture(SamplerT, FltCoord) and wins in
+ * overload resolution when the sampler is a non-cube depth array type. */
+template<typename T, access A, typename TextureT>
+inline T texture(thread _mtl_sampler<T, A, TextureT, true, 2, 0, 1> &s, float4 coord)
+{
+  return s.texture->sample_compare(*s.samp, float2(coord.xy), uint(coord.z), coord.w);
 }
 
 #undef SAMPLER_FN

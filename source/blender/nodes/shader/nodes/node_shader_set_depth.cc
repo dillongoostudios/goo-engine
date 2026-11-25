@@ -24,6 +24,8 @@ static int node_shader_gpu_add_shader(GPUMaterial *mat,
    GPU_link(mat, "view_z_get", &in[1].link);
  }
 
+ GPU_material_flag_set(mat, GPU_MATFLAG_SET_DEPTH);
+
  return GPU_stack_link(mat, node, "node_set_depth", in, out);
 }
 

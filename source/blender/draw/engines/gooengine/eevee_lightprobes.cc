@@ -207,6 +207,16 @@ void EEVEE_lightprobes_init(EEVEE_ViewLayerData *sldata, EEVEE_Data *vedata)
     e_data.planar_pool_placeholder = DRW_texture_create_2d_array_ex(
         1, 1, 1, GPU_RGBA8, planar_usage, DRW_TEX_FILTER, nullptr);
   }
+  /* Same for the depth pool. `txl->planar_depth` is swapped to this placeholder while planar
+   * reflections are rendered, but it was never allocated, so any `planarDepth` binding that
+   * references `txl->planar_depth` dereferenced a null texture during that render. The GL path
+   * never binds `planarDepth` on material shading groups, but Metal must bind every declared
+   * sampler, so adding a planar probe crashed there. */
+  if (!e_data.depth_array_placeholder) {
+    eGPUTextureUsage depth_usage = GPU_TEXTURE_USAGE_ATTACHMENT | GPU_TEXTURE_USAGE_SHADER_READ;
+    e_data.depth_array_placeholder = DRW_texture_create_2d_array_ex(
+        1, 1, 1, GPU_DEPTH_COMPONENT24, depth_usage, DRWTextureFlag(0), nullptr);
+  }
 }
 
 void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
@@ -257,6 +267,13 @@ void EEVEE_lightbake_cache_init(EEVEE_ViewLayerData *sldata,
     DRW_shgroup_uniform_texture(grp, "probeHdr", rt_color);
     DRW_shgroup_uniform_block(grp, "common_block", sldata->common_ubo);
     DRW_shgroup_uniform_block(grp, "renderpass_block", sldata->renderpass_ubo.combined);
+#ifdef WITH_METAL_BACKEND
+    /* Metal requires all declared samplers to be bound.
+     * eevee_legacy_probe_filter_diffuse includes eevee_legacy_irradiance_lib which declares
+     * irradianceGrid, but this shader does not use it directly. Bind a dummy to avoid validation
+     * errors. */
+    DRW_shgroup_uniform_texture(grp, "irradianceGrid", EEVEE_materials_get_dummy_2d_array());
+#endif
 
     blender::gpu::Batch *geom = DRW_cache_fullscreen_quad_get();
     DRW_shgroup_call(grp, geom, nullptr);

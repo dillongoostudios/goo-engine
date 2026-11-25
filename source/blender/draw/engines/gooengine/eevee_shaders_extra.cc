@@ -8,6 +8,7 @@
  * This file is only there to handle ShaderCreateInfos.
  */
 
+#include "GPU_context.hh"
 #include "GPU_shader.hh"
 
 #include "BLI_string_ref.hh"
@@ -76,7 +77,19 @@ void eevee_shader_material_create_info_amend(GPUMaterial *gpumat,
   /* GooEngine: Set Depth node can write to gl_FragDepth arbitrarily.
    * This shouldn't incur a performance penalty according to
    * https://registry.khronos.org/OpenGL/extensions/ARB/ARB_conservative_depth.txt */
-  info.depth_write(DepthWrite::ANY);
+#ifdef WITH_METAL_BACKEND
+  if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+    /* Metal: only declare the depth write for materials that actually contain a Set Depth node.
+     * Declaring it on every material produced black speckle artifacts there. */
+    if (GPU_material_flag_get(gpumat, GPU_MATFLAG_SET_DEPTH)) {
+      info.depth_write(DepthWrite::ANY);
+    }
+  }
+  else
+#endif
+  {
+    info.depth_write(DepthWrite::ANY);
+  }
 
   /* Lookdev - Add FragDepth. */
   if (options & VAR_MAT_LOOKDEV) {

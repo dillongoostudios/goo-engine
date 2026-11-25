@@ -268,8 +268,17 @@ void EEVEE_shaders_material_shaders_init()
 GPUShader *EEVEE_shaders_probe_filter_glossy_sh_get()
 {
   if (e_data.probe_filter_glossy_sh == nullptr) {
-    e_data.probe_filter_glossy_sh = DRW_shader_create_from_info_name(
-        "eevee_legacy_probe_filter_glossy");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.probe_filter_glossy_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_probe_filter_glossy_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.probe_filter_glossy_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_probe_filter_glossy");
+    }
   }
   return e_data.probe_filter_glossy_sh;
 }
@@ -322,8 +331,17 @@ GPUShader *EEVEE_shaders_probe_grid_fill_sh_get()
 GPUShader *EEVEE_shaders_probe_planar_downsample_sh_get()
 {
   if (e_data.probe_planar_downsample_sh == nullptr) {
-    e_data.probe_planar_downsample_sh = DRW_shader_create_from_info_name(
-        "eevee_legacy_lightprobe_planar_downsample");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.probe_planar_downsample_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_lightprobe_planar_downsample_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.probe_planar_downsample_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_lightprobe_planar_downsample");
+    }
   }
   return e_data.probe_planar_downsample_sh;
 }
@@ -403,8 +421,17 @@ GPUShader *EEVEE_shaders_effect_downsample_sh_get()
 GPUShader *EEVEE_shaders_effect_downsample_cube_sh_get()
 {
   if (e_data.downsample_cube_sh == nullptr) {
-    e_data.downsample_cube_sh = DRW_shader_create_from_info_name(
-        "eevee_legacy_effect_downsample_cube");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.downsample_cube_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_effect_downsample_cube_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.downsample_cube_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_effect_downsample_cube");
+    }
   }
   return e_data.downsample_cube_sh;
 }
@@ -749,7 +776,16 @@ GPUShader *EEVEE_shaders_subsurface_translucency_sh_get()
 GPUShader *EEVEE_shaders_volumes_clear_sh_get()
 {
   if (e_data.volumetric_clear_sh == nullptr) {
-    e_data.volumetric_clear_sh = DRW_shader_create_from_info_name("eevee_legacy_volumes_clear");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.volumetric_clear_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_volumes_clear_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.volumetric_clear_sh = DRW_shader_create_from_info_name("eevee_legacy_volumes_clear");
+    }
   }
   return e_data.volumetric_clear_sh;
 }
@@ -757,7 +793,16 @@ GPUShader *EEVEE_shaders_volumes_clear_sh_get()
 GPUShader *EEVEE_shaders_volumes_scatter_sh_get()
 {
   if (e_data.scatter_sh == nullptr) {
-    e_data.scatter_sh = DRW_shader_create_from_info_name("eevee_legacy_volumes_scatter");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.scatter_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_volumes_scatter_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.scatter_sh = DRW_shader_create_from_info_name("eevee_legacy_volumes_scatter");
+    }
   }
   return e_data.scatter_sh;
 }
@@ -765,8 +810,17 @@ GPUShader *EEVEE_shaders_volumes_scatter_sh_get()
 GPUShader *EEVEE_shaders_volumes_scatter_with_lights_sh_get()
 {
   if (e_data.scatter_with_lights_sh == nullptr) {
-    e_data.scatter_with_lights_sh = DRW_shader_create_from_info_name(
-        "eevee_legacy_volumes_scatter_with_lights");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.scatter_with_lights_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_volumes_scatter_with_lights_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.scatter_with_lights_sh = DRW_shader_create_from_info_name(
+          "eevee_legacy_volumes_scatter_with_lights");
+    }
   }
   return e_data.scatter_with_lights_sh;
 }
@@ -774,9 +828,19 @@ GPUShader *EEVEE_shaders_volumes_scatter_with_lights_sh_get()
 GPUShader *EEVEE_shaders_volumes_integration_sh_get()
 {
   if (e_data.volumetric_integration_sh == nullptr) {
-    e_data.volumetric_integration_sh = DRW_shader_create_from_info_name(
-        (USE_VOLUME_OPTI) ? "eevee_legacy_volumes_integration_OPTI" :
-                            "eevee_legacy_volumes_integration");
+#ifdef WITH_METAL_BACKEND
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      e_data.volumetric_integration_sh = DRW_shader_create_from_info_name(
+          (USE_VOLUME_OPTI) ? "eevee_legacy_volumes_integration_OPTI_no_geom" :
+                              "eevee_legacy_volumes_integration_no_geom");
+    }
+    else
+#endif
+    {
+      e_data.volumetric_integration_sh = DRW_shader_create_from_info_name(
+          (USE_VOLUME_OPTI) ? "eevee_legacy_volumes_integration_OPTI" :
+                              "eevee_legacy_volumes_integration");
+    }
   }
   return e_data.volumetric_integration_sh;
 }
@@ -1198,7 +1262,15 @@ static const char *eevee_get_vert_info(int options, char **r_src)
 
   if ((options & VAR_MAT_VOLUME) != 0) {
     *r_src = DRW_shader_library_create_shader_string(e_data.lib, datatoc_volumetric_vert_glsl);
-    info_name = "eevee_legacy_material_volumetric_vert";
+    /* Metal has no geometry shader support. Use the _no_geom variant which outputs both
+     * volumetric_vert_iface and volumetric_geom_iface from the vertex shader, and sets
+     * gpu_Layer directly (via BuiltinBits::LAYER). */
+    if (GPU_backend_get_type() == GPU_BACKEND_METAL) {
+      info_name = "eevee_legacy_material_volumetric_vert_no_geom";
+    }
+    else {
+      info_name = "eevee_legacy_material_volumetric_vert";
+    }
   }
   else if ((options & (VAR_WORLD_PROBE | VAR_WORLD_BACKGROUND)) != 0) {
     *r_src = DRW_shader_library_create_shader_string(e_data.lib, datatoc_world_vert_glsl);
@@ -1257,30 +1329,40 @@ static const char *eevee_get_frag_info(int options, char **r_src)
   }
   else if ((options & VAR_MAT_DEPTH) != 0) {
     /* -- PREPASS FRAG -
-     * Select create info permutation for `prepass_frag`. */
+     * Select create info permutation for `prepass_frag`. The shadow variants declare the R16UI
+     * `resource_id_out` (shadow-ID pool); the depth prepass variants declare a VEC2 output
+     * matching the main FB instead (see eevee_legacy_material_info.hh). */
+
+    const bool is_shadow = (options & VAR_MAT_SHADOW) != 0;
 
     if (is_alpha_hash) {
       /* Alpha hash material variants. */
       if (is_hair) {
-        info_name = "eevee_legacy_material_prepass_frag_alpha_hash_hair";
+        info_name = is_shadow ? "eevee_legacy_material_shadow_frag_alpha_hash_hair" :
+                                "eevee_legacy_material_prepass_frag_alpha_hash_hair";
       }
       else if (is_point_cloud) {
-        info_name = "eevee_legacy_material_prepass_frag_alpha_hash_pointcloud";
+        info_name = is_shadow ? "eevee_legacy_material_shadow_frag_alpha_hash_pointcloud" :
+                                "eevee_legacy_material_prepass_frag_alpha_hash_pointcloud";
       }
       else {
-        info_name = "eevee_legacy_material_prepass_frag_alpha_hash";
+        info_name = is_shadow ? "eevee_legacy_material_shadow_frag_alpha_hash" :
+                                "eevee_legacy_material_prepass_frag_alpha_hash";
       }
     }
     else {
       /* Opaque material variants. */
       if (is_hair) {
-        info_name = "eevee_legacy_material_prepass_frag_opaque_hair";
+        info_name = is_shadow ? "eevee_legacy_material_shadow_frag_opaque_hair" :
+                                "eevee_legacy_material_prepass_frag_opaque_hair";
       }
       else if (is_point_cloud) {
-        info_name = "eevee_legacy_material_prepass_frag_opaque_pointcloud";
+        info_name = is_shadow ? "eevee_legacy_material_shadow_frag_opaque_pointcloud" :
+                                "eevee_legacy_material_prepass_frag_opaque_pointcloud";
       }
       else {
-        info_name = "eevee_legacy_material_prepass_frag_opaque";
+        info_name = is_shadow ? "eevee_legacy_material_shadow_frag_opaque" :
+                                "eevee_legacy_material_prepass_frag_opaque";
       }
     }
     *r_src = BLI_strdup(e_data.surface_prepass_frag);
@@ -1345,6 +1427,9 @@ static char *eevee_get_defines(int options)
   }
   if ((options & VAR_MAT_SHADOW_ID) != 0) {
     BLI_dynstr_append(ds, "#define USE_SHADOW_ID\n");
+  }
+  if ((options & VAR_MAT_SHADOW) != 0) {
+    BLI_dynstr_append(ds, "#define SHADOW_PASS\n");
   }
 
   str = BLI_dynstr_get_cstring(ds);

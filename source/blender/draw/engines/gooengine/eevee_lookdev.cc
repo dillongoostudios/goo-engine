@@ -242,6 +242,23 @@ void EEVEE_lookdev_cache_init(EEVEE_Data *vedata,
       /* Do not fade-out when doing probe rendering, only when drawing the background. */
       DRW_shgroup_uniform_float_copy(grp, "backgroundAlpha", 1.0f);
       DRW_shgroup_uniform_float_copy(grp, "studioLightBlur", 0.0f);
+#ifdef WITH_METAL_BACKEND
+      /* Metal requires all declared samplers to be bound.
+       * eevee_legacy_studiolight_probe includes eevee_legacy_lightprobe_lib which declares
+       * these samplers, but they are unused in probe_render mode (no LOOKDEV_BG define).
+       * Bind dummy textures to satisfy the Metal validation layer. */
+      GPUTexture *dummy_2d_array = EEVEE_materials_get_dummy_2d_array();
+      GPUTexture *dummy_cube_array = EEVEE_materials_get_dummy_cube_array();
+      GPUTexture *util_tex = EEVEE_materials_get_util_tex();
+      GPUTexture *dummy_2d = EEVEE_materials_get_dummy_2d();
+      DRW_shgroup_uniform_texture(grp, "irradianceGrid", dummy_2d_array);
+      DRW_shgroup_uniform_texture(grp, "utilTex", util_tex ? util_tex : dummy_2d_array);
+      DRW_shgroup_uniform_texture(grp, "maxzBuffer", dummy_2d);
+      DRW_shgroup_uniform_texture(grp, "planarDepth", dummy_2d_array);
+      DRW_shgroup_uniform_texture(grp, "horizonBuffer", dummy_2d);
+      DRW_shgroup_uniform_texture(grp, "probePlanars", dummy_2d_array);
+      DRW_shgroup_uniform_texture(grp, "probeCubes", dummy_cube_array);
+#endif
     }
     else {
       float background_alpha = g_data->background_alpha * shading->studiolight_background;

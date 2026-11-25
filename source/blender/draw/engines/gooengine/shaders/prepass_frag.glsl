@@ -92,7 +92,19 @@ void main()
   }
 #endif
 
-  resource_id_out = resource_id;
+  /* GooEngine Fix: Output Normal to RG16 buffer (Loc 1), matching the gtao/SSR normalBuffer
+   * readers (.rg).
+   * Use viewNormal from vertex shader interface, which is always initialized.
+   * g_data.N is only initialized when USE_ALPHA_HASH is defined. */
+#ifndef SHADOW_PASS
+  /* viewNormal comes from surface_lib interface, already in view space. */
+  vec3 N = normalize(viewNormal);
+  out_normal = normal_encode(N, vec3(0.0));
+#else
+  /* Shadow pass: the shadow FB binds the R16UI shadow-ID pool at attachment 1; sample_ID_texture
+   * reads it to suppress same-object self-shadowing. Explicit uint() cast for MSL. */
+  resource_id_out = uint(resource_id);
+#endif
 }
 
 /* Passthrough. */
