@@ -58,7 +58,15 @@ VKImageView::VKImageView(VKTexture &texture, const VKImageViewInfo &info, String
   image_view_info.subresourceRange.layerCount = info.layer_range.size();
 
   const VKDevice &device = VKBackend::get().device;
-  vkCreateImageView(device.vk_handle(), &image_view_info, nullptr, &vk_image_view_);
+  const VkResult result = vkCreateImageView(
+      device.vk_handle(), &image_view_info, nullptr, &vk_image_view_);
+  if (result != VK_SUCCESS) {
+    /* The creation fails when the source image is gone, which happens for a texture view whose
+     * source texture was already freed. Leaving the handle null lets `is_valid()` report it, so
+     * that callers do not hand an empty view to the driver. */
+    vk_image_view_ = VK_NULL_HANDLE;
+    return;
+  }
   debug::object_label(vk_image_view_, name.c_str());
 }
 

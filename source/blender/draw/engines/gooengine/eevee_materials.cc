@@ -79,8 +79,18 @@ void EEVEE_material_bind_resources(DRWShadingGroup *shgrp,
   bool use_refract = GPU_material_flag_get(gpumat, GPU_MATFLAG_REFRACT);
   bool use_ao = GPU_material_flag_get(gpumat, GPU_MATFLAG_AO);
 
-#ifdef __APPLE__
-  /* NOTE: Some implementation do not optimize out the unused samplers. */
+#if defined(__APPLE__) || defined(WITH_VULKAN_BACKEND)
+  /* NOTE: Some implementation do not optimize out the unused samplers.
+   *
+   * The Vulkan backend has the same constraint as Metal: the descriptor set layout is
+   * derived from the statically declared shader resources, so a sampler that the shader
+   * declares (because it is pulled in via `ADDITIONAL_INFO`, e.g. through
+   * `eevee_legacy_closure_eval_surface_lib`) must still be bound even when the material
+   * never uses its matching closure. If it is left unbound the descriptor slot stays
+   * undefined, which is undefined behaviour and used to crash during world light-baking.
+   *
+   * Note that this only covers the samplers gated by `use_*` below. Any remaining
+   * declared-but-unbound sampler is handled defensively by the Vulkan backend itself. */
   use_diffuse = use_glossy = use_refract = use_ao = true;
 #endif
   LightCache *lcache = vedata->stl->g_data->light_cache;

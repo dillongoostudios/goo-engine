@@ -344,6 +344,10 @@ void VKShaderInterface::descriptor_set_location_update(
   resource_binding.location = location;
   resource_binding.arrayed = arrayed;
   resource_binding.access_mask = vk_access_flags;
+  if (resource.has_value() &&
+      resource->bind_type == shader::ShaderCreateInfo::Resource::BindType::SAMPLER) {
+    resource_binding.image_type = resource->sampler.type;
+  }
 }
 
 const VKResourceBinding &VKShaderInterface::resource_binding_info(

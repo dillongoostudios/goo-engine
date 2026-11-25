@@ -516,6 +516,11 @@ void VKCommandBuilder::add_buffer_read_barriers(VKRenderGraph &render_graph,
       continue;
     }
     const ResourceWithStamp &versioned_resource = link.resource;
+    /* Nodes can reference resources the render graph does not track; those links carry the
+     * sentinel handle and must not be looked up. */
+    if (versioned_resource.handle == NO_RESOURCE_HANDLE) {
+      continue;
+    }
     VKResourceStateTracker::Resource &resource = render_graph.resources_.resources_.lookup(
         versioned_resource.handle);
     VKResourceBarrierState &resource_state = resource.barrier_state;
@@ -556,6 +561,10 @@ void VKCommandBuilder::add_buffer_write_barriers(VKRenderGraph &render_graph,
       continue;
     }
     const ResourceWithStamp &versioned_resource = link.resource;
+    if (versioned_resource.handle == NO_RESOURCE_HANDLE) {
+      /* See `add_buffer_read_barriers`. */
+      continue;
+    }
     VKResourceStateTracker::Resource &resource = render_graph.resources_.resources_.lookup(
         versioned_resource.handle);
     VKResourceBarrierState &resource_state = resource.barrier_state;
@@ -638,6 +647,10 @@ void VKCommandBuilder::add_image_read_barriers(VKRenderGraph &render_graph,
       continue;
     }
     const ResourceWithStamp &versioned_resource = link.resource;
+    if (versioned_resource.handle == NO_RESOURCE_HANDLE) {
+      /* See `add_buffer_read_barriers`. */
+      continue;
+    }
     VKResourceStateTracker::Resource &resource = render_graph.resources_.resources_.lookup(
         versioned_resource.handle);
     VKResourceBarrierState &resource_state = resource.barrier_state;
@@ -704,6 +717,10 @@ void VKCommandBuilder::add_image_write_barriers(VKRenderGraph &render_graph,
       continue;
     }
     const ResourceWithStamp &versioned_resource = link.resource;
+    if (versioned_resource.handle == NO_RESOURCE_HANDLE) {
+      /* See `add_buffer_read_barriers`. */
+      continue;
+    }
     VKResourceStateTracker::Resource &resource = render_graph.resources_.resources_.lookup(
         versioned_resource.handle);
     VKResourceBarrierState &resource_state = resource.barrier_state;
@@ -806,6 +823,10 @@ void VKCommandBuilder::LayeredImageTracker::begin(const VKRenderGraph &render_gr
 
   const VKRenderGraphNodeLinks &links = render_graph.links_[node_handle];
   for (const VKRenderGraphLink &link : links.outputs) {
+    if (link.resource.handle == NO_RESOURCE_HANDLE) {
+      /* See `add_buffer_read_barriers`. */
+      continue;
+    }
     VKResourceStateTracker::Resource &resource = render_graph.resources_.resources_.lookup(
         link.resource.handle);
     if (resource.has_multiple_layers()) {

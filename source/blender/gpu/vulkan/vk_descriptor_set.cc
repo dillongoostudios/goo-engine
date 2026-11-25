@@ -17,6 +17,126 @@
 
 namespace blender::gpu {
 
+/** Size of the neutral buffers bound to unbound storage and uniform buffer slots. Only has to
+ * satisfy the descriptor; the contents are never expected to be read through. */
+static constexpr VkDeviceSize DUMMY_BUFFER_SIZE = 1024;
+
+/**
+ * Map a declared sampler type onto the placeholder texture type it needs.
+ *
+ * Used when a sampler turns out to be unbound at draw time: the placeholder has to match the
+ * declared type, otherwise its image view is incompatible with the descriptor and
+ * `vkUpdateDescriptorSets` fails validation.
+ */
+static eGPUTextureType to_dummy_texture_type(const shader::ImageType image_type)
+{
+  switch (image_type) {
+    case shader::ImageType::FLOAT_1D:
+    case shader::ImageType::INT_1D:
+    case shader::ImageType::UINT_1D:
+      return GPU_TEXTURE_1D;
+    case shader::ImageType::FLOAT_1D_ARRAY:
+    case shader::ImageType::INT_1D_ARRAY:
+    case shader::ImageType::UINT_1D_ARRAY:
+      return GPU_TEXTURE_1D_ARRAY;
+    case shader::ImageType::FLOAT_2D:
+    case shader::ImageType::INT_2D:
+    case shader::ImageType::UINT_2D:
+    case shader::ImageType::UINT_2D_ATOMIC:
+    case shader::ImageType::INT_2D_ATOMIC:
+    case shader::ImageType::SHADOW_2D:
+    case shader::ImageType::DEPTH_2D:
+      return GPU_TEXTURE_2D;
+    case shader::ImageType::FLOAT_2D_ARRAY:
+    case shader::ImageType::INT_2D_ARRAY:
+    case shader::ImageType::UINT_2D_ARRAY:
+    case shader::ImageType::UINT_2D_ARRAY_ATOMIC:
+    case shader::ImageType::INT_2D_ARRAY_ATOMIC:
+    case shader::ImageType::SHADOW_2D_ARRAY:
+    case shader::ImageType::DEPTH_2D_ARRAY:
+      return GPU_TEXTURE_2D_ARRAY;
+    case shader::ImageType::FLOAT_3D:
+    case shader::ImageType::INT_3D:
+    case shader::ImageType::UINT_3D:
+    case shader::ImageType::UINT_3D_ATOMIC:
+    case shader::ImageType::INT_3D_ATOMIC:
+      return GPU_TEXTURE_3D;
+    case shader::ImageType::FLOAT_CUBE:
+    case shader::ImageType::INT_CUBE:
+    case shader::ImageType::UINT_CUBE:
+    case shader::ImageType::SHADOW_CUBE:
+    case shader::ImageType::DEPTH_CUBE:
+      return GPU_TEXTURE_CUBE;
+    case shader::ImageType::FLOAT_CUBE_ARRAY:
+    case shader::ImageType::INT_CUBE_ARRAY:
+    case shader::ImageType::UINT_CUBE_ARRAY:
+    case shader::ImageType::SHADOW_CUBE_ARRAY:
+    case shader::ImageType::DEPTH_CUBE_ARRAY:
+      return GPU_TEXTURE_CUBE_ARRAY;
+    default:
+      BLI_assert_unreachable();
+      return GPU_TEXTURE_2D;
+  }
+}
+
+/**
+ * Format a placeholder sampler reads as. Mirrors `MTLContext::get_dummy_texture()`, which picks
+ * the texture format from the sampler format for the same reason.
+ */
+static eGPUSamplerFormat to_dummy_sampler_format(const shader::ImageType image_type)
+{
+  switch (image_type) {
+    case shader::ImageType::INT_1D:
+    case shader::ImageType::INT_1D_ARRAY:
+    case shader::ImageType::INT_2D:
+    case shader::ImageType::INT_2D_ARRAY:
+    case shader::ImageType::INT_3D:
+    case shader::ImageType::INT_CUBE:
+    case shader::ImageType::INT_CUBE_ARRAY:
+    case shader::ImageType::INT_2D_ATOMIC:
+    case shader::ImageType::INT_2D_ARRAY_ATOMIC:
+    case shader::ImageType::INT_3D_ATOMIC:
+      return GPU_SAMPLER_TYPE_INT;
+    case shader::ImageType::UINT_1D:
+    case shader::ImageType::UINT_1D_ARRAY:
+    case shader::ImageType::UINT_2D:
+    case shader::ImageType::UINT_2D_ARRAY:
+    case shader::ImageType::UINT_3D:
+    case shader::ImageType::UINT_CUBE:
+    case shader::ImageType::UINT_CUBE_ARRAY:
+    case shader::ImageType::UINT_2D_ATOMIC:
+    case shader::ImageType::UINT_2D_ARRAY_ATOMIC:
+    case shader::ImageType::UINT_3D_ATOMIC:
+      return GPU_SAMPLER_TYPE_UINT;
+    case shader::ImageType::SHADOW_2D:
+    case shader::ImageType::SHADOW_2D_ARRAY:
+    case shader::ImageType::SHADOW_CUBE:
+    case shader::ImageType::SHADOW_CUBE_ARRAY:
+    case shader::ImageType::DEPTH_2D:
+    case shader::ImageType::DEPTH_2D_ARRAY:
+    case shader::ImageType::DEPTH_CUBE:
+    case shader::ImageType::DEPTH_CUBE_ARRAY:
+      return GPU_SAMPLER_TYPE_DEPTH;
+    default:
+      return GPU_SAMPLER_TYPE_FLOAT;
+  }
+}
+
+/**
+ * Whether a declared sampler is a buffer texture.
+ *
+ * Buffer textures are represented as `VKBindType::SAMPLER` but their descriptor set layout slot
+ * is `VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER`, so they cannot be satisfied by the placeholder
+ * images used for ordinary samplers.
+ */
+static bool is_buffer_sampler(const shader::ImageType image_type)
+{
+  return ELEM(image_type,
+              shader::ImageType::FLOAT_BUFFER,
+              shader::ImageType::INT_BUFFER,
+              shader::ImageType::UINT_BUFFER);
+}
+
 void VKDescriptorSetTracker::bind_buffer(VkDescriptorType vk_descriptor_type,
                                          VkBuffer vk_buffer,
                                          VkDeviceSize buffer_offset,
@@ -75,13 +195,33 @@ void VKDescriptorSetTracker::bind_image_resource(const VKStateManager &state_man
                                                  const VKResourceBinding &resource_binding,
                                                  render_graph::VKResourceAccessInfo &access_info)
 {
-  VKTexture &texture = *state_manager.images_.get(resource_binding.binding);
-  bind_image(
-      VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-      VK_NULL_HANDLE,
-      texture.image_view_get(resource_binding.arrayed, VKImageViewFlags::NO_SWIZZLING).vk_handle(),
-      VK_IMAGE_LAYOUT_GENERAL,
-      resource_binding.location);
+  VKTexture *texture_ptr = state_manager.images_.get(resource_binding.binding);
+  if (texture_ptr == nullptr) {
+    /* Image was not bound on this drawing path while the shader still declares it. There is no
+     * placeholder storage image that could stand in for it (a write to it would be silently
+     * discarded, and its format has to match the declared image type), so the binding stays
+     * unwritten and the descriptor is undefined. This is a known gap: unlike the sampler case it
+     * has not been observed in practice, because images declared via `ADDITIONAL_INFO` are also
+     * bound by the paths that use them. */
+    return;
+  }
+  VKTexture &texture = *texture_ptr;
+  const VkImage vk_image = texture.vk_image_handle();
+  /* See `bind_texture_resource` for why a texture without an image, or whose view failed to
+   * create, is skipped rather than registered. */
+  if (vk_image == VK_NULL_HANDLE) {
+    return;
+  }
+  const VKImageView &image_view = texture.image_view_get(resource_binding.arrayed,
+                                                        VKImageViewFlags::NO_SWIZZLING);
+  if (!image_view.is_valid()) {
+    return;
+  }
+  bind_image(VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+             VK_NULL_HANDLE,
+             image_view.vk_handle(),
+             VK_IMAGE_LAYOUT_GENERAL,
+             resource_binding.location);
   /* Update access info. */
   uint32_t layer_base = 0;
   uint32_t layer_count = VK_REMAINING_ARRAY_LAYERS;
@@ -90,7 +230,7 @@ void VKDescriptorSetTracker::bind_image_resource(const VKStateManager &state_man
     layer_base = layer_range.start();
     layer_count = layer_range.size();
   }
-  access_info.images.append({texture.vk_image_handle(),
+  access_info.images.append({vk_image,
                              resource_binding.access_mask,
                              to_vk_image_aspect_flag_bits(texture.device_format_get()),
                              layer_base,
@@ -107,8 +247,7 @@ void VKDescriptorSetTracker::bind_texture_resource(const VKDevice &device,
     case BindSpaceTextures::Type::VertexBuffer: {
       VKVertexBuffer *vertex_buffer = static_cast<VKVertexBuffer *>(elem.resource);
       vertex_buffer->ensure_updated();
-      vertex_buffer->ensure_buffer_view();
-      bind_texel_buffer(vertex_buffer->vk_buffer_view_get(), resource_binding.location);
+      bind_texel_buffer(vertex_buffer->ensure_and_get_buffer_view(), resource_binding.location);
       access_info.buffers.append({vertex_buffer->vk_handle(), resource_binding.access_mask});
       break;
     }
@@ -120,19 +259,39 @@ void VKDescriptorSetTracker::bind_texture_resource(const VKDevice &device,
         /* TODO: Investigate if this can be improved in the API. */
         VKVertexBuffer *vertex_buffer = texture->source_buffer_;
         vertex_buffer->ensure_updated();
-        vertex_buffer->ensure_buffer_view();
-        bind_texel_buffer(vertex_buffer->vk_buffer_view_get(), resource_binding.location);
+        bind_texel_buffer(vertex_buffer->ensure_and_get_buffer_view(), resource_binding.location);
         access_info.buffers.append({vertex_buffer->vk_handle(), resource_binding.access_mask});
       }
       else {
+        const VkImage vk_image = texture->vk_image_handle();
+        /* A bound texture can reference an image that no longer exists. `VKTexture` handles for
+         * texture views forward to their source texture, and the draw manager keeps views alive
+         * across `TextureFromPool::release()`, which frees the source texture and clears its
+         * `vk_image_`. The view is then still bound while its source has no image left.
+         *
+         * Registering such a handle would make `VKResourceStateTracker::get_image` look up an
+         * image that was never added, and the lookup after it would read out of bounds.
+         * `BLI_assert` cannot catch this either, since it is compiled out in release builds.
+         * Skip the binding instead: the descriptor stays undefined, which matches how this
+         * function already treats a resource that was not bound on the drawing path. */
+        if (vk_image == VK_NULL_HANDLE) {
+          break;
+        }
+        /* The image view is created against the image above, so it fails for the same textures.
+         * Handing an empty view to the descriptor set crashes the driver, which dereferences it
+         * while updating the descriptor. */
+        const VKImageView &image_view = texture->image_view_get(resource_binding.arrayed,
+                                                               VKImageViewFlags::DEFAULT);
+        if (!image_view.is_valid()) {
+          break;
+        }
         const VKSampler &sampler = device.samplers().get(elem.sampler);
         bind_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                    sampler.vk_handle(),
-                   texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::DEFAULT)
-                       .vk_handle(),
+                   image_view.vk_handle(),
                    VK_IMAGE_LAYOUT_GENERAL,
                    resource_binding.location);
-        access_info.images.append({texture->vk_image_handle(),
+        access_info.images.append({vk_image,
                                    resource_binding.access_mask,
                                    to_vk_image_aspect_flag_bits(texture->device_format_get()),
                                    0,
@@ -141,7 +300,76 @@ void VKDescriptorSetTracker::bind_texture_resource(const VKDevice &device,
       break;
     }
     case BindSpaceTextures::Type::Unused: {
-      BLI_assert_unreachable();
+      /* The shader declares this sampler but nothing was bound to it on this drawing path.
+       *
+       * Some backends do not optimize out unused samplers, and several engine code paths
+       * intentionally skip optional textures (for example world light-baking renders a material
+       * shader whose statically declared sampler list is much larger than what that path binds).
+       * Vulkan requires every binding present in the descriptor set layout to be written before
+       * the draw, otherwise the descriptor stays undefined, which is undefined behaviour and used
+       * to crash while reading the unbound resource. Bind a neutral resource so the layout is
+       * always satisfied.
+       *
+       * Which neutral resource is required depends on the declared sampler type: buffer textures
+       * occupy a uniform-texel-buffer slot, while everything else is a combined image sampler
+       * whose placeholder has to match the declared dimensionality. */
+      const shader::ImageType image_type = resource_binding.image_type;
+      if (is_buffer_sampler(image_type)) {
+        /* Buffer textures occupy a uniform-texel-buffer slot rather than a combined image
+         * sampler, so the placeholder image cannot be used here. The device owns a matching
+         * placeholder buffer view. */
+        VkBufferView dummy_view = device.dummy_texel_buffer_view_get(
+            to_dummy_sampler_format(image_type));
+        if (dummy_view != VK_NULL_HANDLE) {
+          bind_texel_buffer(dummy_view, resource_binding.location);
+        }
+        break;
+      }
+      GPUTexture *dummy_texture = device.dummy_texture_get(to_dummy_texture_type(image_type),
+                                                           to_dummy_sampler_format(image_type));
+      if (dummy_texture == nullptr) {
+        break;
+      }
+      /* Two unwrap steps are required, as elsewhere in this backend (see `vk_framebuffer.cc` and
+       * `vk_context.cc`): `GPUTexture` is only an opaque forward declaration, not a base class, so
+       * no single cast reaches `VKTexture`. The first unwrap turns the opaque handle into a
+       * `Texture *`, the second reaches the backend type. */
+      VKTexture *filler_texture = unwrap(unwrap(dummy_texture));
+      const VkImage filler_image = filler_texture->vk_image_handle();
+      /* Same reasoning as the bound-texture case above: a placeholder without an image would
+       * register a handle that the render graph cannot resolve. The buffer-texture placeholders
+       * are the ones that may legitimately have no image of their own, but those take the
+       * `is_buffer_sampler` branch and never reach here. */
+      if (filler_image == VK_NULL_HANDLE) {
+        break;
+      }
+      const VKSampler &sampler = device.samplers().get(
+          ELEM(image_type,
+               shader::ImageType::SHADOW_2D,
+               shader::ImageType::SHADOW_2D_ARRAY,
+               shader::ImageType::SHADOW_CUBE,
+               shader::ImageType::SHADOW_CUBE_ARRAY) ?
+              GPUSamplerState::compare_sampler() :
+              GPUSamplerState::default_sampler());
+      /* The placeholder's view fails to create under the same condition as the image is missing,
+       * which the check above already covers. Check it anyway so every binding path treats a
+       * failed view the same way. */
+      const VKImageView &filler_view = filler_texture->image_view_get(resource_binding.arrayed,
+                                                                     VKImageViewFlags::DEFAULT);
+      if (!filler_view.is_valid()) {
+        break;
+      }
+      bind_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                 sampler.vk_handle(),
+                 filler_view.vk_handle(),
+                 VK_IMAGE_LAYOUT_GENERAL,
+                 resource_binding.location);
+      access_info.images.append({filler_image,
+                                 resource_binding.access_mask,
+                                 to_vk_image_aspect_flag_bits(filler_texture->device_format_get()),
+                                 0,
+                                 VK_REMAINING_ARRAY_LAYERS});
+      break;
     }
   }
 }
@@ -154,16 +382,28 @@ void VKDescriptorSetTracker::bind_input_attachment_resource(
 {
   const bool supports_local_read = !device.workarounds_get().dynamic_rendering_local_read;
   if (supports_local_read) {
-    VKTexture *texture = static_cast<VKTexture *>(
-        state_manager.images_.get(resource_binding.binding));
-    BLI_assert(texture);
+    VKTexture *texture = state_manager.images_.get(resource_binding.binding);
+    if (texture == nullptr) {
+      /* See `bind_image_resource` for why the binding is skipped. */
+      return;
+    }
+    const VkImage vk_image = texture->vk_image_handle();
+    /* See `bind_texture_resource` for why a texture without an image, or whose view failed to
+     * create, is skipped rather than registered. */
+    if (vk_image == VK_NULL_HANDLE) {
+      return;
+    }
+    const VKImageView &image_view = texture->image_view_get(resource_binding.arrayed,
+                                                          VKImageViewFlags::NO_SWIZZLING);
+    if (!image_view.is_valid()) {
+      return;
+    }
     bind_image(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
                VK_NULL_HANDLE,
-               texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::NO_SWIZZLING)
-                   .vk_handle(),
+               image_view.vk_handle(),
                VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ_KHR,
                resource_binding.location);
-    access_info.images.append({texture->vk_image_handle(),
+    access_info.images.append({vk_image,
                                resource_binding.access_mask,
                                to_vk_image_aspect_flag_bits(texture->device_format_get()),
                                0,
@@ -172,18 +412,31 @@ void VKDescriptorSetTracker::bind_input_attachment_resource(
   else {
     bool supports_dynamic_rendering = !device.workarounds_get().dynamic_rendering;
     const BindSpaceTextures::Elem &elem = state_manager.textures_.get(resource_binding.binding);
+    if (elem.resource_type != BindSpaceTextures::Type::Texture || elem.resource == nullptr) {
+      /* The input attachment was not bound on this drawing path. Nothing sensible can be bound
+       * in its place, so skip it rather than dereferencing a null resource. */
+      return;
+    }
     VKTexture *texture = static_cast<VKTexture *>(elem.resource);
-    BLI_assert(texture);
-    BLI_assert(elem.resource_type == BindSpaceTextures::Type::Texture);
+    const VkImage vk_image = texture->vk_image_handle();
+    /* See `bind_texture_resource` for why a texture without an image, or whose view failed to
+     * create, is skipped rather than registered. */
+    if (vk_image == VK_NULL_HANDLE) {
+      return;
+    }
     if (supports_dynamic_rendering) {
+      const VKImageView &image_view = texture->image_view_get(resource_binding.arrayed,
+                                                            VKImageViewFlags::DEFAULT);
+      if (!image_view.is_valid()) {
+        return;
+      }
       const VKSampler &sampler = device.samplers().get(elem.sampler);
-      bind_image(
-          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-          sampler.vk_handle(),
-          texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::DEFAULT).vk_handle(),
-          VK_IMAGE_LAYOUT_GENERAL,
-          resource_binding.location);
-      access_info.images.append({texture->vk_image_handle(),
+      bind_image(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                 sampler.vk_handle(),
+                 image_view.vk_handle(),
+                 VK_IMAGE_LAYOUT_GENERAL,
+                 resource_binding.location);
+      access_info.images.append({vk_image,
                                  resource_binding.access_mask,
                                  to_vk_image_aspect_flag_bits(texture->device_format_get()),
                                  0,
@@ -191,13 +444,17 @@ void VKDescriptorSetTracker::bind_input_attachment_resource(
     }
     else {
       /* Fallback to render-passes / sub-passes. */
+      const VKImageView &image_view = texture->image_view_get(resource_binding.arrayed,
+                                                            VKImageViewFlags::NO_SWIZZLING);
+      if (!image_view.is_valid()) {
+        return;
+      }
       bind_image(VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
                  VK_NULL_HANDLE,
-                 texture->image_view_get(resource_binding.arrayed, VKImageViewFlags::NO_SWIZZLING)
-                     .vk_handle(),
+                 image_view.vk_handle(),
                  VK_IMAGE_LAYOUT_GENERAL,
                  resource_binding.location);
-      access_info.images.append({texture->vk_image_handle(),
+      access_info.images.append({vk_image,
                                  resource_binding.access_mask,
                                  to_vk_image_aspect_flag_bits(texture->device_format_get()),
                                  0,
@@ -207,6 +464,7 @@ void VKDescriptorSetTracker::bind_input_attachment_resource(
 }
 
 void VKDescriptorSetTracker::bind_storage_buffer_resource(
+    const VKDevice &device,
     const VKStateManager &state_manager,
     const VKResourceBinding &resource_binding,
     render_graph::VKResourceAccessInfo &access_info)
@@ -251,7 +509,20 @@ void VKDescriptorSetTracker::bind_storage_buffer_resource(
       break;
     }
     case BindSpaceStorageBuffers::Type::Unused: {
-      BLI_assert_unreachable();
+      /* The storage buffer was not bound on this drawing path while the shader still declares it.
+       * Vulkan requires the slot to be written, so bind a neutral buffer rather than leaving the
+       * descriptor undefined. */
+      VkBuffer dummy_buffer = device.dummy_buffer_get(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+      if (dummy_buffer == VK_NULL_HANDLE) {
+        return;
+      }
+      bind_buffer(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                  dummy_buffer,
+                  0,
+                  DUMMY_BUFFER_SIZE,
+                  resource_binding.location);
+      access_info.buffers.append({dummy_buffer, resource_binding.access_mask});
+      return;
     }
   }
 
@@ -264,11 +535,30 @@ void VKDescriptorSetTracker::bind_storage_buffer_resource(
 }
 
 void VKDescriptorSetTracker::bind_uniform_buffer_resource(
+    const VKDevice &device,
     const VKStateManager &state_manager,
     const VKResourceBinding &resource_binding,
     render_graph::VKResourceAccessInfo &access_info)
 {
-  VKUniformBuffer &uniform_buffer = *state_manager.uniform_buffers_.get(resource_binding.binding);
+  VKUniformBuffer *uniform_buffer_ptr = state_manager.uniform_buffers_.get(
+      resource_binding.binding);
+  if (uniform_buffer_ptr == nullptr) {
+    /* The uniform buffer was not bound on this drawing path while the shader still declares it.
+     * Vulkan requires the slot to be written, so bind a neutral buffer rather than leaving the
+     * descriptor undefined. */
+    VkBuffer dummy_buffer = device.dummy_buffer_get(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+    if (dummy_buffer == VK_NULL_HANDLE) {
+      return;
+    }
+    bind_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                dummy_buffer,
+                0,
+                DUMMY_BUFFER_SIZE,
+                resource_binding.location);
+    access_info.buffers.append({dummy_buffer, resource_binding.access_mask});
+    return;
+  }
+  VKUniformBuffer &uniform_buffer = *uniform_buffer_ptr;
   uniform_buffer.ensure_updated();
   bind_buffer(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
               uniform_buffer.vk_handle(),
@@ -309,11 +599,11 @@ void VKDescriptorSetTracker::bind_shader_resources(const VKDevice &device,
 
     switch (resource_binding.bind_type) {
       case VKBindType::UNIFORM_BUFFER:
-        bind_uniform_buffer_resource(state_manager, resource_binding, access_info);
+        bind_uniform_buffer_resource(device, state_manager, resource_binding, access_info);
         break;
 
       case VKBindType::STORAGE_BUFFER:
-        bind_storage_buffer_resource(state_manager, resource_binding, access_info);
+        bind_storage_buffer_resource(device, state_manager, resource_binding, access_info);
         break;
 
       case VKBindType::SAMPLER:
